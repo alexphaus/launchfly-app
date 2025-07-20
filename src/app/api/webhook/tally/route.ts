@@ -98,7 +98,12 @@ Return as JSON.`;
     response_format: { type: "json_object" }
   });
 
-  return JSON.parse(completion.choices[0].message.content) as BusinessIdea;
+  const content = completion.choices[0].message.content;
+  if (!content) {
+    throw new Error('No content received from OpenAI');
+  }
+
+  return JSON.parse(content) as BusinessIdea;
 }
 
 // Email sending function

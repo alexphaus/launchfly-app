@@ -38,7 +38,7 @@ export async function POST(request) {
 
 // OpenAI function
 async function generateBusiness(userData) {
-  const prompt = `You are a brilliant business strategist. Create a specific, actionable online business idea based on this person's profile:
+  const prompt = `You are a brilliant business strategist and website builder. Create a specific, actionable online business idea based on this person's profile:
 
 Name: ${userData.name}
 Skills/Interests: ${userData.skills}

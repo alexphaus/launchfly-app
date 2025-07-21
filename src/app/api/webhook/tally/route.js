@@ -38,25 +38,50 @@ export async function POST(request) {
 
 // OpenAI function
 async function generateBusiness(userData) {
-  const prompt = `You are a brilliant business strategist and website builder. Create a specific, actionable online business idea based on this person's profile:
+  const prompt = `You are an expert business strategist and web designer who has helped launch 1000+ successful online businesses. Analyze this person's profile and create a SPECIFIC, VALIDATED business idea:
 
-Name: ${userData.name}
-Skills/Interests: ${userData.skills}
-Business Type Preference: ${userData.businessType}
-Goal: ${userData.goal}
-Special Preferences: ${userData.preferences || 'None'}
+PROFILE:
+- Name: ${userData.name}
+- Skills/Interests: ${userData.skills}
+- Business Type: ${userData.businessType}
+- Goal: ${userData.goal}
+- Preferences: ${userData.preferences || 'None'}
 
-Generate a business idea with:
-1. businessName: Creative and memorable name
-2. tagline: One compelling sentence
-3. product: What they're selling (specific product/service)
-4. price: Price point (e.g., "$99/month")
-5. targetCustomer: Be specific about who will buy
-6. steps: Array of 3 specific actions to take this week
-7. monthlyRevenue: Realistic potential (e.g., "$2,000-$5,000/month")
-8. landingPage: Generate full High converting HTML landing page based on the business idea, hero page, and product description. CTA etc.
+REQUIREMENTS:
+Create a business that:
+1. Leverages their existing skills
+2. Has proven market demand
+3. Can start with $0-500 budget
+4. Can generate income within 30 days
+5. Scales to $10K+/month potential
 
-Return as JSON.`;
+OUTPUT (JSON format):
+{
+  "businessName": "Creative, brandable name (not generic)",
+  "tagline": "Clear value proposition in 10 words or less",
+  "product": "Specific product/service with unique angle",
+  "price": "Strategic pricing with rationale (e.g., '$97/month - premium but accessible')",
+  "targetCustomer": "Specific niche with demographics, pain points, and buying power",
+  "marketValidation": "Why this business will succeed (market size, trends, competition gaps)",
+  "steps": [
+    "Week 1: Specific action with tools/platforms",
+    "Week 2: Specific action with metrics to track", 
+    "Week 3: Specific action with expected outcome"
+  ],
+  "monthlyRevenue": "Realistic projection with math (e.g., '50 customers × $97 = $4,850/month')",
+  "landingPage": "Professional HTML with modern CSS, compelling headlines, social proof placeholders, clear CTAs, mobile-responsive design, and conversion-optimized layout. Include hero section, benefits, testimonials placeholder, pricing, FAQ, and footer. Use modern design trends, proper spacing, and psychological triggers.",
+  "launchStrategy": "Step-by-step 30-day launch plan",
+  "competitiveAdvantage": "What makes this different from competitors"
+}
+
+Make the landing page HTML production-ready with:
+- Modern CSS styling (gradients, shadows, animations)
+- Mobile-first responsive design
+- Conversion psychology (urgency, social proof, benefit-focused)
+- Clear value hierarchy
+- Professional typography and spacing
+- Call-to-action buttons that convert
+- Trust signals and credibility elements`;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",

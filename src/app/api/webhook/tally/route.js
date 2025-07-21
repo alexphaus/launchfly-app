@@ -54,7 +54,7 @@ Generate a business idea with:
 5. targetCustomer: Be specific about who will buy
 6. steps: Array of 3 specific actions to take this week
 7. monthlyRevenue: Realistic potential (e.g., "$2,000-$5,000/month")
-8. landingPage: Generate full High converting HTML landing page based on the business idea
+8. landingPage: Generate full High converting HTML landing page based on the business idea, hero page, and product description. CTA etc.
 
 Return as JSON.`;
 

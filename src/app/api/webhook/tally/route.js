@@ -59,7 +59,7 @@ Generate a business idea with:
 Return as JSON.`;
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
+    model: "gpt-4o",
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" }
   });

@@ -54,7 +54,7 @@ Generate a business idea with:
 5. targetCustomer: Be specific about who will buy
 6. steps: Array of 3 specific actions to take this week
 7. monthlyRevenue: Realistic potential (e.g., "$2,000-$5,000/month")
-8. website: Basic HTML landing page
+8. websiteHTML: High converting HTML landing page
 
 Return as JSON.`;
 
@@ -109,7 +109,7 @@ async function sendBusinessEmail(email, name, business) {
       </p>
     </div>
     <div>
-        ${business.website}
+        ${business.websiteHTML}
     </div>
   `;
 

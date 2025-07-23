@@ -9,13 +9,18 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.52.0",
+    "lucide-react": "^0.525.0",
+    "nanoid": "^5.1.5",
     "next": "15.4.2",
-    "openai": "^5.10.1",
+    "openai": "^5.10.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "resend": "^4.7.0"
+    "recharts": "^3.1.0",
+    "resend": "^4.7.0",
+    "twilio": "^5.7.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -17,7 +17,7 @@ export default function LoadingPage() {
         const data = await res.json();
         
         if (data.sessionId) {
-          router.push(`/dashboard/${data.sessionId}`);
+          router.push(`${process.env.NEXT_PUBLIC_URL}/dashboard/${sessionId}?onboarding=true`);
         } else {
           // Retry after 2 seconds
           setTimeout(checkSession, 2000);

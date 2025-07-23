@@ -45,11 +45,15 @@ export async function POST(request) {
       userId = authData.user.id;
     } else {
       // User exists, get their ID
-      const { data: existingUser } = await supabase
+      const { data: existingUser, error } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', userData.email)
         .single();
+        
+      if (error || !existingUser) {
+        throw new Error(`User not found: ${userData.email}`);
+      }
       
       userId = existingUser.id;
     }

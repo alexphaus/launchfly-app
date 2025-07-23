@@ -22,8 +22,12 @@ export async function POST(request) {
       businessType: formData.data.fields.find(f => f.label === "What type of business are you most interested in?")?.value,
       goal: formData.data.fields.find(f => f.label === "What's your business goal?")?.value,
       preferences: formData.data.fields.find(f => f.label === "Any special preferences or ideas you have?")?.value,
-      plan: formData.data.fields.find(f => f.label === "Plan")?.value || "Starter"
+      plan: formData.data.fields.find(f => f.label === "plan")?.value || "Starter"
     };
+
+    // Extract session ID from hidden field or generate new one
+    const sessionId = formData.data.fields.find(f => f.label === "sessionID")?.value || nanoid();
+    console.log('Using session ID:', sessionId);
     
     // Create or get user
     let userId;
@@ -57,9 +61,6 @@ export async function POST(request) {
       
       userId = existingUser.id;
     }
-
-    // Generate unique session ID
-    const sessionId = nanoid();
 
     // Create business record
     const { data: business, error: businessError } = await supabase

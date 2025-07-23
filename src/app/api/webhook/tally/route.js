@@ -138,7 +138,7 @@ async function sendDashboardEmail(email, name, sessionId) {
     `
   });
 }
-
+ 
 async function generateBusinessInBackground(businessId, sessionId, userData) {
   const { generateBusinessWithAI } = await import('@/lib/business-generator');
   

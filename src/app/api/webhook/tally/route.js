@@ -97,7 +97,13 @@ export async function POST(request) {
     
     // Return redirect URL for Tally
     return Response.json({ 
-      redirectUrl: `${process.env.NEXT_PUBLIC_URL}/dashboard/${sessionId}?onboarding=true`
+      success: true,
+      redirect: `${process.env.NEXT_PUBLIC_URL}/dashboard/${sessionId}?onboarding=true`
+    }, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      }
     });
     
   } catch (error) {
@@ -138,7 +144,7 @@ async function sendDashboardEmail(email, name, sessionId) {
     `
   });
 }
- 
+
 async function generateBusinessInBackground(businessId, sessionId, userData) {
   const { generateBusinessWithAI } = await import('@/lib/business-generator');
   

@@ -97,13 +97,7 @@ export async function POST(request) {
     
     // Return redirect URL for Tally
     return Response.json({ 
-      success: true,
-      redirect: `${process.env.NEXT_PUBLIC_URL}/dashboard/${sessionId}?onboarding=true`
-    }, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      }
+      redirectUrl: `${process.env.NEXT_PUBLIC_URL}/dashboard/${sessionId}?onboarding=true`
     });
     
   } catch (error) {

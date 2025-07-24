@@ -34,7 +34,7 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
       console.error('Error updating session:', error);
     }
     
-    await new Promise(resolve => setTimeout(resolve, stage.duration));
+    //await new Promise(resolve => setTimeout(resolve, stage.duration));
   }
 
   // Generate business data with OpenAI

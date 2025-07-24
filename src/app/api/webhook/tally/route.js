@@ -97,7 +97,7 @@ export async function POST(request) {
     generateBusinessInBackground(business.id, sessionId, userData);
     
     // Return redirect URL for Tally
-    return Response.json({ success: true });
+    //return Response.json({ success: true });
     
   } catch (error) {
     console.error('Webhook error:', error);

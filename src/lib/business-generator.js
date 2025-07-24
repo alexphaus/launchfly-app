@@ -33,14 +33,6 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
   //   await new Promise(resolve => setTimeout(resolve, stage.duration));
   // }
 
-  await supabase
-      .from('sessions')
-      .update({
-        stage: "finalizing",
-        progress: 95
-      })
-      .eq('id', sessionId);
-
   // Generate business data with OpenAI
   console.log('Calling OpenAI API...');
 

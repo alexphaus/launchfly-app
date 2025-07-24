@@ -94,9 +94,7 @@ export async function POST(request) {
     await sendDashboardEmail(userData.email, userData.name, sessionId);
     
     // Start business generation in background
-    setImmediate(() => {
-      generateBusinessInBackground(business.id, sessionId, userData);
-    });
+    generateBusinessInBackground(business.id, sessionId, userData);
     
     // Return redirect URL for Tally
     return Response.json({ success: true });

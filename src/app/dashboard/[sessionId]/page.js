@@ -20,32 +20,67 @@ export default function DashboardPage() {
   }, [params.sessionId]);
 
   async function loadInitialData() {
-    try {
-      // Get session first
-      const { data: session, error: sessionError } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('id', params.sessionId)
-        .single();
+    const maxRetries = 10;
+    const baseDelay = 1000; // Start with 1 second
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Get session first
+        const { data: session, error: sessionError } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('id', params.sessionId)
+          .single();
 
-      if (sessionError) throw sessionError;
+        // If session doesn't exist yet, wait and retry
+        if (sessionError?.code === 'PGRST116') { // No rows returned
+          if (attempt < maxRetries - 1) {
+            const delay = baseDelay * Math.pow(1.5, attempt); // Exponential backoff
+            console.log(`Session not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            throw new Error('Session not found after maximum retries');
+          }
+        }
+        
+        if (sessionError) throw sessionError;
 
-      // Get business using session_id (not foreign key)
-      const { data: business, error: businessError } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('session_id', params.sessionId)
-        .single();
+        // Get business using session_id
+        const { data: business, error: businessError } = await supabase
+          .from('businesses')
+          .select('*')
+          .eq('session_id', params.sessionId)
+          .single();
 
-      if (businessError) throw businessError;
-      
-      setSessionData(session);
-      setBusinessData(business);
-      setLoading(false);
-      
-    } catch (error) {
-      console.error('Load error:', error);
-      router.push('/');
+        // If business doesn't exist yet, wait and retry
+        if (businessError?.code === 'PGRST116') {
+          if (attempt < maxRetries - 1) {
+            const delay = baseDelay * Math.pow(1.5, attempt);
+            console.log(`Business not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            throw new Error('Business not found after maximum retries');
+          }
+        }
+        
+        if (businessError) throw businessError;
+        
+        // Success! Set data and exit retry loop
+        setSessionData(session);
+        setBusinessData(business);
+        setLoading(false);
+        return;
+        
+      } catch (error) {
+        if (attempt === maxRetries - 1) {
+          console.error('Load error after all retries:', error);
+          router.push('/');
+          return;
+        }
+        // Continue to next retry attempt
+      }
     }
   }
 

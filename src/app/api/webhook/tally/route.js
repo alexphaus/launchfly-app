@@ -156,13 +156,20 @@ async function generateBusinessInBackground(businessId, sessionId, userData) {
       .eq('id', businessId);
 
     // Update session to complete
-    await supabase
+    const { data, error } = await supabase
       .from('sessions')
       .update({
         stage: 'complete',
         progress: 100
       })
-      .eq('id', sessionId);
+      .eq('id', sessionId)
+      .select();
+
+    if (error) {
+      console.error('Supabase update error:', error);
+    } else {
+      console.log('Session updated:', data);
+    }
 
     // Log analytics event
     await supabase

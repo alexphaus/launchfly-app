@@ -9,6 +9,8 @@ const supabase = createClient(
 );
 
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
+  console.log('Starting business generation for session:', sessionId);
+  
   const stages = [
     { stage: 'analyzing', progress: 25, duration: 3000 },
     { stage: 'researching', progress: 50, duration: 3000 },
@@ -18,6 +20,7 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
 
   // Update progress through stages
   for (const stage of stages) {
+    console.log(`Updating to stage: ${stage.stage} with progress: ${stage.progress}`);
     await supabase
       .from('sessions')
       .update({
@@ -28,6 +31,9 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
       
     await new Promise(resolve => setTimeout(resolve, stage.duration));
   }
+
+  // Generate business data with OpenAI
+  console.log('Calling OpenAI API...');
 
   // Generate business data with OpenAI
   const prompt = `You are a brilliant business strategist. Create a specific, actionable online business based on this profile:

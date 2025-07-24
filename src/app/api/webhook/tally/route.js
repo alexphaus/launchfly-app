@@ -138,54 +138,52 @@ async function sendDashboardEmail(email, name, sessionId) {
   });
 }
 
-// ...existing code...
 async function generateBusinessInBackground(businessId, sessionId, userData) {
-  // IMPORTANT: We do not await generateBusinessWithAI.
-  // This allows the function to run in the background on Vercel
-  // without being terminated when the main API route responds.
-  generateBusinessWithAI(userData, sessionId, businessId)
-    .then(businessData => {
-      console.log('AI generation complete, updating database...');
-      // Update business with generated data
-      return supabase
-        .from('businesses')
-        .update({
-          name: businessData.businessName,
-          subdomain: businessData.domain.replace('.com', '').toLowerCase(),
-          business_data: businessData,
-          status: 'ready'
-        })
-        .eq('id', businessId);
-    })
-    .then(() => {
-      // Update session to complete
-      return supabase
-        .from('sessions')
-        .update({
-          stage: 'complete',
-          progress: 100
-        })
-        .eq('id', sessionId);
-    })
-    .then(() => {
-      // Log analytics event
-      return supabase
-        .from('analytics')
-        .insert({
-          business_id: businessId,
-          event_type: 'business_generated',
-          event_data: { generation_time: Date.now() }
-        });
-    })
-    .catch(error => {
-      console.error('Background generation failed:', error);
-      // Update business and session to failed/error state
-      supabase.from('businesses').update({ status: 'failed' }).eq('id', businessId);
-      supabase.from('sessions').update({ stage: 'error' }).eq('id', sessionId);
-    });
-}
+  const { generateBusinessWithAI } = await import('@/lib/business-generator');
+  
+  try {
+    const businessData = await generateBusinessWithAI(userData, sessionId, businessId);
+    
+    // Update business with generated data
+    await supabase
+      .from('businesses')
+      .update({
+        name: businessData.businessName,
+        subdomain: businessData.domain.replace('.com', '').toLowerCase(),
+        business_data: businessData,
+        status: 'ready'
+      })
+      .eq('id', businessId);
 
-async function generateBusinessWithAI(userData, sessionId, businessId) {
-  const { generateBusinessWithAI: generator } = await import('@/lib/business-generator');
-  return generator(userData, sessionId, businessId);
+    // Update session to complete
+    await supabase
+      .from('sessions')
+      .update({
+        stage: 'complete',
+        progress: 100
+      })
+      .eq('id', sessionId);
+
+    // Log analytics event
+    await supabase
+      .from('analytics')
+      .insert({
+        business_id: businessId,
+        event_type: 'business_generated',
+        event_data: { generation_time: Date.now() }
+      });
+
+  } catch (error) {
+    console.error('Generation error:', error);
+    
+    await supabase
+      .from('businesses')
+      .update({ status: 'failed' })
+      .eq('id', businessId);
+      
+    await supabase
+      .from('sessions')
+      .update({ stage: 'error' })
+      .eq('id', sessionId);
+  }
 }

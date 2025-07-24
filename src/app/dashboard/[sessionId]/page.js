@@ -1,6 +1,7 @@
+// app/dashboard/[sessionId]/page.js
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import LaunchflyDashboard from '@/components/LaunchflyDashboard';
@@ -11,31 +12,49 @@ export default function DashboardPage() {
   const [sessionData, setSessionData] = useState(null);
   const [businessData, setBusinessData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [generationStarted, setGenerationStarted] = useState(false);
+  const generationTriggered = useRef(false);
   
   const supabase = createClientComponentClient();
 
   useEffect(() => {
     loadInitialData();
-    setupRealtimeSubscription();
-  }, [params.sessionId]);
+  }, []);
+
+  useEffect(() => {
+    // Start polling when we have data and generation is in progress
+    if (sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error') {
+      const pollInterval = setInterval(async () => {
+        await fetchLatestData();
+      }, 2000); // Poll every 2 seconds
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [sessionData?.stage]);
+
+  useEffect(() => {
+    // Trigger generation if session is pending
+    if (sessionData?.stage === 'pending' && businessData && !generationTriggered.current) {
+      generationTriggered.current = true;
+      startBusinessGeneration();
+    }
+  }, [sessionData, businessData]);
 
   async function loadInitialData() {
     const maxRetries = 10;
-    const baseDelay = 1000; // Start with 1 second
+    const baseDelay = 1000;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        // Get session first
         const { data: session, error: sessionError } = await supabase
           .from('sessions')
           .select('*')
           .eq('id', params.sessionId)
           .single();
 
-        // If session doesn't exist yet, wait and retry
-        if (sessionError?.code === 'PGRST116') { // No rows returned
+        if (sessionError?.code === 'PGRST116') {
           if (attempt < maxRetries - 1) {
-            const delay = baseDelay * Math.pow(1.5, attempt); // Exponential backoff
+            const delay = baseDelay * Math.pow(1.5, attempt);
             console.log(`Session not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
@@ -46,14 +65,12 @@ export default function DashboardPage() {
         
         if (sessionError) throw sessionError;
 
-        // Get business using session_id
         const { data: business, error: businessError } = await supabase
           .from('businesses')
           .select('*')
           .eq('session_id', params.sessionId)
           .single();
 
-        // If business doesn't exist yet, wait and retry
         if (businessError?.code === 'PGRST116') {
           if (attempt < maxRetries - 1) {
             const delay = baseDelay * Math.pow(1.5, attempt);
@@ -67,7 +84,7 @@ export default function DashboardPage() {
         
         if (businessError) throw businessError;
         
-        // Success! Set data and exit retry loop
+        console.log('Initial data loaded:', { session, business });
         setSessionData(session);
         setBusinessData(business);
         setLoading(false);
@@ -79,55 +96,67 @@ export default function DashboardPage() {
           router.push('/');
           return;
         }
-        // Continue to next retry attempt
       }
     }
   }
 
-  function setupRealtimeSubscription() {
-    // Subscribe to session changes
-    const sessionChannel = supabase
-      .channel(`session-${params.sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sessions',
-          filter: `id=eq.${params.sessionId}`
-        },
-        (payload) => {
-          console.log('Session update:', payload);
-          setSessionData(current => ({ ...current, ...payload.new }));
-        }
-      )
-      .subscribe();
+  async function fetchLatestData() {
+    try {
+      const { data: session, error: sessionError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('id', params.sessionId)
+        .single();
 
-    // Subscribe to business changes
-    const businessChannel = supabase
-      .channel(`business-${params.sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'businesses',
-          filter: `session_id=eq.${params.sessionId}`
-        },
-        (payload) => {
-          console.log('Business update:', payload);
-          setBusinessData(payload.new);
-        }
-      )
-      .subscribe();
+      if (!sessionError && session) {
+        console.log('Fetched updated session:', session);
+        setSessionData(session);
+      }
 
-    return () => {
-      supabase.removeChannel(sessionChannel);
-      supabase.removeChannel(businessChannel);
-    };
+      const { data: business, error: businessError } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('session_id', params.sessionId)
+        .single();
+
+      if (!businessError && business) {
+        console.log('Fetched updated business:', business);
+        setBusinessData(business);
+      }
+    } catch (error) {
+      console.error('Error fetching latest data:', error);
+    }
   }
 
-  // Handler functions
+  async function startBusinessGeneration() {
+    console.log('Starting business generation from dashboard...');
+    setGenerationStarted(true);
+    
+    try {
+      const response = await fetch('/api/generate-business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: params.sessionId,
+          businessId: businessData.id,
+          formData: businessData.form_data
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to start generation');
+      }
+      
+      const result = await response.json();
+      console.log('Generation started successfully:', result);
+      
+    } catch (error) {
+      console.error('Error starting generation:', error);
+      // Update UI to show error
+      setSessionData(prev => ({ ...prev, stage: 'error' }));
+    }
+  }
+
   const handlePhoneCapture = async (phoneNumber) => {
     await fetch('/api/phone/capture', {
       method: 'POST',
@@ -139,19 +168,14 @@ export default function DashboardPage() {
   const handleStepComplete = async (stepId) => {
     const newSteps = [...(sessionData.completed_steps || []), stepId.toString()];
     
-    await supabase
+    const { error } = await supabase
       .from('sessions')
       .update({ completed_steps: newSteps })
       .eq('id', params.sessionId);
-      
-    // Track analytics
-    await supabase
-      .from('analytics')
-      .insert({
-        business_id: businessData.id,
-        event_type: 'step_completed',
-        event_data: { step_id: stepId }
-      });
+    
+    if (!error) {
+      setSessionData(prev => ({ ...prev, completed_steps: newSteps }));
+    }
   };
 
   if (loading) {

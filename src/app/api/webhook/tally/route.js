@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { nanoid } from 'nanoid';
+import { waitUntil } from '@vercel/functions';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -94,7 +95,9 @@ export async function POST(request) {
     await sendDashboardEmail(userData.email, userData.name, sessionId);
     
     // Start business generation in background
-    generateBusinessInBackground(business.id, sessionId, userData);
+    waitUntil(
+      generateBusinessInBackground(business.id, sessionId, userData)
+    );
     
     // Return redirect URL for Tally
     return Response.json({ success: true });

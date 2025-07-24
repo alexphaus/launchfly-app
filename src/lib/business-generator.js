@@ -96,34 +96,34 @@ Generate a comprehensive business plan with:
 
 Return ONLY valid JSON.`;
 
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
-    });
+  // try {
+  //   const completion = await openai.chat.completions.create({
+  //     model: "gpt-4",
+  //     messages: [{ role: "user", content: prompt }],
+  //     temperature: 0.7,
+  //     response_format: { type: "json_object" }
+  //   });
 
-    console.log('OpenAI response received:', completion.choices[0].message.content);
+  //   console.log('OpenAI response received:', completion.choices[0].message.content);
     
-    const businessData = JSON.parse(completion.choices[0].message.content);
+  //   const businessData = JSON.parse(completion.choices[0].message.content);
     
-    // Ensure all required fields exist
-    return {
-      businessName: businessData.businessName || "Your Business",
-      tagline: businessData.tagline || "Transform your passion into profit",
-      domain: businessData.domain || `business-${Date.now()}.com`,
-      logo: businessData.logo || "🚀",
-      revenue: businessData.monthlyRevenue || "$2,000-$5,000/month",
-      products: businessData.products || [],
-      targetCustomers: businessData.targetCustomers || [],
-      monthlyData: businessData.monthlyData || [],
-      marketingStrategy: businessData.marketingStrategy || {},
-      competitors: businessData.competitors || []
-    };
+  //   // Ensure all required fields exist
+  //   return {
+  //     businessName: businessData.businessName || "Your Business",
+  //     tagline: businessData.tagline || "Transform your passion into profit",
+  //     domain: businessData.domain || `business-${Date.now()}.com`,
+  //     logo: businessData.logo || "🚀",
+  //     revenue: businessData.monthlyRevenue || "$2,000-$5,000/month",
+  //     products: businessData.products || [],
+  //     targetCustomers: businessData.targetCustomers || [],
+  //     monthlyData: businessData.monthlyData || [],
+  //     marketingStrategy: businessData.marketingStrategy || {},
+  //     competitors: businessData.competitors || []
+  //   };
     
-  } catch (error) {
-    console.error('OpenAI generation error:', error);
+  // } catch (error) {
+  //   console.error('OpenAI generation error:', error);
     
     // Return fallback data
     return {
@@ -151,5 +151,5 @@ Return ONLY valid JSON.`;
         { month: "Month 6", revenue: 7200 }
       ]
     };
-  }
+  
 }

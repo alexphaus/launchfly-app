@@ -41,7 +41,7 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
 
 Name: ${userData.name}
 Skills/Interests: ${userData.skills}
-Business Type: ${userData.businessType}
+Business Type: {userData.businessType}
 Goal: ${userData.goal}
 Preferences: ${userData.preferences || 'None'}
 
@@ -103,7 +103,7 @@ Return ONLY valid JSON.`;
       temperature: 0.7,
       response_format: { type: "json_object" }
     });
-    console.log('OpenAI response received', completion.choices[0].message.content);
+    
     const businessData = JSON.parse(completion.choices[0].message.content);
     
     // Ensure all required fields exist

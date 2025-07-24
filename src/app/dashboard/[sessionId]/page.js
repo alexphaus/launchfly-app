@@ -21,20 +21,26 @@ export default function DashboardPage() {
 
   async function loadInitialData() {
     try {
-      // Get session with business data
-      const { data: session, error } = await supabase
+      // Get session first
+      const { data: session, error: sessionError } = await supabase
         .from('sessions')
-        .select(`
-          *,
-          business:businesses(*)
-        `)
+        .select('*')
         .eq('id', params.sessionId)
         .single();
 
-      if (error) throw error;
+      if (sessionError) throw sessionError;
+
+      // Get business using session_id (not foreign key)
+      const { data: business, error: businessError } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('session_id', params.sessionId)
+        .single();
+
+      if (businessError) throw businessError;
       
       setSessionData(session);
-      setBusinessData(session.business);
+      setBusinessData(business);
       setLoading(false);
       
     } catch (error) {

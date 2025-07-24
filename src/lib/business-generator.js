@@ -18,19 +18,7 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
     { stage: 'finalizing', progress: 95, duration: 2000 },
   ];
 
-  // Update progress through stages
-  for (const stage of stages) {
-    console.log(`Updating to stage: ${stage.stage} with progress: ${stage.progress}`);
-    await supabase
-      .from('sessions')
-      .update({
-        stage: stage.stage,
-        progress: stage.progress
-      })
-      .eq('id', sessionId);
-      
-    await new Promise(resolve => setTimeout(resolve, stage.duration));
-  }
+  
 
   // Generate business data with OpenAI
   console.log('Calling OpenAI API...');

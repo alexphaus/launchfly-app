@@ -106,7 +106,7 @@ Return ONLY valid JSON.`;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using gpt-4o-mini for cost efficiency
+      model: "gpt-4o",
       messages: [
         {
           role: "system",

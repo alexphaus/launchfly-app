@@ -11,27 +11,27 @@ const supabase = createClient(
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
   console.log('Starting business generation for session:', sessionId);
   
-  // const stages = [
-  //   { stage: 'analyzing', progress: 25, duration: 3000 },
-  //   { stage: 'researching', progress: 50, duration: 3000 },
-  //   { stage: 'building', progress: 75, duration: 3000 },
-  //   { stage: 'finalizing', progress: 95, duration: 2000 },
-  // ];
+  const stages = [
+    { stage: 'analyzing', progress: 25, duration: 3000 },
+    { stage: 'researching', progress: 50, duration: 3000 },
+    { stage: 'building', progress: 75, duration: 3000 },
+    { stage: 'finalizing', progress: 95, duration: 2000 },
+  ];
 
-  // // Update progress through stages
-  // for (const stage of stages) {
-  //   console.log(`Updating to stage: ${stage.stage} with progress: ${stage.progress}`);
-  //   await supabase
-  //     .from('sessions')
-  //     .update({
-  //       stage: stage.stage,
-  //       progress: stage.progress
-  //     })
-  //     .eq('id', sessionId);
+  // Update progress through stages
+  for (const stage of stages) {
+    console.log(`Updating to stage: ${stage.stage} with progress: ${stage.progress}`);
+    await supabase
+      .from('sessions')
+      .update({
+        stage: stage.stage,
+        progress: stage.progress
+      })
+      .eq('id', sessionId);
     
-  //   // Simulate delay for each stage
-  //   await new Promise(resolve => setTimeout(resolve, stage.duration));
-  // }
+    // Simulate delay for each stage
+    await new Promise(resolve => setTimeout(resolve, stage.duration));
+  }
 
   // Generate business data with OpenAI
   console.log('Calling OpenAI API...');

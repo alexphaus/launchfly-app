@@ -85,8 +85,7 @@ export async function POST(request) {
         id: sessionId,
         business_id: business.id,
         stage: 'pending', // Will trigger generation from dashboard
-        progress: 0,
-        userData: userData // Store user data for dashboard access
+        progress: 0
       });
 
     if (sessionError) throw sessionError;

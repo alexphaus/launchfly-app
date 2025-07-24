@@ -10,7 +10,7 @@ const supabase = createClient(
 
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
   const stages = [
-    { stage: 'analyzing', progress: 25, duration: 3000 },
+    //{ stage: 'analyzing', progress: 25, duration: 3000 },
     { stage: 'researching', progress: 50, duration: 3000 },
     { stage: 'building', progress: 75, duration: 3000 },
     { stage: 'finalizing', progress: 95, duration: 2000 },

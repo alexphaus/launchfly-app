@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import LaunchflyDashboard from '@/components/LaunchflyDashboard';
+import FutureProofDashboard from '@/components/FutureProofDashboard';
 
 export default function DashboardPage() {
   const params = useParams();
@@ -129,11 +130,12 @@ export default function DashboardPage() {
   }
 
   async function startBusinessGeneration() {
-    console.log('Starting business generation from dashboard...');
+    console.log('Starting future-proof business launch from dashboard...');
     setGenerationStarted(true);
     
     try {
-      const response = await fetch('/api/generate-business', {
+      // Try the new future-proof API first
+      const response = await fetch('/api/launch-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,14 +146,32 @@ export default function DashboardPage() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to start generation');
+        // Fallback to legacy generation if new system fails
+        console.log('New system failed, falling back to legacy generation...');
+        const fallbackResponse = await fetch('/api/generate-business', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: params.sessionId,
+            businessId: businessData.id,
+            formData: businessData.form_data
+          })
+        });
+        
+        if (!fallbackResponse.ok) {
+          throw new Error('Both new and legacy systems failed');
+        }
+        
+        const fallbackResult = await fallbackResponse.json();
+        console.log('Legacy generation completed:', fallbackResult);
+        return;
       }
       
       const result = await response.json();
-      console.log('Generation started successfully:', result);
+      console.log('Future-proof business launch completed:', result);
       
     } catch (error) {
-      console.error('Error starting generation:', error);
+      console.error('Error starting business launch:', error);
       // Update UI to show error
       setSessionData(prev => ({ ...prev, stage: 'error' }));
     }
@@ -189,12 +209,26 @@ export default function DashboardPage() {
     );
   }
 
+  // Decide which dashboard to show based on business data structure
+  const showFutureProofDashboard = businessData?.business_data?.opportunity || businessData?.business_data?.validation;
+
   return (
-    <LaunchflyDashboard 
-      session={sessionData}
-      business={businessData}
-      onPhoneCapture={handlePhoneCapture}
-      onStepComplete={handleStepComplete}
-    />
+    <>
+      {showFutureProofDashboard ? (
+        <FutureProofDashboard 
+          session={sessionData}
+          business={businessData}
+          onPhoneCapture={handlePhoneCapture}
+          onStepComplete={handleStepComplete}
+        />
+      ) : (
+        <LaunchflyDashboard 
+          session={sessionData}
+          business={businessData}
+          onPhoneCapture={handlePhoneCapture}
+          onStepComplete={handleStepComplete}
+        />
+      )}
+    </>
   );
 }

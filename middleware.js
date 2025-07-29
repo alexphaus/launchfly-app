@@ -8,10 +8,7 @@ export async function middleware(request) {
     request.nextUrl.pathname.startsWith('/api/') ||
     request.nextUrl.pathname.startsWith('/_next/') ||
     request.nextUrl.pathname.startsWith('/favicon.ico') ||
-    request.nextUrl.pathname.startsWith('/dashboard/') ||
-    hostname?.includes('localhost') ||
-    hostname?.includes('127.0.0.1') ||
-    hostname?.includes('vercel.app')
+    request.nextUrl.pathname.startsWith('/dashboard/')
   ) {
     return NextResponse.next();
   }
@@ -19,15 +16,31 @@ export async function middleware(request) {
   // Extract subdomain from hostname
   const subdomain = hostname?.split('.')[0];
   
-  // If we have a subdomain and it's not 'www', treat it as a dynamic site
-  if (subdomain && subdomain !== 'www' && hostname?.includes('launchfly.ai')) {
-    // Rewrite to the dynamic site page
+  console.log('Middleware - Hostname:', hostname);
+  console.log('Middleware - Subdomain:', subdomain);
+  console.log('Middleware - Pathname:', request.nextUrl.pathname);
+  
+  // Skip localhost and main domain
+  if (
+    hostname?.includes('localhost') ||
+    hostname?.includes('127.0.0.1') ||
+    subdomain === 'launchfly' ||
+    subdomain === 'www'
+  ) {
+    console.log('Middleware - Skipping for main domain/localhost');
+    return NextResponse.next();
+  }
+
+  // If we have a subdomain, treat it as a dynamic site
+  if (subdomain && (hostname?.includes('launchfly.ai') || hostname?.includes('vercel.app'))) {
+    console.log('Middleware - Rewriting to:', `/sites/${subdomain}`);
     const url = request.nextUrl.clone();
     url.pathname = `/sites/${subdomain}`;
     
     return NextResponse.rewrite(url);
   }
 
+  console.log('Middleware - No rewrite, continuing');
   return NextResponse.next();
 }
 

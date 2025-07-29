@@ -1,6 +1,6 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
-import { generateBusinessWithAI } from '@/lib/business-generator';
+import { generateBusinessWithAI } from '@/lib/business-generator-v2';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,

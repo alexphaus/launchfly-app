@@ -1,4 +1,5 @@
 // Simple test to verify dynamic routing works
+// Simple test to verify dynamic routing works
 export default async function DynamicWebsite({ params }) {
   // Debug: Show what we're receiving
   console.log('DynamicWebsite - Params:', params);

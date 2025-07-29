@@ -1,8 +1,6 @@
-'use client';
-
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import * as LaunchflyUI from '@/components/launchfly-ui';
 
 // A wrapper to inject theme variables
@@ -22,61 +20,138 @@ function ThemedLayout({ theme, children }) {
   return <main style={style}>{children}</main>;
 }
 
-export default function DynamicWebsite({ params }) {
-  const [business, setBusiness] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const supabase = createClientComponentClient();
+export default async function DynamicWebsite({ params }) {
+  console.log('DynamicWebsite - Params:', params);
+  
+  const supabase = createServerComponentClient({ cookies });
 
-  useEffect(() => {
-    async function fetchBusiness() {
-      try {
-        const { data, error } = await supabase
-          .from('businesses')
-          .select('*')
-          .eq('subdomain', params.subdomain)
-          .eq('status', 'ready')
-          .single();
+  try {
+    const { data: business, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('subdomain', params.subdomain)
+      .eq('status', 'ready')
+      .single();
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            setError('Website not found');
-          } else {
-            setError('Failed to load website');
-          }
-          return;
-        }
+    console.log('DynamicWebsite - Business query result:', { business: !!business, error });
 
-        setBusiness(data);
-      } catch (err) {
-        setError('Failed to load website');
-        console.error('Error fetching business:', err);
-      } finally {
-        setLoading(false);
+    if (error) {
+      console.log('DynamicWebsite - Error:', error);
+      if (error.code === 'PGRST116') {
+        notFound();
       }
+      throw error;
     }
 
-    fetchBusiness();
-  }, [params.subdomain, supabase]);
+    if (!business) {
+      console.log('DynamicWebsite - No business found');
+      notFound();
+    }
 
-  if (loading) {
+    // Get business data with fallbacks
+    const businessData = business.business_data || {};
+    const theme = businessData.theme || {};
+    const layout = businessData.layout || [];
+
+    // If no layout is defined, create a default layout
+    const defaultLayout = [
+      {
+        component: 'NavBar',
+        props: {
+          businessName: businessData.businessName || business.name || 'Your Business',
+          logo: businessData.logo || '🚀',
+          links: ['About', 'Services', 'Pricing', 'Contact'],
+          ctaText: 'Get Started'
+        }
+      },
+      {
+        component: 'Hero',
+        props: {
+          title: businessData.tagline || 'Transform Your Vision Into Reality',
+          subtitle: `Welcome to ${businessData.businessName || business.name || 'Your Business'}`,
+          ctaText: 'Get Started Today'
+        }
+      },
+      {
+        component: 'FeatureGrid',
+        props: {
+          title: 'Why Choose Us',
+          features: businessData.products?.slice(0, 3).map(product => ({
+            icon: '⭐',
+            title: product.name,
+            description: product.description
+          })) || []
+        }
+      },
+      {
+        component: 'TestimonialSlider',
+        props: {
+          testimonials: businessData.testimonials || []
+        }
+      },
+      {
+        component: 'PricingTable',
+        props: {
+          plans: businessData.products?.map(product => ({
+            name: product.name,
+            price: product.price,
+            description: product.description,
+            features: ['Everything included', 'Email support', '30-day guarantee'],
+            ctaText: 'Get Started',
+            popular: false
+          })) || []
+        }
+      },
+      {
+        component: 'CallToAction',
+        props: {
+          title: 'Ready to Get Started?',
+          subtitle: `Join ${businessData.businessName || business.name || 'us'} today`,
+          ctaText: 'Start Now'
+        }
+      },
+      {
+        component: 'Footer',
+        props: {
+          businessName: businessData.businessName || business.name || 'Your Business',
+          logo: businessData.logo || '🚀',
+          description: businessData.tagline || 'Professional solutions for your success'
+        }
+      }
+    ];
+
+    const finalLayout = layout.length > 0 ? layout : defaultLayout;
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading website...</p>
+      <ThemedLayout theme={theme}>
+        <div className="min-h-screen">
+          {finalLayout.map((section, index) => {
+            const Component = LaunchflyUI[section.component];
+            
+            if (!Component) {
+              console.warn(`Component ${section.component} not found`);
+              return null;
+            }
+
+            return (
+              <Component 
+                key={index} 
+                {...(section.props || {})} 
+              />
+            );
+          })}
         </div>
-      </div>
+      </ThemedLayout>
     );
-  }
 
-  if (error || !business) {
+  } catch (error) {
+    console.error('DynamicWebsite - Unexpected error:', error);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Website Not Found</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Website Error</h1>
           <p className="text-gray-600 mb-8">
-            {error || 'This website is not available or is still being generated.'}
+            There was an error loading this website.
           </p>
           <a 
             href="/" 
@@ -88,100 +163,4 @@ export default function DynamicWebsite({ params }) {
       </div>
     );
   }
-
-  // Get business data with fallbacks
-  const businessData = business.business_data || {};
-  const theme = businessData.theme || {};
-  const layout = businessData.layout || [];
-
-  // If no layout is defined, create a default layout
-  const defaultLayout = [
-    {
-      component: 'NavBar',
-      props: {
-        businessName: businessData.businessName || business.name || 'Your Business',
-        logo: businessData.logo || '🚀',
-        links: ['About', 'Services', 'Pricing', 'Contact'],
-        ctaText: 'Get Started'
-      }
-    },
-    {
-      component: 'Hero',
-      props: {
-        title: businessData.tagline || 'Transform Your Vision Into Reality',
-        subtitle: `Welcome to ${businessData.businessName || business.name || 'Your Business'}`,
-        ctaText: 'Get Started Today'
-      }
-    },
-    {
-      component: 'FeatureGrid',
-      props: {
-        title: 'Why Choose Us',
-        features: businessData.products?.slice(0, 3).map(product => ({
-          icon: '⭐',
-          title: product.name,
-          description: product.description
-        })) || []
-      }
-    },
-    {
-      component: 'TestimonialSlider',
-      props: {
-        testimonials: businessData.testimonials || []
-      }
-    },
-    {
-      component: 'PricingTable',
-      props: {
-        plans: businessData.products?.map(product => ({
-          name: product.name,
-          price: product.price,
-          description: product.description,
-          features: ['Everything included', 'Email support', '30-day guarantee'],
-          ctaText: 'Get Started',
-          popular: false
-        })) || []
-      }
-    },
-    {
-      component: 'CallToAction',
-      props: {
-        title: 'Ready to Get Started?',
-        subtitle: `Join ${businessData.businessName || business.name || 'us'} today`,
-        ctaText: 'Start Now'
-      }
-    },
-    {
-      component: 'Footer',
-      props: {
-        businessName: businessData.businessName || business.name || 'Your Business',
-        logo: businessData.logo || '🚀',
-        description: businessData.tagline || 'Professional solutions for your success'
-      }
-    }
-  ];
-
-  const finalLayout = layout.length > 0 ? layout : defaultLayout;
-
-  return (
-    <ThemedLayout theme={theme}>
-      <div className="min-h-screen">
-        {finalLayout.map((section, index) => {
-          const Component = LaunchflyUI[section.component];
-          
-          if (!Component) {
-            console.warn(`Component ${section.component} not found`);
-            return null;
-          }
-
-          return (
-            <Component 
-              key={index} 
-              {...(section.props || {})} 
-            />
-          );
-        })}
-      </div>
-    </ThemedLayout>
-  );
 }

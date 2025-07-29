@@ -148,7 +148,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     const businessData = useMemo(() => business?.business_data || {
         businessName: business?.name || "Generating Your Business...",
         tagline: "Your personalized business is being created...",
-        domain: business?.subdomain ? `${business.subdomain}.launchfly.site` : "yourbusiness.com",
+        domain: business?.subdomain ? `${business.subdomain}.launchfly.ai` : "yourbusiness.com",
         revenue: "$2,000-$5,000/month",
         products: [{ name: "AI-Generated Product", price: "$99", description: "High-value product tailored to your niche." }],
         targetCustomers: ["Your ideal customers are being identified..."],
@@ -262,14 +262,14 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                     <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><Globe className="w-5 h-5" style={{color: theme.colors.primary}} /> Website & Products</h4>
                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="font-semibold">{businessData.businessName}</p>
-                                        <a href={`https://${business.subdomain}.launchfly.site`} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline flex items-center gap-2" style={{color: theme.colors.primary}}>
+                                        <a href={`https://${business.subdomain}.launchfly.ai`} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline flex items-center gap-2" style={{color: theme.colors.primary}}>
                                             <Globe className="w-4 h-4" />
-                                            {business.subdomain}.launchfly.site
+                                            {business.subdomain}.launchfly.ai
                                         </a>
                                         <p className="text-sm mt-2" style={{color: theme.colors.textGray}}>{businessData.tagline}</p>
                                         <div className="mt-4">
                                             <a 
-                                                href={`https://${business.subdomain}.launchfly.site`} 
+                                                href={`https://${business.subdomain}.launchfly.ai`} 
                                                 target="_blank" 
                                                 rel="noopener noreferrer"
                                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold hover:opacity-90 transition-opacity"

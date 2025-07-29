@@ -58,7 +58,7 @@ async function testDynamicWebsites() {
       console.log(`\n📋 Business ${index + 1}:`);
       console.log(`   Name: ${business.name}`);
       console.log(`   Subdomain: ${business.subdomain}`);
-      console.log(`   Website URL: https://${business.subdomain}.launchfly.site`);
+      console.log(`   Website URL: https://${business.subdomain}.launchfly.ai`);
       console.log(`   Status: ${business.status}`);
       
       if (business.business_data) {
@@ -119,7 +119,7 @@ async function testDynamicWebsites() {
     });
     console.log('\n💡 For production testing with subdomains:');
     console.log('   Configure your domain to point to your app');
-    console.log('   Then visit: https://[subdomain].launchfly.site');
+    console.log('   Then visit: https://[subdomain].launchfly.ai');
     
   } catch (error) {
     console.error('❌ Test failed:', error);

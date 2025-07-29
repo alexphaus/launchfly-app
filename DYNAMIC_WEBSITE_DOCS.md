@@ -9,7 +9,7 @@ The system allows Launchfly to generate and serve an unlimited number of unique 
 ## Architecture
 
 ```
-User visits: fitness-pro.launchfly.site
+User visits: fitness-pro.launchfly.ai
        ↓
     Middleware detects subdomain
        ↓
@@ -51,7 +51,7 @@ File: `/middleware.js`
 
 **Purpose:**
 - Intercepts requests to subdomains
-- Routes `[subdomain].launchfly.site` to `/sites/[subdomain]`
+- Routes `[subdomain].launchfly.ai` to `/sites/[subdomain]`
 - Preserves normal app functionality for API routes and static assets
 
 ### 4. Enhanced Business Generator
@@ -122,7 +122,7 @@ When a business is generated through the dashboard, the AI creates:
 - Layout structure with component props
 
 ### 2. Access the Website
-- Dashboard shows link: `https://[subdomain].launchfly.site`
+- Dashboard shows link: `https://[subdomain].launchfly.ai`
 - Click to open the generated website
 - Website renders using the stored theme and layout
 
@@ -141,7 +141,7 @@ http://localhost:3000/sites/[subdomain]
 ```
 
 ### Production Setup
-1. Configure DNS to point `*.launchfly.site` to your app
+1. Configure DNS to point `*.launchfly.ai` to your app
 2. Subdomains will automatically route to the correct business
 
 ### Adding New Components

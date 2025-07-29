@@ -20,7 +20,7 @@ export async function middleware(request) {
   const subdomain = hostname?.split('.')[0];
   
   // If we have a subdomain and it's not 'www', treat it as a dynamic site
-  if (subdomain && subdomain !== 'www' && hostname?.includes('launchfly.site')) {
+  if (subdomain && subdomain !== 'www' && hostname?.includes('launchfly.ai')) {
     // Rewrite to the dynamic site page
     const url = request.nextUrl.clone();
     url.pathname = `/sites/${subdomain}`;

@@ -1,12 +1,12 @@
 The Elegant Solution for Dynamic Website Generation
-This document outlines the optimal, industry-standard architecture for generating and serving an infinite number of unique, professional websites from a single Next.js application. The core concept is robust, scalable, and perfectly aligned with Launchfly's future-proof business strategy.
+This document outlines the optimal, industry-standard architecture for generating and serving an infinite number of unique,[ ] Configure DNS & Vercel: Add the wildcard CNAME record in your DNS and the *.launchfly.ai domain in Vercel.professional websites from a single Next.js application. The core concept is robust, scalable, and perfectly aligned with Launchfly's future-proof business strategy.
 
 🎯 Core Architecture: Dynamic Subdomains (The Right Choice)
 The foundational architecture is correct: one Next.js app serves all customer websites dynamically based on the subdomain. This is the most efficient and scalable method.
 
-fitness-pro.launchfly.site → Your app renders the fitness website
-consulting-experts.launchfly.site → Your app renders the consulting website
-sarah-coaching.launchfly.site → Your app renders the coaching website
+fitness-pro.launchfly.ai → Your app renders the fitness website
+consulting-experts.launchfly.ai → Your app renders the consulting website
+sarah-coaching.launchfly.ai → Your app renders the coaching website
 
 This approach is superior because it is:
 
@@ -173,7 +173,7 @@ Separation of Concerns: The architecture is clean. The middleware handles routin
 
 [ ] Add Middleware: Place middleware.js in your project root.
 
-[ ] Configure DNS & Vercel: Add the wildcard CNAME record in your DNS and the *.launchfly.site domain in Vercel.
+[ ] Configure DNS & Vercel: Add the wildcard CNAME record in your DNS and the *.launchfly.ai domain in Vercel.
 
 By adopting this enhanced model, you build a powerful, flexible, and scalable system that can generate an infinite number of truly stunning and professional websites.
 

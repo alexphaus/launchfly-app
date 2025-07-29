@@ -68,6 +68,71 @@ const mockBusinessData = {
         }
       }
     ]
+  },
+  innovativesolutionshub: {
+    name: 'Innovative Solutions Hub',
+    theme: {
+      colors: {
+        primary: '#10b981',
+        secondary: '#059669',
+        textDark: '#1f2937',
+        textGray: '#6b7280',
+        borderColor: '#e5e7eb'
+      },
+      font: 'Inter',
+      gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+    },
+    layout: [
+      {
+        component: 'NavBar',
+        props: {
+          businessName: 'Innovative Solutions Hub',
+          links: ['Home', 'About', 'Solutions', 'Contact']
+        }
+      },
+      {
+        component: 'Hero',
+        props: {
+          title: 'Transform Your Business with Innovation',
+          subtitle: 'Cutting-edge solutions that drive growth and efficiency for modern businesses',
+          buttonText: 'Get Started',
+          buttonLink: '#contact'
+        }
+      },
+      {
+        component: 'FeatureGrid',
+        props: {
+          title: 'Our Solutions',
+          features: [
+            {
+              title: 'Digital Transformation',
+              description: 'Modernize your operations with our comprehensive digital solutions',
+              icon: '🚀'
+            },
+            {
+              title: 'Innovation Strategy',
+              description: 'Strategic guidance to stay ahead in competitive markets',
+              icon: '💡'
+            },
+            {
+              title: 'Technology Integration',
+              description: 'Seamlessly integrate new technologies into your workflow',
+              icon: '⚙️'
+            }
+          ]
+        }
+      },
+      {
+        component: 'Footer',
+        props: {
+          companyName: 'Innovative Solutions Hub',
+          links: [
+            { href: '#privacy', label: 'Privacy Policy' },
+            { href: '#terms', label: 'Terms of Service' }
+          ]
+        }
+      }
+    ]
   }
 };
 

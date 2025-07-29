@@ -158,6 +158,18 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         ]
     }, [business]);
 
+    // Dynamic website URL generation
+    const getWebsiteUrl = (subdomain) => {
+        const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_URL;
+        const isDev = process.env.NODE_ENV === 'development' || baseUrl?.includes('localhost');
+        
+        if (isDev) {
+            return `${baseUrl}/sites/${subdomain}`;
+        } else {
+            return `https://${subdomain}.launchfly.ai`;
+        }
+    };
+
     // --- Effects ---
     useEffect(() => {
         if (stage === 'complete' && business?.business_data) {
@@ -262,14 +274,14 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                     <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><Globe className="w-5 h-5" style={{color: theme.colors.primary}} /> Website & Products</h4>
                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="font-semibold">{businessData.businessName}</p>
-                                        <a href={`https://${business.subdomain}.launchfly.ai`} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline flex items-center gap-2" style={{color: theme.colors.primary}}>
+                                        <a href={getWebsiteUrl(business.subdomain)} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline flex items-center gap-2" style={{color: theme.colors.primary}}>
                                             <Globe className="w-4 h-4" />
                                             {business.subdomain}.launchfly.ai
                                         </a>
                                         <p className="text-sm mt-2" style={{color: theme.colors.textGray}}>{businessData.tagline}</p>
                                         <div className="mt-4">
                                             <a 
-                                                href={`https://${business.subdomain}.launchfly.ai`} 
+                                                href={getWebsiteUrl(business.subdomain)} 
                                                 target="_blank" 
                                                 rel="noopener noreferrer"
                                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold hover:opacity-90 transition-opacity"

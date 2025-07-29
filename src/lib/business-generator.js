@@ -53,7 +53,7 @@ Business Type: ${userData.businessType}
 Goal: ${userData.goal}
 Preferences: ${userData.preferences || 'None'}
 
-Generate a comprehensive business plan with:
+Generate a comprehensive business plan with theme and layout for a professional website:
 {
   "businessName": "Creative and memorable business name",
   "tagline": "One compelling sentence that sells the vision",
@@ -98,6 +98,98 @@ Generate a comprehensive business plan with:
       "name": "Competitor 1",
       "strength": "What they do well",
       "weakness": "Where you can beat them"
+    }
+  ],
+  "theme": {
+    "colors": {
+      "primary": "#3b82f6",
+      "secondary": "#1e40af",
+      "textDark": "#1f2937",
+      "textGray": "#6b7280",
+      "borderColor": "#e5e7eb"
+    },
+    "font": "Inter",
+    "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+  },
+  "layout": [
+    {
+      "component": "NavBar",
+      "props": {
+        "businessName": "Use businessName from above",
+        "logo": "Use logo from above", 
+        "links": ["About", "Services", "Pricing", "Contact"],
+        "ctaText": "Get Started"
+      }
+    },
+    {
+      "component": "Hero",
+      "props": {
+        "title": "Use tagline or create compelling hero title",
+        "subtitle": "Compelling subtitle about the business value",
+        "ctaText": "Start Today",
+        "secondaryCtaText": "Learn More"
+      }
+    },
+    {
+      "component": "FeatureGrid",
+      "props": {
+        "title": "Why Choose Us",
+        "features": [
+          {
+            "icon": "⚡",
+            "title": "Feature based on business type",
+            "description": "Description of this feature"
+          }
+          // 3 features total
+        ]
+      }
+    },
+    {
+      "component": "TestimonialSlider",
+      "props": {
+        "testimonials": [
+          {
+            "name": "John Doe",
+            "role": "Happy Customer",
+            "content": "Realistic testimonial based on business type",
+            "avatar": "👨‍💼",
+            "rating": 5
+          }
+          // 2-3 testimonials
+        ]
+      }
+    },
+    {
+      "component": "PricingTable", 
+      "props": {
+        "plans": [
+          {
+            "name": "Basic",
+            "price": "Price from products above",
+            "description": "Perfect for getting started",
+            "features": ["Feature 1", "Feature 2", "Feature 3"],
+            "ctaText": "Get Started",
+            "popular": false
+          }
+          // Use products as pricing plans
+        ]
+      }
+    },
+    {
+      "component": "CallToAction",
+      "props": {
+        "title": "Ready to Get Started?",
+        "subtitle": "Join us today and transform your business",
+        "ctaText": "Start Now"
+      }
+    },
+    {
+      "component": "Footer",
+      "props": {
+        "businessName": "Use businessName from above",
+        "logo": "Use logo from above",
+        "description": "Use tagline from above"
+      }
     }
   ]
 }
@@ -145,7 +237,19 @@ Return ONLY valid JSON.`;
         { month: "Month 6", revenue: 7200 }
       ],
       marketingStrategy: businessData.marketingStrategy || {},
-      competitors: businessData.competitors || []
+      competitors: businessData.competitors || [],
+      theme: businessData.theme || {
+        colors: {
+          primary: "#3b82f6",
+          secondary: "#1e40af", 
+          textDark: "#1f2937",
+          textGray: "#6b7280",
+          borderColor: "#e5e7eb"
+        },
+        font: "Inter",
+        gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      },
+      layout: businessData.layout || []
     };
     
     // Update session to complete

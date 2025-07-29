@@ -262,10 +262,23 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                     <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><Globe className="w-5 h-5" style={{color: theme.colors.primary}} /> Website & Products</h4>
                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="font-semibold">{businessData.businessName}</p>
-                                        <a href={`http://${businessData.domain}`} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline" style={{color: theme.colors.primary}}>
-                                            http://{businessData.domain}
+                                        <a href={`https://${business.subdomain}.launchfly.site`} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline flex items-center gap-2" style={{color: theme.colors.primary}}>
+                                            <Globe className="w-4 h-4" />
+                                            {business.subdomain}.launchfly.site
                                         </a>
                                         <p className="text-sm mt-2" style={{color: theme.colors.textGray}}>{businessData.tagline}</p>
+                                        <div className="mt-4">
+                                            <a 
+                                                href={`https://${business.subdomain}.launchfly.site`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white font-semibold hover:opacity-90 transition-opacity"
+                                                style={{background: theme.colors.primary}}
+                                            >
+                                                <Globe className="w-4 h-4" />
+                                                Visit Your Website
+                                            </a>
+                                        </div>
                                     </div>
                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="font-semibold mb-2">{businessData.products[0].name} - <span style={{color: theme.colors.primary}}>{businessData.products[0].price}</span></p>

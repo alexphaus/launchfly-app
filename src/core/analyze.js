@@ -16,6 +16,58 @@ const supabase = createClient(
 );
 
 /**
+ * Validates market demand for a business opportunity
+ * 
+ * @param {Object} opportunity - The business opportunity to validate
+ * @returns {Object} Validation results with confidence score
+ */
+export async function validateDemand(opportunity) {
+  try {
+    const prompt = `
+      Validate market demand for this business opportunity:
+      ${JSON.stringify(opportunity)}
+      
+      Research and analyze:
+      1. Market size and growth trends
+      2. Competitor analysis and pricing
+      3. Customer pain points and willingness to pay
+      4. Barriers to entry and competition level
+      5. Revenue potential and scalability
+      
+      Return a confidence score (0-100) and detailed validation data as JSON.
+    `;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are a market research expert who validates business opportunities with real data and analysis." },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" }
+    });
+    
+    const validation = JSON.parse(response.choices[0].message.content);
+    
+    return {
+      confidence: validation.confidence || 50,
+      marketSize: validation.marketSize || "Unknown",
+      competition: validation.competition || "Medium",
+      barriers: validation.barriers || "Medium",
+      revenueProjection: validation.revenueProjection || "Unknown",
+      risks: validation.risks || [],
+      validated: validation.confidence > 70
+    };
+  } catch (error) {
+    console.error("Error validating demand:", error);
+    return {
+      confidence: 50,
+      validated: false,
+      error: "Validation failed"
+    };
+  }
+}
+
+/**
  * Analyzes user data to find profitable business opportunities
  * 
  * @param {Object} userData - User information from the form

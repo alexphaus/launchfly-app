@@ -8,7 +8,7 @@
  * 3. growBusiness - Make it successful (the real moat)
  */
 
-export { analyzeOpportunity, calculateSuccessProbability } from './analyze';
+export { analyzeOpportunity, calculateSuccessProbability, validateDemand } from './analyze';
 export { launchBusiness } from './launch';
 export { growBusiness, runGrowthExperiments } from './grow';
 
@@ -18,6 +18,7 @@ export { growBusiness, runGrowthExperiments } from './grow';
 export class LaunchflyV2 {
   /**
    * Launch a new business from start to finish
+   * Following the future-proof approach: discover → validate → create → grow
    * 
    * @param {Object} user - User information and preferences
    * @param {string} sessionId - Current session ID 
@@ -25,15 +26,21 @@ export class LaunchflyV2 {
    * @returns {Object} Complete business data with growth metrics
    */
   async launchBusiness(user, sessionId, businessId) {
-    // Step 1: Find what will work
-    const { analyzeOpportunity } = await import('./analyze');
+    // Step 1: Find what will work (AI-resistant value)
+    const { analyzeOpportunity, validateDemand } = await import('./analyze');
     const opportunity = await analyzeOpportunity(user, sessionId);
     
-    // Step 2: Create the business with best available AI
+    // Step 2: Validate with real market data (our expertise)
+    const validation = await validateDemand(opportunity);
+    if (!validation.validated) {
+      throw new Error('Business opportunity failed validation. Confidence too low.');
+    }
+    
+    // Step 3: Create the business with best available AI (replaceable layer)
     const { launchBusiness: createBusiness } = await import('./launch');
     const business = await createBusiness(opportunity, sessionId, businessId);
     
-    // Step 3: Generate customers and growth (the real value)
+    // Step 4: Generate customers and optimize for profit (our moat)
     const { growBusiness } = await import('./grow');
     return await growBusiness(business, businessId);
   }
@@ -48,60 +55,58 @@ export class LaunchflyV2 {
     // Implementation would fetch and analyze business data
     // from database to provide insights and metrics
     return {
-      valuation: "$25,000-$50,000",
-      successProbability: 0.82,
-      projectedAnnualRevenue: "$60,000",
-      growthRate: "15% month-over-month",
-      customerAcquisitionCost: "$52",
-      lifetimeValue: "$750"
+      valuation: 0,
+      monthlyRevenue: 0,
+      growthRate: 0,
+      customerCount: 0
     };
   }
-  
+
   /**
-   * Generate growth plan for an existing business
+   * Success guarantee levels following the future-proof approach
+   * Each level provides increasing value and pricing
+   */
+  static getSuccessGuarantees() {
+    return {
+      basic: {
+        promise: "Website in 24 hours",
+        price: 97,
+        refundable: true
+      },
+      better: {
+        promise: "First customer in 7 days",
+        price: 297,
+        refundable: true
+      },
+      best: {
+        promise: "Profitable in 30 days or money back",
+        price: 997,
+        refundable: true
+      },
+      ultimate: {
+        promise: "We run it until it makes $X",
+        price: "% of revenue",
+        refundable: false
+      }
+    };
+  }
+
+  /**
+   * Check if business meets success criteria
    * 
    * @param {string} businessId - Business record ID
-   * @returns {Object} Growth plan and strategies
+   * @param {string} guarantee - Guarantee level
+   * @returns {Object} Success status and metrics
    */
-  async generateGrowthPlan(businessId) {
-    // Implementation would analyze business and market data
-    // to create a comprehensive growth plan
+  async checkSuccessGuarantee(businessId, guarantee) {
+    const metrics = await this.getBusinessMetrics(businessId);
+    const guarantees = LaunchflyV2.getSuccessGuarantees();
+    
+    // Implementation would check if business meets the guarantee criteria
     return {
-      strategies: [
-        {
-          name: "Expand Product Line",
-          impact: "High",
-          effort: "Medium",
-          timeline: "3 months"
-        },
-        {
-          name: "Referral Program",
-          impact: "Medium",
-          effort: "Low",
-          timeline: "1 month"
-        },
-        {
-          name: "Content Marketing",
-          impact: "High",
-          effort: "High",
-          timeline: "6 months"
-        }
-      ],
-      projections: {
-        sixMonth: {
-          revenue: "$36,000",
-          customers: 85
-        },
-        twelveMonth: {
-          revenue: "$120,000",
-          customers: 250
-        }
-      },
-      nextSteps: [
-        "Implement referral program",
-        "Create content calendar",
-        "Research product expansion opportunities"
-      ]
+      met: false,
+      metrics,
+      guarantee: guarantees[guarantee]
     };
   }
 }

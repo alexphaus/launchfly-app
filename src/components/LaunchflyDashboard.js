@@ -93,7 +93,7 @@ const GuaranteeCard = () => (
 // --- COMPONENT: Main Launch Checklist ---
 const LaunchChecklist = ({ businessData, completedSteps, onStepComplete }) => {
     const steps = [
-        { id: 1, title: "Claim Your Domain", description: `Secure ${businessData.domain} before someone else does.`, buttonText: "Claim Now", icon: "🌐" },
+        { id: 1, title: "Claim Your Domain", description: `Secure ${businessData?.domain || 'your-business.com'} before someone else does.`, buttonText: "Claim Now", icon: "🌐" },
         { id: 2, title: "Activate Payments", description: "Connect Stripe to start accepting payments in 2 minutes.", buttonText: "Connect Stripe", icon: "💳" },
         { id: 3, title: "Launch & Get Customers", description: "Go live! Our AI will start finding your first customers immediately.", buttonText: "Activate Business", icon: "🚀" }
     ];
@@ -279,12 +279,12 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                 <div className="space-y-6">
                                     <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><Globe className="w-5 h-5" style={{color: theme.colors.primary}} /> Website & Products</h4>
                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
-                                        <p className="font-semibold">{businessData.businessName}</p>
+                                        <p className="font-semibold">{businessData?.businessName || 'Your Business'}</p>
                                         <a href={getWebsiteUrl(business.subdomain)} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline flex items-center gap-2" style={{color: theme.colors.primary}}>
                                             <Globe className="w-4 h-4" />
                                             {business.subdomain}.launchfly.ai
                                         </a>
-                                        <p className="text-sm mt-2" style={{color: theme.colors.textGray}}>{businessData.tagline}</p>
+                                        <p className="text-sm mt-2" style={{color: theme.colors.textGray}}>{businessData?.tagline || 'Transform your passion into profit'}</p>
                                         <div className="mt-4">
                                             <a 
                                                 href={getWebsiteUrl(business.subdomain)} 
@@ -299,8 +299,17 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                         </div>
                                     </div>
                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
-                                        <p className="font-semibold mb-2">{businessData.products[0].name} - <span style={{color: theme.colors.primary}}>{businessData.products[0].price}</span></p>
-                                        <p className="text-sm" style={{color: theme.colors.textGray}}>{businessData.products[0].description}</p>
+                                        {businessData.products && businessData.products.length > 0 ? (
+                                            <>
+                                                <p className="font-semibold mb-2">{businessData.products[0].name} - <span style={{color: theme.colors.primary}}>{businessData.products[0].price}</span></p>
+                                                <p className="text-sm" style={{color: theme.colors.textGray}}>{businessData.products[0].description}</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="font-semibold mb-2">Premium Service - <span style={{color: theme.colors.primary}}>$297/month</span></p>
+                                                <p className="text-sm" style={{color: theme.colors.textGray}}>Professional service offering coming soon</p>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 {/* Revenue & Customers */}
@@ -308,11 +317,15 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                      <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><TrendingUp className="w-5 h-5" style={{color: theme.colors.primary}} /> Revenue & Customers</h4>
                                      <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="text-sm font-medium" style={{color: theme.colors.textGray}}>Est. Monthly Revenue</p>
-                                        <p className="text-2xl font-bold" style={{color: theme.colors.success}}>{businessData.revenue}</p>
+                                        <p className="text-2xl font-bold" style={{color: theme.colors.success}}>{businessData?.revenue || businessData?.monthlyRevenue || '$2,000-$5,000/month'}</p>
                                      </div>
                                       <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="font-semibold mb-2 flex items-center gap-2"><Users className="w-5 h-5" style={{color: theme.colors.primary}}/> Ideal Customer Profile</p>
-                                        <p className="text-sm" style={{color: theme.colors.textGray}}>{businessData.targetCustomers[0]}</p>
+                                        <p className="text-sm" style={{color: theme.colors.textGray}}>
+                                            {businessData.targetCustomers && businessData.targetCustomers.length > 0 
+                                                ? businessData.targetCustomers[0] 
+                                                : "Professional business owners and entrepreneurs"}
+                                        </p>
                                      </div>
                                 </div>
                             </div>

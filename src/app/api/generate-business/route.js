@@ -13,8 +13,10 @@ const supabase = createClient(
  * Following the principles from future-proof-approach.md
  */
 export async function POST(request) {
+  let sessionId, businessId, formData;
+  
   try {
-    const { sessionId, businessId, formData } = await request.json();
+    ({ sessionId, businessId, formData } = await request.json());
     
     console.log('Starting business generation via API:', { sessionId, businessId });
     
@@ -27,18 +29,18 @@ export async function POST(request) {
       .eq('id', businessId);
     
     // Option 1: Use the legacy generator for backward compatibility
-    // const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
+    const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
     
     // Option 2: Use our new unified LaunchflyV2 class (preferred approach)
-    const launchfly = new LaunchflyV2();
-    const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
+    // const launchfly = new LaunchflyV2();
+    // const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
     
     // Update business with generated data
     await supabase
       .from('businesses')
       .update({
         name: businessData.businessName,
-        subdomain: businessData.domain.replace('.com', '').toLowerCase(),
+        subdomain: businessData.domain ? businessData.domain.replace('.com', '').toLowerCase() : `business-${Date.now()}`,
         business_data: businessData,
         status: 'ready'
       })
@@ -54,13 +56,16 @@ export async function POST(request) {
   } catch (error) {
     console.error('Generation API error:', error);
     
-    // Update session to error state
-    if (request.body) {
-      const { sessionId } = await request.json();
-      await supabase
-        .from('sessions')
-        .update({ stage: 'error' })
-        .eq('id', sessionId);
+    // Update session to error state using the stored sessionId
+    if (sessionId) {
+      try {
+        await supabase
+          .from('sessions')
+          .update({ stage: 'error' })
+          .eq('id', sessionId);
+      } catch (updateError) {
+        console.error('Error updating session to error state:', updateError);
+      }
     }
     
     return new Response(JSON.stringify({ error: error.message }), { 

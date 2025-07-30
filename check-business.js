@@ -27,13 +27,14 @@ const supabase = createClient(
 );
 
 async function checkBusiness() {
-  console.log('🔍 Checking business data for subdomain: axceleratebusiness\n');
+  const subdomain = 'pizzaxperience';
+  console.log(`🔍 Checking business data for subdomain: ${subdomain}\n`);
   
   try {
     const { data: business, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('subdomain', 'axceleratebusiness')
+      .eq('subdomain', subdomain)
       .single();
       
     if (error) {
@@ -58,8 +59,8 @@ async function checkBusiness() {
     }
     
     console.log('\n🧪 Test URLs:');
-    console.log('  Local: http://localhost:3000/sites/axceleratebusiness');
-    console.log('  Production: https://axceleratebusiness.launchfly.ai');
+    console.log(`  Local: http://localhost:3000/sites/${subdomain}`);
+    console.log(`  Production: https://${subdomain}.launchfly.ai`);
     
   } catch (error) {
     console.error('❌ Test failed:', error);

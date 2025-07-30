@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 
-export async function middleware(request) {
+export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host');
   
   // Skip middleware for API routes, static files, and Next.js internals

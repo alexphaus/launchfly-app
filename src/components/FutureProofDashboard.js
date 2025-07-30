@@ -2,7 +2,42 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ValueLayers, SuccessGuarantees } from '@/lib/core/index.js';
+
+// Define ValueLayers and SuccessGuarantees locally to avoid import issues during build
+const ValueLayers = {
+  discovery: {
+    value: "Find profitable opportunity",
+    price: "$97",
+    moat: "Market knowledge + real data"
+  },
+  validation: {
+    value: "Prove people will pay",
+    price: "$297",
+    moat: "Real customer conversations"
+  },
+  creation: {
+    value: "Build the business",
+    price: "$0",
+    moat: "None - use best AI available"
+  },
+  acquisition: {
+    value: "Bring paying customers", 
+    price: "$997 or 10% revenue share",
+    moat: "Relationships + reputation"
+  },
+  scale: {
+    value: "Grow to sustainable revenue",
+    price: "20% of growth above baseline",
+    moat: "Experience + network effects"
+  }
+};
+
+const SuccessGuarantees = {
+  basic: "Website live in 24 hours",
+  better: "First customer within 7 days",
+  best: "Profitable within 30 days or money back", 
+  ultimate: "We manage until you hit revenue goals"
+};
 
 const theme = {
   colors: {

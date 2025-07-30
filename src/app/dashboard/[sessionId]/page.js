@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import LaunchflyDashboard from '@/components/LaunchflyDashboard';
+import { growBusiness, runGrowthExperiments } from '@/core';
 
 export default function DashboardPage() {
   const params = useParams();
@@ -175,6 +176,43 @@ export default function DashboardPage() {
     
     if (!error) {
       setSessionData(prev => ({ ...prev, completed_steps: newSteps }));
+      
+      // When the business is activated (step 3), run the growth strategies
+      if (stepId === 3 && businessData) {
+        try {
+          // Apply our growth strategies to the business
+          console.log('Starting growth strategies for business...');
+          const growthData = await growBusiness(businessData.business_data, businessData.id);
+          
+          // Run experiments to optimize
+          const experiments = await runGrowthExperiments(businessData.business_data);
+          
+          console.log('Growth strategies applied:', { growthData, experiments });
+          
+          // Update the business data with growth metrics
+          const updatedBusiness = {
+            ...businessData,
+            business_data: {
+              ...businessData.business_data,
+              growthMetrics: growthData,
+              experiments: experiments
+            }
+          };
+          
+          setBusinessData(updatedBusiness);
+          
+          // Persist to database
+          await supabase
+            .from('businesses')
+            .update({ 
+              business_data: updatedBusiness.business_data 
+            })
+            .eq('id', businessData.id);
+            
+        } catch (error) {
+          console.error('Error applying growth strategies:', error);
+        }
+      }
     }
   };
 

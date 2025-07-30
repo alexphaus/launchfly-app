@@ -1,28 +1,24 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
 import { generateBusinessWithAI } from '@/lib/business-generator';
+import { LaunchflyV2 } from '@/core';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
+/**
+ * API route to generate a business using our future-proof architecture
+ * Following the principles from future-proof-approach.md
+ */
 export async function POST(request) {
   try {
     const { sessionId, businessId, formData } = await request.json();
     
     console.log('Starting business generation via API:', { sessionId, businessId });
     
-    // Update session to show generation is starting
-    await supabase
-      .from('sessions')
-      .update({
-        stage: 'analyzing',
-        progress: 25
-      })
-      .eq('id', sessionId);
-    
-    // Update business status
+    // Initialize status
     await supabase
       .from('businesses')
       .update({
@@ -30,8 +26,12 @@ export async function POST(request) {
       })
       .eq('id', businessId);
     
-    // Run the generation process
-    const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
+    // Option 1: Use the legacy generator for backward compatibility
+    // const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
+    
+    // Option 2: Use our new unified LaunchflyV2 class (preferred approach)
+    const launchfly = new LaunchflyV2();
+    const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
     
     // Update business with generated data
     await supabase

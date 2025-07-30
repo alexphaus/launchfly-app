@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { ChevronRight, Globe, DollarSign, Users, Rocket, Check, TrendingUp, Sparkles, Clock, X, AlertCircle, MessageSquare } from 'lucide-react';
+import GrowthInsights from './GrowthInsights';
 
 // --- NEW: Design System Inspired by styles.css ---
 const theme = {
@@ -264,6 +265,11 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                         
                         {/* --- Middle Section: Launch Checklist --- */}
                         <LaunchChecklist businessData={businessData} completedSteps={completedSteps} onStepComplete={completeStep} />
+                        
+                        {/* --- Growth Section: Insights from Core Architecture --- */}
+                        {businessData?.growthMetrics || completedSteps?.includes('3') ? (
+                            <GrowthInsights businessData={businessData} theme={theme} />
+                        ) : null}
 
                         {/* --- Bottom Section: Business Details --- */}
                         <div className="bg-white rounded-2xl p-6 md:p-8" style={{ boxShadow: theme.shadows.lg }}>

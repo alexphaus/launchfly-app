@@ -1,49 +1,50 @@
 // lib/business-generator.js
-import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { analyzeOpportunity, launchBusiness, growBusiness } from '../core';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
+// Create Supabase client for database operations
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
+/**
+ * Generate a complete business using the future-proof architecture
+ * This function orchestrates the entire business creation process
+ * 
+ * @param {Object} userData - User information from the form 
+ * @param {string} sessionId - Current session ID
+ * @param {string} businessId - Business record ID
+ * @returns {Object} Complete business data
+ */
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
   console.log('Starting business generation for session:', sessionId);
   
-  const stages = [
-    { stage: 'analyzing', progress: 25, duration: 1500 },
-    { stage: 'researching', progress: 50, duration: 1500 },
-    { stage: 'building', progress: 75, duration: 1500 },
-    { stage: 'finalizing', progress: 95, duration: 1000 },
-  ];
-
-  // Update progress through stages
-  for (const stage of stages) {
-    console.log(`Updating to stage: ${stage.stage} with progress: ${stage.progress}`);
+  try {
+    // Step 1: Analyze opportunity using our core function
+    console.log('Analyzing business opportunity...');
+    const opportunity = await analyzeOpportunity(userData, sessionId);
     
-    const { data, error } = await supabase
+    // Step 2: Launch the business with the analyzed opportunity
+    console.log('Launching business...');
+    const businessData = await launchBusiness(opportunity, sessionId, businessId);
+    
+    // Note: We don't run growBusiness automatically here because
+    // that's part of the ongoing value we provide to customers
+    // It's called later in the dashboard flow
+    
+    return businessData;
+  } catch (error) {
+    console.error('Error generating business:', error);
+    
+    // Update session to error state
+    await supabase
       .from('sessions')
-      .update({
-        stage: stage.stage,
-        progress: stage.progress
-      })
-      .eq('id', sessionId)
-      .select()
-      .single();
+      .update({ stage: 'error' })
+      .eq('id', sessionId);
     
-    if (error) {
-      console.error('Error updating session:', error);
-    } else {
-      console.log('Successfully updated session:', data);
-    }
-    
-    await new Promise(resolve => setTimeout(resolve, stage.duration));
+    throw error;
   }
-
-  // Generate business data with OpenAI
-  console.log('Calling OpenAI API...');
 
   const prompt = `You are a brilliant business strategist. Create a specific, actionable online business based on this profile:
 

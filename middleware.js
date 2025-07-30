@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 
 export async function middleware(request) {
   const hostname = request.headers.get('host');
+  const pathname = request.nextUrl.pathname;
   
   // Skip middleware for API routes, static files, and Next.js internals
   if (
-    request.nextUrl.pathname.startsWith('/api/') ||
-    request.nextUrl.pathname.startsWith('/_next/') ||
-    request.nextUrl.pathname.startsWith('/favicon.ico') ||
-    request.nextUrl.pathname.startsWith('/dashboard/')
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname.startsWith('/dashboard/') ||
+    pathname.startsWith('/sites/') // Important: Skip if already going to /sites/
   ) {
     return NextResponse.next();
   }
@@ -16,31 +18,37 @@ export async function middleware(request) {
   // Extract subdomain from hostname
   const subdomain = hostname?.split('.')[0];
   
-  console.log('Middleware - Hostname:', hostname);
-  console.log('Middleware - Subdomain:', subdomain);
-  console.log('Middleware - Pathname:', request.nextUrl.pathname);
+  // Enhanced logging for production debugging
+  console.log('🔍 Middleware Debug:', {
+    hostname,
+    subdomain,
+    pathname,
+    userAgent: request.headers.get('user-agent')?.substring(0, 50)
+  });
   
   // Skip localhost and main domain
   if (
     hostname?.includes('localhost') ||
     hostname?.includes('127.0.0.1') ||
     subdomain === 'launchfly' ||
-    subdomain === 'www'
+    subdomain === 'www' ||
+    !subdomain ||
+    subdomain === 'launchfly-app' // Skip Vercel preview URLs
   ) {
-    console.log('Middleware - Skipping for main domain/localhost');
+    console.log('⏭️  Middleware - Skipping for main domain/localhost');
     return NextResponse.next();
   }
 
-  // If we have a subdomain, treat it as a dynamic site
+  // If we have a subdomain and it's on the right domain, treat it as a dynamic site
   if (subdomain && (hostname?.includes('launchfly.ai') || hostname?.includes('vercel.app'))) {
-    console.log('Middleware - Rewriting to:', `/sites/${subdomain}`);
+    console.log('🔄 Middleware - Rewriting to:', `/sites/${subdomain}${pathname}`);
     const url = request.nextUrl.clone();
-    url.pathname = `/sites/${subdomain}`;
+    url.pathname = `/sites/${subdomain}${pathname}`;
     
     return NextResponse.rewrite(url);
   }
 
-  console.log('Middleware - No rewrite, continuing');
+  console.log('🚫 Middleware - No rewrite, continuing to main app');
   return NextResponse.next();
 }
 

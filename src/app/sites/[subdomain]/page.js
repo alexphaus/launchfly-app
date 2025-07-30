@@ -164,7 +164,7 @@ export default async function DynamicWebsite({ params }) {
       .from('businesses')
       .select('*')
       .eq('subdomain', params.subdomain)
-      .eq('status', 'published')
+      .eq('status', 'ready')
       .single();
 
     if (business && !error) {

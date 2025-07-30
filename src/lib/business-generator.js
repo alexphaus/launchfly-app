@@ -1,6 +1,7 @@
-// lib/business-generator.js
+// lib/business-generator.js - Now using the future-proof core system
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import LaunchflyCore from './core/index.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -9,8 +10,82 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Initialize the future-proof core system
+const launchflyCore = new LaunchflyCore();
+
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
-  console.log('Starting business generation for session:', sessionId);
+  console.log('🚀 Starting future-proof business generation for session:', sessionId);
+  
+  try {
+    // Use the new core system instead of the old approach
+    const result = await launchflyCore.launchSuccessfulBusiness(userData, sessionId);
+    
+    if (result.success) {
+      // Convert core system output to expected format
+      const businessData = convertToLegacyFormat(result, userData);
+      
+      // Mark as complete
+      await supabase
+        .from('sessions')
+        .update({
+          stage: 'complete',
+          progress: 100
+        })
+        .eq('id', sessionId);
+      
+      console.log('✅ Business successfully generated using future-proof approach');
+      return businessData;
+    } else {
+      throw new Error(result.error || 'Failed to generate business');
+    }
+  } catch (error) {
+    console.error('Future-proof generation failed, falling back to legacy approach:', error);
+    return await legacyGenerateBusinessWithAI(userData, sessionId, businessId);
+  }
+}
+
+// Convert new core system output to expected legacy format
+function convertToLegacyFormat(coreResult, userData) {
+  const { opportunity, business, growth } = coreResult;
+  
+  return {
+    businessName: opportunity.business.name || `${userData.businessType || 'Professional'} Business`,
+    domain: business.website.domain || 'example.com',
+    description: opportunity.business.solution || 'Professional services business',
+    
+    // Website structure
+    hero: {
+      title: business.website.hero.headline,
+      subtitle: business.website.hero.subheading,
+      ctaText: business.website.hero.cta
+    },
+    
+    features: business.website.features,
+    pricing: business.website.pricing,
+    testimonials: business.website.testimonials,
+    
+    // Business details
+    target: opportunity.business.target,
+    problem: opportunity.business.problem,
+    solution: opportunity.business.solution,
+    advantage: opportunity.business.advantage,
+    
+    // Growth data
+    growth: {
+      strategy: growth.status === 'successful' ? 'Proven growth system' : 'Growth optimization in progress',
+      expectedRevenue: growth.revenue || 0,
+      timeline: '30-90 days to profitability'
+    },
+    
+    // Success metrics
+    confidence: opportunity.confidence,
+    guarantee: coreResult.guarantee
+  };
+}
+
+// Legacy fallback function for backwards compatibility
+async function legacyGenerateBusinessWithAI(userData, sessionId, businessId) {
+  console.log('📊 Using legacy generation approach...');
   
   const stages = [
     { stage: 'analyzing', progress: 25, duration: 1500 },

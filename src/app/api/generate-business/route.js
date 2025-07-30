@@ -1,6 +1,7 @@
-// app/api/generate-business/route.js
+// app/api/generate-business/route.js - Updated for future-proof approach
 import { createClient } from '@supabase/supabase-js';
 import { generateBusinessWithAI } from '@/lib/business-generator';
+import LaunchflyCore from '@/lib/core/index.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -11,7 +12,7 @@ export async function POST(request) {
   try {
     const { sessionId, businessId, formData } = await request.json();
     
-    console.log('Starting business generation via API:', { sessionId, businessId });
+    console.log('🚀 Starting future-proof business generation via API:', { sessionId, businessId });
     
     // Update session to show generation is starting
     await supabase
@@ -30,7 +31,7 @@ export async function POST(request) {
       })
       .eq('id', businessId);
     
-    // Run the generation process
+    // Use the new future-proof generation process
     const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
     
     // Update business with generated data
@@ -44,26 +45,34 @@ export async function POST(request) {
       })
       .eq('id', businessId);
     
-    // Session is already marked complete by generateBusinessWithAI
+    // Session completion is handled by the core system
     
     return Response.json({ 
       success: true, 
-      businessData 
+      businessData,
+      message: 'Business generated using future-proof approach'
     });
     
   } catch (error) {
-    console.error('Generation API error:', error);
+    console.error('Future-proof generation API error:', error);
     
     // Update session to error state
     if (request.body) {
-      const { sessionId } = await request.json();
-      await supabase
-        .from('sessions')
-        .update({ stage: 'error' })
-        .eq('id', sessionId);
+      try {
+        const { sessionId } = await request.json();
+        await supabase
+          .from('sessions')
+          .update({ stage: 'error' })
+          .eq('id', sessionId);
+      } catch (parseError) {
+        console.error('Failed to parse request for error handling:', parseError);
+      }
     }
     
-    return new Response(JSON.stringify({ error: error.message }), { 
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      fallback: 'Will attempt legacy generation approach'
+    }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });

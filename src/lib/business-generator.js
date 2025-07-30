@@ -1,4 +1,6 @@
-// lib/business-generator.js
+// lib/business-generator.js - Future-Proof Implementation
+import { launchflyCore } from './core/index.js';
+import { shouldUseFutureProofCore, FUTURE_PROOF_CONFIG } from './config/future-proof.js';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 
@@ -9,7 +11,55 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+/**
+ * Future-proof business generation with gradual rollout
+ * Uses feature flags to control new system deployment
+ */
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
+  console.log('🚀 Starting business generation...');
+  
+  // Check if user should get new system
+  const useFutureProofCore = shouldUseFutureProofCore(sessionId);
+  
+  if (useFutureProofCore) {
+    console.log('✨ Using future-proof core system for session:', sessionId);
+    
+    try {
+      // Use the new future-proof core system
+      const businessData = await launchflyCore.createSuccessfulBusiness(
+        userData, 
+        sessionId, 
+        businessId,
+        { 
+          targetRevenue: FUTURE_PROOF_CONFIG.DEFAULT_TARGET_REVENUE,
+          useEnhancedIntelligence: true 
+        }
+      );
+      
+      console.log('✅ Future-proof business generation complete');
+      return businessData;
+      
+    } catch (error) {
+      console.error('❌ Future-proof generation failed:', error);
+      
+      if (FUTURE_PROOF_CONFIG.FALLBACK_ON_ERROR) {
+        console.log('🔄 Falling back to legacy generation...');
+        return await generateBusinessWithAI_Legacy(userData, sessionId, businessId);
+      } else {
+        throw error;
+      }
+    }
+  } else {
+    console.log('🔧 Using legacy generation system for session:', sessionId);
+    return await generateBusinessWithAI_Legacy(userData, sessionId, businessId);
+  }
+}
+
+/**
+ * Legacy business generation - kept for backwards compatibility
+ * This is the old approach that just creates websites
+ */
+async function generateBusinessWithAI_Legacy(userData, sessionId, businessId) {
   console.log('Starting business generation for session:', sessionId);
   
   const stages = [

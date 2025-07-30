@@ -160,11 +160,10 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
 
     // Dynamic website URL generation
     const getWebsiteUrl = (subdomain) => {
-        const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_URL;
-        const isDev = process.env.NODE_ENV === 'development' || baseUrl?.includes('localhost');
+        const isDev = process.env.NODE_ENV === 'development' || window.location.hostname.includes('localhost');
         
         if (isDev) {
-            return `${baseUrl}/sites/${subdomain}`;
+            return `${window.location.protocol}//${window.location.host}/sites/${subdomain}`;
         } else {
             return `https://${subdomain}.launchfly.ai`;
         }

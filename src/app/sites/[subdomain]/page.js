@@ -154,24 +154,28 @@ function ThemedLayout({ theme, children }) {
 }
 
 export default async function DynamicWebsite({ params }) {
+  // Await params to fix Next.js 15 requirement
+  const { subdomain } = await params;
+  
   let businessData = null;
   
   try {
     // Try to get data from Supabase first
-    const supabase = createServerComponentClient({ cookies });
+    const cookieStore = await cookies();
+    const supabase = createServerComponentClient({ cookies: () => cookieStore });
     
     const { data: business, error } = await supabase
       .from('businesses')
       .select('*')
-      .eq('subdomain', params.subdomain)
+      .eq('subdomain', subdomain)
       .eq('status', 'ready')
       .single();
 
     if (business && !error) {
       businessData = business.business_data;
-      console.log('✅ Loaded from database:', params.subdomain);
+      console.log('✅ Loaded from database:', subdomain);
     } else {
-      console.log('📦 Using mock data for:', params.subdomain);
+      console.log('📦 Using mock data for:', subdomain);
     }
   } catch (err) {
     console.log('⚠️  Database error, using mock data:', err.message);
@@ -179,7 +183,7 @@ export default async function DynamicWebsite({ params }) {
   
   // Fall back to mock data if no database data
   if (!businessData) {
-    businessData = mockBusinessData[params.subdomain];
+    businessData = mockBusinessData[subdomain];
   }
   
   if (!businessData) {
@@ -187,7 +191,7 @@ export default async function DynamicWebsite({ params }) {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">🔍 Business Not Found</h1>
-          <p className="text-gray-600 mb-4">No website found for subdomain: <code className="bg-gray-100 px-2 py-1 rounded">{params.subdomain}</code></p>
+          <p className="text-gray-600 mb-4">No website found for subdomain: <code className="bg-gray-100 px-2 py-1 rounded">{subdomain}</code></p>
           <div className="text-sm text-gray-500 space-y-1">
             <p><strong>Available mock sites:</strong></p>
             <p>• axceleratebusiness</p>

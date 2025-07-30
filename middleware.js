@@ -3,47 +3,71 @@ import { NextResponse } from 'next/server';
 
 export async function middleware(request) {
   const hostname = request.headers.get('host');
+  const pathname = request.nextUrl.pathname;
   
-  console.log('Middleware - Hostname:', hostname);
-  console.log('Middleware - Pathname:', request.nextUrl.pathname);
+  // Enhanced logging for debugging
+  console.log('🔍 Middleware Debug:', {
+    hostname,
+    pathname,
+    userAgent: request.headers.get('user-agent')?.slice(0, 50),
+    timestamp: new Date().toISOString()
+  });
   
   // Skip middleware for API routes, static files, and Next.js internals
   if (
-    request.nextUrl.pathname.startsWith('/api/') ||
-    request.nextUrl.pathname.startsWith('/_next/') ||
-    request.nextUrl.pathname.startsWith('/favicon.ico') ||
-    request.nextUrl.pathname.startsWith('/dashboard/') ||
-    request.nextUrl.pathname.includes('_vercel')
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname.startsWith('/dashboard/') ||
+    pathname.includes('_vercel') ||
+    pathname.startsWith('/robots.txt') ||
+    pathname.startsWith('/sitemap.xml')
   ) {
+    console.log('⏭️  Skipping middleware for:', pathname);
     return NextResponse.next();
   }
 
   // Extract subdomain from hostname
   const subdomain = hostname?.split('.')[0];
   
-  // Skip localhost and main domain
-  if (
-    hostname?.includes('localhost') ||
-    hostname?.includes('127.0.0.1') ||
-    subdomain === 'launchfly' ||
+  console.log('🔧 Subdomain extracted:', subdomain);
+  
+  // Main domain conditions - be more specific
+  const isMainDomain = (
+    !hostname ||
+    hostname === 'launchfly.ai' ||
+    hostname === 'www.launchfly.ai' ||
+    hostname.includes('localhost') ||
+    hostname.includes('127.0.0.1') ||
     subdomain === 'www' ||
-    !subdomain ||
-    subdomain === hostname // No dots in hostname
-  ) {
-    console.log('Middleware - Skipping for main domain/localhost');
+    subdomain === hostname // No dots in hostname (localhost case)
+  );
+  
+  if (isMainDomain) {
+    console.log('🏠 Main domain detected, continuing normally');
     return NextResponse.next();
   }
 
   // Production subdomain routing
   if (hostname?.includes('launchfly.ai') || hostname?.includes('vercel.app')) {
-    console.log('Middleware - Rewriting subdomain to:', `/sites/${subdomain}`);
-    const url = request.nextUrl.clone();
-    url.pathname = `/sites/${subdomain}${request.nextUrl.pathname}`;
+    console.log('🚀 Rewriting subdomain request:', {
+      from: `${hostname}${pathname}`,
+      to: `/sites/${subdomain}${pathname}`
+    });
     
-    return NextResponse.rewrite(url);
+    const url = request.nextUrl.clone();
+    url.pathname = `/sites/${subdomain}${pathname}`;
+    
+    const response = NextResponse.rewrite(url);
+    
+    // Add debug headers to help troubleshoot
+    response.headers.set('x-middleware-subdomain', subdomain);
+    response.headers.set('x-middleware-rewrite', `/sites/${subdomain}${pathname}`);
+    
+    return response;
   }
 
-  console.log('Middleware - No rewrite, continuing');
+  console.log('❓ No rewrite condition matched, continuing');
   return NextResponse.next();
 }
 

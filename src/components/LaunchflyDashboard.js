@@ -160,13 +160,17 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
 
     // Dynamic website URL generation
     const getWebsiteUrl = (subdomain) => {
-        const isDev = process.env.NODE_ENV === 'development' || window.location.hostname.includes('localhost');
-        
-        if (isDev) {
-            return `${window.location.protocol}//${window.location.host}/sites/${subdomain}`;
-        } else {
-            return `https://${subdomain}.launchfly.ai`;
+        // Check if we're in development environment
+        if (typeof window !== 'undefined') {
+            const isDev = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+            
+            if (isDev) {
+                return `${window.location.protocol}//${window.location.host}/sites/${subdomain}`;
+            }
         }
+        
+        // Production URL
+        return `https://${subdomain}.launchfly.ai`;
     };
 
     // --- Effects ---

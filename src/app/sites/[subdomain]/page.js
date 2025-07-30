@@ -136,21 +136,81 @@ const mockBusinessData = {
   }
 };
 
-// A wrapper to inject theme variables
+// Enhanced wrapper to inject dynamic theme variables and styling
 function ThemedLayout({ theme, children }) {
   if (!theme) return <main>{children}</main>;
   
   const style = {
     '--primary': theme.colors?.primary || '#3b82f6',
     '--secondary': theme.colors?.secondary || '#1e40af',
-    '--text-dark': theme.colors?.textDark || '#1f2937',
-    '--text-gray': theme.colors?.textGray || '#6b7280',
-    '--border-color': theme.colors?.borderColor || '#e5e7eb',
+    '--accent': theme.colors?.accent || '#10b981',
+    '--text-dark': theme.colors?.textDark || '#1a1a1a',
+    '--text-gray': theme.colors?.textGray || '#666666',
+    '--background': theme.colors?.background || '#ffffff',
+    '--border-color': theme.colors?.borderColor || '#e5e5e5',
     '--gradient-bg': theme.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     '--font-family': theme.font ? `'${theme.font}', sans-serif` : 'system-ui, sans-serif',
   };
   
-  return <main style={style}>{children}</main>;
+  // Add dynamic CSS classes based on theme style and mood
+  const themeClasses = [
+    'dynamic-website',
+    theme.style ? `style-${theme.style}` : 'style-modern',
+    theme.mood ? `mood-${theme.mood}` : 'mood-professional'
+  ].join(' ');
+  
+  return (
+    <main style={style} className={themeClasses}>
+      {/* Inject custom CSS for this specific theme */}
+      <style jsx>{`
+        .dynamic-website {
+          font-family: var(--font-family);
+          color: var(--text-dark);
+          background: var(--background);
+        }
+        
+        /* Style variations */
+        .style-elegant h1, .style-elegant h2, .style-elegant h3 {
+          font-family: 'Playfair Display', serif;
+        }
+        
+        .style-bold {
+          font-weight: 600;
+        }
+        
+        .style-creative {
+          overflow-x: hidden;
+        }
+        
+        .style-minimalist section {
+          padding: 3rem 1rem;
+        }
+        
+        .style-luxury {
+          background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+        }
+        
+        /* Mood variations */
+        .mood-energetic {
+          animation: subtle-pulse 3s ease-in-out infinite;
+        }
+        
+        .mood-calm section {
+          transition: all 0.3s ease;
+        }
+        
+        .mood-playful {
+          cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="%23ff6b6b"/></svg>'), auto;
+        }
+        
+        @keyframes subtle-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.002); }
+        }
+      `}</style>
+      {children}
+    </main>
+  );
 }
 
 export default async function DynamicWebsite({ params }) {
@@ -164,7 +224,7 @@ export default async function DynamicWebsite({ params }) {
       .from('businesses')
       .select('*')
       .eq('subdomain', params.subdomain)
-      .eq('status', 'published')
+      .eq('status', 'ready')
       .single();
 
     if (business && !error) {

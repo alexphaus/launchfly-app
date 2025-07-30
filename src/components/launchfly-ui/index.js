@@ -6,3 +6,6 @@ export { default as TestimonialSlider } from './TestimonialSlider';
 export { default as PricingTable } from './PricingTable';
 export { default as CallToAction } from './CallToAction';
 export { default as Footer } from './Footer';
+export { default as StatsSection } from './StatsSection';
+export { default as AboutSection } from './AboutSection';
+export { default as PortfolioSection } from './PortfolioSection';

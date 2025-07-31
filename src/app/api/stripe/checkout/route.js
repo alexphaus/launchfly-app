@@ -58,8 +58,8 @@ export async function POST(request) {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/${subdomain}`,
+      success_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}`,
       customer_email: customerEmail,
       metadata: {
         business_id: businessId,

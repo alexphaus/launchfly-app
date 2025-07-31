@@ -34,8 +34,8 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     .eq('id', sessionId);
   
   try {
-    // Generate website theme and layout
-    const websiteData = await generateWebsite(opportunity);
+    // Generate website data with AI
+    const websiteData = await generateWebsite(opportunity, products);
     
     // Create digital products based on the opportunity
     const products = await createProducts(opportunity);
@@ -99,9 +99,10 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
  * Generates a website theme and layout based on the opportunity
  * 
  * @param {Object} opportunity - The analyzed business opportunity
+ * @param {Array} products - Generated products for the business
  * @returns {Object} Website theme and layout
  */
-async function generateWebsite(opportunity) {
+async function generateWebsite(opportunity, products = []) {
   try {
     const prompt = `
       Create a professional website theme and layout for this business:
@@ -162,7 +163,7 @@ async function generateWebsite(opportunity) {
         font: "Inter",
         gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
       },
-      layout: generateDefaultLayout(opportunity)
+      layout: generateDefaultLayout(opportunity, products)
     };
   }
 }
@@ -180,32 +181,96 @@ async function createProducts(opportunity) {
       ${JSON.stringify(opportunity)}
       
       Each product should have:
+      - A unique id (lowercase, hyphenated)
       - A clear name
-      - A compelling description
-      - An appropriate price point for the target market
+      - A compelling description (2-3 sentences)
+      - An appropriate price point for the target market (format: $XX or $XXX)
+      - A list of 4-6 key features/benefits
+      - Whether it should be marked as popular (boolean)
+      - A call-to-action text (e.g., "Buy Now", "Get Started", "Order Today")
       
-      Return as a JSON array with objects containing name, price, and description.
+      Return as a JSON object with a "products" array containing objects with: id, name, price, description, features, popular, ctaText
     `;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are a product development and pricing expert." },
+        { role: "system", content: "You are a product development and pricing expert. Create compelling products that solve real problems for the target market." },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }
     });
     
     const { products } = JSON.parse(response.choices[0].message.content);
-    return products || [];
+    
+    // Ensure each product has an ID and proper structure
+    const processedProducts = (products || []).map((product, index) => ({
+      id: product.id || `product-${index + 1}`,
+      name: product.name || `Product ${index + 1}`,
+      price: product.price || `$${97 + (index * 100)}`,
+      description: product.description || "A great product for your needs",
+      features: Array.isArray(product.features) ? product.features : [
+        "High-quality solution",
+        "Expert support included",
+        "30-day guarantee",
+        "Instant access"
+      ],
+      popular: product.popular || index === 1, // Make middle product popular by default
+      ctaText: product.ctaText || "Buy Now"
+    }));
+    
+    return processedProducts;
   } catch (error) {
     console.error("Error creating products:", error);
     
-    // Fallback products
+    // Fallback products with proper structure
     return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      { 
+        id: "basic-package",
+        name: "Basic Package", 
+        price: "$97", 
+        description: "Essential services to get you started with everything you need for success.",
+        features: [
+          "Everything you need to begin",
+          "Email support included",
+          "Step-by-step guidance",
+          "30-day money-back guarantee"
+        ],
+        popular: false,
+        ctaText: "Get Started"
+      },
+      { 
+        id: "professional-package",
+        name: "Professional Package", 
+        price: "$297", 
+        description: "Comprehensive solutions for established businesses looking to scale their operations.",
+        features: [
+          "All Basic features included",
+          "Priority support",
+          "Advanced tools & features",
+          "Custom integrations",
+          "Analytics dashboard",
+          "90-day guarantee"
+        ],
+        popular: true,
+        ctaText: "Most Popular"
+      },
+      { 
+        id: "premium-package",
+        name: "Premium Package", 
+        price: "$597", 
+        description: "All-inclusive enterprise-grade services with white-glove support and custom solutions.",
+        features: [
+          "All Professional features",
+          "Dedicated account manager",
+          "Custom development",
+          "Priority implementation",
+          "Advanced analytics",
+          "1-year guarantee"
+        ],
+        popular: false,
+        ctaText: "Go Premium"
+      }
     ];
   }
 }
@@ -391,7 +456,7 @@ async function handleLaunchError(sessionId, businessId) {
  * @param {Object} opportunity - The analyzed business opportunity
  * @returns {Array} Default layout configuration
  */
-function generateDefaultLayout(opportunity) {
+function generateDefaultLayout(opportunity, products = []) {
   return [
     {
       component: 'NavBar',
@@ -434,29 +499,19 @@ function generateDefaultLayout(opportunity) {
       }
     },
     {
+      component: 'ProductGrid',
+      props: {
+        title: 'Our Products',
+        subtitle: 'Discover our range of solutions designed for your success',
+        products: products // Pass products to ProductGrid
+      }
+    },
+    {
       component: 'PricingTable',
       props: {
-        title: 'Our Packages',
-        plans: [
-          {
-            name: 'Starter',
-            price: '$99',
-            period: 'month',
-            description: 'Perfect for getting started',
-            features: ['Everything you need to begin', 'Email support', '30-day guarantee'],
-            ctaText: 'Get Started',
-            popular: false
-          },
-          {
-            name: 'Professional',
-            price: '$299',
-            period: 'month',
-            description: 'Most popular choice',
-            features: ['All Starter features', 'Priority support', 'Advanced features', 'Custom integrations'],
-            ctaText: 'Start Free Trial',
-            popular: true
-          }
-        ]
+        title: products.length > 0 ? 'Our Products' : 'Our Packages',
+        subtitle: products.length > 0 ? 'Choose the perfect solution for your needs' : 'Flexible pricing for every need',
+        products: products // Pass products instead of plans
       }
     },
     {

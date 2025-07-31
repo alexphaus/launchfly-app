@@ -35,7 +35,13 @@ export async function middleware(request: NextRequest) {
   if (subdomain && (hostname?.includes('launchfly.ai') || hostname?.includes('vercel.app'))) {
     console.log('Middleware - Rewriting to:', `/sites/${subdomain}`);
     const url = request.nextUrl.clone();
-    url.pathname = `/sites/${subdomain}`;
+    
+    // Handle success page specifically
+    if (request.nextUrl.pathname === '/success') {
+      url.pathname = `/sites/${subdomain}/success`;
+    } else {
+      url.pathname = `/sites/${subdomain}`;
+    }
     
     return NextResponse.rewrite(url);
   }

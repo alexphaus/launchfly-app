@@ -13,7 +13,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <head>
+        <script src="https://js.stripe.com/v3/"></script>
+      </head>
+      <body>
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if (typeof window !== 'undefined' && window.Stripe) { window.stripe = window.Stripe('${process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}'); }`,
+          }}
+        />
+      </body>
     </html>
   );
 }

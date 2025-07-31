@@ -216,10 +216,16 @@ export default async function DynamicWebsite({ params }) {
             return null;
           }
           
+          // Pass products to ProductShowcase component
+          const extraProps = section.component === 'ProductShowcase' 
+            ? { products: businessData.products || [], subdomain }
+            : { subdomain };
+          
           return (
             <Component
               key={index}
               {...section.props}
+              {...extraProps}
             />
           );
         })}

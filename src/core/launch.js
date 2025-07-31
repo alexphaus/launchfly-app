@@ -112,7 +112,7 @@ async function generateWebsite(opportunity) {
         "theme": {
           "colors": {
             "primary": "#hexcode",
-            "secondary": "#hexcode",
+            "secondary": "#hexcode", 
             "textDark": "#hexcode",
             "textGray": "#hexcode",
             "borderColor": "#hexcode"
@@ -126,11 +126,12 @@ async function generateWebsite(opportunity) {
             "props": {
               "businessName": "Name",
               "logo": "Emoji",
-              "links": ["About", "Services", "Pricing", "Contact"],
+              "links": ["About", "Services", "Products", "Contact"],
               "ctaText": "Get Started"
             }
           },
-          // Hero, FeatureGrid, TestimonialSlider, PricingTable, CallToAction, Footer
+          // Include these components: Hero, FeatureGrid, ProductShowcase, TestimonialSlider, CallToAction, Footer
+          // ProductShowcase should come after FeatureGrid to showcase products for sale
           // Use all available components with appropriate props
         ]
       }
@@ -180,32 +181,88 @@ async function createProducts(opportunity) {
       ${JSON.stringify(opportunity)}
       
       Each product should have:
-      - A clear name
-      - A compelling description
-      - An appropriate price point for the target market
+      - id: a unique identifier (kebab-case)
+      - name: a clear, compelling name
+      - price: numeric price (just the number, no $ symbol)
+      - description: a compelling description
+      - features: array of 3-5 key features/benefits
+      - popular: boolean (mark middle tier as popular)
       
-      Return as a JSON array with objects containing name, price, and description.
+      Create starter ($99), professional ($299), and premium ($599) tiers.
+      
+      Return as JSON object with "products" array.
     `;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are a product development and pricing expert." },
+        { role: "system", content: "You are a product development and pricing expert who creates compelling product offerings." },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }
     });
     
     const { products } = JSON.parse(response.choices[0].message.content);
-    return products || [];
+    
+    // Ensure proper format and add IDs if missing
+    return (products || []).map((product, index) => ({
+      id: product.id || `product-${index + 1}`,
+      name: product.name,
+      price: typeof product.price === 'number' ? product.price : parseFloat(product.price.replace(/[^0-9.]/g, '')) || [99, 299, 599][index],
+      description: product.description,
+      features: product.features || [
+        "Professional service delivery",
+        "Email support included",
+        "30-day satisfaction guarantee"
+      ],
+      popular: product.popular || index === 1 // Make middle tier popular by default
+    }));
   } catch (error) {
     console.error("Error creating products:", error);
     
-    // Fallback products
+    // Fallback products with proper Stripe format
     return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      {
+        id: "starter-package",
+        name: "Starter Package",
+        price: 99,
+        description: "Essential services to get you started",
+        features: [
+          "Initial consultation",
+          "Basic setup and configuration", 
+          "Email support",
+          "30-day money-back guarantee"
+        ],
+        popular: false
+      },
+      {
+        id: "professional-package",
+        name: "Professional Package", 
+        price: 299,
+        description: "Comprehensive solutions for established businesses",
+        features: [
+          "Everything in Starter",
+          "Advanced features and customization",
+          "Priority support",
+          "Monthly strategy sessions",
+          "Performance analytics"
+        ],
+        popular: true
+      },
+      {
+        id: "premium-package",
+        name: "Premium Package",
+        price: 599, 
+        description: "All-inclusive enterprise-grade services",
+        features: [
+          "Everything in Professional",
+          "Dedicated account manager",
+          "Custom integrations", 
+          "24/7 phone support",
+          "Quarterly business reviews"
+        ],
+        popular: false
+      }
     ];
   }
 }
@@ -398,7 +455,7 @@ function generateDefaultLayout(opportunity) {
       props: {
         businessName: opportunity.businessName || 'Your Business',
         logo: '🚀',
-        links: ['About', 'Services', 'Pricing', 'Contact'],
+        links: ['About', 'Services', 'Products', 'Contact'],
         ctaText: 'Get Started'
       }
     },
@@ -434,29 +491,10 @@ function generateDefaultLayout(opportunity) {
       }
     },
     {
-      component: 'PricingTable',
+      component: 'ProductShowcase',
       props: {
-        title: 'Our Packages',
-        plans: [
-          {
-            name: 'Starter',
-            price: '$99',
-            period: 'month',
-            description: 'Perfect for getting started',
-            features: ['Everything you need to begin', 'Email support', '30-day guarantee'],
-            ctaText: 'Get Started',
-            popular: false
-          },
-          {
-            name: 'Professional',
-            price: '$299',
-            period: 'month',
-            description: 'Most popular choice',
-            features: ['All Starter features', 'Priority support', 'Advanced features', 'Custom integrations'],
-            ctaText: 'Start Free Trial',
-            popular: true
-          }
-        ]
+        title: 'Our Solutions',
+        subtitle: 'Choose the perfect package for your needs'
       }
     },
     {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function ProductGrid({ 
   title = "Our Products",
@@ -8,11 +9,26 @@ export default function ProductGrid({
   products = []
 }) {
   const params = useParams();
+  const router = useRouter();
+  
+  // Debug logging
+  console.log('ProductGrid - params:', params);
+  console.log('ProductGrid - window.location:', typeof window !== 'undefined' ? window.location.href : 'server');
   
   // Generate product URLs
   const getProductUrl = (product, index) => {
     const slug = product.id || product.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `product-${index}`;
-    return `/sites/${params?.subdomain || 'demo'}/product/${slug}`;
+    const productUrl = `/sites/${params?.subdomain || 'demo'}/product/${slug}`;
+    console.log('ProductGrid - Generated URL:', productUrl);
+    return productUrl;
+  };
+
+  // Handle click with navigation
+  const handleProductClick = (e, product, index) => {
+    e.preventDefault();
+    const url = getProductUrl(product, index);
+    console.log('ProductGrid - Navigating to:', url);
+    router.push(url);
   };
 
   if (!products || products.length === 0) {
@@ -35,10 +51,10 @@ export default function ProductGrid({
         {/* Products Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {products.map((product, index) => (
-            <a
+            <div
               key={product.id || index}
-              href={getProductUrl(product, index)}
-              className="group bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border border-gray-100"
+              onClick={(e) => handleProductClick(e, product, index)}
+              className="group bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border border-gray-100 cursor-pointer"
             >
               {/* Product Image Placeholder */}
               <div className="aspect-w-16 aspect-h-9 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg mb-6 overflow-hidden">
@@ -104,7 +120,7 @@ export default function ProductGrid({
                   Popular
                 </div>
               )}
-            </a>
+            </div>
           ))}
         </div>
       </div>

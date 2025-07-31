@@ -30,17 +30,17 @@ export async function middleware(request: NextRequest) {
     console.log('Middleware - Skipping for main domain/localhost');
     return NextResponse.next();
   }
+  
+  // Handle subdomain routing
+  const url = request.nextUrl.clone();
+  url.pathname = `/sites/${subdomain}${request.nextUrl.pathname}`;
+  
+  return NextResponse.rewrite(url);
+}
 
-  // If we have a subdomain, treat it as a dynamic site
-  if (subdomain && (hostname?.includes('launchfly.ai') || hostname?.includes('vercel.app'))) {
-    console.log('Middleware - Rewriting to:', `/sites/${subdomain}`);
-    const url = request.nextUrl.clone();
-    url.pathname = `/sites/${subdomain}`;
-    
-    return NextResponse.rewrite(url);
-  }
-
-  console.log('Middleware - No rewrite, continuing');
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
   return NextResponse.next();
 }
 

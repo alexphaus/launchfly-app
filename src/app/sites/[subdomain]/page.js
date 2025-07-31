@@ -158,6 +158,7 @@ export default async function DynamicWebsite({ params }) {
   const { subdomain } = await params;
   
   let businessData = null;
+  let businessRecord = null;
   
   try {
     // Try to get data from Supabase first
@@ -173,6 +174,7 @@ export default async function DynamicWebsite({ params }) {
 
     if (business && !error) {
       businessData = business.business_data;
+      businessRecord = business;
       console.log('✅ Loaded from database:', subdomain);
     } else {
       console.log('📦 Using mock data for:', subdomain);
@@ -184,6 +186,8 @@ export default async function DynamicWebsite({ params }) {
   // Fall back to mock data if no database data
   if (!businessData) {
     businessData = mockBusinessData[subdomain];
+    // Create a mock business record for the ProductShowcase component
+    businessRecord = { id: `mock_${subdomain}` };
   }
   
   if (!businessData) {
@@ -216,10 +220,19 @@ export default async function DynamicWebsite({ params }) {
             return null;
           }
           
+          // Inject business data for components that need it
+          const enhancedProps = { ...section.props };
+          
+          // If it's ProductShowcase, add the business data
+          if (section.component === 'ProductShowcase') {
+            enhancedProps.businessId = businessRecord.id;
+            enhancedProps.businessSubdomain = subdomain;
+          }
+          
           return (
             <Component
               key={index}
-              {...section.props}
+              {...enhancedProps}
             />
           );
         })}

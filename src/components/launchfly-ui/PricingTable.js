@@ -1,10 +1,16 @@
 'use client';
 
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+
 export default function PricingTable({ 
   title = "Choose Your Plan",
   subtitle = "Flexible pricing for every need",
-  plans = []
+  plans = [],
+  businessId = null // Business ID for payment processing
 }) {
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const pathname = usePathname();
   const defaultPlans = [
     {
       name: "Starter",
@@ -53,6 +59,54 @@ export default function PricingTable({
   ];
 
   const displayPlans = plans.length > 0 ? plans : defaultPlans;
+
+  // Handle payment processing
+  const handlePurchase = async (plan, index) => {
+    // Don't process if no business ID (fallback to default behavior)
+    if (!businessId) {
+      return;
+    }
+
+    // Skip if price is not numeric (like "Custom")
+    const priceStr = plan.price.replace('$', '');
+    if (isNaN(parseFloat(priceStr))) {
+      return;
+    }
+
+    setLoadingPlan(index);
+
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          productId: `plan_${index}`,
+          businessId,
+          amount: parseFloat(priceStr),
+          productName: plan.name,
+          productDescription: plan.description
+        }),
+      });
+
+      const { url, error } = await response.json();
+      
+      if (error) {
+        console.error('Checkout error:', error);
+        alert('Sorry, there was an error processing your payment. Please try again.');
+        return;
+      }
+
+      // Redirect to Stripe checkout
+      window.location.href = url;
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Sorry, there was an error processing your payment. Please try again.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <section className="py-20 bg-gray-50" id="pricing">
@@ -120,30 +174,39 @@ export default function PricingTable({
 
               {/* CTA Button */}
               <button
+                onClick={() => handlePurchase(plan, index)}
+                disabled={loadingPlan === index}
                 className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:scale-105 ${
                   plan.popular 
                     ? 'text-white shadow-lg' 
                     : 'border-2 hover:text-white'
-                }`}
+                } ${loadingPlan === index ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={{
                   background: plan.popular ? 'var(--primary, #3b82f6)' : 'transparent',
                   borderColor: 'var(--primary, #3b82f6)',
                   color: plan.popular ? 'white' : 'var(--primary, #3b82f6)'
                 }}
                 onMouseEnter={(e) => {
-                  if (!plan.popular) {
+                  if (!plan.popular && loadingPlan !== index) {
                     e.target.style.background = 'var(--primary, #3b82f6)';
                     e.target.style.color = 'white';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!plan.popular) {
+                  if (!plan.popular && loadingPlan !== index) {
                     e.target.style.background = 'transparent';
                     e.target.style.color = 'var(--primary, #3b82f6)';
                   }
                 }}
               >
-                {plan.ctaText}
+                {loadingPlan === index ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  plan.ctaText
+                )}
               </button>
             </div>
           ))}

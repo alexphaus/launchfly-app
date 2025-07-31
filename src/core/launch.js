@@ -43,6 +43,12 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     // Generate marketing materials and strategies
     const marketing = await createMarketing(opportunity);
     
+    // Convert products to pricing plans for the website
+    const pricingPlans = convertProductsToPricingPlans(products);
+    
+    // Update the layout to use the generated pricing plans
+    const updatedLayout = updateLayoutWithPricing(websiteData.layout, pricingPlans);
+    
     // Integrate with the existing business structure
     const businessData = {
       businessName: opportunity.businessName,
@@ -54,7 +60,7 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       targetCustomers: await identifyTargetCustomers(opportunity),
       monthlyData: generateProjectedGrowth(),
       theme: websiteData.theme,
-      layout: websiteData.layout,
+      layout: updatedLayout,
       marketing: marketing
     };
     
@@ -96,7 +102,72 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
 }
 
 /**
- * Generates a website theme and layout based on the opportunity
+ * Converts generated products to pricing plans format
+ * 
+ * @param {Array} products - Generated products
+ * @returns {Array} Pricing plans for PricingTable component
+ */
+function convertProductsToPricingPlans(products) {
+  if (!products || products.length === 0) {
+    return [
+      {
+        name: 'Basic Package',
+        price: '$97',
+        description: 'Perfect for getting started',
+        features: ['Everything you need to begin', 'Email support', '30-day guarantee'],
+        ctaText: 'Get Started',
+        popular: false
+      },
+      {
+        name: 'Premium Package',
+        price: '$297',
+        description: 'Most popular choice',
+        features: ['All Basic features', 'Priority support', 'Advanced features', 'Custom integrations'],
+        ctaText: 'Start Free Trial',
+        popular: true
+      }
+    ];
+  }
+
+  return products.map((product, index) => ({
+    name: product.name,
+    price: product.price,
+    description: product.description,
+    features: [
+      'Digital delivery',
+      'Full access included',
+      '30-day money-back guarantee',
+      'Email support'
+    ],
+    ctaText: 'Buy Now',
+    popular: index === 1 // Make the second product popular
+  }));
+}
+
+/**
+ * Updates the layout to use generated pricing plans
+ * 
+ * @param {Array} layout - Website layout components
+ * @param {Array} pricingPlans - Generated pricing plans
+ * @returns {Array} Updated layout with pricing plans
+ */
+function updateLayoutWithPricing(layout, pricingPlans) {
+  return layout.map(section => {
+    if (section.component === 'PricingTable') {
+      return {
+        ...section,
+        props: {
+          ...section.props,
+          plans: pricingPlans
+        }
+      };
+    }
+    return section;
+  });
+}
+
+/**
+ * Generates default layout configuration
  * 
  * @param {Object} opportunity - The analyzed business opportunity
  * @returns {Object} Website theme and layout

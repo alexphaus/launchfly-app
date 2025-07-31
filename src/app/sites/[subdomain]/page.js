@@ -58,6 +58,56 @@ const mockBusinessData = {
         }
       },
       {
+        component: 'PricingTable',
+        props: {
+          title: 'Choose Your Package',
+          subtitle: 'Accelerate your growth with our tailored solutions',
+          plans: [
+            {
+              name: 'Starter',
+              price: '$297',
+              description: 'Perfect for small businesses',
+              features: [
+                'AI Process Automation',
+                'Basic Analytics Dashboard',
+                'Email Support',
+                '30-day Money-back Guarantee'
+              ],
+              ctaText: 'Get Started',
+              popular: false
+            },
+            {
+              name: 'Professional',
+              price: '$597',
+              description: 'Most popular for growing companies',
+              features: [
+                'Everything in Starter',
+                'Advanced AI Integration',
+                'Priority Support',
+                'Custom Integrations',
+                'Advanced Analytics'
+              ],
+              ctaText: 'Start Free Trial',
+              popular: true
+            },
+            {
+              name: 'Enterprise',
+              price: '$997',
+              description: 'For large organizations',
+              features: [
+                'Everything in Professional',
+                'Dedicated Account Manager',
+                'Custom Development',
+                'SLA Guarantee',
+                'Advanced Security'
+              ],
+              ctaText: 'Contact Sales',
+              popular: false
+            }
+          ]
+        }
+      },
+      {
         component: 'Footer',
         props: {
           companyName: 'Axcelerate Business',
@@ -123,6 +173,56 @@ const mockBusinessData = {
         }
       },
       {
+        component: 'PricingTable',
+        props: {
+          title: 'Innovation Packages',
+          subtitle: 'Transform your business with our proven solutions',
+          plans: [
+            {
+              name: 'Digital Starter',
+              price: '$497',
+              description: 'Begin your digital transformation',
+              features: [
+                'Digital Strategy Consultation',
+                'Basic Process Optimization',
+                'Implementation Support',
+                '90-day Success Guarantee'
+              ],
+              ctaText: 'Start Transformation',
+              popular: false
+            },
+            {
+              name: 'Innovation Suite',
+              price: '$897',
+              description: 'Complete innovation package',
+              features: [
+                'Everything in Digital Starter',
+                'Advanced Technology Integration',
+                'Custom Innovation Strategy',
+                'Priority Implementation',
+                'Quarterly Reviews'
+              ],
+              ctaText: 'Get Innovation Suite',
+              popular: true
+            },
+            {
+              name: 'Enterprise Innovation',
+              price: '$1497',
+              description: 'Full-scale transformation',
+              features: [
+                'Everything in Innovation Suite',
+                'Dedicated Innovation Team',
+                'Custom Development',
+                'Change Management Support',
+                'Ongoing Optimization'
+              ],
+              ctaText: 'Contact Innovation Team',
+              popular: false
+            }
+          ]
+        }
+      },
+      {
         component: 'Footer',
         props: {
           companyName: 'Innovative Solutions Hub',
@@ -158,6 +258,7 @@ export default async function DynamicWebsite({ params }) {
   const { subdomain } = await params;
   
   let businessData = null;
+  let businessId = null;
   
   try {
     // Try to get data from Supabase first
@@ -173,6 +274,7 @@ export default async function DynamicWebsite({ params }) {
 
     if (business && !error) {
       businessData = business.business_data;
+      businessId = business.id;
       console.log('✅ Loaded from database:', subdomain);
     } else {
       console.log('📦 Using mock data for:', subdomain);
@@ -220,6 +322,7 @@ export default async function DynamicWebsite({ params }) {
             <Component
               key={index}
               {...section.props}
+              {...(section.component === 'PricingTable' && businessId ? { businessId } : {})}
             />
           );
         })}

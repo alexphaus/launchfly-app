@@ -1,10 +1,21 @@
+// app/sites/[subdomain]/page.js - Updated version
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
 
-// Mock business data for fallback
+// Import the new ProductShowcase component
+import ProductShowcase from '@/components/launchfly-ui/ProductShowcase';
+
+// Register the new component
+const componentMap = {
+  ...LaunchflyUI,
+  ProductShowcase
+};
+
+// Mock business data remains the same...
 const mockBusinessData = {
   axceleratebusiness: {
+    id: 'mock-axcelerate-id',
     name: 'Axcelerate Business',
     theme: {
       colors: {
@@ -22,7 +33,7 @@ const mockBusinessData = {
         component: 'NavBar',
         props: {
           businessName: 'Axcelerate Business',
-          links: ['Home', 'About', 'Services', 'Contact']
+          links: ['Home', 'About', 'Products', 'Contact']
         }
       },
       {
@@ -30,29 +41,54 @@ const mockBusinessData = {
         props: {
           title: 'Accelerate Your Business Growth',
           subtitle: 'AI-powered solutions to streamline operations and boost productivity',
-          buttonText: 'Get Started',
-          buttonLink: '#contact'
+          buttonText: 'View Products',
+          buttonLink: '#products'
         }
       },
       {
-        component: 'FeatureGrid',
+        component: 'ProductShowcase',
         props: {
-          title: 'Why Choose Us',
-          features: [
+          title: 'Our Solutions',
+          subtitle: 'Choose the perfect package for your needs',
+          products: [
             {
-              title: 'AI Integration',
-              description: 'Leverage cutting-edge AI to automate processes',
-              icon: '🤖'
+              id: 'starter',
+              name: 'AI Starter',
+              price: '$99',
+              description: 'Perfect for small businesses getting started with AI',
+              features: [
+                'Basic AI automation',
+                'Email support',
+                'Monthly reports',
+                '30-day guarantee'
+              ]
             },
             {
-              title: 'Scalable Solutions',
-              description: 'Grow with confidence using our flexible platform',
-              icon: '📈'
+              id: 'growth',
+              name: 'AI Growth',
+              price: '$299',
+              description: 'Scale your business with advanced AI features',
+              features: [
+                'All Starter features',
+                'Advanced automation',
+                'Priority support',
+                'Custom workflows',
+                'Weekly optimization'
+              ],
+              popular: true
             },
             {
-              title: 'Expert Support',
-              description: '24/7 dedicated support from our expert team',
-              icon: '🎯'
+              id: 'enterprise',
+              name: 'AI Enterprise',
+              price: '$599',
+              description: 'Full AI transformation for large organizations',
+              features: [
+                'All Growth features',
+                'Dedicated AI specialist',
+                'Custom integrations',
+                'White-label options',
+                '24/7 phone support'
+              ]
             }
           ]
         }
@@ -70,6 +106,7 @@ const mockBusinessData = {
     ]
   },
   innovativesolutionshub: {
+    id: 'mock-innovative-id',
     name: 'Innovative Solutions Hub',
     theme: {
       colors: {
@@ -87,37 +124,49 @@ const mockBusinessData = {
         component: 'NavBar',
         props: {
           businessName: 'Innovative Solutions Hub',
-          links: ['Home', 'About', 'Solutions', 'Contact']
+          links: ['Home', 'Solutions', 'Products', 'Contact']
         }
       },
       {
         component: 'Hero',
         props: {
           title: 'Transform Your Business with Innovation',
-          subtitle: 'Cutting-edge solutions that drive growth and efficiency for modern businesses',
-          buttonText: 'Get Started',
-          buttonLink: '#contact'
+          subtitle: 'Cutting-edge solutions that drive growth and efficiency',
+          buttonText: 'Explore Solutions',
+          buttonLink: '#products'
         }
       },
       {
-        component: 'FeatureGrid',
+        component: 'ProductShowcase',
         props: {
-          title: 'Our Solutions',
-          features: [
+          title: 'Innovation Packages',
+          subtitle: 'Select your transformation journey',
+          products: [
             {
-              title: 'Digital Transformation',
-              description: 'Modernize your operations with our comprehensive digital solutions',
-              icon: '🚀'
+              id: 'basic',
+              name: 'Innovation Basic',
+              price: '$149',
+              description: 'Start your digital transformation journey',
+              features: [
+                'Digital assessment',
+                'Basic optimization',
+                'Monthly check-ins',
+                'Email support'
+              ]
             },
             {
-              title: 'Innovation Strategy',
-              description: 'Strategic guidance to stay ahead in competitive markets',
-              icon: '💡'
-            },
-            {
-              title: 'Technology Integration',
-              description: 'Seamlessly integrate new technologies into your workflow',
-              icon: '⚙️'
+              id: 'pro',
+              name: 'Innovation Pro',
+              price: '$399',
+              description: 'Accelerate growth with proven strategies',
+              features: [
+                'Everything in Basic',
+                'Advanced analytics',
+                'Weekly strategy calls',
+                'Custom roadmap',
+                'Priority implementation'
+              ],
+              popular: true
             }
           ]
         }
@@ -158,6 +207,7 @@ export default async function DynamicWebsite({ params }) {
   const { subdomain } = await params;
   
   let businessData = null;
+  let businessRecord = null;
   
   try {
     // Try to get data from Supabase first
@@ -172,6 +222,7 @@ export default async function DynamicWebsite({ params }) {
       .single();
 
     if (business && !error) {
+      businessRecord = business;
       businessData = business.business_data;
       console.log('✅ Loaded from database:', subdomain);
     } else {
@@ -183,7 +234,17 @@ export default async function DynamicWebsite({ params }) {
   
   // Fall back to mock data if no database data
   if (!businessData) {
-    businessData = mockBusinessData[subdomain];
+    const mockData = mockBusinessData[subdomain];
+    if (mockData) {
+      businessData = mockData;
+      // For mock data, create a fake business record
+      businessRecord = {
+        id: mockData.id || `mock-${subdomain}`,
+        subdomain: subdomain,
+        name: mockData.name,
+        business_data: mockData
+      };
+    }
   }
   
   if (!businessData) {
@@ -195,6 +256,7 @@ export default async function DynamicWebsite({ params }) {
           <div className="text-sm text-gray-500 space-y-1">
             <p><strong>Available mock sites:</strong></p>
             <p>• axceleratebusiness</p>
+            <p>• innovativesolutionshub</p>
             <p><strong>To create new sites:</strong></p>
             <p>Go to /dashboard/test123 and generate a business</p>
           </div>
@@ -210,16 +272,25 @@ export default async function DynamicWebsite({ params }) {
     <ThemedLayout theme={theme}>
       <div className="dynamic-website">
         {layout.map((section, index) => {
-          const Component = LaunchflyUI[section.component];
+          const Component = componentMap[section.component];
           if (!Component) {
             console.warn(`Component ${section.component} not found`);
             return null;
           }
           
+          // Inject business data for components that need it
+          const enhancedProps = { ...section.props };
+          
+          // If it's ProductShowcase, add the business data
+          if (section.component === 'ProductShowcase') {
+            enhancedProps.businessId = businessRecord.id;
+            enhancedProps.businessSubdomain = subdomain;
+          }
+          
           return (
             <Component
               key={index}
-              {...section.props}
+              {...enhancedProps}
             />
           );
         })}

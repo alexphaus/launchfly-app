@@ -11,37 +11,6 @@ const twilioClient = process.env.TWILIO_ACCOUNT_SID ?
   null;
 
 export async function POST(request) {
-  const { sessionId, phoneNumber } = await request.json();
-  
-  // Update session
-  await supabase
-    .from('sessions')
-    .update({ phone_number: phoneNumber })
-    .eq('id', sessionId);
-  
-  // Update business
-  await supabase
-    .from('businesses')
-    .update({ phone_number: phoneNumber })
-    .eq('session_id', sessionId);
-  
-  // Send welcome SMS if Twilio is configured
-  if (twilioClient && process.env.TWILIO_PHONE_NUMBER) {
-    try {
-      await twilioClient.messages.create({
-        body: '🚀 Welcome to Launchfly! You\'ll get instant alerts when someone visits your site or when you make a sale. Reply STOP to unsubscribe.',
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to: phoneNumber
-      });
-    } catch (error) {
-      console.error('SMS error:', error);
-    }
-  }
-  
-  return Response.json({ success: true });
-}
-
-export async function POST(request) {
   try {
     const { sessionId, phoneNumber } = await request.json();
     
@@ -60,7 +29,7 @@ export async function POST(request) {
       .single();
       
     if (businessError) {
-      console.error('Error finding business:', businessError);
+      console.error('Business lookup error:', businessError);
       return new Response(JSON.stringify({ error: 'Business not found' }), { 
         status: 404, 
         headers: { 'Content-Type': 'application/json' }
@@ -76,11 +45,25 @@ export async function POST(request) {
       .eq('id', business.id);
     
     if (updateError) {
-      console.error('Error updating phone number:', updateError);
+      console.error('Update error:', updateError);
       return new Response(JSON.stringify({ error: 'Failed to save phone number' }), { 
         status: 500, 
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+    
+    // Send welcome SMS if Twilio is configured
+    if (twilioClient && process.env.TWILIO_PHONE_NUMBER) {
+      try {
+        await twilioClient.messages.create({
+          body: 'Thanks for providing your phone number! Your business is being created.',
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: phoneNumber
+        });
+      } catch (error) {
+        console.error('SMS error:', error);
+        // Don't fail the request if SMS fails
+      }
     }
     
     return Response.json({

@@ -1,14 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
-import twilio from 'twilio';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-const twilioClient = process.env.TWILIO_ACCOUNT_SID ? 
-  twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : 
-  null;
+// Initialize Twilio client only when needed and with proper validation
+function getTwilioClient() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  
+  if (!accountSid || !authToken || !accountSid.startsWith('AC')) {
+    return null;
+  }
+  
+  try {
+    const twilio = require('twilio');
+    return twilio(accountSid, authToken);
+  } catch (error) {
+    console.warn('Failed to initialize Twilio client:', error.message);
+    return null;
+  }
+}
 
 export async function POST(request) {
   const { sessionId, phoneNumber } = await request.json();
@@ -26,6 +39,7 @@ export async function POST(request) {
     .eq('session_id', sessionId);
   
   // Send welcome SMS if Twilio is configured
+  const twilioClient = getTwilioClient();
   if (twilioClient && process.env.TWILIO_PHONE_NUMBER) {
     try {
       await twilioClient.messages.create({

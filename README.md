@@ -1,4 +1,5 @@
 SUPABASE SCHEMA:
+
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
@@ -20,6 +21,7 @@ CREATE TABLE public.businesses (
   total_revenue numeric DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  last_sale_date timestamp with time zone,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -33,6 +35,21 @@ CREATE TABLE public.profiles (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.sales (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  product_id text,
+  amount numeric NOT NULL,
+  currency text DEFAULT 'usd'::text,
+  customer_email text,
+  customer_name text,
+  stripe_session_id text UNIQUE,
+  payment_status text DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'refunded'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT sales_pkey PRIMARY KEY (id),
+  CONSTRAINT sales_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.sessions (
   id text NOT NULL,

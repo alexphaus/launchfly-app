@@ -18,16 +18,19 @@ const supabase = createClient(
  * @returns {Object} Complete business data
  */
 export async function generateBusinessWithAI(userData, sessionId, businessId) {
-  console.log('Starting business generation for session:', sessionId);
+  console.log('🚀 Starting business generation for session:', sessionId);
+  console.log('📋 User data:', { name: userData.name, skills: userData.skills?.substring(0, 50) });
   
   try {
     // Step 1: Analyze opportunity using our core function
-    console.log('Analyzing business opportunity...');
+    console.log('🔍 Step 1: Analyzing business opportunity...');
     const opportunity = await analyzeOpportunity(userData, sessionId);
+    console.log('✅ Opportunity analyzed:', opportunity.businessName);
     
     // Step 2: Launch the business with the analyzed opportunity
-    console.log('Launching business...');
+    console.log('🚀 Step 2: Launching business...');
     const businessData = await launchBusiness(opportunity, sessionId, businessId);
+    console.log('✅ Business launched successfully');
     
     // Note: We don't run growBusiness automatically here because
     // that's part of the ongoing value we provide to customers
@@ -35,13 +38,22 @@ export async function generateBusinessWithAI(userData, sessionId, businessId) {
     
     return businessData;
   } catch (error) {
-    console.error('Error generating business:', error);
+    console.error('❌ Error generating business:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
+    });
     
     // Update session to error state
-    await supabase
-      .from('sessions')
-      .update({ stage: 'error' })
-      .eq('id', sessionId);
+    try {
+      await supabase
+        .from('sessions')
+        .update({ stage: 'error' })
+        .eq('id', sessionId);
+      console.log('📝 Session marked as error');
+    } catch (updateError) {
+      console.error('Failed to update session to error state:', updateError);
+    }
     
     throw error;
   }

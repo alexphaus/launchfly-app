@@ -34,16 +34,28 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     .eq('id', sessionId);
   
   try {
-    // Generate website data with AI
-    const websiteData = await generateWebsite(opportunity, products);
-    
-    // Create digital products based on the opportunity
+    console.log('🔨 Creating products for opportunity:', opportunity.businessName);
+    // Create digital products based on the opportunity first
     const products = await createProducts(opportunity);
+    console.log('✅ Products created:', products.length);
     
+    console.log('🎨 Generating website layout...');
+    // Generate website data with AI (now with products available)
+    const websiteData = await generateWebsite(opportunity, products);
+    console.log('✅ Website data generated');
+    
+    console.log('📢 Creating marketing materials...');
     // Generate marketing materials and strategies
     const marketing = await createMarketing(opportunity);
+    console.log('✅ Marketing materials created');
     
     // Integrate with the existing business structure
+    console.log('🔍 Building business data with opportunity:', {
+      businessName: opportunity.businessName,
+      niche: opportunity.niche,
+      hasBusinessName: !!opportunity.businessName
+    });
+    
     const businessData = {
       businessName: opportunity.businessName,
       tagline: opportunity.solution,
@@ -346,6 +358,11 @@ async function createMarketing(opportunity) {
  * @returns {string} Domain name suggestion
  */
 function generateDomain(businessName) {
+  console.log('🔍 generateDomain called with:', businessName, typeof businessName);
+  if (!businessName) {
+    console.error('❌ businessName is undefined in generateDomain!');
+    return 'temp-domain.com';
+  }
   return businessName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')

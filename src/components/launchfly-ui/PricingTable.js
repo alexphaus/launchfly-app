@@ -1,10 +1,14 @@
 'use client';
 
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+
 export default function PricingTable({ 
   title = "Choose Your Plan",
   subtitle = "Flexible pricing for every need",
   plans = []
 }) {
+  const params = useParams();
   const defaultPlans = [
     {
       name: "Starter",
@@ -119,8 +123,9 @@ export default function PricingTable({
               </ul>
 
               {/* CTA Button */}
-              <button
-                className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:scale-105 ${
+              <Link
+                href={`/${params.subdomain}/product/${plan.id || plan.name.toLowerCase().replace(/\s+/g, '-')}`}
+                className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:scale-105 block text-center ${
                   plan.popular 
                     ? 'text-white shadow-lg' 
                     : 'border-2 hover:text-white'
@@ -128,7 +133,8 @@ export default function PricingTable({
                 style={{
                   background: plan.popular ? 'var(--primary, #3b82f6)' : 'transparent',
                   borderColor: 'var(--primary, #3b82f6)',
-                  color: plan.popular ? 'white' : 'var(--primary, #3b82f6)'
+                  color: plan.popular ? 'white' : 'var(--primary, #3b82f6)',
+                  textDecoration: 'none'
                 }}
                 onMouseEnter={(e) => {
                   if (!plan.popular) {
@@ -144,7 +150,7 @@ export default function PricingTable({
                 }}
               >
                 {plan.ctaText}
-              </button>
+              </Link>
             </div>
           ))}
         </div>

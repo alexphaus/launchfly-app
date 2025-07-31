@@ -22,7 +22,7 @@ const mockBusinessData = {
         component: 'NavBar',
         props: {
           businessName: 'Axcelerate Business',
-          links: ['Home', 'About', 'Services', 'Contact']
+          links: ['Home', 'About', 'Services', 'Products', 'Contact']
         }
       },
       {
@@ -30,8 +30,8 @@ const mockBusinessData = {
         props: {
           title: 'Accelerate Your Business Growth',
           subtitle: 'AI-powered solutions to streamline operations and boost productivity',
-          buttonText: 'Get Started',
-          buttonLink: '#contact'
+          buttonText: 'View Products',
+          buttonLink: '#products'
         }
       },
       {
@@ -53,6 +53,63 @@ const mockBusinessData = {
               title: 'Expert Support',
               description: '24/7 dedicated support from our expert team',
               icon: '🎯'
+            }
+          ]
+        }
+      },
+      {
+        component: 'ProductGrid',
+        props: {
+          title: 'Our Solutions',
+          subtitle: 'Choose the perfect package for your business needs',
+          products: [
+            {
+              id: 'ai-starter',
+              name: 'AI Starter',
+              price: '$299',
+              period: 'one-time',
+              description: 'Perfect for small businesses getting started with AI',
+              icon: '🚀',
+              features: [
+                'AI-powered automation setup',
+                'Basic workflow optimization',  
+                'Email support',
+                '30-day money-back guarantee'
+              ],
+              ctaText: 'Get Started'
+            },
+            {
+              id: 'ai-pro',
+              name: 'AI Professional',
+              price: '$699',
+              period: 'one-time',
+              description: 'Advanced AI solutions for growing businesses',
+              icon: '⭐',
+              features: [
+                'Everything in Starter',
+                'Advanced AI integrations',
+                'Custom workflow design',
+                'Priority support',
+                'Performance analytics'
+              ],
+              ctaText: 'Go Pro',
+              popular: true
+            },
+            {
+              id: 'ai-enterprise',
+              name: 'AI Enterprise',
+              price: '$1,499',
+              period: 'one-time',
+              description: 'Complete AI transformation for large organizations',
+              icon: '💎',
+              features: [
+                'Everything in Professional',
+                'Dedicated AI consultant',
+                'Custom AI development',
+                'SLA guarantee',
+                'Unlimited revisions'
+              ],
+              ctaText: 'Contact Sales'
             }
           ]
         }

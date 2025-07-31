@@ -30,7 +30,7 @@ export default function ProductCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId: product.id,
-          businessId: businessId,
+          businessId: businessId || null, // Handle null/undefined businessId
           customerEmail: customerInfo.email,
           customerName: customerInfo.name,
           subdomain: businessSubdomain
@@ -39,11 +39,11 @@ export default function ProductCard({
 
       const data = await response.json();
 
-      if (data.url) {
+      if (response.ok && data.url) {
         // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
-        throw new Error('Failed to create checkout session');
+        throw new Error(data.error || 'Failed to create checkout session');
       }
     } catch (error) {
       console.error('Checkout error:', error);

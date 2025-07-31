@@ -53,10 +53,54 @@ async function handleSuccessfulPayment(session) {
       businessSubdomain,
       businessOwnerEmail,
       businessOwnerName,
-      businessUserId
+      businessUserId,
+      isDemoMode
     } = session.metadata;
 
-    // Get the business to check if this is their first sale
+    // Handle demo mode purchases
+    if (isDemoMode === 'true') {
+      console.log('🎭 Demo purchase completed:', {
+        sessionId: session.id,
+        businessSubdomain,
+        amount: session.amount_total / 100
+      });
+      
+      // For demo mode, we don't record in database but can still send notification
+      if (resend) {
+        const amount = session.amount_total / 100;
+        await resend.emails.send({
+          from: 'Launchfly <demo@launchfly.ai>',
+          to: 'demo@launchfly.ai', // Send to demo email
+          subject: '🎭 Demo Purchase Completed!',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #5D5FEF;">🎭 Demo Purchase Completed!</h1>
+              
+              <p style="font-size: 18px; line-height: 1.6;">
+                A demo purchase was just completed!
+              </p>
+              
+              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3>Demo Purchase Details:</h3>
+                <p><strong>Amount:</strong> $${amount}</p>
+                <p><strong>Business:</strong> ${businessSubdomain}</p>
+                <p><strong>Customer:</strong> ${session.customer_details?.name}</p>
+                <p><strong>Email:</strong> ${session.customer_details?.email}</p>
+              </div>
+              
+              <p style="color: #666;">
+                This was a demo purchase to test the Stripe integration. No real money was processed.
+              </p>
+            </div>
+          `
+        });
+      }
+      
+      console.log('Demo purchase notification sent');
+      return;
+    }
+
+    // Handle real business purchases
     const { data: business } = await supabase
       .from('businesses')
       .select('total_revenue, first_sale_date')

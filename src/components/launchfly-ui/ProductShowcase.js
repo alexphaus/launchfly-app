@@ -52,6 +52,14 @@ export default function ProductShowcase({
   const handlePurchase = async (product, index) => {
     setLoading(index);
     
+    console.log('🛒 Purchase attempt:', {
+      productId: product.id || `product_${index}`,
+      businessId: businessId,
+      productName: product.name,
+      price: product.price,
+      businessSubdomain: businessSubdomain
+    });
+    
     try {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -69,11 +77,13 @@ export default function ProductShowcase({
 
       const data = await response.json();
       
+      console.log('📦 Checkout API response:', { status: response.status, data });
+      
       if (data.checkoutUrl) {
         // Redirect to Stripe Checkout
         window.location.href = data.checkoutUrl;
       } else {
-        console.error('No checkout URL received');
+        console.error('No checkout URL received:', data);
         alert('Sorry, there was an error processing your request. Please try again.');
       }
     } catch (error) {

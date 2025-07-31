@@ -124,7 +124,7 @@ export default function PricingTable({
 
               {/* CTA Button */}
               <Link
-                href={`/${params.subdomain}/product/${plan.id || plan.name.toLowerCase().replace(/\s+/g, '-')}`}
+                href={`/sites/${params.subdomain}/product/${plan.id || plan.name.toLowerCase().replace(/\s+/g, '-')}`}
                 className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:scale-105 block text-center ${
                   plan.popular 
                     ? 'text-white shadow-lg' 

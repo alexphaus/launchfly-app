@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname } from 'next/navigation';
 
 export default function PricingTable({ 
   title = "Choose Your Plan",
@@ -13,10 +12,6 @@ export default function PricingTable({
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [customerInfo, setCustomerInfo] = useState({ email: '', name: '' });
   const [showCheckoutForm, setShowCheckoutForm] = useState(null);
-  const pathname = usePathname();
-  
-  // Get subdomain from pathname if not provided
-  const subdomain = businessSubdomain || pathname?.split('/')[1];
   const defaultPlans = [
     {
       name: "Starter",
@@ -85,20 +80,18 @@ export default function PricingTable({
 
     setLoadingPlan(plan.id || plan.name);
 
-    try {
-      const response = await fetch('/api/stripe/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productId: plan.id || plan.name,
-          businessId: businessId,
-          customerEmail: customerInfo.email,
-          customerName: customerInfo.name,
-          subdomain: subdomain
-        })
-      });
-
-      const data = await response.json();
+        try {
+            const response = await fetch('/api/stripe/create-checkout-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    productId: plan.id || plan.name,
+                    businessId: businessId,
+                    customerEmail: customerInfo.email,
+                    customerName: customerInfo.name,
+                    subdomain: businessSubdomain
+                })
+            });      const data = await response.json();
 
       if (data.url) {
         // Redirect to Stripe Checkout

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname } from 'next/navigation';
 
 export default function ProductCard({ 
   product,
@@ -12,10 +11,6 @@ export default function ProductCard({
   const [loading, setLoading] = useState(false);
   const [customerInfo, setCustomerInfo] = useState({ email: '', name: '' });
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
-  const pathname = usePathname();
-  
-  // Get subdomain from pathname if not provided
-  const subdomain = businessSubdomain || pathname?.split('/')[1];
 
   const handleBuyNow = () => {
     setShowCheckoutForm(true);
@@ -38,7 +33,7 @@ export default function ProductCard({
           businessId: businessId,
           customerEmail: customerInfo.email,
           customerName: customerInfo.name,
-          subdomain: subdomain
+          subdomain: businessSubdomain
         })
       });
 

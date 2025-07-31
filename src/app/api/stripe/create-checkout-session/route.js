@@ -79,10 +79,30 @@ export async function POST(request) {
     
     // Find the specific product from business data
     const businessData = business.business_data;
-    const product = businessData?.products?.find(p => p.id === productId);
+    
+    // First try to find in products array
+    let product = businessData?.products?.find(p => p.id === productId || p.name === productId);
+    
+    // If not found in products, search in layout structure for PricingTable plans
+    if (!product && businessData?.layout) {
+      const pricingTableSection = businessData.layout.find(section => section.component === 'PricingTable');
+      if (pricingTableSection?.props?.plans) {
+        product = pricingTableSection.props.plans.find(p => p.id === productId || p.name === productId);
+      }
+    }
     
     if (!product) {
-      console.error('Product not found:', { productId, availableProducts: businessData?.products?.map(p => p.id) });
+      // Collect all available products/plans for debugging
+      const availableProducts = [];
+      if (businessData?.products) {
+        availableProducts.push(...businessData.products.map(p => ({ source: 'products', id: p.id, name: p.name })));
+      }
+      const pricingTableSection = businessData?.layout?.find(section => section.component === 'PricingTable');
+      if (pricingTableSection?.props?.plans) {
+        availableProducts.push(...pricingTableSection.props.plans.map(p => ({ source: 'plans', id: p.id || 'no-id', name: p.name })));
+      }
+      
+      console.error('Product not found:', { productId, availableProducts });
       return Response.json({ error: 'Product not found' }, { status: 404 });
     }
     

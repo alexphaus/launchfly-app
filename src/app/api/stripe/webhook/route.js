@@ -10,40 +10,60 @@ const supabase = createClient(
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request) {
+  console.log('🚀 Webhook received at:', new Date().toISOString());
+  
   const body = await request.text();
   const sig = request.headers.get('stripe-signature');
+  
+  console.log('📧 Webhook signature present:', !!sig);
+  console.log('🔑 Webhook secret configured:', !!process.env.STRIPE_WEBHOOK_SECRET);
   
   let event;
   
   try {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    console.log('✅ Webhook signature verified successfully');
+    console.log('📦 Event type:', event.type);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
   
   // Handle the event
+  console.log('🎯 Processing event:', event.type);
+  
   switch (event.type) {
     case 'checkout.session.completed':
+      console.log('💰 Processing checkout session completed');
       await handleCheckoutSessionCompleted(event.data.object);
       break;
     case 'payment_intent.succeeded':
-      console.log('PaymentIntent was successful!');
+      console.log('💳 PaymentIntent was successful!');
       break;
     default:
-      console.log(`Unhandled event type ${event.type}`);
+      console.log(`⚠️ Unhandled event type ${event.type}`);
   }
   
+  console.log('✅ Webhook processing completed successfully');
   return new Response('Success', { status: 200 });
 }
 
 async function handleCheckoutSessionCompleted(session) {
   try {
+    console.log('🔍 Processing session:', session.id);
+    console.log('📋 Session metadata:', session.metadata);
+    console.log('👤 Customer details:', session.customer_details);
+    
     const { businessId, productId, customerName, subdomain } = session.metadata;
     const customerEmail = session.customer_details.email;
     const amountTotal = session.amount_total / 100; // Convert from cents
     
+    console.log('💼 Business ID:', businessId);
+    console.log('🛍️ Product ID:', productId);
+    console.log('💰 Amount:', amountTotal);
+    
     // Get business data
+    console.log('🔎 Fetching business data...');
     const { data: business, error: businessError } = await supabase
       .from('businesses')
       .select('*')
@@ -51,18 +71,24 @@ async function handleCheckoutSessionCompleted(session) {
       .single();
     
     if (businessError) {
-      console.error('Error fetching business:', businessError);
+      console.error('❌ Error fetching business:', businessError);
       return;
     }
+    
+    console.log('✅ Business found:', business.name);
     
     // Find the product
     const product = business.business_data?.products?.find(p => p.id === productId);
     if (!product) {
-      console.error('Product not found:', productId);
+      console.error('❌ Product not found:', productId);
+      console.log('Available products:', business.business_data?.products?.map(p => ({ id: p.id, name: p.name })));
       return;
     }
     
+    console.log('✅ Product found:', product.name);
+    
     // Record the sale
+    console.log('💾 Recording sale in database...');
     const { data: sale, error: saleError } = await supabase
       .from('sales')
       .insert({
@@ -79,9 +105,11 @@ async function handleCheckoutSessionCompleted(session) {
       .single();
     
     if (saleError) {
-      console.error('Error recording sale:', saleError);
+      console.error('❌ Error recording sale:', saleError);
       return;
     }
+    
+    console.log('✅ Sale recorded successfully:', sale.id);
     
     // Update business total revenue and sale dates
     const currentRevenue = business.total_revenue || 0;

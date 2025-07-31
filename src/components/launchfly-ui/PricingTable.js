@@ -14,6 +14,7 @@ export default function PricingTable({
   const [showCheckoutForm, setShowCheckoutForm] = useState(null);
   const defaultPlans = [
     {
+      id: "starter-plan",
       name: "Starter",
       price: "$99",
       period: "month",
@@ -28,6 +29,7 @@ export default function PricingTable({
       popular: false
     },
     {
+      id: "professional-plan",
       name: "Professional",
       price: "$199",
       period: "month", 
@@ -43,6 +45,7 @@ export default function PricingTable({
       popular: true
     },
     {
+      id: "enterprise-plan",
       name: "Enterprise",
       price: "Custom",
       period: "",

@@ -1,10 +1,22 @@
 'use client';
 
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+
 export default function PricingTable({ 
   title = "Choose Your Plan",
   subtitle = "Flexible pricing for every need",
-  plans = []
+  plans = [],
+  businessId,
+  businessSubdomain
 }) {
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const [customerInfo, setCustomerInfo] = useState({ email: '', name: '' });
+  const [showCheckoutForm, setShowCheckoutForm] = useState(null);
+  const pathname = usePathname();
+  
+  // Get subdomain from pathname if not provided
+  const subdomain = businessSubdomain || pathname?.split('/')[1];
   const defaultPlans = [
     {
       name: "Starter",
@@ -53,6 +65,54 @@ export default function PricingTable({
   ];
 
   const displayPlans = plans.length > 0 ? plans : defaultPlans;
+
+  const handlePlanSelect = async (plan) => {
+    // For non-payment plans (like "Contact Sales"), handle differently
+    if (plan.price === 'Custom' || plan.ctaText.toLowerCase().includes('contact')) {
+      // You could open a contact form or redirect to a contact page
+      alert('Please contact us for custom pricing');
+      return;
+    }
+
+    setShowCheckoutForm(plan.id || plan.name);
+  };
+
+  const handleCheckout = async (plan) => {
+    if (!customerInfo.email) {
+      alert('Please enter your email address');
+      return;
+    }
+
+    setLoadingPlan(plan.id || plan.name);
+
+    try {
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: plan.id || plan.name,
+          businessId: businessId,
+          customerEmail: customerInfo.email,
+          customerName: customerInfo.name,
+          subdomain: subdomain
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error('Failed to create checkout session');
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Something went wrong. Please try again.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <section className="py-20 bg-gray-50" id="pricing">
@@ -119,32 +179,69 @@ export default function PricingTable({
               </ul>
 
               {/* CTA Button */}
-              <button
-                className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:scale-105 ${
-                  plan.popular 
-                    ? 'text-white shadow-lg' 
-                    : 'border-2 hover:text-white'
-                }`}
-                style={{
-                  background: plan.popular ? 'var(--primary, #3b82f6)' : 'transparent',
-                  borderColor: 'var(--primary, #3b82f6)',
-                  color: plan.popular ? 'white' : 'var(--primary, #3b82f6)'
-                }}
-                onMouseEnter={(e) => {
-                  if (!plan.popular) {
-                    e.target.style.background = 'var(--primary, #3b82f6)';
-                    e.target.style.color = 'white';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!plan.popular) {
-                    e.target.style.background = 'transparent';
-                    e.target.style.color = 'var(--primary, #3b82f6)';
-                  }
-                }}
-              >
-                {plan.ctaText}
-              </button>
+              {showCheckoutForm === (plan.id || plan.name) ? (
+                <div className="space-y-3">
+                  <input
+                    type="email"
+                    placeholder="Your email address"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={customerInfo.email}
+                    onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Your name (optional)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={customerInfo.name}
+                    onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCheckout(plan)}
+                      disabled={loadingPlan === (plan.id || plan.name)}
+                      className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all text-white shadow-lg disabled:opacity-50"
+                      style={{ background: 'var(--primary, #3b82f6)' }}
+                    >
+                      {loadingPlan === (plan.id || plan.name) ? 'Processing...' : 'Buy Now'}
+                    </button>
+                    <button
+                      onClick={() => setShowCheckoutForm(null)}
+                      className="px-4 py-3 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handlePlanSelect(plan)}
+                  disabled={loadingPlan === (plan.id || plan.name)}
+                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:scale-105 disabled:opacity-50 ${
+                    plan.popular 
+                      ? 'text-white shadow-lg' 
+                      : 'border-2 hover:text-white'
+                  }`}
+                  style={{
+                    background: plan.popular ? 'var(--primary, #3b82f6)' : 'transparent',
+                    borderColor: 'var(--primary, #3b82f6)',
+                    color: plan.popular ? 'white' : 'var(--primary, #3b82f6)'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!plan.popular) {
+                      e.target.style.background = 'var(--primary, #3b82f6)';
+                      e.target.style.color = 'white';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!plan.popular) {
+                      e.target.style.background = 'transparent';
+                      e.target.style.color = 'var(--primary, #3b82f6)';
+                    }
+                  }}
+                >
+                  {loadingPlan === (plan.id || plan.name) ? 'Loading...' : plan.ctaText}
+                </button>
+              )}
             </div>
           ))}
         </div>

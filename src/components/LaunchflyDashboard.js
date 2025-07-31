@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { ChevronRight, Globe, DollarSign, Users, Rocket, Check, TrendingUp, Sparkles, Clock, X, AlertCircle, MessageSquare } from 'lucide-react';
 import GrowthInsights from './GrowthInsights';
+import SalesWidget from './SalesWidget';
 
 // --- NEW: Design System Inspired by styles.css ---
 const theme = {
@@ -213,6 +214,32 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             setAiCoach({ show: true, message: `🚀 You are LIVE! I'm now analyzing the market and will notify you the moment your first visitor arrives. Exciting! 🔥` });
         }
     };
+
+    // Test function to create a demo sale
+    const createTestSale = async () => {
+        if (!business?.id) return;
+        
+        try {
+            const response = await fetch('/api/test/create-sale', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    businessId: business.id,
+                    productId: 'demo_product',
+                    amount: 97.00
+                })
+            });
+            
+            if (response.ok) {
+                setAiCoach({ 
+                    show: true, 
+                    message: `🎉 Test sale created! Check your sales widget to see real-time updates. This is how you'll be notified of actual sales!` 
+                });
+            }
+        } catch (error) {
+            console.error('Error creating test sale:', error);
+        }
+    };
     
     const stageMessages = {
         analyzing: "analyzing", researching: "researching", building: "building", finalizing: "finalizing", complete: "complete",
@@ -312,13 +339,24 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
                                         )}
                                     </div>
                                 </div>
-                                {/* Revenue & Customers */}
+                                {/* Revenue & Sales */}
                                 <div className="space-y-6">
-                                     <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><TrendingUp className="w-5 h-5" style={{color: theme.colors.primary}} /> Revenue & Customers</h4>
-                                     <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
-                                        <p className="text-sm font-medium" style={{color: theme.colors.textGray}}>Est. Monthly Revenue</p>
-                                        <p className="text-2xl font-bold" style={{color: theme.colors.success}}>{businessData?.revenue || businessData?.monthlyRevenue || '$2,000-$5,000/month'}</p>
+                                     <h4 className="font-bold text-lg flex items-center gap-2" style={{color: theme.colors.textDark}}><TrendingUp className="w-5 h-5" style={{color: theme.colors.primary}} /> Sales & Revenue</h4>
+                                     
+                                     {/* Sales Widget - Real-time sales data */}
+                                     <SalesWidget businessId={business?.id} theme={theme} />
+                                     
+                                     {/* Test Sale Button (for demonstration) */}
+                                     <div className="text-center">
+                                         <button
+                                             onClick={createTestSale}
+                                             className="px-4 py-2 rounded-lg text-sm font-medium border-2 border-dashed hover:bg-gray-50 transition-colors"
+                                             style={{ borderColor: theme.colors.primary, color: theme.colors.primary }}
+                                         >
+                                             🧪 Create Test Sale ($97) - Demo Only
+                                         </button>
                                      </div>
+                                     
                                       <div className="p-6 rounded-xl border" style={{borderColor: theme.colors.borderLight}}>
                                         <p className="font-semibold mb-2 flex items-center gap-2"><Users className="w-5 h-5" style={{color: theme.colors.primary}}/> Ideal Customer Profile</p>
                                         <p className="text-sm" style={{color: theme.colors.textGray}}>

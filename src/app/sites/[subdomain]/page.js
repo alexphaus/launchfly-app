@@ -17,6 +17,34 @@ const mockBusinessData = {
       font: 'Inter',
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
     },
+    products: [
+      {
+        id: 'mock_product_1',
+        name: 'Business Acceleration Package',
+        price: '$297',
+        description: 'Transform your business with our comprehensive acceleration program. Get expert guidance, proven strategies, and hands-on support.',
+        features: [
+          'Complete business audit and analysis',
+          'Custom growth strategy development',
+          '30-day implementation roadmap',
+          'Weekly coaching calls',
+          'ROI tracking and optimization'
+        ]
+      },
+      {
+        id: 'mock_product_2',
+        name: 'Digital Transformation Suite',
+        price: '$497',
+        description: 'Modernize your operations with cutting-edge digital solutions. Streamline processes and boost productivity.',
+        features: [
+          'Process automation setup',
+          'Digital workflow optimization',
+          'Technology integration',
+          'Staff training and support',
+          '6-month maintenance included'
+        ]
+      }
+    ],
     layout: [
       {
         component: 'NavBar',
@@ -158,6 +186,7 @@ export default async function DynamicWebsite({ params }) {
   const { subdomain } = await params;
   
   let businessData = null;
+  let businessRecord = null;
   
   try {
     // Try to get data from Supabase first
@@ -173,6 +202,7 @@ export default async function DynamicWebsite({ params }) {
 
     if (business && !error) {
       businessData = business.business_data;
+      businessRecord = business;
       console.log('✅ Loaded from database:', subdomain);
     } else {
       console.log('📦 Using mock data for:', subdomain);
@@ -205,6 +235,7 @@ export default async function DynamicWebsite({ params }) {
 
   const theme = businessData.theme || {};
   const layout = businessData.layout || [];
+  const products = businessData.products || [];
 
   return (
     <ThemedLayout theme={theme}>
@@ -216,13 +247,36 @@ export default async function DynamicWebsite({ params }) {
             return null;
           }
           
+          // Add business information to pricing and product components
+          const enhancedProps = { 
+            ...section.props,
+            ...(section.component === 'PricingTable' && { 
+              businessId: businessRecord?.id,
+              businessSubdomain: subdomain 
+            }),
+            ...(section.component === 'ProductGrid' && { 
+              businessId: businessRecord?.id,
+              businessSubdomain: subdomain,
+              products: products 
+            })
+          };
+          
           return (
             <Component
               key={index}
-              {...section.props}
+              {...enhancedProps}
             />
           );
         })}
+        
+        {/* Add ProductGrid if products exist but not in layout */}
+        {products && products.length > 0 && !layout.some(section => section.component === 'ProductGrid') && (
+          <LaunchflyUI.ProductGrid
+            products={products}
+            businessId={businessRecord?.id}
+            businessSubdomain={subdomain}
+          />
+        )}
       </div>
     </ThemedLayout>
   );

@@ -183,8 +183,9 @@ async function createProducts(opportunity) {
       - A clear name
       - A compelling description
       - An appropriate price point for the target market
+      - Key features/benefits (array of 3-5 items)
       
-      Return as a JSON array with objects containing name, price, and description.
+      Return as a JSON array with objects containing name, price, description, and features.
     `;
 
     const response = await openai.chat.completions.create({
@@ -197,15 +198,45 @@ async function createProducts(opportunity) {
     });
     
     const { products } = JSON.parse(response.choices[0].message.content);
-    return products || [];
+    
+    // Add unique IDs to each product
+    const productsWithIds = (products || []).map((product, index) => ({
+      ...product,
+      id: `product_${Date.now()}_${index}`,
+      features: product.features || [
+        "Professional quality service",
+        "Expert guidance included",
+        "Satisfaction guarantee"
+      ]
+    }));
+    
+    return productsWithIds;
   } catch (error) {
     console.error("Error creating products:", error);
     
-    // Fallback products
+    // Fallback products with IDs
     return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      { 
+        id: `product_${Date.now()}_0`,
+        name: "Basic Package", 
+        price: "$97", 
+        description: "Essential services to get you started",
+        features: ["Core features", "Email support", "30-day guarantee"]
+      },
+      { 
+        id: `product_${Date.now()}_1`,
+        name: "Professional Package", 
+        price: "$297", 
+        description: "Comprehensive solutions for established businesses",
+        features: ["All Basic features", "Priority support", "Advanced tools", "Custom setup"]
+      },
+      { 
+        id: `product_${Date.now()}_2`,
+        name: "Premium Package", 
+        price: "$597", 
+        description: "All-inclusive enterprise-grade services",
+        features: ["All Professional features", "Dedicated manager", "Custom development", "24/7 support", "Success guarantee"]
+      }
     ];
   }
 }

@@ -61,6 +61,20 @@ export default function ProductPage() {
     setPurchasing(true);
     
     try {
+      // Track the purchase attempt with analytics (if available)
+      if (window.gtag) {
+        window.gtag('event', 'begin_checkout', {
+          currency: 'USD',
+          value: parseFloat(product.price.replace(/[$,]/g, '')),
+          items: [{
+            item_id: product.id,
+            item_name: product.name,
+            price: parseFloat(product.price.replace(/[$,]/g, ''))
+          }]
+        });
+      }
+      
+      // Create Stripe checkout session
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,12 +85,15 @@ export default function ProductPage() {
         })
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error creating checkout session');
+      }
+
       const { url, error } = await response.json();
       
       if (error) {
-        alert('Error creating checkout session: ' + error);
-        setPurchasing(false);
-        return;
+        throw new Error(error);
       }
       
       // Redirect to Stripe Checkout
@@ -84,7 +101,17 @@ export default function ProductPage() {
       
     } catch (error) {
       console.error('Purchase error:', error);
-      alert('Something went wrong. Please try again.');
+      
+      // Show user-friendly error message
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'fixed top-0 left-0 w-full p-4 bg-red-500 text-white text-center';
+      errorMessage.textContent = 'Unable to process your payment. Please try again.';
+      document.body.appendChild(errorMessage);
+      
+      setTimeout(() => {
+        errorMessage.remove();
+      }, 5000);
+      
       setPurchasing(false);
     }
   }

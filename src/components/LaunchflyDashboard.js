@@ -38,7 +38,9 @@ const GenerationLoader = ({ progress, stageMessage }) => {
 
     const currentStepIndex = useMemo(() => {
         const stageOrder = ['analyzing', 'researching', 'building', 'finalizing', 'complete'];
-        return stageOrder.indexOf(stageMessage);
+        const index = stageOrder.indexOf(stageMessage);
+        console.log('GenerationLoader - stageMessage:', stageMessage, 'currentStepIndex:', index);
+        return index;
     }, [stageMessage]);
 
     return (

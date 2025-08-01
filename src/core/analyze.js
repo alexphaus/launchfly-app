@@ -75,6 +75,7 @@ export async function validateDemand(opportunity) {
  * @returns {Object} Business opportunity data
  */
 export async function analyzeOpportunity(userData, sessionId) {
+  console.log('Starting analyze opportunity - setting stage to analyzing');
   // Update session to show we're analyzing
   await supabase
     .from('sessions')
@@ -86,6 +87,16 @@ export async function analyzeOpportunity(userData, sessionId) {
   
   // Extract relevant data from user input
   const { name, skills, businessType, goal, preferences } = userData;
+  
+  console.log('Setting stage to researching');
+  // Update session to show we're researching
+  await supabase
+    .from('sessions')
+    .update({
+      stage: 'researching',
+      progress: 40
+    })
+    .eq('id', sessionId);
   
   try {
     // Use AI to analyze the best market opportunity based on user data

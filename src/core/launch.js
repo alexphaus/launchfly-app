@@ -24,12 +24,13 @@ const supabase = createClient(
  * @returns {Object} Complete business data
  */
 export async function launchBusiness(opportunity, sessionId, businessId) {
+  console.log('Starting launch business - setting stage to building');
   // Update session to show we're building
   await supabase
     .from('sessions')
     .update({
       stage: 'building',
-      progress: 50
+      progress: 60
     })
     .eq('id', sessionId);
   
@@ -58,12 +59,13 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       marketing: marketing
     };
     
+    console.log('Setting stage to finalizing');
     // Update session to finalizing
     await supabase
       .from('sessions')
       .update({
         stage: 'finalizing',
-        progress: 75
+        progress: 80
       })
       .eq('id', sessionId);
     
@@ -78,6 +80,7 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       })
       .eq('id', businessId);
     
+    console.log('Setting stage to complete');
     // Mark session as complete
     await supabase
       .from('sessions')

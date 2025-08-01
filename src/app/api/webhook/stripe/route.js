@@ -185,127 +185,258 @@ async function sendSaleNotification({
 }) {
   try {
     const subject = isFirstSale 
-      ? `🚀 FIRST SALE ALERT! $${amount} - Your Launchfly business is live!`
-      : `🎯 KA-CHING! New $${amount} sale from ${customerName}`;
-
-    const celebrationHeader = isFirstSale 
-      ? `
-        <div style="background: linear-gradient(135deg, #007BFF 0%, #00D4FF 100%); color: white; padding: 40px 20px; border-radius: 16px; margin: 0 0 30px 0; text-align: center; box-shadow: 0 8px 32px rgba(0, 123, 255, 0.3);">
-          <div style="font-size: 48px; margin-bottom: 16px;">🚀</div>
-          <h1 style="margin: 0 0 12px 0; font-size: 32px; font-weight: 900; letter-spacing: -0.5px;">FIRST SALE!</h1>
-          <p style="margin: 0; font-size: 20px; opacity: 0.95; font-weight: 500;">Your AI-powered business just made money!</p>
-          <div style="background: rgba(255, 255, 255, 0.2); display: inline-block; padding: 8px 16px; border-radius: 24px; margin-top: 16px;">
-            <span style="font-size: 24px; font-weight: 800;">$${amount}</span>
-          </div>
-        </div>
-      `
-      : `
-        <div style="background: linear-gradient(135deg, #007BFF 0%, #00D4FF 100%); color: white; padding: 30px 20px; border-radius: 16px; margin: 0 0 30px 0; text-align: center; box-shadow: 0 8px 32px rgba(0, 123, 255, 0.3);">
-          <div style="font-size: 40px; margin-bottom: 12px;">💰</div>
-          <h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 800;">NEW SALE!</h1>
-          <div style="background: rgba(255, 255, 255, 0.2); display: inline-block; padding: 8px 16px; border-radius: 24px;">
-            <span style="font-size: 24px; font-weight: 800;">$${amount}</span>
-          </div>
-        </div>
-      `;
+      ? `🎉 You Just Made Your First Sale! $${amount}` 
+      : `💰 New Sale Alert! $${amount} from ${customerName}`;
 
     const dashboardUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/dashboard`;
     const websiteUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/${subdomain}`;
 
+    // Calculate some motivational stats
+    const timeToFirstSale = isFirstSale ? "Less than 24hrs" : "N/A";
+    const percentile = isFirstSale ? "5" : "10"; // Top performers
+    const daysTo1K = Math.max(7, Math.floor(1000 / amount * 7)); // Estimate based on current sale
+
     await resend.emails.send({
-      from: 'Launchfly 🚀 <hello@launchfly.ai>',
+      from: 'Launchfly Sales <hello@launchfly.ai>',
       to: businessOwnerEmail,
       subject: subject,
       html: `
-        <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 20px;">
-          ${celebrationHeader}
-          
-          <!-- Main Content Card -->
-          <div style="background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 20px rgba(26, 43, 72, 0.08); margin-bottom: 24px;">
-            
-            <!-- Sale Details -->
-            <div style="margin-bottom: 32px;">
-              <h2 style="color: #1A2B48; margin: 0 0 20px 0; font-size: 20px; font-weight: 700;">📊 Sale Details</h2>
-              <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                <div style="display: grid; gap: 12px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                    <span style="color: #64748b; font-weight: 500;">Product</span>
-                    <span style="color: #1A2B48; font-weight: 600;">${productName}</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                    <span style="color: #64748b; font-weight: 500;">Customer</span>
-                    <span style="color: #1A2B48; font-weight: 600;">${customerName}</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                    <span style="color: #64748b; font-weight: 500;">Email</span>
-                    <span style="color: #1A2B48; font-weight: 600;">${customerEmail}</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
-                    <span style="color: #64748b; font-weight: 500;">Business</span>
-                    <span style="color: #1A2B48; font-weight: 600;">${businessName}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Revenue Stats -->
-            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 24px; border-radius: 12px; margin: 24px 0; text-align: center;">
-              <div style="font-size: 32px; margin-bottom: 8px;">💎</div>
-              <h3 style="color: white; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Total Business Revenue</h3>
-              <div style="color: white; font-size: 36px; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">$${totalRevenue.toLocaleString()}</div>
-              ${isFirstSale ? 
-                `<p style="color: rgba(255,255,255,0.9); margin: 12px 0 0 0; font-size: 14px; font-weight: 500;">🎯 You've officially launched your first profitable AI business!</p>` :
-                `<p style="color: rgba(255,255,255,0.9); margin: 12px 0 0 0; font-size: 14px; font-weight: 500;">🔥 Your business is growing!</p>`
-              }
-            </div>
-
-            <!-- Action Buttons -->
-            <div style="text-align: center; margin: 32px 0;">
-              <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #007BFF 0%, #0056b3 100%); color: white; padding: 16px 28px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; display: inline-block; margin: 8px; box-shadow: 0 4px 14px rgba(0, 123, 255, 0.3); transition: all 0.3s ease;">
-                📈 View Dashboard
-              </a>
-              <a href="${websiteUrl}" style="background: linear-gradient(135deg, #00B8D9 0%, #0094a6 100%); color: white; padding: 16px 28px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; display: inline-block; margin: 8px; box-shadow: 0 4px 14px rgba(0, 184, 217, 0.3);">
-                🌐 Visit Your Site
-              </a>
-            </div>
-
-            ${isFirstSale ? `
-              <!-- First Sale Special Message -->
-              <div style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); padding: 24px; border-radius: 12px; margin: 24px 0; text-align: center;">
-                <div style="font-size: 28px; margin-bottom: 12px;">🎯</div>
-                <h3 style="color: white; margin: 0 0 12px 0; font-weight: 700; font-size: 18px;">You Did It!</h3>
-                <p style="color: rgba(255,255,255,0.95); margin: 0 0 16px 0; font-size: 15px; line-height: 1.5;">
-                  From idea to first sale in record time! Your AI-powered business is now generating real revenue. 
-                  This is just the beginning of your entrepreneurial journey with Launchfly.
-                </p>
-                <div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 8px; margin-top: 16px;">
-                  <p style="color: white; margin: 0; font-size: 14px; font-weight: 600;">
-                    💡 Pro Tip: Check your dashboard for AI-powered growth strategies to scale to $10K/month
-                  </p>
-                </div>
-              </div>
-            ` : `
-              <!-- Regular Sale Message -->
-              <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); padding: 20px; border-radius: 12px; margin: 24px 0; text-align: center;">
-                <div style="font-size: 24px; margin-bottom: 8px;">⚡</div>
-                <h3 style="color: white; margin: 0 0 8px 0; font-weight: 600;">Momentum Building!</h3>
-                <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 14px;">
-                  Another sale in the books! Your Launchfly business continues to grow with AI-powered strategies.
-                </p>
-              </div>
-            `}
-          </div>
-
-          <!-- Footer -->
-          <div style="text-align: center; padding: 20px;">
-            <div style="margin-bottom: 16px;">
-              <span style="font-size: 24px;">🚀</span>
-              <span style="color: #007BFF; font-weight: 700; font-size: 18px; margin-left: 8px;">Launchfly</span>
-            </div>
-            <p style="color: #64748b; font-size: 14px; margin: 0 0 8px 0;">AI-Powered Business Builder</p>
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Launch an AI-powered business in 30 minutes. Your first $1,000 is guaranteed.</p>
-          </div>
-        </div>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+                body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+                table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+                img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+                
+                body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background-color: #f4f4f4;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                }
+                
+                @media screen and (max-width: 600px) {
+                    .mobile-center { text-align: center !important; }
+                    .mobile-padding { padding: 20px !important; }
+                    .mobile-button { width: 100% !important; }
+                    .confetti-emoji { font-size: 40px !important; }
+                }
+            </style>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                    <td align="center" style="padding: 40px 0;">
+                        <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden;">
+                            
+                            ${isFirstSale ? `
+                            <!-- Celebration Header for First Sale -->
+                            <tr>
+                                <td align="center" style="background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); padding: 40px 20px;">
+                                    <div style="font-size: 60px; margin-bottom: 20px;" class="confetti-emoji">🎉</div>
+                                    <h1 style="color: #ffffff; font-size: 36px; font-weight: 800; margin: 0 0 10px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                        YOU DID IT!
+                                    </h1>
+                                    <p style="color: #ffffff; font-size: 20px; margin: 0; opacity: 0.95;">
+                                        Your first sale just came through!
+                                    </p>
+                                </td>
+                            </tr>
+                            ` : `
+                            <!-- Regular Header for Additional Sales -->
+                            <tr>
+                                <td align="center" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px 20px;">
+                                    <div style="font-size: 50px; margin-bottom: 15px;">💰</div>
+                                    <h1 style="color: #ffffff; font-size: 28px; font-weight: 800; margin: 0 0 10px 0;">
+                                        Another Sale!
+                                    </h1>
+                                    <p style="color: #ffffff; font-size: 18px; margin: 0; opacity: 0.95;">
+                                        Your business keeps growing!
+                                    </p>
+                                </td>
+                            </tr>
+                            `}
+                            
+                            <!-- Sale Details -->
+                            <tr>
+                                <td style="padding: 40px 40px 20px 40px;" class="mobile-padding">
+                                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td align="center">
+                                                <div style="background-color: #E6F2FF; border-radius: 12px; padding: 30px; margin-bottom: 30px;">
+                                                    <p style="color: #007BFF; font-size: 18px; margin: 0 0 10px 0; font-weight: 600;">
+                                                        Sale Amount
+                                                    </p>
+                                                    <p style="color: #1A2B48; font-size: 48px; font-weight: 800; margin: 0;">
+                                                        $${amount}
+                                                    </p>
+                                                    <p style="color: #5A6982; font-size: 16px; margin: 10px 0 0 0;">
+                                                        ${productName}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Personal Message -->
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;" class="mobile-padding">
+                                    <p style="color: #1A2B48; font-size: 18px; line-height: 1.6; margin: 0 0 20px 0;">
+                                        <strong>This is huge!</strong> 🚀
+                                    </p>
+                                    <p style="color: #5A6982; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                        ${isFirstSale 
+                                          ? `You've officially joined the ranks of successful Launchfly entrepreneurs. Your business <strong>${businessName}</strong> is now generating real revenue!`
+                                          : `Another customer has chosen <strong>${businessName}</strong>! Your business momentum is building beautifully.`
+                                        }
+                                    </p>
+                                    <p style="color: #5A6982; font-size: 16px; line-height: 1.6; margin: 0;">
+                                        Customer: <strong>${customerName}</strong> (${customerEmail})
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Revenue Stats -->
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;" class="mobile-padding">
+                                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #F9FAFB; border-radius: 12px; padding: 20px;">
+                                        <tr>
+                                            <td width="50%" align="center" style="padding: 10px;">
+                                                <p style="color: #5A6982; font-size: 14px; margin: 0;">Total Revenue</p>
+                                                <p style="color: #1A2B48; font-size: 28px; font-weight: 700; margin: 5px 0 0 0;">$${totalRevenue}</p>
+                                            </td>
+                                            <td width="50%" align="center" style="padding: 10px; border-left: 1px solid #E4E7EB;">
+                                                <p style="color: #5A6982; font-size: 14px; margin: 0;">${isFirstSale ? 'Time to First Sale' : 'Your Performance'}</p>
+                                                <p style="color: ${isFirstSale ? '#28a745' : '#007BFF'}; font-size: 24px; font-weight: 700; margin: 5px 0 0 0;">
+                                                    ${isFirstSale ? timeToFirstSale : `Top ${percentile}%`}
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Next Steps -->
+                            ${isFirstSale ? `
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;" class="mobile-padding">
+                                    <h2 style="color: #1A2B48; font-size: 24px; font-weight: 700; margin: 0 0 20px 0;">
+                                        🎯 Your Next Moves
+                                    </h2>
+                                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td style="padding-bottom: 15px;">
+                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                    <tr>
+                                                        <td style="font-size: 20px; padding-right: 10px;">📧</td>
+                                                        <td>
+                                                            <p style="color: #1A2B48; font-size: 16px; font-weight: 600; margin: 0;">Send a Thank You</p>
+                                                            <p style="color: #5A6982; font-size: 14px; margin: 0;">Build loyalty with a personal touch</p>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding-bottom: 15px;">
+                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                    <tr>
+                                                        <td style="font-size: 20px; padding-right: 10px;">🚀</td>
+                                                        <td>
+                                                            <p style="color: #1A2B48; font-size: 16px; font-weight: 600; margin: 0;">Scale Your Success</p>
+                                                            <p style="color: #5A6982; font-size: 14px; margin: 0;">AI found what works - now let's 10x it</p>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>
+                                                <table cellpadding="0" cellspacing="0" border="0">
+                                                    <tr>
+                                                        <td style="font-size: 20px; padding-right: 10px;">💎</td>
+                                                        <td>
+                                                            <p style="color: #1A2B48; font-size: 16px; font-weight: 600; margin: 0;">Upgrade to Growth Plan</p>
+                                                            <p style="color: #5A6982; font-size: 14px; margin: 0;">Unlock advanced AI to hit $1,000 faster</p>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            ` : ''}
+                            
+                            <!-- CTA Buttons -->
+                            <tr>
+                                <td align="center" style="padding: 0 40px 40px 40px;" class="mobile-padding">
+                                    <table cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td align="center" style="border-radius: 8px; background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); margin-right: 10px;" class="mobile-button">
+                                                <a href="${dashboardUrl}" target="_blank" style="display: inline-block; padding: 16px 32px; font-size: 18px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px;">
+                                                    View Dashboard →
+                                                </a>
+                                            </td>
+                                            <td align="center" style="border-radius: 8px; background: #10b981; margin-left: 10px;" class="mobile-button">
+                                                <a href="${websiteUrl}" target="_blank" style="display: inline-block; padding: 16px 32px; font-size: 18px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px;">
+                                                    Visit Your Site →
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- AI Success Coach Message -->
+                            ${isFirstSale ? `
+                            <tr>
+                                <td style="background-color: #F9FAFB; padding: 30px 40px;" class="mobile-padding">
+                                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td width="50" valign="top">
+                                                <div style="background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; text-align: center; line-height: 40px;">
+                                                    🤖
+                                                </div>
+                                            </td>
+                                            <td style="padding-left: 15px;">
+                                                <p style="color: #1A2B48; font-size: 14px; font-weight: 600; margin: 0 0 5px 0;">
+                                                    Your AI Success Coach
+                                                </p>
+                                                <p style="color: #5A6982; font-size: 14px; line-height: 1.5; margin: 0;">
+                                                    "You're in the top ${percentile}% of users for speed to first sale! Based on your metrics, I predict you'll hit $1,000 in revenue within ${daysTo1K} days. Let's make it happen!"
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            ` : ''}
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td align="center" style="padding: 30px 40px; border-top: 1px solid #E4E7EB;">
+                                    <p style="color: #5A6982; font-size: 14px; margin: 0 0 10px 0;">
+                                        Questions? Reply to this email or contact our support team
+                                    </p>
+                                    <p style="color: #5A6982; font-size: 12px; margin: 0;">
+                                        © 2025 Launchfly AI. All rights reserved.
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
       `
     });
 

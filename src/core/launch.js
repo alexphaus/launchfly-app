@@ -183,8 +183,10 @@ async function createProducts(opportunity) {
       - A clear name
       - A compelling description
       - An appropriate price point for the target market
+      - 3-5 key features or benefits
+      - A unique ID (alphanumeric)
       
-      Return as a JSON array with objects containing name, price, and description.
+      Return as a JSON object with a "products" array containing objects with id, name, price, description, and features (array).
     `;
 
     const response = await openai.chat.completions.create({
@@ -197,15 +199,57 @@ async function createProducts(opportunity) {
     });
     
     const { products } = JSON.parse(response.choices[0].message.content);
-    return products || [];
+    
+    // Ensure each product has an ID and other required fields
+    const enhancedProducts = (products || []).map((product, index) => {
+      // Generate placeholder images
+      const imageIndex = index % 5 + 1;
+      const placeholderImage = `https://images.unsplash.com/photo-${1550000000000 + index * 1000}-example-product-${imageIndex}`;
+      
+      return {
+        id: product.id || `product-${index + 1}-${Date.now().toString(36)}`,
+        name: product.name,
+        price: product.price,
+        description: product.description,
+        features: product.features || [
+          "Quality guaranteed",
+          "Professional support",
+          "Satisfaction guarantee"
+        ],
+        image: product.image || placeholderImage
+      };
+    });
+    
+    return enhancedProducts;
   } catch (error) {
     console.error("Error creating products:", error);
     
-    // Fallback products
+    // Fallback products with all required fields
     return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      {
+        id: `product-basic-${Date.now().toString(36)}`,
+        name: "Basic Package",
+        price: "$97",
+        description: "Essential services to get you started with everything you need to launch your business quickly.",
+        features: ["Core functionality", "Email support", "30-day money-back guarantee"],
+        image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e"
+      },
+      {
+        id: `product-pro-${Date.now().toString(36)}`,
+        name: "Professional Package",
+        price: "$297", 
+        description: "Comprehensive solutions for established businesses looking to scale their operations effectively.",
+        features: ["All Basic features", "Premium support", "Advanced tools", "Priority access"],
+        image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30"
+      },
+      {
+        id: `product-premium-${Date.now().toString(36)}`,
+        name: "Premium Package", 
+        price: "$597",
+        description: "All-inclusive enterprise-grade services for businesses requiring the highest level of service.",
+        features: ["All Professional features", "Dedicated account manager", "Custom development", "24/7 support", "White-glove onboarding"],
+        image: "https://images.unsplash.com/photo-1553456558-aff63285bdd1"
+      }
     ];
   }
 }

@@ -206,9 +206,13 @@ export default async function DynamicWebsite({ params }) {
   const theme = businessData.theme || {};
   const layout = businessData.layout || [];
 
+  // Check if we have products to display
+  const hasProducts = businessData.products && businessData.products.length > 0;
+
   return (
     <ThemedLayout theme={theme}>
       <div className="dynamic-website">
+        {/* Render the layout components first */}
         {layout.map((section, index) => {
           const Component = LaunchflyUI[section.component];
           if (!Component) {
@@ -223,6 +227,22 @@ export default async function DynamicWebsite({ params }) {
             />
           );
         })}
+        
+        {/* Add ProductGrid if products exist but aren't already in the layout */}
+        {hasProducts && !layout.some(section => section.component === 'ProductGrid') && (
+          <LaunchflyUI.ProductGrid 
+            title="Our Products"
+            subtitle="Discover our range of solutions designed for you"
+            products={businessData.products.map(product => ({
+              id: product.id || product.name.toLowerCase().replace(/\s+/g, '-'),
+              name: product.name,
+              price: product.price,
+              description: product.description,
+              image: product.image || null,
+              features: product.features || []
+            }))}
+          />
+        )}
       </div>
     </ThemedLayout>
   );

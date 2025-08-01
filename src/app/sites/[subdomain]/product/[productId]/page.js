@@ -34,18 +34,34 @@ export default function ProductPage() {
       setBusiness(businessData);
       
       // Find the specific product
-      const productData = businessData.business_data?.products?.find(
-        p => p.id === params.productId || p.name.toLowerCase().replace(/\s+/g, '-') === params.productId
-      );
+      const products = businessData.business_data?.products || [];
+      console.log('Available products:', products);
+      console.log('Looking for productId:', params.productId);
+      
+      // Try to find by ID first
+      let productData = products.find(p => p.id === params.productId);
+      
+      // If not found by ID, try by slug (name converted to URL-friendly format)
+      if (!productData) {
+        productData = products.find(p => 
+          p.name.toLowerCase().replace(/\s+/g, '-') === params.productId
+        );
+      }
+      
+      // If still not found, try by index
+      if (!productData) {
+        const productIndex = parseInt(params.productId);
+        if (!isNaN(productIndex) && products[productIndex]) {
+          productData = products[productIndex];
+        }
+      }
       
       if (productData) {
+        console.log('Found product:', productData);
         setProduct(productData);
       } else {
-        // Fallback to index-based lookup
-        const productIndex = parseInt(params.productId);
-        if (!isNaN(productIndex) && businessData.business_data?.products?.[productIndex]) {
-          setProduct(businessData.business_data.products[productIndex]);
-        }
+        console.error('Product not found:', params.productId);
+        // Could show error message to user
       }
       
     } catch (error) {

@@ -5,4 +5,5 @@ export { default as FeatureGrid } from './FeatureGrid';
 export { default as TestimonialSlider } from './TestimonialSlider';
 export { default as PricingTable } from './PricingTable';
 export { default as CallToAction } from './CallToAction';
+export { default as ProductGrid } from './ProductGrid';
 export { default as Footer } from './Footer';

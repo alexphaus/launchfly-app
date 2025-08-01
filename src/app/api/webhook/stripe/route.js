@@ -206,7 +206,7 @@ async function sendSaleNotification({
       : `💰 New Sale: $${amount.toFixed(2)} for ${businessName}`;
 
     const dashboardUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/dashboard`;
-    const websiteUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/${subdomain}`;
+    const websiteUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}`;
 
     let htmlContent;
 

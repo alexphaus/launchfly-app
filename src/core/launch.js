@@ -54,17 +54,14 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     // Generate website theme and layout
     console.log('Generating website data...');
     const websiteData = await generateWebsite(opportunity);
-    console.log('Website data generated:', !!websiteData);
     
     // Create digital products based on the opportunity
     console.log('Creating products...');
     const products = await createProducts(opportunity);
-    console.log('Products created:', products?.length || 0);
     
     // Generate marketing materials and strategies
     console.log('Creating marketing materials...');
     const marketing = await createMarketing(opportunity);
-    console.log('Marketing materials created:', !!marketing);
     
     // Integrate with the existing business structure
     console.log('Creating business data object...');

@@ -28,7 +28,7 @@ const theme = {
 };
 
 // --- COMPONENT: Enhanced Loading State ---
-const GenerationLoader = ({ progress, stageMessage, timeElapsed }) => {
+const GenerationLoader = ({ progress, stageMessage }) => {
     const steps = useMemo(() => [
         { id: 'analyzing', text: 'Analyzing your skills & goals' },
         { id: 'researching', text: 'Researching profitable niches' },
@@ -39,12 +39,8 @@ const GenerationLoader = ({ progress, stageMessage, timeElapsed }) => {
     const currentStepIndex = useMemo(() => {
         const stageOrder = ['analyzing', 'researching', 'building', 'finalizing', 'complete'];
         const index = stageOrder.indexOf(stageMessage);
-        console.log('GenerationLoader - stageMessage:', stageMessage, 'currentStepIndex:', index);
         return index;
     }, [stageMessage]);
-
-    // Show warning if taking too long
-    const showTimeWarning = timeElapsed && timeElapsed > 120; // 2 minutes
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] p-4" style={{ color: theme.colors.textDark }}>
@@ -56,18 +52,6 @@ const GenerationLoader = ({ progress, stageMessage, timeElapsed }) => {
             </div>
             <h2 className="text-3xl font-black mb-3 text-center" style={{ color: theme.colors.textDark }}>Crafting Your Business</h2>
             <p className="text-lg text-center max-w-md mb-8" style={{ color: theme.colors.textGray }}>The AI is working its magic. Your launchpad will be ready in moments.</p>
-
-            {showTimeWarning && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg max-w-md text-center">
-                    <div className="flex items-center justify-center mb-2">
-                        <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
-                        <span className="font-medium text-yellow-800">Taking longer than usual</span>
-                    </div>
-                    <p className="text-sm text-yellow-700">
-                        The AI is working on complex tasks. This can take up to 3 minutes during peak hours.
-                    </p>
-                </div>
-            )}
 
             <div className="w-full max-w-md space-y-3">
                 {steps.map((step, index) => (
@@ -88,12 +72,6 @@ const GenerationLoader = ({ progress, stageMessage, timeElapsed }) => {
                     </div>
                 ))}
             </div>
-            
-            {timeElapsed && (
-                <div className="mt-6 text-sm text-gray-500">
-                    Generation time: {Math.round(timeElapsed / 1000)}s
-                </div>
-            )}
         </div>
     );
 };
@@ -156,7 +134,7 @@ const LaunchChecklist = ({ businessData, completedSteps, onStepComplete }) => {
 
 
 // --- MAIN DASHBOARD COMPONENT ---
-const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete, timeElapsed }) => {
+const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete }) => {
     // --- State Management ---
     const stage = session?.stage || 'analyzing';
     const progress = session?.progress || 0;
@@ -272,7 +250,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete,
             {/* --- Main Content --- */}
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
                 {!showBusiness ? (
-                    <GenerationLoader progress={progress} stageMessage={stageMessages[stage]} timeElapsed={timeElapsed} />
+                    <GenerationLoader progress={progress} stageMessage={stageMessages[stage]} />
                 ) : (
                     <div className="space-y-8 animate-fadeIn">
                         {/* --- Top Section: Welcome & Guarantee --- */}

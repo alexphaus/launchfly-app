@@ -258,17 +258,11 @@ async function sendSaleNotification({
                             </tr>
                             <tr>
                                 <td style="padding: 40px 40px 20px 40px;" class="mobile-padding">
-                                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr>
-                                            <td align="center">
-                                                <div style="background-color: #E6F2FF; border-radius: 12px; padding: 30px; margin-bottom: 30px;">
-                                                    <p style="color: #007BFF; font-size: 18px; margin: 0 0 10px 0; font-weight: 600;">Sale Amount</p>
-                                                    <p style="color: #1A2B48; font-size: 48px; font-weight: 800; margin: 0;">$${amount.toFixed(2)}</p>
-                                                    <p style="color: #5A6982; font-size: 16px; margin: 10px 0 0 0;">${productName}</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </table>
+                                    <div style="background-color: #E6F2FF; border-radius: 12px; padding: 30px; margin-bottom: 30px; text-align: center; width: 100%;">
+                                        <p style="color: #007BFF; font-size: 18px; margin: 0 0 10px 0; font-weight: 600;">Sale Amount</p>
+                                        <p style="color: #1A2B48; font-size: 48px; font-weight: 800; margin: 0;">$${amount.toFixed(2)}</p>
+                                        <p style="color: #5A6982; font-size: 16px; margin: 10px 0 0 0;">${productName}</p>
+                                    </div>
                                 </td>
                             </tr>
                             <tr>
@@ -290,21 +284,13 @@ async function sendSaleNotification({
                                 </td>
                             </tr>
                             <tr>
-                                <td align="center" style="padding: 0 40px 40px 40px;" class="mobile-padding">
+                                <td align="center" style="padding: 0 40px 20px 40px;" class="mobile-padding">
                                     <a href="${dashboardUrl}" target="_blank" style="display: inline-block; padding: 16px 32px; font-size: 18px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px; background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);">View Your Dashboard →</a>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="background-color: #F9FAFB; padding: 30px 40px;" class="mobile-padding">
-                                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                        <tr>
-                                            <td width="50" valign="top"><div style="background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">💬</div></td>
-                                            <td style="padding-left: 15px;">
-                                                <p style="color: #1A2B48; font-size: 14px; font-weight: 600; margin: 0 0 5px 0;">Your AI Success Coach</p>
-                                                <p style="color: #5A6982; font-size: 14px; line-height: 1.5; margin: 0;">"${businessOwnerName}, you're in the top ${percentile}% of users for speed to first sale! Based on your metrics, I predict you'll hit $1,000 in revenue within ${daysTo1k} days. Let's make it happen!"</p>
-                                            </td>
-                                        </tr>
-                                    </table>
+                                <td align="center" style="padding: 0 40px 40px 40px;" class="mobile-padding">
+                                    <a href="${websiteUrl}" target="_blank" style="color: #007BFF; text-decoration: none; font-size: 16px; font-weight: 600;">Visit Your Website</a>
                                 </td>
                             </tr>
                             <tr>
@@ -320,39 +306,80 @@ async function sendSaleNotification({
         </html>
       `;
     } else {
-      // Enhanced template for subsequent sales
       htmlContent = `
-        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
-          <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 30px; margin: 20px 0;">
-            <h1 style="color: #1f2937; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">Another Sale! Keep it up!</h1>
-            <p style="color: #4b5563; font-size: 16px;">Your business, ${businessName}, just made another sale.</p>
-            
-            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 25px 0;">
-              <h3 style="color: #1f2937; margin: 0 0 15px 0;">Sale Details:</h3>
-              <p style="margin: 8px 0; color: #4b5563; font-size: 16px;"><strong>Product:</strong> ${productName}</p>
-              <p style="margin: 8px 0; color: #4b5563; font-size: 16px;"><strong>Amount:</strong> <span style="color: #16a34a; font-weight: bold;">$${amount.toFixed(2)}</span></p>
-              <p style="margin: 8px 0; color: #4b5563; font-size: 16px;"><strong>Customer:</strong> ${customerName}</p>
-            </div>
-
-            <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 20px; border-radius: 8px; margin: 25px 0; text-align: center;">
-              <h3 style="color: #065f46; margin: 0 0 10px 0;">💰 Total Revenue Update</h3>
-              <p style="color: #047857; margin: 0; font-size: 24px; font-weight: bold;">$${totalRevenue.toFixed(2)}</p>
-            </div>
-
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${dashboardUrl}" style="background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin: 0 10px;">
-                View Dashboard
-              </a>
-              <a href="${websiteUrl}" style="background: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin: 0 10px;">
-                Visit Your Site
-              </a>
-            </div>
-          </div>
-
-          <div style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 30px;">
-            <p>Powered by Launchfly - Your AI Business Partner</p>
-          </div>
-        </div>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>💰 Another Sale for ${businessName}!</title>
+            <style>
+                body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+                table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+                img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+                body { margin: 0 !important; padding: 0 !important; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+                @media screen and (max-width: 600px) {
+                    .mobile-padding { padding: 20px !important; }
+                }
+            </style>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                    <td align="center" style="padding: 40px 0;">
+                        <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden;">
+                            <tr>
+                                <td align="center" style="background: linear-gradient(135deg, #16a34a 0%, #10b981 100%); padding: 40px 20px;">
+                                    <div style="font-size: 60px; margin-bottom: 20px;">💰</div>
+                                    <h1 style="color: #ffffff; font-size: 36px; font-weight: 800; margin: 0 0 10px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">ANOTHER SALE!</h1>
+                                    <p style="color: #ffffff; font-size: 20px; margin: 0; opacity: 0.95;">Keep the momentum going!</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 40px 40px 20px 40px;" class="mobile-padding">
+                                    <div style="background-color: #E6F9F0; border-radius: 12px; padding: 30px; margin-bottom: 30px; text-align: center; width: 100%;">
+                                        <p style="color: #16a34a; font-size: 18px; margin: 0 0 10px 0; font-weight: 600;">Sale Amount</p>
+                                        <p style="color: #1A2B48; font-size: 48px; font-weight: 800; margin: 0;">$${amount.toFixed(2)}</p>
+                                        <p style="color: #5A6982; font-size: 16px; margin: 10px 0 0 0;">${productName}</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;" class="mobile-padding">
+                                    <p style="color: #1A2B48; font-size: 18px; line-height: 1.6; margin: 0 0 20px 0;"><strong>${businessOwnerName}, you're on fire!</strong> 🔥</p>
+                                    <p style="color: #5A6982; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Your business <strong>${businessName}</strong> just made another sale. This is what consistent success looks like!</p>
+                                    <p style="color: #5A6982; font-size: 16px; line-height: 1.6; margin: 0;">Customer <strong>${customerName}</strong> just purchased your product. <strong style="color: #16a34a;">Keep building that momentum!</strong></p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;" class="mobile-padding">
+                                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 20px; border-radius: 12px; text-align: center;">
+                                        <h3 style="color: #065f46; margin: 0 0 10px 0; font-size: 18px; font-weight: 600;">💰 Total Revenue</h3>
+                                        <p style="color: #047857; margin: 0; font-size: 32px; font-weight: 800;">$${totalRevenue.toFixed(2)}</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding: 0 40px 20px 40px;" class="mobile-padding">
+                                    <a href="${dashboardUrl}" target="_blank" style="display: inline-block; padding: 16px 32px; font-size: 18px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px; background: linear-gradient(135deg, #16a34a 0%, #10b981 100%);">View Your Dashboard →</a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding: 0 40px 40px 40px;" class="mobile-padding">
+                                    <a href="${websiteUrl}" target="_blank" style="color: #16a34a; text-decoration: none; font-size: 16px; font-weight: 600;">Visit Your Website</a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding: 30px 40px; border-top: 1px solid #E4E7EB;">
+                                    <p style="color: #5A6982; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} Launchfly AI. All rights reserved.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
       `;
     }
 

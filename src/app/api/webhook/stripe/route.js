@@ -201,7 +201,7 @@ async function sendSaleNotification({
     const websiteUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/${subdomain}`;
 
     await resend.emails.send({
-      from: 'Launchfly Sales <sales@launchfly.ai>',
+      from: 'Launchfly Sales <hello@launchfly.ai>',
       to: businessOwnerEmail,
       subject: subject,
       html: `

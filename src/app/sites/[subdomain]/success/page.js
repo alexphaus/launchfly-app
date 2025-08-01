@@ -60,8 +60,11 @@ export default function PurchaseSuccess({ params }) {
 
         {sessionId && (
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-500">
-              Transaction ID: <span className="font-mono">{sessionId}</span>
+            <p className="text-sm text-gray-500 mb-1">
+              Transaction ID:
+            </p>
+            <p className="text-xs font-mono text-gray-700 break-all">
+              {sessionId}
             </p>
           </div>
         )}

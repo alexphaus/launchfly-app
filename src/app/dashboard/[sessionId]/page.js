@@ -4,7 +4,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import LaunchflyDashboard from '@/components/LaunchflyDashboard';
+import LaunchflyDashboardV2 from '@/components/LaunchflyDashboardV2';
 
 export default function DashboardPage() {
   const params = useParams();
@@ -205,7 +205,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <LaunchflyDashboard 
+    <LaunchflyDashboardV2 
       session={sessionData}
       business={businessData}
       onPhoneCapture={handlePhoneCapture}

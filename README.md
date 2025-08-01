@@ -36,13 +36,17 @@ CREATE TABLE public.profiles (
 );
 CREATE TABLE public.sessions (
   id text NOT NULL,
-  business_id uuid,
-  stage text DEFAULT 'initializing'::text CHECK (stage = ANY (ARRAY['pending'::text, 'initializing'::text, 'analyzing'::text, 'researching'::text, 'building'::text, 'finalizing'::text, 'complete'::text, 'error'::text])),
-  progress integer DEFAULT 0,
-  completed_steps ARRAY DEFAULT '{}'::text[],
-  phone_number text,
-  created_at timestamp with time zone DEFAULT now(),
-  expires_at timestamp with time zone DEFAULT (now() + '7 days'::interval),
-  CONSTRAINT sessions_pkey PRIMARY KEY (id),
   CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+
+CREATE TABLE public.sales (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  business_id uuid NOT NULL,
+  product_id text,
+  product_name text,
+  amount numeric,
+  customer_email text,
+  stripe_session_id text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT sales_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );

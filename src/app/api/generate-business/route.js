@@ -55,20 +55,41 @@ export async function POST(request) {
     
   } catch (error) {
     console.error('Generation API error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      type: error.type,
+      stack: error.stack
+    });
     
     // Update session to error state using the stored sessionId
     if (sessionId) {
       try {
         await supabase
           .from('sessions')
-          .update({ stage: 'error' })
+          .update({ 
+            stage: 'error',
+            error_message: error.message 
+          })
           .eq('id', sessionId);
+          
+        // Also update business status if we have businessId
+        if (businessId) {
+          await supabase
+            .from('businesses')
+            .update({ status: 'failed' })
+            .eq('id', businessId);
+        }
       } catch (updateError) {
-        console.error('Error updating session to error state:', updateError);
+        console.error('Error updating session/business to error state:', updateError);
       }
     }
     
-    return new Response(JSON.stringify({ error: error.message }), { 
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      code: error.code,
+      type: error.type 
+    }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -77,4 +98,4 @@ export async function POST(request) {
 
 // Set a longer timeout for this endpoint if using Vercel
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 60 seconds timeout
+export const maxDuration = 120; // 2 minutes timeout to handle the full generation process

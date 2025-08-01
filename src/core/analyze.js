@@ -8,12 +8,28 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: 30000, // 30 second timeout
+  maxRetries: 2 // Retry failed requests up to 2 times
+});
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
+
+/**
+ * Wrapper for OpenAI calls with timeout and error handling
+ */
+async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
+  return Promise.race([
+    apiCall(),
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('OpenAI API call timed out')), timeoutMs)
+    )
+  ]);
+}
 
 /**
  * Validates market demand for a business opportunity
@@ -37,14 +53,16 @@ export async function validateDemand(opportunity) {
       Return a confidence score (0-100) and detailed validation data as JSON.
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a market research expert who validates business opportunities with real data and analysis." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a market research expert who validates business opportunities with real data and analysis." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
     const validation = JSON.parse(response.choices[0].message.content);
     
@@ -130,14 +148,16 @@ export async function analyzeOpportunity(userData, sessionId) {
     `;
 
     // Call AI service to analyze the opportunity
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a brilliant business strategist that finds profitable opportunities based on people's skills." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a brilliant business strategist that finds profitable opportunities based on people's skills." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
     // Parse the AI response
     const opportunity = JSON.parse(response.choices[0].message.content);
@@ -185,14 +205,16 @@ async function identifyQuickWins(opportunity) {
       Return as a JSON array of strings.
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You identify practical first steps for new businesses." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You identify practical first steps for new businesses." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
     const { quickWins } = JSON.parse(response.choices[0].message.content);
     return quickWins || [];

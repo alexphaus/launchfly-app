@@ -8,12 +8,28 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: 30000, // 30 second timeout
+  maxRetries: 2 // Retry failed requests up to 2 times
+});
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
+
+/**
+ * Wrapper for OpenAI calls with timeout and error handling
+ */
+async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
+  return Promise.race([
+    apiCall(),
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('OpenAI API call timed out')), timeoutMs)
+    )
+  ]);
+}
 
 /**
  * Launches a business based on the analyzed opportunity
@@ -36,28 +52,49 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
   
   try {
     // Generate website theme and layout
+    console.log('Generating website data...');
     const websiteData = await generateWebsite(opportunity);
+    console.log('Website data generated:', !!websiteData);
     
     // Create digital products based on the opportunity
+    console.log('Creating products...');
     const products = await createProducts(opportunity);
+    console.log('Products created:', products?.length || 0);
     
     // Generate marketing materials and strategies
+    console.log('Creating marketing materials...');
     const marketing = await createMarketing(opportunity);
+    console.log('Marketing materials created:', !!marketing);
     
     // Integrate with the existing business structure
+    console.log('Creating business data object...');
+    console.log('Generating logo...');
+    const logo = await generateLogo(opportunity.niche);
+    console.log('Logo generated:', logo);
+    
+    console.log('Identifying target customers...');
+    const targetCustomers = await identifyTargetCustomers(opportunity);
+    console.log('Target customers identified:', targetCustomers?.length || 0);
+    
+    console.log('Generating projected growth...');
+    const monthlyData = generateProjectedGrowth();
+    console.log('Projected growth generated:', monthlyData?.length || 0);
+    
     const businessData = {
       businessName: opportunity.businessName,
       tagline: opportunity.solution,
       domain: generateDomain(opportunity.businessName),
-      logo: await generateLogo(opportunity.niche),
+      logo: logo,
       monthlyRevenue: opportunity.profitPotential,
       products: products,
-      targetCustomers: await identifyTargetCustomers(opportunity),
-      monthlyData: generateProjectedGrowth(),
+      targetCustomers: targetCustomers,
+      monthlyData: monthlyData,
       theme: websiteData.theme,
       layout: websiteData.layout,
       marketing: marketing
     };
+    
+    console.log('Business data object created successfully');
     
     console.log('Setting stage to finalizing');
     // Update session to finalizing
@@ -106,6 +143,7 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
  */
 async function generateWebsite(opportunity) {
   try {
+    console.log('Starting website generation for:', opportunity.businessName);
     const prompt = `
       Create a professional website theme and layout for this business:
       ${JSON.stringify(opportunity)}
@@ -139,18 +177,30 @@ async function generateWebsite(opportunity) {
       }
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are an expert web designer that creates modern, professional website themes and layouts." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    console.log('Calling OpenAI for website generation...');
+    const response = await callOpenAIWithTimeout(() => 
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are an expert web designer that creates modern, professional website themes and layouts." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
-    return JSON.parse(response.choices[0].message.content);
+    console.log('OpenAI response received for website generation');
+    const result = JSON.parse(response.choices[0].message.content);
+    console.log('Website generation completed successfully');
+    return result;
   } catch (error) {
     console.error("Error generating website:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      type: error.type,
+      stack: error.stack
+    });
     
     // Provide fallback website data
     return {
@@ -178,6 +228,7 @@ async function generateWebsite(opportunity) {
  */
 async function createProducts(opportunity) {
   try {
+    console.log('Starting product creation for:', opportunity.businessName);
     const prompt = `
       Create 3 compelling product or service offerings for this business:
       ${JSON.stringify(opportunity)}
@@ -187,22 +238,40 @@ async function createProducts(opportunity) {
       - A compelling description
       - An appropriate price point for the target market
       
-      Return as a JSON array with objects containing name, price, and description.
+      Return as a JSON object with a "products" array containing objects with name, price, and description.
+      Example format:
+      {
+        "products": [
+          {"name": "Product Name", "price": "$99", "description": "Product description"},
+          {"name": "Product Name 2", "price": "$199", "description": "Product description 2"},
+          {"name": "Product Name 3", "price": "$299", "description": "Product description 3"}
+        ]
+      }
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a product development and pricing expert." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    console.log('Calling OpenAI for product creation...');
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a product development and pricing expert." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
+    console.log('OpenAI response received for product creation');
     const { products } = JSON.parse(response.choices[0].message.content);
+    console.log('Products created successfully:', products?.length || 0);
     return products || [];
   } catch (error) {
     console.error("Error creating products:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      type: error.type
+    });
     
     // Fallback products
     return [
@@ -221,6 +290,7 @@ async function createProducts(opportunity) {
  */
 async function createMarketing(opportunity) {
   try {
+    console.log('Starting marketing creation for:', opportunity.businessName);
     const prompt = `
       Create a complete marketing strategy for this business:
       ${JSON.stringify(opportunity)}
@@ -235,18 +305,29 @@ async function createMarketing(opportunity) {
       Return as a structured JSON object.
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a marketing expert specializing in growth strategies for new businesses." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    console.log('Calling OpenAI for marketing creation...');
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a marketing expert specializing in growth strategies for new businesses." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
-    return JSON.parse(response.choices[0].message.content);
+    console.log('OpenAI response received for marketing creation');
+    const result = JSON.parse(response.choices[0].message.content);
+    console.log('Marketing creation completed successfully');
+    return result;
   } catch (error) {
     console.error("Error creating marketing:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      type: error.type
+    });
     
     // Fallback marketing plan
     return {
@@ -298,19 +379,31 @@ function generateDomain(businessName) {
  */
 async function generateLogo(niche) {
   try {
+    console.log('Starting logo generation for niche:', niche);
     const prompt = `Choose a single emoji that best represents a business in the "${niche}" niche. Return just the emoji character.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "user", content: prompt }
-      ]
-    });
+    console.log('Calling OpenAI for logo generation...');
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "user", content: prompt }
+        ]
+      })
+    );
     
+    console.log('OpenAI response received for logo generation');
     const emoji = response.choices[0].message.content.trim();
-    return emoji.length > 2 ? '🚀' : emoji;
+    const finalEmoji = emoji.length > 2 ? '🚀' : emoji;
+    console.log('Logo generated successfully:', finalEmoji);
+    return finalEmoji;
   } catch (error) {
     console.error("Error generating logo:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      type: error.type
+    });
     return '🚀';
   }
 }
@@ -323,28 +416,48 @@ async function generateLogo(niche) {
  */
 async function identifyTargetCustomers(opportunity) {
   try {
+    console.log('Starting target customer identification for:', opportunity.businessName);
     const prompt = `
       Based on this business opportunity:
       ${JSON.stringify(opportunity)}
       
       Identify 3 specific target customer segments that would benefit most from this business.
       Be specific about demographics, pain points, and motivations.
-      Return as a JSON array of strings.
+      
+      Return as a JSON object with a "targetCustomers" array containing strings.
+      Example format:
+      {
+        "targetCustomers": [
+          "Customer segment 1 description",
+          "Customer segment 2 description", 
+          "Customer segment 3 description"
+        ]
+      }
     `;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a customer research specialist." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
+    console.log('Calling OpenAI for target customer identification...');
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a customer research specialist." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
     
+    console.log('OpenAI response received for target customer identification');
     const { targetCustomers } = JSON.parse(response.choices[0].message.content);
+    console.log('Target customers identified successfully:', targetCustomers?.length || 0);
     return targetCustomers || [];
   } catch (error) {
     console.error("Error identifying target customers:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      type: error.type
+    });
     return [
       "Small business owners looking to grow their online presence",
       "Professionals seeking to establish industry authority",

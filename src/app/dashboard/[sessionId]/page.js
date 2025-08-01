@@ -13,6 +13,8 @@ export default function DashboardPage() {
   const [businessData, setBusinessData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generationStarted, setGenerationStarted] = useState(false);
+  const [generationStartTime, setGenerationStartTime] = useState(null);
+  const [timeElapsed, setTimeElapsed] = useState(null);
   const generationTriggered = useRef(false);
   
   const supabase = createClientComponentClient();
@@ -26,16 +28,22 @@ export default function DashboardPage() {
     if (sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error') {
       const pollInterval = setInterval(async () => {
         await fetchLatestData();
+        
+        // Update time elapsed if generation started
+        if (generationStartTime) {
+          setTimeElapsed(Date.now() - generationStartTime);
+        }
       }, 2000); // Poll every 2 seconds
 
       return () => clearInterval(pollInterval);
     }
-  }, [sessionData?.stage]);
+  }, [sessionData?.stage, generationStartTime]);
 
   useEffect(() => {
     // Trigger generation if session is pending
     if (sessionData?.stage === 'pending' && businessData && !generationTriggered.current) {
       generationTriggered.current = true;
+      setGenerationStartTime(Date.now());
       startBusinessGeneration();
     }
   }, [sessionData, businessData]);
@@ -210,6 +218,7 @@ export default function DashboardPage() {
       business={businessData}
       onPhoneCapture={handlePhoneCapture}
       onStepComplete={handleStepComplete}
+      timeElapsed={timeElapsed}
     />
   );
 }

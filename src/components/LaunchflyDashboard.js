@@ -163,7 +163,8 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     const getWebsiteUrl = (subdomain) => {
         const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_URL;
         const isDev = process.env.NODE_ENV === 'development' || baseUrl?.includes('localhost');
-        
+        // temporary fix for local development
+        return `${baseUrl}/sites/${subdomain}`;
         if (isDev) {
             return `${baseUrl}/sites/${subdomain}`;
         } else {

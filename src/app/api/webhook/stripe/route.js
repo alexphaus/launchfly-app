@@ -10,9 +10,27 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Health check endpoint
+export async function GET() {
+  return Response.json({ 
+    status: 'Stripe webhook endpoint is active',
+    timestamp: new Date().toISOString(),
+    env_check: {
+      stripe_secret: !!process.env.STRIPE_SECRET_KEY,
+      webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      supabase_key: !!process.env.SUPABASE_SERVICE_KEY
+    }
+  });
+}
+
 export async function POST(request) {
+  console.log('=== STRIPE WEBHOOK RECEIVED ===');
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
+
+  console.log('Body length:', body.length);
+  console.log('Signature:', signature ? 'Present' : 'Missing');
 
   let event;
 
@@ -22,29 +40,46 @@ export async function POST(request) {
       signature,
       process.env.STRIPE_WEBHOOK_SECRET
     );
+    console.log('✅ Webhook signature verified');
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
   console.log('Received Stripe webhook:', event.type);
+  console.log('Webhook data:', JSON.stringify(event.data.object, null, 2));
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const metadata = session.metadata;
     
+    console.log('Processing checkout.session.completed');
+    console.log('Session metadata:', metadata);
+    console.log('Session customer_details:', session.customer_details);
+    
     try {
-      // Record the sale in database
+      // Validate required metadata
+      if (!metadata.business_id) {
+        throw new Error('Missing business_id in metadata');
+      }
+      
+      if (!metadata.product_id) {
+        throw new Error('Missing product_id in metadata');
+      }
+      
+      // Record the sale in database - match your actual schema
       const saleData = {
         business_id: metadata.business_id,
+        product_id: metadata.product_id,
+        amount: session.amount_total / 100, // Convert from cents
+        currency: 'usd',
         customer_email: session.customer_details?.email || metadata.customer_email,
         customer_name: session.customer_details?.name || metadata.customer_name || 'Unknown',
-        product_name: metadata.product_name,
-        amount: session.amount_total / 100, // Convert from cents
         stripe_session_id: session.id,
-        stripe_payment_intent: session.payment_intent,
-        created_at: new Date().toISOString(),
+        payment_status: 'completed'
       };
+
+      console.log('Inserting sale data:', saleData);
 
       // Insert sale record
       const { data: sale, error: saleError } = await supabase
@@ -78,16 +113,22 @@ export async function POST(request) {
       // Update business with sale info
       const businessUpdates = {
         total_revenue: newTotalRevenue,
+        last_sale_date: new Date().toISOString()
       };
 
       if (isFirstSale) {
         businessUpdates.first_sale_date = new Date().toISOString();
       }
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('businesses')
         .update(businessUpdates)
         .eq('id', metadata.business_id);
+
+      if (updateError) {
+        console.error('Error updating business:', updateError);
+        throw updateError;
+      }
 
       // Send success email to business owner
       const businessOwnerEmail = business.form_data?.email || metadata.business_owner_email;
@@ -110,7 +151,21 @@ export async function POST(request) {
 
     } catch (error) {
       console.error('Error processing sale:', error);
-      // Don't return error to Stripe to avoid retries for non-recoverable errors
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      
+      // Return error response to help with debugging
+      return new Response(JSON.stringify({ 
+        error: 'Failed to process sale', 
+        details: error.message 
+      }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   }
 

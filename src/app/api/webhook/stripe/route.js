@@ -229,262 +229,215 @@ async function sendSaleNotification({
 
       htmlContent = `
         <!DOCTYPE html>
-        <html lang="en">
+        <html>
         <head>
-          <meta charset="UTF-8">
+          <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Your First Sale!</title>
+          <title>🎉 Your First Sale!</title>
         </head>
-        <body style="margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); min-height: 100vh;">
-          <div style="max-width: 600px; margin: 0 auto; background: white; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border-radius: 12px; overflow: hidden;">
-            
-            <!-- Header with gradient -->
-            <div style="background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); padding: 40px 30px; text-align: center; position: relative;">
-              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><circle cx=\"20\" cy=\"20\" r=\"2\" fill=\"white\" opacity=\"0.1\"/><circle cx=\"80\" cy=\"40\" r=\"3\" fill=\"white\" opacity=\"0.1\"/><circle cx=\"40\" cy=\"80\" r=\"2\" fill=\"white\" opacity=\"0.1\"/></svg>') repeat;"></div>
-              <div style="position: relative; z-index: 1;">
-                <div style="font-size: 60px; margin-bottom: 10px;">🚀</div>
-                <h1 style="color: white; font-size: 32px; font-weight: 800; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">FIRST SALE!</h1>
-                <p style="color: rgba(255,255,255,0.9); font-size: 18px; margin: 10px 0 0 0; font-weight: 500;">Congratulations ${businessOwnerName}! 🎉</p>
-              </div>
-            </div>
-
-            <!-- Main content -->
-            <div style="padding: 40px 30px;">
-              
-              <!-- Celebration message -->
-              <div style="text-align: center; margin-bottom: 40px;">
-                <h2 style="color: #1A2B48; font-size: 28px; font-weight: 700; margin: 0 0 15px 0; line-height: 1.2;">
-                  Your business <span style="background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">${businessName}</span> just made its first sale!
-                </h2>
-                <p style="color: #5A6982; font-size: 18px; line-height: 1.6; margin: 0;">
-                  This is just the beginning of your success story.
-                </p>
-              </div>
-
-              <!-- Sale details card -->
-              <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 30px; margin-bottom: 30px; position: relative; overflow: hidden;">
-                <div style="position: absolute; top: -50px; right: -50px; width: 100px; height: 100px; background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); border-radius: 50%; opacity: 0.1;"></div>
-                <div style="position: relative; z-index: 1;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
-                    <div>
-                      <h3 style="color: #1A2B48; font-size: 20px; font-weight: 600; margin: 0 0 5px 0;">Sale Details</h3>
-                      <p style="color: #5A6982; margin: 0; font-size: 14px;">Product: ${productName}</p>
-                    </div>
-                    <div style="text-align: right;">
-                      <div style="background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); color: white; padding: 8px 16px; border-radius: 20px; font-weight: 700; font-size: 18px;">
-                        $${amount.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
+        <body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,sans-serif;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td align="center" style="padding:40px 0">
+                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.1);">
                   
-                  <div style="border-top: 1px solid #e2e8f0; padding-top: 20px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                      <div>
-                        <p style="color: #5A6982; margin: 0 0 5px 0; font-size: 14px; font-weight: 500;">Customer</p>
-                        <p style="color: #1A2B48; margin: 0; font-weight: 600;">${customerName}</p>
-                        <p style="color: #5A6982; margin: 0; font-size: 14px;">${customerEmail}</p>
+                  <!-- Celebration Header -->
+                  <tr>
+                    <td align="center" style="background:linear-gradient(135deg,#FF6B6B 0%,#FF8E53 50%,#FF6B9D 100%);padding:40px 20px;">
+                      <div style="font-size:64px;margin-bottom:20px;">🎉</div>
+                      <h1 style="color:#ffffff;font-size:32px;font-weight:900;margin:0 0 12px 0;text-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                        YOU DID IT!
+                      </h1>
+                      <p style="color:#ffffff;font-size:20px;margin:0;opacity:0.95;font-weight:600;">
+                        Your first sale just came through! 🚀
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Main Content -->
+                  <tr>
+                    <td style="padding:40px 40px 20px 40px;">
+                      <p style="color:#1a2b48;font-size:20px;line-height:1.6;margin:0 0 30px 0;font-weight:600;">
+                        <strong>Congratulations, ${businessOwnerName}!</strong> 
+                      </p>
+                      
+                      <!-- Sale Amount Card -->
+                      <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;padding:30px;margin-bottom:30px;text-align:center;color:white;">
+                        <p style="font-size:18px;margin:0 0 12px 0;font-weight:600;opacity:0.9;">
+                          First Sale Amount
+                        </p>
+                        <p style="font-size:48px;font-weight:900;margin:0 0 8px 0;text-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                          $${amount.toFixed(2)}
+                        </p>
+                        <p style="font-size:18px;margin:0;opacity:0.8;">
+                          ${productName}
+                        </p>
                       </div>
-                      <div>
-                        <p style="color: #5A6982; margin: 0 0 5px 0; font-size: 14px; font-weight: 500;">Time to First Sale</p>
-                        <p style="color: #28a745; margin: 0; font-weight: 700; font-size: 16px;">${timeToSale}</p>
-                        <p style="color: #5A6982; margin: 0; font-size: 12px;">Faster than ${percentile}% of businesses!</p>
+
+                      <!-- Stats Grid -->
+                      <div style="display:flex;gap:15px;margin-bottom:30px;">
+                        <div style="flex:1;background-color:#f8f9ff;border-radius:12px;padding:20px;text-align:center;border:2px solid #e8ebff;">
+                          <p style="color:#667eea;font-size:14px;margin:0 0 8px 0;font-weight:600;">TIME TO FIRST SALE</p>
+                          <p style="color:#1a2b48;font-size:24px;font-weight:800;margin:0;">${timeToSale}</p>
+                        </div>
+                        <div style="flex:1;background-color:#f0fdf4;border-radius:12px;padding:20px;text-align:center;border:2px solid #dcfce7;">
+                          <p style="color:#16a34a;font-size:14px;margin:0 0 8px 0;font-weight:600;">FASTER THAN</p>
+                          <p style="color:#1a2b48;font-size:24px;font-weight:800;margin:0;">${percentile}% OF BUSINESSES</p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              <!-- Success metrics -->
-              <div style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 30px;">
-                <h3 style="color: #1A2B48; font-size: 18px; font-weight: 600; margin: 0 0 20px 0; text-align: center;">🎯 Your Success Metrics</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;">
-                  <div>
-                    <div style="color: #007BFF; font-size: 24px; font-weight: 700;">$${totalRevenue.toFixed(2)}</div>
-                    <div style="color: #5A6982; font-size: 12px; font-weight: 500;">Total Revenue</div>
-                  </div>
-                  <div>
-                    <div style="color: #00B8D9; font-size: 24px; font-weight: 700;">${visitorCount || 0}</div>
-                    <div style="color: #5A6982; font-size: 12px; font-weight: 500;">Site Visits</div>
-                  </div>
-                  <div>
-                    <div style="color: #28a745; font-size: 24px; font-weight: 700;">~${daysTo1k}d</div>
-                    <div style="color: #5A6982; font-size: 12px; font-weight: 500;">To $1K Revenue*</div>
-                  </div>
-                </div>
-                <p style="color: #5A6982; font-size: 11px; text-align: center; margin: 15px 0 0 0; font-style: italic;">*Projected based on current performance</p>
-              </div>
+                      <!-- Customer Info -->
+                      <div style="background-color:#fafbfc;border-radius:12px;padding:25px;margin-bottom:30px;border-left:4px solid #667eea;">
+                        <h3 style="color:#1a2b48;font-size:18px;font-weight:700;margin:0 0 15px 0;">Your First Customer:</h3>
+                        <p style="color:#5a6982;margin:5px 0;font-size:16px;"><strong>Name:</strong> ${customerName}</p>
+                        <p style="color:#5a6982;margin:5px 0;font-size:16px;"><strong>Email:</strong> ${customerEmail}</p>
+                        <p style="color:#5a6982;margin:5px 0;font-size:16px;"><strong>Business:</strong> ${businessName}</p>
+                      </div>
 
-              <!-- CTA buttons -->
-              <div style="text-align: center; margin-bottom: 30px;">
-                <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; margin: 0 10px 10px 0; box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3); transition: all 0.3s ease;">
-                  📊 View Dashboard
-                </a>
-                <a href="${websiteUrl}" style="display: inline-block; background: white; color: #007BFF; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 16px; border: 2px solid #007BFF; margin: 0 10px 10px 0;">
-                  🌐 Visit Your Site
-                </a>
-              </div>
+                      <!-- Motivational Message -->
+                      <div style="background:linear-gradient(135deg,#ffecd2 0%,#fcb69f 100%);border-radius:12px;padding:25px;margin-bottom:30px;text-align:center;">
+                        <h3 style="color:#8b4513;font-size:20px;font-weight:700;margin:0 0 10px 0;">This is just the beginning! 🌟</h3>
+                        <p style="color:#8b4513;font-size:16px;line-height:1.6;margin:0;">
+                          You've officially joined the ranks of successful Launchfly entrepreneurs. Based on our data, businesses that get their first sale in <strong>${timeToSale}</strong> typically reach <strong>$1,000 in revenue within ${daysTo1k} days</strong>. Keep the momentum going!
+                        </p>
+                      </div>
+                    </tr>
 
-              <!-- Encouragement message -->
-              <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 4px solid #007BFF; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h4 style="color: #1A2B48; font-size: 16px; font-weight: 600; margin: 0 0 10px 0;">🚀 What's Next?</h4>
-                <p style="color: #5A6982; margin: 0; line-height: 1.6; font-size: 14px;">
-                  This first sale proves your business concept works! Keep promoting your site, engage with customers, and watch your revenue grow. We're here to support you every step of the way.
-                </p>
-              </div>
+                    <!-- CTA Buttons -->
+                    <tr>
+                      <td align="center" style="padding:0 40px 40px 40px;">
+                        <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+                          <tr>
+                            <td align="center" style="border-radius:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);box-shadow:0 4px 15px rgba(102,126,234,0.4);">
+                              <a href="${dashboardUrl}" style="display:inline-block;padding:16px 32px;font-size:18px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;">
+                                🎯 View Your Dashboard
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                        <div style="margin-top:15px;">
+                          <a href="${websiteUrl}" style="color:#667eea;text-decoration:none;font-size:16px;font-weight:600;">
+                            🌐 Visit Your Website
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
 
-            </div>
-
-            <!-- Footer -->
-            <div style="background: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <div style="margin-bottom: 15px;">
-                <span style="font-size: 24px;">🚀</span>
-                <strong style="color: #1A2B48; font-size: 18px; margin-left: 8px;">Launchfly</strong>
-              </div>
-              <p style="color: #5A6982; margin: 0 0 15px 0; font-size: 14px;">
-                AI-powered businesses that actually work
-              </p>
-              <p style="color: #9CA3AF; margin: 0; font-size: 12px;">
-                This email was sent because you made your first sale with Launchfly.<br>
-                Need help? Reply to this email or visit our support center.
-              </p>
-            </div>
-
-          </div>
+                    <!-- Footer -->
+                    <tr>
+                      <td align="center" style="padding:30px 40px;border-top:1px solid #e4e7eb;background-color:#fafbfc;">
+                        <p style="color:#667eea;font-size:16px;margin:0 0 10px 0;font-weight:600;">
+                          The journey to $10K starts with $1! 🚀
+                        </p>
+                        <p style="color:#5a6982;font-size:14px;margin:0;">
+                          © 2025 Launchfly AI. All rights reserved.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
         </body>
         </html>
       `;
     } else {
       htmlContent = `
         <!DOCTYPE html>
-        <html lang="en">
+        <html>
         <head>
-          <meta charset="UTF-8">
+          <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>New Sale Alert!</title>
+          <title>💰 Ka-ching! New Sale</title>
         </head>
-        <body style="margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); min-height: 100vh;">
-          <div style="max-width: 600px; margin: 0 auto; background: white; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border-radius: 12px; overflow: hidden;">
-            
-            <!-- Header with gradient -->
-            <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 35px 30px; text-align: center; position: relative;">
-              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><circle cx=\"25\" cy=\"25\" r=\"2\" fill=\"white\" opacity=\"0.15\"/><circle cx=\"75\" cy=\"45\" r=\"3\" fill=\"white\" opacity=\"0.1\"/><circle cx=\"45\" cy=\"75\" r=\"2\" fill=\"white\" opacity=\"0.15\"/></svg>') repeat;"></div>
-              <div style="position: relative; z-index: 1;">
-                <div style="font-size: 50px; margin-bottom: 8px;">💰</div>
-                <h1 style="color: white; font-size: 28px; font-weight: 700; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">NEW SALE!</h1>
-                <p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 8px 0 0 0; font-weight: 500;">Ka-ching! Your business is growing 📈</p>
-              </div>
-            </div>
-
-            <!-- Main content -->
-            <div style="padding: 35px 30px;">
-              
-              <!-- Sale announcement -->
-              <div style="text-align: center; margin-bottom: 35px;">
-                <h2 style="color: #1A2B48; font-size: 24px; font-weight: 600; margin: 0 0 12px 0; line-height: 1.3;">
-                  Another sale for <span style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">${businessName}</span>!
-                </h2>
-                <p style="color: #5A6982; font-size: 16px; line-height: 1.5; margin: 0;">
-                  Your business momentum is building. Keep it up!
-                </p>
-              </div>
-
-              <!-- Sale details card -->
-              <div style="background: linear-gradient(135deg, #f0fff4 0%, #ecfdf5 100%); border: 2px solid #d1fae5; border-radius: 12px; padding: 28px; margin-bottom: 28px; position: relative; overflow: hidden;">
-                <div style="position: absolute; top: -40px; right: -40px; width: 80px; height: 80px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border-radius: 50%; opacity: 0.1;"></div>
-                <div style="position: relative; z-index: 1;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
-                    <div>
-                      <h3 style="color: #1A2B48; font-size: 18px; font-weight: 600; margin: 0 0 4px 0;">Latest Sale</h3>
-                      <p style="color: #5A6982; margin: 0; font-size: 14px;">Product: ${productName}</p>
-                    </div>
-                    <div style="text-align: right;">
-                      <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 10px 18px; border-radius: 25px; font-weight: 700; font-size: 20px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);">
-                        +$${amount.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
+        <body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,sans-serif;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td align="center" style="padding:40px 0">
+                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
                   
-                  <div style="border-top: 1px solid #d1fae5; padding-top: 18px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
-                      <div>
-                        <p style="color: #5A6982; margin: 0 0 4px 0; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Customer</p>
-                        <p style="color: #1A2B48; margin: 0; font-weight: 600; font-size: 15px;">${customerName}</p>
-                        <p style="color: #5A6982; margin: 2px 0 0 0; font-size: 13px;">${customerEmail}</p>
+                  <!-- Header -->
+                  <tr>
+                    <td align="center" style="background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);padding:30px 20px;">
+                      <div style="font-size:48px;margin-bottom:15px;">💰</div>
+                      <h1 style="color:#ffffff;font-size:28px;font-weight:800;margin:0 0 8px 0;">
+                        Ka-ching!
+                      </h1>
+                      <p style="color:#ffffff;font-size:18px;margin:0;opacity:0.95;">
+                        Another sale just rolled in!
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Main Content -->
+                  <tr>
+                    <td style="padding:40px 40px 20px 40px;">
+                      <p style="color:#1a2b48;font-size:18px;line-height:1.6;margin:0 0 25px 0;">
+                        <strong>Great news, ${businessOwnerName}!</strong> 🎉
+                      </p>
+                      
+                      <!-- Sale Amount -->
+                      <div style="background-color:#e6f2ff;border-radius:12px;padding:25px;margin-bottom:25px;text-align:center;">
+                        <p style="color:#007bff;font-size:16px;margin:0 0 8px 0;font-weight:600;">
+                          New Sale
+                        </p>
+                        <p style="color:#1a2b48;font-size:36px;font-weight:800;margin:0;">
+                          $${amount.toFixed(2)}
+                        </p>
+                        <p style="color:#5a6982;font-size:16px;margin:8px 0 0 0;">
+                          ${productName}
+                        </p>
                       </div>
-                      <div>
-                        <p style="color: #5A6982; margin: 0 0 4px 0; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Sale Time</p>
-                        <p style="color: #1A2B48; margin: 0; font-weight: 600; font-size: 15px;">${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+
+                      <!-- Sale Details -->
+                      <div style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:25px;">
+                        <h3 style="color:#1a2b48;font-size:16px;font-weight:600;margin:0 0 15px 0;">Sale Details:</h3>
+                        <p style="color:#5a6982;margin:5px 0;font-size:14px;"><strong>Customer:</strong> ${customerName}</p>
+                        <p style="color:#5a6982;margin:5px 0;font-size:14px;"><strong>Business:</strong> ${businessName}</p>
+                        <p style="color:#5a6982;margin:5px 0;font-size:14px;"><strong>Total Revenue:</strong> $${totalRevenue.toFixed(2)}</p>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              <!-- Revenue progress -->
-              <div style="background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin-bottom: 25px;">
-                <h3 style="color: #1A2B48; font-size: 16px; font-weight: 600; margin: 0 0 18px 0; text-align: center;">💰 Revenue Update</h3>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: center;">
-                  <div style="padding: 15px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 8px;">
-                    <div style="color: #007BFF; font-size: 28px; font-weight: 700; margin-bottom: 4px;">$${totalRevenue.toFixed(2)}</div>
-                    <div style="color: #5A6982; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Total Revenue</div>
-                  </div>
-                  <div style="padding: 15px; background: linear-gradient(135deg, #f0fff4 0%, #ecfdf5 100%); border-radius: 8px;">
-                    <div style="color: #28a745; font-size: 28px; font-weight: 700; margin-bottom: 4px;">+$${amount.toFixed(2)}</div>
-                    <div style="color: #5A6982; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">This Sale</div>
-                  </div>
-                </div>
-                
-                <!-- Progress towards $1K -->
-                <div style="margin-top: 20px; padding-top: 18px; border-top: 1px solid #e2e8f0;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="color: #5A6982; font-size: 13px; font-weight: 500;">Progress to $1,000</span>
-                    <span style="color: #1A2B48; font-size: 13px; font-weight: 600;">${Math.min(100, (totalRevenue / 1000 * 100)).toFixed(1)}%</span>
-                  </div>
-                  <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
-                    <div style="height: 100%; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); width: ${Math.min(100, (totalRevenue / 1000 * 100))}%; border-radius: 4px; transition: width 0.3s ease;"></div>
-                  </div>
-                  <p style="color: #5A6982; font-size: 11px; margin: 6px 0 0 0; text-align: center;">
-                    ${totalRevenue >= 1000 ? 'Congratulations! You\'ve hit $1K! 🎉' : `$${(1000 - totalRevenue).toFixed(2)} to go until $1,000!`}
-                  </p>
-                </div>
-              </div>
+                      <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
+                        Your business is gaining momentum! Keep up the great work – each sale brings you closer to your goals.
+                      </p>
+                    </td>
+                  </tr>
 
-              <!-- CTA buttons -->
-              <div style="text-align: center; margin-bottom: 25px;">
-                <a href="${dashboardUrl}" style="display: inline-block; background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 0 8px 8px 0; box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);">
-                  📊 View Dashboard
-                </a>
-                <a href="${websiteUrl}" style="display: inline-block; background: white; color: #28a745; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; border: 2px solid #28a745; margin: 0 8px 8px 0;">
-                  🌐 Check Your Site
-                </a>
-              </div>
+                  <!-- CTA Buttons -->
+                  <tr>
+                    <td align="center" style="padding:0 40px 40px 40px;">
+                      <table cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td align="center" style="border-radius:8px;background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);">
+                            <a href="${dashboardUrl}" style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
+                              View Dashboard →
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                      <div style="margin-top:15px;">
+                        <a href="${websiteUrl}" style="color:#007bff;text-decoration:none;font-size:14px;font-weight:600;">
+                          Visit Your Website
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
 
-              <!-- Growth tip -->
-              <div style="background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%); border-left: 4px solid #f59e0b; padding: 18px; border-radius: 8px;">
-                <h4 style="color: #1A2B48; font-size: 15px; font-weight: 600; margin: 0 0 8px 0;">💡 Growth Tip</h4>
-                <p style="color: #5A6982; margin: 0; line-height: 1.5; font-size: 13px;">
-                  Great momentum! Consider reaching out to this customer for a testimonial or review. Social proof can help drive even more sales.
-                </p>
-              </div>
-
-            </div>
-
-            <!-- Footer -->
-            <div style="background: #f8fafc; padding: 25px; text-align: center; border-top: 1px solid #e2e8f0;">
-              <div style="margin-bottom: 12px;">
-                <span style="font-size: 20px;">🚀</span>
-                <strong style="color: #1A2B48; font-size: 16px; margin-left: 6px;">Launchfly</strong>
-              </div>
-              <p style="color: #5A6982; margin: 0 0 12px 0; font-size: 13px;">
-                Your AI business partner
-              </p>
-              <p style="color: #9CA3AF; margin: 0; font-size: 11px;">
-                Sale notification from ${businessName}<br>
-                Want to adjust notifications? Reply to this email.
-              </p>
-            </div>
-
-          </div>
+                  <!-- Footer -->
+                  <tr>
+                    <td align="center" style="padding:30px 40px;border-top:1px solid #e4e7eb;">
+                      <p style="color:#5a6982;font-size:14px;margin:0 0 10px 0;">
+                        Keep up the momentum! 🚀
+                      </p>
+                      <p style="color:#5a6982;font-size:12px;margin:0;">
+                        © 2025 Launchfly AI. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
         </body>
         </html>
       `;

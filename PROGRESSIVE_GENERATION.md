@@ -4,6 +4,30 @@
 
 This system provides real-time updates to the website preview area during AI business generation, showing chunks of data as they become available rather than waiting for the entire process to complete.
 
+## Recent Fixes for Data Consistency
+
+### Logo Consistency Issue (Fixed)
+**Problem**: The logo would show one value during generation, then change to a different value on the final website.
+
+**Root Cause**: 
+- The `generateWebsite()` function was generating its own logo independently
+- Fallback data used hardcoded values (🚀) that overwrote generated logos
+- Layout generation happened without using already-generated business data
+
+**Solution**:
+1. **Unified Logo Generation**: Logo is generated once and passed to website generation
+2. **Consistent Parameters**: `generateWebsite()` now accepts logo and business name parameters
+3. **Logo Consistency Check**: Added `ensureLogoConsistency()` function to update all layout components
+4. **Better Debugging**: Added comprehensive logging to track logo changes
+
+### Business Name & Theme Consistency
+**Problem**: Similar issues with business names and theme colors changing between preview and final site.
+
+**Solution**:
+- Pass business name to all generation functions
+- Ensure fallback data uses actual generated values, not hardcoded defaults
+- Update layout components to maintain consistency
+
 ## How It Works
 
 ### 1. Progressive Data Generation

@@ -129,17 +129,18 @@ export default function DashboardPage() {
   }
 
   async function startBusinessGeneration() {
-    console.log('Starting business generation from dashboard...');
+    console.log('Starting streaming business generation from dashboard...');
     setGenerationStarted(true);
     
     try {
-      const response = await fetch('/api/generate-business', {
-        method: 'POST',
+      // Note: The streaming connection is now handled directly in the LaunchflyDashboard component
+      // We just need to trigger the initial state change here
+      
+      const response = await fetch('/api/sessions/' + params.sessionId, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: params.sessionId,
-          businessId: businessData.id,
-          formData: businessData.form_data
+          stage: 'pending' // This will trigger the streaming in the dashboard component
         })
       });
       
@@ -147,8 +148,7 @@ export default function DashboardPage() {
         throw new Error('Failed to start generation');
       }
       
-      const result = await response.json();
-      console.log('Generation started successfully:', result);
+      console.log('Generation initiated successfully');
       
     } catch (error) {
       console.error('Error starting generation:', error);

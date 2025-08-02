@@ -59,18 +59,27 @@ export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Bu
           <div className="md:hidden">
             <button 
               onClick={toggleMenu}
-              className="text-gray-700 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              className="relative p-2 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
               aria-label="Toggle mobile menu"
             >
-              {isMenuOpen ? (
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              )}
+              {/* Animated Hamburger Icon */}
+              <div className="w-6 h-6 flex flex-col justify-center items-center">
+                <span 
+                  className={`block h-0.5 w-6 bg-current transform transition-all duration-300 ease-in-out ${
+                    isMenuOpen ? 'rotate-45 translate-y-1.5' : ''
+                  }`}
+                />
+                <span 
+                  className={`block h-0.5 w-6 bg-current transform transition-all duration-300 ease-in-out mt-1 ${
+                    isMenuOpen ? 'opacity-0' : ''
+                  }`}
+                />
+                <span 
+                  className={`block h-0.5 w-6 bg-current transform transition-all duration-300 ease-in-out mt-1 ${
+                    isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''
+                  }`}
+                />
+              </div>
             </button>
           </div>
         </div>

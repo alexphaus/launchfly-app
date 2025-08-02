@@ -47,7 +47,7 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
  */
 async function updateBusinessProgress(businessId, partialData, stage = null) {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/business/update-progress`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/business/update-progress`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

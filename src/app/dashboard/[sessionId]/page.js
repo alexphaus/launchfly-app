@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import LaunchflyDashboard from '@/components/LaunchflyDashboard';
+import LaunchflyDashboardV2 from '@/components/LaunchflyDashboardV2';
 
 export default function DashboardPage() {
   const params = useParams();
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const [businessData, setBusinessData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generationStarted, setGenerationStarted] = useState(false);
+  const [useV2Dashboard, setUseV2Dashboard] = useState(true); // Default to V2
   const generationTriggered = useRef(false);
   
   const supabase = createClientComponentClient();
@@ -204,12 +206,38 @@ export default function DashboardPage() {
     );
   }
 
+  // Show V2 Dashboard for businesses that are ready or generating
+  const showV2 = useV2Dashboard && (sessionData?.stage === 'complete' || businessData?.status === 'ready');
+
   return (
-    <LaunchflyDashboard 
-      session={sessionData}
-      business={businessData}
-      onPhoneCapture={handlePhoneCapture}
-      onStepComplete={handleStepComplete}
-    />
+    <>
+      {/* Dashboard Version Toggle - Remove in production */}
+      {(sessionData?.stage === 'complete' || businessData?.status === 'ready') && (
+        <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg p-2 border">
+          <button
+            onClick={() => setUseV2Dashboard(!useV2Dashboard)}
+            className="text-xs font-medium px-3 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+          >
+            {useV2Dashboard ? 'Switch to V1' : 'Switch to V2'} Dashboard
+          </button>
+        </div>
+      )}
+      
+      {showV2 ? (
+        <LaunchflyDashboardV2 
+          session={sessionData}
+          business={businessData}
+          onPhoneCapture={handlePhoneCapture}
+          onStepComplete={handleStepComplete}
+        />
+      ) : (
+        <LaunchflyDashboard 
+          session={sessionData}
+          business={businessData}
+          onPhoneCapture={handlePhoneCapture}
+          onStepComplete={handleStepComplete}
+        />
+      )}
+    </>
   );
 }

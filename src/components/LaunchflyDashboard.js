@@ -118,7 +118,7 @@ const MoneyHero = ({ totalEarned = 0, projectedThisWeek = 0, canCashOut = false 
 const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStage }) => {
   const [currentVisitors, setCurrentVisitors] = useState(visitors);
   const [showContent, setShowContent] = useState({
-    skeleton: false,
+    skeleton: true,
     businessName: false,
     colors: false,
     hero: false,
@@ -126,107 +126,37 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
     complete: false
   });
   
-  // Generate placeholder content during generation
-  const isGenerating = generationStage && generationStage !== 'complete' && generationStage !== 'error';
-  const hasRealData = businessData && businessData.businessName;
+  const websiteUrl = subdomain ? `https://${subdomain}.launchfly.ai` : null;
   
-  // Progressive reveal based on generation stage timing
+  // Progressive content reveal based on generation stage and business data
   useEffect(() => {
-    if (!isGenerating && !hasRealData) return;
+    if (!businessData) return;
     
-    // Reset states when generation starts
-    if (generationStage === 'pending' || generationStage === 'analyzing') {
-      setShowContent({
-        skeleton: true,
-        businessName: false,
-        colors: false,
-        hero: false,
-        products: false,
-        complete: false
-      });
-    }
+    // Show content based on what data is available
+    const updates = {};
+    if (businessData.businessName) updates.businessName = true;
+    if (businessData.theme) updates.colors = true;
+    if (businessData.tagline) updates.hero = true;
+    if (businessData.products && businessData.products.length > 0) updates.products = true;
+    if (generationStage === 'complete') updates.complete = true;
     
-    // Progressive reveal timeline during generation
-    if (isGenerating) {
-      const timeline = {
-        skeleton: 0,
-        businessName: 2000,
-        colors: 5000,
-        hero: 8000,
-        products: 12000
-      };
-      
-      const timers = [];
-      
-      // Show skeleton immediately
-      setShowContent(prev => ({ ...prev, skeleton: true }));
-      
-      // Schedule reveals
-      Object.entries(timeline).forEach(([key, delay]) => {
-        if (delay > 0) {
-          const timer = setTimeout(() => {
-            setShowContent(prev => ({ ...prev, [key]: true }));
-          }, delay);
-          timers.push(timer);
-        }
-      });
-      
-      return () => timers.forEach(clearTimeout);
-    }
-    
-    // If we have real data (generation complete), show everything
-    if (hasRealData) {
-      setShowContent({
-        skeleton: false,
-        businessName: true,
-        colors: true,
-        hero: true,
-        products: true,
-        complete: true
-      });
-    }
-  }, [generationStage, isGenerating, hasRealData]);
+    setShowContent(prev => ({ ...prev, ...updates }));
+  }, [businessData, generationStage]);
   
   // Simulate live visitors after site is complete
   useEffect(() => {
-    if (showContent.complete || generationStage === 'complete') {
-      const timer = setTimeout(() => {
-        setCurrentVisitors(1);
-      }, 1000);
-      
+    if (showContent.complete) {
       const interval = setInterval(() => {
-        setCurrentVisitors(prev => Math.max(1, prev + Math.floor(Math.random() * 5 - 2)));
+        setCurrentVisitors(prev => Math.max(0, prev + Math.floor(Math.random() * 5 - 2)));
       }, 3000);
-      
-      return () => {
-        clearTimeout(timer);
-        clearInterval(interval);
-      };
+      return () => clearInterval(interval);
     }
-  }, [showContent.complete, generationStage]);
+  }, [showContent.complete]);
 
-  // Determine what content to show
-  const displayData = hasRealData ? businessData : {
-    businessName: "Your Amazing Business",
-    tagline: "Professional solutions tailored to your needs",
-    theme: {
-      colors: { primary: '#007BFF', secondary: '#00B8D9' },
-      gradient: 'linear-gradient(135deg, #007BFF 0%, #00B8D9 100%)'
-    },
-    products: [
-      { name: 'Starter Package', price: '$299' },
-      { name: 'Professional', price: '$699' },
-      { name: 'Enterprise', price: '$1,499' }
-    ]
-  };
-  
-  const themeColors = displayData.theme || {
+  const themeColors = businessData?.theme || {
     colors: { primary: '#007BFF', secondary: '#00B8D9' },
     gradient: 'linear-gradient(135deg, #007BFF 0%, #00B8D9 100%)'
   };
-  
-  const websiteUrl = subdomain ? `https://${subdomain}.launchfly.ai` : null;
-  const isComplete = generationStage === 'complete';
 
   return (
     <div style={{
@@ -239,9 +169,9 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
     }}>
       {/* Header */}
       <div style={{
-        background: (showContent.colors || isComplete) ? themeColors.gradient : 'linear-gradient(135deg, #e5e7eb 0%, #f3f4f6 100%)',
+        background: showContent.colors ? themeColors.gradient : 'linear-gradient(135deg, #e5e7eb 0%, #f3f4f6 100%)',
         padding: '24px',
-        color: (showContent.colors || isComplete) ? 'white' : '#6b7280',
+        color: showContent.colors ? 'white' : '#6b7280',
         transition: 'all 1s ease'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
@@ -250,10 +180,11 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
               fontSize: '24px', 
               fontWeight: '700', 
               marginBottom: '8px',
+              opacity: showContent.businessName ? 1 : 0.3,
               transition: 'opacity 0.5s ease'
             }}>
-              {isComplete ? 'Your Website is Live! 🎉' : 
-               isGenerating ? 'Your Website is Building! ✨' : 
+              {generationStage === 'complete' ? 'Your Website is Live! 🎉' : 
+               showContent.businessName ? 'Your Website is Building! ✨' : 
                'Preparing your website...'}
             </h2>
             <p style={{ opacity: 0.9, marginBottom: '12px' }}>
@@ -262,7 +193,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
             
             {/* Live status */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {!isComplete ? (
+              {!showContent.complete ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
                   <span style={{ fontWeight: '600' }}>
@@ -289,7 +220,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
             </div>
           </div>
           
-          {isComplete && websiteUrl && (
+          {showContent.complete && websiteUrl && (
             <a 
               href={websiteUrl} 
               target="_blank"
@@ -327,8 +258,8 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
         flexDirection: 'column',
         overflow: 'hidden'
       }}>
-        {/* Show skeleton during early generation */}
-        {showContent.skeleton && !showContent.businessName && (
+        {/* Skeleton loader */}
+        {!showContent.businessName && (
           <div style={{ padding: '40px', animation: 'pulse 1.5s ease-in-out infinite' }}>
             <div style={{ height: '60px', background: '#e5e7eb', borderRadius: '8px', marginBottom: '20px' }} />
             <div style={{ height: '20px', background: '#e5e7eb', borderRadius: '4px', marginBottom: '12px', width: '80%' }} />
@@ -336,55 +267,48 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
           </div>
         )}
         
-        {/* Business name appears (either placeholder or real) */}
-        {(showContent.businessName || isComplete) && (
+        {/* Business name appears */}
+        {showContent.businessName && (
           <div style={{
             padding: '40px',
             textAlign: 'center',
-            animation: 'fadeInUp 0.8s ease forwards',
-            opacity: 0,
-            animationDelay: showContent.businessName && !isComplete ? '0s' : '0s'
+            animation: 'fadeInUp 0.8s ease forwards'
           }}>
             <h1 style={{
               fontSize: '36px',
               fontWeight: '800',
-              color: (showContent.colors || isComplete) ? (themeColors.colors?.primary || '#007BFF') : '#e5e7eb',
+              color: showContent.colors ? (themeColors.colors?.primary || '#007BFF') : '#e5e7eb',
               marginBottom: '16px',
               transition: 'color 1s ease'
             }}>
-              {displayData.businessName}
+              {businessData?.businessName || 'Your Business'}
             </h1>
             
-            {/* Hero text */}
-            {(showContent.hero || isComplete) && (
+            {/* Hero text types out */}
+            {showContent.hero && (
               <p style={{
                 fontSize: '18px',
                 color: '#6b7280',
                 maxWidth: '600px',
-                margin: '0 auto',
-                opacity: 0,
-                animation: 'fadeIn 1s ease forwards',
-                animationDelay: '0.5s'
+                margin: '0 auto'
               }}>
-                {displayData.tagline}
+                {businessData?.tagline || 'Professional solutions for your success'}
               </p>
             )}
           </div>
         )}
         
         {/* Products appear */}
-        {(showContent.products || isComplete) && (
+        {showContent.products && businessData?.products && (
           <div style={{
             display: 'flex',
             gap: '20px',
             padding: '0 40px',
             marginTop: 'auto',
             marginBottom: '40px',
-            opacity: 0,
-            animation: 'fadeInUp 0.8s ease forwards',
-            animationDelay: showContent.products && !isComplete ? '0s' : '0.2s'
+            animation: 'fadeInUp 0.8s ease forwards'
           }}>
-            {displayData.products.slice(0, 3).map((product, index) => (
+            {businessData.products.slice(0, 3).map((product, index) => (
               <div
                 key={index}
                 style={{
@@ -408,15 +332,14 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
           </div>
         )}
         
-        {/* Magic sparkles effect when complete */}
-        {isComplete && hasRealData && (
+        {/* Magic sparkles effect */}
+        {showContent.complete && (
           <div style={{
             position: 'absolute',
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            animation: 'sparkleExplosion 1s ease forwards',
-            pointerEvents: 'none'
+            animation: 'sparkleExplosion 1s ease forwards'
           }}>
             <Sparkles size={48} color="#fbbf24" />
           </div>

@@ -47,8 +47,7 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
  */
 async function updateBusinessProgress(businessId, partialData, stage = null) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/business/update-progress`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/business/update-progress`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +103,7 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Generate website theme (can be slow)
     console.log('Generating website data...');
-    const websiteData = await generateWebsite(opportunity, businessData.logo, businessData.businessName);
+    const websiteData = await generateWebsite(opportunity);
     businessData.theme = websiteData.theme;
     businessData.layout = websiteData.layout;
     
@@ -139,15 +138,8 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     // Complete business data
     businessData.targetCustomers = targetCustomers;
     businessData.monthlyData = monthlyData;
-    businessData.marketing = marketing;
-    
-    // Ensure logo consistency throughout the layout
-    businessData = ensureLogoConsistency(businessData);
     
     console.log('Business data object created successfully');
-    console.log('Final logo in business data:', businessData.logo);
-    
-    console.log('Setting stage to finalizing');
     
     console.log('Setting stage to finalizing');
     // Update session to finalizing
@@ -159,7 +151,7 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       })
       .eq('id', sessionId);
     
-    // Final update with all data - ensure logo is consistent throughout
+    // Final update with all data
     await supabase
       .from('businesses')
       .update({
@@ -192,23 +184,14 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
  * Generates a website theme and layout based on the opportunity
  * 
  * @param {Object} opportunity - The analyzed business opportunity
- * @param {string} logo - The generated logo for the business
- * @param {string} businessName - The business name
  * @returns {Object} Website theme and layout
  */
-async function generateWebsite(opportunity, logo = '🚀', businessName = null) {
+async function generateWebsite(opportunity) {
   try {
-    console.log('Starting website generation for:', businessName || opportunity.businessName);
-    const finalBusinessName = businessName || opportunity.businessName;
-    const finalLogo = logo || '🚀';
-    
+    console.log('Starting website generation for:', opportunity.businessName);
     const prompt = `
       Create a professional website theme and layout for this business:
-      Business Name: ${finalBusinessName}
-      Logo: ${finalLogo}
       ${JSON.stringify(opportunity)}
-      
-      IMPORTANT: Use the provided business name "${finalBusinessName}" and logo "${finalLogo}" exactly as given.
       
       Return a JSON object with:
       {
@@ -227,8 +210,8 @@ async function generateWebsite(opportunity, logo = '🚀', businessName = null) 
           {
             "component": "NavBar",
             "props": {
-              "businessName": "${finalBusinessName}",
-              "logo": "${finalLogo}",
+              "businessName": "Name",
+              "logo": "Emoji",
               "links": ["About", "Services", "Pricing", "Contact"],
               "ctaText": "Get Started"
             }
@@ -254,7 +237,6 @@ async function generateWebsite(opportunity, logo = '🚀', businessName = null) 
     console.log('OpenAI response received for website generation');
     const result = JSON.parse(response.choices[0].message.content);
     console.log('Website generation completed successfully');
-    console.log('Generated layout NavBar logo:', result.layout?.find(c => c.component === 'NavBar')?.props?.logo);
     return result;
   } catch (error) {
     console.error("Error generating website:", error);
@@ -278,7 +260,7 @@ async function generateWebsite(opportunity, logo = '🚀', businessName = null) 
         font: "Inter",
         gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
       },
-      layout: generateDefaultLayout(opportunity, logo, businessName)
+      layout: generateDefaultLayout(opportunity)
     };
   }
 }
@@ -458,8 +440,6 @@ async function generateLogo(niche) {
     console.log('OpenAI response received for logo generation');
     const emoji = response.choices[0].message.content.trim();
     const finalEmoji = emoji.length > 2 ? '🚀' : emoji;
-    console.log('Raw emoji from OpenAI:', emoji);
-    console.log('Final processed emoji:', finalEmoji);
     console.log('Logo generated successfully:', finalEmoji);
     return finalEmoji;
   } catch (error) {
@@ -567,52 +547,18 @@ async function handleLaunchError(sessionId, businessId) {
 }
 
 /**
- * Ensures logo consistency throughout all layout components
- * 
- * @param {Object} businessData - The business data object
- * @returns {Object} Business data with consistent logos
- */
-function ensureLogoConsistency(businessData) {
-  const mainLogo = businessData.logo || '🚀';
-  const mainBusinessName = businessData.businessName || 'Your Business';
-  
-  // Update layout components to use the main logo
-  if (businessData.layout && Array.isArray(businessData.layout)) {
-    businessData.layout = businessData.layout.map(component => {
-      if (component.component === 'NavBar' && component.props) {
-        component.props.logo = mainLogo;
-        component.props.businessName = mainBusinessName;
-      }
-      if (component.component === 'Footer' && component.props) {
-        component.props.logo = mainLogo;
-        component.props.businessName = mainBusinessName;
-      }
-      return component;
-    });
-  }
-  
-  console.log('Logo consistency ensured. Main logo:', mainLogo);
-  return businessData;
-}
-
-/**
  * Generates a default layout when AI fails
  * 
  * @param {Object} opportunity - The analyzed business opportunity
- * @param {string} logo - The generated logo
- * @param {string} businessName - The business name
  * @returns {Array} Default layout configuration
  */
-function generateDefaultLayout(opportunity, logo = '🚀', businessName = null) {
-  const finalBusinessName = businessName || opportunity.businessName || 'Your Business';
-  const finalLogo = logo || '🚀';
-  
+function generateDefaultLayout(opportunity) {
   return [
     {
       component: 'NavBar',
       props: {
-        businessName: finalBusinessName,
-        logo: finalLogo,
+        businessName: opportunity.businessName || 'Your Business',
+        logo: '🚀',
         links: ['About', 'Services', 'Pricing', 'Contact'],
         ctaText: 'Get Started'
       }
@@ -685,8 +631,8 @@ function generateDefaultLayout(opportunity, logo = '🚀', businessName = null) 
     {
       component: 'Footer',
       props: {
-        businessName: finalBusinessName,
-        logo: finalLogo,
+        businessName: opportunity.businessName || 'Your Business',
+        logo: '🚀',
         description: opportunity.solution || 'Professional solutions for your success'
       }
     }

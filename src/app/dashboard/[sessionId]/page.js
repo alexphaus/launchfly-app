@@ -23,20 +23,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Start polling when we have data and generation is in progress
+    // Reduced polling frequency since we're using streaming for live updates
     if (sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error') {
       const pollInterval = setInterval(async () => {
         await fetchLatestData();
-      }, 2000); // Poll every 2 seconds
+      }, 5000); // Poll every 5 seconds (less frequent since streaming handles real-time updates)
 
       return () => clearInterval(pollInterval);
     }
   }, [sessionData?.stage]);
 
   useEffect(() => {
-    // Trigger generation if session is pending
+    // Trigger streaming generation if session is pending
     if (sessionData?.stage === 'pending' && businessData && !generationTriggered.current) {
       generationTriggered.current = true;
-      startBusinessGeneration();
+      // Don't call the old generation API - the streaming will be handled by the LaunchflyDashboard component
+      console.log('Session is pending, streaming generation will start automatically');
     }
   }, [sessionData, businessData]);
 

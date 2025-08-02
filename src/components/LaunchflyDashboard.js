@@ -114,150 +114,6 @@ const MoneyHero = ({ totalEarned = 0, projectedThisWeek = 0, canCashOut = false 
   );
 };
 
-// --- COMPONENT: Generation Progress Bar ---
-const GenerationProgressBar = ({ generationStage, businessData }) => {
-  const [progress, setProgress] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState('');
-  const [startTime] = useState(Date.now());
-  
-  useEffect(() => {
-    let targetProgress = 0;
-    let estimatedTimeRemaining = '';
-    
-    // Calculate progress based on stage and available data
-    switch (generationStage) {
-      case 'pending':
-        targetProgress = 5;
-        estimatedTimeRemaining = '2-3 minutes';
-        break;
-      case 'analyzing':
-        targetProgress = 20;
-        estimatedTimeRemaining = '2-3 minutes';
-        break;
-      case 'researching':
-        targetProgress = 35;
-        estimatedTimeRemaining = '1-2 minutes';
-        break;
-      case 'building':
-        targetProgress = 50;
-        estimatedTimeRemaining = '1-2 minutes';
-        // Add progress based on available data
-        if (businessData?.businessName) {
-          targetProgress += 10;
-          estimatedTimeRemaining = '60-90 seconds';
-        }
-        if (businessData?.logo) {
-          targetProgress += 5;
-          estimatedTimeRemaining = '45-60 seconds';
-        }
-        if (businessData?.theme) {
-          targetProgress += 15;
-          estimatedTimeRemaining = '30-45 seconds';
-        }
-        if (businessData?.products) {
-          targetProgress += 10;
-          estimatedTimeRemaining = '15-30 seconds';
-        }
-        break;
-      case 'finalizing':
-        targetProgress = 90;
-        estimatedTimeRemaining = '10-15 seconds';
-        break;
-      case 'complete':
-        targetProgress = 100;
-        estimatedTimeRemaining = 'Complete!';
-        break;
-      default:
-        targetProgress = 0;
-        estimatedTimeRemaining = 'Starting...';
-    }
-    
-    setTimeRemaining(estimatedTimeRemaining);
-    
-    // Animate progress bar
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev < targetProgress) {
-          return Math.min(prev + 1, targetProgress);
-        }
-        clearInterval(interval);
-        return prev;
-      });
-    }, 50);
-    
-    return () => clearInterval(interval);
-  }, [generationStage, businessData]);
-  
-  if (generationStage === 'complete') return null;
-  
-  return (
-    <div style={{
-      background: 'white',
-      borderRadius: '16px',
-      padding: '20px',
-      boxShadow: theme.shadows.md,
-      marginBottom: '24px'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', color: theme.colors.textDark, margin: 0 }}>
-          Generation Progress
-        </h4>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '14px', fontWeight: '700', color: theme.colors.primary }}>
-            {progress}%
-          </div>
-          <div style={{ fontSize: '12px', color: theme.colors.textGray }}>
-            ~{timeRemaining}
-          </div>
-        </div>
-      </div>
-      
-      <div style={{
-        width: '100%',
-        height: '8px',
-        background: '#f1f5f9',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        marginBottom: '12px'
-      }}>
-        <div style={{
-          width: `${progress}%`,
-          height: '100%',
-          background: theme.gradients.primary,
-          borderRadius: '8px',
-          transition: 'width 0.3s ease',
-          position: 'relative'
-        }}>
-          {progress > 0 && (
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: '20px',
-              height: '100%',
-              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3))',
-              animation: 'shimmer 2s infinite'
-            }} />
-          )}
-        </div>
-      </div>
-      
-      <div style={{ fontSize: '13px', color: theme.colors.textGray }}>
-        {generationStage === 'pending' && '🤖 Initializing AI systems...'}
-        {generationStage === 'analyzing' && '🔍 Analyzing your opportunity...'}
-        {generationStage === 'researching' && '📊 Researching your market...'}
-        {generationStage === 'building' && 
-          (businessData?.products ? '✨ Adding final elements...' :
-           businessData?.theme ? '📦 Creating products...' :
-           businessData?.logo ? '🎨 Designing website...' :
-           businessData?.businessName ? '🌈 Generating branding...' :
-           '🔨 Building your business...')}
-        {generationStage === 'finalizing' && '🚀 Optimizing and finalizing...'}
-      </div>
-    </div>
-  );
-};
-
 // --- COMPONENT: Live Website Preview with Real-time Updates ---
 const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStage }) => {
   const [currentVisitors, setCurrentVisitors] = useState(visitors);
@@ -1122,18 +978,12 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         margin: '0 auto',
         padding: '0 24px'
       }}>
-        {/* Money Display */}
-        <MoneyHero 
-          totalEarned={totalEarned}
-          projectedThisWeek={businessData.monthlyRevenue ? parseInt(businessData.monthlyRevenue.replace(/[^0-9]/g, '')) / 4 : 2100}
-          canCashOut={totalEarned > 0}
-        />
-
-        {/* Generation Progress Bar */}
-        {generationStage !== 'complete' && (
-          <GenerationProgressBar 
-            generationStage={generationStage}
-            businessData={businessData}
+        {/* Money Display - Only show when complete */}
+        {generationStage === 'complete' && (
+          <MoneyHero 
+            totalEarned={totalEarned}
+            projectedThisWeek={businessData.monthlyRevenue ? parseInt(businessData.monthlyRevenue.replace(/[^0-9]/g, '')) / 4 : 2100}
+            canCashOut={totalEarned > 0}
           />
         )}
 

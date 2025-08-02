@@ -204,20 +204,12 @@ export default function DashboardPage() {
     );
   }
 
-  // Handle business data updates
-  const handleBusinessUpdate = (updatedBusiness) => {
-    // Update the local state with the latest business data
-    // This will cause the dashboard to re-render with the new data
-    setBusinessData(updatedBusiness);
-  };
-
   return (
     <LaunchflyDashboard 
       session={sessionData}
       business={businessData}
       onPhoneCapture={handlePhoneCapture}
       onStepComplete={handleStepComplete}
-      onBusinessUpdate={handleBusinessUpdate}
     />
   );
 }

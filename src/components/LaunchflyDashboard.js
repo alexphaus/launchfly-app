@@ -116,57 +116,10 @@ const MoneyHero = ({ totalEarned = 0, projectedThisWeek = 0, canCashOut = false 
 };
 
 // --- COMPONENT: Live Website Preview ---
-const LiveWebsiteCard = ({ 
-  subdomain, 
-  visitors = 0, 
-  isGenerating = false, 
-  generationStage = null,
-  businessData = null  // Include business data to get streaming content
-}) => {
+const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, generationStage = null }) => {
   const [currentVisitors, setCurrentVisitors] = useState(visitors);
   const [generationProgress, setGenerationProgress] = useState(0);
-  const [cursorPosition, setCursorPosition] = useState(0);
   const websiteUrl = `https://app.launchfly.ai/sites/${subdomain}/`;
-
-  // Get streaming content from business data
-  const getStreamingContent = () => {
-    if (!businessData?.business_data?.streaming) return null;
-    
-    // Select appropriate streaming content based on generation stage
-    if (generationStage === 'building') {
-      return businessData.business_data.streaming.website?.content || null;
-    } else if (generationStage === 'finalizing') {
-      return businessData.business_data.streaming.products?.content || null;
-    }
-    
-    return null;
-  };
-  
-  const [streamingContent, setStreamingContent] = useState(null);
-  const previousBusinessData = useRef(null);
-  
-  // Update streaming content when business data changes
-  useEffect(() => {
-    const newContent = getStreamingContent();
-    
-    // Only update if content actually changed
-    if (newContent !== streamingContent) {
-      setStreamingContent(newContent);
-    }
-    
-    previousBusinessData.current = businessData;
-  }, [businessData]);
-  
-  // Scroll streaming content to bottom when updated
-  useEffect(() => {
-    if (streamingContent) {
-      // Find the streaming content container and scroll to bottom
-      const container = document.querySelector('.streaming-content');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-  }, [streamingContent]);
   
   // Simulate live visitors
   useEffect(() => {
@@ -204,17 +157,6 @@ const LiveWebsiteCard = ({
       return () => clearInterval(interval);
     }
   }, [isGenerating, generationStage]);
-  
-  // Animate typing cursor for streaming content
-  useEffect(() => {
-    if (streamingContent) {
-      const cursorInterval = setInterval(() => {
-        setCursorPosition(prev => !prev);
-      }, 500);
-      
-      return () => clearInterval(cursorInterval);
-    }
-  }, [streamingContent]);
 
   const getGenerationContent = () => {
     switch (generationStage) {
@@ -342,89 +284,25 @@ const LiveWebsiteCard = ({
         background: isGenerating ? '#f3f4f6' : '#f5f5f5',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden'
+        justifyContent: 'center'
       }}>
         {isGenerating ? (
-          <div style={{ 
-            textAlign: 'center', 
-            color: theme.colors.textGray,
-            width: '100%',
-            padding: '0 20px'
-          }}>
-            {/* Show streaming content if available */}
-            {streamingContent ? (
-              <div className="streaming-content" style={{ 
-                textAlign: 'left', 
-                overflow: 'auto',
-                height: '280px',
-                background: '#1e293b',
-                color: '#e2e8f0',
-                padding: '16px',
-                borderRadius: '8px',
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                boxShadow: 'inset 0 0 10px rgba(0,0,0,0.3)',
-                whiteSpace: 'pre-wrap',
-                position: 'relative'
-              }}>
-                {streamingContent}
-                <span 
-                  style={{ 
-                    opacity: cursorPosition ? 1 : 0, 
-                    transition: 'opacity 0.2s',
-                    color: '#10b981'
-                  }}
-                >
-                  ▋
-                </span>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '12px', 
-                  right: '12px',
-                  background: '#6366f1',
-                  color: 'white',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  opacity: 0.9,
-                  fontFamily: 'sans-serif'
-                }}>
-                  {generationStage === 'building' ? 'GENERATING WEBSITE' : 'CREATING PRODUCTS'}
-                </div>
-                <div style={{ 
-                  position: 'absolute', 
-                  bottom: '12px', 
-                  right: '12px',
-                  color: '#94a3b8',
-                  padding: '4px',
-                  fontSize: '10px',
-                  fontFamily: 'sans-serif',
-                  fontStyle: 'italic'
-                }}>
-                  Live AI output
-                </div>
-              </div>
-            ) : (
-              <>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  border: '4px solid #e5e7eb',
-                  borderTop: '4px solid #3b82f6',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  margin: '0 auto 16px'
-                }} />
-                <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-                  {generationStage === 'building' ? 'Designing your website...' : 'Preparing your business...'}
-                </p>
-                <p style={{ fontSize: '14px' }}>
-                  Your website will appear here once it's ready
-                </p>
-              </>
-            )}
+          <div style={{ textAlign: 'center', color: theme.colors.textGray }}>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              border: '4px solid #e5e7eb',
+              borderTop: '4px solid #3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 16px'
+            }} />
+            <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+              {generationStage === 'building' ? 'Designing your website...' : 'Preparing your business...'}
+            </p>
+            <p style={{ fontSize: '14px' }}>
+              Your website will appear here once it's ready
+            </p>
           </div>
         ) : (
           <>
@@ -453,12 +331,7 @@ const LiveWebsiteCard = ({
 };
 
 // --- COMPONENT: AI Activity Feed ---
-const AIActivityFeed = ({ 
-  isGenerating = false, 
-  generationStage = null, 
-  generationActivities = [],
-  businessData = null // Include business data for streaming updates 
-}) => {
+const AIActivityFeed = ({ isGenerating = false, generationStage = null, generationActivities = [] }) => {
   const [activities, setActivities] = useState([]);
 
   // Generation stage activities for real-time progress
@@ -494,52 +367,10 @@ const AIActivityFeed = ({
     ]
   };
 
-  // Get streaming progress information
-  const [streamingProgress, setStreamingProgress] = useState(null);
-  
-  // Monitor streaming progress
-  useEffect(() => {
-    if (businessData?.business_data?.streaming) {
-      // Get streaming data
-      const streamingData = businessData.business_data.streaming;
-      
-      // Check if we have progress updates
-      if (streamingData.website?.lastUpdated || streamingData.products?.lastUpdated) {
-        // Create progress indicator
-        const stageProgress = {
-          type: generationStage === 'building' ? 'build' : 'finalize',
-          status: 'streaming',
-          lastUpdated: streamingData.website?.lastUpdated || streamingData.products?.lastUpdated
-        };
-        
-        setStreamingProgress(stageProgress);
-      }
-    }
-  }, [businessData, generationStage]);
-  
   // Set activities based on generation stage
   useEffect(() => {
     if (isGenerating && generationStage && generationStages[generationStage]) {
-      // Start with base activities for this stage
-      const baseActivities = [...generationStages[generationStage]];
-      
-      // If we have streaming progress, enhance the current activity
-      if (streamingProgress) {
-        const updatedActivities = baseActivities.map(activity => {
-          if (activity.inProgress && activity.type === streamingProgress.type) {
-            return {
-              ...activity,
-              streaming: true,
-              lastUpdated: streamingProgress.lastUpdated
-            };
-          }
-          return activity;
-        });
-        
-        setActivities(updatedActivities);
-      } else {
-        setActivities(baseActivities);
-      }
+      setActivities(generationStages[generationStage]);
     } else if (!isGenerating) {
       // Default activities when not generating
       const defaultActivities = [
@@ -643,12 +474,7 @@ const AIActivityFeed = ({
                   fontWeight: isCompleted || isInProgress || activity.highlight ? '600' : '500'
                 }}>
                   {activity.text}
-                  {activity.streaming && (
-                    <span style={{ marginLeft: '6px', fontSize: '13px', color: theme.colors.success }}>
-                      [live]
-                    </span>
-                  )}
-                  {isInProgress && !activity.streaming && (
+                  {isInProgress && (
                     <span style={{ 
                       marginLeft: '8px',
                       animation: 'pulse 1.5s infinite'
@@ -812,7 +638,7 @@ const NextSteps = ({ onComplete }) => {
 };
 
 // --- MAIN DASHBOARD COMPONENT ---
-const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete, onBusinessUpdate }) => {
+const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete }) => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [totalEarned, setTotalEarned] = useState(0);
   
@@ -820,32 +646,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete,
   const isGenerating = session?.stage && !['complete', 'error'].includes(session.stage);
   const generationStage = session?.stage || 'complete';
   
-  // Subscribe to real-time business updates
-  useEffect(() => {
-    if (isGenerating && business?.id) {
-      // Set up a polling interval to check for business data updates
-      const pollingInterval = setInterval(async () => {
-        try {
-          // Fetch the latest business data directly (in a real implementation, this would use Supabase subscription)
-          const response = await fetch(`/api/business/${business.id}`);
-          if (response.ok) {
-            const updatedBusiness = await response.json();
-            // Update the local business state if needed
-            // This would typically be handled by the parent component
-            if (onBusinessUpdate && updatedBusiness) {
-              onBusinessUpdate(updatedBusiness);
-            }
-          }
-        } catch (error) {
-          console.error('Error polling for business updates:', error);
-        }
-      }, 2000); // Poll every 2 seconds
-      
-      return () => clearInterval(pollingInterval);
-    }
-  }, [isGenerating, business?.id]);
-  
-  // Business data for components
+  // Mock data for demonstration
   const businessData = {
     subdomain: business?.subdomain || business?.name?.toLowerCase().replace(/\s+/g, '-') || 'your-business',
     totalRevenue: business?.total_revenue || 0,
@@ -950,14 +751,12 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete,
           visitors={businessData.visitors}
           isGenerating={isGenerating}
           generationStage={generationStage}
-          businessData={business} // Pass the complete business object for streaming content
         />
 
         {/* AI Activity with Generation Progress */}
         <AIActivityFeed 
           isGenerating={isGenerating}
           generationStage={generationStage}
-          businessData={business} // Pass the complete business object for streaming updates
         />
 
         {/* Show success predictor and next steps only after generation */}

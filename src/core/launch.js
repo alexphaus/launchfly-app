@@ -3,18 +3,15 @@
  * 
  * This module focuses on taking a validated opportunity and turning it into a functional business.
  * Following the future-proof approach, this layer uses whatever AI tools are best at the moment.
- * 
- * Enhanced with real-time streaming of content as it's generated.
  */
 
-import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
-import { processStreamingResponse } from './streaming';
+import OpenAI from 'openai';
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,
-  timeout: 60000,  // Extended timeout for streaming
-  maxRetries: 2
+  timeout: 30000, // 30 second timeout
+  maxRetries: 2 // Retry failed requests up to 2 times
 });
 
 const supabase = createClient(
@@ -54,20 +51,13 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     .eq('id', sessionId);
   
   try {
-    // Add business ID to opportunity for streaming updates
-    const opportunityWithId = {
-      ...opportunity,
-      businessId: businessId,
-      sessionId: sessionId
-    };
+    // Generate website theme and layout
+    console.log('Generating website data...');
+    const websiteData = await generateWebsite(opportunity);
     
-    // Generate website theme and layout with streaming
-    console.log('Generating website data with streaming...');
-    const websiteData = await generateWebsite(opportunityWithId);
-    
-    // Create digital products based on the opportunity with streaming
-    console.log('Creating products with streaming...');
-    const products = await createProducts(opportunityWithId);
+    // Create digital products based on the opportunity
+    console.log('Creating products...');
+    const products = await createProducts(opportunity);
     
     // Generate marketing materials and strategies
     console.log('Creating marketing materials...');
@@ -184,29 +174,20 @@ async function generateWebsite(opportunity) {
       }
     `;
 
-    console.log('Starting streaming website generation...');
-    
-    // Create a streaming response
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are an expert web designer that creates modern, professional website themes and layouts." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" },
-      stream: true // Enable streaming
-    });
-    
-    // Process the streaming response and update business data in real-time
-    const contentString = await processStreamingResponse(
-      stream, 
-      opportunity.businessId, 
-      'website',
-      { businessName: opportunity.businessName }
+    console.log('Calling OpenAI for website generation...');
+    const response = await callOpenAIWithTimeout(() => 
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are an expert web designer that creates modern, professional website themes and layouts." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
     );
     
-    console.log('Website generation streaming completed');
-    const result = JSON.parse(contentString);
+    console.log('OpenAI response received for website generation');
+    const result = JSON.parse(response.choices[0].message.content);
     console.log('Website generation completed successfully');
     return result;
   } catch (error) {
@@ -265,29 +246,20 @@ async function createProducts(opportunity) {
       }
     `;
 
-    console.log('Starting streaming product generation...');
-    
-    // Create a streaming response for products
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a product development and pricing expert." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" },
-      stream: true // Enable streaming
-    });
-    
-    // Process the streaming response and update business data in real-time
-    const contentString = await processStreamingResponse(
-      stream, 
-      opportunity.businessId, 
-      'products',
-      { businessName: opportunity.businessName }
+    console.log('Calling OpenAI for product creation...');
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a product development and pricing expert." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
     );
     
-    console.log('Product generation streaming completed');
-    const { products } = JSON.parse(contentString);
+    console.log('OpenAI response received for product creation');
+    const { products } = JSON.parse(response.choices[0].message.content);
     console.log('Products created successfully:', products?.length || 0);
     return products || [];
   } catch (error) {

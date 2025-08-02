@@ -114,12 +114,157 @@ const MoneyHero = ({ totalEarned = 0, projectedThisWeek = 0, canCashOut = false 
   );
 };
 
+// --- COMPONENT: Generation Progress Bar ---
+const GenerationProgressBar = ({ generationStage, businessData }) => {
+  const [progress, setProgress] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState('');
+  const [startTime] = useState(Date.now());
+  
+  useEffect(() => {
+    let targetProgress = 0;
+    let estimatedTimeRemaining = '';
+    
+    // Calculate progress based on stage and available data
+    switch (generationStage) {
+      case 'pending':
+        targetProgress = 5;
+        estimatedTimeRemaining = '2-3 minutes';
+        break;
+      case 'analyzing':
+        targetProgress = 20;
+        estimatedTimeRemaining = '2-3 minutes';
+        break;
+      case 'researching':
+        targetProgress = 35;
+        estimatedTimeRemaining = '1-2 minutes';
+        break;
+      case 'building':
+        targetProgress = 50;
+        estimatedTimeRemaining = '1-2 minutes';
+        // Add progress based on available data
+        if (businessData?.businessName) {
+          targetProgress += 10;
+          estimatedTimeRemaining = '60-90 seconds';
+        }
+        if (businessData?.logo) {
+          targetProgress += 5;
+          estimatedTimeRemaining = '45-60 seconds';
+        }
+        if (businessData?.theme) {
+          targetProgress += 15;
+          estimatedTimeRemaining = '30-45 seconds';
+        }
+        if (businessData?.products) {
+          targetProgress += 10;
+          estimatedTimeRemaining = '15-30 seconds';
+        }
+        break;
+      case 'finalizing':
+        targetProgress = 90;
+        estimatedTimeRemaining = '10-15 seconds';
+        break;
+      case 'complete':
+        targetProgress = 100;
+        estimatedTimeRemaining = 'Complete!';
+        break;
+      default:
+        targetProgress = 0;
+        estimatedTimeRemaining = 'Starting...';
+    }
+    
+    setTimeRemaining(estimatedTimeRemaining);
+    
+    // Animate progress bar
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev < targetProgress) {
+          return Math.min(prev + 1, targetProgress);
+        }
+        clearInterval(interval);
+        return prev;
+      });
+    }, 50);
+    
+    return () => clearInterval(interval);
+  }, [generationStage, businessData]);
+  
+  if (generationStage === 'complete') return null;
+  
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '20px',
+      boxShadow: theme.shadows.md,
+      marginBottom: '24px'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h4 style={{ fontSize: '16px', fontWeight: '600', color: theme.colors.textDark, margin: 0 }}>
+          Generation Progress
+        </h4>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: theme.colors.primary }}>
+            {progress}%
+          </div>
+          <div style={{ fontSize: '12px', color: theme.colors.textGray }}>
+            ~{timeRemaining}
+          </div>
+        </div>
+      </div>
+      
+      <div style={{
+        width: '100%',
+        height: '8px',
+        background: '#f1f5f9',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        marginBottom: '12px'
+      }}>
+        <div style={{
+          width: `${progress}%`,
+          height: '100%',
+          background: theme.gradients.primary,
+          borderRadius: '8px',
+          transition: 'width 0.3s ease',
+          position: 'relative'
+        }}>
+          {progress > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: '20px',
+              height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3))',
+              animation: 'shimmer 2s infinite'
+            }} />
+          )}
+        </div>
+      </div>
+      
+      <div style={{ fontSize: '13px', color: theme.colors.textGray }}>
+        {generationStage === 'pending' && '🤖 Initializing AI systems...'}
+        {generationStage === 'analyzing' && '🔍 Analyzing your opportunity...'}
+        {generationStage === 'researching' && '📊 Researching your market...'}
+        {generationStage === 'building' && 
+          (businessData?.products ? '✨ Adding final elements...' :
+           businessData?.theme ? '📦 Creating products...' :
+           businessData?.logo ? '🎨 Designing website...' :
+           businessData?.businessName ? '🌈 Generating branding...' :
+           '🔨 Building your business...')}
+        {generationStage === 'finalizing' && '🚀 Optimizing and finalizing...'}
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENT: Live Website Preview with Real-time Updates ---
 const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStage }) => {
   const [currentVisitors, setCurrentVisitors] = useState(visitors);
   const [showContent, setShowContent] = useState({
     skeleton: true,
     businessName: false,
+    logo: false,
     colors: false,
     hero: false,
     products: false,
@@ -128,17 +273,43 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
   
   const websiteUrl = subdomain ? `https://${subdomain}.launchfly.ai` : null;
   
-  // Progressive content reveal based on generation stage and business data
+  // Progressive content reveal based on available business data
   useEffect(() => {
     if (!businessData) return;
     
-    // Show content based on what data is available
+    // Show content based on what data is available incrementally
     const updates = {};
-    if (businessData.businessName) updates.businessName = true;
-    if (businessData.theme) updates.colors = true;
-    if (businessData.tagline) updates.hero = true;
-    if (businessData.products && businessData.products.length > 0) updates.products = true;
-    if (generationStage === 'complete') updates.complete = true;
+    
+    // Basic business info appears first
+    if (businessData.businessName) {
+      updates.businessName = true;
+      updates.skeleton = false;
+    }
+    
+    // Logo appears when available
+    if (businessData.logo) {
+      updates.logo = true;
+    }
+    
+    // Theme/colors appear when generated
+    if (businessData.theme?.colors) {
+      updates.colors = true;
+    }
+    
+    // Hero content appears when tagline is ready
+    if (businessData.tagline) {
+      updates.hero = true;
+    }
+    
+    // Products appear when generated
+    if (businessData.products && businessData.products.length > 0) {
+      updates.products = true;
+    }
+    
+    // Mark as complete when generation is done
+    if (generationStage === 'complete') {
+      updates.complete = true;
+    }
     
     setShowContent(prev => ({ ...prev, ...updates }));
   }, [businessData, generationStage]);
@@ -199,7 +370,12 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
                   <span style={{ fontWeight: '600' }}>
                     {generationStage === 'analyzing' && 'Analyzing your business...'}
                     {generationStage === 'researching' && 'Researching your market...'}
-                    {generationStage === 'building' && 'Building your website...'}
+                    {generationStage === 'building' && (
+                      showContent.products ? 'Adding final touches...' :
+                      showContent.colors ? 'Creating products...' :
+                      showContent.businessName ? 'Designing your website...' :
+                      'Building your website...'
+                    )}
                     {generationStage === 'finalizing' && 'Adding final touches...'}
                     {generationStage === 'pending' && 'Starting AI systems...'}
                   </span>
@@ -259,91 +435,154 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
         overflow: 'hidden'
       }}>
         {/* Skeleton loader */}
-        {!showContent.businessName && (
-          <div style={{ padding: '40px', animation: 'pulse 1.5s ease-in-out infinite' }}>
+        {showContent.skeleton && (
+          <div style={{ 
+            padding: '40px', 
+            animation: 'pulse 1.5s ease-in-out infinite',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: '#f9fafb',
+            zIndex: 1,
+            transition: 'opacity 0.5s ease',
+            opacity: showContent.businessName ? 0 : 1
+          }}>
             <div style={{ height: '60px', background: '#e5e7eb', borderRadius: '8px', marginBottom: '20px' }} />
             <div style={{ height: '20px', background: '#e5e7eb', borderRadius: '4px', marginBottom: '12px', width: '80%' }} />
             <div style={{ height: '20px', background: '#e5e7eb', borderRadius: '4px', width: '60%' }} />
           </div>
         )}
         
-        {/* Business name appears */}
-        {showContent.businessName && (
-          <div style={{
-            padding: '40px',
-            textAlign: 'center',
-            animation: 'fadeInUp 0.8s ease forwards'
-          }}>
-            <h1 style={{
-              fontSize: '36px',
-              fontWeight: '800',
-              color: showContent.colors ? (themeColors.colors?.primary || '#007BFF') : '#e5e7eb',
-              marginBottom: '16px',
-              transition: 'color 1s ease'
+        {/* Progressive Website Content */}
+        <div style={{
+          position: 'relative',
+          zIndex: 2,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* Business name and logo appear first */}
+          {showContent.businessName && (
+            <div style={{
+              padding: '40px',
+              textAlign: 'center',
+              animation: 'fadeInUp 0.8s ease forwards'
             }}>
-              {businessData?.businessName || 'Your Business'}
-            </h1>
-            
-            {/* Hero text types out */}
-            {showContent.hero && (
-              <p style={{
-                fontSize: '18px',
-                color: '#6b7280',
-                maxWidth: '600px',
-                margin: '0 auto'
-              }}>
-                {businessData?.tagline || 'Professional solutions for your success'}
-              </p>
-            )}
-          </div>
-        )}
-        
-        {/* Products appear */}
-        {showContent.products && businessData?.products && (
-          <div style={{
-            display: 'flex',
-            gap: '20px',
-            padding: '0 40px',
-            marginTop: 'auto',
-            marginBottom: '40px',
-            animation: 'fadeInUp 0.8s ease forwards'
-          }}>
-            {businessData.products.slice(0, 3).map((product, index) => (
-              <div
-                key={index}
-                style={{
-                  flex: 1,
-                  background: 'white',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  opacity: 0,
-                  animation: `fadeInScale 0.5s ease ${index * 0.2}s forwards`
-                }}
-              >
-                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1a2b48', marginBottom: '8px' }}>
-                  {product.name}
-                </h3>
-                <p style={{ fontSize: '24px', fontWeight: '800', color: themeColors.colors?.primary || '#007BFF' }}>
-                  {product.price}
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
+                {showContent.logo && (
+                  <span style={{ 
+                    fontSize: '48px',
+                    animation: 'fadeInScale 0.6s ease 0.3s forwards',
+                    opacity: 0
+                  }}>
+                    {businessData?.logo || '🚀'}
+                  </span>
+                )}
+                <h1 style={{
+                  fontSize: showContent.logo ? '32px' : '36px',
+                  fontWeight: '800',
+                  color: showContent.colors ? (themeColors.colors?.primary || '#007BFF') : '#1f2937',
+                  margin: 0,
+                  transition: 'color 1s ease, font-size 0.5s ease'
+                }}>
+                  {businessData?.businessName || 'Your Business'}
+                </h1>
               </div>
-            ))}
-          </div>
-        )}
-        
-        {/* Magic sparkles effect */}
-        {showContent.complete && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            animation: 'sparkleExplosion 1s ease forwards'
-          }}>
-            <Sparkles size={48} color="#fbbf24" />
-          </div>
-        )}
+              
+              {/* Hero text types out when available */}
+              {showContent.hero && (
+                <p style={{
+                  fontSize: '18px',
+                  color: '#6b7280',
+                  maxWidth: '600px',
+                  margin: '0 auto',
+                  animation: 'fadeInUp 0.8s ease 0.2s forwards',
+                  opacity: 0
+                }}>
+                  {businessData?.tagline || 'Professional solutions for your success'}
+                </p>
+              )}
+            </div>
+          )}
+          
+          {/* Colors/theme update with smooth transition */}
+          {showContent.colors && !showContent.products && (
+            <div style={{
+              padding: '0 40px',
+              textAlign: 'center',
+              animation: 'fadeInUp 0.8s ease forwards'
+            }}>
+              <div style={{
+                display: 'inline-flex',
+                gap: '12px',
+                padding: '16px 24px',
+                background: themeColors.colors?.primary || '#007BFF',
+                borderRadius: '50px',
+                color: 'white',
+                fontWeight: '600',
+                fontSize: '14px',
+                animation: 'fadeInScale 0.6s ease forwards'
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: 'white'
+                }} />
+                Brand colors applied
+              </div>
+            </div>
+          )}
+          
+          {/* Products appear when ready */}
+          {showContent.products && businessData?.products && (
+            <div style={{
+              display: 'flex',
+              gap: '20px',
+              padding: '0 40px',
+              marginTop: 'auto',
+              marginBottom: '40px',
+              animation: 'fadeInUp 0.8s ease forwards'
+            }}>
+              {businessData.products.slice(0, 3).map((product, index) => (
+                <div
+                  key={index}
+                  style={{
+                    flex: 1,
+                    background: 'white',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    opacity: 0,
+                    animation: `fadeInScale 0.5s ease ${index * 0.2}s forwards`
+                  }}
+                >
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1a2b48', marginBottom: '8px' }}>
+                    {product.name}
+                  </h3>
+                  <p style={{ fontSize: '24px', fontWeight: '800', color: themeColors.colors?.primary || '#007BFF' }}>
+                    {product.price}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Magic sparkles effect when complete */}
+          {showContent.complete && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              animation: 'sparkleExplosion 1s ease forwards'
+            }}>
+              <Sparkles size={48} color="#fbbf24" />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -353,15 +592,92 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
 const AIActivityFeed = ({ generationStage, businessData }) => {
   const [activities, setActivities] = useState([]);
   const [currentStage, setCurrentStage] = useState('');
+  const [previousBusinessData, setPreviousBusinessData] = useState({});
+  
+  // Track specific business data changes for granular updates
+  useEffect(() => {
+    if (!businessData) return;
+    
+    const newActivities = [];
+    
+    // Check for new data pieces and add specific activities
+    if (businessData.businessName && !previousBusinessData.businessName) {
+      newActivities.push({
+        id: Date.now() + Math.random(),
+        text: `✨ Business name created: "${businessData.businessName}"`,
+        icon: '🎯',
+        type: 'success',
+        time: 'Just now'
+      });
+    }
+    
+    if (businessData.logo && !previousBusinessData.logo) {
+      newActivities.push({
+        id: Date.now() + Math.random(),
+        text: `${businessData.logo} Logo generated for your brand`,
+        icon: '🎨',
+        type: 'success',
+        time: 'Just now'
+      });
+    }
+    
+    if (businessData.theme?.colors && !previousBusinessData.theme?.colors) {
+      newActivities.push({
+        id: Date.now() + Math.random(),
+        text: `🎨 Brand colors and theme applied`,
+        icon: '🌈',
+        type: 'success',
+        time: 'Just now'
+      });
+    }
+    
+    if (businessData.products && !previousBusinessData.products) {
+      const productCount = businessData.products.length;
+      newActivities.push({
+        id: Date.now() + Math.random(),
+        text: `📦 ${productCount} product${productCount > 1 ? 's' : ''} created and priced`,
+        icon: '💰',
+        type: 'success',
+        time: 'Just now'
+      });
+    }
+    
+    if (businessData.tagline && !previousBusinessData.tagline) {
+      newActivities.push({
+        id: Date.now() + Math.random(),
+        text: `📝 Compelling tagline written: "${businessData.tagline.slice(0, 50)}${businessData.tagline.length > 50 ? '...' : ''}"`,
+        icon: '✍️',
+        type: 'success',
+        time: 'Just now'
+      });
+    }
+    
+    if (businessData.marketing && !previousBusinessData.marketing) {
+      newActivities.push({
+        id: Date.now() + Math.random(),
+        text: `📈 Marketing strategy and materials created`,
+        icon: '🚀',
+        type: 'success',
+        time: 'Just now'
+      });
+    }
+    
+    // Add new activities to the beginning of the list
+    if (newActivities.length > 0) {
+      setActivities(prev => [...newActivities, ...prev].slice(0, 6));
+    }
+    
+    setPreviousBusinessData(businessData);
+  }, [businessData, previousBusinessData]);
   
   // Generation stage activities
   useEffect(() => {
     const stageActivities = {
-      pending: { text: 'Initializing AI systems...', icon: '🤖', type: 'system' },
-      analyzing: { text: 'Analyzing your skills and market opportunity ✅', icon: '🔍', type: 'success' },
-      researching: { text: 'Researching profitable niches in your industry...', icon: '📊', type: 'working' },
-      building: { text: 'Building your website and products...', icon: '🔨', type: 'working' },
-      finalizing: { text: 'Optimizing for conversions and profit...', icon: '✨', type: 'working' },
+      pending: { text: 'Initializing AI systems...', icon: '🤖', type: 'working' },
+      analyzing: { text: 'Analyzing your skills and market opportunity', icon: '🔍', type: 'working' },
+      researching: { text: 'Researching profitable niches in your industry', icon: '📊', type: 'working' },
+      building: { text: 'Building your website and products', icon: '🔨', type: 'working' },
+      finalizing: { text: 'Optimizing for conversions and profit', icon: '✨', type: 'working' },
       complete: { text: 'Your business is ready! First visitors arriving soon 🎉', icon: '🚀', type: 'success' }
     };
     
@@ -379,9 +695,9 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
         setActivities(prev => {
           // Mark previous working items as complete
           const updated = prev.map(a => 
-            a.type === 'working' ? { ...a, type: 'success', text: a.text.replace('...', ' ✅') } : a
+            a.type === 'working' ? { ...a, type: 'success', text: a.text.replace('...', '') + ' ✅' } : a
           );
-          return [newActivity, ...updated].slice(0, 5);
+          return [newActivity, ...updated].slice(0, 6);
         });
       }
     }
@@ -392,21 +708,21 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
     if (generationStage === 'complete') {
       const timer = setTimeout(() => {
         const postActivities = [
-          { text: 'Found 12 potential customers in your niche', icon: '🎯', type: 'lead' },
-          { text: 'Optimizing pricing based on competitor analysis', icon: '💰', type: 'optimization' },
-          { text: 'First marketing campaign launching...', icon: '📤', type: 'email' }
+          { text: 'SEO optimization applied to boost visibility', icon: '🔍', type: 'optimization' },
+          { text: 'Conversion tracking pixels installed', icon: '�', type: 'analytics' },
+          { text: 'Performance monitoring activated', icon: '⚡', type: 'monitoring' }
         ];
         
         let delay = 0;
         postActivities.forEach(activity => {
           setTimeout(() => {
             setActivities(prev => [{
-              id: Date.now(),
+              id: Date.now() + Math.random(),
               ...activity,
               time: 'Just now'
-            }, ...prev].slice(0, 5));
+            }, ...prev].slice(0, 6));
           }, delay);
-          delay += 3000;
+          delay += 2000;
         });
       }, 2000);
       
@@ -480,20 +796,25 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
                 display: 'flex',
                 gap: '12px',
                 alignItems: 'start',
-                opacity: index === 0 ? 1 : 0.8 - (index * 0.15),
-                transform: `translateX(${index === 0 ? 0 : index * 5}px)`,
+                opacity: index === 0 ? 1 : 0.8 - (index * 0.12),
+                transform: `translateX(${index === 0 ? 0 : index * 3}px)`,
                 transition: 'all 0.3s',
                 animation: index === 0 ? 'slideInLeft 0.5s ease' : 'none'
               }}
             >
-              <span style={{ fontSize: '20px' }}>{activity.icon}</span>
+              <span style={{ fontSize: '20px', flexShrink: 0 }}>{activity.icon}</span>
               <div style={{ flex: 1 }}>
                 <p style={{ 
                   fontSize: '15px',
                   color: activity.type === 'success' ? theme.colors.success : 
                          activity.type === 'working' ? theme.colors.primary : 
+                         activity.type === 'optimization' ? '#f59e0b' :
+                         activity.type === 'analytics' ? '#8b5cf6' :
+                         activity.type === 'monitoring' ? '#10b981' :
                          theme.colors.textDark,
-                  fontWeight: activity.type === 'working' ? '600' : '500'
+                  fontWeight: activity.type === 'working' ? '600' : '500',
+                  margin: 0,
+                  marginBottom: '4px'
                 }}>
                   {activity.text}
                   {activity.type === 'working' && (
@@ -506,7 +827,7 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
                     </span>
                   )}
                 </p>
-                <p style={{ fontSize: '13px', color: theme.colors.textGray }}>{activity.time}</p>
+                <p style={{ fontSize: '13px', color: theme.colors.textGray, margin: 0 }}>{activity.time}</p>
               </div>
             </div>
           ))
@@ -808,6 +1129,14 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           canCashOut={totalEarned > 0}
         />
 
+        {/* Generation Progress Bar */}
+        {generationStage !== 'complete' && (
+          <GenerationProgressBar 
+            generationStage={generationStage}
+            businessData={businessData}
+          />
+        )}
+
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 
           subdomain={business?.subdomain}
@@ -911,6 +1240,32 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             transform: translate(-50%, -50%) scale(0) rotate(360deg);
             opacity: 0;
           }
+        }
+        
+        @keyframes shimmer {
+          0% {
+            background-position: -200px 0;
+          }
+          100% {
+            background-position: calc(200px + 100%) 0;
+          }
+        }
+        
+        @keyframes slideInFromTop {
+          from {
+            opacity: 0;
+            transform: translateY(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .shimmer {
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          background-size: 200px 100%;
+          animation: shimmer 1.5s infinite;
         }
       `}</style>
     </div>

@@ -23,10 +23,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Start polling when we have data and generation is in progress
+    // Use faster polling during active generation
     if (sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error') {
       const pollInterval = setInterval(async () => {
         await fetchLatestData();
-      }, 2000); // Poll every 2 seconds
+      }, sessionData.stage === 'building' ? 1000 : 2000); // Poll every 1s during building, 2s otherwise
 
       return () => clearInterval(pollInterval);
     }

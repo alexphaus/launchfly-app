@@ -39,6 +39,35 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
  * @param {string} businessId - Business record ID
  * @returns {Object} Complete business data
  */
+/**
+ * Updates business data progressively during generation
+ * @param {string} businessId - Business record ID
+ * @param {Object} partialData - Partial business data to update
+ * @param {string} stage - Optional stage update
+ */
+async function updateBusinessProgress(businessId, partialData, stage = null) {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/business/update-progress`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        businessId,
+        partialData,
+        stage
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to update business progress:', await response.text());
+    }
+  } catch (error) {
+    console.error('Error updating business progress:', error);
+    // Don't throw - this is just for UI updates, shouldn't break the main flow
+  }
+}
+
 export async function launchBusiness(opportunity, sessionId, businessId) {
   console.log('Starting launch business - setting stage to building');
   // Update session to show we're building
@@ -51,24 +80,53 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     .eq('id', sessionId);
   
   try {
-    // Generate website theme and layout
-    console.log('Generating website data...');
-    const websiteData = await generateWebsite(opportunity);
+    // Initialize partial business data with basic info
+    let businessData = {
+      businessName: opportunity.businessName,
+      tagline: opportunity.solution,
+      domain: generateDomain(opportunity.businessName),
+      monthlyRevenue: opportunity.profitPotential,
+    };
     
-    // Create digital products based on the opportunity
-    console.log('Creating products...');
-    const products = await createProducts(opportunity);
+    // Update database with initial data so UI can show business name immediately
+    console.log('Updating with initial business data...');
+    await updateBusinessProgress(businessId, businessData, 'generating');
     
-    // Generate marketing materials and strategies
-    console.log('Creating marketing materials...');
-    const marketing = await createMarketing(opportunity);
-    
-    // Integrate with the existing business structure
-    console.log('Creating business data object...');
+    // Generate logo (fast operation)
     console.log('Generating logo...');
     const logo = await generateLogo(opportunity.niche);
     console.log('Logo generated:', logo);
+    businessData.logo = logo;
     
+    // Update database with logo
+    await updateBusinessProgress(businessId, { logo });
+    
+    // Generate website theme (can be slow)
+    console.log('Generating website data...');
+    const websiteData = await generateWebsite(opportunity);
+    businessData.theme = websiteData.theme;
+    businessData.layout = websiteData.layout;
+    
+    // Update database with theme/colors
+    await updateBusinessProgress(businessId, { 
+      theme: websiteData.theme, 
+      layout: websiteData.layout 
+    });
+    
+    // Create digital products (can be slow)
+    console.log('Creating products...');
+    const products = await createProducts(opportunity);
+    businessData.products = products;
+    
+    // Update database with products
+    await updateBusinessProgress(businessId, { products });
+    
+    // Generate marketing materials and strategies (can be slow)
+    console.log('Creating marketing materials...');
+    const marketing = await createMarketing(opportunity);
+    businessData.marketing = marketing;
+    
+    // Generate remaining data
     console.log('Identifying target customers...');
     const targetCustomers = await identifyTargetCustomers(opportunity);
     console.log('Target customers identified:', targetCustomers?.length || 0);
@@ -77,19 +135,9 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     const monthlyData = generateProjectedGrowth();
     console.log('Projected growth generated:', monthlyData?.length || 0);
     
-    const businessData = {
-      businessName: opportunity.businessName,
-      tagline: opportunity.solution,
-      domain: generateDomain(opportunity.businessName),
-      logo: logo,
-      monthlyRevenue: opportunity.profitPotential,
-      products: products,
-      targetCustomers: targetCustomers,
-      monthlyData: monthlyData,
-      theme: websiteData.theme,
-      layout: websiteData.layout,
-      marketing: marketing
-    };
+    // Complete business data
+    businessData.targetCustomers = targetCustomers;
+    businessData.monthlyData = monthlyData;
     
     console.log('Business data object created successfully');
     
@@ -103,7 +151,7 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       })
       .eq('id', sessionId);
     
-    // Update business with generated data
+    // Final update with all data
     await supabase
       .from('businesses')
       .update({

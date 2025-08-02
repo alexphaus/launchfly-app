@@ -30,7 +30,9 @@ export default function TestimonialSlider({
     }
   ];
 
-  const displayTestimonials = testimonials.length > 0 ? testimonials : defaultTestimonials;
+  const displayTestimonials = testimonials.length > 0 && testimonials.some(t => t.content && t.content.trim() !== '') 
+    ? testimonials.filter(t => t.content && t.content.trim() !== '') 
+    : defaultTestimonials;
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const nextTestimonial = () => {

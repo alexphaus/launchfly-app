@@ -193,6 +193,12 @@ async function generateWebsite(opportunity) {
       Create a professional website theme and layout for this business:
       ${JSON.stringify(opportunity)}
       
+      IMPORTANT: Create realistic, specific testimonials based on the business type. Each testimonial should:
+      - Reference actual results or benefits someone would get from this business
+      - Use appropriate names and roles for the target audience
+      - Include specific details that make them believable
+      - Show clear value provided by the business
+      
       Return a JSON object with:
       {
         "theme": {
@@ -216,8 +222,77 @@ async function generateWebsite(opportunity) {
               "ctaText": "Get Started"
             }
           },
-          // Hero, FeatureGrid, TestimonialSlider, PricingTable, CallToAction, Footer
-          // Use all available components with appropriate props
+          {
+            "component": "Hero",
+            "props": {
+              "title": "Hero title based on business",
+              "subtitle": "Compelling subtitle",
+              "ctaText": "Get Started",
+              "ctaLink": "#contact"
+            }
+          },
+          {
+            "component": "FeatureGrid", 
+            "props": {
+              "title": "Why Choose Us",
+              "features": [
+                {
+                  "icon": "⚡",
+                  "title": "Feature 1",
+                  "description": "Feature description"
+                }
+              ]
+            }
+          },
+          {
+            "component": "TestimonialSlider",
+            "props": {
+              "title": "What Our Clients Say",
+              "testimonials": [
+                {
+                  "name": "First Name + Last Name",
+                  "role": "Job Title relevant to target customer",
+                  "content": "Specific testimonial about results achieved with this business - include numbers, timeframes, or specific benefits. Make it realistic and believable for this business type.",
+                  "avatar": "👨‍💼 or 👩‍💼 or similar professional emoji",
+                  "rating": 5
+                },
+                {
+                  "name": "Different Name",
+                  "role": "Different relevant job title", 
+                  "content": "Another specific testimonial highlighting different benefits of this business. Include specific details that show real value.",
+                  "avatar": "👩‍� or 👨‍🚀 or other professional emoji",
+                  "rating": 5
+                },
+                {
+                  "name": "Third Name",
+                  "role": "Third relevant role",
+                  "content": "Third testimonial focusing on another key benefit or outcome customers get from this business.",
+                  "avatar": "Different professional emoji", 
+                  "rating": 5
+                }
+              ]
+            }
+          },
+          {
+            "component": "PricingTable",
+            "props": {
+              "title": "Choose Your Plan",
+              "plans": []
+            }
+          },
+          {
+            "component": "CallToAction",
+            "props": {
+              "title": "Ready to Get Started?",
+              "ctaText": "Start Now"
+            }
+          },
+          {
+            "component": "Footer",
+            "props": {
+              "businessName": "Use business name"
+            }
+          }
         ]
       }
     `;

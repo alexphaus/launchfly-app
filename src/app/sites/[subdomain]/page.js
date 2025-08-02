@@ -58,6 +58,35 @@ const mockBusinessData = {
         }
       },
       {
+        component: 'TestimonialSlider',
+        props: {
+          title: 'What Our Clients Say',
+          testimonials: [
+            {
+              name: 'Sarah Johnson',
+              role: 'Business Owner',
+              content: 'Axcelerate Business completely transformed our operations. We saw 300% growth in efficiency within just 3 months!',
+              avatar: '👩‍💼',
+              rating: 5
+            },
+            {
+              name: 'Mike Chen',
+              role: 'CEO',
+              content: 'The AI integration was seamless and the results were immediate. Our productivity has never been higher.',
+              avatar: '👨‍💻',
+              rating: 5
+            },
+            {
+              name: 'Emily Rodriguez',
+              role: 'Operations Manager',
+              content: 'Professional, reliable, and incredibly effective. This is exactly what we needed to scale our business.',
+              avatar: '👩‍🚀',
+              rating: 5
+            }
+          ]
+        }
+      },
+      {
         component: 'ProductGrid',
         props: {
           title: 'Our Solutions',
@@ -261,7 +290,83 @@ export default async function DynamicWebsite({ params }) {
   }
 
   const theme = businessData.theme || {};
-  const layout = businessData.layout || [];
+  let layout = businessData.layout || [];
+
+  // If no layout exists or layout is empty, create a fallback layout
+  if (!layout || layout.length === 0) {
+    console.log('Creating fallback layout for:', subdomain);
+    layout = [
+      {
+        component: 'NavBar',
+        props: {
+          businessName: businessData.businessName || businessData.name || 'Your Business',
+          logo: businessData.logo || '🚀',
+          links: ['About', 'Services', 'Pricing', 'Contact'],
+          ctaText: 'Get Started'
+        }
+      },
+      {
+        component: 'Hero',
+        props: {
+          title: businessData.tagline || 'Transform Your Vision Into Reality',
+          subtitle: `Welcome to ${businessData.businessName || businessData.name || 'Your Business'}`,
+          ctaText: 'Get Started Today'
+        }
+      },
+      {
+        component: 'FeatureGrid',
+        props: {
+          title: 'Why Choose Us',
+          features: businessData.products?.slice(0, 3).map(product => ({
+            icon: '⭐',
+            title: product.name,
+            description: product.description
+          })) || [
+            { icon: '⚡', title: 'Fast Results', description: 'Quick and efficient solutions' },
+            { icon: '🎯', title: 'Targeted Approach', description: 'Customized for your needs' },
+            { icon: '🚀', title: 'Growth Focused', description: 'Built for success' }
+          ]
+        }
+      },
+      {
+        component: 'TestimonialSlider',
+        props: {
+          title: 'What Our Clients Say',
+          testimonials: businessData.testimonials || []
+        }
+      },
+      {
+        component: 'PricingTable',
+        props: {
+          title: 'Choose Your Plan',
+          plans: businessData.products?.map(product => ({
+            name: product.name,
+            price: product.price,
+            description: product.description,
+            features: ['Feature 1', 'Feature 2', 'Feature 3'],
+            ctaText: 'Get Started',
+            popular: false
+          })) || []
+        }
+      },
+      {
+        component: 'CallToAction',
+        props: {
+          title: 'Ready to Get Started?',
+          subtitle: 'Join us today and transform your business',
+          ctaText: 'Start Now'
+        }
+      },
+      {
+        component: 'Footer',
+        props: {
+          businessName: businessData.businessName || businessData.name || 'Your Business',
+          logo: businessData.logo || '🚀',
+          description: businessData.tagline || 'Professional solutions for your success'
+        }
+      }
+    ];
+  }
 
   return (
     <ThemedLayout theme={theme}>

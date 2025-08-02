@@ -271,7 +271,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
     complete: false
   });
 
-  const websiteUrl = subdomain ? `https://app.launchfly.ai/${subdomain}` : null;
+  const websiteUrl = subdomain ? `https://app.launchfly.ai/sites/${subdomain}` : null;
 
   // Progressive content reveal based on available business data
   useEffect(() => {

@@ -199,6 +199,12 @@ async function generateWebsite(opportunity) {
       - Include specific details that make them believable
       - Show clear value provided by the business
       
+      IMPORTANT: For pricing plans, ensure each plan has:
+      - Realistic pricing for the business type
+      - Clear feature differentiation
+      - Appropriate call-to-action text (ctaText) like "Get Started", "Start Free Trial", "Contact Sales"
+      - Mark the middle plan as popular (popular: true)
+      
       Return a JSON object with:
       {
         "theme": {
@@ -277,7 +283,49 @@ async function generateWebsite(opportunity) {
             "component": "PricingTable",
             "props": {
               "title": "Choose Your Plan",
-              "plans": []
+              "subtitle": "Flexible pricing for every need",
+              "plans": [
+                {
+                  "name": "Basic Plan Name",
+                  "price": "$XX",
+                  "period": "month",
+                  "description": "Brief description of what this plan offers",
+                  "features": [
+                    "Feature 1 relevant to business",
+                    "Feature 2 relevant to business", 
+                    "Feature 3 relevant to business"
+                  ],
+                  "ctaText": "Get Started",
+                  "popular": false
+                },
+                {
+                  "name": "Premium Plan Name",
+                  "price": "$XX", 
+                  "period": "month",
+                  "description": "Most popular choice with additional features",
+                  "features": [
+                    "All Basic features",
+                    "Premium feature 1",
+                    "Premium feature 2",
+                    "Premium feature 3"
+                  ],
+                  "ctaText": "Start Free Trial",
+                  "popular": true
+                },
+                {
+                  "name": "Enterprise Plan Name",
+                  "price": "$XX",
+                  "period": "month",
+                  "description": "For serious businesses",
+                  "features": [
+                    "All Premium features",
+                    "Enterprise feature 1",
+                    "Enterprise feature 2"
+                  ],
+                  "ctaText": "Contact Sales", 
+                  "popular": false
+                }
+              ]
             }
           },
           {

@@ -56,7 +56,12 @@ export default function PricingTable({
     }
   ];
 
-  const displayPlans = plans.length > 0 ? plans : defaultPlans;
+  const displayPlans = plans.length > 0 ? plans.map(plan => ({
+    ...plan,
+    ctaText: plan.ctaText || 'Choose Plan',
+    features: plan.features || ['Feature 1', 'Feature 2', 'Feature 3'],
+    description: plan.description || 'Great choice for your needs'
+  })) : defaultPlans;
 
   return (
     <section className="py-20 bg-gray-50" id="pricing">
@@ -149,7 +154,7 @@ export default function PricingTable({
                   }
                 }}
               >
-                {plan.ctaText}
+                {plan.ctaText || 'Choose Plan'}
               </Link>
             </div>
           ))}

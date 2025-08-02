@@ -111,24 +111,34 @@ async function sendDashboardEmail(email, name, sessionId) {
   await resend.emails.send({
     from: 'Launchfly <hello@launchfly.ai>',
     to: email,
-    subject: `🚀 ${name}, your business is ready to be created!`,
+    subject: `🚀 ${name}, watch your business being built in real-time!`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #5D5FEF;">Click to Build Your Business!</h1>
+        <h1 style="color: #5D5FEF;">Your Business Dashboard is Ready!</h1>
         
         <p style="font-size: 18px; line-height: 1.6;">
           Hi ${name},<br><br>
-          Your personalized business is ready to be generated!
+          Your dashboard is ready! Click below to watch your AI-powered business being built in real-time.
         </p>
         
         <div style="text-align: center; margin: 40px 0;">
           <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #5D5FEF 0%, #00D4FF 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold; display: inline-block;">
-            Start Building Your Business →
+            Watch Your Business Being Built →
           </a>
         </div>
         
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 24px 0;">
+          <h3 style="color: #333; margin: 0 0 12px 0;">✨ What you'll see:</h3>
+          <ul style="color: #666; margin: 0; padding-left: 20px;">
+            <li>AI analyzing your skills and opportunities</li>
+            <li>Real-time website creation and updates</li>
+            <li>Live progress as your business takes shape</li>
+            <li>Your custom business website going live</li>
+          </ul>
+        </div>
+        
         <p style="color: #666;">
-          <strong>Tip:</strong> The AI will create your complete business in just 30 seconds!
+          <strong>Note:</strong> The entire process takes about 2-3 minutes. You can watch every step happen live in your dashboard!
         </p>
       </div>
     `

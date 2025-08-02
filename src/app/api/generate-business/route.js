@@ -27,6 +27,30 @@ export async function POST(request) {
         status: 'generating'
       })
       .eq('id', businessId);
+
+    // Update session stage to 'analyzing'
+    await supabase
+      .from('sessions')
+      .update({ stage: 'analyzing' })
+      .eq('id', sessionId);
+    
+    // Add a small delay to show the analyzing stage
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Update session stage to 'researching'
+    await supabase
+      .from('sessions')
+      .update({ stage: 'researching' })
+      .eq('id', sessionId);
+    
+    // Add delay for researching stage
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Update session stage to 'building'
+    await supabase
+      .from('sessions')
+      .update({ stage: 'building' })
+      .eq('id', sessionId);
     
     // Option 1: Use the legacy generator for backward compatibility
     const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
@@ -34,6 +58,15 @@ export async function POST(request) {
     // Option 2: Use our new unified LaunchflyV2 class (preferred approach)
     // const launchfly = new LaunchflyV2();
     // const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
+    
+    // Update session stage to 'finalizing'
+    await supabase
+      .from('sessions')
+      .update({ stage: 'finalizing' })
+      .eq('id', sessionId);
+    
+    // Add delay for finalizing stage
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Update business with generated data
     await supabase
@@ -45,8 +78,12 @@ export async function POST(request) {
         status: 'ready'
       })
       .eq('id', businessId);
-    
-    // Session is already marked complete by generateBusinessWithAI
+
+    // Mark session as complete
+    await supabase
+      .from('sessions')
+      .update({ stage: 'complete' })
+      .eq('id', sessionId);
     
     return Response.json({ 
       success: true, 

@@ -1,6 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle } from 'lucide-react';
 
+// --- TYPEWRITER TEXT COMPONENT ---
+const TypewriterText = ({ text, speed = 100 }) => {
+  const [displayText, setDisplayText] = useState('');
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayText(prev => prev + text[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, speed);
+      return () => clearTimeout(timer);
+    }
+  }, [currentIndex, text, speed]);
+
+  return <span>{displayText}</span>;
+};
+
 // --- DESIGN SYSTEM ---
 const theme = {
   colors: {
@@ -116,13 +134,114 @@ const MoneyHero = ({ totalEarned = 0, projectedThisWeek = 0, canCashOut = false 
 };
 
 // --- COMPONENT: Live Website Preview ---
-const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, generationStage = null, businessConcept = null, websiteContent = null, streamingContent = '' }) => {
+const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, generationStage = null, business }) => {
   const [currentVisitors, setCurrentVisitors] = useState(visitors);
   const [generationProgress, setGenerationProgress] = useState(0);
-  const [displayContent, setDisplayContent] = useState(null);
+  const [websiteContent, setWebsiteContent] = useState({
+    businessName: '',
+    colors: { primary: '#6b7280', secondary: '#f3f4f6' },
+    heroText: '',
+    products: [],
+    marketingCopy: '',
+    isReady: false
+  });
+  const [animationStage, setAnimationStage] = useState(0);
   const websiteUrl = `https://${subdomain}.launchfly.ai`;
   
-  // Simulate live visitors
+  // Progressive website content animation
+  useEffect(() => {
+    if (isGenerating && generationStage === 'building') {
+      // Stage 0: Dashboard loads → Shows skeleton site (0s)
+      setAnimationStage(0);
+      setWebsiteContent({
+        businessName: '',
+        colors: { primary: '#6b7280', secondary: '#f3f4f6' },
+        heroText: '',
+        products: [],
+        marketingCopy: '',
+        isReady: false
+      });
+
+      const animationSequence = [
+        // Stage 1: Business name appears → Colors animate in (2s)
+        {
+          delay: 2000,
+          stage: 1,
+          content: {
+            businessName: business?.name || `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} Business`,
+            colors: { primary: '#3b82f6', secondary: '#dbeafe' },
+            heroText: '',
+            products: [],
+            marketingCopy: '',
+            isReady: false
+          }
+        },
+        // Stage 2: Hero text types out → First product appears (5s)
+        {
+          delay: 5000,
+          stage: 2,
+          content: {
+            businessName: business?.name || `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} Business`,
+            colors: { primary: '#3b82f6', secondary: '#dbeafe' },
+            heroText: 'Transform Your Vision Into Reality',
+            products: [{ name: 'Premium Service', price: '$99' }],
+            marketingCopy: '',
+            isReady: false
+          }
+        },
+        // Stage 3: All products loaded → Marketing copy fills in (8s)
+        {
+          delay: 8000,
+          stage: 3,
+          content: {
+            businessName: business?.name || `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} Business`,
+            colors: { primary: '#3b82f6', secondary: '#dbeafe' },
+            heroText: 'Transform Your Vision Into Reality',
+            products: [
+              { name: 'Premium Service', price: '$99' },
+              { name: 'Professional Package', price: '$199' },
+              { name: 'Enterprise Solution', price: '$299' }
+            ],
+            marketingCopy: 'Professional solutions tailored to your unique needs',
+            isReady: false
+          }
+        },
+        // Stage 4: Website fully ready → Visitor counter starts (12s)
+        {
+          delay: 12000,
+          stage: 4,
+          content: {
+            businessName: business?.name || `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} Business`,
+            colors: { primary: '#3b82f6', secondary: '#dbeafe' },
+            heroText: 'Transform Your Vision Into Reality',
+            products: [
+              { name: 'Premium Service', price: '$99' },
+              { name: 'Professional Package', price: '$199' },
+              { name: 'Enterprise Solution', price: '$299' }
+            ],
+            marketingCopy: 'Professional solutions tailored to your unique needs',
+            isReady: true
+          }
+        }
+      ];
+
+      animationSequence.forEach(({ delay, stage, content }) => {
+        setTimeout(() => {
+          setAnimationStage(stage);
+          setWebsiteContent(content);
+        }, delay);
+      });
+
+      // Stage 5: First visitor arrives → Magic moment! (15s)
+      setTimeout(() => {
+        setCurrentVisitors(1);
+        setTimeout(() => setCurrentVisitors(3), 2000);
+        setTimeout(() => setCurrentVisitors(7), 4000);
+      }, 15000);
+    }
+  }, [isGenerating, generationStage, subdomain, business]);
+
+  // Simulate live visitors for completed websites
   useEffect(() => {
     if (!isGenerating) {
       const interval = setInterval(() => {
@@ -159,26 +278,6 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
     }
   }, [isGenerating, generationStage]);
 
-  // Update display content based on streaming data
-  useEffect(() => {
-    if (websiteContent) {
-      setDisplayContent(websiteContent);
-    } else if (businessConcept) {
-      // Show basic content structure while building
-      setDisplayContent({
-        hero: {
-          title: businessConcept.businessName,
-          subtitle: businessConcept.tagline,
-          ctaText: "Get Started"
-        },
-        theme: {
-          primaryColor: "#3b82f6",
-          secondaryColor: "#8b5cf6"
-        }
-      });
-    }
-  }, [websiteContent, businessConcept]);
-
   const getGenerationContent = () => {
     switch (generationStage) {
       case 'analyzing':
@@ -186,7 +285,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
       case 'researching':
         return { title: 'Researching Your Market...', subtitle: 'Finding your target customers and competitors' };
       case 'building':
-        return { title: 'Building Your Website...', subtitle: 'Creating your professional business website' };
+        return { title: 'Building Your Website Live...', subtitle: 'Watch your website come to life in real-time' };
       case 'finalizing':
         return { title: 'Finalizing Your Business...', subtitle: 'Setting up products and payment processing' };
       case 'complete':
@@ -197,199 +296,6 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
   };
 
   const content = getGenerationContent();
-
-  // Render live website preview during generation
-  const renderLivePreview = () => {
-    if (!isGenerating || !displayContent) {
-      return (
-        <div style={{ textAlign: 'center', color: theme.colors.textGray, padding: '60px 20px' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            border: '4px solid #e5e7eb',
-            borderTop: '4px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-            {generationStage === 'building' ? 'Designing your website...' : 'Preparing your business...'}
-          </p>
-          <p style={{ fontSize: '14px' }}>
-            Your website will appear here once it's ready
-          </p>
-        </div>
-      );
-    }
-
-    // Show live website preview as it's being built
-    const bgColor = displayContent.theme?.primaryColor || '#3b82f6';
-    const secondaryColor = displayContent.theme?.secondaryColor || '#8b5cf6';
-    
-    return (
-      <div style={{
-        background: '#fff',
-        minHeight: '300px',
-        position: 'relative',
-        fontSize: '12px',
-        overflow: 'hidden'
-      }}>
-        {/* Mini website preview */}
-        <div style={{
-          background: `linear-gradient(135deg, ${bgColor} 0%, ${secondaryColor} 100%)`,
-          color: 'white',
-          padding: '20px',
-          textAlign: 'center',
-          position: 'relative'
-        }}>
-          {/* Hero section */}
-          <div style={{
-            opacity: displayContent.hero ? 1 : 0.3,
-            transition: 'opacity 0.5s ease-in-out'
-          }}>
-            <h1 style={{ 
-              fontSize: '18px', 
-              fontWeight: 'bold', 
-              margin: '0 0 8px 0',
-              lineHeight: '1.2'
-            }}>
-              {displayContent.hero?.title || 'Your Business Name'}
-            </h1>
-            <p style={{ 
-              fontSize: '12px', 
-              opacity: 0.9, 
-              margin: '0 0 16px 0' 
-            }}>
-              {displayContent.hero?.subtitle || 'Professional solutions for your success'}
-            </p>
-            <div style={{
-              background: 'rgba(255,255,255,0.2)',
-              padding: '8px 16px',
-              borderRadius: '20px',
-              display: 'inline-block',
-              fontSize: '10px',
-              fontWeight: '600'
-            }}>
-              {displayContent.hero?.ctaText || 'Get Started'}
-            </div>
-          </div>
-
-          {/* Streaming content indicator */}
-          {streamingContent && (
-            <div style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
-              background: 'rgba(255,255,255,0.2)',
-              padding: '4px 8px',
-              borderRadius: '12px',
-              fontSize: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}>
-              <div style={{
-                width: '4px',
-                height: '4px',
-                background: '#10b981',
-                borderRadius: '50%',
-                animation: 'pulse 1s infinite'
-              }} />
-              Generating...
-            </div>
-          )}
-        </div>
-
-        {/* Features section */}
-        <div style={{ padding: '16px', background: '#f9fafb' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px',
-            opacity: displayContent.features ? 1 : 0.3,
-            transition: 'opacity 0.5s ease-in-out'
-          }}>
-            {(displayContent.features || [{}, {}, {}]).slice(0, 3).map((feature, i) => (
-              <div key={i} style={{
-                textAlign: 'center',
-                padding: '8px',
-                background: 'white',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb'
-              }}>
-                <div style={{ fontSize: '16px', marginBottom: '4px' }}>
-                  {feature.icon || '⚡'}
-                </div>
-                <div style={{ fontSize: '8px', fontWeight: '600', marginBottom: '2px' }}>
-                  {feature.title || 'Feature'}
-                </div>
-                <div style={{ fontSize: '7px', color: '#666', lineHeight: '1.2' }}>
-                  {feature.description || 'Coming soon...'}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Products/pricing section */}
-        {displayContent.products && displayContent.products.length > 0 && (
-          <div style={{ padding: '16px', background: 'white' }}>
-            <div style={{
-              textAlign: 'center',
-              opacity: displayContent.products ? 1 : 0.3,
-              transition: 'opacity 0.5s ease-in-out'
-            }}>
-              <div style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                padding: '12px',
-                background: '#f9fafb'
-              }}>
-                <div style={{ fontSize: '10px', fontWeight: '600', marginBottom: '4px' }}>
-                  {displayContent.products[0].name}
-                </div>
-                <div style={{ fontSize: '14px', fontWeight: 'bold', color: bgColor, marginBottom: '4px' }}>
-                  {displayContent.products[0].price}
-                </div>
-                <div style={{ fontSize: '7px', color: '#666' }}>
-                  {displayContent.products[0].description}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Live building overlay */}
-        {isGenerating && (
-          <div style={{
-            position: 'absolute',
-            bottom: '0',
-            left: '0',
-            right: '0',
-            background: 'rgba(59, 130, 246, 0.95)',
-            color: 'white',
-            padding: '8px 12px',
-            fontSize: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              background: '#10b981',
-              borderRadius: '50%',
-              animation: 'pulse 1s infinite'
-            }} />
-            <span>Building in real-time...</span>
-            <div style={{ marginLeft: 'auto' }}>
-              {generationProgress}%
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div style={{
@@ -495,12 +401,219 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
       <div style={{
         height: '300px',
         position: 'relative',
-        background: isGenerating ? '#f3f4f6' : '#f5f5f5',
+        background: isGenerating ? '#f9fafb' : '#f5f5f5',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        overflow: 'hidden'
       }}>
-        {isGenerating ? renderLivePreview() : (
+        {isGenerating && generationStage === 'building' ? (
+          // Live Website Building Animation
+          <div style={{
+            width: '100%',
+            height: '100%',
+            background: 'white',
+            position: 'relative',
+            transform: 'scale(0.8)',
+            transformOrigin: 'center',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            {/* Animated Website Header */}
+            <div style={{
+              height: '60px',
+              background: websiteContent.colors.primary,
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 20px',
+              transition: 'all 0.8s ease',
+              opacity: animationStage >= 1 ? 1 : 0.3
+            }}>
+              <div style={{
+                color: 'white',
+                fontWeight: 'bold',
+                fontSize: '16px',
+                opacity: animationStage >= 1 ? 1 : 0,
+                transform: animationStage >= 1 ? 'translateX(0)' : 'translateX(-20px)',
+                transition: 'all 0.6s ease'
+              }}>
+                {websiteContent.businessName || '████████'}
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} style={{
+                    width: '60px',
+                    height: '20px',
+                    background: 'rgba(255,255,255,0.2)',
+                    borderRadius: '4px',
+                    opacity: animationStage >= 1 ? 1 : 0.3,
+                    transition: `all 0.4s ease ${i * 0.1}s`
+                  }} />
+                ))}
+              </div>
+            </div>
+
+            {/* Hero Section */}
+            <div style={{
+              padding: '30px 20px',
+              textAlign: 'center',
+              background: `linear-gradient(135deg, ${websiteContent.colors.primary}10, ${websiteContent.colors.secondary}30)`,
+              transition: 'all 0.8s ease'
+            }}>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 'bold',
+                color: '#1f2937',
+                marginBottom: '12px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {animationStage >= 2 ? (
+                  <TypewriterText text={websiteContent.heroText} speed={50} />
+                ) : (
+                  <div style={{
+                    width: '200px',
+                    height: '20px',
+                    background: '#e5e7eb',
+                    borderRadius: '4px'
+                  }} />
+                )}
+              </div>
+              <div style={{
+                fontSize: '14px',
+                color: '#6b7280',
+                opacity: animationStage >= 3 ? 1 : 0,
+                transform: animationStage >= 3 ? 'translateY(0)' : 'translateY(10px)',
+                transition: 'all 0.6s ease 0.5s'
+              }}>
+                {websiteContent.marketingCopy || '████████████████████████'}
+              </div>
+            </div>
+
+            {/* Products Section */}
+            <div style={{
+              padding: '20px',
+              background: 'white'
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '10px'
+              }}>
+                {[0, 1, 2].map(index => {
+                  const product = websiteContent.products[index];
+                  const shouldShow = animationStage >= 2 + (index === 0 ? 0 : index === 1 ? 1 : 1);
+                  
+                  return (
+                    <div key={index} style={{
+                      background: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      textAlign: 'center',
+                      opacity: shouldShow ? 1 : 0.3,
+                      transform: shouldShow ? 'scale(1)' : 'scale(0.9)',
+                      transition: `all 0.6s ease ${index * 0.2}s`
+                    }}>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: '#1f2937',
+                        marginBottom: '4px'
+                      }}>
+                        {product?.name || '████████'}
+                      </div>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: websiteContent.colors.primary
+                      }}>
+                        {product?.price || '███'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Live Visitor Indicator */}
+            {websiteContent.isReady && (
+              <div style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: 'rgba(16, 185, 129, 0.9)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '12px',
+                fontSize: '10px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                animation: 'fadeInBounce 0.6s ease',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              }}>
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  background: 'white',
+                  borderRadius: '50%',
+                  animation: 'pulse 2s infinite'
+                }} />
+                {currentVisitors} online
+              </div>
+            )}
+
+            {/* Magic Moment Effect */}
+            {currentVisitors > 0 && websiteContent.isReady && (
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '2px solid #10b981',
+                borderRadius: '50%',
+                width: '100px',
+                height: '100px',
+                animation: 'magicPulse 2s ease-out',
+                pointerEvents: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px'
+              }}>
+                ✨
+              </div>
+            )}
+          </div>
+        ) : isGenerating ? (
+          // Other generation stages
+          <div style={{ textAlign: 'center', color: theme.colors.textGray }}>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              border: '4px solid #e5e7eb',
+              borderTop: '4px solid #3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 16px'
+            }} />
+            <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+              {generationStage === 'analyzing' ? 'Analyzing your business opportunity...' : 
+               generationStage === 'researching' ? 'Researching your target market...' : 
+               'Preparing your business...'}
+            </p>
+            <p style={{ fontSize: '14px' }}>
+              Your website preview will appear soon
+            </p>
+          </div>
+        ) : (
+          // Completed website iframe
           <>
             <iframe
               src={websiteUrl}
@@ -527,7 +640,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
 };
 
 // --- COMPONENT: AI Activity Feed ---
-const AIActivityFeed = ({ isGenerating = false, generationStage = null, streamingContent = '', businessConcept = null }) => {
+const AIActivityFeed = ({ isGenerating = false, generationStage = null, generationActivities = [] }) => {
   const [activities, setActivities] = useState([]);
 
   // Generation stage activities for real-time progress
@@ -544,47 +657,73 @@ const AIActivityFeed = ({ isGenerating = false, generationStage = null, streamin
     'building': [
       { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
       { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
-      { type: 'build', text: businessConcept ? `Building "${businessConcept.businessName}" ✅` : 'Building your website ✅', icon: '🏗️', completed: true },
-      { type: 'build', text: 'Creating your products...', icon: '📦', inProgress: true }
+      { type: 'build', text: 'Building website skeleton ✅', icon: '🏗️', completed: true },
+      { type: 'build', text: 'Adding business name and colors...', icon: '🎨', inProgress: true },
+      { type: 'build', text: 'Creating hero content...', icon: '✍️', inProgress: false },
+      { type: 'build', text: 'Generating products...', icon: '📦', inProgress: false }
     ],
     'finalizing': [
       { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
       { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
-      { type: 'build', text: businessConcept ? `Built "${businessConcept.businessName}" ✅` : 'Building your website ✅', icon: '🏗️', completed: true },
-      { type: 'build', text: 'Creating your products ✅', icon: '📦', completed: true },
+      { type: 'build', text: 'Building website skeleton ✅', icon: '🏗️', completed: true },
+      { type: 'build', text: 'Website design complete ✅', icon: '�', completed: true },
+      { type: 'build', text: 'Content generation complete ✅', icon: '✍️', completed: true },
+      { type: 'build', text: 'Products created ✅', icon: '📦', completed: true },
       { type: 'finalize', text: 'Setting up payment processing...', icon: '💳', inProgress: true }
     ],
     'complete': [
-      { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
-      { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
-      { type: 'build', text: businessConcept ? `Built "${businessConcept.businessName}" ✅` : 'Built your website ✅', icon: '🏗️', completed: true },
-      { type: 'build', text: 'Created your products ✅', icon: '📦', completed: true },
-      { type: 'finalize', text: 'Your business is ready! ✅', icon: '🚀', completed: true }
+      { type: 'analyze', text: 'Business analysis complete ✅', icon: '🧠', completed: true },
+      { type: 'research', text: 'Market research complete ✅', icon: '🔍', completed: true },
+      { type: 'build', text: 'Website launched ✅', icon: '🚀', completed: true },
+      { type: 'finalize', text: 'Payment system active ✅', icon: '�', completed: true },
+      { type: 'live', text: 'Your business is live and ready! ✅', icon: '🎉', completed: true }
     ]
   };
 
   // Set activities based on generation stage
   useEffect(() => {
     if (isGenerating && generationStage && generationStages[generationStage]) {
-      let stageActivities = [...generationStages[generationStage]];
-      
-      // Add streaming content indicator if we have streaming data
-      if (streamingContent && generationStage === 'building') {
-        stageActivities = stageActivities.map((activity, index) => {
-          if (activity.inProgress && activity.type === 'build') {
-            return {
-              ...activity,
-              text: 'Generating website content in real-time...',
-              streamingText: streamingContent.length > 100 ? 
-                streamingContent.substring(streamingContent.length - 100) + '...' : 
-                streamingContent
-            };
-          }
-          return activity;
-        });
+      if (generationStage === 'building') {
+        // Special timeline for building stage to match website animation
+        setActivities([
+          { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
+          { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
+          { type: 'build', text: 'Creating website skeleton...', icon: '🏗️', inProgress: true }
+        ]);
+
+        // Timeline to match website building animation
+        setTimeout(() => {
+          setActivities(prev => prev.map(item => 
+            item.icon === '🏗️' ? { ...item, text: 'Website skeleton complete ✅', completed: true, inProgress: false } : item
+          ).concat([{ type: 'build', text: 'Adding business branding...', icon: '🎨', inProgress: true }]));
+        }, 2000);
+
+        setTimeout(() => {
+          setActivities(prev => prev.map(item => 
+            item.icon === '🎨' ? { ...item, text: 'Business branding complete ✅', completed: true, inProgress: false } : item
+          ).concat([{ type: 'build', text: 'Writing hero content...', icon: '✍️', inProgress: true }]));
+        }, 5000);
+
+        setTimeout(() => {
+          setActivities(prev => prev.map(item => 
+            item.icon === '✍️' ? { ...item, text: 'Hero content complete ✅', completed: true, inProgress: false } : item
+          ).concat([{ type: 'build', text: 'Generating products...', icon: '📦', inProgress: true }]));
+        }, 8000);
+
+        setTimeout(() => {
+          setActivities(prev => prev.map(item => 
+            item.icon === '📦' ? { ...item, text: 'Products created ✅', completed: true, inProgress: false } : item
+          ).concat([{ type: 'build', text: 'Optimizing for visitors...', icon: '⚡', inProgress: true }]));
+        }, 12000);
+
+        setTimeout(() => {
+          setActivities(prev => prev.map(item => 
+            item.icon === '⚡' ? { ...item, text: 'Website ready for visitors! ✅', completed: true, inProgress: false } : item
+          ));
+        }, 15000);
+      } else {
+        setActivities(generationStages[generationStage]);
       }
-      
-      setActivities(stageActivities);
     } else if (!isGenerating) {
       // Default activities when not generating
       const defaultActivities = [
@@ -615,7 +754,7 @@ const AIActivityFeed = ({ isGenerating = false, generationStage = null, streamin
 
       return () => clearInterval(interval);
     }
-  }, [isGenerating, generationStage, streamingContent, businessConcept]);
+  }, [isGenerating, generationStage]);
 
   return (
     <div style={{
@@ -697,35 +836,6 @@ const AIActivityFeed = ({ isGenerating = false, generationStage = null, streamin
                     </span>
                   )}
                 </p>
-                
-                {/* Show streaming content for building activities */}
-                {activity.streamingText && (
-                  <div style={{
-                    marginTop: '8px',
-                    padding: '8px 12px',
-                    background: '#f3f4f6',
-                    borderRadius: '6px',
-                    fontSize: '11px',
-                    fontFamily: 'monospace',
-                    color: theme.colors.textGray,
-                    maxHeight: '60px',
-                    overflow: 'hidden',
-                    position: 'relative'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '8px',
-                      background: '#10b981',
-                      width: '4px',
-                      height: '4px',
-                      borderRadius: '50%',
-                      animation: 'pulse 1s infinite'
-                    }} />
-                    {activity.streamingText}
-                  </div>
-                )}
-                
                 <p style={{ fontSize: '13px', color: theme.colors.textGray }}>
                   {activity.time || (isCompleted ? 'Completed' : isInProgress ? 'In progress...' : 'Just now')}
                 </p>
@@ -884,12 +994,6 @@ const NextSteps = ({ onComplete }) => {
 const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete }) => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [totalEarned, setTotalEarned] = useState(0);
-  const [streamingData, setStreamingData] = useState({
-    businessConcept: null,
-    websiteContent: null,
-    streamingContent: '',
-    currentStage: null
-  });
   
   // Determine if business is being generated
   const isGenerating = session?.stage && !['complete', 'error'].includes(session.stage);
@@ -901,110 +1005,6 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     totalRevenue: business?.total_revenue || 0,
     projectedRevenue: 2100,
     visitors: isGenerating ? 0 : 23
-  };
-
-  // Handle streaming generation data
-  useEffect(() => {
-    if (isGenerating && session?.id && business?.id && !streamingData.businessConcept) {
-      startStreamingGeneration();
-    }
-  }, [isGenerating, session?.id, business?.id]);
-
-  const startStreamingGeneration = async () => {
-    try {
-      const response = await fetch('/api/generate-business-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: session.id,
-          businessId: business.id,
-          formData: business.form_data
-        })
-      });
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              handleStreamingData(data);
-            } catch (e) {
-              console.error('Error parsing streaming data:', e);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Streaming generation error:', error);
-    }
-  };
-
-  const handleStreamingData = (data) => {
-    switch (data.type) {
-      case 'concept_chunk':
-        setStreamingData(prev => ({
-          ...prev,
-          streamingContent: data.accumulated
-        }));
-        break;
-        
-      case 'concept_complete':
-        setStreamingData(prev => ({
-          ...prev,
-          businessConcept: data.concept,
-          streamingContent: ''
-        }));
-        break;
-        
-      case 'website_chunk':
-        setStreamingData(prev => ({
-          ...prev,
-          streamingContent: data.accumulated
-        }));
-        
-        // Try to parse partial JSON for live updates
-        try {
-          const partialData = JSON.parse(data.accumulated);
-          if (partialData.hero || partialData.features) {
-            setStreamingData(prev => ({
-              ...prev,
-              websiteContent: partialData
-            }));
-          }
-        } catch (e) {
-          // Partial JSON, continue streaming
-        }
-        break;
-        
-      case 'complete':
-        setStreamingData(prev => ({
-          ...prev,
-          websiteContent: data.businessData.website,
-          streamingContent: ''
-        }));
-        break;
-        
-      case 'progress':
-        setStreamingData(prev => ({
-          ...prev,
-          currentStage: data.stage
-        }));
-        break;
-    }
   };
 
   // Simulate earnings for completed businesses
@@ -1103,18 +1103,14 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           subdomain={businessData.subdomain}
           visitors={businessData.visitors}
           isGenerating={isGenerating}
-          generationStage={streamingData.currentStage || generationStage}
-          businessConcept={streamingData.businessConcept}
-          websiteContent={streamingData.websiteContent}
-          streamingContent={streamingData.streamingContent}
+          generationStage={generationStage}
+          business={business}
         />
 
         {/* AI Activity with Generation Progress */}
         <AIActivityFeed 
           isGenerating={isGenerating}
-          generationStage={streamingData.currentStage || generationStage}
-          streamingContent={streamingData.streamingContent}
-          businessConcept={streamingData.businessConcept}
+          generationStage={generationStage}
         />
 
         {/* Show success predictor and next steps only after generation */}
@@ -1192,6 +1188,52 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeInBounce {
+          0% {
+            opacity: 0;
+            transform: translateY(-10px) scale(0.8);
+          }
+          50% {
+            opacity: 1;
+            transform: translateY(-2px) scale(1.1);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes magicPulse {
+          0% {
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 1;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 0.8;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0;
+          }
+        }
+
+        @keyframes slideInUp {
+          0% {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          100% {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+
+        @keyframes colorShift {
+          0% { background-color: #6b7280; }
+          100% { background-color: #3b82f6; }
         }
       `}</style>
     </div>

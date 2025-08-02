@@ -119,7 +119,14 @@ const MoneyHero = ({ totalEarned = 0, projectedThisWeek = 0, canCashOut = false 
 const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, generationStage = null }) => {
   const [currentVisitors, setCurrentVisitors] = useState(visitors);
   const [generationProgress, setGenerationProgress] = useState(0);
-  const websiteUrl = `https://${subdomain}.launchfly.ai`;
+  const [buildingElements, setBuildingElements] = useState({
+    header: false,
+    hero: false,
+    features: false,
+    products: false,
+    footer: false
+  });
+  const websiteUrl = `https://app.launchfly.ai/sites/${subdomain}/`;
   
   // Simulate live visitors
   useEffect(() => {
@@ -155,6 +162,35 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
       }, 100);
       
       return () => clearInterval(interval);
+    }
+  }, [isGenerating, generationStage]);
+
+  // Progressive website building animation
+  useEffect(() => {
+    if (isGenerating && generationStage === 'building') {
+      // Simulate building elements one by one
+      const buildSequence = [
+        { element: 'header', delay: 1000 },
+        { element: 'hero', delay: 2500 },
+        { element: 'features', delay: 4000 },
+        { element: 'products', delay: 5500 },
+        { element: 'footer', delay: 7000 }
+      ];
+
+      buildSequence.forEach(({ element, delay }) => {
+        setTimeout(() => {
+          setBuildingElements(prev => ({ ...prev, [element]: true }));
+        }, delay);
+      });
+    } else if (!isGenerating) {
+      // Reset building elements when not generating
+      setBuildingElements({
+        header: false,
+        hero: false,
+        features: false,
+        products: false,
+        footer: false
+      });
     }
   }, [isGenerating, generationStage]);
 
@@ -284,25 +320,232 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, isGenerating = false, genera
         background: isGenerating ? '#f3f4f6' : '#f5f5f5',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        overflow: 'hidden'
       }}>
         {isGenerating ? (
-          <div style={{ textAlign: 'center', color: theme.colors.textGray }}>
+          /* Progressive Website Building */
+          <div style={{
+            width: '100%',
+            height: '100%',
+            position: 'relative',
+            background: 'white',
+            transform: 'scale(0.7)',
+            transformOrigin: 'center center',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            {/* Building Animation Overlay */}
             <div style={{
-              width: '60px',
-              height: '60px',
-              border: '4px solid #e5e7eb',
-              borderTop: '4px solid #3b82f6',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 16px'
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(45deg, transparent 30%, rgba(59, 130, 246, 0.1) 50%, transparent 70%)',
+              animation: generationStage === 'building' ? 'shimmer 2s infinite' : 'none',
+              zIndex: 10
             }} />
-            <p style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-              {generationStage === 'building' ? 'Designing your website...' : 'Preparing your business...'}
-            </p>
-            <p style={{ fontSize: '14px' }}>
-              Your website will appear here once it's ready
-            </p>
+
+            {/* Header Section */}
+            <div style={{
+              height: '60px',
+              background: buildingElements.header ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : '#f1f5f9',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 20px',
+              opacity: buildingElements.header ? 1 : 0.3,
+              transition: 'all 0.8s ease-in-out'
+            }}>
+              {buildingElements.header && (
+                <>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    background: 'white',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px'
+                  }}>🚀</div>
+                  <div style={{ marginLeft: '12px', color: 'white', fontSize: '14px', fontWeight: '600' }}>
+                    Your Business
+                  </div>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px' }}>
+                    <div style={{ width: '60px', height: '24px', background: 'rgba(255,255,255,0.2)', borderRadius: '4px' }} />
+                    <div style={{ width: '60px', height: '24px', background: 'rgba(255,255,255,0.2)', borderRadius: '4px' }} />
+                  </div>
+                </>
+              )}
+              {!buildingElements.header && generationStage === 'building' && (
+                <div style={{ color: '#64748b', fontSize: '12px' }}>Creating header...</div>
+              )}
+            </div>
+
+            {/* Hero Section */}
+            <div style={{
+              height: '120px',
+              background: buildingElements.hero ? 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' : '#f8fafc',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+              opacity: buildingElements.hero ? 1 : 0.3,
+              transition: 'all 0.8s ease-in-out'
+            }}>
+              {buildingElements.hero && (
+                <>
+                  <div style={{
+                    width: '80%',
+                    height: '16px',
+                    background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)',
+                    borderRadius: '8px',
+                    marginBottom: '8px'
+                  }} />
+                  <div style={{
+                    width: '60%',
+                    height: '12px',
+                    background: '#cbd5e1',
+                    borderRadius: '6px',
+                    marginBottom: '12px'
+                  }} />
+                  <div style={{
+                    width: '100px',
+                    height: '32px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)',
+                    borderRadius: '16px'
+                  }} />
+                </>
+              )}
+              {!buildingElements.hero && buildingElements.header && (
+                <div style={{ color: '#64748b', fontSize: '12px' }}>Adding hero section...</div>
+              )}
+            </div>
+
+            {/* Features Section */}
+            <div style={{
+              height: '80px',
+              background: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              padding: '16px',
+              opacity: buildingElements.features ? 1 : 0.3,
+              transition: 'all 0.8s ease-in-out',
+              borderTop: '1px solid #f1f5f9'
+            }}>
+              {buildingElements.features && (
+                <>
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        background: `hsl(${200 + i * 40}, 70%, 60%)`,
+                        borderRadius: '50%'
+                      }} />
+                      <div style={{
+                        width: '40px',
+                        height: '8px',
+                        background: '#e2e8f0',
+                        borderRadius: '4px'
+                      }} />
+                    </div>
+                  ))}
+                </>
+              )}
+              {!buildingElements.features && buildingElements.hero && (
+                <div style={{ color: '#64748b', fontSize: '12px' }}>Building features...</div>
+              )}
+            </div>
+
+            {/* Products Section */}
+            <div style={{
+              height: '60px',
+              background: '#fafafa',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '12px',
+              padding: '12px',
+              opacity: buildingElements.products ? 1 : 0.3,
+              transition: 'all 0.8s ease-in-out'
+            }}>
+              {buildingElements.products && (
+                <>
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} style={{
+                      width: '80px',
+                      height: '36px',
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <div style={{
+                        width: '60px',
+                        height: '8px',
+                        background: '#cbd5e1',
+                        borderRadius: '4px'
+                      }} />
+                    </div>
+                  ))}
+                </>
+              )}
+              {!buildingElements.products && buildingElements.features && (
+                <div style={{ color: '#64748b', fontSize: '12px' }}>Creating products...</div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              height: '40px',
+              background: buildingElements.footer ? '#1f2937' : '#f1f5f9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: buildingElements.footer ? 1 : 0.3,
+              transition: 'all 0.8s ease-in-out'
+            }}>
+              {buildingElements.footer && (
+                <div style={{
+                  width: '120px',
+                  height: '8px',
+                  background: '#6b7280',
+                  borderRadius: '4px'
+                }} />
+              )}
+              {!buildingElements.footer && buildingElements.products && (
+                <div style={{ color: '#64748b', fontSize: '12px' }}>Finalizing footer...</div>
+              )}
+            </div>
+
+            {/* Building Progress Indicator */}
+            {generationStage === 'building' && (
+              <div style={{
+                position: 'absolute',
+                bottom: '10px',
+                right: '10px',
+                background: 'rgba(59, 130, 246, 0.9)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: '600'
+              }}>
+                Building... {Math.round((Object.values(buildingElements).filter(Boolean).length / 5) * 100)}%
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -348,22 +591,23 @@ const AIActivityFeed = ({ isGenerating = false, generationStage = null, generati
     'building': [
       { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
       { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
-      { type: 'build', text: 'Building your website ✅', icon: '🏗️', completed: true },
-      { type: 'build', text: 'Creating your products...', icon: '📦', inProgress: true }
+      { type: 'build', text: 'Creating website header and navigation ✅', icon: '🏗️', completed: true },
+      { type: 'build', text: 'Building hero section and main content ✅', icon: '🎨', completed: true },
+      { type: 'build', text: 'Adding features and product sections...', icon: '📦', inProgress: true }
     ],
     'finalizing': [
       { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
       { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
-      { type: 'build', text: 'Building your website ✅', icon: '🏗️', completed: true },
-      { type: 'build', text: 'Creating your products ✅', icon: '📦', completed: true },
+      { type: 'build', text: 'Website design completed ✅', icon: '🏗️', completed: true },
+      { type: 'build', text: 'Products and content finalized ✅', icon: '📦', completed: true },
       { type: 'finalize', text: 'Setting up payment processing...', icon: '💳', inProgress: true }
     ],
     'complete': [
       { type: 'analyze', text: 'Analyzing your skills and experience ✅', icon: '🧠', completed: true },
       { type: 'research', text: 'Researching your target market ✅', icon: '🔍', completed: true },
-      { type: 'build', text: 'Building your website ✅', icon: '🏗️', completed: true },
-      { type: 'build', text: 'Creating your products ✅', icon: '📦', completed: true },
-      { type: 'finalize', text: 'Your business is ready! ✅', icon: '🚀', completed: true }
+      { type: 'build', text: 'Website fully built and deployed ✅', icon: '🏗️', completed: true },
+      { type: 'build', text: 'Products and pricing configured ✅', icon: '📦', completed: true },
+      { type: 'finalize', text: 'Your business is ready to accept orders! ✅', icon: '🚀', completed: true }
     ]
   };
 
@@ -834,6 +1078,22 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+
+        @keyframes slideInUp {
+          0% { 
+            opacity: 0; 
+            transform: translateY(20px); 
+          }
+          100% { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
         }
       `}</style>
     </div>

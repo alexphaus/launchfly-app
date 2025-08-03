@@ -243,7 +243,8 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
                       'Building your website...'
                     )}
                     {generationStage === 'finalizing' && 'Adding final touches...'}
-                    {generationStage === 'pending' && 'Starting AI systems...'}
+                    {(generationStage === 'pending' || generationStage === 'queued') && 'Starting AI systems...'}
+                    {!generationStage && 'Preparing your systems...'}
                   </span>
                 </div>
               ) : (

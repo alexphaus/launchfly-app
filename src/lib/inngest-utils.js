@@ -9,7 +9,11 @@ import { inngest } from "./inngest";
  */
 export async function triggerBusinessGeneration(sessionId, businessId, formData) {
   try {
-    const event = await inngest.send({
+    console.log('=== INNGEST UTILS: Triggering business generation ===');
+    console.log('Session ID:', sessionId);
+    console.log('Business ID:', businessId);
+    
+    const eventData = {
       name: "business/generation.requested",
       data: {
         sessionId,
@@ -17,26 +21,36 @@ export async function triggerBusinessGeneration(sessionId, businessId, formData)
         formData,
         timestamp: new Date().toISOString()
       },
-    });
+    };
     
-    console.log('Business generation triggered:', event.ids[0]);
+    console.log('Sending Inngest event:', eventData);
+    const event = await inngest.send(eventData);
+    
+    console.log('Inngest event sent successfully:', event);
     return { success: true, eventId: event.ids[0] };
   } catch (error) {
-    console.error('Failed to trigger business generation:', error);
+    console.error('=== INNGEST UTILS: Failed to trigger business generation ===');
+    console.error('Error details:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     
     // Trigger error handler
-    await inngest.send({
-      name: "business/generation.failed",
-      data: {
-        sessionId,
-        businessId,
-        error: {
-          message: error.message,
-          stack: error.stack
-        },
-        originalEventData: { sessionId, businessId, formData }
-      }
-    });
+    try {
+      await inngest.send({
+        name: "business/generation.failed",
+        data: {
+          sessionId,
+          businessId,
+          error: {
+            message: error.message,
+            stack: error.stack
+          },
+          originalEventData: { sessionId, businessId, formData }
+        }
+      });
+    } catch (errorHandlerError) {
+      console.error('Failed to trigger error handler:', errorHandlerError);
+    }
     
     throw error;
   }

@@ -34,8 +34,8 @@ export default function DashboardPage() {
   }, [sessionData?.stage]);
 
   useEffect(() => {
-    // Trigger generation if session is pending
-    if (sessionData?.stage === 'pending' && businessData && !generationTriggered.current) {
+    // Trigger generation if session is pending or queued
+    if ((sessionData?.stage === 'pending' || sessionData?.stage === 'queued') && businessData && !generationTriggered.current) {
       generationTriggered.current = true;
       startBusinessGeneration();
     }

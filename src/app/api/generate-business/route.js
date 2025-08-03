@@ -17,9 +17,13 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('Starting business generation via Inngest:', { sessionId, businessId });
+    console.log('=== INNGEST API: Starting business generation ===');
+    console.log('Session ID:', sessionId);
+    console.log('Business ID:', businessId);
+    console.log('Form Data keys:', Object.keys(formData || {}));
     
     // Initialize status immediately
+    console.log('Setting business status to generating...');
     await supabase
       .from('businesses')
       .update({
@@ -27,6 +31,7 @@ export async function POST(request) {
       })
       .eq('id', businessId);
 
+    console.log('Setting session stage to queued...');
     await supabase
       .from('sessions')
       .update({ 
@@ -36,9 +41,10 @@ export async function POST(request) {
       .eq('id', sessionId);
 
     // Use utility function to trigger the Inngest function
+    console.log('Triggering Inngest function...');
     const result = await triggerBusinessGeneration(sessionId, businessId, formData);
     
-    console.log('Inngest event triggered:', result.eventId);
+    console.log('Inngest event triggered successfully:', result.eventId);
     
     // Return immediately - the processing will happen in the background
     return Response.json({ 

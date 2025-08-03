@@ -37,18 +37,6 @@ export default function Hero({
         {/* Animated Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-transparent to-blue-500/20 animate-pulse"></div>
         
-        {/* Grid Pattern - now more subtle */}
-        <div className="absolute inset-0 opacity-5">
-          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <defs>
-              <pattern id="heroGrid" width="10" height="10" patternUnits="userSpaceOnUse">
-                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" strokeWidth="0.3"/>
-              </pattern>
-            </defs>
-            <rect width="100" height="100" fill="url(#heroGrid)" />
-          </svg>
-        </div>
-
         {/* Floating Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-20 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl animate-float"></div>

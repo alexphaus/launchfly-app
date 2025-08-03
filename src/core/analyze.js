@@ -103,8 +103,8 @@ export async function analyzeOpportunity(userData, sessionId) {
     })
     .eq('id', sessionId);
   
-  // Extract relevant data from user input
-  const { name, skills, businessType, goal, preferences } = userData;
+  // Extract relevant data from user input (businessType removed to reduce friction)
+  const { name, skills, goal, preferences } = userData;
   
   console.log('Setting stage to researching');
   // Update session to show we're researching
@@ -119,31 +119,34 @@ export async function analyzeOpportunity(userData, sessionId) {
   try {
     // Use AI to analyze the best market opportunity based on user data
     const prompt = `
-      As a business strategist, analyze these skills and preferences to identify the most profitable business opportunity:
+      As a business strategist, analyze these user inputs to identify the most profitable business opportunity that matches their skills and goals:
       
       Name: ${name}
       Skills/Interests: ${skills}
-      Business Type: ${businessType}
       Goal: ${goal}
-      Preferences: ${preferences || 'None'}
+      Preferences: ${preferences || 'None specified'}
       
-      Find a specific, profitable market niche that:
-      1. Matches their skills
-      2. Has proven customer demand
-      3. Can be quickly validated
-      4. Has low competition or a unique angle
-      5. Can generate revenue quickly
+      Based on their skills and goals, determine the best business opportunity by finding a specific, profitable market niche that:
+      1. Leverages their existing skills and interests
+      2. Has proven customer demand and market viability
+      3. Can be quickly validated and started
+      4. Has reasonable competition or a unique differentiation angle
+      5. Can generate revenue within the first few months
+      6. Aligns with their stated goal and preferences
+      
+      IMPORTANT: Focus on identifying the core business opportunity without specifying whether it should be "e-commerce", "service-based", "agency", etc. The business model will be determined separately by AI based on the opportunity characteristics.
       
       Return a JSON object with:
       {
-        "businessName": "Creative and memorable business name",
-        "niche": "Specific target market",
-        "problem": "Clear problem being solved",
-        "solution": "How this business solves it",
-        "uniqueAdvantage": "What makes this opportunity special",
-        "profitPotential": "Estimated monthly revenue range",
-        "validationStrategy": "How to quickly test this business idea",
-        "confidence": 0.85 // 0-1 score of how promising this opportunity is
+        "businessName": "Creative and memorable business name that reflects the opportunity",
+        "niche": "Specific target market/industry segment", 
+        "problem": "Clear, specific problem this business would solve",
+        "solution": "How this business uniquely solves the problem",
+        "targetMarket": "Primary customer segment who would pay for this solution",
+        "uniqueAdvantage": "What makes this opportunity special based on user's skills/background",
+        "profitPotential": "Realistic monthly revenue estimate (e.g. '$2,500 monthly')",
+        "validationStrategy": "Specific way to quickly test market demand for this idea",
+        "confidence": 0.85 // 0-1 score based on market opportunity + user skill fit
       }
     `;
 

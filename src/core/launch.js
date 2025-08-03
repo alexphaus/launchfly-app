@@ -118,10 +118,12 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     const products = await createProducts(opportunity);
     businessData.products = products;
     
-    // Determine and store business model for frontend adaptation
-    const businessModel = determineBusinessModel(opportunity);
+    // Determine and store business model for frontend adaptation (AI-powered)
+    const businessModel = await determineBusinessModel(opportunity);
     businessData.businessModel = businessModel;
     console.log('Business model:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
+    console.log('AI confidence:', businessModel.confidence);
+    console.log('Reasoning:', businessModel.reasoning);
     
     // Add e-commerce settings for cart functionality (always include for flexibility)
     businessData.ecommerceSettings = {
@@ -461,90 +463,81 @@ async function createProducts(opportunity) {
   try {
     console.log('Starting product creation for:', opportunity.businessName);
     
-    // Determine if this should be an e-commerce business or service business
-    const businessModel = determineBusinessModel(opportunity);
-    console.log('Business model determined:', businessModel);
+    // Determine if this should be an e-commerce business or service business (AI-powered)
+    const businessModel = await determineBusinessModel(opportunity);
+    console.log('Business model determined:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
+    console.log('AI reasoning:', businessModel.reasoning);
     
     const prompt = `
-      Create ${businessModel.isEcommerce ? 'between 8-20' : '3-5'} compelling ${businessModel.isEcommerce ? 'physical/digital products' : 'service offerings'} for this business:
-      ${JSON.stringify(opportunity)}
+      Create ${businessModel.isEcommerce ? 'between 8-20' : '3-5'} compelling ${businessModel.isEcommerce ? 'physical/digital products' : 'service offerings'} for this business opportunity:
       
-      Business Model: ${businessModel.isEcommerce ? 'E-commerce (selling products)' : 'Service-based (providing services)'}
-      Business Type: ${opportunity.businessType || 'Not specified'}
+      Business Name: ${opportunity.businessName || 'Not specified'}
       Niche: ${opportunity.niche || 'Not specified'}
+      Solution: ${opportunity.solution || 'Not specified'}
+      Problem Being Solved: ${opportunity.problem || 'Not specified'}
+      Target Market: ${opportunity.targetMarket || 'Not specified'}
+      
+      Business Model Detected: ${businessModel.isEcommerce ? 'E-COMMERCE (selling products)' : 'SERVICE-BASED (providing services)'}
+      AI Confidence: ${businessModel.confidence || 0.8}
+      Categories: ${businessModel.productCategories?.join(', ') || 'General'}
       
       ${businessModel.isEcommerce ? `
-      This is an E-COMMERCE business. Create a diverse product catalog with:
-      - ${businessModel.productCategories.join(', ')}
-      - Mix of different price points (budget, mid-range, premium)
-      - Include product variants where appropriate
-      - Add inventory status (inStock: true/false)
-      - Include product images (use relevant stock photo URLs)
-      - Add product categories for organization
-      - Include detailed product specifications
-      - Set appropriate stock quantities (stock: number)
+      This is an E-COMMERCE business. Create a diverse product catalog with these characteristics:
       
-      Each product should have:
-      - name: Clear product name
-      - price: Appropriate price as number (not string with $)
-      - originalPrice: Optional higher price for sales (number)
-      - description: Detailed product description
-      - image: Stock photo URL relevant to the product
-      - category: Product category
-      - inStock: boolean
-      - stock: number of items available
-      - features: Array of key product features
+      PRODUCT REQUIREMENTS:
+      - Product categories: ${businessModel.productCategories.join(', ')}
+      - Mix of price points: budget ($15-50), mid-range ($50-150), premium ($150+)
+      - Include seasonal/trending items where relevant
+      - Add realistic stock levels and availability
+      - Use high-quality product images from Unsplash
+      - Include detailed specifications and features
+      - Add sale items (20-30% of products should be on sale)
+      
+      PRODUCT STRUCTURE (each product needs):
+      - id: unique identifier (e.g., "prod-001")
+      - name: Clear, appealing product name
+      - price: Current price (number, not string)
+      - originalPrice: Higher price if on sale (number, optional)
+      - description: Detailed product description (2-3 sentences)
+      - image: Relevant Unsplash image URL
+      - category: One of the provided categories
+      - inStock: true/false
+      - stock: Number of items available (0-100)
+      - features: Array of 3-5 key product features
       - specifications: Object with technical details
-      - isOnSale: boolean (true if originalPrice exists)
-      ` : `
-      This is a SERVICE business. Create professional service packages with:
-      - Different service tiers (basic, premium, enterprise)
-      - Clear value propositions for each service
-      - Appropriate pricing for the target market
-      - Service deliverables and timelines
+      - isOnSale: true if originalPrice exists
       
-      Each service should have:
-      - name: Service package name
+      Focus on products that would realistically sell in this niche and appeal to the target market.
+      ` : `
+      This is a SERVICE business. Create professional service packages with these characteristics:
+      
+      SERVICE REQUIREMENTS:
+      - Different tiers: Basic, Professional, Premium/Enterprise
+      - Clear value propositions for each tier
+      - Realistic pricing for the target market and niche
+      - Specific deliverables and timelines
+      - Progressive feature sets (basic → premium)
+      
+      SERVICE STRUCTURE (each service needs):
+      - id: unique identifier (e.g., "svc-001") 
+      - name: Professional service package name
       - price: Price as number (not string with $)
-      - description: What's included in this service
-      - deliveryTime: How long the service takes
-      - features: Array of what's included
-      - category: Type of service
-      - popular: boolean (mark one as most popular)
+      - description: What's included in this service (2-3 sentences)
+      - deliveryTime: Realistic completion timeframe
+      - features: Array of 4-6 specific deliverables/benefits
+      - category: Type of service offered
+      - popular: true for the middle tier (most popular)
+      
+      Focus on services that solve the identified problem and deliver clear value to the target market.
       `}
+      
+      IMPORTANT: Base all products/services on the actual business opportunity provided. Make them realistic, specific to the niche, and appealing to the target market.
       
       Return as a JSON object with:
       {
         "businessModel": "${businessModel.isEcommerce ? 'ecommerce' : 'service'}",
-        "products": [
-          ${businessModel.isEcommerce ? `
-          {
-            "id": "unique-id",
-            "name": "Product Name",
-            "price": 99.99,
-            "originalPrice": 119.99,
-            "description": "Detailed product description",
-            "image": "https://images.unsplash.com/relevant-product-image",
-            "category": "Category Name",
-            "inStock": true,
-            "stock": 50,
-            "features": ["Feature 1", "Feature 2", "Feature 3"],
-            "specifications": {"spec1": "value1", "spec2": "value2"},
-            "isOnSale": true
-          }
-          ` : `
-          {
-            "id": "unique-id", 
-            "name": "Service Name",
-            "price": 299,
-            "description": "Service description and what's included",
-            "deliveryTime": "5-7 business days",
-            "features": ["Feature 1", "Feature 2", "Feature 3"],
-            "category": "Service Category",
-            "popular": false
-          }
-          `}
-        ]
+        "totalItems": ${businessModel.isEcommerce ? '12-18' : '3-4'},
+        "products": [/* array of products/services following the structure above */]
       }
     `;
 
@@ -575,7 +568,7 @@ async function createProducts(opportunity) {
     });
     
     // Determine fallback based on business type
-    const businessModel = determineBusinessModel(opportunity);
+    const businessModel = await determineBusinessModel(opportunity);
     
     if (businessModel.isEcommerce) {
       // Fallback e-commerce products
@@ -601,74 +594,172 @@ async function createProducts(opportunity) {
 }
 
 /**
- * Determines if a business should be e-commerce or service-based
+ * Determines if a business should be e-commerce or service-based using AI
  * 
  * @param {Object} opportunity - The analyzed business opportunity
  * @returns {Object} Business model information
  */
-function determineBusinessModel(opportunity) {
+async function determineBusinessModel(opportunity) {
+  try {
+    console.log('Using AI to determine business model for:', opportunity.businessName);
+    
+    const prompt = `
+      Analyze this business opportunity and determine if it should be an E-COMMERCE business (selling physical/digital products) or a SERVICE business (providing services/consulting):
+      
+      Business Name: ${opportunity.businessName || 'Not specified'}
+      Niche: ${opportunity.niche || 'Not specified'}
+      Solution: ${opportunity.solution || 'Not specified'}
+      Problem: ${opportunity.problem || 'Not specified'}
+      Target Market: ${opportunity.targetMarket || 'Not specified'}
+      
+      Consider these factors:
+      - Does this business naturally sell physical or digital products?
+      - Would customers expect to "buy items" or "hire services"?
+      - Is this more about tangible goods or expertise/time?
+      - What would be the primary revenue model?
+      
+      E-COMMERCE examples: clothing store, electronics shop, book publisher, supplement brand, jewelry maker, toy store, home decor, beauty products
+      SERVICE examples: consulting, coaching, marketing agency, web design, accounting, legal services, photography, event planning, cleaning, tutoring
+      
+      Return a JSON object with:
+      {
+        "businessModel": "ecommerce" or "service",
+        "confidence": 0.85, // 0-1 confidence score
+        "reasoning": "Brief explanation of why this classification was chosen",
+        "productCategories": ["Category1", "Category2"] // Only if ecommerce, empty array if service
+      }
+    `;
+
+    const response = await callOpenAIWithTimeout(() =>
+      openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a business model analyst expert at determining whether businesses should be e-commerce or service-based." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" }
+      })
+    );
+    
+    const result = JSON.parse(response.choices[0].message.content);
+    const isEcommerce = result.businessModel === 'ecommerce';
+    
+    console.log(`AI determined business model: ${result.businessModel} (confidence: ${result.confidence})`);
+    console.log(`Reasoning: ${result.reasoning}`);
+    
+    return {
+      isEcommerce,
+      productCategories: result.productCategories || [],
+      confidence: result.confidence || 0.8,
+      reasoning: result.reasoning || 'AI classification based on business characteristics'
+    };
+    
+  } catch (error) {
+    console.error("Error determining business model with AI:", error);
+    console.log("Falling back to keyword-based detection");
+    
+    // Fallback to enhanced keyword-based detection
+    return determineBusinessModelFallback(opportunity);
+  }
+}
+
+/**
+ * Fallback keyword-based business model determination
+ * 
+ * @param {Object} opportunity - The analyzed business opportunity
+ * @returns {Object} Business model information
+ */
+function determineBusinessModelFallback(opportunity) {
   const niche = (opportunity.niche || '').toLowerCase();
-  const businessType = (opportunity.businessType || '').toLowerCase();
   const solution = (opportunity.solution || '').toLowerCase();
   const problem = (opportunity.problem || '').toLowerCase();
+  const businessName = (opportunity.businessName || '').toLowerCase();
   
-  // E-commerce indicators
+  // E-commerce indicators (expanded and more specific)
   const ecommerceKeywords = [
-    'retail', 'store', 'shop', 'product', 'goods', 'merchandise', 'inventory',
-    'fashion', 'clothing', 'jewelry', 'electronics', 'gadgets', 'accessories',
-    'home decor', 'furniture', 'tools', 'equipment', 'supplies', 'books',
-    'toys', 'games', 'crafts', 'art supplies', 'beauty', 'cosmetics',
-    'supplements', 'food', 'beverage', 'kitchenware', 'appliances',
-    'sports equipment', 'fitness gear', 'outdoor gear', 'automotive parts',
-    'pet supplies', 'baby products', 'health products', 'subscription box'
+    // Direct product terms
+    'store', 'shop', 'retail', 'sell', 'product', 'goods', 'merchandise', 'inventory', 'catalog',
+    // Product categories
+    'fashion', 'clothing', 'apparel', 'jewelry', 'accessories', 'shoes', 'bags',
+    'electronics', 'gadgets', 'devices', 'computers', 'phones', 'tech',
+    'home', 'furniture', 'decor', 'kitchen', 'appliances', 'tools', 'equipment',
+    'beauty', 'cosmetics', 'skincare', 'makeup', 'fragrance', 'personal care',
+    'health products', 'supplements', 'vitamins', 'wellness products',
+    'books', 'publishing', 'ebooks', 'courses', 'digital downloads',
+    'toys', 'games', 'sports equipment', 'fitness gear', 'outdoor gear',
+    'food', 'beverage', 'snacks', 'organic', 'gourmet',
+    'automotive', 'car parts', 'motorcycle', 'vehicle accessories',
+    'pet supplies', 'baby products', 'kids items', 'maternity',
+    'art supplies', 'crafts', 'hobbies', 'collectibles',
+    // Business model terms
+    'marketplace', 'e-commerce', 'online store', 'dropshipping', 'wholesale', 'brand'
   ];
   
-  // Service indicators  
+  // Service indicators (expanded and more specific)
   const serviceKeywords = [
-    'consulting', 'service', 'agency', 'coaching', 'training', 'education',
-    'marketing', 'design', 'development', 'freelance', 'professional',
-    'legal', 'accounting', 'financial', 'healthcare', 'therapy', 'fitness trainer',
-    'photography', 'event planning', 'catering', 'cleaning', 'maintenance',
-    'repair', 'installation', 'landscaping', 'tutoring', 'writing',
-    'translation', 'social media management', 'seo', 'content creation'
+    // Direct service terms
+    'service', 'services', 'consulting', 'consultant', 'agency', 'firm',
+    'coaching', 'training', 'education', 'teaching', 'tutoring', 'mentoring',
+    // Professional services
+    'marketing', 'advertising', 'seo', 'social media', 'content creation',
+    'design', 'web design', 'graphic design', 'branding', 'creative',
+    'development', 'software', 'app development', 'programming', 'tech solutions',
+    'legal', 'law', 'attorney', 'lawyer', 'paralegal',
+    'accounting', 'bookkeeping', 'tax', 'financial planning', 'cpa',
+    'healthcare', 'medical', 'therapy', 'counseling', 'wellness',
+    'fitness training', 'personal training', 'nutrition', 'lifestyle',
+    'photography', 'videography', 'media production', 'editing',
+    'event planning', 'wedding planning', 'party planning', 'catering',
+    'cleaning', 'maintenance', 'repair', 'installation', 'handyman',
+    'landscaping', 'gardening', 'lawn care', 'exterior',
+    'real estate', 'property management', 'brokerage',
+    'translation', 'writing', 'copywriting', 'editing', 'proofreading',
+    'research', 'analysis', 'strategy', 'planning', 'optimization',
+    // Service delivery terms
+    'freelance', 'professional', 'expert', 'specialist', 'advisor'
   ];
   
-  const textToCheck = `${niche} ${businessType} ${solution} ${problem}`;
+  const textToCheck = `${niche} ${solution} ${problem} ${businessName}`;
   
   const ecommerceMatches = ecommerceKeywords.filter(keyword => 
     textToCheck.includes(keyword)
-  ).length;
+  );
   
   const serviceMatches = serviceKeywords.filter(keyword => 
     textToCheck.includes(keyword)
-  ).length;
+  );
   
-  const isEcommerce = ecommerceMatches > serviceMatches;
+  const isEcommerce = ecommerceMatches.length > serviceMatches.length;
   
-  // Define product categories based on niche
+  // Generate categories based on detected keywords and niche
   let productCategories = [];
   if (isEcommerce) {
-    if (niche.includes('fashion') || niche.includes('clothing')) {
+    if (textToCheck.includes('fashion') || textToCheck.includes('clothing') || textToCheck.includes('apparel')) {
       productCategories = ['Tops', 'Bottoms', 'Dresses', 'Accessories', 'Shoes'];
-    } else if (niche.includes('tech') || niche.includes('electronics')) {
+    } else if (textToCheck.includes('tech') || textToCheck.includes('electronics') || textToCheck.includes('gadgets')) {
       productCategories = ['Smartphones', 'Laptops', 'Accessories', 'Gadgets', 'Components'];
-    } else if (niche.includes('home') || niche.includes('decor')) {
+    } else if (textToCheck.includes('home') || textToCheck.includes('furniture') || textToCheck.includes('decor')) {
       productCategories = ['Furniture', 'Lighting', 'Decor', 'Storage', 'Kitchen'];
-    } else if (niche.includes('health') || niche.includes('fitness')) {
+    } else if (textToCheck.includes('health') || textToCheck.includes('fitness') || textToCheck.includes('wellness')) {
       productCategories = ['Supplements', 'Equipment', 'Apparel', 'Accessories', 'Recovery'];
-    } else if (niche.includes('beauty') || niche.includes('cosmetics')) {
+    } else if (textToCheck.includes('beauty') || textToCheck.includes('cosmetics') || textToCheck.includes('skincare')) {
       productCategories = ['Skincare', 'Makeup', 'Haircare', 'Fragrance', 'Tools'];
+    } else if (textToCheck.includes('book') || textToCheck.includes('education') || textToCheck.includes('course')) {
+      productCategories = ['Books', 'Courses', 'Guides', 'Resources', 'Templates'];
     } else {
       productCategories = ['Featured', 'Popular', 'New Arrivals', 'Best Sellers', 'Clearance'];
     }
   }
   
+  const confidence = Math.max(ecommerceMatches.length, serviceMatches.length) / Math.max(ecommerceKeywords.length * 0.1, 1);
+  
   return {
     isEcommerce,
     productCategories,
+    confidence: Math.min(confidence, 0.95),
     reasoning: isEcommerce ? 
-      `E-commerce indicators: ${ecommerceMatches}, Service indicators: ${serviceMatches}` :
-      `Service indicators: ${serviceMatches}, E-commerce indicators: ${ecommerceMatches}`
+      `E-commerce classification: Found ${ecommerceMatches.length} product indicators (${ecommerceMatches.slice(0, 3).join(', ')}) vs ${serviceMatches.length} service indicators` :
+      `Service classification: Found ${serviceMatches.length} service indicators (${serviceMatches.slice(0, 3).join(', ')}) vs ${ecommerceMatches.length} product indicators`
   };
 }
 

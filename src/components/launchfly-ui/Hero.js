@@ -1,7 +1,5 @@
 'use client';
 
-import './hero-animations.css';
-
 export default function Hero({ 
   title = "Transform Your Vision Into Reality", 
   subtitle = "Professional solutions tailored to your unique needs", 

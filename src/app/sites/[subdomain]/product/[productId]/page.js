@@ -412,64 +412,6 @@ function ProductPageWithCart() {
 
 export default function ProductPage() {
   const params = useParams();
-  const [businessData, setBusiness] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const supabase = createClientComponentClient();
-
-  useEffect(() => {
-    async function fetchBusiness() {
-      try {
-        const subdomain = await params.subdomain;
-        const { data, error } = await supabase
-          .from('businesses')
-          .select('*')
-          .eq('subdomain', subdomain)
-          .eq('status', 'ready')
-          .single();
-
-        if (!error && data) {
-          setBusiness(data);
-        }
-      } catch (err) {
-        console.error('Error:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchBusiness();
-  }, [params.subdomain, supabase]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const ecommerceSettings = businessData?.business_data?.ecommerceSettings || {
-    shipping: { freeShippingThreshold: 50, standardRate: 5.99, expressRate: 12.99 },
-    tax: { rate: 0.08, included: false },
-    policies: { returns: "30-day returns", shipping: "Ships within 2 business days" },
-    coupons: {
-      'WELCOME10': { discount: 0.10, description: '10% off your order' },
-      'SAVE20': { discount: 0.20, description: '20% off your order' }
-    }
-  };
-
-  return (
-    <CartProvider ecommerceSettings={ecommerceSettings}>
-      <ProductPageWithCart />
-    </CartProvider>
-  );
-}
-
-export default function ProductPage() {
-  const params = useParams();
   const router = useRouter();
   const [businessData, setBusiness] = useState(null);
   const [product, setProduct] = useState(null);

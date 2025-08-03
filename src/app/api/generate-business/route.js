@@ -1,7 +1,6 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
-import { generateBusinessWithAI } from '@/lib/business-generator';
-import { LaunchflyV2 } from '@/core';
+import { triggerBusinessGeneration } from '@/lib/inngest-utils';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,8 +8,8 @@ const supabase = createClient(
 );
 
 /**
- * API route to generate a business using our future-proof architecture
- * Following the principles from future-proof-approach.md
+ * API route to generate a business using Inngest for background processing
+ * This provides better reliability, observability, and error handling
  */
 export async function POST(request) {
   let sessionId, businessId, formData;
@@ -18,9 +17,9 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('Starting business generation via API:', { sessionId, businessId });
+    console.log('Starting business generation via Inngest:', { sessionId, businessId });
     
-    // Initialize status
+    // Initialize status immediately
     await supabase
       .from('businesses')
       .update({
@@ -28,78 +27,32 @@ export async function POST(request) {
       })
       .eq('id', businessId);
 
-    // Update session stage to 'analyzing'
     await supabase
       .from('sessions')
-      .update({ stage: 'analyzing' })
-      .eq('id', sessionId);
-    
-    // Add a small delay to show the analyzing stage
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update session stage to 'researching'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'researching' })
-      .eq('id', sessionId);
-    
-    // Add delay for researching stage
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update session stage to 'building'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'building' })
-      .eq('id', sessionId);
-    
-    // Option 1: Use the legacy generator for backward compatibility
-    const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
-    
-    // Option 2: Use our new unified LaunchflyV2 class (preferred approach)
-    // const launchfly = new LaunchflyV2();
-    // const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
-    
-    // Update session stage to 'finalizing'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'finalizing' })
-      .eq('id', sessionId);
-    
-    // Add delay for finalizing stage
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Update business with generated data
-    await supabase
-      .from('businesses')
-      .update({
-        name: businessData.businessName,
-        subdomain: businessData.domain ? businessData.domain.replace('.com', '').toLowerCase() : `business-${Date.now()}`,
-        business_data: businessData,
-        status: 'ready'
+      .update({ 
+        stage: 'queued',
+        progress: 0 
       })
-      .eq('id', businessId);
-
-    // Mark session as complete
-    await supabase
-      .from('sessions')
-      .update({ stage: 'complete' })
       .eq('id', sessionId);
+
+    // Use utility function to trigger the Inngest function
+    const result = await triggerBusinessGeneration(sessionId, businessId, formData);
     
+    console.log('Inngest event triggered:', result.eventId);
+    
+    // Return immediately - the processing will happen in the background
     return Response.json({ 
       success: true, 
-      businessData 
+      message: "Business generation started",
+      eventId: result.eventId,
+      sessionId,
+      businessId
     });
     
   } catch (error) {
     console.error('Generation API error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      type: error.type,
-      stack: error.stack
-    });
     
-    // Update session to error state using the stored sessionId
+    // Update session to error state
     if (sessionId) {
       try {
         await supabase
@@ -110,7 +63,6 @@ export async function POST(request) {
           })
           .eq('id', sessionId);
           
-        // Also update business status if we have businessId
         if (businessId) {
           await supabase
             .from('businesses')
@@ -124,8 +76,7 @@ export async function POST(request) {
     
     return new Response(JSON.stringify({ 
       error: error.message,
-      code: error.code,
-      type: error.type 
+      success: false
     }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
@@ -133,6 +84,6 @@ export async function POST(request) {
   }
 }
 
-// Set a longer timeout for this endpoint if using Vercel
+// Optimize for serverless
 export const runtime = 'nodejs';
-export const maxDuration = 120; // 2 minutes timeout to handle the full generation process
+export const maxDuration = 30; // Quick response since processing happens in background

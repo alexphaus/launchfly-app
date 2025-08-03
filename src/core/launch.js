@@ -413,7 +413,7 @@ async function generateWebsite(opportunity) {
     const result = JSON.parse(response.choices[0].message.content);
     
     // Enhance result with business-specific visuals if not provided
-    const visuals = getBusinessVisuals(opportunity.niche, opportunity.businessType);
+    const visuals = getBusinessVisuals(opportunity.niche, null);
     if (result.layout) {
       const heroComponent = result.layout.find(component => component.component === 'Hero');
       if (heroComponent && !heroComponent.props.backgroundImage) {
@@ -434,7 +434,7 @@ async function generateWebsite(opportunity) {
     });
     
     // Provide fallback website data with enhanced visuals
-    const visuals = getBusinessVisuals(opportunity.niche, opportunity.businessType);
+    const visuals = getBusinessVisuals(opportunity.niche, null);
     return {
       theme: {
         colors: {
@@ -855,7 +855,7 @@ function generateDomain(businessName) {
 /**
  * Gets business-specific background images and overlays
  */
-function getBusinessVisuals(niche, businessType) {
+function getBusinessVisuals(niche, businessType = null) {
   const visualMap = {
     fitness: {
       background: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
@@ -906,9 +906,9 @@ function getBusinessVisuals(niche, businessType) {
   const lowerNiche = niche?.toLowerCase() || '';
   const lowerType = businessType?.toLowerCase() || '';
   
-  // Check niche first, then business type
+  // Check niche first, then business type (if provided)
   for (const [key, visuals] of Object.entries(visualMap)) {
-    if (lowerNiche.includes(key) || lowerType.includes(key)) {
+    if (lowerNiche.includes(key) || (businessType && lowerType.includes(key))) {
       return visuals;
     }
   }
@@ -1054,7 +1054,7 @@ async function handleLaunchError(sessionId, businessId) {
  * @returns {Array} Default layout configuration
  */
 function generateDefaultLayout(opportunity, visuals = null) {
-  const businessVisuals = visuals || getBusinessVisuals(opportunity.niche, opportunity.businessType);
+  const businessVisuals = visuals || getBusinessVisuals(opportunity.niche, null);
   
   return [
     {

@@ -174,18 +174,19 @@ export async function analyzeOpportunity(userData, sessionId) {
     
     // Provide fallback data if AI fails
     return {
-      businessName: `${name}'s ${businessType}`,
-      niche: "General market",
-      problem: "Customer needs in this industry",
-      solution: "Professional services",
-      uniqueAdvantage: "Personal expertise and attention",
-      profitPotential: "$2,000-$5,000/month",
-      validationStrategy: "Direct outreach to potential customers",
+      businessName: `${name}'s Business Venture`,
+      niche: "General market opportunity",
+      problem: "Common customer challenges in this space",
+      solution: "Professional solutions tailored to customer needs",
+      targetMarket: "Small to medium businesses and individuals",
+      uniqueAdvantage: "Personal expertise and dedicated customer service",
+      profitPotential: "$2,000-$5,000 monthly",
+      validationStrategy: "Direct outreach to potential customers for feedback",
       confidence: 0.7,
       quickWins: [
-        "Create a simple landing page",
-        "Reach out to 10 potential customers",
-        "Offer a limited-time launch discount"
+        "Create a simple landing page to test interest",
+        "Reach out to 10 potential customers for market research",
+        "Offer a limited-time launch discount or free consultation"
       ]
     };
   }

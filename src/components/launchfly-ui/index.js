@@ -8,3 +8,15 @@ export { default as ProductGrid } from './ProductGrid';
 export { default as ProductCard } from './ProductCard';
 export { default as CallToAction } from './CallToAction';
 export { default as Footer } from './Footer';
+
+// E-commerce components
+export { 
+  EcommerceProductGrid, 
+  EcommerceProductCard, 
+  CartProvider, 
+  CartContext, 
+  CartIcon, 
+  CartOverlay,
+  CategoryBanner,
+  TrustBadges
+} from './EcommerceComponents';

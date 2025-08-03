@@ -106,6 +106,9 @@ export async function analyzeOpportunity(userData, sessionId) {
   // Extract relevant data from user input
   const { name, skills, businessType, goal, preferences } = userData;
   
+  // Detect if this should be an e-commerce business
+  const isEcommerce = detectEcommerceIntent(userData);
+  
   console.log('Setting stage to researching');
   // Update session to show we're researching
   await supabase
@@ -127,6 +130,15 @@ export async function analyzeOpportunity(userData, sessionId) {
       Goal: ${goal}
       Preferences: ${preferences || 'None'}
       
+      ${isEcommerce ? `
+      IMPORTANT: This appears to be an e-commerce opportunity. Focus on:
+      - Physical or digital products that can be sold online
+      - Target market for online sales
+      - Product categories and inventory considerations
+      - Online marketing and customer acquisition
+      - E-commerce specific advantages and strategies
+      ` : ''}
+      
       Find a specific, profitable market niche that:
       1. Matches their skills
       2. Has proven customer demand
@@ -143,6 +155,7 @@ export async function analyzeOpportunity(userData, sessionId) {
         "uniqueAdvantage": "What makes this opportunity special",
         "profitPotential": "Estimated monthly revenue range",
         "validationStrategy": "How to quickly test this business idea",
+        "businessModel": "${isEcommerce ? 'ecommerce' : 'service'}",
         "confidence": 0.85 // 0-1 score of how promising this opportunity is
       }
     `;
@@ -162,6 +175,9 @@ export async function analyzeOpportunity(userData, sessionId) {
     // Parse the AI response
     const opportunity = JSON.parse(response.choices[0].message.content);
     
+    // Ensure business model is set
+    opportunity.businessModel = opportunity.businessModel || (isEcommerce ? 'ecommerce' : 'service');
+    
     // Add quick wins to the opportunity
     opportunity.quickWins = await identifyQuickWins(opportunity);
     
@@ -178,6 +194,7 @@ export async function analyzeOpportunity(userData, sessionId) {
       uniqueAdvantage: "Personal expertise and attention",
       profitPotential: "$2,000-$5,000/month",
       validationStrategy: "Direct outreach to potential customers",
+      businessModel: isEcommerce ? 'ecommerce' : 'service',
       confidence: 0.7,
       quickWins: [
         "Create a simple landing page",
@@ -186,6 +203,66 @@ export async function analyzeOpportunity(userData, sessionId) {
       ]
     };
   }
+}
+
+/**
+ * Detects if user input suggests an e-commerce business model
+ * 
+ * @param {Object} userData - User information from the form
+ * @returns {boolean} True if e-commerce indicators are found
+ */
+function detectEcommerceIntent(userData) {
+  const { skills, businessType, goal, preferences } = userData;
+  
+  // Combine all text for analysis
+  const allText = `${skills} ${businessType} ${goal} ${preferences}`.toLowerCase();
+  
+  // E-commerce keywords and indicators
+  const ecommerceKeywords = [
+    'products', 'sell products', 'online store', 'ecommerce', 'e-commerce',
+    'retail', 'merchandise', 'inventory', 'physical products', 'digital products',
+    'handmade', 'crafts', 'art', 'jewelry', 'clothing', 'accessories',
+    'dropshipping', 'print on demand', 'amazon', 'etsy', 'shopify',
+    'marketplace', 'online sales', 'product photography', 'shipping',
+    'packaging', 'wholesale', 'manufacturing', 'branded products',
+    'subscription box', 'beauty products', 'fashion', 'electronics',
+    'home goods', 'kitchen', 'toys', 'books', 'supplements',
+    'vintage', 'collectibles', 'antiques', 'reselling', 'flipping',
+    'import', 'export', 'sourcing', 'alibaba', 'product design',
+    'brand', 'private label', 'white label', 'catalog', 'store'
+  ];
+  
+  // Check for e-commerce keywords
+  const hasEcommerceKeywords = ecommerceKeywords.some(keyword => 
+    allText.includes(keyword)
+  );
+  
+  // Check for service-specific keywords that would indicate NOT e-commerce
+  const serviceKeywords = [
+    'consulting', 'coaching', 'freelance', 'services', 'agency',
+    'marketing services', 'design services', 'legal services',
+    'accounting', 'bookkeeping', 'tutoring', 'teaching', 'training',
+    'therapy', 'counseling', 'fitness training', 'personal trainer',
+    'web development', 'software development', 'app development',
+    'writing services', 'copywriting', 'content creation',
+    'virtual assistant', 'social media management', 'seo services'
+  ];
+  
+  const hasServiceKeywords = serviceKeywords.some(keyword => 
+    allText.includes(keyword)
+  );
+  
+  // If both are present, e-commerce keywords take precedence if they're more specific
+  if (hasEcommerceKeywords && hasServiceKeywords) {
+    // Count specific product-related keywords
+    const productKeywords = ['products', 'sell products', 'physical products', 'handmade', 'crafts'];
+    const hasStrongProductIndicators = productKeywords.some(keyword => 
+      allText.includes(keyword)
+    );
+    return hasStrongProductIndicators;
+  }
+  
+  return hasEcommerceKeywords && !hasServiceKeywords;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
+import { CartProvider, CartOverlay } from '@/components/launchfly-ui';
 
 // Mock business data for fallback
 const mockBusinessData = {
@@ -368,7 +369,12 @@ export default async function DynamicWebsite({ params }) {
     ];
   }
 
-  return (
+  // Check if this is an e-commerce site
+  const isEcommerce = businessData?.business_data?.businessModel === 'ecommerce' || 
+                     businessData?.businessModel === 'ecommerce' ||
+                     layout.some(section => section.component === 'EcommerceProductGrid');
+
+  const siteContent = (
     <ThemedLayout theme={theme}>
       <div className="dynamic-website">
         {layout.map((section, index) => {
@@ -386,6 +392,18 @@ export default async function DynamicWebsite({ params }) {
           );
         })}
       </div>
+      {isEcommerce && <CartOverlay />}
     </ThemedLayout>
   );
+
+  // Wrap e-commerce sites with CartProvider for shopping cart functionality
+  if (isEcommerce) {
+    return (
+      <CartProvider>
+        {siteContent}
+      </CartProvider>
+    );
+  }
+
+  return siteContent;
 }

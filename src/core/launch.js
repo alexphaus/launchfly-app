@@ -189,9 +189,24 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
 async function generateWebsite(opportunity) {
   try {
     console.log('Starting website generation for:', opportunity.businessName);
+    
+    // Detect if this is an e-commerce business
+    const isEcommerce = opportunity.businessModel === 'ecommerce';
+    
     const prompt = `
-      Create a professional website theme and layout for this business:
+      Create a professional website theme and layout for this ${isEcommerce ? 'e-commerce' : 'service'} business:
       ${JSON.stringify(opportunity)}
+      
+      ${isEcommerce ? `
+      IMPORTANT - E-COMMERCE SPECIFIC REQUIREMENTS:
+      - Use "EcommerceProductGrid" component instead of "PricingTable" 
+      - Generate actual products to sell (not services)
+      - Include product categories, images, and detailed product information
+      - Focus on product discovery, shopping experience, and conversion
+      - Include shopping cart functionality and product pages
+      - Add trust signals for online shopping (secure checkout, returns, etc.)
+      - Pricing should reflect actual product costs, not subscription fees
+      ` : ''}
       
       IMPORTANT: For Hero backgrounds, generate stunning visual elements:
       - Use high-quality Unsplash images that match the business type perfectly
@@ -431,24 +446,95 @@ async function generateWebsite(opportunity) {
 async function createProducts(opportunity) {
   try {
     console.log('Starting product creation for:', opportunity.businessName);
+    
+    // Detect if this is an e-commerce business
+    const isEcommerce = opportunity.businessModel === 'ecommerce';
+    
     const prompt = `
-      Create 3 compelling product or service offerings for this business:
+      Create ${isEcommerce ? '6-9 compelling products' : '3 compelling service packages'} for this business:
       ${JSON.stringify(opportunity)}
       
-      Each product should have:
-      - A clear name
-      - A compelling description
-      - An appropriate price point for the target market
+      ${isEcommerce ? `
+      IMPORTANT - E-COMMERCE PRODUCT REQUIREMENTS:
+      - Generate actual products to sell (not services or subscriptions)
+      - Include realistic product names, prices, and descriptions
+      - Add product categories for organization
+      - Include product features and specifications where relevant
+      - Pricing should be competitive for the product category
+      - Consider different price points (budget, mid-range, premium)
+      - Include product variants if applicable (size, color, etc.)
+      - Add realistic ratings and review counts
       
-      Return as a JSON object with a "products" array containing objects with name, price, and description.
-      Example format:
+      For each product, include:
+      - id: URL-friendly slug
+      - name: Actual product name
+      - price: One-time purchase price (not subscription)
+      - originalPrice: If on sale
+      - description: Detailed product description
+      - category: Product category
+      - icon: Relevant emoji
+      - features: Key product features/benefits
+      - rating: 4.0-5.0 range
+      - reviewCount: Realistic number
+      - variants: Different options if applicable
+      - specifications: Technical details if relevant
+      ` : `
+      STANDARD SERVICE PACKAGE REQUIREMENTS:
+      - Generate service packages or offerings
+      - Subscription-based pricing is appropriate
+      - Focus on deliverables and outcomes
+      `}
+      
+      Return as a JSON object with a "products" array containing detailed product objects.
+      
+      ${isEcommerce ? `
+      Example e-commerce format:
       {
         "products": [
-          {"name": "Product Name", "price": "$99", "description": "Product description"},
-          {"name": "Product Name 2", "price": "$199", "description": "Product description 2"},
-          {"name": "Product Name 3", "price": "$299", "description": "Product description 3"}
+          {
+            "id": "premium-wireless-headphones",
+            "name": "Premium Wireless Headphones",
+            "price": "$89.99",
+            "originalPrice": "$119.99",
+            "description": "High-quality wireless headphones with noise cancellation and 30-hour battery life",
+            "category": "Electronics",
+            "icon": "🎧",
+            "features": [
+              "Active noise cancellation",
+              "30-hour battery life",
+              "Premium sound quality",
+              "Comfortable design"
+            ],
+            "rating": 4.7,
+            "reviewCount": 234,
+            "variants": [
+              {
+                "name": "Black",
+                "price": "$89.99"
+              },
+              {
+                "name": "White", 
+                "price": "$89.99"
+              }
+            ],
+            "specifications": {
+              "Battery Life": "30 hours",
+              "Connectivity": "Bluetooth 5.0",
+              "Weight": "250g"
+            }
+          }
         ]
       }
+      ` : `
+      Example service format:
+      {
+        "products": [
+          {"name": "Basic Package", "price": "$97", "description": "Essential services to get you started"},
+          {"name": "Professional Package", "price": "$297", "description": "Comprehensive solutions for established businesses"},
+          {"name": "Premium Package", "price": "$597", "description": "All-inclusive enterprise-grade services"}
+        ]
+      }
+      `}
     `;
 
     console.log('Calling OpenAI for product creation...');
@@ -456,7 +542,7 @@ async function createProducts(opportunity) {
       openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "You are a product development and pricing expert." },
+          { role: "system", content: `You are a product development and pricing expert specializing in ${isEcommerce ? 'e-commerce product catalogs' : 'service package design'}.` },
           { role: "user", content: prompt }
         ],
         response_format: { type: "json_object" }
@@ -475,12 +561,51 @@ async function createProducts(opportunity) {
       type: error.type
     });
     
-    // Fallback products
-    return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
-    ];
+    // Fallback products based on business type
+    if (opportunity.businessModel === 'ecommerce') {
+      return [
+        { 
+          id: "starter-product",
+          name: "Essential Product", 
+          price: "$29.99", 
+          description: "Perfect for getting started with our brand",
+          category: "Essentials",
+          icon: "📦",
+          features: ["High quality", "Fast shipping", "Money-back guarantee"],
+          rating: 4.5,
+          reviewCount: 89
+        },
+        { 
+          id: "premium-product",
+          name: "Premium Product", 
+          price: "$59.99", 
+          originalPrice: "$79.99",
+          description: "Our most popular choice with enhanced features",
+          category: "Premium",
+          icon: "⭐",
+          features: ["Premium materials", "Extended warranty", "Priority support"],
+          rating: 4.8,
+          reviewCount: 156
+        },
+        { 
+          id: "deluxe-product",
+          name: "Deluxe Product", 
+          price: "$99.99", 
+          description: "Top-of-the-line option for serious customers",
+          category: "Deluxe",
+          icon: "💎",
+          features: ["Luxury finish", "Lifetime warranty", "VIP support"],
+          rating: 4.9,
+          reviewCount: 203
+        }
+      ];
+    } else {
+      return [
+        { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
+        { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
+        { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      ];
+    }
   }
 }
 

@@ -85,5 +85,5 @@ jest.mock('@supabase/auth-helpers-nextjs', () => ({
 global.fetch = jest.fn()
 
 // Mock window.location
-delete (window as any).location
-window.location = { href: '' } as any
+delete window.location
+window.location = { href: '' }

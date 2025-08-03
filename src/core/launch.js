@@ -101,29 +101,53 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     // Update database with logo
     await updateBusinessProgress(businessId, { logo });
     
-    // Generate website theme (can be slow)
-    console.log('Generating website data...');
-    const websiteData = await generateWebsite(opportunity);
-    businessData.theme = websiteData.theme;
-    businessData.layout = websiteData.layout;
-    
-    // Update database with theme/colors
-    await updateBusinessProgress(businessId, { 
-      theme: websiteData.theme, 
-      layout: websiteData.layout 
-    });
-    
-    // Create digital products (can be slow)
-    console.log('Creating products...');
-    const products = await createProducts(opportunity);
-    businessData.products = products;
-    
-    // Determine and store business model for frontend adaptation (AI-powered)
+    // Determine and store business model for frontend adaptation (AI-powered) - DO THIS FIRST!
+    console.log('Determining business model...');
     const businessModel = await determineBusinessModel(opportunity);
     businessData.businessModel = businessModel;
     console.log('Business model:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
     console.log('AI confidence:', businessModel.confidence);
     console.log('Reasoning:', businessModel.reasoning);
+    
+    // Create digital products (can be slow) - DO THIS BEFORE WEBSITE so we have products for layout
+    console.log('Creating products...');
+    const products = await createProducts(opportunity, businessModel);
+    businessData.products = products;
+    
+    // Generate website theme (can be slow) - NOW with business model and products
+    console.log('Generating website data...');
+    const websiteData = await generateWebsite(opportunity, businessModel, products);
+    businessData.theme = websiteData.theme;
+    businessData.layout = websiteData.layout;
+    
+    // Add e-commerce settings for cart functionality (always include for flexibility)
+    businessData.ecommerceSettings = {
+      enabled: businessModel.isEcommerce, // Controls whether cart functionality is active
+      shipping: {
+        standard: { name: 'Standard Shipping', price: 5.99, estimatedDays: '5-7' },
+        express: { name: 'Express Shipping', price: 12.99, estimatedDays: '2-3' },
+        overnight: { name: 'Overnight Shipping', price: 24.99, estimatedDays: '1' }
+      },
+      tax: {
+        rate: 0.08, // 8% default tax rate
+        includedInPrice: false
+      },
+      currency: 'USD',
+      policies: {
+        returns: businessModel.isEcommerce ? '30-day return policy' : '100% satisfaction guarantee',
+        privacy: 'We protect your privacy and never share your data.',
+        terms: 'Standard terms and conditions apply.'
+      }
+    };
+    
+    // Update database with theme/colors, products, business model, and e-commerce settings
+    await updateBusinessProgress(businessId, { 
+      theme: websiteData.theme, 
+      layout: websiteData.layout,
+      products, 
+      businessModel,
+      ecommerceSettings: businessData.ecommerceSettings 
+    });
     
     // Add e-commerce settings for cart functionality (always include for flexibility)
     businessData.ecommerceSettings = {
@@ -217,107 +241,201 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
  * @param {Object} opportunity - The analyzed business opportunity
  * @returns {Object} Website theme and layout
  */
-async function generateWebsite(opportunity) {
+async function generateWebsite(opportunity, businessModel, products) {
   try {
     console.log('Starting website generation for:', opportunity.businessName);
-    const prompt = `
-      Create a professional website theme and layout for this business:
-      ${JSON.stringify(opportunity)}
-      
-      IMPORTANT: For Hero backgrounds, generate stunning visual elements:
-      - Use high-quality Unsplash images that match the business type perfectly
-      - Create complementary gradient overlays for text readability  
-      - Ensure the background enhances the business brand and message
-      - Use professional, modern imagery that appeals to the target audience
-      
-      For different business types, use these Unsplash image suggestions:
-      - Fitness/Health: https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Business/Consulting: https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Technology: https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Creative/Design: https://images.unsplash.com/photo-1561736778-92e52a7769ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Education: https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Food/Restaurant: https://images.unsplash.com/photo-1514933651103-005eec06c04b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Real Estate: https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Finance: https://images.unsplash.com/photo-1559526324-4b87b5e36e44?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      
-      Choose the most appropriate image URL based on the business type and niche.
-      
-      IMPORTANT: Create realistic, specific testimonials based on the business type. Each testimonial should:
-      - Reference actual results or benefits someone would get from this business
-      - Use appropriate names and roles for the target audience
-      - Include specific details that make them believable
-      - Show clear value provided by the business
-      
-      IMPORTANT: For pricing plans, ensure each plan has:
-      - Realistic pricing for the business type
-      - Clear feature differentiation
-      - Appropriate call-to-action text (ctaText) like "Get Started", "Start Free Trial", "Contact Sales"
-      - Mark the middle plan as popular (popular: true)
-      
-      Return a JSON object with:
+    console.log('Business model:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
+    
+    // Create the layout components based on business model
+    const layoutComponents = [
       {
-        "theme": {
-          "colors": {
-            "primary": "#hexcode (choose colors that complement the hero background image)",
-            "secondary": "#hexcode (complementary color)",
-            "textDark": "#1f2937",
-            "textGray": "#6b7280",
-            "borderColor": "#e5e7eb"
-          },
-          "font": "Inter, Poppins, or Montserrat - choose based on business type",
-          "gradient": "CSS gradient that works harmoniously with the hero background",
-          "heroGradient": "Specific gradient overlay for hero background for optimal text readability"
-        },
-        "layout": [
-          {
-            "component": "NavBar",
-            "props": {
-              "businessName": "Name",
-              "logo": "Emoji",
-              "links": ["About", "Services", "Pricing", "Contact"],
-              "ctaText": "Get Started"
+        "component": "NavBar",
+        "props": {
+          "businessName": opportunity.businessName,
+          "logo": "🚀",
+          "links": ["About", businessModel.isEcommerce ? "Products" : "Services", "Pricing", "Contact"],
+          "ctaText": "Get Started"
+        }
+      },
+      {
+        "component": "Hero",
+        "props": {
+          "title": `Transform Your ${opportunity.niche}, Boost Your Confidence`,
+          "subtitle": `Specialized ${opportunity.niche} solutions designed just for you.`,
+          "ctaText": businessModel.isEcommerce ? "Shop Now" : "Get Started",
+          "ctaLink": businessModel.isEcommerce ? "#products" : "#contact",
+          "backgroundImage": "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
+          "backgroundOverlay": "linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(30, 64, 175, 0.6))"
+        }
+      },
+      {
+        "component": "FeatureGrid", 
+        "props": {
+          "title": "Why Choose Us",
+          "subtitle": "Everything you need to succeed",
+          "features": [
+            {
+              "icon": "⚡",
+              "title": businessModel.isEcommerce ? "Premium Quality" : "Tailored Solutions",
+              "description": businessModel.isEcommerce ? "High-quality products crafted with care." : "Our services are specifically designed for your needs."
+            },
+            {
+              "icon": "📅",
+              "title": businessModel.isEcommerce ? "Fast Shipping" : "Easy Daily Routine", 
+              "description": businessModel.isEcommerce ? "Quick delivery to your door." : "Simple and effective solutions that fit into a busy schedule."
+            },
+            {
+              "icon": "🔬",
+              "title": businessModel.isEcommerce ? "Science-Backed" : "Science-Backed Formulas",
+              "description": businessModel.isEcommerce ? "Products backed by research." : "Our formulations are created with the latest research."
             }
-          },
-          {
-            "component": "Hero",
-            "props": {
-              "title": "Hero title based on business",
-              "subtitle": "Compelling subtitle",
-              "ctaText": "Get Started",
-              "ctaLink": "#contact",
-              "backgroundImage": "High-quality background image URL that matches the business type (choose from the Unsplash URLs above)",
-              "backgroundOverlay": "Use the heroGradient from theme for optimal text readability"
+          ]
+        }
+      },
+      {
+        "component": "TestimonialSlider",
+        "props": {
+          "title": "What Our Clients Say", 
+          "testimonials": [
+            {
+              "name": "Michael Chen",
+              "role": "Marketing Executive",
+              "content": `The ${opportunity.niche} solutions transformed my daily routine. I saw noticeable improvements within just 2 weeks.`,
+              "avatar": "👨‍💼",
+              "rating": 5
+            },
+            {
+              "name": "David Rodriguez", 
+              "role": "Fitness Trainer",
+              "content": `Professional results that actually work. The quality exceeded my expectations completely.`,
+              "avatar": "👨‍🚀",
+              "rating": 5
+            },
+            {
+              "name": "James Wilson",
+              "role": "Business Owner", 
+              "content": `Finally found ${opportunity.niche} products that deliver real results. Couldn't be happier with my decision.`,
+              "avatar": "👨‍💻",
+              "rating": 5
             }
-          },
-          {
-            "component": "FeatureGrid", 
-            "props": {
-              "title": "Why Choose Us",
+          ]
+        }
+      }
+    ];
+
+    // Add either ProductGrid or PricingTable based on business model
+    if (businessModel.isEcommerce) {
+      layoutComponents.push({
+        "component": "ProductGrid",
+        "props": {
+          "title": "Our Products", 
+          "subtitle": `Premium ${opportunity.niche} products designed for you`,
+          "products": products.slice(0, 6),
+          "showCart": true,
+          "viewAllText": "View All Products"
+        }
+      });
+    } else {
+      layoutComponents.push({
+        "component": "PricingTable",
+        "props": {
+          "title": "Choose Your Plan",
+          "subtitle": "Flexible pricing for every need",
+          "plans": [
+            {
+              "name": "Starter Plan",
+              "price": "$25",
+              "period": "month",
+              "description": `Essential solutions to start your ${opportunity.niche} journey.`,
               "features": [
-                {
-                  "icon": "⚡",
-                  "title": "Feature 1",
-                  "description": "Feature description"
-                }
-              ]
+                `Basic ${opportunity.niche} products`,
+                `Access to ${opportunity.niche} tips`,
+                "Monthly newsletter"
+              ],
+              "ctaText": "Get Started",
+              "popular": false
+            },
+            {
+              "name": "Professional Plan",
+              "price": "$45", 
+              "period": "month",
+              "description": "Most popular choice with additional features",
+              "features": [
+                "All Starter features",
+                `Advanced ${opportunity.niche} solutions`,
+                "Priority customer support",
+                "Exclusive webinars"
+              ],
+              "ctaText": "Start Free Trial",
+              "popular": true
+            },
+            {
+              "name": "Executive Plan",
+              "price": "$65",
+              "period": "month",
+              "description": "For power users seeking tailored solutions.",
+              "features": [
+                "All Professional features",
+                `Personalized ${opportunity.niche} plan`,
+                "Quarterly advanced analysis"
+              ],
+              "ctaText": "Contact Sales",
+              "popular": false
             }
-          },
-          {
-            "component": "TestimonialSlider",
-            "props": {
-              "title": "What Our Clients Say",
-              "testimonials": [
-                {
-                  "name": "First Name + Last Name",
-                  "role": "Job Title relevant to target customer",
-                  "content": "Specific testimonial about results achieved with this business - include numbers, timeframes, or specific benefits. Make it realistic and believable for this business type.",
-                  "avatar": "👨‍💼 or 👩‍💼 or similar professional emoji",
-                  "rating": 5
-                },
-                {
-                  "name": "Different Name",
-                  "role": "Different relevant job title", 
-                  "content": "Another specific testimonial highlighting different benefits of this business. Include specific details that show real value.",
+          ]
+        }
+      });
+    }
+
+    // Add final components
+    layoutComponents.push(
+      {
+        "component": "CallToAction",
+        "props": {
+          "title": "Ready to Get Started?",
+          "subtitle": "Join thousands of satisfied customers today", 
+          "ctaText": businessModel.isEcommerce ? "Start Shopping" : "Start Now",
+          "ctaLink": businessModel.isEcommerce ? "#products" : "#contact"
+        }
+      },
+      {
+        "component": "Footer",
+        "props": {
+          "businessName": opportunity.businessName,
+          "description": "Professional solutions for your success"
+        }
+      }
+    );
+
+    const websiteStructure = {
+      "theme": {
+        "colors": {
+          "primary": "#3b82f6",
+          "secondary": "#1e40af", 
+          "textDark": "#1f2937",
+          "textGray": "#6b7280",
+          "borderColor": "#e5e7eb"
+        },
+        "font": "Inter",
+        "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        "heroGradient": "linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(30, 64, 175, 0.6))"
+      },
+      "layout": layoutComponents
+    };
+
+    console.log('Website structure created successfully');
+    return websiteStructure;
+    
+  } catch (error) {
+    console.error("Error generating website:", error);
+    throw error;
+/**
+ * Creates products or services based on the opportunity and business model
+ * 
+ * @param {Object} opportunity - The analyzed business opportunity
+ * @param {Object} businessModel - The determined business model
+ * @returns {Array} Products or services
+ */
                   "avatar": "👩‍� or 👨‍🚀 or other professional emoji",
                   "rating": 5
                 },
@@ -331,6 +449,17 @@ async function generateWebsite(opportunity) {
               ]
             }
           },
+          ${businessModel.isEcommerce ? `
+          {
+            "component": "ProductGrid",
+            "props": {
+              "title": "Our Products", 
+              "subtitle": "Premium ${opportunity.niche} products designed for you",
+              "products": ${JSON.stringify(products.slice(0, 6))},
+              "showCart": true,
+              "viewAllText": "View All Products"
+            }
+          },` : `
           {
             "component": "PricingTable",
             "props": {
@@ -338,59 +467,59 @@ async function generateWebsite(opportunity) {
               "subtitle": "Flexible pricing for every need",
               "plans": [
                 {
-                  "name": "Basic Plan Name",
-                  "price": "$XX",
+                  "name": "Starter Plan",
+                  "price": "$25",
                   "period": "month",
-                  "description": "Brief description of what this plan offers",
+                  "description": "Essential solutions to start your ${opportunity.niche} journey.",
                   "features": [
-                    "Feature 1 relevant to business",
-                    "Feature 2 relevant to business", 
-                    "Feature 3 relevant to business"
+                    "Basic ${opportunity.niche} products",
+                    "Access to ${opportunity.niche} tips",
+                    "Monthly newsletter"
                   ],
                   "ctaText": "Get Started",
                   "popular": false
                 },
                 {
-                  "name": "Premium Plan Name",
-                  "price": "$XX", 
+                  "name": "Professional Plan",
+                  "price": "$45", 
                   "period": "month",
                   "description": "Most popular choice with additional features",
                   "features": [
-                    "All Basic features",
-                    "Premium feature 1",
-                    "Premium feature 2",
-                    "Premium feature 3"
+                    "All Starter features",
+                    "Advanced ${opportunity.niche} solutions",
+                    "Priority customer support",
+                    "Exclusive webinars"
                   ],
                   "ctaText": "Start Free Trial",
                   "popular": true
                 },
                 {
-                  "name": "Enterprise Plan Name",
-                  "price": "$XX",
+                  "name": "Executive Plan",
+                  "price": "$65",
                   "period": "month",
-                  "description": "For serious businesses",
+                  "description": "For power users seeking tailored solutions.",
                   "features": [
-                    "All Premium features",
-                    "Enterprise feature 1",
-                    "Enterprise feature 2"
+                    "All Professional features",
+                    "Personalized ${opportunity.niche} plan",
+                    "Quarterly advanced analysis"
                   ],
-                  "ctaText": "Contact Sales", 
+                  "ctaText": "Contact Sales",
                   "popular": false
-                }
-              ]
-            }
           },
           {
             "component": "CallToAction",
             "props": {
               "title": "Ready to Get Started?",
-              "ctaText": "Start Now"
+              "subtitle": "Join thousands of satisfied customers today",
+              "ctaText": ${businessModel.isEcommerce ? '"Start Shopping"' : '"Start Now"'},
+              "ctaLink": ${businessModel.isEcommerce ? '"#products"' : '"#contact"'}
             }
           },
           {
             "component": "Footer",
             "props": {
-              "businessName": "Use business name"
+              "businessName": "${opportunity.businessName}",
+              "description": "Professional solutions for your success"
             }
           }
         ]
@@ -459,13 +588,10 @@ async function generateWebsite(opportunity) {
  * @param {Object} opportunity - The analyzed business opportunity
  * @returns {Array} List of product offerings
  */
-async function createProducts(opportunity) {
+export async function createProducts(opportunity, businessModel) {
   try {
     console.log('Starting product creation for:', opportunity.businessName);
-    
-    // Determine if this should be an e-commerce business or service business (AI-powered)
-    const businessModel = await determineBusinessModel(opportunity);
-    console.log('Business model determined:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
+    console.log('Business model provided:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
     console.log('AI reasoning:', businessModel.reasoning);
     
     const prompt = `
@@ -477,7 +603,7 @@ async function createProducts(opportunity) {
       Problem Being Solved: ${opportunity.problem || 'Not specified'}
       Target Market: ${opportunity.targetMarket || 'Not specified'}
       
-      Business Model Detected: ${businessModel.isEcommerce ? 'E-COMMERCE (selling products)' : 'SERVICE-BASED (providing services)'}
+      Business Model: ${businessModel.isEcommerce ? 'E-COMMERCE (selling products)' : 'SERVICE-BASED (providing services)'}
       AI Confidence: ${businessModel.confidence || 0.8}
       Categories: ${businessModel.productCategories?.join(', ') || 'General'}
       
@@ -599,7 +725,7 @@ async function createProducts(opportunity) {
  * @param {Object} opportunity - The analyzed business opportunity
  * @returns {Object} Business model information
  */
-async function determineBusinessModel(opportunity) {
+export async function determineBusinessModel(opportunity) {
   try {
     console.log('Using AI to determine business model for:', opportunity.businessName);
     

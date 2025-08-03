@@ -5,7 +5,9 @@ import ProductCard from './ProductCard';
 export default function ProductGrid({ 
   title = "Our Products",
   subtitle = "Choose the perfect solution for your needs",
-  products = []
+  products = [],
+  business = null,
+  onAddToCart = null
 }) {
   const defaultProducts = [
     {
@@ -55,6 +57,9 @@ export default function ProductGrid({
     }
   ];
 
+  // Check if this is an e-commerce business
+  const isEcommerce = business?.businessModel?.isEcommerce || business?.ecommerceSettings?.enabled;
+
   const displayProducts = products.length > 0 ? products : defaultProducts;
 
   if (displayProducts.length === 0) {
@@ -81,6 +86,8 @@ export default function ProductGrid({
               key={product.id || index}
               product={product}
               featured={product.popular}
+              showAddToCart={isEcommerce}
+              onAddToCart={onAddToCart}
             />
           ))}
         </div>

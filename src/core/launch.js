@@ -118,8 +118,37 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     const products = await createProducts(opportunity);
     businessData.products = products;
     
-    // Update database with products
-    await updateBusinessProgress(businessId, { products });
+    // Determine and store business model for frontend adaptation
+    const businessModel = determineBusinessModel(opportunity);
+    businessData.businessModel = businessModel;
+    console.log('Business model:', businessModel.isEcommerce ? 'E-commerce' : 'Service-based');
+    
+    // Add e-commerce settings for cart functionality (always include for flexibility)
+    businessData.ecommerceSettings = {
+      enabled: businessModel.isEcommerce, // Controls whether cart functionality is active
+      shipping: {
+        standard: { name: 'Standard Shipping', price: 5.99, estimatedDays: '5-7' },
+        express: { name: 'Express Shipping', price: 12.99, estimatedDays: '2-3' },
+        overnight: { name: 'Overnight Shipping', price: 24.99, estimatedDays: '1' }
+      },
+      tax: {
+        rate: 0.08, // 8% default tax rate
+        includedInPrice: false
+      },
+      currency: 'USD',
+      policies: {
+        returns: businessModel.isEcommerce ? '30-day return policy' : '100% satisfaction guarantee',
+        privacy: 'We protect your privacy and never share your data.',
+        terms: 'Standard terms and conditions apply.'
+      }
+    };
+    
+    // Update database with products, business model, and e-commerce settings
+    await updateBusinessProgress(businessId, { 
+      products, 
+      businessModel,
+      ecommerceSettings: businessData.ecommerceSettings 
+    });
     
     // Generate marketing materials and strategies (can be slow)
     console.log('Creating marketing materials...');
@@ -431,22 +460,90 @@ async function generateWebsite(opportunity) {
 async function createProducts(opportunity) {
   try {
     console.log('Starting product creation for:', opportunity.businessName);
+    
+    // Determine if this should be an e-commerce business or service business
+    const businessModel = determineBusinessModel(opportunity);
+    console.log('Business model determined:', businessModel);
+    
     const prompt = `
-      Create 3 compelling product or service offerings for this business:
+      Create ${businessModel.isEcommerce ? 'between 8-20' : '3-5'} compelling ${businessModel.isEcommerce ? 'physical/digital products' : 'service offerings'} for this business:
       ${JSON.stringify(opportunity)}
       
-      Each product should have:
-      - A clear name
-      - A compelling description
-      - An appropriate price point for the target market
+      Business Model: ${businessModel.isEcommerce ? 'E-commerce (selling products)' : 'Service-based (providing services)'}
+      Business Type: ${opportunity.businessType || 'Not specified'}
+      Niche: ${opportunity.niche || 'Not specified'}
       
-      Return as a JSON object with a "products" array containing objects with name, price, and description.
-      Example format:
+      ${businessModel.isEcommerce ? `
+      This is an E-COMMERCE business. Create a diverse product catalog with:
+      - ${businessModel.productCategories.join(', ')}
+      - Mix of different price points (budget, mid-range, premium)
+      - Include product variants where appropriate
+      - Add inventory status (inStock: true/false)
+      - Include product images (use relevant stock photo URLs)
+      - Add product categories for organization
+      - Include detailed product specifications
+      - Set appropriate stock quantities (stock: number)
+      
+      Each product should have:
+      - name: Clear product name
+      - price: Appropriate price as number (not string with $)
+      - originalPrice: Optional higher price for sales (number)
+      - description: Detailed product description
+      - image: Stock photo URL relevant to the product
+      - category: Product category
+      - inStock: boolean
+      - stock: number of items available
+      - features: Array of key product features
+      - specifications: Object with technical details
+      - isOnSale: boolean (true if originalPrice exists)
+      ` : `
+      This is a SERVICE business. Create professional service packages with:
+      - Different service tiers (basic, premium, enterprise)
+      - Clear value propositions for each service
+      - Appropriate pricing for the target market
+      - Service deliverables and timelines
+      
+      Each service should have:
+      - name: Service package name
+      - price: Price as number (not string with $)
+      - description: What's included in this service
+      - deliveryTime: How long the service takes
+      - features: Array of what's included
+      - category: Type of service
+      - popular: boolean (mark one as most popular)
+      `}
+      
+      Return as a JSON object with:
       {
+        "businessModel": "${businessModel.isEcommerce ? 'ecommerce' : 'service'}",
         "products": [
-          {"name": "Product Name", "price": "$99", "description": "Product description"},
-          {"name": "Product Name 2", "price": "$199", "description": "Product description 2"},
-          {"name": "Product Name 3", "price": "$299", "description": "Product description 3"}
+          ${businessModel.isEcommerce ? `
+          {
+            "id": "unique-id",
+            "name": "Product Name",
+            "price": 99.99,
+            "originalPrice": 119.99,
+            "description": "Detailed product description",
+            "image": "https://images.unsplash.com/relevant-product-image",
+            "category": "Category Name",
+            "inStock": true,
+            "stock": 50,
+            "features": ["Feature 1", "Feature 2", "Feature 3"],
+            "specifications": {"spec1": "value1", "spec2": "value2"},
+            "isOnSale": true
+          }
+          ` : `
+          {
+            "id": "unique-id", 
+            "name": "Service Name",
+            "price": 299,
+            "description": "Service description and what's included",
+            "deliveryTime": "5-7 business days",
+            "features": ["Feature 1", "Feature 2", "Feature 3"],
+            "category": "Service Category",
+            "popular": false
+          }
+          `}
         ]
       }
     `;
@@ -456,7 +553,7 @@ async function createProducts(opportunity) {
       openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "You are a product development and pricing expert." },
+          { role: "system", content: "You are a product development and pricing expert who understands the difference between e-commerce and service businesses." },
           { role: "user", content: prompt }
         ],
         response_format: { type: "json_object" }
@@ -464,9 +561,11 @@ async function createProducts(opportunity) {
     );
     
     console.log('OpenAI response received for product creation');
-    const { products } = JSON.parse(response.choices[0].message.content);
-    console.log('Products created successfully:', products?.length || 0);
-    return products || [];
+    const result = JSON.parse(response.choices[0].message.content);
+    const products = result.products || [];
+    
+    console.log(`Products created successfully: ${products.length} ${businessModel.isEcommerce ? 'products' : 'services'} for ${businessModel.isEcommerce ? 'e-commerce' : 'service'} business`);
+    return products;
   } catch (error) {
     console.error("Error creating products:", error);
     console.error("Error details:", {
@@ -475,13 +574,102 @@ async function createProducts(opportunity) {
       type: error.type
     });
     
-    // Fallback products
-    return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
-    ];
+    // Determine fallback based on business type
+    const businessModel = determineBusinessModel(opportunity);
+    
+    if (businessModel.isEcommerce) {
+      // Fallback e-commerce products
+      return [
+        { id: "prod-1", name: "Starter Package", price: 49.99, description: "Essential product to get you started", image: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Starter", inStock: true, stock: 25, features: ["Feature 1", "Feature 2"], specifications: {}, isOnSale: false },
+        { id: "prod-2", name: "Professional Kit", price: 99.99, originalPrice: 129.99, description: "Complete professional solution", image: "https://images.unsplash.com/photo-1556742049-0cfed14d4617?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Professional", inStock: true, stock: 15, features: ["All Starter features", "Premium feature"], specifications: {}, isOnSale: true },
+        { id: "prod-3", name: "Premium Bundle", price: 199.99, description: "Everything you need for success", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Premium", inStock: true, stock: 10, features: ["All Professional features", "Exclusive content"], specifications: {}, isOnSale: false },
+        { id: "prod-4", name: "Deluxe Edition", price: 149.99, description: "Enhanced version with extra benefits", image: "https://images.unsplash.com/photo-1542393545-10f5cde2c810?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Deluxe", inStock: true, stock: 8, features: ["Deluxe features"], specifications: {}, isOnSale: false },
+        { id: "prod-5", name: "Basic Model", price: 29.99, description: "Affordable option for beginners", image: "https://images.unsplash.com/photo-1527385352018-3c26dd6c3916?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Basic", inStock: true, stock: 50, features: ["Basic features"], specifications: {}, isOnSale: false },
+        { id: "prod-6", name: "Advanced Pro", price: 299.99, description: "For advanced users who need more", image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Advanced", inStock: true, stock: 5, features: ["Advanced features"], specifications: {}, isOnSale: false },
+        { id: "prod-7", name: "Ultimate Package", price: 499.99, description: "The complete solution for professionals", image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Ultimate", inStock: true, stock: 3, features: ["All features included"], specifications: {}, isOnSale: false },
+        { id: "prod-8", name: "Compact Version", price: 79.99, description: "Space-saving design with full functionality", image: "https://images.unsplash.com/photo-1586953983027-d7508698d47b?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80", category: "Compact", inStock: true, stock: 20, features: ["Compact design"], specifications: {}, isOnSale: false }
+      ];
+    } else {
+      // Fallback service packages
+      return [
+        { id: "svc-1", name: "Basic Package", price: 97, description: "Essential services to get you started", deliveryTime: "3-5 business days", features: ["Core service", "Email support"], category: "Basic", popular: false },
+        { id: "svc-2", name: "Professional Package", price: 297, description: "Comprehensive solutions for established businesses", deliveryTime: "5-7 business days", features: ["All Basic features", "Priority support", "Advanced features"], category: "Professional", popular: true },
+        { id: "svc-3", name: "Premium Package", price: 597, description: "All-inclusive enterprise-grade services", deliveryTime: "7-10 business days", features: ["All Professional features", "Dedicated account manager", "Custom solutions"], category: "Premium", popular: false }
+      ];
+    }
   }
+}
+
+/**
+ * Determines if a business should be e-commerce or service-based
+ * 
+ * @param {Object} opportunity - The analyzed business opportunity
+ * @returns {Object} Business model information
+ */
+function determineBusinessModel(opportunity) {
+  const niche = (opportunity.niche || '').toLowerCase();
+  const businessType = (opportunity.businessType || '').toLowerCase();
+  const solution = (opportunity.solution || '').toLowerCase();
+  const problem = (opportunity.problem || '').toLowerCase();
+  
+  // E-commerce indicators
+  const ecommerceKeywords = [
+    'retail', 'store', 'shop', 'product', 'goods', 'merchandise', 'inventory',
+    'fashion', 'clothing', 'jewelry', 'electronics', 'gadgets', 'accessories',
+    'home decor', 'furniture', 'tools', 'equipment', 'supplies', 'books',
+    'toys', 'games', 'crafts', 'art supplies', 'beauty', 'cosmetics',
+    'supplements', 'food', 'beverage', 'kitchenware', 'appliances',
+    'sports equipment', 'fitness gear', 'outdoor gear', 'automotive parts',
+    'pet supplies', 'baby products', 'health products', 'subscription box'
+  ];
+  
+  // Service indicators  
+  const serviceKeywords = [
+    'consulting', 'service', 'agency', 'coaching', 'training', 'education',
+    'marketing', 'design', 'development', 'freelance', 'professional',
+    'legal', 'accounting', 'financial', 'healthcare', 'therapy', 'fitness trainer',
+    'photography', 'event planning', 'catering', 'cleaning', 'maintenance',
+    'repair', 'installation', 'landscaping', 'tutoring', 'writing',
+    'translation', 'social media management', 'seo', 'content creation'
+  ];
+  
+  const textToCheck = `${niche} ${businessType} ${solution} ${problem}`;
+  
+  const ecommerceMatches = ecommerceKeywords.filter(keyword => 
+    textToCheck.includes(keyword)
+  ).length;
+  
+  const serviceMatches = serviceKeywords.filter(keyword => 
+    textToCheck.includes(keyword)
+  ).length;
+  
+  const isEcommerce = ecommerceMatches > serviceMatches;
+  
+  // Define product categories based on niche
+  let productCategories = [];
+  if (isEcommerce) {
+    if (niche.includes('fashion') || niche.includes('clothing')) {
+      productCategories = ['Tops', 'Bottoms', 'Dresses', 'Accessories', 'Shoes'];
+    } else if (niche.includes('tech') || niche.includes('electronics')) {
+      productCategories = ['Smartphones', 'Laptops', 'Accessories', 'Gadgets', 'Components'];
+    } else if (niche.includes('home') || niche.includes('decor')) {
+      productCategories = ['Furniture', 'Lighting', 'Decor', 'Storage', 'Kitchen'];
+    } else if (niche.includes('health') || niche.includes('fitness')) {
+      productCategories = ['Supplements', 'Equipment', 'Apparel', 'Accessories', 'Recovery'];
+    } else if (niche.includes('beauty') || niche.includes('cosmetics')) {
+      productCategories = ['Skincare', 'Makeup', 'Haircare', 'Fragrance', 'Tools'];
+    } else {
+      productCategories = ['Featured', 'Popular', 'New Arrivals', 'Best Sellers', 'Clearance'];
+    }
+  }
+  
+  return {
+    isEcommerce,
+    productCategories,
+    reasoning: isEcommerce ? 
+      `E-commerce indicators: ${ecommerceMatches}, Service indicators: ${serviceMatches}` :
+      `Service indicators: ${serviceMatches}, E-commerce indicators: ${ecommerceMatches}`
+  };
 }
 
 /**

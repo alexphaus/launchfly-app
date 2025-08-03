@@ -8,3 +8,10 @@ export { default as ProductGrid } from './ProductGrid';
 export { default as ProductCard } from './ProductCard';
 export { default as CallToAction } from './CallToAction';
 export { default as Footer } from './Footer';
+
+// E-commerce components
+export { default as MiniCart } from './MiniCart';
+export { default as CartPage } from './CartPage';
+export { default as CheckoutPage } from './CheckoutPage';
+export { default as OrderConfirmation } from './OrderConfirmation';
+export { default as CartProvider, useCart } from './CartProvider';

@@ -335,7 +335,16 @@ export default async function DynamicWebsite({ params }) {
           testimonials: businessData.testimonials || []
         }
       },
-      {
+      // Show ProductGrid for e-commerce businesses, PricingTable for service businesses
+      ...(businessData.businessModel?.isEcommerce || businessData.ecommerceSettings?.enabled ? [{
+        component: 'ProductGrid',
+        props: {
+          title: 'Our Products',
+          subtitle: 'Discover our complete product range',
+          products: businessData.products || [],
+          business: businessData
+        }
+      }] : [{
         component: 'PricingTable',
         props: {
           title: 'Choose Your Plan',
@@ -343,12 +352,12 @@ export default async function DynamicWebsite({ params }) {
             name: product.name,
             price: product.price,
             description: product.description,
-            features: ['Feature 1', 'Feature 2', 'Feature 3'],
+            features: product.features || ['Feature 1', 'Feature 2', 'Feature 3'],
             ctaText: 'Get Started',
-            popular: false
+            popular: product.popular || false
           })) || []
         }
-      },
+      }]),
       {
         component: 'CallToAction',
         props: {

@@ -1,8 +1,30 @@
 'use client';
 
-export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Business", links = [], ctaText = "Get Started", ctaLink = "#contact" }) {
+import { useState } from 'react';
+import MiniCart from './MiniCart';
+import { useCart } from './CartProvider';
+
+export default function NavBar({ 
+  logoUrl, 
+  logo = "🚀", 
+  businessName = "Your Business", 
+  links = [], 
+  ctaText = "Get Started", 
+  ctaLink = "#contact",
+  showCart = false 
+}) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Only use cart if CartProvider is available and showCart is true
+  let cart = null;
+  try {
+    cart = showCart ? useCart() : null;
+  } catch (error) {
+    // CartProvider not available, cart will remain null
+  }
+
   return (
-    <nav className="bg-white shadow-sm border-b" style={{ 
+    <nav className="bg-white shadow-sm border-b sticky top-0 z-40" style={{ 
       borderColor: 'var(--border-color, #e5e7eb)',
       color: 'var(--text-dark, #1f2937)'
     }}>
@@ -35,6 +57,16 @@ export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Bu
                 {link}
               </a>
             ))}
+            
+            {/* Cart Icon */}
+            {showCart && cart && (
+              <MiniCart
+                cartItems={cart.cart.items}
+                onRemoveItem={cart.removeItem}
+                onUpdateQuantity={cart.updateQuantity}
+              />
+            )}
+            
             <a
               href={ctaLink}
               className="px-6 py-2 rounded-full font-semibold text-white transition-all hover:scale-105"
@@ -48,14 +80,52 @@ export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Bu
           </div>
           
           {/* Mobile Menu Button */}
-          <div className="md:hidden">
-            <button className="text-gray-700 hover:text-gray-900">
+          <div className="md:hidden flex items-center space-x-2">
+            {/* Mobile Cart Icon */}
+            {showCart && cart && (
+              <MiniCart
+                cartItems={cart.cart.items}
+                onRemoveItem={cart.removeItem}
+                onUpdateQuantity={cart.updateQuantity}
+              />
+            )}
+            
+            <button 
+              className="text-gray-700 hover:text-gray-900"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
           </div>
         </div>
+        
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-200 bg-white">
+            <div className="px-2 pt-2 pb-3 space-y-1">
+              {links.map((link, index) => (
+                <a
+                  key={index}
+                  href={`#${link.toLowerCase().replace(/\s+/g, '-')}`}
+                  className="block px-3 py-2 text-gray-700 hover:text-gray-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {link}
+                </a>
+              ))}
+              <a
+                href={ctaLink}
+                className="block mx-3 mt-4 px-6 py-2 rounded-full font-semibold text-white text-center transition-all"
+                style={{ background: 'var(--primary, #3b82f6)' }}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                {ctaText}
+              </a>
+            </div>
+          </div>
+        )}
       </div>
     </nav>
   );

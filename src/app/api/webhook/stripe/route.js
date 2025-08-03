@@ -164,15 +164,6 @@ export async function POST(request) {
 
       // Send order confirmation email to customer
       if (saleData.customer_email) {
-        // Fetch business theme data for email styling
-        const { data: businessData } = await supabase
-          .from('businesses')
-          .select('business_data')
-          .eq('id', metadata.business_id)
-          .single();
-
-        const theme = businessData?.business_data?.theme || {};
-
         await sendCustomerConfirmation({
           customerEmail: saleData.customer_email,
           customerName: saleData.customer_name,
@@ -180,8 +171,7 @@ export async function POST(request) {
           productName: metadata.product_name,
           amount: session.amount_total / 100,
           orderId: session.id,
-          websiteUrl: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${business.subdomain}`,
-          theme: theme
+          websiteUrl: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${business.subdomain}`
         });
       }
 
@@ -501,19 +491,10 @@ async function sendCustomerConfirmation({
   productName,
   amount,
   orderId,
-  websiteUrl,
-  theme = {}
+  websiteUrl
 }) {
   try {
     const subject = `Order Confirmation - Thank you for your purchase from ${businessName}!`;
-
-    // Extract theme colors with fallbacks
-    const primaryColor = theme.colors?.primary || '#3b82f6';
-    const secondaryColor = theme.colors?.secondary || '#1e40af';
-    const textDark = theme.colors?.textDark || '#1f2937';
-    const textGray = theme.colors?.textGray || '#6b7280';
-    const borderColor = theme.colors?.borderColor || '#e5e7eb';
-    const gradient = theme.gradient || `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -531,7 +512,7 @@ async function sendCustomerConfirmation({
                 
                 <!-- Header -->
                 <tr>
-                  <td align="center" style="background:${gradient};padding:40px 20px;">
+                  <td align="center" style="background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);padding:40px 20px;">
                     <div style="font-size:48px;margin-bottom:20px;">✅</div>
                     <h1 style="color:#ffffff;font-size:32px;font-weight:800;margin:0 0 12px 0;">
                       Order Confirmed!
@@ -547,49 +528,49 @@ async function sendCustomerConfirmation({
                   <td style="padding:40px 40px 20px 40px;">
                     
                     <!-- Greeting -->
-                    <p style="color:${textDark};font-size:18px;line-height:1.6;margin:0 0 25px 0;">
+                    <p style="color:#1a2b48;font-size:18px;line-height:1.6;margin:0 0 25px 0;">
                       Hi ${customerName},
                     </p>
                     
-                    <p style="color:${textGray};font-size:16px;line-height:1.6;margin:0 0 30px 0;">
+                    <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0 0 30px 0;">
                       Thank you for your purchase! We're excited to confirm that your order has been successfully processed.
                     </p>
 
                     <!-- Order Details -->
-                    <div style="background-color:#f0f9ff;border-radius:12px;padding:30px;margin-bottom:30px;border-left:4px solid ${primaryColor};">
-                      <h2 style="color:${textDark};font-size:20px;font-weight:700;margin:0 0 20px 0;">
+                    <div style="background-color:#f0f9ff;border-radius:12px;padding:30px;margin-bottom:30px;">
+                      <h2 style="color:#1a2b48;font-size:20px;font-weight:700;margin:0 0 20px 0;">
                         Order Details
                       </h2>
                       
                       <!-- Order ID -->
                       <div style="margin-bottom:15px;">
-                        <p style="color:${textGray};font-size:14px;margin:0 0 5px 0;font-weight:500;">Order ID:</p>
-                        <p style="color:${textDark};font-size:16px;margin:0;font-weight:600;font-family:monospace;">${orderId}</p>
+                        <p style="color:#5a6982;font-size:14px;margin:0 0 5px 0;font-weight:500;">Order ID:</p>
+                        <p style="color:#1a2b48;font-size:16px;margin:0;font-weight:600;font-family:monospace;">${orderId}</p>
                       </div>
 
                       <!-- Product & Amount -->
-                      <div style="border-top:1px solid ${borderColor};padding-top:15px;">
+                      <div style="border-top:1px solid #e0f2fe;padding-top:15px;">
                         <div style="display:table;width:100%;">
                           <div style="display:table-row;">
                             <div style="display:table-cell;padding:8px 0;vertical-align:middle;">
-                              <p style="color:${textDark};font-size:16px;margin:0;font-weight:600;">${productName}</p>
+                              <p style="color:#1a2b48;font-size:16px;margin:0;font-weight:600;">${productName}</p>
                             </div>
                             <div style="display:table-cell;text-align:right;padding:8px 0;vertical-align:middle;">
-                              <p style="color:${textDark};font-size:20px;margin:0;font-weight:800;">$${amount.toFixed(2)}</p>
+                              <p style="color:#1a2b48;font-size:20px;margin:0;font-weight:800;">$${amount.toFixed(2)}</p>
                             </div>
                           </div>
                         </div>
                       </div>
 
                       <!-- Total -->
-                      <div style="border-top:2px solid ${primaryColor};padding-top:15px;margin-top:15px;">
+                      <div style="border-top:2px solid #007bff;padding-top:15px;margin-top:15px;">
                         <div style="display:table;width:100%;">
                           <div style="display:table-row;">
                             <div style="display:table-cell;padding:5px 0;vertical-align:middle;">
-                              <p style="color:${textDark};font-size:18px;margin:0;font-weight:800;">Total Paid:</p>
+                              <p style="color:#1a2b48;font-size:18px;margin:0;font-weight:800;">Total Paid:</p>
                             </div>
                             <div style="display:table-cell;text-align:right;padding:5px 0;vertical-align:middle;">
-                              <p style="color:${primaryColor};font-size:24px;margin:0;font-weight:800;">$${amount.toFixed(2)}</p>
+                              <p style="color:#007bff;font-size:24px;margin:0;font-weight:800;">$${amount.toFixed(2)}</p>
                             </div>
                           </div>
                         </div>
@@ -598,8 +579,8 @@ async function sendCustomerConfirmation({
 
                     <!-- Next Steps -->
                     <div style="background-color:#f9fafb;border-radius:8px;padding:25px;margin-bottom:25px;">
-                      <h3 style="color:${textDark};font-size:18px;font-weight:600;margin:0 0 15px 0;">What's Next?</h3>
-                      <p style="color:${textGray};font-size:16px;line-height:1.6;margin:0;">
+                      <h3 style="color:#1a2b48;font-size:18px;font-weight:600;margin:0 0 15px 0;">What's Next?</h3>
+                      <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
                         We're working on getting your order ready! If you have any questions about your order, 
                         please don't hesitate to reach out to us directly.
                       </p>
@@ -607,7 +588,7 @@ async function sendCustomerConfirmation({
 
                     <!-- Thank You Message -->
                     <div style="text-align:center;margin-bottom:20px;">
-                      <p style="color:${textGray};font-size:16px;line-height:1.6;margin:0;">
+                      <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
                         Thank you for choosing ${businessName}! We appreciate your business and hope you love your purchase. 💙
                       </p>
                     </div>
@@ -619,7 +600,7 @@ async function sendCustomerConfirmation({
                   <td align="center" style="padding:0 40px 40px 40px;">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td align="center" style="border-radius:8px;background:${gradient};">
+                        <td align="center" style="border-radius:8px;background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);">
                           <a href="${websiteUrl}" style="display:inline-block;padding:16px 32px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
                             Visit Our Store →
                           </a>
@@ -631,11 +612,11 @@ async function sendCustomerConfirmation({
 
                 <!-- Footer -->
                 <tr>
-                  <td align="center" style="padding:30px 40px;border-top:1px solid ${borderColor};">
-                    <p style="color:${textGray};font-size:14px;margin:0 0 10px 0;">
+                  <td align="center" style="padding:30px 40px;border-top:1px solid #e4e7eb;">
+                    <p style="color:#5a6982;font-size:14px;margin:0 0 10px 0;">
                       Thank you for your order from ${businessName}
                     </p>
-                    <p style="color:${textGray};font-size:12px;margin:0;">
+                    <p style="color:#5a6982;font-size:12px;margin:0;">
                       This order was processed securely. © 2025 ${businessName}. All rights reserved.
                     </p>
                   </td>

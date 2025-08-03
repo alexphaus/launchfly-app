@@ -193,23 +193,11 @@ async function generateWebsite(opportunity) {
       Create a professional website theme and layout for this business:
       ${JSON.stringify(opportunity)}
       
-      IMPORTANT: For Hero backgrounds, generate stunning visual elements:
-      - Use high-quality Unsplash images that match the business type perfectly
+      IMPORTANT: For Hero backgrounds, create stunning visual elements using CSS:
+      - Use sophisticated gradient backgrounds that match the business type perfectly
       - Create complementary gradient overlays for text readability  
       - Ensure the background enhances the business brand and message
-      - Use professional, modern imagery that appeals to the target audience
-      
-      For different business types, use these Unsplash image suggestions:
-      - Fitness/Health: https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Business/Consulting: https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Technology: https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Creative/Design: https://images.unsplash.com/photo-1561736778-92e52a7769ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Education: https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Food/Restaurant: https://images.unsplash.com/photo-1514933651103-005eec06c04b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Real Estate: https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      - Finance: https://images.unsplash.com/photo-1559526324-4b87b5e36e44?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80
-      
-      Choose the most appropriate image URL based on the business type and niche.
+      - Use modern CSS gradients and effects that appeal to the target audience
       
       IMPORTANT: Create realistic, specific testimonials based on the business type. Each testimonial should:
       - Reference actual results or benefits someone would get from this business
@@ -227,15 +215,15 @@ async function generateWebsite(opportunity) {
       {
         "theme": {
           "colors": {
-            "primary": "#hexcode (choose colors that complement the hero background image)",
+            "primary": "#hexcode (choose colors that work well with gradients)",
             "secondary": "#hexcode (complementary color)",
             "textDark": "#1f2937",
             "textGray": "#6b7280",
             "borderColor": "#e5e7eb"
           },
           "font": "Inter, Poppins, or Montserrat - choose based on business type",
-          "gradient": "CSS gradient that works harmoniously with the hero background",
-          "heroGradient": "Specific gradient overlay for hero background for optimal text readability"
+          "gradient": "CSS gradient that represents the business type",
+          "heroBackground": "Sophisticated CSS gradient or pattern for hero section"
         },
         "layout": [
           {
@@ -254,8 +242,7 @@ async function generateWebsite(opportunity) {
               "subtitle": "Compelling subtitle",
               "ctaText": "Get Started",
               "ctaLink": "#contact",
-              "backgroundImage": "High-quality background image URL that matches the business type (choose from the Unsplash URLs above)",
-              "backgroundOverlay": "Use the heroGradient from theme for optimal text readability"
+              "background": "Use the heroBackground from theme for stunning CSS-only visuals"
             }
           },
           {
@@ -381,13 +368,12 @@ async function generateWebsite(opportunity) {
     console.log('OpenAI response received for website generation');
     const result = JSON.parse(response.choices[0].message.content);
     
-    // Enhance result with business-specific visuals if not provided
-    const visuals = getBusinessVisuals(opportunity.niche, opportunity.businessType);
+    // Enhance result with business-specific CSS visuals
+    const cssBackground = getBusinessCSSBackground(opportunity.niche, opportunity.businessType);
     if (result.layout) {
       const heroComponent = result.layout.find(component => component.component === 'Hero');
-      if (heroComponent && !heroComponent.props.backgroundImage) {
-        heroComponent.props.backgroundImage = visuals.background;
-        heroComponent.props.backgroundOverlay = visuals.overlay;
+      if (heroComponent && !heroComponent.props.background) {
+        heroComponent.props.background = cssBackground;
       }
     }
     
@@ -402,8 +388,8 @@ async function generateWebsite(opportunity) {
       stack: error.stack
     });
     
-    // Provide fallback website data with enhanced visuals
-    const visuals = getBusinessVisuals(opportunity.niche, opportunity.businessType);
+    // Provide fallback website data with CSS-only backgrounds
+    const cssBackground = getBusinessCSSBackground(opportunity.niche, opportunity.businessType);
     return {
       theme: {
         colors: {
@@ -415,9 +401,9 @@ async function generateWebsite(opportunity) {
         },
         font: "Inter",
         gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        heroGradient: visuals.overlay
+        heroBackground: cssBackground
       },
-      layout: generateDefaultLayout(opportunity, visuals)
+      layout: generateDefaultLayout(opportunity, cssBackground)
     };
   }
 }
@@ -574,67 +560,34 @@ function generateDomain(businessName) {
 }
 
 /**
- * Gets business-specific background images and overlays
+ * Gets business-specific CSS backgrounds (gradients and patterns)
  */
-function getBusinessVisuals(niche, businessType) {
-  const visualMap = {
-    fitness: {
-      background: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(245, 87, 108, 0.8) 0%, rgba(240, 147, 251, 0.6) 100%)"
-    },
-    health: {
-      background: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(67, 233, 123, 0.8) 0%, rgba(56, 249, 215, 0.6) 100%)"
-    },
-    business: {
-      background: "https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(79, 172, 254, 0.8) 0%, rgba(0, 242, 254, 0.6) 100%)"
-    },
-    technology: {
-      background: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.6) 100%)"
-    },
-    creative: {
-      background: "https://images.unsplash.com/photo-1561736778-92e52a7769ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(250, 112, 154, 0.8) 0%, rgba(254, 225, 64, 0.6) 100%)"
-    },
-    education: {
-      background: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(168, 237, 234, 0.8) 0%, rgba(254, 214, 227, 0.6) 100%)"
-    },
-    food: {
-      background: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(255, 236, 210, 0.8) 0%, rgba(252, 182, 159, 0.6) 100%)"
-    },
-    finance: {
-      background: "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(26, 43, 72, 0.8) 0%, rgba(59, 130, 246, 0.6) 100%)"
-    },
-    realestate: {
-      background: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(34, 197, 94, 0.8) 0%, rgba(59, 130, 246, 0.6) 100%)"
-    },
-    consulting: {
-      background: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(59, 130, 246, 0.8) 0%, rgba(147, 51, 234, 0.6) 100%)"
-    },
-    default: {
-      background: "https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80",
-      overlay: "linear-gradient(135deg, rgba(79, 172, 254, 0.8) 0%, rgba(0, 242, 254, 0.6) 100%)"
-    }
+function getBusinessCSSBackground(niche, businessType) {
+  const backgroundMap = {
+    fitness: "linear-gradient(135deg, #667eea 0%, #764ba2 100%), radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%)",
+    health: "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%), radial-gradient(circle at 80% 20%, rgba(132, 250, 176, 0.4) 0%, transparent 50%)",
+    business: "linear-gradient(135deg, #667eea 0%, #764ba2 100%), linear-gradient(45deg, rgba(255,255,255,0.1) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.1) 25%, transparent 25%)",
+    technology: "linear-gradient(135deg, #667eea 0%, #764ba2 100%), conic-gradient(from 45deg at 50% 50%, transparent 0deg, rgba(255,255,255,0.1) 180deg, transparent 360deg)",
+    creative: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%), radial-gradient(circle at 30% 70%, rgba(255, 182, 193, 0.5) 0%, transparent 50%)",
+    education: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%), repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px)",
+    food: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%), radial-gradient(circle at 60% 40%, rgba(255, 140, 0, 0.3) 0%, transparent 50%)",
+    finance: "linear-gradient(135deg, #2c3e50 0%, #3498db 100%), linear-gradient(90deg, rgba(255,255,255,0.05) 50%, transparent 50%)",
+    realestate: "linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%), polygon(50% 0%, 0% 100%, 100% 100%)",
+    consulting: "linear-gradient(135deg, #667eea 0%, #764ba2 100%), repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)",
+    default: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
   };
   
   const lowerNiche = niche?.toLowerCase() || '';
   const lowerType = businessType?.toLowerCase() || '';
   
   // Check niche first, then business type
-  for (const [key, visuals] of Object.entries(visualMap)) {
+  for (const [key, background] of Object.entries(backgroundMap)) {
     if (lowerNiche.includes(key) || lowerType.includes(key)) {
-      return visuals;
+      return background;
     }
   }
   
-  return visualMap.default;
+  return backgroundMap.default;
 }
 
 /**
@@ -771,11 +724,11 @@ async function handleLaunchError(sessionId, businessId) {
  * Generates a default layout when AI fails
  * 
  * @param {Object} opportunity - The analyzed business opportunity
- * @param {Object} visuals - Business-specific visual assets
+ * @param {string} cssBackground - CSS background for hero section
  * @returns {Array} Default layout configuration
  */
-function generateDefaultLayout(opportunity, visuals = null) {
-  const businessVisuals = visuals || getBusinessVisuals(opportunity.niche, opportunity.businessType);
+function generateDefaultLayout(opportunity, cssBackground = null) {
+  const background = cssBackground || getBusinessCSSBackground(opportunity.niche, opportunity.businessType);
   
   return [
     {
@@ -793,8 +746,7 @@ function generateDefaultLayout(opportunity, visuals = null) {
         title: opportunity.solution || 'Transform Your Business',
         subtitle: opportunity.problem || 'Professional solutions tailored to your needs',
         ctaText: 'Get Started Today',
-        backgroundImage: businessVisuals.background,
-        backgroundOverlay: businessVisuals.overlay
+        background: background
       }
     },
     {

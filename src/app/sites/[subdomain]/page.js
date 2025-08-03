@@ -1,6 +1,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
+import EcommerceWrapper from '@/components/EcommerceWrapper';
 
 // Mock business data for fallback
 const mockBusinessData = {
@@ -370,22 +371,32 @@ export default async function DynamicWebsite({ params }) {
 
   return (
     <ThemedLayout theme={theme}>
-      <div className="dynamic-website">
-        {layout.map((section, index) => {
-          const Component = LaunchflyUI[section.component];
-          if (!Component) {
-            console.warn(`Component ${section.component} not found`);
-            return null;
-          }
-          
-          return (
-            <Component
-              key={index}
-              {...section.props}
-            />
-          );
-        })}
-      </div>
+      <EcommerceWrapper businessData={businessData}>
+        <div className="dynamic-website">
+          {layout.map((section, index) => {
+            const Component = LaunchflyUI[section.component];
+            if (!Component) {
+              console.warn(`Component ${section.component} not found`);
+              return null;
+            }
+            
+            // Add showCart prop to NavBar for e-commerce sites
+            let props = section.props;
+            if (section.component === 'NavBar' && businessData?.ecommerceSettings?.enabled) {
+              props = { ...section.props, showCart: true };
+            } else if (section.component === 'ProductGrid') {
+              props = { ...section.props, businessData };
+            }
+            
+            return (
+              <Component
+                key={index}
+                {...props}
+              />
+            );
+          })}
+        </div>
+      </EcommerceWrapper>
     </ThemedLayout>
   );
 }

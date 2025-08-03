@@ -118,8 +118,13 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     const products = await createProducts(opportunity);
     businessData.products = products;
     
-    // Update database with products
-    await updateBusinessProgress(businessId, { products });
+    // Add e-commerce settings based on business type
+    console.log('Adding e-commerce settings...');
+    const ecommerceSettings = generateEcommerceSettings(opportunity.businessType, products);
+    businessData.ecommerceSettings = ecommerceSettings;
+    
+    // Update database with products and e-commerce settings
+    await updateBusinessProgress(businessId, { products, ecommerceSettings });
     
     // Generate marketing materials and strategies (can be slow)
     console.log('Creating marketing materials...');
@@ -431,7 +436,17 @@ async function generateWebsite(opportunity) {
 async function createProducts(opportunity) {
   try {
     console.log('Starting product creation for:', opportunity.businessName);
-    const prompt = `
+    
+    // Determine if this is an e-commerce business
+    const isEcommerce = opportunity.businessType && (
+      opportunity.businessType.toLowerCase().includes('ecommerce') ||
+      opportunity.businessType.toLowerCase().includes('e-commerce') ||
+      opportunity.businessType.toLowerCase().includes('retail') ||
+      opportunity.businessType.toLowerCase().includes('store') ||
+      opportunity.businessType.toLowerCase().includes('shop')
+    );
+    
+    const basePrompt = `
       Create 3 compelling product or service offerings for this business:
       ${JSON.stringify(opportunity)}
       
@@ -439,14 +454,61 @@ async function createProducts(opportunity) {
       - A clear name
       - A compelling description
       - An appropriate price point for the target market
+    `;
+    
+    const ecommercePrompt = `
+      ${basePrompt}
       
-      Return as a JSON object with a "products" array containing objects with name, price, and description.
-      Example format:
+      Since this is an e-commerce business, also include:
+      - Stock quantity (realistic numbers between 10-100)
+      - At least one variant option (like size, color, or model) for each product
+      - Features list (3-5 key features per product)
+      - Original price if there's a discount (optional)
+      
+      Return as JSON with this exact structure:
       {
         "products": [
-          {"name": "Product Name", "price": "$99", "description": "Product description"},
-          {"name": "Product Name 2", "price": "$199", "description": "Product description 2"},
-          {"name": "Product Name 3", "price": "$299", "description": "Product description 3"}
+          {
+            "id": "product-slug",
+            "name": "Product Name",
+            "price": "$99.99",
+            "originalPrice": "$129.99",
+            "description": "Product description",
+            "stock": 45,
+            "image": null,
+            "icon": "📦",
+            "features": ["Feature 1", "Feature 2", "Feature 3"],
+            "variants": [
+              {"id": "variant-1", "name": "Small", "price": "$99.99"},
+              {"id": "variant-2", "name": "Medium", "price": "$109.99"},
+              {"id": "variant-3", "name": "Large", "price": "$119.99"}
+            ],
+            "variantType": "Size"
+          }
+        ]
+      }
+    `;
+    
+    const servicePrompt = `
+      ${basePrompt}
+      
+      Since this is a service business, also include:
+      - Features list (3-5 key features per service)
+      - Service period if recurring (monthly, yearly, one-time)
+      
+      Return as JSON with this structure:
+      {
+        "products": [
+          {
+            "id": "service-slug",
+            "name": "Service Name",
+            "price": "$99",
+            "period": "monthly",
+            "description": "Service description",
+            "icon": "🚀",
+            "features": ["Feature 1", "Feature 2", "Feature 3"],
+            "ctaText": "Get Started"
+          }
         ]
       }
     `;
@@ -457,7 +519,7 @@ async function createProducts(opportunity) {
         model: "gpt-4o",
         messages: [
           { role: "system", content: "You are a product development and pricing expert." },
-          { role: "user", content: prompt }
+          { role: "user", content: isEcommerce ? ecommercePrompt : servicePrompt }
         ],
         response_format: { type: "json_object" }
       })
@@ -465,8 +527,23 @@ async function createProducts(opportunity) {
     
     console.log('OpenAI response received for product creation');
     const { products } = JSON.parse(response.choices[0].message.content);
-    console.log('Products created successfully:', products?.length || 0);
-    return products || [];
+    
+    // Enhance products with additional e-commerce data if needed
+    const enhancedProducts = products.map((product, index) => {
+      const enhanced = {
+        ...product,
+        id: product.id || product.name.toLowerCase().replace(/\s+/g, '-')
+      };
+      
+      if (isEcommerce && !product.stock) {
+        enhanced.stock = Math.floor(Math.random() * 90) + 10; // 10-100 stock
+      }
+      
+      return enhanced;
+    });
+    
+    console.log('Products created successfully:', enhancedProducts?.length || 0);
+    return enhancedProducts || [];
   } catch (error) {
     console.error("Error creating products:", error);
     console.error("Error details:", {
@@ -475,12 +552,63 @@ async function createProducts(opportunity) {
       type: error.type
     });
     
+    // Determine fallback type
+    const isEcommerce = opportunity.businessType && (
+      opportunity.businessType.toLowerCase().includes('ecommerce') ||
+      opportunity.businessType.toLowerCase().includes('retail') ||
+      opportunity.businessType.toLowerCase().includes('store')
+    );
+    
     // Fallback products
-    return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
-    ];
+    if (isEcommerce) {
+      return [
+        { 
+          id: "starter-product",
+          name: "Starter Product", 
+          price: "$29.99", 
+          description: "Perfect for getting started",
+          stock: 50,
+          features: ["High quality", "Fast shipping", "1-year warranty"],
+          variants: [
+            { id: "small", name: "Small", price: "$29.99" },
+            { id: "medium", name: "Medium", price: "$34.99" },
+            { id: "large", name: "Large", price: "$39.99" }
+          ],
+          variantType: "Size",
+          icon: "📦"
+        },
+        { 
+          id: "premium-product",
+          name: "Premium Product", 
+          price: "$79.99",
+          originalPrice: "$99.99", 
+          description: "Our most popular choice",
+          stock: 25,
+          features: ["Premium quality", "Extended warranty", "Free shipping", "24/7 support"],
+          variants: [
+            { id: "basic", name: "Basic", price: "$79.99" },
+            { id: "deluxe", name: "Deluxe", price: "$89.99" }
+          ],
+          variantType: "Model",
+          icon: "⭐"
+        },
+        { 
+          id: "enterprise-product",
+          name: "Enterprise Product", 
+          price: "$149.99", 
+          description: "For serious customers",
+          stock: 15,
+          features: ["Enterprise grade", "Bulk pricing", "Dedicated support", "Custom options"],
+          icon: "💎"
+        }
+      ];
+    } else {
+      return [
+        { id: "basic-package", name: "Basic Package", price: "$97", period: "one-time", description: "Essential services to get you started", features: ["Basic setup", "Email support", "30-day guarantee"], icon: "🚀", ctaText: "Get Started" },
+        { id: "professional-package", name: "Professional Package", price: "$297", period: "one-time", description: "Comprehensive solutions for established businesses", features: ["Advanced setup", "Priority support", "60-day guarantee", "Training included"], icon: "⭐", ctaText: "Go Pro" },
+        { id: "premium-package", name: "Premium Package", price: "$597", period: "one-time", description: "All-inclusive enterprise-grade services", features: ["Full setup", "24/7 support", "90-day guarantee", "Custom development"], icon: "💎", ctaText: "Contact Sales" }
+      ];
+    }
   }
 }
 
@@ -863,4 +991,65 @@ function generateDefaultLayout(opportunity, visuals = null) {
       }
     }
   ];
+}
+
+/**
+ * Generate e-commerce settings based on business type and products
+ */
+function generateEcommerceSettings(businessType, products) {
+  const isEcommerce = businessType && (
+    businessType.toLowerCase().includes('ecommerce') ||
+    businessType.toLowerCase().includes('e-commerce') ||
+    businessType.toLowerCase().includes('retail') ||
+    businessType.toLowerCase().includes('store') ||
+    businessType.toLowerCase().includes('shop') ||
+    (products && products.some(p => p.price && !p.period)) // Has products without recurring periods
+  );
+
+  if (!isEcommerce) {
+    return null;
+  }
+
+  return {
+    enabled: true,
+    businessType: 'ecommerce', // Flag to determine site type
+    shipping: {
+      freeShippingThreshold: 50,
+      standardRate: 5.99,
+      expressRate: 12.99,
+      estimatedDelivery: '5-7 business days',
+      expeditedDelivery: '2-3 business days'
+    },
+    tax: {
+      rate: 0.08, // Simple percentage (8%)
+      included: false,
+      description: 'Tax calculated at checkout'
+    },
+    policies: {
+      returns: '30-day returns',
+      shipping: 'Ships within 2 business days',
+      warranty: '1-year warranty on all products',
+      support: 'Email support within 24 hours'
+    },
+    currency: {
+      code: 'USD',
+      symbol: '$',
+      decimal: 2
+    },
+    inventory: {
+      trackStock: true,
+      lowStockThreshold: 5,
+      outOfStockBehavior: 'hide' // 'hide' or 'show'
+    },
+    checkout: {
+      guestCheckout: true,
+      requireAccount: false,
+      savePaymentMethods: false
+    },
+    notifications: {
+      orderConfirmation: true,
+      shipmentTracking: true,
+      lowStock: true
+    }
+  };
 }

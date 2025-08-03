@@ -1,11 +1,14 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import ProductCard from './ProductCard';
+import EnhancedProductCard from './EnhancedProductCard';
 
 export default function ProductGrid({ 
   title = "Our Products",
   subtitle = "Choose the perfect solution for your needs",
-  products = []
+  products = [],
+  businessData = null
 }) {
   const defaultProducts = [
     {
@@ -56,10 +59,14 @@ export default function ProductGrid({
   ];
 
   const displayProducts = products.length > 0 ? products : defaultProducts;
+  const isEcommerce = businessData?.ecommerceSettings?.enabled;
 
   if (displayProducts.length === 0) {
     return null;
   }
+
+  // Choose the appropriate card component
+  const CardComponent = isEcommerce ? EnhancedProductCard : ProductCard;
 
   return (
     <section className="py-20 bg-gray-50" id="products">
@@ -77,10 +84,12 @@ export default function ProductGrid({
         {/* Products Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {displayProducts.map((product, index) => (
-            <ProductCard
+            <CardComponent
               key={product.id || index}
               product={product}
               featured={product.popular}
+              showVariants={isEcommerce}
+              showAddToCart={isEcommerce}
             />
           ))}
         </div>

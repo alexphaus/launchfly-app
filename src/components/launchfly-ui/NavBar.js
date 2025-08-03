@@ -1,6 +1,16 @@
 'use client';
 
-export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Business", links = [], ctaText = "Get Started", ctaLink = "#contact" }) {
+import MiniCart from './MiniCart';
+
+export default function NavBar({ 
+  logoUrl, 
+  logo = "🚀", 
+  businessName = "Your Business", 
+  links = [], 
+  ctaText = "Get Started", 
+  ctaLink = "#contact",
+  showCart = false 
+}) {
   return (
     <nav className="bg-white shadow-sm border-b" style={{ 
       borderColor: 'var(--border-color, #e5e7eb)',
@@ -35,6 +45,10 @@ export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Bu
                 {link}
               </a>
             ))}
+            
+            {/* Cart Icon - only show for e-commerce sites */}
+            {showCart && <MiniCart />}
+            
             <a
               href={ctaLink}
               className="px-6 py-2 rounded-full font-semibold text-white transition-all hover:scale-105"
@@ -48,7 +62,10 @@ export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Bu
           </div>
           
           {/* Mobile Menu Button */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center space-x-4">
+            {/* Mobile Cart Icon */}
+            {showCart && <MiniCart />}
+            
             <button className="text-gray-700 hover:text-gray-900">
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

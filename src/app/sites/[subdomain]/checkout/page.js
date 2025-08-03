@@ -1,29 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import OrderConfirmation from '../../../../components/launchfly-ui/OrderConfirmation';
+import { CartProvider } from '../../../../hooks/useCart';
+import CheckoutPage from '../../../../components/launchfly-ui/CheckoutPage';
 
-export default function Success() {
+export default function Checkout() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const [businessData, setBusiness] = useState(null);
-  const [orderData, setOrderData] = useState(null);
   const [loading, setLoading] = useState(true);
   const supabase = createClientComponentClient();
 
   useEffect(() => {
-    loadBusinessAndOrder();
+    loadBusiness();
   }, []);
 
-  async function loadBusinessAndOrder() {
+  async function loadBusiness() {
     try {
       const subdomain = await params.subdomain;
-      const sessionId = searchParams.get('session_id');
-      const orderId = searchParams.get('order_id');
 
-      // Load business data
       const { data: business, error } = await supabase
         .from('businesses')
         .select('*')
@@ -47,37 +43,10 @@ export default function Success() {
           root.style.setProperty(`--${key}`, value);
         });
       }
-
-      // Create mock order data (in a real app, you'd fetch this from your database)
-      if (sessionId || orderId) {
-        const mockOrderData = {
-          id: orderId || `ORD-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          status: 'confirmed',
-          createdAt: new Date().toISOString(),
-          customer: {
-            email: 'customer@example.com',
-            firstName: 'John',
-            lastName: 'Doe'
-          },
-          items: [],
-          totals: {
-            subtotal: 0,
-            shipping: 0,
-            tax: 0,
-            total: 0
-          },
-          estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        };
-        
-        setOrderData(mockOrderData);
-      }
-      
-      // Clear cart from localStorage
-      localStorage.removeItem('launchfly-cart');
       
       setLoading(false);
     } catch (error) {
-      console.error('Error loading business and order:', error);
+      console.error('Error loading business:', error);
       setLoading(false);
     }
   }
@@ -108,5 +77,9 @@ export default function Success() {
     );
   }
 
-  return <OrderConfirmation orderData={orderData} />;
+  return (
+    <CartProvider>
+      <CheckoutPage />
+    </CartProvider>
+  );
 }

@@ -1054,15 +1054,6 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         margin: '0 auto',
         padding: '0 24px'
       }}>
-        {/* Live Website Preview with Real-time Updates */}
-        <LiveWebsiteCard 
-          subdomain={business?.subdomain}
-          visitors={business?.views || 0}
-          businessData={businessData}
-          generationStage={generationStage}
-          business={business}
-        />
-
         {/* Money Display - Always show for motivation */}
         <MoneyHero 
           totalRevenue={totalRevenue}
@@ -1075,6 +1066,15 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             (totalRevenue > 0 ? Math.max(totalRevenue * 0.1, 5) : 0) // 10% of revenue or $5 minimum
           }
           canCashOut={totalRevenue > 0} // Allow cashout when there's any revenue
+        />
+
+        {/* Live Website Preview with Real-time Updates */}
+        <LiveWebsiteCard 
+          subdomain={business?.subdomain}
+          visitors={business?.views || 0}
+          businessData={businessData}
+          generationStage={generationStage}
+          business={business}
         />
 
         {/* Real-time AI Activity */}

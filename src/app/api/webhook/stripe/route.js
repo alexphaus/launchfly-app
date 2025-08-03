@@ -98,7 +98,7 @@ export async function POST(request) {
       // Check if this is the first sale
       const { data: business, error: businessError } = await supabase
         .from('businesses')
-        .select('user_id, name, subdomain, form_data, launch_date, created_at, views, first_sale_date, total_revenue')
+        .select('user_id, name, subdomain, form_data, launch_date, created_at, views, first_sale_date, total_revenue, session_id')
         .eq('id', metadata.business_id)
         .single();
 
@@ -157,7 +157,8 @@ export async function POST(request) {
           totalRevenue: newTotalRevenue,
           subdomain: business.subdomain,
           businessLaunchDate: business.launch_date || business.created_at,
-          visitorCount: business.views || 0
+          visitorCount: business.views || 0,
+          sessionId: business.session_id
         });
       }
 
@@ -198,15 +199,16 @@ async function sendSaleNotification({
   totalRevenue,
   subdomain,
   businessLaunchDate,
-  visitorCount
+  visitorCount,
+  sessionId
 }) {
   try {
     const subject = isFirstSale 
       ? `🎉 You did it! Your first sale for ${businessName}!`
       : `💰 New Sale: $${amount.toFixed(2)} for ${businessName}`;
 
-    const dashboardUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/dashboard`;
-    const websiteUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/${subdomain}`;
+    const dashboardUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/dashboard/${sessionId}`;
+    const websiteUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}`;
 
     let htmlContent;
 

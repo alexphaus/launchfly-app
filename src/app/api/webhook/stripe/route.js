@@ -162,6 +162,19 @@ export async function POST(request) {
         });
       }
 
+      // Send order confirmation email to customer
+      if (saleData.customer_email) {
+        await sendCustomerConfirmation({
+          customerEmail: saleData.customer_email,
+          customerName: saleData.customer_name,
+          businessName: business.name,
+          productName: metadata.product_name,
+          amount: session.amount_total / 100,
+          orderId: session.id,
+          websiteUrl: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${business.subdomain}`
+        });
+      }
+
       console.log('Sale processing completed successfully');
 
     } catch (error) {
@@ -468,5 +481,164 @@ async function sendSaleNotification({
 
   } catch (error) {
     console.error('Error sending sale notification email:', error);
+  }
+}
+
+async function sendCustomerConfirmation({
+  customerEmail,
+  customerName,
+  businessName,
+  productName,
+  amount,
+  orderId,
+  websiteUrl
+}) {
+  try {
+    const subject = `Order Confirmation - Thank you for your purchase from ${businessName}!`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Order Confirmation</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,sans-serif;">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            <td align="center" style="padding:40px 0">
+              <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+                
+                <!-- Header -->
+                <tr>
+                  <td align="center" style="background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);padding:40px 20px;">
+                    <div style="font-size:48px;margin-bottom:20px;">✅</div>
+                    <h1 style="color:#ffffff;font-size:32px;font-weight:800;margin:0 0 12px 0;">
+                      Order Confirmed!
+                    </h1>
+                    <p style="color:#ffffff;font-size:18px;margin:0;opacity:0.95;font-weight:500;">
+                      Thank you for your purchase from ${businessName}
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Main Content -->
+                <tr>
+                  <td style="padding:40px 40px 20px 40px;">
+                    
+                    <!-- Greeting -->
+                    <p style="color:#1a2b48;font-size:18px;line-height:1.6;margin:0 0 25px 0;">
+                      Hi ${customerName},
+                    </p>
+                    
+                    <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0 0 30px 0;">
+                      Thank you for your purchase! We're excited to confirm that your order has been successfully processed.
+                    </p>
+
+                    <!-- Order Details -->
+                    <div style="background-color:#f0f9ff;border-radius:12px;padding:30px;margin-bottom:30px;">
+                      <h2 style="color:#1a2b48;font-size:20px;font-weight:700;margin:0 0 20px 0;">
+                        Order Details
+                      </h2>
+                      
+                      <!-- Order ID -->
+                      <div style="margin-bottom:15px;">
+                        <p style="color:#5a6982;font-size:14px;margin:0 0 5px 0;font-weight:500;">Order ID:</p>
+                        <p style="color:#1a2b48;font-size:16px;margin:0;font-weight:600;font-family:monospace;">${orderId}</p>
+                      </div>
+
+                      <!-- Product & Amount -->
+                      <div style="border-top:1px solid #e0f2fe;padding-top:15px;">
+                        <div style="display:table;width:100%;">
+                          <div style="display:table-row;">
+                            <div style="display:table-cell;padding:8px 0;vertical-align:middle;">
+                              <p style="color:#1a2b48;font-size:16px;margin:0;font-weight:600;">${productName}</p>
+                            </div>
+                            <div style="display:table-cell;text-align:right;padding:8px 0;vertical-align:middle;">
+                              <p style="color:#1a2b48;font-size:20px;margin:0;font-weight:800;">$${amount.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Total -->
+                      <div style="border-top:2px solid #007bff;padding-top:15px;margin-top:15px;">
+                        <div style="display:table;width:100%;">
+                          <div style="display:table-row;">
+                            <div style="display:table-cell;padding:5px 0;vertical-align:middle;">
+                              <p style="color:#1a2b48;font-size:18px;margin:0;font-weight:800;">Total Paid:</p>
+                            </div>
+                            <div style="display:table-cell;text-align:right;padding:5px 0;vertical-align:middle;">
+                              <p style="color:#007bff;font-size:24px;margin:0;font-weight:800;">$${amount.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Next Steps -->
+                    <div style="background-color:#f9fafb;border-radius:8px;padding:25px;margin-bottom:25px;">
+                      <h3 style="color:#1a2b48;font-size:18px;font-weight:600;margin:0 0 15px 0;">What's Next?</h3>
+                      <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
+                        You'll receive any additional information about your purchase directly from ${businessName}. 
+                        If you have any questions about your order, please don't hesitate to reach out to them.
+                      </p>
+                    </div>
+
+                    <!-- Thank You Message -->
+                    <div style="text-align:center;margin-bottom:20px;">
+                      <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
+                        Thank you for supporting ${businessName}! We hope you love your purchase. 💙
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- CTA Button -->
+                <tr>
+                  <td align="center" style="padding:0 40px 40px 40px;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="border-radius:8px;background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);">
+                          <a href="${websiteUrl}" style="display:inline-block;padding:16px 32px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
+                            Visit ${businessName} →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td align="center" style="padding:30px 40px;border-top:1px solid #e4e7eb;">
+                    <p style="color:#5a6982;font-size:14px;margin:0 0 10px 0;">
+                      This order was processed securely through Launchfly AI
+                    </p>
+                    <p style="color:#5a6982;font-size:12px;margin:0;">
+                      © 2025 Launchfly AI. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await resend.emails.send({
+      from: 'Orders <hello@launchfly.ai>',
+      to: customerEmail,
+      subject: subject,
+      html: htmlContent
+    });
+
+    console.log(`Order confirmation sent to ${customerEmail} for order ${orderId}`);
+
+  } catch (error) {
+    console.error('Error sending customer confirmation email:', error);
   }
 }

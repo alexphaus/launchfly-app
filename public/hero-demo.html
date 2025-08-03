@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Hero Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        @keyframes float-delayed {
+            0%, 100% {
+                transform: translateY(0px) translateX(0px);
+            }
+            33% {
+                transform: translateY(-15px) translateX(10px);
+            }
+            66% {
+                transform: translateY(-25px) translateX(-5px);
+            }
+        }
+
+        @keyframes float-slow {
+            0%, 100% {
+                transform: translateY(0px) scale(1);
+            }
+            50% {
+                transform: translateY(-30px) scale(1.1);
+            }
+        }
+
+        .animate-fadeInUp {
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .animate-float-delayed {
+            animation: float-delayed 8s ease-in-out infinite;
+            animation-delay: 2s;
+        }
+
+        .animate-float-slow {
+            animation: float-slow 10s ease-in-out infinite;
+            animation-delay: 4s;
+        }
+
+        .animation-delay-200 {
+            animation-delay: 0.2s;
+        }
+
+        .animation-delay-400 {
+            animation-delay: 0.4s;
+        }
+
+        .animation-delay-600 {
+            animation-delay: 0.6s;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="text-4xl font-bold text-center py-8 bg-gray-100">Enhanced Hero Background Demo</h1>
+    
+    <!-- Fitness Business Hero -->
+    <section 
+        class="relative py-20 lg:py-32 overflow-hidden min-h-[80vh] flex items-center mb-8"
+        style="
+            background: linear-gradient(135deg, rgba(245, 87, 108, 0.8) 0%, rgba(240, 147, 251, 0.6) 100%), url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        "
+    >
+        <!-- Enhanced Background Elements -->
+        <div class="absolute inset-0">
+            <!-- Animated Gradient Overlay -->
+            <div class="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-transparent to-blue-500/20 animate-pulse"></div>
+            
+            <!-- Grid Pattern -->
+            <div class="absolute inset-0 opacity-5">
+                <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                        <pattern id="heroGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+                            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" stroke-width="0.3"/>
+                        </pattern>
+                    </defs>
+                    <rect width="100" height="100" fill="url(#heroGrid)" />
+                </svg>
+            </div>
+
+            <!-- Floating Elements -->
+            <div class="absolute inset-0 overflow-hidden">
+                <div class="absolute top-20 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl animate-float"></div>
+                <div class="absolute top-40 right-20 w-32 h-32 bg-white/5 rounded-full blur-2xl animate-float-delayed"></div>
+                <div class="absolute bottom-20 left-1/4 w-16 h-16 bg-white/8 rounded-full blur-lg animate-float-slow"></div>
+            </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
+            <!-- Enhanced Title -->
+            <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                <span class="drop-shadow-lg animate-fadeInUp">
+                    Transform Your Body, Transform Your Life
+                </span>
+            </h1>
+            
+            <!-- Enhanced Subtitle -->
+            <p class="text-xl md:text-2xl text-white/95 mb-10 max-w-3xl mx-auto leading-relaxed drop-shadow-md animate-fadeInUp animation-delay-200">
+                Professional fitness coaching that gets real results. Join thousands who've achieved their dream body.
+            </p>
+            
+            <!-- Enhanced CTA Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fadeInUp animation-delay-400">
+                <a
+                    href="#"
+                    class="group px-8 py-4 rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 text-white shadow-2xl relative overflow-hidden bg-pink-600"
+                >
+                    <!-- Button glow effect -->
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                    <span class="relative z-10">Start Your Transformation</span>
+                </a>
+                
+                <a
+                    href="#"
+                    class="group px-8 py-4 rounded-full font-semibold text-lg border-2 border-white/80 text-white hover:bg-white/10 hover:border-white transition-all duration-300 backdrop-blur-sm"
+                >
+                    <span class="group-hover:text-white transition-colors duration-300">
+                        View Success Stories
+                    </span>
+                </a>
+            </div>
+
+            <!-- Trust indicators -->
+            <div class="mt-12 flex justify-center items-center space-x-8 text-white/70 animate-fadeInUp animation-delay-600">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                    </svg>
+                    <span class="text-sm font-medium">Trusted by thousands</span>
+                </div>
+                <div class="text-sm">•</div>
+                <div class="text-sm font-medium">95% success rate guaranteed</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Business Consulting Hero -->
+    <section 
+        class="relative py-20 lg:py-32 overflow-hidden min-h-[80vh] flex items-center mb-8"
+        style="
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.8) 0%, rgba(0, 242, 254, 0.6) 100%), url('https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        "
+    >
+        <!-- Same background elements as above -->
+        <div class="absolute inset-0">
+            <div class="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-transparent to-cyan-500/20 animate-pulse"></div>
+            <div class="absolute inset-0 opacity-5">
+                <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                        <pattern id="heroGrid2" width="10" height="10" patternUnits="userSpaceOnUse">
+                            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" stroke-width="0.3"/>
+                        </pattern>
+                    </defs>
+                    <rect width="100" height="100" fill="url(#heroGrid2)" />
+                </svg>
+            </div>
+            <div class="absolute inset-0 overflow-hidden">
+                <div class="absolute top-20 right-10 w-20 h-20 bg-white/10 rounded-full blur-xl animate-float"></div>
+                <div class="absolute top-40 left-20 w-32 h-32 bg-white/5 rounded-full blur-2xl animate-float-delayed"></div>
+                <div class="absolute bottom-20 right-1/4 w-16 h-16 bg-white/8 rounded-full blur-lg animate-float-slow"></div>
+            </div>
+        </div>
+        
+        <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
+            <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                <span class="drop-shadow-lg animate-fadeInUp">
+                    Scale Your Business to 7 Figures
+                </span>
+            </h1>
+            
+            <p class="text-xl md:text-2xl text-white/95 mb-10 max-w-3xl mx-auto leading-relaxed drop-shadow-md animate-fadeInUp animation-delay-200">
+                Strategic consulting that transforms ambitious entrepreneurs into industry leaders.
+            </p>
+            
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fadeInUp animation-delay-400">
+                <a
+                    href="#"
+                    class="group px-8 py-4 rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 text-white shadow-2xl relative overflow-hidden bg-blue-600"
+                >
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                    <span class="relative z-10">Book Strategy Call</span>
+                </a>
+                
+                <a
+                    href="#"
+                    class="group px-8 py-4 rounded-full font-semibold text-lg border-2 border-white/80 text-white hover:bg-white/10 hover:border-white transition-all duration-300 backdrop-blur-sm"
+                >
+                    <span class="group-hover:text-white transition-colors duration-300">
+                        View Case Studies
+                    </span>
+                </a>
+            </div>
+
+            <div class="mt-12 flex justify-center items-center space-x-8 text-white/70 animate-fadeInUp animation-delay-600">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                    </svg>
+                    <span class="text-sm font-medium">500+ businesses scaled</span>
+                </div>
+                <div class="text-sm">•</div>
+                <div class="text-sm font-medium">$10M+ revenue generated</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="text-center py-12 bg-gray-100">
+        <h2 class="text-2xl font-bold mb-4">Enhanced Hero Background Features</h2>
+        <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-6 px-4">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="font-bold text-lg mb-2">🎨 Business-Specific Backgrounds</h3>
+                <p class="text-gray-600">High-quality Unsplash images automatically matched to business type</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="font-bold text-lg mb-2">✨ Enhanced Animations</h3>
+                <p class="text-gray-600">Smooth fade-in effects, floating elements, and button interactions</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="font-bold text-lg mb-2">🎯 Smart Overlays</h3>
+                <p class="text-gray-600">Custom gradient overlays optimized for text readability</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="font-bold text-lg mb-2">📱 Mobile Optimized</h3>
+                <p class="text-gray-600">All effects work seamlessly across desktop and mobile devices</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

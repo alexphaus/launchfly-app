@@ -386,6 +386,18 @@ export default async function DynamicWebsite({ params }) {
               props = { ...section.props, showCart: true };
             } else if (section.component === 'ProductGrid') {
               props = { ...section.props, businessData };
+            } else if (section.component === 'PricingTable' && businessData?.ecommerceSettings?.enabled) {
+              // Convert PricingTable to ProductGrid for e-commerce sites
+              const products = businessData.products || section.props.plans || [];
+              return (
+                <LaunchflyUI.ProductGrid
+                  key={index}
+                  title={section.props.title || "Our Products"}
+                  subtitle="Choose the perfect solution for your needs"
+                  products={products}
+                  businessData={businessData}
+                />
+              );
             }
             
             return (

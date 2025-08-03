@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useCart } from '../../hooks/useCart';
+import { useCart } from '@/hooks/useCart';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function MiniCart({ className = '' }) {

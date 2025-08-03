@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useCart } from '../../hooks/useCart';
+import { useCart } from '@/hooks/useCart';
 
 export default function EnhancedProductCard({ 
   product,

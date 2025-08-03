@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import OrderConfirmation from '../../../../components/launchfly-ui/OrderConfirmation';
+import OrderConfirmation from '@/components/launchfly-ui/OrderConfirmation';
 
 export default function Success() {
   const params = useParams();

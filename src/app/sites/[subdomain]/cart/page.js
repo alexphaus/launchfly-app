@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { CartProvider } from '../../../../hooks/useCart';
-import CartPage from '../../../../components/launchfly-ui/CartPage';
+import { CartProvider } from '@/hooks/useCart';
+import CartPage from '@/components/launchfly-ui/CartPage';
 
 export default function Cart() {
   const params = useParams();

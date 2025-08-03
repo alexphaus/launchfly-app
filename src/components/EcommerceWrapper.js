@@ -1,6 +1,6 @@
 'use client';
 
-import { CartProvider } from '../../../hooks/useCart';
+import { CartProvider } from '@/hooks/useCart';
 
 export default function EcommerceWrapper({ children, businessData }) {
   const isEcommerce = businessData?.ecommerceSettings?.enabled;

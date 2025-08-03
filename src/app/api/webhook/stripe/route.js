@@ -581,15 +581,15 @@ async function sendCustomerConfirmation({
                     <div style="background-color:#f9fafb;border-radius:8px;padding:25px;margin-bottom:25px;">
                       <h3 style="color:#1a2b48;font-size:18px;font-weight:600;margin:0 0 15px 0;">What's Next?</h3>
                       <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
-                        We're working on getting your order ready! If you have any questions about your order, 
-                        please don't hesitate to reach out to us directly.
+                        You'll receive any additional information about your purchase directly from ${businessName}. 
+                        If you have any questions about your order, please don't hesitate to reach out to them.
                       </p>
                     </div>
 
                     <!-- Thank You Message -->
                     <div style="text-align:center;margin-bottom:20px;">
                       <p style="color:#5a6982;font-size:16px;line-height:1.6;margin:0;">
-                        Thank you for choosing ${businessName}! We appreciate your business and hope you love your purchase. 💙
+                        Thank you for supporting ${businessName}! We hope you love your purchase. 💙
                       </p>
                     </div>
                   </td>
@@ -602,7 +602,7 @@ async function sendCustomerConfirmation({
                       <tr>
                         <td align="center" style="border-radius:8px;background:linear-gradient(135deg,#007bff 0%,#00b8d9 100%);">
                           <a href="${websiteUrl}" style="display:inline-block;padding:16px 32px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
-                            Visit Our Store →
+                            Visit ${businessName} →
                           </a>
                         </td>
                       </tr>
@@ -614,10 +614,10 @@ async function sendCustomerConfirmation({
                 <tr>
                   <td align="center" style="padding:30px 40px;border-top:1px solid #e4e7eb;">
                     <p style="color:#5a6982;font-size:14px;margin:0 0 10px 0;">
-                      Thank you for your order from ${businessName}
+                      This order was processed securely through Launchfly AI
                     </p>
                     <p style="color:#5a6982;font-size:12px;margin:0;">
-                      This order was processed securely. © 2025 ${businessName}. All rights reserved.
+                      © 2025 Launchfly AI. All rights reserved.
                     </p>
                   </td>
                 </tr>
@@ -630,7 +630,7 @@ async function sendCustomerConfirmation({
     `;
 
     await resend.emails.send({
-      from: `${businessName} <hello@launchfly.ai>`,
+      from: 'Orders <hello@launchfly.ai>',
       to: customerEmail,
       subject: subject,
       html: htmlContent

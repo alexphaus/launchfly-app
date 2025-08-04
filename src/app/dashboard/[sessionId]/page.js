@@ -25,8 +25,18 @@ export default function DashboardPage() {
     // Start polling when we have data and generation is in progress
     // Use faster polling during active generation
     if (sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error') {
+      // Add timeout detection for stuck sessions
+      const startTime = Date.now();
+      const maxDuration = 5 * 60 * 1000; // 5 minutes max
+      
       const pollInterval = setInterval(async () => {
         await fetchLatestData();
+        
+        // Check if session has been stuck for too long
+        if (Date.now() - startTime > maxDuration && sessionData.stage === 'building') {
+          console.warn('Session appears stuck, attempting recovery...');
+          // Could trigger recovery here
+        }
       }, sessionData.stage === 'building' ? 1000 : 2000); // Poll every 1s during building, 2s otherwise
 
       return () => clearInterval(pollInterval);

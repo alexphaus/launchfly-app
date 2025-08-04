@@ -47,20 +47,47 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
  */
 async function updateBusinessProgress(businessId, partialData, stage = null) {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/business/update-progress`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        businessId,
-        partialData,
-        stage
-      })
-    });
+    console.log(`Updating business progress for ${businessId}:`, Object.keys(partialData));
     
-    if (!response.ok) {
-      console.error('Failed to update business progress:', await response.text());
+    // Get current business data
+    const { data: currentBusiness, error: fetchError } = await supabase
+      .from('businesses')
+      .select('business_data')
+      .eq('id', businessId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching current business data:', fetchError);
+      return;
+    }
+    
+    // Merge the new partial data with existing data
+    const updatedBusinessData = {
+      ...currentBusiness.business_data,
+      ...partialData,
+      lastUpdated: new Date().toISOString(),
+      updateSource: 'launch-module'
+    };
+    
+    // Update the business record directly
+    const updateData = {
+      business_data: updatedBusinessData,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (stage) {
+      updateData.status = stage;
+    }
+    
+    const { error: updateError } = await supabase
+      .from('businesses')
+      .update(updateData)
+      .eq('id', businessId);
+    
+    if (updateError) {
+      console.error('Error updating business data:', updateError);
+    } else {
+      console.log(`✅ Business progress updated successfully for ${businessId}`);
     }
   } catch (error) {
     console.error('Error updating business progress:', error);
@@ -122,32 +149,58 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     console.log('Updating database with products...');
     await updateBusinessProgress(businessId, { products });
     
-    // Verify products were saved correctly
+    // Verify products were saved correctly with a small delay
+    await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to ensure DB consistency
+    
     try {
-      const verification = await supabase
+      const { data: verification, error: verifyError } = await supabase
         .from('businesses')
         .select('business_data')
         .eq('id', businessId)
         .single();
       
-      if (verification.data?.business_data?.products?.length > 0) {
-        console.log('✅ Products verified in database:', verification.data.business_data.products.length);
+      if (verifyError) {
+        console.error('Error verifying products save:', verifyError);
+        throw new Error('Failed to verify product save');
+      }
+      
+      if (verification?.business_data?.products?.length > 0) {
+        console.log('✅ Products verified in database:', verification.business_data.products.length);
       } else {
-        console.error('⚠️ Products not found in database after update');
-        // Try direct database update as fallback
-        await supabase
+        console.error('⚠️ Products not found in database after update, attempting direct save...');
+        
+        // Get fresh business data for the fallback
+        const { data: currentBusiness } = await supabase
+          .from('businesses')
+          .select('business_data')
+          .eq('id', businessId)
+          .single();
+        
+        // Force update with products
+        const completeData = {
+          ...(currentBusiness?.business_data || {}),
+          products,
+          productsAddedAt: new Date().toISOString()
+        };
+        
+        const { error: fallbackError } = await supabase
           .from('businesses')
           .update({ 
-            business_data: { 
-              ...verification.data?.business_data, 
-              products 
-            }
+            business_data: completeData,
+            updated_at: new Date().toISOString()
           })
           .eq('id', businessId);
-        console.log('🔄 Applied direct database fallback for products');
+          
+        if (fallbackError) {
+          console.error('❌ Fallback update failed:', fallbackError);
+          throw new Error('Failed to save products');
+        }
+        
+        console.log('✅ Applied direct database fallback for products successfully');
       }
     } catch (verifyError) {
-      console.error('Error verifying products save:', verifyError);
+      console.error('Critical error with product verification:', verifyError);
+      // Don't let verification errors stop the flow, but log them prominently
     }
     
     // Generate marketing materials and strategies (can be slow)

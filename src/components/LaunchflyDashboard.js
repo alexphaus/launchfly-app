@@ -239,10 +239,11 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
                     {generationStage === 'researching' && 'Researching your market...'}
                     {generationStage === 'building' && (
                       showContent.products ? 'Adding final touches...' :
-                      showContent.colors ? 'Creating products...' :
+                      showContent.colors ? 'Creating your products...' :
                       showContent.businessName ? 'Designing your website...' :
                       'Building your website...'
                     )}
+                    {generationStage === 'generating' && 'Generating content and products...'}
                     {generationStage === 'finalizing' && 'Adding final touches...'}
                     {generationStage === 'pending' && 'Starting AI systems...'}
                   </span>
@@ -502,7 +503,7 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
       const productCount = businessData.products.length;
       newActivities.push({
         id: Date.now() + Math.random(),
-        text: `📦 ${productCount} product${productCount > 1 ? 's' : ''} created and priced`,
+        text: `📦 ${productCount} product${productCount > 1 ? 's' : ''} created and priced automatically`,
         icon: '💰',
         type: 'success',
         time: 'Just now'
@@ -544,7 +545,8 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
       queued: { text: 'Queued for processing...', icon: '⏳', type: 'working' },
       analyzing: { text: 'Analyzing your skills and market opportunity', icon: '🔍', type: 'working' },
       researching: { text: 'Researching profitable niches in your industry', icon: '📊', type: 'working' },
-      building: { text: 'Building your website and products', icon: '🔨', type: 'working' },
+      building: { text: 'Building your website and creating products', icon: '🔨', type: 'working' },
+      generating: { text: 'Generating your business content and products', icon: '⚡', type: 'working' },
       finalizing: { text: 'Optimizing for conversions and profit', icon: '✨', type: 'working' },
       complete: { text: 'Your business is ready! First visitors arriving soon 🎉', icon: '🚀', type: 'success' }
     };
@@ -577,7 +579,7 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
       const timer = setTimeout(() => {
         const postActivities = [
           { text: 'SEO optimization applied to boost visibility', icon: '🔍', type: 'optimization' },
-          { text: 'Conversion tracking pixels installed', icon: '�', type: 'analytics' },
+          { text: 'Conversion tracking pixels installed', icon: '📊', type: 'analytics' },
           { text: 'Performance monitoring activated', icon: '⚡', type: 'monitoring' }
         ];
         

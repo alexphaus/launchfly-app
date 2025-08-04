@@ -47,6 +47,8 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
  */
 async function updateBusinessProgress(businessId, partialData, stage = null) {
   try {
+    console.log(`Updating business progress for ${businessId}:`, Object.keys(partialData));
+    
     const response = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/business/update-progress`, {
       method: 'POST',
       headers: {
@@ -56,15 +58,81 @@ async function updateBusinessProgress(businessId, partialData, stage = null) {
         businessId,
         partialData,
         stage
-      })
+      }),
+      timeout: 10000 // 10 second timeout for the update call
     });
     
     if (!response.ok) {
-      console.error('Failed to update business progress:', await response.text());
+      const errorText = await response.text();
+      console.error('Failed to update business progress. Status:', response.status, 'Error:', errorText);
+      
+      // Try direct database update as fallback
+      console.log('Attempting direct database update as fallback...');
+      return await updateBusinessDirectly(businessId, partialData, stage);
     }
+    
+    const result = await response.json();
+    console.log('Business progress updated successfully');
+    return result;
+    
   } catch (error) {
-    console.error('Error updating business progress:', error);
-    // Don't throw - this is just for UI updates, shouldn't break the main flow
+    console.error('Error updating business progress via API:', error);
+    
+    // Try direct database update as fallback
+    console.log('Attempting direct database update as fallback...');
+    try {
+      return await updateBusinessDirectly(businessId, partialData, stage);
+    } catch (fallbackError) {
+      console.error('Fallback database update also failed:', fallbackError);
+      // Don't throw - this is just for UI updates, shouldn't break the main flow
+      return { success: false, error: fallbackError.message };
+    }
+  }
+}
+
+/**
+ * Direct database update as fallback when API fails
+ */
+async function updateBusinessDirectly(businessId, partialData, stage = null) {
+  try {
+    // Get current business data
+    const { data: currentBusiness, error: fetchError } = await supabase
+      .from('businesses')
+      .select('business_data')
+      .eq('id', businessId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching current business data for direct update:', fetchError);
+      throw fetchError;
+    }
+    
+    // Merge the new partial data with existing data
+    const updatedBusinessData = {
+      ...currentBusiness.business_data,
+      ...partialData
+    };
+    
+    // Update the business record directly
+    const { error: updateError } = await supabase
+      .from('businesses')
+      .update({ 
+        business_data: updatedBusinessData,
+        ...(stage && { status: stage })
+      })
+      .eq('id', businessId);
+    
+    if (updateError) {
+      console.error('Error in direct database update:', updateError);
+      throw updateError;
+    }
+    
+    console.log('Direct database update successful');
+    return { success: true, method: 'direct_db_update' };
+    
+  } catch (error) {
+    console.error('Direct database update failed:', error);
+    throw error;
   }
 }
 
@@ -115,11 +183,55 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Create digital products (can be slow)
     console.log('Creating products...');
-    const products = await createProducts(opportunity);
-    businessData.products = products;
     
-    // Update database with products
-    await updateBusinessProgress(businessId, { products });
+    // Update progress to show we're specifically working on products
+    await supabase
+      .from('sessions')
+      .update({ progress: 65 })
+      .eq('id', sessionId);
+    
+    try {
+      const products = await createProducts(opportunity);
+      businessData.products = products;
+      
+      // Update database with products - ensure this doesn't fail silently
+      console.log('Updating database with products:', products?.length || 0);
+      const updateResult = await updateBusinessProgress(businessId, { products });
+      console.log('Product update result:', updateResult);
+      
+      // Also update session progress after successful product creation
+      await supabase
+        .from('sessions')
+        .update({ progress: 70 })
+        .eq('id', sessionId);
+        
+    } catch (productError) {
+      console.error('Critical error in product creation:', productError);
+      
+      // Ensure we still have fallback products even if update fails
+      const fallbackProducts = [
+        { name: "Starter Package", price: "$97", description: "Essential services to get you started" },
+        { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
+        { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      ];
+      
+      businessData.products = fallbackProducts;
+      
+      // Try to update database with fallback products
+      try {
+        await updateBusinessProgress(businessId, { products: fallbackProducts });
+        console.log('Successfully saved fallback products');
+      } catch (fallbackError) {
+        console.error('Failed to save even fallback products:', fallbackError);
+        // Continue anyway - products will be in businessData object
+      }
+      
+      // Update progress to show we're moving forward despite the error
+      await supabase
+        .from('sessions')
+        .update({ progress: 70 })
+        .eq('id', sessionId);
+    }
     
     // Generate marketing materials and strategies (can be slow)
     console.log('Creating marketing materials...');
@@ -446,26 +558,75 @@ async function createProducts(opportunity) {
           { role: "user", content: prompt }
         ],
         response_format: { type: "json_object" }
-      })
+      }), 45000 // Increase timeout to 45 seconds
     );
     
     console.log('OpenAI response received for product creation');
-    const { products } = JSON.parse(response.choices[0].message.content);
-    console.log('Products created successfully:', products?.length || 0);
-    return products || [];
+    
+    // Validate response structure before parsing
+    if (!response?.choices?.[0]?.message?.content) {
+      console.error('Invalid OpenAI response structure:', response);
+      throw new Error('Invalid OpenAI response structure');
+    }
+    
+    // Safely parse JSON with validation
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(response.choices[0].message.content);
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI JSON response:', parseError);
+      console.error('Raw response content:', response.choices[0].message.content);
+      throw new Error('Failed to parse OpenAI response as JSON');
+    }
+    
+    // Validate the parsed response has products array
+    if (!parsedResponse?.products || !Array.isArray(parsedResponse.products)) {
+      console.error('Invalid products structure in response:', parsedResponse);
+      throw new Error('Response missing valid products array');
+    }
+    
+    // Validate each product has required fields
+    const validProducts = parsedResponse.products.filter(product => 
+      product?.name && product?.price && product?.description
+    );
+    
+    if (validProducts.length === 0) {
+      console.error('No valid products found in response:', parsedResponse.products);
+      throw new Error('No valid products in OpenAI response');
+    }
+    
+    console.log('Products created successfully:', validProducts.length);
+    return validProducts;
+    
   } catch (error) {
     console.error("Error creating products:", error);
     console.error("Error details:", {
       message: error.message,
       code: error.code,
-      type: error.type
+      type: error.type,
+      stack: error.stack
     });
     
-    // Fallback products
+    // Enhanced fallback products with business-specific customization
+    const businessType = opportunity?.niche || opportunity?.businessName || 'business';
+    console.log(`Using fallback products for ${businessType}`);
+    
     return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      { 
+        name: "Starter Package", 
+        price: "$97", 
+        description: `Essential ${businessType.toLowerCase()} services to get you started and see immediate results` 
+      },
+      { 
+        name: "Professional Package", 
+        price: "$297", 
+        description: `Comprehensive ${businessType.toLowerCase()} solutions for established operations with proven ROI` 
+      },
+      { 
+        name: "Premium Package", 
+        price: "$597", 
+        description: `All-inclusive enterprise-grade ${businessType.toLowerCase()} services with dedicated support` 
+      }
     ];
   }
 }

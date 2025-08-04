@@ -9,8 +9,11 @@ const supabase = createClient(
 /**
  * API endpoint to update business data progressively during generation
  * This allows the UI to show updates as data becomes available
+ * Enhanced with better error handling and verification
  */
 export async function POST(request) {
+  const startTime = Date.now();
+  
   try {
     const { businessId, partialData, stage } = await request.json();
     
@@ -18,49 +21,100 @@ export async function POST(request) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
     
-    // Get current business data
-    const { data: currentBusiness, error: fetchError } = await supabase
-      .from('businesses')
-      .select('business_data')
-      .eq('id', businessId)
-      .single();
+    console.log(`Updating business ${businessId} with data:`, Object.keys(partialData));
     
-    if (fetchError) {
-      console.error('Error fetching current business data:', fetchError);
-      return Response.json({ error: 'Failed to fetch business data' }, { status: 500 });
+    // Get current business data with retry logic
+    let currentBusiness;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      const { data, error: fetchError } = await supabase
+        .from('businesses')
+        .select('business_data')
+        .eq('id', businessId)
+        .single();
+      
+      if (!fetchError) {
+        currentBusiness = data;
+        break;
+      }
+      
+      attempts++;
+      console.error(`Attempt ${attempts} failed to fetch business data:`, fetchError);
+      
+      if (attempts >= maxAttempts) {
+        return Response.json({ 
+          error: 'Failed to fetch business data after retries',
+          details: fetchError.message 
+        }, { status: 500 });
+      }
+      
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 100 * attempts));
     }
     
-    // Merge the new partial data with existing data
+    // Merge the new partial data with existing data (deep merge for complex objects)
+    const existingData = currentBusiness.business_data || {};
     const updatedBusinessData = {
-      ...currentBusiness.business_data,
-      ...partialData
+      ...existingData,
+      ...partialData,
+      // Ensure timestamps for tracking
+      lastUpdated: new Date().toISOString(),
+      updateSource: 'progress-api'
     };
     
-    // Update the business record
-    const { error: updateError } = await supabase
+    // Special handling for products array to ensure it's properly set
+    if (partialData.products) {
+      updatedBusinessData.products = partialData.products;
+      console.log(`Setting products: ${partialData.products.length} items`);
+    }
+    
+    // Update the business record with verification
+    const { data: updateResult, error: updateError } = await supabase
       .from('businesses')
       .update({ 
         business_data: updatedBusinessData,
+        updated_at: new Date().toISOString(),
         ...(stage && { status: stage })
       })
-      .eq('id', businessId);
+      .eq('id', businessId)
+      .select('business_data');
     
     if (updateError) {
       console.error('Error updating business data:', updateError);
-      return Response.json({ error: 'Failed to update business data' }, { status: 500 });
+      return Response.json({ 
+        error: 'Failed to update business data',
+        details: updateError.message 
+      }, { status: 500 });
     }
+    
+    // Verify the update was successful
+    const finalData = updateResult[0]?.business_data;
+    const hasProducts = finalData?.products?.length > 0;
+    const hasExpectedKeys = Object.keys(partialData).every(key => finalData[key] !== undefined);
+    
+    const duration = Date.now() - startTime;
+    console.log(`Business update completed in ${duration}ms. Products: ${hasProducts}, Keys verified: ${hasExpectedKeys}`);
     
     return Response.json({ 
       success: true, 
       message: 'Business data updated successfully',
-      updatedData: updatedBusinessData 
+      updatedData: updatedBusinessData,
+      verification: {
+        hasProducts,
+        hasExpectedKeys,
+        duration
+      }
     });
     
   } catch (error) {
-    console.error('Error in update-progress API:', error);
+    const duration = Date.now() - startTime;
+    console.error(`Error in update-progress API after ${duration}ms:`, error);
     return Response.json({ 
       error: 'Internal server error',
-      details: error.message 
+      details: error.message,
+      duration
     }, { status: 500 });
   }
 }

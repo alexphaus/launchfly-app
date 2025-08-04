@@ -118,8 +118,37 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     const products = await createProducts(opportunity);
     businessData.products = products;
     
-    // Update database with products
+    // Update database with products - critical step for UI
+    console.log('Updating database with products...');
     await updateBusinessProgress(businessId, { products });
+    
+    // Verify products were saved correctly
+    try {
+      const verification = await supabase
+        .from('businesses')
+        .select('business_data')
+        .eq('id', businessId)
+        .single();
+      
+      if (verification.data?.business_data?.products?.length > 0) {
+        console.log('✅ Products verified in database:', verification.data.business_data.products.length);
+      } else {
+        console.error('⚠️ Products not found in database after update');
+        // Try direct database update as fallback
+        await supabase
+          .from('businesses')
+          .update({ 
+            business_data: { 
+              ...verification.data?.business_data, 
+              products 
+            }
+          })
+          .eq('id', businessId);
+        console.log('🔄 Applied direct database fallback for products');
+      }
+    } catch (verifyError) {
+      console.error('Error verifying products save:', verifyError);
+    }
     
     // Generate marketing materials and strategies (can be slow)
     console.log('Creating marketing materials...');
@@ -163,14 +192,35 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       .eq('id', businessId);
     
     console.log('Setting stage to complete');
-    // Mark session as complete
-    await supabase
+    // Mark session as complete - CRITICAL for UI
+    const sessionUpdate = await supabase
       .from('sessions')
       .update({
         stage: 'complete',
-        progress: 100
+        progress: 100,
+        updated_at: new Date().toISOString()
       })
       .eq('id', sessionId);
+    
+    if (sessionUpdate.error) {
+      console.error('❌ Failed to update session to complete:', sessionUpdate.error);
+      throw new Error('Failed to complete session status update');
+    }
+    
+    console.log('✅ Session marked as complete successfully');
+    
+    // Double-check session was updated
+    const finalSession = await supabase
+      .from('sessions')
+      .select('stage, progress')
+      .eq('id', sessionId)
+      .single();
+    
+    if (finalSession.data?.stage === 'complete') {
+      console.log('✅ Session completion verified');
+    } else {
+      console.error('⚠️ Session completion verification failed:', finalSession.data);
+    }
     
     return businessData;
   } catch (error) {
@@ -415,8 +465,10 @@ async function generateWebsite(opportunity) {
  * @returns {Array} List of product offerings
  */
 async function createProducts(opportunity) {
+  const startTime = Date.now();
+  console.log('Starting product creation for:', opportunity.businessName);
+  
   try {
-    console.log('Starting product creation for:', opportunity.businessName);
     const prompt = `
       Create 3 compelling product or service offerings for this business:
       ${JSON.stringify(opportunity)}
@@ -438,6 +490,8 @@ async function createProducts(opportunity) {
     `;
 
     console.log('Calling OpenAI for product creation...');
+    
+    // Use a shorter timeout specifically for product creation (20 seconds)
     const response = await callOpenAIWithTimeout(() =>
       openai.chat.completions.create({
         model: "gpt-4o",
@@ -446,28 +500,79 @@ async function createProducts(opportunity) {
           { role: "user", content: prompt }
         ],
         response_format: { type: "json_object" }
-      })
+      }), 20000
     );
     
     console.log('OpenAI response received for product creation');
-    const { products } = JSON.parse(response.choices[0].message.content);
-    console.log('Products created successfully:', products?.length || 0);
-    return products || [];
+    
+    // Parse and validate the response
+    let products;
+    try {
+      const parsed = JSON.parse(response.choices[0].message.content);
+      products = parsed.products;
+      
+      // Validate products array
+      if (!Array.isArray(products) || products.length === 0) {
+        throw new Error('Invalid products array in response');
+      }
+      
+      // Validate each product has required fields
+      products.forEach((product, index) => {
+        if (!product.name || !product.price || !product.description) {
+          throw new Error(`Product ${index} missing required fields`);
+        }
+      });
+      
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI response:', parseError);
+      throw new Error('Invalid response format from OpenAI');
+    }
+    
+    const duration = Date.now() - startTime;
+    console.log(`Products created successfully: ${products.length} products in ${duration}ms`);
+    return products;
+    
   } catch (error) {
-    console.error("Error creating products:", error);
+    const duration = Date.now() - startTime;
+    console.error(`Error creating products after ${duration}ms:`, error);
     console.error("Error details:", {
       message: error.message,
       code: error.code,
-      type: error.type
+      type: error.type,
+      stack: error.stack?.split('\n')[0] // First line of stack
     });
     
-    // Fallback products
-    return [
-      { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
-      { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
-      { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
-    ];
+    // Generate contextual fallback products based on opportunity
+    const fallbackProducts = generateFallbackProducts(opportunity);
+    console.log(`Using fallback products: ${fallbackProducts.length} products generated`);
+    return fallbackProducts;
   }
+}
+
+/**
+ * Generates fallback products based on the business opportunity
+ */
+function generateFallbackProducts(opportunity) {
+  const businessName = opportunity.businessName || 'Business';
+  const niche = opportunity.niche || 'service';
+  
+  return [
+    { 
+      name: "Starter Package", 
+      price: "$97", 
+      description: `Essential ${niche} package to get you started with ${businessName}` 
+    },
+    { 
+      name: "Professional Package", 
+      price: "$297", 
+      description: `Comprehensive ${niche} solutions for established businesses` 
+    },
+    { 
+      name: "Premium Package", 
+      price: "$597", 
+      description: `All-inclusive enterprise-grade ${niche} services with premium support` 
+    }
+  ];
 }
 
 /**

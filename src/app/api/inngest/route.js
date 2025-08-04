@@ -1,6 +1,7 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest";
 import { generateBusinessFunction } from "@/lib/inngest/generate-business";
+import { generateBusinessDebugFunction } from "@/lib/inngest/generate-business-debug";
 // Temporarily commented out until error handling functions are fixed
 // import { 
 //   errorHandlerFunction, 
@@ -14,6 +15,7 @@ export const { GET, POST, PUT } = serve({
   functions: [
     // Core business generation
     generateBusinessFunction,
+    generateBusinessDebugFunction,
     
     // Support functions - temporarily disabled
     // errorHandlerFunction,

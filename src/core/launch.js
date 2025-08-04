@@ -47,21 +47,46 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
  */
 async function updateBusinessProgress(businessId, partialData, stage = null) {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/business/update-progress`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        businessId,
-        partialData,
-        stage
-      })
-    });
+    console.log(`Updating business progress for ${businessId}:`, { partialData: Object.keys(partialData), stage });
     
-    if (!response.ok) {
-      console.error('Failed to update business progress:', await response.text());
+    // Get current business data from database directly
+    const { data: currentBusiness, error: fetchError } = await supabase
+      .from('businesses')
+      .select('business_data')
+      .eq('id', businessId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Failed to fetch current business data:', fetchError);
+      return;
     }
+    
+    // Merge the new partial data with existing data
+    const updatedBusinessData = {
+      ...currentBusiness.business_data,
+      ...partialData
+    };
+    
+    // Update the business record directly in database
+    const updateData = { 
+      business_data: updatedBusinessData
+    };
+    
+    if (stage) {
+      updateData.status = stage;
+    }
+    
+    const { error: updateError } = await supabase
+      .from('businesses')
+      .update(updateData)
+      .eq('id', businessId);
+    
+    if (updateError) {
+      console.error('Failed to update business data:', updateError);
+      return;
+    }
+    
+    console.log(`Business progress updated successfully for ${businessId}`);
   } catch (error) {
     console.error('Error updating business progress:', error);
     // Don't throw - this is just for UI updates, shouldn't break the main flow

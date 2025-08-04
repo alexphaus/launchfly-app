@@ -6,7 +6,7 @@ import { LaunchflyV2 } from '@/core';
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
-);
+); 
 
 /**
  * API route to generate a business using our future-proof architecture

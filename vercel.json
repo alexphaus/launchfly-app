@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "src/app/api/inngest/route.js": {
+      "maxDuration": 300
+    },
+    "src/app/api/generate-business/route.js": {
+      "maxDuration": 10
+    },
+    "src/app/api/webhook/tally/route.js": {
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "INNGEST_SIGNING_KEY": "@inngest-signing-key",
+    "INNGEST_EVENT_KEY": "@inngest-event-key"
+  }
+}

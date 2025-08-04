@@ -10,8 +10,7 @@ import { Inngest } from "inngest";
 // Create the main Inngest client
 export const inngest = new Inngest({ 
   id: "launchfly", 
-  name: "Launchfly AI Business Generator",
-  eventKey: process.env.INNGEST_EVENT_KEY
+  name: "Launchfly AI Business Generator"
 });
 
 // Event types for type safety and better organization

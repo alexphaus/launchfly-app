@@ -21,8 +21,71 @@ CREATE TABLE public.businesses (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   last_sale_date timestamp with time zone,
+  growth_data jsonb,
+  latest_campaign_review jsonb,
+  latest_email_campaign jsonb,
+  latest_email_batch jsonb,
+  opportunity_data jsonb,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.email_outreach (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  prospect_id character varying NOT NULL,
+  email_type character varying NOT NULL,
+  subject character varying,
+  content text,
+  status character varying DEFAULT 'sent'::character varying,
+  sent_at timestamp with time zone,
+  response_received boolean DEFAULT false,
+  meeting_scheduled boolean DEFAULT false,
+  converted boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT email_outreach_pkey PRIMARY KEY (id),
+  CONSTRAINT email_outreach_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.growth_experiments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  experiment_type character varying NOT NULL,
+  experiment_data jsonb NOT NULL,
+  status character varying DEFAULT 'running'::character varying,
+  started_at timestamp with time zone DEFAULT now(),
+  completed_at timestamp with time zone,
+  results jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT growth_experiments_pkey PRIMARY KEY (id),
+  CONSTRAINT growth_experiments_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.inngest_jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  job_type character varying NOT NULL,
+  event_name character varying NOT NULL,
+  event_data jsonb NOT NULL,
+  status character varying DEFAULT 'queued'::character varying,
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  error_message text,
+  retry_count integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT inngest_jobs_pkey PRIMARY KEY (id),
+  CONSTRAINT inngest_jobs_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.marketing_campaigns (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  campaign_data jsonb NOT NULL,
+  channel character varying NOT NULL,
+  status character varying DEFAULT 'active'::character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT marketing_campaigns_pkey PRIMARY KEY (id),
+  CONSTRAINT marketing_campaigns_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -59,6 +122,8 @@ CREATE TABLE public.sessions (
   phone_number text,
   created_at timestamp with time zone DEFAULT now(),
   expires_at timestamp with time zone DEFAULT (now() + '7 days'::interval),
+  inngest_job_id uuid,
   CONSTRAINT sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+  CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT sessions_inngest_job_id_fkey FOREIGN KEY (inngest_job_id) REFERENCES public.inngest_jobs(id)
 );

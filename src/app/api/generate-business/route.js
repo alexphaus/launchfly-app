@@ -1,7 +1,7 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
-import { generateBusinessWithAI } from '@/lib/business-generator';
-import { LaunchflyV2 } from '@/core';
+import { inngest } from '@/lib/inngest';
+import { BusinessEvents } from '@/lib/inngest';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,8 +9,8 @@ const supabase = createClient(
 ); 
 
 /**
- * API route to generate a business using our future-proof architecture
- * Following the principles from future-proof-approach.md
+ * API route to generate a business using Inngest for orchestration
+ * This follows the future-proof architecture with background processing
  */
 export async function POST(request) {
   let sessionId, businessId, formData;
@@ -18,7 +18,7 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('Starting business generation via API:', { sessionId, businessId });
+    console.log('Starting business generation via API with Inngest:', { sessionId, businessId });
     
     // Initialize status
     await supabase
@@ -28,66 +28,30 @@ export async function POST(request) {
       })
       .eq('id', businessId);
 
-    // Update session stage to 'analyzing'
+    // Update session stage to 'pending'
     await supabase
       .from('sessions')
-      .update({ stage: 'analyzing' })
-      .eq('id', sessionId);
-    
-    // Add a small delay to show the analyzing stage
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update session stage to 'researching'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'researching' })
-      .eq('id', sessionId);
-    
-    // Add delay for researching stage
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update session stage to 'building'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'building' })
-      .eq('id', sessionId);
-    
-    // Option 1: Use the legacy generator for backward compatibility
-    const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
-    
-    // Option 2: Use our new unified LaunchflyV2 class (preferred approach)
-    // const launchfly = new LaunchflyV2();
-    // const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
-    
-    // Update session stage to 'finalizing'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'finalizing' })
-      .eq('id', sessionId);
-    
-    // Add delay for finalizing stage
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Update business with generated data
-    await supabase
-      .from('businesses')
-      .update({
-        name: businessData.businessName,
-        subdomain: businessData.domain ? businessData.domain.replace('.com', '').toLowerCase() : `business-${Date.now()}`,
-        business_data: businessData,
-        status: 'ready'
+      .update({ 
+        stage: 'pending',
+        progress: 10
       })
-      .eq('id', businessId);
-
-    // Mark session as complete
-    await supabase
-      .from('sessions')
-      .update({ stage: 'complete' })
       .eq('id', sessionId);
+    
+    // Trigger the Inngest orchestration function
+    await inngest.send({
+      name: BusinessEvents.GenerationRequested,
+      data: {
+        sessionId,
+        businessId,
+        formData
+      }
+    });
     
     return Response.json({ 
       success: true, 
-      businessData 
+      message: "Business generation started successfully",
+      sessionId,
+      businessId
     });
     
   } catch (error) {
@@ -133,6 +97,5 @@ export async function POST(request) {
   }
 }
 
-// Set a longer timeout for this endpoint if using Vercel
+// Set a longer timeout for this endpoint
 export const runtime = 'nodejs';
-export const maxDuration = 120; // 2 minutes timeout to handle the full generation process

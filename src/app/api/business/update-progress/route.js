@@ -32,17 +32,19 @@ export async function POST(request) {
     
     // Merge the new partial data with existing data
     const updatedBusinessData = {
-      ...currentBusiness.business_data,
+      ...currentBusiness.business_data || {},
       ...partialData
     };
     
     // Update the business record
+    const updateData = { business_data: updatedBusinessData };
+    if (stage) {
+      updateData.status = stage;
+    }
+    
     const { error: updateError } = await supabase
       .from('businesses')
-      .update({ 
-        business_data: updatedBusinessData,
-        ...(stage && { status: stage })
-      })
+      .update(updateData)
       .eq('id', businessId);
     
     if (updateError) {

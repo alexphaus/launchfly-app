@@ -120,7 +120,7 @@ export async function POST(request) {
       try {
         console.log('Step 5: Starting growth experiments...');
         await Promise.race([
-          runGrowthExperiments(businessId, businessConcept),
+          runGrowthExperiments(businessId, ['cold-outreach', 'content-marketing']),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Growth experiments timeout')), 30000)
           )

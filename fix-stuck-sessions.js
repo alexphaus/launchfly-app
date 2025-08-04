@@ -50,20 +50,32 @@ async function findStuckSessions() {
     const business = session.businesses[0];
     if (!business) continue;
 
+    const timeStuck = Math.floor((new Date() - new Date(session.updated_at)) / (1000 * 60));
+    const businessTimeStuck = Math.floor((new Date() - new Date(business.updated_at)) / (1000 * 60));
+
     const isStuck = (
       // Session is in intermediate stage
       ['pending', 'queued', 'analyzing', 'generating', 'researching', 'building'].includes(session.stage) &&
       // But business has data (meaning generation completed)
       business.business_data &&
-      // And it's been more than 5 minutes since last update
-      new Date() - new Date(session.updated_at) > 5 * 60 * 1000
+      // And it's been more than 2 minutes since last update (reduced from 5 minutes)
+      new Date() - new Date(session.updated_at) > 2 * 60 * 1000
+    ) || (
+      // OR business status is generating but has data
+      business.status === 'generating' &&
+      business.business_data &&
+      new Date() - new Date(business.updated_at) > 2 * 60 * 1000
+    ) || (
+      // OR business is ready but session is not complete
+      business.status === 'ready' && session.stage !== 'complete'
     );
 
     console.log(`\n📋 Session: ${session.id}`);
     console.log(`   Stage: ${session.stage} (${session.progress}%)`);
     console.log(`   Business Status: ${business.status}`);
     console.log(`   Has Data: ${business.business_data ? 'YES' : 'NO'}`);
-    console.log(`   Updated: ${new Date(session.updated_at).toLocaleString()}`);
+    console.log(`   Session Updated: ${new Date(session.updated_at).toLocaleString()} (${timeStuck} min ago)`);
+    console.log(`   Business Updated: ${new Date(business.updated_at).toLocaleString()} (${businessTimeStuck} min ago)`);
 
     if (isStuck) {
       console.log('   🔧 FIXING: Session appears stuck...');

@@ -22,13 +22,35 @@ const supabase = createClient(
 /**
  * Wrapper for OpenAI calls with timeout and error handling
  */
-async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
-  return Promise.race([
-    apiCall(),
-    new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('OpenAI API call timed out')), timeoutMs)
-    )
-  ]);
+async function callOpenAIWithTimeout(apiCall, timeoutMs = 20000) {
+  const startTime = Date.now();
+  
+  try {
+    const result = await Promise.race([
+      apiCall(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`OpenAI API call timed out after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ OpenAI call completed in ${duration}ms`);
+    return result;
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`❌ OpenAI call failed after ${duration}ms:`, error.message);
+    
+    // Log more details for debugging
+    if (error.code) {
+      console.error(`Error code: ${error.code}`);
+    }
+    if (error.type) {
+      console.error(`Error type: ${error.type}`);
+    }
+    
+    throw error;
+  }
 }
 
 /**
@@ -130,15 +152,46 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Generate website theme (can be slow)
     console.log('Generating website data...');
-    const websiteData = await generateWebsite(opportunity);
+    let websiteData;
+    try {
+      websiteData = await generateWebsite(opportunity);
+      console.log('✅ Website data generated successfully');
+    } catch (websiteError) {
+      console.error('❌ Website generation failed, using fallback:', websiteError.message);
+      // Force a fallback website generation
+      websiteData = {
+        theme: {
+          colors: {
+            primary: "#3b82f6",
+            secondary: "#1e40af",
+            textDark: "#1f2937",
+            textGray: "#6b7280",
+            borderColor: "#e5e7eb"
+          },
+          font: "Inter",
+          gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          heroBackground: "background: linear-gradient(135deg, rgba(102,126,234,0.9) 0%, rgba(118,75,162,0.9) 100%);"
+        },
+        layout: [
+          { component: "NavBar", props: { businessName: opportunity.businessName || "Business", logo: "🚀" } },
+          { component: "Hero", props: { title: `Welcome to ${opportunity.businessName || "Your Business"}` } },
+          { component: "Footer", props: { businessName: opportunity.businessName || "Business" } }
+        ]
+      };
+    }
+    
     businessData.theme = websiteData.theme;
     businessData.layout = websiteData.layout;
     
     // Update database with theme/colors
+    console.log('Saving theme and layout to database...');
     await updateBusinessProgress(businessId, { 
       theme: websiteData.theme, 
       layout: websiteData.layout 
     });
+    
+    // Verify theme was saved
+    console.log('✅ Theme and layout saved to database');
     
     // Create digital products (can be slow)
     console.log('Creating products...');

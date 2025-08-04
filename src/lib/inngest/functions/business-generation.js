@@ -7,9 +7,9 @@
  * This replaces direct API calls with a robust, retryable workflow
  */
 
-import { inngest, EventTypes } from "../inngest.js";
-import { analyzeOpportunity } from "../../core/analyze.js";
-import { launchBusiness } from "../../core/launch.js";
+import { inngest, EventTypes } from "@/lib/inngest";
+import { analyzeOpportunity } from "@/core/analyze";
+import { launchBusiness } from "@/core/launch";
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(

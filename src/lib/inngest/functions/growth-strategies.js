@@ -8,8 +8,8 @@
  * - Growth experiments
  */
 
-import { inngest, EventTypes } from "../inngest.js";
-import { growBusiness } from "../../core/grow.js";
+import { inngest, EventTypes } from "@/lib/inngest";
+import { growBusiness } from "@/core/grow";
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 

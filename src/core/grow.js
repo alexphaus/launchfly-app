@@ -8,7 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { sendEvent, EventTypes } from '../lib/inngest.js';
+import { sendEvent, EventTypes } from '@/lib/inngest';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -390,7 +390,7 @@ async function updateBusinessMetrics(businessId, customers, revenue) {
  * @param {Object} business - The business data
  * @returns {Array} Results of growth experiments
  */
-export async function runGrowthExperiments(business) {
+export async function runBusinessExperiments(business) {
   try {
     const experiments = await generateGrowthExperiments(business);
     const results = [];

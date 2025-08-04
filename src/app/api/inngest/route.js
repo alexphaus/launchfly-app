@@ -6,7 +6,7 @@
  */
 
 import { serve } from "inngest/next";
-import { inngest } from "../../../lib/inngest.js";
+import { inngest } from "@/lib/inngest";
 
 // Import all Inngest functions
 import {
@@ -14,14 +14,14 @@ import {
   handleAnalysisCompleted,
   handleCreationCompleted,
   handleGenerationCompleted
-} from "../../../lib/inngest/functions/business-generation.js";
+} from "@/lib/inngest/functions/business-generation";
 
 import {
   growthStrategyOrchestrator,
   customerAcquisitionCampaign,
   coldEmailCampaignOrchestrator,
   handleColdEmailBatchSent
-} from "../../../lib/inngest/functions/growth-strategies.js";
+} from "@/lib/inngest/functions/growth-strategies";
 
 // Collect all functions
 const functions = [

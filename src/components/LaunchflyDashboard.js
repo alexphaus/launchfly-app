@@ -457,14 +457,43 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
 };
 
 // --- COMPONENT: Real-time AI Activity Feed ---
-const AIActivityFeed = ({ generationStage, businessData }) => {
+const AIActivityFeed = ({ generationStage, businessData, business }) => {
   const [activities, setActivities] = useState([]);
   const [currentStage, setCurrentStage] = useState('');
   const [previousBusinessData, setPreviousBusinessData] = useState({});
-  
-  // Track specific business data changes for granular updates
+  const [realActivitiesLoaded, setRealActivitiesLoaded] = useState(false);
+
+  // Fetch real activities from API when business is available
   useEffect(() => {
-    if (!businessData) return;
+    if (business?.id && generationStage === 'complete' && !realActivitiesLoaded) {
+      fetchRealActivities();
+      setRealActivitiesLoaded(true);
+      
+      // Set up polling for real-time updates
+      const interval = setInterval(fetchRealActivities, 10000); // Poll every 10 seconds
+      return () => clearInterval(interval);
+    }
+  }, [business?.id, generationStage, realActivitiesLoaded]);
+
+  const fetchRealActivities = async () => {
+    try {
+      const response = await fetch(`/api/business/${business.id}/activities?limit=6`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.activities.length > 0) {
+          // Replace simulated activities with real ones
+          setActivities(data.activities);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching real activities:', error);
+    }
+  };
+
+  // Track specific business data changes for granular updates (only during generation)
+  useEffect(() => {
+    if (!businessData || generationStage === 'complete' || realActivitiesLoaded) return;
     
     const newActivities = [];
     
@@ -536,10 +565,12 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
     }
     
     setPreviousBusinessData(businessData);
-  }, [businessData, previousBusinessData]);
+  }, [businessData, previousBusinessData, generationStage, realActivitiesLoaded]);
   
-  // Generation stage activities
+  // Generation stage activities (only during generation)
   useEffect(() => {
+    if (generationStage === 'complete' || realActivitiesLoaded) return;
+    
     const stageActivities = {
       pending: { text: 'Initializing AI systems...', icon: '🤖', type: 'working' },
       queued: { text: 'Queued for processing...', icon: '⏳', type: 'working' },
@@ -548,7 +579,7 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
       building: { text: 'Building your website and creating products', icon: '🔨', type: 'working' },
       generating: { text: 'Generating your business content and products', icon: '⚡', type: 'working' },
       finalizing: { text: 'Optimizing for conversions and profit', icon: '✨', type: 'working' },
-      complete: { text: 'Your business is ready! First visitors arriving soon 🎉', icon: '🚀', type: 'success' }
+      complete: { text: 'Your business is ready! AI is now hunting for customers 🎉', icon: '🚀', type: 'success' }
     };
     
     if (generationStage && generationStage !== currentStage) {
@@ -571,34 +602,21 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
         });
       }
     }
-  }, [generationStage, currentStage]);
+  }, [generationStage, currentStage, realActivitiesLoaded]);
   
-  // Add post-generation activities
+  // Transition to real activities when generation completes
   useEffect(() => {
-    if (generationStage === 'complete') {
+    if (generationStage === 'complete' && !realActivitiesLoaded) {
       const timer = setTimeout(() => {
-        const postActivities = [
-          { text: 'SEO optimization applied to boost visibility', icon: '🔍', type: 'optimization' },
-          { text: 'Conversion tracking pixels installed', icon: '📊', type: 'analytics' },
-          { text: 'Performance monitoring activated', icon: '⚡', type: 'monitoring' }
-        ];
-        
-        let delay = 0;
-        postActivities.forEach(activity => {
-          setTimeout(() => {
-            setActivities(prev => [{
-              id: Date.now() + Math.random(),
-              ...activity,
-              time: 'Just now'
-            }, ...prev].slice(0, 6));
-          }, delay);
-          delay += 2000;
-        });
-      }, 2000);
+        // Clear simulated activities and fetch real ones
+        setActivities([]);
+        fetchRealActivities();
+        setRealActivitiesLoaded(true);
+      }, 3000); // Wait 3 seconds after completion
       
       return () => clearTimeout(timer);
     }
-  }, [generationStage]);
+  }, [generationStage, realActivitiesLoaded]);
 
   return (
     <div style={{
@@ -1085,6 +1103,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         <AIActivityFeed 
           generationStage={generationStage}
           businessData={businessData}
+          business={business}
         />
 
         {/* Success Predictor */}

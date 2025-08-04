@@ -16,7 +16,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
- 
+
 /**
  * Main business generation orchestrator
  * Coordinates the entire business creation process

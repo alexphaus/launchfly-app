@@ -22,7 +22,7 @@ const supabase = createClient(
 /**
  * Wrapper for OpenAI calls with timeout and error handling
  */
-async function callOpenAIWithTimeout(apiCall, timeoutMs = 30000) {
+async function callOpenAIWithTimeout(apiCall, timeoutMs = 45000) {
   return Promise.race([
     apiCall(),
     new Promise((_, reject) => 
@@ -103,33 +103,84 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Generate website theme (can be slow)
     console.log('Generating website data...');
-    const websiteData = await generateWebsite(opportunity);
-    businessData.theme = websiteData.theme;
-    businessData.layout = websiteData.layout;
+    try {
+      const websiteData = await generateWebsite(opportunity);
+      businessData.theme = websiteData.theme;
+      businessData.layout = websiteData.layout;
+      console.log('Website data generated successfully');
+    } catch (error) {
+      console.error('Website generation failed, using fallback:', error.message);
+      // Use fallback data to prevent complete failure
+      const fallbackTheme = {
+        colors: { primary: '#007BFF', secondary: '#00B8D9' },
+        gradient: 'linear-gradient(135deg, #007BFF 0%, #00B8D9 100%)'
+      };
+      businessData.theme = fallbackTheme;
+      businessData.layout = generateDefaultLayout(opportunity);
+    }
     
     // Update database with theme/colors
     await updateBusinessProgress(businessId, { 
-      theme: websiteData.theme, 
-      layout: websiteData.layout 
+      theme: businessData.theme, 
+      layout: businessData.layout 
     });
     
     // Create digital products (can be slow)
     console.log('Creating products...');
-    const products = await createProducts(opportunity);
-    businessData.products = products;
+    try {
+      const products = await createProducts(opportunity);
+      businessData.products = products;
+      console.log('Products created successfully:', products?.length || 0);
+    } catch (error) {
+      console.error('Product creation failed, using fallback:', error.message);
+      // Use fallback products to prevent complete failure
+      businessData.products = [
+        { name: "Basic Package", price: "$97", description: "Essential services to get you started" },
+        { name: "Professional Package", price: "$297", description: "Comprehensive solutions for established businesses" },
+        { name: "Premium Package", price: "$597", description: "All-inclusive enterprise-grade services" }
+      ];
+    }
     
     // Update database with products
-    await updateBusinessProgress(businessId, { products });
+    await updateBusinessProgress(businessId, { products: businessData.products });
     
     // Generate marketing materials and strategies (can be slow)
     console.log('Creating marketing materials...');
-    const marketing = await createMarketing(opportunity);
-    businessData.marketing = marketing;
+    try {
+      const marketing = await createMarketing(opportunity);
+      businessData.marketing = marketing;
+      console.log('Marketing materials created successfully');
+    } catch (error) {
+      console.error('Marketing creation failed, using fallback:', error.message);
+      // Use fallback marketing to prevent complete failure
+      businessData.marketing = {
+        acquisitionChannels: [
+          "Direct outreach to potential clients",
+          "Content marketing and SEO",
+          "Strategic partnerships with complementary businesses"
+        ],
+        sellingPoints: [
+          "Expert solutions tailored to your specific needs",
+          "Proven results with measurable outcomes",
+          "Ongoing support to ensure your success"
+        ]
+      };
+    }
     
     // Generate remaining data
     console.log('Identifying target customers...');
-    const targetCustomers = await identifyTargetCustomers(opportunity);
-    console.log('Target customers identified:', targetCustomers?.length || 0);
+    let targetCustomers;
+    try {
+      targetCustomers = await identifyTargetCustomers(opportunity);
+      console.log('Target customers identified:', targetCustomers?.length || 0);
+    } catch (error) {
+      console.error('Target customer identification failed, using fallback:', error.message);
+      targetCustomers = [
+        "Small business owners looking to grow their online presence",
+        "Professionals seeking to establish industry authority",
+        "Organizations needing specialized expertise in this field"
+      ];
+    }
     
     console.log('Generating projected growth...');
     const monthlyData = generateProjectedGrowth();

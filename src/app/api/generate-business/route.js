@@ -1,9 +1,6 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
 import { sendEvent, EventTypes } from '@/lib/inngest';
-import { analyzeOpportunity } from '@/core/analyze';
-import { launchBusiness } from '@/core/launch';
-import { runGrowthExperiments } from '@/core/grow';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -11,9 +8,8 @@ const supabase = createClient(
 ); 
 
 /**
- * API route to trigger business generation with hybrid approach:
- * - Process immediately for development/immediate results
- * - Also trigger Inngest for production scalability
+ * API route to trigger business generation via Inngest background processing
+ * This route returns immediately to prevent timeouts while heavy processing runs in background
  */
 export async function POST(request) {
   let sessionId, businessId, formData;
@@ -21,9 +17,9 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('🚀 Starting business generation (hybrid approach):', { sessionId, businessId });
+    console.log('🚀 Starting business generation (background only):', { sessionId, businessId });
     
-    // Get session data for processing
+    // Get session data for validation
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
       .select('*')
@@ -34,7 +30,7 @@ export async function POST(request) {
       throw new Error(`Session not found: ${sessionError?.message}`);
     }
 
-    // Initialize status to processing
+    // Update status to show processing has started
     await supabase
       .from('businesses')
       .update({
@@ -50,145 +46,40 @@ export async function POST(request) {
       })
       .eq('id', sessionId);
 
-    // **DIRECT PROCESSING** - Execute business generation immediately
-    try {
-      console.log('Step 1: Analyzing user data...');
-      
-      // Add timeout wrapper to prevent hanging
-      const analysisResult = await Promise.race([
-        analyzeOpportunity(session, sessionId),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Analysis timeout after 60 seconds')), 60000)
-        )
-      ]);
-      
-      console.log('Analysis completed:', JSON.stringify(analysisResult, null, 2));
-
-      // Update progress
-      await supabase
-        .from('sessions')
-        .update({ 
-          stage: 'generating',
-          progress: 40 
-        })
-        .eq('id', sessionId);
-
-      console.log('Step 2: Generating business concept...');
-      
-      // Add timeout wrapper for business generation
-      const businessConcept = await Promise.race([
-        launchBusiness(analysisResult, sessionId, businessId),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Business generation timeout after 120 seconds')), 120000)
-        )
-      ]);
-      
-      console.log('Business concept generated:', JSON.stringify(businessConcept, null, 2));
-
-      // Update progress
-      await supabase
-        .from('sessions')
-        .update({ 
-          stage: 'launching',
-          progress: 70 
-        })
-        .eq('id', sessionId);
-
-      // Step 3: Update business record with generated data
-      await supabase
-        .from('businesses')
-        .update({
-          business_data: businessConcept,
-          status: 'ready',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', businessId);
-
-      // Step 4: Update session to complete
-      await supabase
-        .from('sessions')
-        .update({ 
-          stage: 'complete',
-          progress: 100,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
-
-      console.log('✅ Business generation completed successfully');
-
-      // Step 5: Trigger growth experiments asynchronously (with timeout protection)
-      try {
-        console.log('Step 5: Starting growth experiments...');
-        await Promise.race([
-          runGrowthExperiments(businessId, ['cold-outreach', 'content-marketing']),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Growth experiments timeout')), 30000)
-          )
-        ]);
-        console.log('Growth experiments initiated');
-      } catch (growthError) {
-        console.error('Warning: Growth experiments failed (non-critical):', growthError);
-        // Don't fail the main flow
-      }
-
-    } catch (processingError) {
-      console.error('❌ Error in direct business generation:', processingError);
-      
-      // Update business status to failed
-      await supabase
-        .from('businesses')
-        .update({
-          status: 'failed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', businessId);
-
-      // Update session to failed
-      await supabase
-        .from('sessions')
-        .update({ 
-          stage: 'failed',
-          error_message: processingError.message,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
-
-      throw processingError; // Re-throw to be caught by outer try-catch
-    }
-
-    // **INNGEST BACKUP** - Also trigger Inngest for additional processing (non-blocking)
-    try {
-      await sendEvent(EventTypes.BUSINESS_GENERATION_STARTED, {
+    // Trigger Inngest for ALL processing - no synchronous work
+    console.log('🔄 Triggering Inngest background processing...');
+    
+    // Don't await the sendEvent to prevent blocking
+    sendEvent({
+      name: EventTypes.BUSINESS_GENERATION_STARTED,
+      data: {
         sessionId,
         businessId,
         userData: formData,
         formData,
         triggeredAt: new Date().toISOString(),
-        source: 'api',
-        isBackgroundProcessing: true // Flag to indicate this is backup processing
-      });
-      console.log('Inngest backup orchestration triggered');
-    } catch (inngestError) {
-      console.error('Warning: Inngest trigger failed (non-critical):', inngestError);
-      // Don't fail the main flow
-    }
+        source: 'api'
+      }
+    }).then(() => {
+      console.log('✅ Inngest event sent successfully');
+    }).catch((error) => {
+      console.error('❌ Inngest event failed:', error);
+    });
+
+    console.log('✅ Background processing triggered successfully');
     
+    // Return immediately - all processing happens in background
     return Response.json({
       success: true,
-      message: 'Business generation completed successfully',
+      message: 'Business generation started in background',
       sessionId,
       businessId,
-      status: 'completed'
+      status: 'processing',
+      backgroundProcessing: true
     });
 
   } catch (error) {
     console.error('❌ Generation API error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      type: error.type,
-      stack: error.stack
-    });
     
     // Update session to error state
     if (sessionId) {
@@ -196,7 +87,7 @@ export async function POST(request) {
         await supabase
           .from('sessions')
           .update({ 
-            stage: 'failed',
+            stage: 'error',
             error_message: error.message 
           })
           .eq('id', sessionId);
@@ -214,8 +105,8 @@ export async function POST(request) {
     
     return new Response(JSON.stringify({ 
       error: error.message,
-      code: error.code,
-      type: error.type 
+      sessionId,
+      businessId
     }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
@@ -223,6 +114,6 @@ export async function POST(request) {
   }
 }
 
-// Set a shorter timeout since we're just triggering orchestration
+// Fast timeout since we're just triggering background processing
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 10;

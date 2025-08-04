@@ -53,7 +53,15 @@ export async function POST(request) {
     // **DIRECT PROCESSING** - Execute business generation immediately
     try {
       console.log('Step 1: Analyzing user data...');
-      const analysisResult = await analyzeOpportunity(session, sessionId);
+      
+      // Add timeout wrapper to prevent hanging
+      const analysisResult = await Promise.race([
+        analyzeOpportunity(session, sessionId),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analysis timeout after 60 seconds')), 60000)
+        )
+      ]);
+      
       console.log('Analysis completed:', JSON.stringify(analysisResult, null, 2));
 
       // Update progress
@@ -66,7 +74,15 @@ export async function POST(request) {
         .eq('id', sessionId);
 
       console.log('Step 2: Generating business concept...');
-      const businessConcept = await launchBusiness(analysisResult, sessionId, businessId);
+      
+      // Add timeout wrapper for business generation
+      const businessConcept = await Promise.race([
+        launchBusiness(analysisResult, sessionId, businessId),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Business generation timeout after 120 seconds')), 120000)
+        )
+      ]);
+      
       console.log('Business concept generated:', JSON.stringify(businessConcept, null, 2));
 
       // Update progress
@@ -83,16 +99,16 @@ export async function POST(request) {
         .from('businesses')
         .update({
           business_data: businessConcept,
-          status: 'active',
+          status: 'ready',
           updated_at: new Date().toISOString()
         })
         .eq('id', businessId);
 
-      // Step 4: Update session to launched
+      // Step 4: Update session to complete
       await supabase
         .from('sessions')
         .update({ 
-          stage: 'launched',
+          stage: 'complete',
           progress: 100,
           updated_at: new Date().toISOString()
         })
@@ -100,10 +116,15 @@ export async function POST(request) {
 
       console.log('✅ Business generation completed successfully');
 
-      // Step 5: Trigger growth experiments asynchronously
+      // Step 5: Trigger growth experiments asynchronously (with timeout protection)
       try {
         console.log('Step 5: Starting growth experiments...');
-        await runGrowthExperiments(businessId, businessConcept);
+        await Promise.race([
+          runGrowthExperiments(businessId, businessConcept),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Growth experiments timeout')), 30000)
+          )
+        ]);
         console.log('Growth experiments initiated');
       } catch (growthError) {
         console.error('Warning: Growth experiments failed (non-critical):', growthError);

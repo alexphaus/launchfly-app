@@ -1,7 +1,6 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
-import { generateBusinessWithAI } from '@/lib/business-generator';
-import { LaunchflyV2 } from '@/core';
+import { inngest, EVENTS } from '@/lib/inngest/client';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,8 +8,8 @@ const supabase = createClient(
 );
 
 /**
- * API route to generate a business using our future-proof architecture
- * Following the principles from future-proof-approach.md
+ * API route to trigger business generation via Inngest
+ * This provides better orchestration and error handling
  */
 export async function POST(request) {
   let sessionId, businessId, formData;
@@ -18,80 +17,28 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('Starting business generation via API:', { sessionId, businessId });
+    console.log('Triggering business generation via Inngest:', { sessionId, businessId });
     
-    // Initialize status
-    await supabase
-      .from('businesses')
-      .update({
-        status: 'generating'
-      })
-      .eq('id', businessId);
-
-    // Update session stage to 'analyzing'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'analyzing' })
-      .eq('id', sessionId);
+    // Send event to Inngest to start generation
+    await inngest.send({
+      name: EVENTS.BUSINESS_GENERATION_STARTED,
+      data: {
+        sessionId,
+        businessId,
+        formData
+      }
+    });
     
-    // Add a small delay to show the analyzing stage
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update session stage to 'researching'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'researching' })
-      .eq('id', sessionId);
-    
-    // Add delay for researching stage
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Update session stage to 'building'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'building' })
-      .eq('id', sessionId);
-    
-    // Option 1: Use the legacy generator for backward compatibility
-    const businessData = await generateBusinessWithAI(formData, sessionId, businessId);
-    
-    // Option 2: Use our new unified LaunchflyV2 class (preferred approach)
-    // const launchfly = new LaunchflyV2();
-    // const businessData = await launchfly.launchBusiness(formData, sessionId, businessId);
-    
-    // Update session stage to 'finalizing'
-    await supabase
-      .from('sessions')
-      .update({ stage: 'finalizing' })
-      .eq('id', sessionId);
-    
-    // Add delay for finalizing stage
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Update business with generated data
-    await supabase
-      .from('businesses')
-      .update({
-        name: businessData.businessName,
-        subdomain: businessData.domain ? businessData.domain.replace('.com', '').toLowerCase() : `business-${Date.now()}`,
-        business_data: businessData,
-        status: 'ready'
-      })
-      .eq('id', businessId);
-
-    // Mark session as complete
-    await supabase
-      .from('sessions')
-      .update({ stage: 'complete' })
-      .eq('id', sessionId);
-    
+    // Return immediately - Inngest will handle the async processing
     return Response.json({ 
       success: true, 
-      businessData 
+      message: 'Business generation started',
+      sessionId,
+      businessId
     });
     
   } catch (error) {
-    console.error('Generation API error:', error);
+    console.error('Error triggering generation:', error);
     console.error('Error details:', {
       message: error.message,
       code: error.code,
@@ -99,7 +46,7 @@ export async function POST(request) {
       stack: error.stack
     });
     
-    // Update session to error state using the stored sessionId
+    // Update session to error state if we can
     if (sessionId) {
       try {
         await supabase
@@ -110,7 +57,6 @@ export async function POST(request) {
           })
           .eq('id', sessionId);
           
-        // Also update business status if we have businessId
         if (businessId) {
           await supabase
             .from('businesses')

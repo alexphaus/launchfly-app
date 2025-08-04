@@ -11,9 +11,8 @@ const supabase = createClient(
 ); 
 
 /**
- * API route to trigger business generation with hybrid approach:
- * - Process immediately for development/immediate results
- * - Also trigger Inngest for production scalability
+ * API route to trigger business generation
+ * Uses Inngest for orchestration with fallback to direct processing
  */
 export async function POST(request) {
   let sessionId, businessId, formData;
@@ -21,7 +20,7 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('🚀 Starting business generation (hybrid approach):', { sessionId, businessId });
+    console.log('🚀 Starting business generation with Inngest orchestration:', { sessionId, businessId });
     
     // Get session data for processing
     const { data: session, error: sessionError } = await supabase
@@ -50,11 +49,35 @@ export async function POST(request) {
       })
       .eq('id', sessionId);
 
-    // **DIRECT PROCESSING** - Execute business generation immediately
+    // **INNGEST ORCHESTRATION** - Primary approach for AI orchestration
     try {
-      console.log('Step 1: Analyzing user data...');
+      console.log('🎭 Triggering Inngest workflow for business generation...');
       
-      // Add timeout wrapper to prevent hanging
+      await sendEvent(EventTypes.BUSINESS_GENERATION_STARTED, {
+        sessionId,
+        businessId,
+        userData: formData,
+        formData,
+        triggeredAt: new Date().toISOString(),
+        source: 'api'
+      });
+      
+      console.log('✅ Inngest workflow triggered successfully');
+      
+      return Response.json({
+        success: true,
+        message: 'Business generation started via Inngest orchestration',
+        sessionId,
+        businessId,
+        processing: 'inngest'
+      });
+      
+    } catch (inngestError) {
+      console.warn('⚠️ Inngest failed, falling back to direct processing:', inngestError.message);
+      
+      // **DIRECT PROCESSING FALLBACK** - Only when Inngest fails
+      console.log('🔄 Step 1: Analyzing user data (direct fallback)...');
+      
       const analysisResult = await Promise.race([
         analyzeOpportunity(session, sessionId),
         new Promise((_, reject) => 
@@ -62,7 +85,7 @@ export async function POST(request) {
         )
       ]);
       
-      console.log('Analysis completed:', JSON.stringify(analysisResult, null, 2));
+      console.log('Analysis completed in direct mode');
 
       // Update progress
       await supabase
@@ -73,9 +96,8 @@ export async function POST(request) {
         })
         .eq('id', sessionId);
 
-      console.log('Step 2: Generating business concept...');
+      console.log('🔄 Step 2: Generating business concept (direct fallback)...');
       
-      // Add timeout wrapper for business generation
       const businessConcept = await Promise.race([
         launchBusiness(analysisResult, sessionId, businessId),
         new Promise((_, reject) => 
@@ -83,7 +105,7 @@ export async function POST(request) {
         )
       ]);
       
-      console.log('Business concept generated:', JSON.stringify(businessConcept, null, 2));
+      console.log('Business concept generated in direct mode');
 
       // Update progress
       await supabase
@@ -156,29 +178,14 @@ export async function POST(request) {
       throw processingError; // Re-throw to be caught by outer try-catch
     }
 
-    // **INNGEST BACKUP** - Also trigger Inngest for additional processing (non-blocking)
-    try {
-      await sendEvent(EventTypes.BUSINESS_GENERATION_STARTED, {
-        sessionId,
-        businessId,
-        userData: formData,
-        formData,
-        triggeredAt: new Date().toISOString(),
-        source: 'api',
-        isBackgroundProcessing: true // Flag to indicate this is backup processing
-      });
-      console.log('Inngest backup orchestration triggered');
-    } catch (inngestError) {
-      console.error('Warning: Inngest trigger failed (non-critical):', inngestError);
-      // Don't fail the main flow
-    }
+    // Inngest integration removed for stability - using direct processing only
     
     return Response.json({
       success: true,
-      message: 'Business generation completed successfully',
+      message: 'Business generation completed via direct processing fallback',
       sessionId,
       businessId,
-      status: 'completed'
+      processing: 'direct_fallback'
     });
 
   } catch (error) {

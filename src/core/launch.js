@@ -69,9 +69,9 @@ async function callOpenAIWithTimeout(apiCall, timeoutMs = 20000) {
  */
 async function updateBusinessProgress(businessId, partialData, stage = null) {
   try {
-    console.log(`Updating business progress for ${businessId}:`, Object.keys(partialData));
+    console.log(`📝 Updating business progress for ${businessId}:`, Object.keys(partialData));
     
-    // Get current business data
+    // Get current business data with error handling
     const { data: currentBusiness, error: fetchError } = await supabase
       .from('businesses')
       .select('business_data')
@@ -79,13 +79,20 @@ async function updateBusinessProgress(businessId, partialData, stage = null) {
       .single();
     
     if (fetchError) {
-      console.error('Error fetching current business data:', fetchError);
-      return;
+      console.error('❌ Error fetching current business data:', fetchError);
+      console.error('This could mean the business record was not created properly');
+      return false;
+    }
+    
+    if (!currentBusiness) {
+      console.error('❌ No business found with ID:', businessId);
+      return false;
     }
     
     // Merge the new partial data with existing data
+    const existingData = currentBusiness.business_data || {};
     const updatedBusinessData = {
-      ...currentBusiness.business_data,
+      ...existingData,
       ...partialData,
       lastUpdated: new Date().toISOString(),
       updateSource: 'launch-module'
@@ -99,6 +106,7 @@ async function updateBusinessProgress(businessId, partialData, stage = null) {
     
     if (stage) {
       updateData.status = stage;
+      console.log(`📊 Also updating business status to: ${stage}`);
     }
     
     const { error: updateError } = await supabase
@@ -107,13 +115,15 @@ async function updateBusinessProgress(businessId, partialData, stage = null) {
       .eq('id', businessId);
     
     if (updateError) {
-      console.error('Error updating business data:', updateError);
+      console.error('❌ Error updating business data:', updateError);
+      return false;
     } else {
       console.log(`✅ Business progress updated successfully for ${businessId}`);
+      return true;
     }
   } catch (error) {
-    console.error('Error updating business progress:', error);
-    // Don't throw - this is just for UI updates, shouldn't break the main flow
+    console.error('❌ Error in updateBusinessProgress:', error);
+    return false;
   }
 }
 
@@ -139,7 +149,10 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Update database with initial data so UI can show business name immediately
     console.log('Updating with initial business data...');
-    await updateBusinessProgress(businessId, businessData, 'generating');
+    const initialUpdateSuccess = await updateBusinessProgress(businessId, businessData, 'generating');
+    if (!initialUpdateSuccess) {
+      throw new Error('Failed to update initial business data - business record may not exist');
+    }
     
     // Generate logo (fast operation)
     console.log('Generating logo...');
@@ -148,7 +161,10 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     businessData.logo = logo;
     
     // Update database with logo
-    await updateBusinessProgress(businessId, { logo });
+    const logoUpdateSuccess = await updateBusinessProgress(businessId, { logo });
+    if (!logoUpdateSuccess) {
+      console.warn('⚠️ Failed to save logo, continuing with generation...');
+    }
     
     // Generate website theme (can be slow)
     console.log('Generating website data...');
@@ -185,13 +201,16 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Update database with theme/colors
     console.log('Saving theme and layout to database...');
-    await updateBusinessProgress(businessId, { 
+    const themeUpdateSuccess = await updateBusinessProgress(businessId, { 
       theme: websiteData.theme, 
       layout: websiteData.layout 
     });
     
-    // Verify theme was saved
-    console.log('✅ Theme and layout saved to database');
+    if (!themeUpdateSuccess) {
+      console.warn('⚠️ Failed to save theme, continuing with generation...');
+    } else {
+      console.log('✅ Theme and layout saved to database');
+    }
     
     // Create digital products (can be slow)
     console.log('Creating products...');
@@ -200,7 +219,10 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
     
     // Update database with products - critical step for UI
     console.log('Updating database with products...');
-    await updateBusinessProgress(businessId, { products });
+    const productsUpdateSuccess = await updateBusinessProgress(businessId, { products });
+    if (!productsUpdateSuccess) {
+      console.warn('⚠️ Failed to save products, continuing with generation...');
+    }
     
     // Verify products were saved correctly with a small delay
     await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to ensure DB consistency

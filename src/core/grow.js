@@ -3,10 +3,12 @@
  * 
  * This module focuses on growing the business and ensuring its success.
  * According to the future-proof approach, this is where the true value lies.
+ * Now enhanced with Inngest integration for scalable growth orchestration.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { sendEvent, EventTypes } from '../lib/inngest.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -17,6 +19,7 @@ const supabase = createClient(
 
 /**
  * Grows a business by implementing customer acquisition strategies
+ * Enhanced with Inngest orchestration for background processing
  * 
  * @param {Object} business - The business data
  * @param {string} businessId - Business record ID
@@ -24,9 +27,9 @@ const supabase = createClient(
  */
 export async function growBusiness(business, businessId) {
   try {
-    // This is where the true value of Launchfly is created
-    // These strategies are what actually make businesses successful
+    console.log(`📈 Starting growth analysis for business: ${businessId}`);
     
+    // Core growth analysis (runs synchronously for immediate feedback)
     const customers = await generateCustomers(business);
     const revenue = await generateRevenue(business, customers);
     const optimization = await optimizeConversion(business);
@@ -34,11 +37,29 @@ export async function growBusiness(business, businessId) {
     // Update business metrics in database
     await updateBusinessMetrics(businessId, customers, revenue);
     
-    return {
-      ...business,
+    const growthMetrics = {
       customers,
       revenue,
-      conversion: optimization.conversionRate
+      conversion: optimization.conversionRate,
+      lastAnalyzed: new Date().toISOString()
+    };
+    
+    // Trigger background growth experiments via Inngest
+    try {
+      await sendEvent(EventTypes.GROWTH_EXPERIMENT_COMPLETED, {
+        businessId,
+        experimentType: 'initial-analysis',
+        metrics: growthMetrics,
+        triggeredAt: new Date().toISOString()
+      });
+    } catch (inngestError) {
+      console.error('Failed to trigger Inngest growth event:', inngestError);
+      // Continue without Inngest if it fails
+    }
+    
+    return {
+      ...business,
+      growthMetrics
     };
   } catch (error) {
     console.error("Error growing business:", error);
@@ -501,5 +522,89 @@ async function generateExperimentLearnings(experiment, result) {
     } else {
       return "The experiment did not achieve the expected results. We should analyze what went wrong and try a different approach.";
     }
+  }
+}
+
+/**
+ * Runs growth experiments using Inngest orchestration
+ * This function can be called to trigger specific growth experiments
+ * 
+ * @param {string} businessId - Business record ID
+ * @param {Array} experimentTypes - Types of experiments to run
+ * @returns {Object} Experiment results
+ */
+export async function runGrowthExperiments(businessId, experimentTypes = ['cold-outreach', 'content-marketing']) {
+  try {
+    console.log(`🧪 Running growth experiments for business: ${businessId}`);
+    
+    // Get business data
+    const { data: business, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('id', businessId)
+      .single();
+    
+    if (error || !business) {
+      throw new Error(`Business not found: ${businessId}`);
+    }
+    
+    const results = [];
+    
+    // Trigger different types of growth experiments
+    for (const experimentType of experimentTypes) {
+      let eventType;
+      let eventData = {
+        businessId,
+        businessData: business,
+        experimentType,
+        triggeredAt: new Date().toISOString()
+      };
+      
+      switch (experimentType) {
+        case 'cold-outreach':
+          eventType = EventTypes.COLD_EMAIL_CAMPAIGN_STARTED;
+          eventData.campaign = {
+            type: 'growth-experiment',
+            targetSize: 50,
+            industry: business.business_data?.industry
+          };
+          break;
+          
+        case 'customer-acquisition':
+          eventType = EventTypes.CUSTOMER_ACQUISITION_STARTED;
+          eventData.strategy = 'multi-channel-experiment';
+          break;
+          
+        case 'content-marketing':
+          // For now, this would be handled in the growth strategies
+          eventType = EventTypes.GROWTH_STRATEGY_STARTED;
+          eventData.strategies = ['content-marketing'];
+          break;
+          
+        default:
+          console.warn(`Unknown experiment type: ${experimentType}`);
+          continue;
+      }
+      
+      // Send the event via Inngest
+      await sendEvent(eventType, eventData);
+      
+      results.push({
+        experimentType,
+        status: 'triggered',
+        triggeredAt: new Date().toISOString()
+      });
+    }
+    
+    return {
+      success: true,
+      businessId,
+      experiments: results,
+      totalTriggered: results.length
+    };
+    
+  } catch (error) {
+    console.error('Error running growth experiments:', error);
+    throw error;
   }
 }

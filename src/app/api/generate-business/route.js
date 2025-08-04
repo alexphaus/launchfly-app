@@ -1,7 +1,6 @@
 // app/api/generate-business/route.js
 import { createClient } from '@supabase/supabase-js';
-import { inngest } from '@/lib/inngest';
-import { BusinessEvents } from '@/lib/inngest';
+import { sendEvent, EventTypes } from '@/lib/inngest';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,8 +8,8 @@ const supabase = createClient(
 ); 
 
 /**
- * API route to generate a business using Inngest for orchestration
- * This follows the future-proof architecture with background processing
+ * API route to trigger business generation using Inngest orchestration
+ * This replaces the direct generation with a robust, retryable workflow
  */
 export async function POST(request) {
   let sessionId, businessId, formData;
@@ -18,42 +17,41 @@ export async function POST(request) {
   try {
     ({ sessionId, businessId, formData } = await request.json());
     
-    console.log('Starting business generation via API with Inngest:', { sessionId, businessId });
+    console.log('🚀 Triggering business generation orchestration:', { sessionId, businessId });
     
     // Initialize status
     await supabase
       .from('businesses')
       .update({
-        status: 'generating'
+        status: 'queued'
       })
       .eq('id', businessId);
 
-    // Update session stage to 'pending'
     await supabase
       .from('sessions')
-      .update({ 
-        stage: 'pending',
-        progress: 10
-      })
+      .update({ stage: 'queued' })
       .eq('id', sessionId);
     
-    // Trigger the Inngest orchestration function
-    await inngest.send({
-      name: BusinessEvents.GenerationRequested,
-      data: {
-        sessionId,
-        businessId,
-        formData
-      }
-    });
-    
-    return Response.json({ 
-      success: true, 
-      message: "Business generation started successfully",
+    // Trigger the Inngest business generation orchestration
+    await sendEvent(EventTypes.BUSINESS_GENERATION_STARTED, {
       sessionId,
-      businessId
+      businessId,
+      userData: formData,
+      formData,
+      triggeredAt: new Date().toISOString(),
+      source: 'api'
     });
     
+    console.log('✅ Business generation orchestration triggered successfully');
+    
+    return Response.json({
+      success: true,
+      message: 'Business generation started successfully',
+      sessionId,
+      businessId,
+      status: 'orchestration_triggered'
+    });
+
   } catch (error) {
     console.error('Generation API error:', error);
     console.error('Error details:', {
@@ -97,5 +95,6 @@ export async function POST(request) {
   }
 }
 
-// Set a longer timeout for this endpoint
+// Set a shorter timeout since we're just triggering orchestration
 export const runtime = 'nodejs';
+export const maxDuration = 30;

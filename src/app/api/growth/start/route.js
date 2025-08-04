@@ -1,24 +1,26 @@
+/**
+ * Growth API Route
+ * 
+ * Triggers growth strategies for existing businesses using Inngest orchestration
+ */
+
 import { createClient } from '@supabase/supabase-js';
-import { inngest } from '@/lib/inngest';
-import { BusinessEvents } from '@/lib/inngest';
+import { sendEvent, EventTypes } from '@/lib/inngest';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-/**
- * API route to start business growth strategies using Inngest
- */
 export async function POST(request) {
   try {
-    const { businessId } = await request.json();
+    const { businessId, strategies = ['customer-acquisition', 'cold-outreach'] } = await request.json();
     
     if (!businessId) {
-      return Response.json({ error: 'Missing businessId parameter' }, { status: 400 });
+      return Response.json({ error: 'Business ID is required' }, { status: 400 });
     }
     
-    console.log('Starting growth strategies for business:', businessId);
+    console.log(`🚀 Triggering growth strategies for business: ${businessId}`);
     
     // Get business data
     const { data: business, error: businessError } = await supabase
@@ -26,40 +28,50 @@ export async function POST(request) {
       .select('*')
       .eq('id', businessId)
       .single();
-      
-    if (businessError) {
-      console.error('Error fetching business data:', businessError);
+    
+    if (businessError || !business) {
       return Response.json({ error: 'Business not found' }, { status: 404 });
     }
     
-    // Trigger growth strategies via Inngest
-    await inngest.send({
-      name: BusinessEvents.GrowthStarted,
-      data: {
-        businessId,
-        businessData: business.business_data
-      }
+    // Trigger growth strategy orchestration
+    await sendEvent(EventTypes.GROWTH_STRATEGY_STARTED, {
+      businessId,
+      businessData: business,
+      strategies,
+      triggeredAt: new Date().toISOString(),
+      source: 'api'
     });
     
-    // Update business to indicate growth is in progress
-    await supabase
-      .from('businesses')
-      .update({ growth_in_progress: true })
-      .eq('id', businessId);
+    console.log(`✅ Growth strategies triggered for business: ${businessId}`);
     
     return Response.json({
       success: true,
-      message: 'Growth strategies initiated successfully'
+      message: 'Growth strategies started successfully',
+      businessId,
+      strategies
     });
     
   } catch (error) {
-    console.error('Error starting growth strategies:', error);
-    return Response.json({ 
-      error: error.message 
-    }, { 
-      status: 500 
-    });
+    console.error('Growth API error:', error);
+    
+    return Response.json({
+      error: error.message,
+      code: error.code
+    }, { status: 500 });
   }
 }
 
-export const runtime = 'nodejs';
+export async function GET() {
+  return Response.json({
+    message: 'Growth Strategy API',
+    methods: ['POST'],
+    description: 'Triggers growth strategies for businesses',
+    availableStrategies: [
+      'customer-acquisition',
+      'cold-outreach', 
+      'content-marketing',
+      'social-media',
+      'paid-advertising'
+    ]
+  });
+}

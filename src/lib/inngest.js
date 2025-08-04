@@ -1,61 +1,108 @@
-import { Inngest } from 'inngest';
+/**
+ * Inngest Client Configuration
+ * 
+ * Central configuration for all Inngest functions and events.
+ * This provides the foundation for our AI orchestration system.
+ */
 
-// Create a client to send and receive events
-export const inngest = new Inngest({
-  id: 'launchfly',
-  eventKey: process.env.INNGEST_EVENT_KEY,
-  signingKey: process.env.INNGEST_SIGNING_KEY
+import { Inngest } from "inngest";
+
+// Create the main Inngest client
+export const inngest = new Inngest({ 
+  id: "launchfly", 
+  name: "Launchfly AI Business Generator",
+  eventKey: process.env.INNGEST_EVENT_KEY
 });
 
-// Define event types for better TypeScript support and documentation
-export const BusinessEvents = {
-  // Trigger events
-  GenerationRequested: 'business/generation.requested',
+// Event types for type safety and better organization
+export const EventTypes = {
+  // Business Generation Flow
+  BUSINESS_GENERATION_STARTED: "business/generation.started",
+  BUSINESS_ANALYSIS_COMPLETED: "business/analysis.completed", 
+  BUSINESS_RESEARCH_COMPLETED: "business/research.completed",
+  BUSINESS_CREATION_COMPLETED: "business/creation.completed",
+  BUSINESS_GENERATION_COMPLETED: "business/generation.completed",
   
-  // Stage events
-  AnalysisStarted: 'business/analysis.started',
-  AnalysisCompleted: 'business/analysis.completed',
-  ResearchStarted: 'business/research.started',
-  ResearchCompleted: 'business/research.completed',
-  BuildingStarted: 'business/building.started',
-  BuildingCompleted: 'business/building.completed',
-  FinalizingStarted: 'business/finalizing.started',
-  GenerationCompleted: 'business/generation.completed',
+  // Growth & Marketing Flow
+  GROWTH_STRATEGY_STARTED: "growth/strategy.started",
+  COLD_EMAIL_CAMPAIGN_STARTED: "growth/cold-email.started",
+  COLD_EMAIL_BATCH_SENT: "growth/cold-email.batch-sent",
+  GROWTH_EXPERIMENT_COMPLETED: "growth/experiment.completed",
   
-  // Progress update events
-  BusinessNameCreated: 'business/progress.name_created',
-  BusinessThemeApplied: 'business/progress.theme_applied',
-  BusinessProductsCreated: 'business/progress.products_created',
-  BusinessTaglineCreated: 'business/progress.tagline_created',
+  // Customer Acquisition
+  CUSTOMER_ACQUISITION_STARTED: "customer/acquisition.started",
+  LEAD_GENERATED: "customer/lead.generated",
+  CUSTOMER_CONVERTED: "customer/converted",
   
-  // Growth events
-  GrowthStarted: 'business/growth.started',
-  GrowthCompleted: 'business/growth.completed',
+  // Business Operations
+  WEBSITE_TRAFFIC_DETECTED: "business/traffic.detected",
+  SALE_COMPLETED: "business/sale.completed",
+  REVENUE_MILESTONE_REACHED: "business/milestone.reached",
   
-  // Error events
-  GenerationFailed: 'business/generation.failed'
+  // Error Handling
+  PROCESS_FAILED: "system/process.failed",
+  RETRY_REQUIRED: "system/retry.required"
 };
 
-// Helper function for updating business data progressively
-export async function updateBusinessProgress(businessId, partialData, stage = null) {
+// Utility function to send events with consistent structure
+export async function sendEvent(eventName, data, user = null) {
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/business/update-progress`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        businessId,
-        partialData,
-        stage
-      })
-    });
+    const eventData = {
+      name: eventName,
+      data: {
+        ...data,
+        timestamp: new Date().toISOString(),
+        ...(user && { user })
+      }
+    };
     
-    if (!response.ok) {
-      throw new Error(`Failed to update business progress: ${response.statusText}`);
-    }
-    
-    return await response.json();
+    await inngest.send(eventData);
+    console.log(`✅ Inngest event sent: ${eventName}`, { eventData });
+    return { success: true, eventData };
   } catch (error) {
-    console.error('Error updating business progress:', error);
+    console.error(`❌ Failed to send Inngest event: ${eventName}`, error);
     throw error;
   }
 }
+
+// Helper to send events with retry logic
+export async function sendEventWithRetry(eventName, data, user = null, maxRetries = 3) {
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
+    try {
+      return await sendEvent(eventName, data, user);
+    } catch (error) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+      
+      // Exponential backoff
+      const delay = Math.pow(2, attempt) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Event data schemas for validation and documentation
+export const EventSchemas = {
+  businessGenerationStarted: {
+    sessionId: "string",
+    businessId: "string", 
+    userData: "object",
+    formData: "object"
+  },
+  
+  growthStrategyStarted: {
+    businessId: "string",
+    businessData: "object",
+    strategies: "array"
+  },
+  
+  coldEmailCampaignStarted: {
+    businessId: "string",
+    campaign: "object",
+    targetList: "array"
+  }
+};

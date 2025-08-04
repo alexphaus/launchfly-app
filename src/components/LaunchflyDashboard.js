@@ -234,6 +234,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
                   <span style={{ fontWeight: '600' }}>
+                    {generationStage === 'queued' && 'Queuing for AI processing...'}
                     {generationStage === 'analyzing' && 'Analyzing your business...'}
                     {generationStage === 'researching' && 'Researching your market...'}
                     {generationStage === 'building' && (
@@ -540,6 +541,7 @@ const AIActivityFeed = ({ generationStage, businessData }) => {
   useEffect(() => {
     const stageActivities = {
       pending: { text: 'Initializing AI systems...', icon: '🤖', type: 'working' },
+      queued: { text: 'Queued for processing...', icon: '⏳', type: 'working' },
       analyzing: { text: 'Analyzing your skills and market opportunity', icon: '🔍', type: 'working' },
       researching: { text: 'Researching profitable niches in your industry', icon: '📊', type: 'working' },
       building: { text: 'Building your website and products', icon: '🔨', type: 'working' },
@@ -908,39 +910,96 @@ const NextSteps = ({ onComplete, generationStage, setupStatus }) => {
 
 // --- MAIN DASHBOARD COMPONENT ---
 const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete }) => {
-  const handleStepComplete = async (stepId) => {
-    if (onStepComplete) {
-      await onStepComplete(stepId);
+  const [setupComplete, setSetupComplete] = useState(false);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [generationStarted, setGenerationStarted] = useState(false);
+  const startedRef = useRef(false);
+  
+  // Debug: Log business object to see what data is available
+  console.log('Business object:', business);
+  
+  // Try multiple possible field names for revenue
+  const getRevenueFromBusiness = (business) => {
+    if (!business) return 0;
+    
+    return business.revenue || 
+           business.earnings || 
+           business.total_revenue || 
+           business.total_earnings || 
+           business.sales || 
+           business.total_sales || 
+           business.income || 
+           business.profit || 
+           0;
+  };
+  
+  // Initialize total revenue from business data
+  useEffect(() => {
+    const revenue = getRevenueFromBusiness(business);
+    console.log('Calculated revenue:', revenue);
+    setTotalRevenue(revenue);
+  }, [business]);
+  
+  // Track setup status from real data
+  const setupStatus = {
+    bank: business?.bank_connected || business?.bank_account || false,
+    phone: business?.phone_number || business?.contact_phone || false
+  };
+  
+  // Update setup complete status based on real data
+  useEffect(() => {
+    setSetupComplete(setupStatus.bank && setupStatus.phone);
+  }, [setupStatus.bank, setupStatus.phone]);
+  
+  // Start generation immediately if pending
+  useEffect(() => {
+    if (session?.stage === 'pending' && business && !startedRef.current) {
+      startedRef.current = true;
+      startGeneration();
+    }
+  }, [session?.stage, business]);
+  
+  // Update revenue from real data
+  useEffect(() => {
+    const revenue = getRevenueFromBusiness(business);
+    console.log('Revenue updated:', revenue);
+    setTotalRevenue(revenue);
+  }, [business?.revenue, business?.earnings, business?.total_revenue, business?.total_earnings, business?.sales, business?.total_sales, business?.income, business?.profit]);
+
+  const startGeneration = async () => {
+    try {
+      setGenerationStarted(true);
+      const response = await fetch('/api/generate-business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.id,
+          businessId: business.id,
+          formData: business.form_data
+        })
+      });
       
-      // If this is the business activation step, trigger growth strategies
-      if (stepId === 3 && business?.id) {
-        try {
-          await fetch('/api/growth/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ businessId: business.id })
-          });
-        } catch (error) {
-          console.error('Error triggering growth strategies:', error);
-        }
+      if (!response.ok) {
+        throw new Error('Generation failed');
       }
+    } catch (error) {
+      console.error('Error starting generation:', error);
+    }
+  };
+
+  const handleStepComplete = (stepId) => {
+    // Update setup status optimistically
+    if (stepId === 'bank') {
+      // This would typically be handled by the parent component
+      // and reflected in business.bank_connected
+    }
+    if (onStepComplete) {
+      onStepComplete(stepId);
     }
   };
 
   const businessData = business?.business_data || {};
   const generationStage = session?.stage || 'pending';
-
-  // Calculate total revenue
-  const totalRevenue = business?.total_revenue || 0;
-
-  // Determine if setup is complete
-  const setupStatus = {
-    phoneVerified: !!business?.phone_number,
-    businessActivated: session?.completed_steps?.includes('3'),
-    profileCompleted: session?.completed_steps?.includes('1'),
-  };
-  
-  const setupComplete = Object.values(setupStatus).every(status => status);
 
   return (
     <div style={{ 
@@ -1001,11 +1060,15 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         <MoneyHero 
           totalRevenue={totalRevenue}
           availableToCashOut={
+            // Use real available cash out data from business
             business?.available_to_cash_out || 
             business?.cashable_amount || 
             businessData.availableToCashOut || 
-            (totalRevenue > 0 ? Math.max(totalRevenue * 0.1, 5) : 0)          }
-          canCashOut={totalRevenue > 0}        />
+            // If we have real revenue, use a small percentage as available
+            (totalRevenue > 0 ? Math.max(totalRevenue * 0.1, 5) : 0) // 10% of revenue or $5 minimum
+          }
+          canCashOut={totalRevenue > 0} // Allow cashout when there's any revenue
+        />
 
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 

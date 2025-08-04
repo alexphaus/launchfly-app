@@ -999,6 +999,10 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
 
   const businessData = business?.business_data || {};
   const generationStage = session?.stage || 'pending';
+  
+  // Debug: Log the generation stage to help with troubleshooting
+  console.log('Generation stage from session:', session?.stage);
+  console.log('Final generation stage:', generationStage);
 
   return (
     <div style={{ 

@@ -30,59 +30,95 @@ export const generateBusinessFunction = inngest.createFunction(
     const opportunity = await step.run("analyze-opportunity", async () => {
       console.log(`[Inngest] Step 1: Analyzing opportunity for session ${sessionId}`);
       
-      await supabase.from('sessions').update({ 
-        stage: 'analyzing',
-        progress: 25 
-      }).eq('id', sessionId);
-      
-      const result = await analyzeOpportunity(formData, sessionId);
-      console.log(`[Inngest] Step 1 completed for session ${sessionId}`);
-      return result;
+      try {
+        await supabase.from('sessions').update({ 
+          stage: 'analyzing',
+          progress: 25 
+        }).eq('id', sessionId);
+        
+        const result = await analyzeOpportunity(formData, sessionId);
+        console.log(`[Inngest] Step 1 completed for session ${sessionId}`);
+        return result;
+      } catch (error) {
+        console.error(`[Inngest] Step 1 failed for session ${sessionId}:`, error);
+        
+        // Update session to error state
+        await supabase.from('sessions').update({ 
+          stage: 'error',
+          error_message: error.message 
+        }).eq('id', sessionId);
+        
+        throw error;
+      }
     });
 
     // Step 2: Generate website data
     const businessData = await step.run("generate-website", async () => {
       console.log(`[Inngest] Step 2: Building website for session ${sessionId}`);
       
-      await supabase.from('sessions').update({ 
-        stage: 'building',
-        progress: 60 
-      }).eq('id', sessionId);
-      
-      const result = await launchBusiness(opportunity, sessionId, businessId);
-      console.log(`[Inngest] Step 2 completed for session ${sessionId}`);
-      return result;
+      try {
+        await supabase.from('sessions').update({ 
+          stage: 'building',
+          progress: 60 
+        }).eq('id', sessionId);
+        
+        const result = await launchBusiness(opportunity, sessionId, businessId);
+        console.log(`[Inngest] Step 2 completed for session ${sessionId}`);
+        return result;
+      } catch (error) {
+        console.error(`[Inngest] Step 2 failed for session ${sessionId}:`, error);
+        
+        // Update session to error state
+        await supabase.from('sessions').update({ 
+          stage: 'error',
+          error_message: error.message 
+        }).eq('id', sessionId);
+        
+        throw error;
+      }
     });
 
     // Step 3: Update database
     await step.run("finalize-business", async () => {
       console.log(`[Inngest] Step 3: Finalizing business for session ${sessionId}`);
       
-      await supabase.from('sessions').update({ 
-        stage: 'finalizing',
-        progress: 90 
-      }).eq('id', sessionId);
+      try {
+        await supabase.from('sessions').update({ 
+          stage: 'finalizing',
+          progress: 90 
+        }).eq('id', sessionId);
 
-      // Generate subdomain safely
-      const subdomain = businessData.domain 
-        ? businessData.domain.replace('.com', '').toLowerCase()
-        : `business-${Date.now()}`;
+        // Generate subdomain safely
+        const subdomain = businessData.domain 
+          ? businessData.domain.replace('.com', '').toLowerCase()
+          : `business-${Date.now()}`;
 
-      console.log(`[Inngest] Updating business with subdomain: ${subdomain}`);
-      await supabase.from('businesses').update({
-        name: businessData.businessName,
-        subdomain: subdomain,
-        business_data: businessData,
-        status: 'ready'
-      }).eq('id', businessId);
+        console.log(`[Inngest] Updating business with subdomain: ${subdomain}`);
+        await supabase.from('businesses').update({
+          name: businessData.businessName,
+          subdomain: subdomain,
+          business_data: businessData,
+          status: 'ready'
+        }).eq('id', businessId);
 
-      console.log(`[Inngest] Marking session as complete`);
-      await supabase.from('sessions').update({ 
-        stage: 'complete',
-        progress: 100 
-      }).eq('id', sessionId);
-      
-      console.log(`[Inngest] Step 3 completed for session ${sessionId}`);
+        console.log(`[Inngest] Marking session as complete`);
+        await supabase.from('sessions').update({ 
+          stage: 'complete',
+          progress: 100 
+        }).eq('id', sessionId);
+        
+        console.log(`[Inngest] Step 3 completed for session ${sessionId}`);
+      } catch (error) {
+        console.error(`[Inngest] Step 3 failed for session ${sessionId}:`, error);
+        
+        // Update session to error state
+        await supabase.from('sessions').update({ 
+          stage: 'error',
+          error_message: error.message 
+        }).eq('id', sessionId);
+        
+        throw error;
+      }
     });
 
     console.log(`[Inngest] Business generation completed for session ${sessionId}`);

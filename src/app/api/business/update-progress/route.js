@@ -5,7 +5,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
-
+ 
 /**
  * API endpoint to update business data progressively during generation
  * This allows the UI to show updates as data becomes available

@@ -1,4 +1,4 @@
-// app/api/demo/populate-activities/route.js
+// src/app/api/demo/populate-activities/route.js
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   logActivity, 

@@ -1,4 +1,4 @@
-// app/api/business/update-progress/route.js
+// src/app/api/business/update-progress/route.js
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(

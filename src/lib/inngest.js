@@ -1,3 +1,4 @@
+// src/lib/inngest.js
 /**
  * Inngest Client Configuration
  * 

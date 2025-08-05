@@ -1,3 +1,4 @@
+// src/lib/inngest/functions/business-generation.js
 /**
  * Business Generation Inngest Functions
  * 

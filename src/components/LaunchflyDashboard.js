@@ -1,4 +1,4 @@
-// components/LaunchflyDashboard.js
+// src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2 } from 'lucide-react';
 
@@ -466,24 +466,66 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
   // Fetch real activities from API when business is available
   useEffect(() => {
     if (business?.id && generationStage === 'complete' && !realActivitiesLoaded) {
+      console.log('🎯 Starting real-time activity polling for customer acquisition');
       fetchRealActivities();
       setRealActivitiesLoaded(true);
       
-      // Set up polling for real-time updates
-      const interval = setInterval(fetchRealActivities, 10000); // Poll every 10 seconds
+      // Set up aggressive polling for customer acquisition activities
+      const interval = setInterval(fetchRealActivities, 3000); // Poll every 3 seconds for real-time updates
       return () => clearInterval(interval);
     }
   }, [business?.id, generationStage, realActivitiesLoaded]);
 
+  // Also start polling immediately when generation finishes to catch the transition
+  useEffect(() => {
+    if (business?.id && generationStage === 'complete') {
+      // Wait a few seconds for activities to start appearing, then begin polling
+      const startPollingTimer = setTimeout(() => {
+        if (!realActivitiesLoaded) {
+          console.log('🚀 Generation complete - starting customer acquisition activity monitoring');
+          fetchRealActivities();
+        }
+      }, 5000); // Wait 5 seconds after completion
+      
+      return () => clearTimeout(startPollingTimer);
+    }
+  }, [business?.id, generationStage]);
+
   const fetchRealActivities = async () => {
     try {
-      const response = await fetch(`/api/business/${business.id}/activities?limit=6`);
+      const response = await fetch(`/api/business/${business.id}/activities?limit=8`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.activities.length > 0) {
-          // Replace simulated activities with real ones
-          setActivities(data.activities);
+          console.log(`📊 Fetched ${data.activities.length} real customer acquisition activities`);
+          
+          // Add transition activity to show the switch to real activities
+          const transitionActivity = {
+            id: 'transition-to-real',
+            icon: '🎯',
+            text: `AI is now actively hunting for real customers for ${businessData.businessName || 'your business'}`,
+            type: 'success',
+            time: 'Just now',
+            details: 'Customer acquisition engine fully activated'
+          };
+          
+          // Combine transition with real activities
+          const allActivities = [transitionActivity, ...data.activities];
+          setActivities(allActivities);
           return;
+        } else {
+          // No real activities yet, but show that we're actively working
+          if (!realActivitiesLoaded) {
+            const workingActivity = {
+              id: 'customer-acquisition-starting',
+              icon: '🚀',
+              text: 'Customer acquisition engine activated - AI is starting to hunt for prospects',
+              type: 'working',
+              time: 'Just now',
+              details: 'Real activities will appear as the AI finds and contacts prospects'
+            };
+            setActivities(prev => [workingActivity, ...prev.slice(0, 5)]);
+          }
         }
       }
     } catch (error) {

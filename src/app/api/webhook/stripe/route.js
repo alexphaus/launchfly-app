@@ -1,3 +1,4 @@
+// src/app/api/webhook/stripe/route.js
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { Resend } from 'resend';

@@ -1,59 +1,14 @@
+// src/app/api/inngest/route.js
+import { serve } from 'inngest/next';
+import { inngest } from '@/lib/inngest/client';
+import { functions } from '@/lib/inngest/functions';
+
 /**
  * Inngest API Route
- * 
- * Serves all Inngest functions for the Launchfly application.
- * This single endpoint handles all background job orchestration.
+ * Handles all Inngest function executions
  */
-
-import { serve } from "inngest/next";
-import { inngest } from "@/lib/inngest";
-
-// Import all Inngest functions
-import {
-  businessGenerationOrchestrator,
-  handleAnalysisCompleted,
-  handleCreationCompleted,
-  handleGenerationCompleted
-} from "@/lib/inngest/functions/business-generation";
-
-import {
-  growthStrategyOrchestrator,
-  customerAcquisitionCampaign,
-  coldEmailCampaignOrchestrator,
-  handleColdEmailBatchSent
-} from "@/lib/inngest/functions/growth-strategies";
-
-// Collect all functions
-const functions = [
-  // Business Generation Functions
-  businessGenerationOrchestrator,
-  handleAnalysisCompleted,
-  handleCreationCompleted,
-  handleGenerationCompleted,
-  
-  // Growth Strategy Functions
-  growthStrategyOrchestrator,
-  customerAcquisitionCampaign,
-  coldEmailCampaignOrchestrator,
-  handleColdEmailBatchSent
-];
-
-// Create and export the handler
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions,
-  signingKey: process.env.INNGEST_SIGNING_KEY,
-  streaming: true
+  landingPage: true, // Enable the Inngest dev dashboard
 });
-
-// Health check for the Inngest endpoint
-export async function HEAD() {
-  return new Response('OK', { 
-    status: 200,
-    headers: {
-      'Content-Type': 'text/plain',
-      'X-Inngest-Functions': functions.length.toString(),
-      'X-Inngest-Status': 'healthy'
-    }
-  });
-}

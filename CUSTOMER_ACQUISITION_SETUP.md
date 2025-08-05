@@ -51,21 +51,54 @@ The system learns and improves:
 Add these to your `.env.local`:
 
 ```bash
-# Email Service (SendGrid, Mailgun, etc.)
-SENDGRID_API_KEY=your_sendgrid_api_key
-FROM_EMAIL=noreply@yourdomain.com
+# 🚨 REQUIRED FOR REAL CUSTOMER ACQUISITION
 
-# Prospect Data Sources
-APOLLO_API_KEY=your_apollo_api_key
-HUNTER_API_KEY=your_hunter_api_key
+# Email Service (Resend - already in use)
+RESEND_API_KEY=your_resend_api_key
+FROM_EMAIL=ai@yourdomain.com
 
-# Meeting Scheduling
+# Prospect Discovery (Apollo.io for finding real prospects)
+APOLLO_API_KEY=your_apollo_api_key  # Get from apollo.io
+HUNTER_API_KEY=your_hunter_api_key  # Alternative prospect source
+
+# Inngest (AI orchestration - already set up)
+INNGEST_EVENT_KEY=your_inngest_event_key
+INNGEST_SIGNING_KEY=your_inngest_signing_key
+
+# Database (Supabase - already configured)
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+
+# AI (OpenAI - already configured)
+OPENAI_API_KEY=your_openai_api_key
+
+# Optional - Meeting Scheduling
 CALENDLY_API_KEY=your_calendly_api_key
 CALENDLY_LINK=https://calendly.com/your-business/15min
-
-# Analytics & Tracking
-MIXPANEL_TOKEN=your_mixpanel_token
 ```
+
+## 🎯 Quick Setup Instructions
+
+### 1. **Get Apollo.io API Key** (for real prospect discovery)
+1. Sign up at [apollo.io](https://apollo.io)
+2. Go to Settings → API
+3. Generate API key
+4. Add to `.env.local` as `APOLLO_API_KEY=your_key`
+
+### 2. **Configure Email Domain** (for real email sending)
+1. Verify your domain in Resend dashboard
+2. Set `FROM_EMAIL=ai@yourdomain.com` (use your verified domain)
+
+### 3. **Test the System**
+```bash
+# Run the simulation script to test end-to-end
+npm run simulate
+```
+
+### 4. **Monitor Real Activities**
+- Real activities will appear in the dashboard
+- Check Inngest dashboard at http://localhost:8288
+- Monitor email sending in Resend dashboard
 
 ## Database Schema
 

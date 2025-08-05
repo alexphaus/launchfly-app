@@ -1,3 +1,4 @@
+// src/core/analyze.js
 /**
  * analyze.js - Find what will work
  * 

@@ -1,3 +1,4 @@
+// src/components/launchfly-ui/Hero.js
 'use client';
 
 export default function Hero({ 

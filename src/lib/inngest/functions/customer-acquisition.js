@@ -1,5 +1,5 @@
-// lib/inngest/functions/customer-acquisition.js
-import { inngest, EventTypes } from '@/lib/inngest';
+// src/lib/inngest/functions/customer-acquisition.js
+import { inngest, EVENTS } from '../client';
 import { createClient } from '@supabase/supabase-js';
 import { 
   startCustomerAcquisition,
@@ -38,7 +38,7 @@ export const customerAcquisitionOrchestrator = inngest.createFunction(
       key: "event.data.businessId"
     }
   },
-  { event: EventTypes.CUSTOMER_ACQUISITION_STARTED },
+  { event: EVENTS.CUSTOMER_ACQUISITION_STARTED },
   async ({ event, step }) => {
     const { businessId, businessData } = event.data;
     
@@ -74,7 +74,7 @@ export const customerAcquisitionOrchestrator = inngest.createFunction(
         // Schedule daily outreach for the next 7 days
         for (let day = 1; day <= 7; day++) {
           await step.sendEvent(`schedule-day-${day}-outreach`, {
-            name: EventTypes.DAILY_OUTREACH_SCHEDULED,
+            name: EVENTS.DAILY_OUTREACH_SCHEDULED,
             data: {
               businessId,
               businessData,
@@ -105,7 +105,7 @@ export const customerAcquisitionOrchestrator = inngest.createFunction(
         
         // Trigger optimization workflow
         await step.sendEvent('trigger-optimization', {
-          name: EventTypes.OPTIMIZATION_STARTED,
+          name: EVENTS.OPTIMIZATION_STARTED,
           data: {
             businessId,
             businessData,
@@ -152,7 +152,7 @@ export const dailyOutreachFunction = inngest.createFunction(
     name: "Daily Outreach Campaign",
     retries: 2
   },
-  { event: EventTypes.DAILY_OUTREACH_SCHEDULED },
+  { event: EVENTS.DAILY_OUTREACH_SCHEDULED },
   async ({ event, step }) => {
     const { businessId, businessData, day, outreachType } = event.data;
     
@@ -276,7 +276,7 @@ export const emailResponseHandler = inngest.createFunction(
     id: "email-response-handler",
     name: "Email Response Handler"
   },
-  { event: EventTypes.EMAIL_RESPONSE_RECEIVED },
+  { event: EVENTS.EMAIL_RESPONSE_RECEIVED },
   async ({ event, step }) => {
     const { businessId, emailData, responseData } = event.data;
     
@@ -336,7 +336,7 @@ export const campaignOptimizer = inngest.createFunction(
     id: "campaign-optimizer",
     name: "Campaign Optimizer"
   },
-  { event: EventTypes.OPTIMIZATION_STARTED },
+  { event: EVENTS.OPTIMIZATION_STARTED },
   async ({ event, step }) => {
     const { businessId, businessData } = event.data;
     
@@ -418,7 +418,7 @@ export const weeklyPerformanceReport = inngest.createFunction(
     id: "weekly-performance-report",
     name: "Weekly Performance Report"
   },
-  { event: EventTypes.WEEKLY_REPORT_SCHEDULED },
+  { event: EVENTS.WEEKLY_REPORT_SCHEDULED },
   async ({ event, step }) => {
     const { businessId, businessData } = event.data;
     
@@ -476,7 +476,7 @@ export const weeklyPerformanceReport = inngest.createFunction(
 
       // Schedule next week's report
       await step.sendEvent('schedule-next-weekly-report', {
-        name: EventTypes.WEEKLY_REPORT_SCHEDULED,
+        name: EVENTS.WEEKLY_REPORT_SCHEDULED,
         data: {
           businessId,
           businessData

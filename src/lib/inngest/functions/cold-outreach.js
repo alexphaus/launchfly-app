@@ -1,7 +1,16 @@
+// src/lib/inngest/functions/cold-outreach.js
+// Enhanced cold-outreach.js - Combining the best of both systems
+// This merges the orchestration excellence of cold-outreach.js 
+// with the real prospect/email capabilities of customer-acquisition_1.js
+
 import { inngest, EVENTS } from '../client';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { Resend } from 'resend';
+import { 
+  findRealProspectsWithApollo, 
+  generateRealisticProspects 
+} from '@/lib/customer-acquisition'; // Import from your other file
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -15,19 +24,18 @@ const openai = new OpenAI({
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
- * Automated Cold Email Outreach System
- * Handles prospect research, email generation, and sending
+ * Enhanced Cold Email Outreach System
+ * Combines real prospects with sophisticated campaign management
  */
-export const coldEmailOutreach = inngest.createFunction(
+export const enhancedColdEmailOutreach = inngest.createFunction(
   {
-    id: 'cold-email-outreach',
-    name: 'Cold Email Outreach Campaign',
+    id: 'enhanced-cold-email-outreach',
+    name: 'Enhanced Cold Email Outreach Campaign',
     retries: 3,
     concurrency: {
-      limit: 10, // Limit concurrent campaigns
+      limit: 10,
     },
     throttle: {
-      // Rate limit to avoid spam flags
       limit: 50,
       period: '1h',
     }
@@ -36,38 +44,59 @@ export const coldEmailOutreach = inngest.createFunction(
   async ({ event, step }) => {
     const { businessId, businessData, targetAudience, campaignGoal } = event.data;
     
-    // Step 1: Generate prospect list based on target audience
-    const prospects = await step.run('generate-prospects', async () => {
-      const prompt = `
-        Based on this business: ${businessData.businessName}
-        Target audience: ${targetAudience || businessData.targetAudience}
-        Products/Services: ${JSON.stringify(businessData.products)}
-        
-        Generate a list of 10 ideal prospect profiles (not real names) with:
-        - Industry/Role
-        - Company Size
-        - Pain Points
-        - Why they'd benefit from our solution
-        
-        Format as JSON array.
-      `;
+    // Step 1: Generate REAL prospect list
+    const prospects = await step.run('generate-real-prospects', async () => {
+      console.log('🔍 Finding REAL prospects for cold outreach...');
       
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-      });
+      let realProspects = [];
       
-      const data = JSON.parse(response.choices[0].message.content);
-      return data.prospects || [];
+      // Try to get real prospects from Apollo.io first
+      if (process.env.APOLLO_API_KEY) {
+        try {
+          realProspects = await findRealProspectsWithApollo(businessData, 50);
+          console.log(`✅ Found ${realProspects.length} real prospects from Apollo.io`);
+        } catch (error) {
+          console.error('Apollo.io error:', error);
+        }
+      }
+      
+      // If we don't have enough real prospects, generate realistic ones
+      if (realProspects.length < 20) {
+        console.log('📦 Supplementing with realistic prospect data...');
+        const additionalProspects = generateRealisticProspects(
+          businessData, 
+          30 - realProspects.length,
+          { industry: businessData.industry }
+        );
+        realProspects = [...realProspects, ...additionalProspects];
+      }
+      
+      // Store prospects in database
+      const { data: savedProspects } = await supabase
+        .from('prospects')
+        .insert(
+          realProspects.map(p => ({
+            business_id: businessId,
+            name: p.name,
+            email: p.email,
+            company: p.company,
+            industry: p.industry,
+            company_size: p.company_size,
+            title: p.title,
+            source: p.source || 'cold_outreach_campaign',
+            status: 'discovered',
+            created_at: new Date().toISOString()
+          }))
+        )
+        .select();
+      
+      return savedProspects || realProspects;
     });
     
-    // Step 2: Generate personalized email templates
+    // Step 2: Generate A/B test email templates (keep this excellent feature)
     const emailTemplates = await step.run('generate-email-templates', async () => {
       const templates = [];
       
-      // Generate 3 different email variations for A/B testing
       for (let i = 0; i < 3; i++) {
         const prompt = `
           Create a cold outreach email template for:
@@ -104,7 +133,7 @@ export const coldEmailOutreach = inngest.createFunction(
       return templates;
     });
     
-    // Step 3: Create outreach campaign in database
+    // Step 3: Create campaign record
     const campaign = await step.run('create-campaign-record', async () => {
       const { data, error } = await supabase
         .from('outreach_campaigns')
@@ -129,68 +158,173 @@ export const coldEmailOutreach = inngest.createFunction(
       return data;
     });
     
-    // Step 4: Send emails in batches
+    // Step 4: Send REAL emails in batches
     const batchSize = 10;
     const results = [];
+    let actualEmailsSent = 0;
+    
+    // 🧪 PLACEHOLDER: Send first email to test address for demo/testing purposes
+    const testProspectResults = await step.run('send-test-email', async () => {
+      const testProspect = {
+        id: 'test-prospect-cold-001',
+        name: 'Alex',
+        email: 'axpg31@gmail.com',
+        company: 'Test Company',
+        industry: businessData.business_data?.industry || 'Technology'
+      };
+      
+      console.log('📧 Sending test cold email to axpg31@gmail.com first...');
+      
+      // Use the first email template for the test
+      const template = emailTemplates[0];
+      const personalizedEmail = {
+        to: testProspect.email,
+        subject: template.subject.replace(/{{companyName}}/g, testProspect.company),
+        body: template.body
+          .replace(/{{recipientName}}/g, testProspect.name)
+          .replace(/{{companyName}}/g, testProspect.company)
+          .replace(/{{productName}}/g, businessData.business_data?.businessName || 'Our Solution')
+          .replace(/{{keyBenefit}}/g, businessData.business_data?.tagline || 'increased efficiency')
+      };
+      
+      try {
+        // Send REAL test email
+        const { data, error } = await resend.emails.send({
+          from: process.env.FROM_EMAIL || 'AI Assistant <ai@launchfly.ai>',
+          to: personalizedEmail.to,
+          subject: personalizedEmail.subject,
+          html: formatEmailAsHTML(personalizedEmail.body, businessData),
+          tags: [
+            { name: 'campaign_id', value: campaign.id },
+            { name: 'business_id', value: businessId },
+            { name: 'is_test_email', value: 'true' }
+          ]
+        });
+        
+        if (error) throw error;
+        
+        // Log the test email send
+        await supabase
+          .from('ai_activities')
+          .insert({
+            business_id: businessId,
+            type: 'email_sent',
+            icon: '📤',
+            message: `Cold email sent to axpg31@gmail.com (TEST)`,
+            details: `Subject: "${personalizedEmail.subject}"`,
+            metadata: {
+              prospect_id: testProspect.id,
+              campaign_id: campaign.id,
+              is_test_email: true
+            }
+          });
+        
+        console.log('✅ Test cold email sent successfully to axpg31@gmail.com');
+        actualEmailsSent++;
+        
+        return [{
+          prospect_id: testProspect.id,
+          status: 'sent',
+          template_used: 0,
+          resend_id: data.id,
+          sent_at: new Date().toISOString(),
+          is_test: true
+        }];
+        
+      } catch (error) {
+        console.error(`Failed to send test email:`, error);
+        return [{
+          prospect_id: testProspect.id,
+          status: 'failed',
+          error: error.message,
+          is_test: true
+        }];
+      }
+    });
+    
+    results.push(...testProspectResults);
     
     for (let i = 0; i < prospects.length; i += batchSize) {
       const batch = prospects.slice(i, i + batchSize);
       
-      const batchResults = await step.run(`send-email-batch-${i}`, async () => {
+      const batchResults = await step.run(`send-real-email-batch-${i}`, async () => {
         const batchSendResults = [];
         
         for (const prospect of batch) {
+          // Skip if no valid email
+          if (!prospect.email || prospect.email.includes('@example')) {
+            console.log(`⚠️ Skipping invalid email: ${prospect.email}`);
+            continue;
+          }
+          
           // Select random template for A/B testing
           const template = emailTemplates[Math.floor(Math.random() * emailTemplates.length)];
           
           // Personalize the email
           const personalizedEmail = {
+            to: prospect.email,
             subject: template.subject
               .replace('{{company}}', prospect.company || 'your company')
               .replace('{{industry}}', prospect.industry || 'your industry'),
             body: template.body
-              .replace('{{firstName}}', prospect.firstName || 'there')
+              .replace('{{firstName}}', prospect.name?.split(' ')[0] || 'there')
               .replace('{{company}}', prospect.company || 'your company')
-              .replace('{{painPoint}}', prospect.painPoint || 'growing your business')
-              .replace('{{benefit}}', prospect.benefit || 'increased efficiency')
+              .replace('{{painPoint}}', businessData.painPoint || 'growing your business')
+              .replace('{{benefit}}', businessData.valueProposition || 'increased efficiency')
           };
           
-          // In production, you would send real emails here
-          // For now, we'll simulate sending
-          if (process.env.NODE_ENV === 'production' && prospect.email) {
-            try {
-              await resend.emails.send({
-                from: 'Outreach <outreach@launchfly.ai>',
-                to: prospect.email,
-                subject: personalizedEmail.subject,
-                html: personalizedEmail.body,
-                tags: [{
-                  name: 'campaign_id',
-                  value: campaign.id
-                }]
-              });
-              
-              batchSendResults.push({
-                prospect: prospect.id,
-                status: 'sent',
-                template_used: emailTemplates.indexOf(template)
-              });
-            } catch (error) {
-              batchSendResults.push({
-                prospect: prospect.id,
-                status: 'failed',
-                error: error.message
-              });
-            }
-          } else {
-            // Simulation mode
+          try {
+            // Send REAL email
+            const { data, error } = await resend.emails.send({
+              from: process.env.FROM_EMAIL || 'AI Assistant <ai@launchfly.ai>',
+              to: personalizedEmail.to,
+              subject: personalizedEmail.subject,
+              html: formatEmailAsHTML(personalizedEmail.body, businessData),
+              tags: [
+                { name: 'campaign_id', value: campaign.id },
+                { name: 'business_id', value: businessId },
+                { name: 'template_index', value: emailTemplates.indexOf(template).toString() }
+              ]
+            });
+            
+            if (error) throw error;
+            
+            actualEmailsSent++;
             batchSendResults.push({
-              prospect: prospect.id,
-              status: 'simulated',
+              prospect_id: prospect.id,
+              status: 'sent',
               template_used: emailTemplates.indexOf(template),
-              email: personalizedEmail
+              resend_id: data.id,
+              sent_at: new Date().toISOString()
+            });
+            
+            // Log the email send
+            await supabase
+              .from('ai_activities')
+              .insert({
+                business_id: businessId,
+                type: 'email_sent',
+                icon: '📤',
+                message: `Cold email sent to ${prospect.name} at ${prospect.company}`,
+                details: `Subject: "${personalizedEmail.subject}"`,
+                metadata: {
+                  prospect_id: prospect.id,
+                  campaign_id: campaign.id,
+                  template_index: emailTemplates.indexOf(template)
+                }
+              });
+            
+          } catch (error) {
+            console.error(`Failed to send email to ${prospect.email}:`, error);
+            batchSendResults.push({
+              prospect_id: prospect.id,
+              status: 'failed',
+              error: error.message
             });
           }
+          
+          // Delay between emails to avoid rate limits
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
         return batchSendResults;
@@ -198,7 +332,7 @@ export const coldEmailOutreach = inngest.createFunction(
       
       results.push(...batchResults);
       
-      // Wait between batches to avoid rate limits
+      // Wait between batches
       if (i + batchSize < prospects.length) {
         await step.sleep(`batch-delay-${i}`, '30s');
       }
@@ -206,35 +340,86 @@ export const coldEmailOutreach = inngest.createFunction(
     
     // Step 5: Update campaign metrics
     await step.run('update-campaign-metrics', async () => {
-      const sentCount = results.filter(r => r.status === 'sent' || r.status === 'simulated').length;
-      
       await supabase
         .from('outreach_campaigns')
         .update({
-          'metrics.sent': sentCount,
+          'metrics.sent': actualEmailsSent,
           last_batch_sent_at: new Date().toISOString()
         })
         .eq('id', campaign.id);
+        
+      // Log summary
+      await supabase
+        .from('ai_activities')
+        .insert({
+          business_id: businessId,
+          type: 'campaign_started',
+          icon: '🚀',
+          message: `Cold email campaign launched: ${actualEmailsSent} emails sent`,
+          details: `A/B testing ${emailTemplates.length} different templates`,
+          metadata: {
+            campaign_id: campaign.id,
+            emails_sent: actualEmailsSent,
+            templates_count: emailTemplates.length
+          }
+        });
     });
     
-    // Step 6: Schedule follow-up sequence
-    await step.sendEvent('schedule-followups', {
-      name: EVENTS.COLD_OUTREACH_FOLLOWUP,
-      data: {
-        campaignId: campaign.id,
-        businessId,
-        results,
-        followUpDay: 3
-      },
-      ts: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days later
-    });
+    // Step 6: Schedule follow-up sequences (keep this excellent feature)
+    if (actualEmailsSent > 0) {
+      await step.sendEvent('schedule-followups', {
+        name: EVENTS.COLD_OUTREACH_FOLLOWUP,
+        data: {
+          campaignId: campaign.id,
+          businessId,
+          results: results.filter(r => r.status === 'sent'),
+          followUpDay: 3
+        },
+        ts: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+      });
+    }
     
     return {
       success: true,
       campaign_id: campaign.id,
-      emails_sent: results.length,
+      emails_sent: actualEmailsSent,
+      prospects_found: prospects.length,
       templates_used: emailTemplates.length,
       results
     };
   }
 );
+
+/**
+ * Format email as professional HTML
+ */
+function formatEmailAsHTML(text, businessData) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        ${text.split('\n').map(line => 
+          line.trim() ? `<p style="margin: 0 0 15px 0;">${line}</p>` : '<br>'
+        ).join('')}
+      </div>
+      
+      <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px; font-size: 13px; color: #6c757d; text-align: center;">
+        <p style="margin: 0 0 10px 0;">
+          <strong>${businessData.businessName}</strong><br>
+          ${businessData.tagline || 'Professional Business Solutions'}
+        </p>
+        <p style="margin: 0; font-size: 11px;">
+          This email was sent by an AI-powered business assistant.<br>
+          <a href="#" style="color: #6c757d;">Unsubscribe</a> | 
+          <a href="#" style="color: #6c757d;">View in browser</a>
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+}

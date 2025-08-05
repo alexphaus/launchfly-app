@@ -1,4 +1,4 @@
-// app/dashboard/[sessionId]/page.js
+// src/app/dashboard/[sessionId]/page.js
 'use client';
 
 import { useEffect, useState, useRef } from 'react';

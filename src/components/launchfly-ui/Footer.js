@@ -1,3 +1,4 @@
+// src/components/launchfly-ui/Footer.js
 'use client';
 
 export default function Footer({ 

@@ -1,4 +1,4 @@
-// app/api/webhook/tally/route.js
+// src/app/api/webhook/tally/route.js
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { nanoid } from 'nanoid';

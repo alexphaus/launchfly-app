@@ -1,3 +1,4 @@
+// src/lib/inngest/functions/generate-business.js
 import { inngest, EVENTS } from '../client';
 import { createClient } from '@supabase/supabase-js';
 import { analyzeOpportunity } from '@/core/analyze';

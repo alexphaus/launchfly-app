@@ -1,3 +1,4 @@
+// src/app/api/growth/start/route.js
 /**
  * Growth API Route
  * 

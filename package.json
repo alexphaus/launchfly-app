@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "simulate": "node simulate-tally-form.js"
+    "simulate": "node simulate-tally-form.js",
+    "test:inngest": "node check-inngest.js",
+    "test:quick": "node test-simulation.js quick",
+    "test:full": "node test-simulation.js full",
+    "test:session": "node test-simulation.js session",
+    "debug": "node test-simulation.js diagnostic"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

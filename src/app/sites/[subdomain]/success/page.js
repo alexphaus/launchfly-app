@@ -1,3 +1,4 @@
+// src/app/sites/[subdomain]/success/page.js
 'use client';
 
 import { useEffect, useState } from 'react';

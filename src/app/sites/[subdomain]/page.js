@@ -1,3 +1,4 @@
+// src/app/sites/[subdomain]/page.js
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';

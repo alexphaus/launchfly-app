@@ -1,3 +1,4 @@
+// src/components/launchfly-ui/ProductCard.js
 'use client';
 
 import { useParams } from 'next/navigation';

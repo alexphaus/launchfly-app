@@ -1,3 +1,4 @@
+// src/lib/inngest/functions/growth-engine.js
 import { inngest, EVENTS } from '../client';
 import { createClient } from '@supabase/supabase-js';
 import { growBusiness, runGrowthExperiments } from '@/core/grow';
@@ -61,20 +62,18 @@ export const growthEngine = inngest.createFunction(
       }
     });
     
-    // Step 3: Launch targeted campaigns based on business type
-    if (businessData.targetAudience) {
-      // Trigger cold outreach campaign
-      await step.sendEvent('trigger-cold-outreach', {
-        name: EVENTS.COLD_OUTREACH_REQUESTED,
+    // Step 3: Launch customer acquisition campaigns
+    if (businessData.businessName) {
+      // Trigger comprehensive customer acquisition
+      await step.sendEvent('trigger-customer-acquisition', {
+        name: EVENTS.CUSTOMER_ACQUISITION_STARTED,
         data: {
           businessId,
-          businessData,
-          targetAudience: businessData.targetAudience,
-          campaignGoal: 'Generate qualified leads'
+          businessData
         }
       });
       
-      // Trigger content generation
+      // Also trigger content generation
       await step.sendEvent('trigger-content-generation', {
         name: EVENTS.CONTENT_GENERATION_REQUESTED,
         data: {

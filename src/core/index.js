@@ -1,3 +1,4 @@
+// src/core/index.js
 /**
  * Core Business Logic - Main Entry Point
  * 

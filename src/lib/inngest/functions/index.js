@@ -1,3 +1,4 @@
+// src/lib/inngest/functions/index.js
 /**
  * Inngest Functions Export
  * All AI orchestration functions for Launchfly
@@ -6,14 +7,12 @@
 export { generateBusiness } from './generate-business';
 export { coldEmailOutreach } from './cold-outreach';
 export { growthEngine } from './growth-engine';
-
-// New Customer Acquisition Functions
 export { 
-  customerAcquisitionOrchestrator,
-  dailyOutreachFunction,
-  emailResponseHandler,
-  campaignOptimizer,
-  weeklyPerformanceReport
+  customerAcquisitionOrchestrator, 
+  dailyOutreachFunction, 
+  emailResponseHandler, 
+  campaignOptimizer, 
+  weeklyPerformanceReport 
 } from './customer-acquisition';
 
 // Export all functions as an array for the Inngest serve handler

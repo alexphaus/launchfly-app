@@ -1,4 +1,4 @@
-// app/api/business/[businessId]/activities/route.js
+// src/app/api/business/[businessId]/activities/route.js
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 

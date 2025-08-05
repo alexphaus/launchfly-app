@@ -1,3 +1,4 @@
+// src/lib/inngest/client.js
 import { Inngest } from 'inngest';
 
 /**
@@ -25,6 +26,13 @@ export const EVENTS = {
   EMAIL_BATCH_SENT: 'growth/email.batch.sent',
   CONTENT_GENERATED: 'growth/content.generated',
   CONTENT_GENERATION_REQUESTED: 'growth/content.generation.requested',
+  
+  // Customer acquisition events
+  CUSTOMER_ACQUISITION_STARTED: 'customer/acquisition.started',
+  DAILY_OUTREACH_SCHEDULED: 'customer/outreach.daily',
+  EMAIL_RESPONSE_RECEIVED: 'customer/email.response',
+  OPTIMIZATION_STARTED: 'customer/optimization.started',
+  WEEKLY_REPORT_SCHEDULED: 'customer/report.weekly',
   
   // Analytics events
   VISITOR_TRACKED: 'analytics/visitor.tracked',

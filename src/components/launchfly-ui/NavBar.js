@@ -1,3 +1,4 @@
+// src/components/launchfly-ui/NavBar.js
 'use client';
 
 export default function NavBar({ logoUrl, logo = "🚀", businessName = "Your Business", links = [], ctaText = "Get Started", ctaLink = "#contact" }) {

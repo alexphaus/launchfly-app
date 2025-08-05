@@ -1,5 +1,6 @@
 // src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2 } from 'lucide-react';
 
 // --- DESIGN SYSTEM ---
@@ -459,6 +460,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
 // --- COMPONENT: Real-time AI Activity Feed ---
 const AIActivityFeed = ({ generationStage, businessData, business }) => {
   const [activities, setActivities] = useState([]);
+  const router = useRouter();
   const [currentStage, setCurrentStage] = useState('');
   const [previousBusinessData, setPreviousBusinessData] = useState({});
   const [realActivitiesLoaded, setRealActivitiesLoaded] = useState(false);
@@ -722,6 +724,7 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
           activities.map((activity, index) => (
             <div
               key={activity.id}
+              onClick={() => business?.id && router.push(`/ai-activity/${business.id}`)}
               style={{
                 display: 'flex',
                 gap: '12px',
@@ -729,7 +732,18 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
                 opacity: index === 0 ? 1 : 0.8 - (index * 0.12),
                 transform: `translateX(${index === 0 ? 0 : index * 3}px)`,
                 transition: 'all 0.3s',
-                animation: index === 0 ? 'slideInLeft 0.5s ease' : 'none'
+                animation: index === 0 ? 'slideInLeft 0.5s ease' : 'none',
+                cursor: 'pointer',
+                padding: '8px',
+                marginLeft: '-8px',
+                marginRight: '-8px',
+                borderRadius: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f5f5f5';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               <span style={{ fontSize: '20px', flexShrink: 0 }}>{activity.icon}</span>
@@ -763,6 +777,42 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
           ))
         )}
       </div>
+      
+      {/* View All Activities Link */}
+      {activities.length > 0 && business?.id && (
+        <button
+          onClick={() => router.push(`/ai-activity/${business.id}`)}
+          style={{
+            marginTop: '20px',
+            width: '100%',
+            padding: '12px',
+            background: theme.gradients.primary,
+            border: 'none',
+            borderRadius: '12px',
+            color: 'white',
+            fontSize: '15px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0, 123, 255, 0.3)'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-1px)';
+            e.target.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 2px 8px rgba(0, 123, 255, 0.3)';
+          }}
+        >
+          View All AI Activities
+          <ChevronRight size={16} />
+        </button>
+      )}
     </div>
   );
 };

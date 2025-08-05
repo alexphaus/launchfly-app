@@ -457,7 +457,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
 };
 
 // --- COMPONENT: Real-time AI Activity Feed ---
-const AIActivityFeed = ({ generationStage, businessData, business }) => {
+const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) => {
   const [activities, setActivities] = useState([]);
   const [currentStage, setCurrentStage] = useState('');
   const [previousBusinessData, setPreviousBusinessData] = useState({});
@@ -688,19 +688,54 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
         <h3 style={{ fontSize: '20px', fontWeight: '700', color: theme.colors.textDark }}>
           AI Working For You
         </h3>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Activity indicator dots */}
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  background: theme.colors.primary,
+                  borderRadius: '50%',
+                  animation: `bounce 1.4s ease-in-out ${i * 0.16}s infinite`
+                }}
+              />
+            ))}
+          </div>
+          
+          {/* View Details Button */}
+          {generationStage === 'complete' && sessionId && (
+            <button
+              onClick={() => window.location.href = `/dashboard/${sessionId}/ai-activity`}
               style={{
-                width: '6px',
-                height: '6px',
-                background: theme.colors.primary,
-                borderRadius: '50%',
-                animation: `bounce 1.4s ease-in-out ${i * 0.16}s infinite`
+                background: 'transparent',
+                border: `1px solid ${theme.colors.primary}`,
+                borderRadius: '8px',
+                padding: '6px 12px',
+                color: theme.colors.primary,
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.2s ease'
               }}
-            />
-          ))}
+              onMouseEnter={(e) => {
+                e.target.style.background = theme.colors.primary;
+                e.target.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'transparent';
+                e.target.style.color = theme.colors.primary;
+              }}
+            >
+              View Details
+              <ChevronRight size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -722,6 +757,11 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
           activities.map((activity, index) => (
             <div
               key={activity.id}
+              onClick={() => {
+                if (generationStage === 'complete' && sessionId) {
+                  window.location.href = `/dashboard/${sessionId}/ai-activity`;
+                }
+              }}
               style={{
                 display: 'flex',
                 gap: '12px',
@@ -729,7 +769,19 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
                 opacity: index === 0 ? 1 : 0.8 - (index * 0.12),
                 transform: `translateX(${index === 0 ? 0 : index * 3}px)`,
                 transition: 'all 0.3s',
-                animation: index === 0 ? 'slideInLeft 0.5s ease' : 'none'
+                animation: index === 0 ? 'slideInLeft 0.5s ease' : 'none',
+                cursor: generationStage === 'complete' && sessionId ? 'pointer' : 'default',
+                padding: '8px',
+                borderRadius: '8px',
+                margin: '-8px'
+              }}
+              onMouseEnter={(e) => {
+                if (generationStage === 'complete' && sessionId) {
+                  e.currentTarget.style.background = theme.colors.bgLight;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
               }}
             >
               <span style={{ fontSize: '20px', flexShrink: 0 }}>{activity.icon}</span>
@@ -757,7 +809,12 @@ const AIActivityFeed = ({ generationStage, businessData, business }) => {
                     </span>
                   )}
                 </p>
-                <p style={{ fontSize: '13px', color: theme.colors.textGray, margin: 0 }}>{activity.time}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: '13px', color: theme.colors.textGray, margin: 0 }}>{activity.time}</p>
+                  {generationStage === 'complete' && sessionId && (
+                    <ChevronRight size={14} style={{ color: theme.colors.textGray, opacity: 0.6 }} />
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -1146,6 +1203,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           generationStage={generationStage}
           businessData={businessData}
           business={business}
+          sessionId={session?.id}
         />
 
         {/* Success Predictor */}

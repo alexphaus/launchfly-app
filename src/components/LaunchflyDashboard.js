@@ -28,9 +28,189 @@ const theme = {
   }
 };
 
+// --- COMPONENT: Cash Out Modal ---
+const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      animation: 'fadeIn 0.3s ease'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '24px',
+        padding: '32px',
+        maxWidth: '500px',
+        width: '90%',
+        maxHeight: '90vh',
+        overflow: 'auto',
+        boxShadow: '0 24px 48px rgba(0, 0, 0, 0.3)',
+        animation: 'slideInUp 0.3s ease'
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '24px'
+        }}>
+          <h2 style={{
+            fontSize: '28px',
+            fontWeight: '800',
+            color: '#1a2b48',
+            margin: 0
+          }}>
+            💰 Cash Out
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '8px',
+              borderRadius: '8px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.target.style.background = '#f3f4f6'}
+            onMouseLeave={e => e.target.style.background = 'none'}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Revenue Summary */}
+        <div style={{
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          color: 'white',
+          marginBottom: '24px',
+          textAlign: 'center'
+        }}>
+          <p style={{ fontSize: '16px', opacity: 0.9, margin: '0 0 8px 0' }}>Available to Cash Out</p>
+          <h3 style={{ fontSize: '48px', fontWeight: '900', margin: '0 0 12px 0' }}>
+            ${availableToCashOut.toLocaleString()}
+          </h3>
+          <p style={{ fontSize: '14px', opacity: 0.8, margin: 0 }}>
+            From ${totalRevenue.toLocaleString()} total revenue
+          </p>
+        </div>
+
+        {/* Payment Method */}
+        <div style={{ marginBottom: '24px' }}>
+          <h4 style={{ fontSize: '18px', fontWeight: '700', color: '#1a2b48', marginBottom: '16px' }}>
+            Payment Method
+          </h4>
+          <div style={{
+            border: '2px solid #e5e7eb',
+            borderRadius: '12px',
+            padding: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <span style={{ fontSize: '24px' }}>🏦</span>
+            <div>
+              <p style={{ fontSize: '16px', fontWeight: '600', color: '#1a2b48', margin: 0 }}>
+                Bank Account
+              </p>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                •••• •••• •••• 1234
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Processing Info */}
+        <div style={{
+          background: '#fef3c7',
+          border: '1px solid #fbbf24',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '24px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '20px' }}>⚡</span>
+            <p style={{ fontSize: '16px', fontWeight: '600', color: '#92400e', margin: 0 }}>
+              Instant Transfer
+            </p>
+          </div>
+          <p style={{ fontSize: '14px', color: '#92400e', margin: 0 }}>
+            Funds will be transferred to your account within 1-2 business days
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1,
+              background: '#f3f4f6',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#374151',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.target.style.background = '#e5e7eb'}
+            onMouseLeave={e => e.target.style.background = '#f3f4f6'}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              // Here you would integrate with your payment processor
+              alert('Cash out initiated! You will receive an email confirmation shortly.');
+              onClose();
+            }}
+            style={{
+              flex: 2,
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '16px',
+              fontWeight: '700',
+              color: 'white',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
+            onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+          >
+            <DollarSign size={20} />
+            Confirm Cash Out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENT: Money Hero Section ---
 const MoneyHero = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false }) => {
   const [displayRevenue, setDisplayRevenue] = useState(totalRevenue);
+  const [showCashOutModal, setShowCashOutModal] = useState(false);
   
   useEffect(() => {
     if (totalRevenue > displayRevenue) {
@@ -88,6 +268,7 @@ const MoneyHero = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = fals
         
         <button
           disabled={!canCashOut}
+          onClick={() => canCashOut && setShowCashOutModal(true)}
           style={{
             background: canCashOut ? theme.gradients.success : 'rgba(255,255,255,0.1)',
             border: 'none',
@@ -109,6 +290,14 @@ const MoneyHero = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = fals
           <DollarSign size={24} />
           {canCashOut ? 'Cash Out Now' : 'Nothing to cash out yet'}
         </button>
+        
+        {/* Cash Out Modal */}
+        <CashOutModal
+          isOpen={showCashOutModal}
+          onClose={() => setShowCashOutModal(false)}
+          totalRevenue={totalRevenue}
+          availableToCashOut={availableToCashOut}
+        />
       </div>
     </div>
   );
@@ -195,15 +384,33 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
     gradient: 'linear-gradient(135deg, #007BFF 0%, #00B8D9 100%)'
   };
 
+  const handleCardClick = () => {
+    if (showContent.complete && websiteUrl) {
+      window.open(websiteUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '20px',
-      overflow: 'hidden',
-      boxShadow: theme.shadows.lg,
-      marginBottom: '24px',
-      transition: 'all 0.5s ease'
-    }}>
+    <div 
+      onClick={handleCardClick}
+      style={{
+        background: 'white',
+        borderRadius: '20px',
+        overflow: 'hidden',
+        boxShadow: theme.shadows.lg,
+        marginBottom: '24px',
+        transition: 'all 0.5s ease',
+        cursor: showContent.complete && websiteUrl ? 'pointer' : 'default'
+      }}
+      onMouseEnter={(e) => {
+        if (showContent.complete && websiteUrl) {
+          e.currentTarget.style.transform = 'scale(1.02)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'scale(1)';
+      }}
+    >
       {/* Header */}
       <div style={{
         background: showContent.colors ? themeColors.gradient : 'linear-gradient(135deg, #e5e7eb 0%, #f3f4f6 100%)',
@@ -269,6 +476,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
               href={websiteUrl} 
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               style={{
                 background: 'white',
                 color: themeColors.colors?.primary || '#8b5cf6',
@@ -1350,6 +1558,17 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
         }
         
         @keyframes sparkleExplosion {

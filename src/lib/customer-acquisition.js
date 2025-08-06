@@ -538,7 +538,7 @@ function generateCompanySize() {
  * @param {Object} businessData - Business information
  * @param {number} count - Number of prospects to find
  */
-async function findRealProspectsWithApollo(businessData, count) {
+export async function findRealProspectsWithApollo(businessData, count) {
   try {
     console.log('🚀 Searching Apollo.io for real prospects...');
     
@@ -638,7 +638,7 @@ function generateApolloSearchCriteria(businessData) {
  * @param {number} count - Number of prospects to generate
  * @param {Object} source - Source information
  */
-function generateRealisticProspects(businessData, count, source) {
+export function generateRealisticProspects(businessData, count, source) {
   const prospects = [];
   const industry = source.industry;
   

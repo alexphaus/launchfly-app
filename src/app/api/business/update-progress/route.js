@@ -64,7 +64,7 @@ export async function POST(request) {
     }, { status: 500 });
   }
 }
-
+ 
 export async function GET() {
   return Response.json({ 
     message: 'Business progress update endpoint',

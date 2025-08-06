@@ -25,4 +25,5 @@ export const functions = [
   require('./customer-acquisition').emailResponseHandler,
   require('./customer-acquisition').campaignOptimizer,
   require('./customer-acquisition').weeklyPerformanceReport,
+  require('./conversion-optimizer').conversionOptimizer,
 ];

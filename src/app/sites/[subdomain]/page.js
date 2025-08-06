@@ -2,6 +2,17 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
+import OptimizedHero from '@/components/launchfly-ui/OptimizedHero';
+import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
+import { 
+  getVisitorId, 
+  getVisitorSegment, 
+  assignVariant, 
+  getActiveExperiments,
+  recordImpression,
+  personalizeContent,
+  createDefaultExperiments
+} from '@/lib/conversion-optimizer';
 
 // Mock business data for fallback
 const mockBusinessData = {
@@ -245,22 +256,39 @@ export default async function DynamicWebsite({ params }) {
   const { subdomain } = await params;
   
   let businessData = null;
+  let businessId = null;
+  let business = null;
   
   try {
     // Try to get data from Supabase first
     const cookieStore = await cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore });
     
-    const { data: business, error } = await supabase
+    const { data: businessRecord, error } = await supabase
       .from('businesses')
       .select('*')
       .eq('subdomain', subdomain)
       .eq('status', 'ready')
       .single();
 
-    if (business && !error) {
-      businessData = business.business_data;
+    if (businessRecord && !error) {
+      business = businessRecord;
+      businessData = businessRecord.business_data;
+      businessId = businessRecord.id;
       console.log('✅ Loaded from database:', subdomain);
+      
+      // Initialize experiments if not exists
+      if (!businessData.experiments) {
+        businessData.experiments = createDefaultExperiments();
+        // Update business with default experiments
+        await supabase
+          .from('businesses')
+          .update({ 
+            business_data: businessData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', businessId);
+      }
     } else {
       console.log('📦 Using mock data for:', subdomain);
     }
@@ -290,6 +318,40 @@ export default async function DynamicWebsite({ params }) {
     );
   }
 
+  // Get visitor tracking data
+  const cookieStore = await cookies();
+  const visitorId = await getVisitorId(cookieStore);
+  
+  // Create segments based on available headers
+  // Note: In production, you'd get these from the actual request headers
+  const segments = {
+    device: 'desktop',
+    timeOfDay: new Date().getHours() < 12 ? 'morning' : 'afternoon',
+    trafficSource: 'direct',
+    returning: false
+  };
+  
+  // Get active experiments and assign variants
+  let heroVariant = null;
+  if (businessId) {
+    const experiments = await getActiveExperiments(businessId, 'Hero');
+    if (experiments.length > 0) {
+      const assignment = assignVariant(visitorId, experiments);
+      if (assignment) {
+        heroVariant = assignment;
+        // Record impression
+        await recordImpression({
+          businessId,
+          visitorId,
+          experimentId: assignment.experimentId,
+          variantId: assignment.variantId,
+          component: 'Hero',
+          segments
+        });
+      }
+    }
+  }
+  
   const theme = businessData.theme || {};
   let layout = businessData.layout || [];
 
@@ -369,10 +431,41 @@ export default async function DynamicWebsite({ params }) {
     ];
   }
 
+  // Generate tracking configuration
+  const trackingConfig = getTrackingConfig(
+    visitorId, 
+    businessId,
+    heroVariant ? {
+      experimentId: heroVariant.experimentId,
+      variantId: heroVariant.variantId
+    } : null
+  );
+
   return (
     <ThemedLayout theme={theme}>
       <div className="dynamic-website">
+        {/* Inject tracking script */}
+        <TrackingScript config={trackingConfig} />
+        
         {layout.map((section, index) => {
+          // Use OptimizedHero for Hero components
+          if (section.component === 'Hero' && heroVariant) {
+            const personalizedProps = personalizeContent(
+              { ...section.props, ...heroVariant.variant.props },
+              segments,
+              businessData
+            );
+            
+            return (
+              <OptimizedHero
+                key={index}
+                {...personalizedProps}
+                variant={heroVariant.variant}
+                segments={segments}
+              />
+            );
+          }
+          
           const Component = LaunchflyUI[section.component];
           if (!Component) {
             console.warn(`Component ${section.component} not found`);

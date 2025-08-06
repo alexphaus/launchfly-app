@@ -1,16 +1,15 @@
 // src/app/api/phone/capture/route.js
 import { createClient } from '@supabase/supabase-js';
-// import twilio from 'twilio';
+import twilio from 'twilio';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-const twilioClient = null; // Temporarily disabled
-// const twilioClient = process.env.TWILIO_ACCOUNT_SID ? 
-//   twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : 
-//   null;
+const twilioClient = process.env.TWILIO_ACCOUNT_SID ? 
+  twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : 
+  null;
 
 export async function POST(request) {
   const { sessionId, phoneNumber } = await request.json();

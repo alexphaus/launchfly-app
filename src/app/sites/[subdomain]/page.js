@@ -3,6 +3,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
 import OptimizedHero from '@/components/launchfly-ui/OptimizedHero';
+import SalesAgent from '@/components/SalesAgent';
 import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
 import { 
   getVisitorId, 
@@ -479,6 +480,33 @@ export default async function DynamicWebsite({ params }) {
             />
           );
         })}
+
+        {/* Enhanced AI Sales Agent - High-Converting Version */}
+        <SalesAgent 
+          product={{
+            name: businessData.businessName || businessData.name || 'Premium Solution',
+            price: businessData.products?.[0]?.price || '$97',
+            fakePrice: '$497', // Always anchor high for psychology
+            savings: '$400',
+            benefit: businessData.tagline || 'achieve your goals faster',
+            guarantee: '30-day money back',
+            scarcity: 'Only 3 left at this price',
+            urgency: '10 minute hold',
+            bonuses: [
+              'Bonus Training ($197 value)',
+              'Priority Support ($97/mo value)', 
+              'Success Templates ($297 value)'
+            ]
+          }}
+          businessId={businessId}
+          subdomain={subdomain}
+          config={{
+            triggerDelay: 15,
+            aggressiveness: 8, // More aggressive for higher conversions
+            maxDiscount: 40,
+            urgencyTimer: 600 // 10 minutes
+          }}
+        />
       </div>
     </ThemedLayout>
   );

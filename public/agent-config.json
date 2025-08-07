@@ -1,0 +1,71 @@
+{
+  "personality": "friendly_expert",
+  "aggressiveness": 7,
+  "maxDiscount": 20,
+  "triggerDelay": 15,
+  "product": {
+    "name": "Launchfly Business Accelerator",
+    "audience": "entrepreneurs",
+    "benefit": "grow their business faster",
+    "problem": "finding customers and scaling revenue",
+    "price": "$97",
+    "originalPrice": "$297",
+    "offer": "LAUNCH20",
+    "timeframe": "30 days",
+    "dailyCost": "$50"
+  },
+  "quickReplies": {
+    "greeting": ["Just browsing", "Tell me more", "How much?", "What does it do?"],
+    "qualifying": ["Makes sense", "Not sure", "What's included?", "How does it work?"],
+    "closing": ["Let's do it", "Too expensive", "I need to think", "What's the guarantee?"]
+  },
+  "offers": {
+    "first_visit": "WELCOME20",
+    "exit_intent": "DONTGO30",
+    "returning": "COMEBACK15",
+    "high_intent": "READY25",
+    "mobile": "MOBILE20"
+  },
+  "triggers": {
+    "timeDelays": [15, 30, 60, 120],
+    "scrollTriggers": [50, 75, 90],
+    "exitIntent": true,
+    "returnVisitor": true,
+    "idleTimeout": 30
+  },
+  "psychology": {
+    "scarcityEnabled": true,
+    "socialProofEnabled": true,
+    "urgencyEnabled": true,
+    "guaranteeEnabled": true
+  },
+  "integrations": {
+    "stripe": {
+      "productId": "price_1234567890",
+      "successUrl": "/success",
+      "cancelUrl": "/"
+    },
+    "analytics": {
+      "trackConversions": true,
+      "trackStages": true,
+      "trackDropoff": true
+    }
+  },
+  "fallbacks": {
+    "greeting": "Hi there! I'm here to help you grow your business faster. What's your biggest challenge right now?",
+    "qualifying": "That makes sense! Let me help you figure out if this is the right fit. What's your main goal?",
+    "closing": "Based on what you've told me, this sounds perfect for you! Ready to get started with 20% off?"
+  },
+  "businessHours": {
+    "enabled": true,
+    "timezone": "America/New_York",
+    "hours": {
+      "monday": "9:00-17:00",
+      "tuesday": "9:00-17:00", 
+      "wednesday": "9:00-17:00",
+      "thursday": "9:00-17:00",
+      "friday": "9:00-17:00"
+    },
+    "afterHoursMessage": "I'm not available right now, but I'd love to help! Leave your email and I'll get back to you first thing tomorrow."
+  }
+}

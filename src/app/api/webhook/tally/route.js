@@ -45,7 +45,7 @@ export async function POST(request) {
       throw authError;
     }
 
-    if (authData?.user) {
+  if (authData?.user) {
       userId = authData.user.id;
     } else {
       // User exists, get their ID
@@ -62,8 +62,26 @@ export async function POST(request) {
       userId = existingUser.id;
     }
 
+    // Ensure profiles row exists & store plan at user level as well
+    const planTier = (userData.plan || 'Starter').toLowerCase();
+    const { error: profileUpsertError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: userId,
+        email: userData.email,
+        full_name: userData.name || 'User',
+        plan: planTier === 'starter' ? 'starter' : planTier === 'pro' ? 'pro' : 'scale'
+      }, { onConflict: 'id' });
+    if (profileUpsertError) {
+      console.warn('Profile upsert warning:', profileUpsertError.message);
+    }
+
     // Create business record
-    const { data: business, error: businessError } = await supabase
+  // Map rev share based on plan tier (Starter 20%, Pro 10%, Scale 5%)
+  const revShareMap = { starter: 20, pro: 10, scale: 5 };
+  const revSharePercent = revShareMap[planTier] ?? 20;
+
+  const { data: business, error: businessError } = await supabase
       .from('businesses')
       .insert({
         user_id: userId,
@@ -71,7 +89,10 @@ export async function POST(request) {
         subdomain: `business-${nanoid(8).toLowerCase()}`,
         status: 'pending', // Not 'generating' yet
         form_data: userData,
-        session_id: sessionId
+    session_id: sessionId,
+    guarantee_start_at: new Date().toISOString(),
+    plan_tier: planTier,
+    rev_share_percent: revSharePercent
       })
       .select()
       .single();
@@ -106,7 +127,7 @@ export async function POST(request) {
 }
 
 async function sendDashboardEmail(email, name, sessionId) {
-  const dashboardUrl = `${process.env.NEXT_PUBLIC_URL}/dashboard/${sessionId}`;
+  const dashboardUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/dashboard/${sessionId}`;
   
   await resend.emails.send({
     from: 'Launchfly <hello@launchfly.ai>',

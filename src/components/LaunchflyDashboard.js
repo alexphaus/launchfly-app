@@ -361,22 +361,10 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
     setShowContent(prev => ({ ...prev, ...updates }));
   }, [businessData, generationStage]);
   
-  // Simulate live visitors based on real data
+  // Live visitors: display real views; remove simulated/random noise
   useEffect(() => {
-    if (showContent.complete && business?.views) {
-      // Start with actual views, then simulate small fluctuations
-      setCurrentVisitors(business.views);
-      const interval = setInterval(() => {
-        setCurrentVisitors(prev => Math.max(0, prev + Math.floor(Math.random() * 3 - 1)));
-      }, 5000);
-      return () => clearInterval(interval);
-    } else if (showContent.complete) {
-      // If no real views, start with a realistic number
-      setCurrentVisitors(Math.floor(Math.random() * 5) + 1);
-      const interval = setInterval(() => {
-        setCurrentVisitors(prev => Math.max(0, prev + Math.floor(Math.random() * 3 - 1)));
-      }, 5000);
-      return () => clearInterval(interval);
+    if (showContent.complete) {
+      setCurrentVisitors(Number(business?.views || 0));
     }
   }, [showContent.complete, business?.views]);
 
@@ -1041,22 +1029,23 @@ const InsightsCard = ({ isSetupComplete, generationStage, businessData, business
   const progressPercentage = Math.min((currentRevenue / milestone) * 100, 100);
   
   // Enhanced metrics calculation
-  const visitors = business?.views || Math.floor(Math.random() * 50) + 10;
+  const visitors = Number(business?.views || 0);
   const totalProspects = business?.growth_data?.customers?.totalLeads || 
-                        business?.total_prospects || 
-                        Math.floor(Math.random() * 40) + 15;
+                        business?.total_prospects || 0;
   
   // Get conversion rate from business data or calculate
   const conversionRate = business?.growth_data?.customers?.conversionRate 
     ? (business.growth_data.customers.conversionRate * 100).toFixed(1)
-    : visitors > 0 ? Math.min(((totalProspects / visitors) * 100), 15).toFixed(1) : '2.3';
+    : visitors > 0 && totalProspects > 0
+      ? Math.min(((totalProspects / visitors) * 100), 100).toFixed(1)
+      : '0.0';
   
   // Calculate pipeline value
   const averageDealSize = business?.average_deal_size || 150;
   const pipelineValue = totalProspects * averageDealSize;
   
   // Daily visitors estimate
-  const dailyVisitors = Math.floor(visitors * 0.15) || 8;
+  const dailyVisitors = Math.max(Math.floor(visitors * 0.15), 0);
   
   // Growth trend calculation
   const getGrowthTrend = () => {
@@ -1212,7 +1201,7 @@ const InsightsCard = ({ isSetupComplete, generationStage, businessData, business
 };
 
 // --- COMPONENT: Simple Next Steps ---
-const NextSteps = ({ onComplete, generationStage, setupStatus }) => {
+const NextSteps = ({ onComplete, generationStage, setupStatus, onConnect }) => {
   const steps = [
     {
       id: 'bank',
@@ -1260,7 +1249,13 @@ const NextSteps = ({ onComplete, generationStage, setupStatus }) => {
         {steps.map(step => (
           <button
             key={step.id}
-            onClick={() => onComplete(step.id)}
+            onClick={() => {
+              if (step.completed) return;
+              if (step.id === 'bank' && onConnect) {
+                return onConnect();
+              }
+              return onComplete(step.id);
+            }}
             disabled={step.completed}
             style={{
               display: 'flex',
@@ -1337,7 +1332,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   
   // Track setup status from real data
   const setupStatus = {
-    bank: business?.bank_connected || business?.bank_account || false,
+    bank: business?.bank_connected || business?.bank_account || !!business?.stripe_connect_account_id || false,
     phone: business?.phone_number || business?.contact_phone || false
   };
   
@@ -1504,6 +1499,21 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             onComplete={handleStepComplete}
             generationStage={generationStage}
             setupStatus={setupStatus}
+            onConnect={async () => {
+              try {
+                const email = business?.form_data?.email;
+                const res = await fetch('/api/stripe/connect', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ businessId: business.id, email })
+                });
+                const data = await res.json();
+                if (!res.ok || !data?.url) throw new Error(data?.error || 'Failed to start Connect');
+                window.location.href = data.url;
+              } catch (e) {
+                alert(`Stripe Connect error: ${e.message}`);
+              }
+            }}
           />
         )}
       </main>

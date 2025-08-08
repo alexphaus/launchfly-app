@@ -42,6 +42,11 @@ export async function POST(request) {
       );
     }
 
+    // Determine application fee percent by plan
+    const feeMap = { starter: 20, pro: 10, scale: 5 };
+    const plan = (business.plan_tier || 'starter').toLowerCase();
+    const feePercent = feeMap[plan] ?? 20;
+
     // Create the checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -62,6 +67,15 @@ export async function POST(request) {
       success_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}`,
       customer_email: customerEmail,
+      ...(business.stripe_connect_account_id ? {
+        payment_intent_data: {
+          transfer_data: {
+            destination: business.stripe_connect_account_id,
+          },
+          application_fee_amount: Math.round((productPrice * feePercent / 100) * 100),
+        },
+        on_behalf_of: business.stripe_connect_account_id,
+      } : {}),
       metadata: {
         business_id: businessId,
         business_name: business.name,

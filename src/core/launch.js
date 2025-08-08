@@ -8,6 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { getCuratedOffers } from '../offers/library';
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,
@@ -529,6 +530,13 @@ async function generateWebsite(opportunity) {
  */
 async function createProducts(opportunity) {
   try {
+    // Prefer curated offers to guarantee fast, high-quality SKUs
+    const curated = getCuratedOffers(opportunity);
+    if (Array.isArray(curated) && curated.length >= 3) {
+      console.log('Using curated offers library');
+      return curated;
+    }
+
     console.log('Starting product creation for:', opportunity.businessName);
     const prompt = `
       Create 3 compelling product or service offerings for this business:
@@ -596,8 +604,8 @@ async function createProducts(opportunity) {
       throw new Error('No valid products in OpenAI response');
     }
     
-    console.log('Products created successfully:', validProducts.length);
-    return validProducts;
+  console.log('Products created successfully:', validProducts.length);
+  return validProducts;
     
   } catch (error) {
     console.error("Error creating products:", error);
@@ -612,7 +620,7 @@ async function createProducts(opportunity) {
     const businessType = opportunity?.niche || opportunity?.businessName || 'business';
     console.log(`Using fallback products for ${businessType}`);
     
-    return [
+  return [
       { 
         name: "Starter Package", 
         price: "$97", 

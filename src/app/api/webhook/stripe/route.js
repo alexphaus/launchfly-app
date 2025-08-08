@@ -108,7 +108,7 @@ export async function POST(request) {
         throw businessError;
       }
 
-      const isFirstSale = !business.first_sale_date;
+  const isFirstSale = !business.first_sale_date;
       const newTotalRevenue = (business.total_revenue || 0) + (session.amount_total / 100);
 
       // Update business with sale info
@@ -118,7 +118,10 @@ export async function POST(request) {
       };
 
       if (isFirstSale) {
-        businessUpdates.first_sale_date = new Date().toISOString();
+  const firstTime = new Date().toISOString();
+  businessUpdates.first_sale_date = firstTime;
+  // Also mark guarantees' first payment timestamp
+  businessUpdates.first_payment_at = firstTime;
       }
 
       const { error: updateError } = await supabase

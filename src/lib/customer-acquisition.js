@@ -114,46 +114,49 @@ export async function findProspects(businessId, businessData) {
  */
 export async function startOutreachCampaign(businessId, businessData) {
   try {
-    // 🧪 PLACEHOLDER: Send first email to test address for demo/testing purposes
-    const testProspect = {
-      id: 'test-prospect-001',
-      name: 'Alex',
-      email: 'axpg31@gmail.com',
-      company: 'Test Company',
-      industry: businessData.industry || 'Technology',
-      company_size: '10-50'
-    };
-    
-    console.log('📧 Sending test email to axpg31@gmail.com first...');
-    
-    // Generate and send test email
-    const testEmail = await generatePersonalizedEmail(testProspect, businessData);
-    const testEmailSent = await sendEmail(testEmail);
-    
-    if (testEmailSent.success) {
-      await logEmailSent(businessId, {
-        recipientEmail: testProspect.email,
-        recipientName: testProspect.name,
-        recipientCompany: testProspect.company,
-        subject: testEmail.subject,
-        emailId: testEmailSent.emailId,
-        campaignId: testEmailSent.campaignId
-      });
-      
-      console.log('✅ Test email sent successfully to axpg31@gmail.com');
+    const canSendRealEmails = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL && process.env.APOLLO_API_KEY);
+    const allowTestEmails = process.env.ENABLE_TEST_EMAILS === 'true';
+    // Optional test email (disabled by default)
+    if (allowTestEmails && canSendRealEmails) {
+      const testProspect = {
+        id: 'test-prospect-001',
+        name: 'Alex',
+        email: 'axpg31@gmail.com',
+        company: 'Test Company',
+        industry: businessData.industry || 'Technology',
+        company_size: '10-50'
+      };
+      console.log('📧 Sending test email to axpg31@gmail.com first...');
+      const testEmail = await generatePersonalizedEmail(testProspect, businessData);
+      const testEmailSent = await sendEmail(testEmail);
+      if (testEmailSent.success) {
+        await logEmailSent(businessId, {
+          recipientEmail: testProspect.email,
+          recipientName: testProspect.name,
+          recipientCompany: testProspect.company,
+          subject: testEmail.subject,
+          emailId: testEmailSent.emailId,
+          campaignId: testEmailSent.campaignId
+        });
+        console.log('✅ Test email sent successfully to axpg31@gmail.com');
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
-    
-    // Wait a moment before continuing with regular prospects
-    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Get prospects from database
     const prospects = await getProspects(businessId, 10); // Start with first 10
+
+    // If we cannot send real emails or there are no real prospects, abort
+    if (!canSendRealEmails || (prospects.length === 0)) {
+      console.log('✋ Outreach aborted: missing keys or no real prospects.');
+      return { success: true, message: 'Outreach skipped (no real prospects or missing keys)' };
+    }
     
     for (const prospect of prospects) {
       // Generate personalized email
       const email = await generatePersonalizedEmail(prospect, businessData);
       
-      // Simulate sending email (in production, use SendGrid/Mailgun)
+      // Send real email via Resend
       const emailSent = await sendEmail(email);
       
       if (emailSent.success) {
@@ -538,7 +541,7 @@ function generateCompanySize() {
  * @param {Object} businessData - Business information
  * @param {number} count - Number of prospects to find
  */
-async function findRealProspectsWithApollo(businessData, count) {
+export async function findRealProspectsWithApollo(businessData, count) {
   try {
     console.log('🚀 Searching Apollo.io for real prospects...');
     
@@ -638,7 +641,7 @@ function generateApolloSearchCriteria(businessData) {
  * @param {number} count - Number of prospects to generate
  * @param {Object} source - Source information
  */
-function generateRealisticProspects(businessData, count, source) {
+export function generateRealisticProspects(businessData, count, source) {
   const prospects = [];
   const industry = source.industry;
   

@@ -11,8 +11,9 @@ const supabase = createClient(
  * API endpoint to fetch real AI activities for a business
  * Replaces simulated dashboard activities with real customer acquisition activities
  */
-export async function GET(request, { params }) {
+export async function GET(request, context) {
   try {
+    const params = await context.params; // Next.js 15 requires awaiting params
     const { businessId } = params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');

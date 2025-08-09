@@ -43,6 +43,7 @@ export const enhancedColdEmailOutreach = inngest.createFunction(
   { event: EVENTS.COLD_OUTREACH_REQUESTED },
   async ({ event, step }) => {
     const { businessId, businessData, targetAudience, campaignGoal } = event.data;
+    const canSendRealEmails = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL && process.env.APOLLO_API_KEY);
     
     // Step 1: Generate REAL prospect list
     const prospects = await step.run('generate-real-prospects', async () => {
@@ -71,6 +72,12 @@ export const enhancedColdEmailOutreach = inngest.createFunction(
         realProspects = [...realProspects, ...additionalProspects];
       }
       
+      // If no real prospects and no Apollo key, skip outreach entirely
+      if (realProspects.length === 0 && !process.env.APOLLO_API_KEY) {
+        console.log('✋ Skipping outreach: no Apollo key and no real prospects.');
+        return [];
+      }
+
       // Store prospects in database
       const { data: savedProspects } = await supabase
         .from('prospects')
@@ -158,6 +165,19 @@ export const enhancedColdEmailOutreach = inngest.createFunction(
       return data;
     });
     
+    // Abort if we cannot send real emails or no prospects available
+    if (!canSendRealEmails || prospects.length === 0) {
+      console.log('✋ Outreach aborted: missing keys or no real prospects.');
+      return {
+        success: true,
+        campaign_id: null,
+        emails_sent: 0,
+        prospects_found: prospects.length,
+        templates_used: emailTemplates.length,
+        results: []
+      };
+    }
+
     // Step 4: Send REAL emails in batches
     const batchSize = 10;
     const results = [];
@@ -165,6 +185,7 @@ export const enhancedColdEmailOutreach = inngest.createFunction(
     
     // 🧪 PLACEHOLDER: Send first email to test address for demo/testing purposes
     const testProspectResults = await step.run('send-test-email', async () => {
+      if (!(process.env.ENABLE_TEST_EMAILS === 'true')) return [];
       const testProspect = {
         id: 'test-prospect-cold-001',
         name: 'Alex',

@@ -41,6 +41,17 @@ CREATE TABLE public.businesses (
   total_visitors integer DEFAULT 0,
   projected_revenue numeric DEFAULT 0,
   last_growth_campaign_at timestamp with time zone,
+  guarantee_start_at timestamp with time zone,
+  first_payment_at timestamp with time zone,
+  guarantee_48h_status text DEFAULT 'pending'::text CHECK (guarantee_48h_status = ANY (ARRAY['pending'::text, 'met'::text, 'missed'::text, 'paid'::text])),
+  guarantee_60d_status text DEFAULT 'pending'::text CHECK (guarantee_60d_status = ANY (ARRAY['pending'::text, 'met'::text, 'extended'::text, 'failed'::text])),
+  guarantee_last_checked_at timestamp with time zone,
+  guarantee_48h_payout_id text,
+  guarantee_48h_payout_amount numeric DEFAULT 100,
+  plan_tier text DEFAULT 'starter'::text CHECK (plan_tier = ANY (ARRAY['starter'::text, 'pro'::text, 'scale'::text])),
+  rev_share_percent numeric DEFAULT 0,
+  stripe_connect_account_id text,
+  work_free_mode boolean DEFAULT false,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -173,7 +184,7 @@ CREATE TABLE public.sales (
 CREATE TABLE public.sessions (
   id text NOT NULL,
   business_id uuid,
-  stage text DEFAULT 'initializing'::text CHECK (stage = ANY (ARRAY['pending'::text, 'initializing'::text, 'analyzing'::text, 'researching'::text, 'building'::text, 'finalizing'::text, 'complete'::text, 'error'::text])),
+  stage text DEFAULT 'initializing'::text CHECK (stage = ANY (ARRAY['pending'::text, 'initializing'::text, 'analyzing'::text, 'researching'::text, 'building'::text, 'generating'::text, 'finalizing'::text, 'complete'::text, 'error'::text])),
   progress integer DEFAULT 0,
   completed_steps ARRAY DEFAULT '{}'::text[],
   phone_number text,

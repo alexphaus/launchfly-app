@@ -65,13 +65,18 @@ export const growthEngine = inngest.createFunction(
     // Step 3: Launch customer acquisition campaigns
     if (businessData.businessName) {
       // Trigger comprehensive customer acquisition
-      await step.sendEvent('trigger-customer-acquisition', {
-        name: EVENTS.CUSTOMER_ACQUISITION_STARTED,
-        data: {
-          businessId,
-          businessData
-        }
-      });
+      const shouldAutoStartOutreach = process.env.AUTO_START_OUTREACH === 'true';
+      if (shouldAutoStartOutreach) {
+        await step.sendEvent('trigger-customer-acquisition', {
+          name: EVENTS.CUSTOMER_ACQUISITION_STARTED,
+          data: {
+            businessId,
+            businessData
+          }
+        });
+      } else {
+        console.log('Skipping auto-start of outreach (AUTO_START_OUTREACH != true).');
+      }
       
       // Also trigger content generation
       await step.sendEvent('trigger-content-generation', {

@@ -368,20 +368,20 @@ async function optimizeConversion(business) {
  */
 async function updateBusinessMetrics(businessId, customers, revenue) {
   try {
-    const { data, error } = await supabase
+    // Write only projected metrics here; real revenue and first sale are set by checkout/webhooks
+    const { error } = await supabase
       .from('businesses')
       .update({
-        views: customers.totalVisits,
-        total_revenue: revenue.totalRevenue,
-        first_sale_date: revenue.sales > 0 ? new Date() : null
+        projected_revenue: revenue.totalRevenue,
+        updated_at: new Date().toISOString()
       })
       .eq('id', businessId);
-      
+
     if (error) {
-      console.error("Error updating business metrics:", error);
+      console.error('Error updating projected business metrics:', error);
     }
   } catch (error) {
-    console.error("Error updating business metrics:", error);
+    console.error('Error updating projected business metrics:', error);
   }
 }
 

@@ -19,7 +19,29 @@ const WEBHOOK_ENDPOINT = `${LOCAL_URL}/api/webhook/tally`;
 // Get user inputs or use defaults
 const email = process.argv[2] || 'axpg31@gmail.com';
 const name = process.argv[3] || 'Alex';
+// Optional preset selector (default: male-skincare)
+const presetArg = (process.argv[4] || 'male-skincare').toLowerCase();
 const sessionId = nanoid();
+
+// Presets for mock submission content
+const presets = {
+  'male-skincare': {
+    skills: 'DTC ecommerce, skincare formulation basics, content marketing, influencer partnerships',
+    businessType: 'Ecommerce (physical products)',
+    goal: 'Launch and scale a profitable DTC brand',
+    preferences:
+      'Build a brand selling male skincare products (face wash, moisturizer, SPF). Start with a 3-product starter kit targeting men 25-40. Focus on clean ingredients, simple routines, and a modern brand voice. Prioritize Shopify, email capture, and UGC on TikTok/IG.'
+  },
+  generic: {
+    skills: 'Web development, design, marketing, and content creation',
+    businessType: 'Digital products and services',
+    goal: 'Build a sustainable income stream',
+    preferences: 'I want to focus on helping other entrepreneurs with productivity tools'
+  }
+};
+
+const selectedPreset = presets[presetArg] || presets['male-skincare'];
+const selectedPresetName = presets[presetArg] ? presetArg : 'male-skincare';
 
 // Mock Tally form submission data
 const mockTallyData = {
@@ -50,25 +72,25 @@ const mockTallyData = {
         key: "question_skills",
         label: "What are your main skills or interests?",
         type: "TEXTAREA",
-        value: "Web development, design, marketing, and content creation"
+        value: selectedPreset.skills
       },
       {
         key: "question_business_type",
         label: "What type of business are you most interested in?",
         type: "MULTIPLE_CHOICE",
-        value: "Digital products and services"
+        value: selectedPreset.businessType
       },
       {
         key: "question_goal",
         label: "What's your business goal?", 
         type: "MULTIPLE_CHOICE",
-        value: "Build a sustainable income stream"
+        value: selectedPreset.goal
       },
       {
         key: "question_preferences",
         label: "Any special preferences or ideas you have?",
         type: "TEXTAREA", 
-        value: "I want to focus on helping other entrepreneurs with productivity tools"
+        value: selectedPreset.preferences
       },
       {
         key: "question_plan",
@@ -91,6 +113,7 @@ async function simulateTallySubmission() {
   console.log(`📧 Email: ${email}`);
   console.log(`👤 Name: ${name}`);
   console.log(`🆔 Session ID: ${sessionId}`);
+  console.log(`🧪 Preset: ${selectedPresetName}`);
   console.log('');
 
   try {

@@ -52,6 +52,9 @@ CREATE TABLE public.businesses (
   rev_share_percent numeric DEFAULT 0,
   stripe_connect_account_id text,
   work_free_mode boolean DEFAULT false,
+  model text,
+  assets jsonb,
+  strategy_plan jsonb,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -193,6 +196,6 @@ CREATE TABLE public.sessions (
   inngest_job_id uuid,
   completed_at timestamp with time zone,
   CONSTRAINT sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
-  CONSTRAINT sessions_inngest_job_id_fkey FOREIGN KEY (inngest_job_id) REFERENCES public.inngest_jobs(id)
+  CONSTRAINT sessions_inngest_job_id_fkey FOREIGN KEY (inngest_job_id) REFERENCES public.inngest_jobs(id),
+  CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );

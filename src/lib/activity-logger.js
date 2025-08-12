@@ -22,7 +22,8 @@ export const ActivityTypes = {
   OPTIMIZATION: 'optimization',
   COMPETITOR_ANALYSIS: 'competitor_analysis',
   CAMPAIGN_STARTED: 'campaign_started',
-  METRICS_UPDATE: 'metrics_update'
+  METRICS_UPDATE: 'metrics_update',
+  STRATEGY_SELECTED: 'strategy_selected'
 };
 
 /**

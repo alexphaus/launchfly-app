@@ -112,8 +112,9 @@ export async function findProspects(businessId, businessData) {
  * @param {string} businessId - Business ID  
  * @param {Object} businessData - Business information
  */
-export async function startOutreachCampaign(businessId, businessData) {
+export async function startOutreachCampaign(businessId, businessData, options = {}) {
   try {
+    const { dryRun = process.env.ACQUISITION_DRY_RUN === 'true', maxSends = 10 } = options;
     const canSendRealEmails = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL && process.env.APOLLO_API_KEY);
     const allowTestEmails = process.env.ENABLE_TEST_EMAILS === 'true';
     // Optional test email (disabled by default)
@@ -144,12 +145,12 @@ export async function startOutreachCampaign(businessId, businessData) {
     }
     
     // Get prospects from database
-    const prospects = await getProspects(businessId, 10); // Start with first 10
+    const prospects = await getProspects(businessId, Math.min(maxSends, 10)); // cap by plan
 
     // If we cannot send real emails or there are no real prospects, abort
-    if (!canSendRealEmails || (prospects.length === 0)) {
+    if (dryRun || !canSendRealEmails || (prospects.length === 0)) {
       console.log('✋ Outreach aborted: missing keys or no real prospects.');
-      return { success: true, message: 'Outreach skipped (no real prospects or missing keys)' };
+      return { success: true, message: 'Outreach skipped (dry-run or no prospects/keys)' };
     }
     
     for (const prospect of prospects) {

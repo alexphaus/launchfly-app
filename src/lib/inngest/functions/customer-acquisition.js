@@ -8,6 +8,7 @@ import {
   generatePersonalizedEmail,
   sendEmail
 } from '@/lib/customer-acquisition';
+import { selectAcquisitionStrategy } from '@/lib/strategy-selection';
 import { 
   logActivity, 
   logEmailSent, 
@@ -45,13 +46,21 @@ export const customerAcquisitionOrchestrator = inngest.createFunction(
     console.log(`🎯 Starting customer acquisition for business: ${businessId}`);
 
     try {
+      // Phase 0: Strategy selection (explainable)
+      const { plan } = await step.run("strategy-selection", async () => {
+        const result = await selectAcquisitionStrategy(businessId, businessData);
+        return result;
+      });
+
       // Phase 1: Customer Discovery (First 24 hours)
       await step.run("customer-discovery", async () => {
         console.log('Phase 1: Customer Discovery');
-        
-        // Start prospect discovery
-        await startCustomerAcquisition(businessId, businessData);
-        
+        const coldEmailEnabled = plan.channels.some((c) => c.name === 'cold_email');
+        if (coldEmailEnabled) {
+          await findProspects(businessId, businessData);
+        } else {
+          console.log('Skipping prospect discovery: cold email not in selected plan.');
+        }
         return { phase: 'discovery', status: 'completed' };
       });
 
@@ -62,40 +71,49 @@ export const customerAcquisitionOrchestrator = inngest.createFunction(
         // Wait a bit to simulate real AI research time
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        await startOutreachCampaign(businessId, businessData);
+        // Respect plan: dry-run and send caps for cold email channel
+        const coldEmailChannel = plan.channels.find((c) => c.name === 'cold_email');
+        if (coldEmailChannel) {
+          const maxSends = Math.max(1, Math.min(100, coldEmailChannel.daily_cap_sends || 10));
+          const dryRun = Boolean(plan.dry_run);
+          await startOutreachCampaign(businessId, businessData, { dryRun, maxSends });
+        } else {
+          console.log('Skipping cold email based on selected strategy mix.');
+        }
         
         return { phase: 'outreach', status: 'completed' };
       });
 
-      // Phase 3: Schedule follow-up activities
+      // Phase 3: Schedule follow-up activities (only if cold email enabled)
       await step.run("schedule-follow-ups", async () => {
         console.log('Phase 3: Scheduling Follow-ups');
-        
-        // Schedule daily outreach for the next 7 days
-        for (let day = 1; day <= 7; day++) {
-          await step.sendEvent(`schedule-day-${day}-outreach`, {
-            name: EVENTS.DAILY_OUTREACH_SCHEDULED,
-            data: {
-              businessId,
-              businessData,
-              day,
-              outreachType: 'follow_up'
-            },
-            ts: new Date(Date.now() + day * 24 * 60 * 60 * 1000).toISOString()
-          });
-        }
-        
-        await logActivity(businessId, {
-          type: ActivityTypes.CAMPAIGN_STARTED,
-          icon: '📅',
-          message: '7-day follow-up sequence activated',
-          details: 'AI will continue outreach automatically for the next week',
-          metadata: {
-            sequenceLength: 7,
-            type: 'follow_up_sequence'
+        const coldEmailEnabled = plan.channels.some((c) => c.name === 'cold_email');
+        if (coldEmailEnabled) {
+          for (let day = 1; day <= 7; day++) {
+            await step.sendEvent(`schedule-day-${day}-outreach`, {
+              name: EVENTS.DAILY_OUTREACH_SCHEDULED,
+              data: {
+                businessId,
+                businessData,
+                day,
+                outreachType: 'follow_up'
+              },
+              ts: new Date(Date.now() + day * 24 * 60 * 60 * 1000).toISOString()
+            });
           }
-        });
-        
+          await logActivity(businessId, {
+            type: ActivityTypes.CAMPAIGN_STARTED,
+            icon: '📅',
+            message: '7-day follow-up sequence activated',
+            details: 'AI will continue outreach automatically for the next week',
+            metadata: {
+              sequenceLength: 7,
+              type: 'follow_up_sequence'
+            }
+          });
+        } else {
+          console.log('Follow-ups not scheduled: cold email not in plan.');
+        }
         return { phase: 'scheduling', status: 'completed' };
       });
 
@@ -120,7 +138,8 @@ export const customerAcquisitionOrchestrator = inngest.createFunction(
         success: true,
         businessId,
         message: "Customer acquisition successfully started",
-        phases: ['discovery', 'outreach', 'scheduling', 'optimization']
+        plan,
+        phases: ['strategy_selection', 'discovery', 'outreach', 'scheduling', 'optimization']
       };
 
     } catch (error) {

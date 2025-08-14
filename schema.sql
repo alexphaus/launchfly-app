@@ -55,8 +55,33 @@ CREATE TABLE public.businesses (
   model text,
   assets jsonb,
   strategy_plan jsonb,
+  email_ramp_stage integer DEFAULT 0,
+  manual_approval_required boolean DEFAULT true,
+  approved_at timestamp with time zone,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.campaigns (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  name text,
+  sent_count integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT campaigns_pkey PRIMARY KEY (id),
+  CONSTRAINT campaigns_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.clicks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  slug text NOT NULL UNIQUE,
+  email_id uuid,
+  business_id uuid NOT NULL,
+  campaign_id uuid,
+  dest_url text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT clicks_pkey PRIMARY KEY (id),
+  CONSTRAINT clicks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT clicks_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id),
+  CONSTRAINT clicks_email_id_fkey FOREIGN KEY (email_id) REFERENCES public.emails(id)
 );
 CREATE TABLE public.email_outreach (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -74,6 +99,35 @@ CREATE TABLE public.email_outreach (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT email_outreach_pkey PRIMARY KEY (id),
   CONSTRAINT email_outreach_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.email_replies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email_id uuid,
+  business_id uuid NOT NULL,
+  from_email text,
+  body text,
+  sentiment text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT email_replies_pkey PRIMARY KEY (id),
+  CONSTRAINT email_replies_email_id_fkey FOREIGN KEY (email_id) REFERENCES public.emails(id),
+  CONSTRAINT email_replies_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.emails (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  campaign_id uuid,
+  to_email text NOT NULL,
+  subject text,
+  provider text,
+  provider_message_id text,
+  bounce boolean DEFAULT false,
+  complaint boolean DEFAULT false,
+  suppressed boolean DEFAULT false,
+  clicked_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT emails_pkey PRIMARY KEY (id),
+  CONSTRAINT emails_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id),
+  CONSTRAINT emails_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.growth_experiments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -99,6 +153,12 @@ CREATE TABLE public.growth_sessions (
   metrics jsonb DEFAULT '{"conversions": 0, "leads_generated": 0, "revenue_generated": 0}'::jsonb,
   CONSTRAINT growth_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT growth_sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.idempotency (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  key text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT idempotency_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.inngest_jobs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -198,4 +258,10 @@ CREATE TABLE public.sessions (
   CONSTRAINT sessions_pkey PRIMARY KEY (id),
   CONSTRAINT sessions_inngest_job_id_fkey FOREIGN KEY (inngest_job_id) REFERENCES public.inngest_jobs(id),
   CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.suppression_list (
+  email text NOT NULL,
+  reason text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT suppression_list_pkey PRIMARY KEY (email)
 );

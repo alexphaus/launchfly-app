@@ -9,7 +9,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { sendEvent, EventTypes } from '@/lib/inngest';
+import { emit, Event } from '@/lib/events';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -46,17 +46,7 @@ export async function growBusiness(business, businessId) {
     };
     
     // Trigger background growth experiments via Inngest
-    try {
-      await sendEvent(EventTypes.GROWTH_EXPERIMENT_COMPLETED, {
-        businessId,
-        experimentType: 'initial-analysis',
-        metrics: growthMetrics,
-        triggeredAt: new Date().toISOString()
-      });
-    } catch (inngestError) {
-      console.error('Failed to trigger Inngest growth event:', inngestError);
-      // Continue without Inngest if it fails
-    }
+    await emit(Event.CampaignLaunched, { businessId, metrics: growthMetrics });
     
     return {
       ...business,

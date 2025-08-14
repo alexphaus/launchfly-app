@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "e2e:seed": "tsx scripts/e2e-seed.ts",
+    "test:engine": "tsx scripts/tests/test-engine.ts",
     "simulate": "node simulate-tally-form.js",
     "test:inngest": "node check-inngest.js",
     "test:quick": "node test-simulation.js quick",
@@ -37,6 +39,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
+    "tsx": "^4.20.4",
     "typescript": "^5"
   }
 }

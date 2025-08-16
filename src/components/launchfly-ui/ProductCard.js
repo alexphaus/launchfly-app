@@ -13,7 +13,7 @@ export default function ProductCard({
   if (!product) return null;
 
   const productId = product.id || product.name.toLowerCase().replace(/\s+/g, '-');
-  const productUrl = `/${params.subdomain}/product/${productId}`;
+  const productUrl = `/sites/${params.subdomain}/product/${productId}`;
 
   return (
     <div 

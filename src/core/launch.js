@@ -8,6 +8,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { nanoid } from 'nanoid';
 import { getCuratedOffers } from '../offers/library';
 
 const openai = new OpenAI({ 
@@ -521,17 +522,22 @@ async function generateWebsite(opportunity) {
  */
 async function createProducts(opportunity) {
   try {
-    // Prefer curated offers to guarantee fast, high-quality SKUs
-    const curated = getCuratedOffers(opportunity);
-    if (Array.isArray(curated) && curated.length >= 3) {
-      console.log('Using curated offers library');
-      return curated;
-    }
-
     console.log('Starting product creation for:', opportunity.businessName);
     
     // Determine if this is an e-commerce business
     const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
+    
+    // For e-commerce businesses, always generate custom physical products
+    // For service businesses, use curated offers for consistency
+    if (!isEcommerce) {
+      const curated = getCuratedOffers(opportunity);
+      if (Array.isArray(curated) && curated.length >= 3) {
+        console.log('Using curated service offers library for non-ecommerce business');
+        return curated;
+      }
+    } else {
+      console.log('Generating custom e-commerce products for business type:', opportunity.businessModel);
+    }
     
     const prompt = `
       Create ${isEcommerce ? '6-8' : '3'} compelling ${isEcommerce ? 'physical products' : 'service offerings'} for this business:
@@ -620,10 +626,13 @@ async function createProducts(opportunity) {
       throw new Error('Response missing valid products array');
     }
     
-    // Validate each product has required fields
-    const validProducts = parsedResponse.products.filter(product => 
-      product?.name && product?.price && product?.description
-    );
+    // Validate each product has required fields and add IDs
+    const validProducts = parsedResponse.products
+      .filter(product => product?.name && product?.price && product?.description)
+      .map(product => ({
+        ...product,
+        id: product.id || product.name.toLowerCase().replace(/\s+/g, '-')
+      }));
     
     if (validProducts.length === 0) {
       console.error('No valid products found in response:', parsedResponse.products);

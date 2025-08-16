@@ -50,18 +50,22 @@ export default function ProductPage() {
 
       // Look for products in different places in the business data
       if (businessContent?.products && Array.isArray(businessContent.products)) {
-        foundProduct = businessContent.products.find(p => p.id === productId || p.name === productId);
+        foundProduct = businessContent.products.find(p => {
+          const pId = p.id || p.name.toLowerCase().replace(/\s+/g, '-');
+          const pName = p.name.toLowerCase().replace(/\s+/g, '-');
+          return pId === productId || pName === productId || p.name === productId;
+        });
       }
 
       // Also check in pricing/plans
       if (!foundProduct && businessContent?.layout) {
         for (const section of businessContent.layout) {
           if (section.component === 'PricingTable' && section.props?.plans) {
-            foundProduct = section.props.plans.find(p => 
-              p.id === productId || 
-              p.name === productId || 
-              p.name.toLowerCase().replace(/\s+/g, '-') === productId
-            );
+            foundProduct = section.props.plans.find(p => {
+              const pId = p.id || p.name.toLowerCase().replace(/\s+/g, '-');
+              const pName = p.name.toLowerCase().replace(/\s+/g, '-');
+              return pId === productId || pName === productId || p.name === productId;
+            });
             if (foundProduct) break;
           }
         }

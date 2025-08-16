@@ -59,12 +59,13 @@ export async function POST(request) {
     }));
 
     // Create checkout session
+    const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/${subdomain}/checkout`,
+      success_url: `${baseUrl}/sites/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/sites/${subdomain}/checkout`,
       customer_email: customerEmail,
       billing_address_collection: 'auto',
       shipping_address_collection: {

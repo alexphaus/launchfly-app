@@ -64,8 +64,8 @@ export async function POST(request) {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${subdomain}`,
+      success_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/sites/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/sites/${subdomain}`,
       customer_email: customerEmail,
       ...(business.stripe_connect_account_id ? {
         payment_intent_data: {

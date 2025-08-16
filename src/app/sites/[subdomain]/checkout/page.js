@@ -3,10 +3,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { useCart } from '@/hooks/useCart';
+import { useCart, CartProvider } from '@/hooks/useCart';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-export default function CheckoutPage() {
+function CheckoutPage() {
   const params = useParams();
   const { cart, getCartTotal, clearCart } = useCart();
   const [businessData, setBusinessData] = useState(null);
@@ -350,5 +350,14 @@ export default function CheckoutPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Export wrapped component with CartProvider
+export default function CheckoutPageWithProvider() {
+  return (
+    <CartProvider>
+      <CheckoutPage />
+    </CartProvider>
   );
 }

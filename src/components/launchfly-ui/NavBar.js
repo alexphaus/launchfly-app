@@ -58,7 +58,7 @@ export default function NavBar({
             <div className="flex items-center space-x-4">
               {/* Search (for e-commerce) */}
               {isEcommerce && (
-                <button className="text-gray-600 hover:text-gray-900 transition-colors">
+                <button className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
@@ -69,7 +69,7 @@ export default function NavBar({
               {isEcommerce && (
                 <button
                   onClick={() => setIsCartOpen(true)}
-                  className="relative text-gray-600 hover:text-gray-900 transition-colors"
+                  className="relative text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />

@@ -2,9 +2,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { useCart } from '@/hooks/useCart';
 
 export default function ShoppingCart({ onClose, isOpen }) {
+  const params = useParams();
+  
   // Safe cart access with error handling
   let cart = [], updateQuantity = () => {}, removeFromCart = () => {}, getCartTotal = () => '0.00', getCartCount = () => 0;
   
@@ -23,9 +26,9 @@ export default function ShoppingCart({ onClose, isOpen }) {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Backdrop */}
+      {/* Invisible backdrop - click to close */}
       <div 
-        className="absolute inset-0 bg-black bg-opacity-50" 
+        className="absolute inset-0" 
         onClick={onClose}
       />
       
@@ -119,8 +122,13 @@ export default function ShoppingCart({ onClose, isOpen }) {
               <button
                 className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 onClick={() => {
-                  // Handle checkout
-                  window.location.href = '/checkout';
+                  // Handle checkout with proper subdomain routing
+                  const subdomain = params?.subdomain;
+                  if (subdomain) {
+                    window.location.href = `/sites/${subdomain}/checkout`;
+                  } else {
+                    window.location.href = '/checkout';
+                  }
                 }}
               >
                 Checkout

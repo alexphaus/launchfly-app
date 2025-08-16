@@ -20,9 +20,10 @@ function decodeToken(token: string): { email: string; businessId: string } | nul
   }
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
-    const decoded = params?.token ? decodeToken(params.token) : null;
+    const { token } = await params;
+    const decoded = token ? decodeToken(token) : null;
     if (!decoded) {
       return new NextResponse('Invalid unsubscribe token', { status: 400 });
     }

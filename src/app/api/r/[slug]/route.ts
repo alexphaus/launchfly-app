@@ -8,9 +8,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-export async function GET(_req: NextRequest, { params }: { params: { slug: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    const slug = params.slug;
+    const { slug } = await params;
     if (!slug) return new NextResponse('Invalid', { status: 400 });
 
     const { data: click } = await supabase

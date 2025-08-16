@@ -15,6 +15,13 @@ export {
   weeklyPerformanceReport 
 } from './customer-acquisition';
 
+export { 
+  growthStrategyOrchestrator,
+  customerAcquisitionCampaign,
+  coldEmailCampaignOrchestrator,
+  handleColdEmailBatchSent 
+} from './growth-strategies';
+
 // Export all functions as an array for the Inngest serve handler
 export const functions = [
   require('./generate-business').generateBusiness,
@@ -25,5 +32,9 @@ export const functions = [
   require('./customer-acquisition').emailResponseHandler,
   require('./customer-acquisition').campaignOptimizer,
   require('./customer-acquisition').weeklyPerformanceReport,
+  require('./growth-strategies').growthStrategyOrchestrator,
+  require('./growth-strategies').customerAcquisitionCampaign,
+  require('./growth-strategies').coldEmailCampaignOrchestrator,
+  require('./growth-strategies').handleColdEmailBatchSent,
   require('./conversion-optimizer').conversionOptimizer,
 ];

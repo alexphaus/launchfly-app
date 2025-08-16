@@ -115,10 +115,12 @@ export async function findProspects(businessId, businessData) {
 export async function startOutreachCampaign(businessId, businessData, options = {}) {
   try {
     const { dryRun = process.env.ACQUISITION_DRY_RUN === 'true', maxSends = 10 } = options;
-    const canSendRealEmails = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL && process.env.APOLLO_API_KEY);
+    const canSendRealEmails = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL && process.env.APOLLO_API_KEY && process.env.APOLLO_API_KEY !== 'dummy_key_for_testing');
+    const canSendTestEmails = Boolean(process.env.RESEND_API_KEY && process.env.FROM_EMAIL);
     const allowTestEmails = process.env.ENABLE_TEST_EMAILS === 'true';
+    
     // Optional test email (disabled by default)
-    if (allowTestEmails && canSendRealEmails) {
+    if (allowTestEmails && canSendTestEmails) {
       const testProspect = {
         id: 'test-prospect-001',
         name: 'Alex',
@@ -147,48 +149,65 @@ export async function startOutreachCampaign(businessId, businessData, options = 
     // Get prospects from database
     const prospects = await getProspects(businessId, Math.min(maxSends, 10)); // cap by plan
 
-    // If we cannot send real emails or there are no real prospects, abort
-    if (dryRun || !canSendRealEmails || (prospects.length === 0)) {
-      console.log('✋ Outreach aborted: missing keys or no real prospects.');
-      return { success: true, message: 'Outreach skipped (dry-run or no prospects/keys)' };
+    // If we cannot send any emails (real or test), abort
+    if (dryRun || (!canSendRealEmails && !canSendTestEmails)) {
+      console.log('✋ Outreach aborted: missing email keys or in dry-run mode.');
+      return { success: true, message: 'Outreach skipped (dry-run or no email keys)' };
     }
     
-    for (const prospect of prospects) {
-      // Generate personalized email
-      const email = await generatePersonalizedEmail(prospect, businessData);
-      
-      // Send real email via Resend
-      const emailSent = await sendEmail(email);
-      
-      if (emailSent.success) {
-        await logEmailSent(businessId, {
-          recipientEmail: prospect.email,
-          recipientName: prospect.name,
-          recipientCompany: prospect.company,
-          subject: email.subject,
-          emailId: emailSent.emailId,
-          campaignId: emailSent.campaignId
-        });
-
-        // Mark prospect as contacted
-        await markProspectContacted(prospect.id);
-      }
-
-      // Space out emails realistically
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    // If we can't send real emails but have no prospects, proceed anyway for test emails
+    if (!canSendRealEmails && prospects.length === 0) {
+      console.log('✅ Continuing with test emails only (no real prospects or Apollo key).');
     }
+    
+    // Send real emails if we have the capability and prospects
+    if (canSendRealEmails && prospects.length > 0) {
+      for (const prospect of prospects) {
+        // Generate personalized email
+        const email = await generatePersonalizedEmail(prospect, businessData);
+        
+        // Send real email via Resend
+        const emailSent = await sendEmail(email);
+        
+        if (emailSent.success) {
+          await logEmailSent(businessId, {
+            recipientEmail: prospect.email,
+            recipientName: prospect.name,
+            recipientCompany: prospect.company,
+            subject: email.subject,
+            emailId: emailSent.emailId,
+            campaignId: emailSent.campaignId
+          });
+
+          // Mark prospect as contacted
+          await markProspectContacted(prospect.id);
+        }
+
+        // Space out emails realistically
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // Determine email count for logging
+    const realEmailsSent = (canSendRealEmails && prospects.length > 0) ? prospects.length : 0;
+    const testEmailsSent = (allowTestEmails && canSendTestEmails) ? 1 : 0;
+    const totalEmailsSent = realEmailsSent + testEmailsSent;
 
     // Log campaign summary
     await logActivity(businessId, {
       type: ActivityTypes.EMAIL_SENT,
       icon: '📬',
-      message: `Launched personalized outreach to ${prospects.length + 1} high-value prospects`,
-      details: 'AI-generated emails tailored to each company\'s needs (includes test email to axpg31@gmail.com)',
+      message: `Launched personalized outreach to ${totalEmailsSent} ${totalEmailsSent === 1 ? 'prospect' : 'prospects'}`,
+      details: testEmailsSent > 0 ? 
+        'AI-generated emails tailored to each company\'s needs (includes test email to axpg31@gmail.com)' :
+        'AI-generated emails tailored to each company\'s needs',
       metadata: {
-        emailsSent: prospects.length + 1,
+        emailsSent: totalEmailsSent,
+        realEmailsSent,
+        testEmailsSent,
         campaignType: 'initial_outreach',
-        includesTestEmail: true,
-        testEmailAddress: 'axpg31@gmail.com'
+        includesTestEmail: testEmailsSent > 0,
+        testEmailAddress: testEmailsSent > 0 ? 'axpg31@gmail.com' : null
       }
     });
 

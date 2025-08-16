@@ -16,6 +16,7 @@ export const ActivityTypes = {
   EMAIL_SENT: 'email_sent',
   EMAIL_OPENED: 'email_opened',
   EMAIL_REPLIED: 'email_replied',
+  EMAIL_OBJECTION_HANDLED: 'email_objection_handled',
   MEETING_BOOKED: 'meeting_booked',
   LINKEDIN_OUTREACH: 'linkedin_outreach',
   CONTENT_CREATED: 'content_created',

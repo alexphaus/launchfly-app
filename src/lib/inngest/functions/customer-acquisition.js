@@ -19,6 +19,7 @@ import {
   logMetricsUpdate,
   ActivityTypes 
 } from '@/lib/activity-logger';
+import { Resend } from 'resend';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -288,7 +289,7 @@ export const dailyOutreachFunction = inngest.createFunction(
 
 /**
  * Email Response Handler
- * Processes incoming email responses and replies
+ * Processes incoming email responses and replies with AI objection handling
  */
 export const emailResponseHandler = inngest.createFunction(
   {
@@ -314,17 +315,46 @@ export const emailResponseHandler = inngest.createFunction(
         });
       });
 
-      // If response is positive, try to book a meeting
+      // If response is positive, send business website link and/or payment link
       if (responseData.isPositive) {
         await step.run("handle-positive-response", async () => {
-          // In production, integrate with Calendly or similar
-          await logMeetingBooked(businessId, {
-            attendeeEmail: responseData.fromEmail,
-            attendeeName: responseData.fromName,
-            scheduledTime: 'TBD - Calendar link sent',
-            duration: '15 minutes',
-            meetingLink: 'https://calendly.com/your-business/15min'
-          });
+          // Get business data
+          const { data: business, error: businessError } = await supabase
+            .from('businesses')
+            .select('*')
+            .eq('id', businessId)
+            .single();
+
+          if (businessError) {
+            console.error('Error fetching business data:', businessError);
+            throw new Error(`Could not fetch business data: ${businessError.message}`);
+          }
+
+          if (!business) {
+            throw new Error(`Business not found: ${businessId}`);
+          }
+
+          if (!business.subdomain) {
+            console.warn(`Business ${businessId} has no subdomain, skipping website link`);
+            return;
+          }
+
+          try {
+            // Send follow-up email with business link
+            await sendInterestResponse(businessId, responseData.fromEmail, business);
+            
+            // Log meeting booking activity for tracking
+            await logMeetingBooked(businessId, {
+              attendeeEmail: responseData.fromEmail,
+              attendeeName: responseData.fromName || 'Interested Prospect',
+              scheduledTime: 'Next steps email sent',
+              duration: 'Visit website',
+              meetingLink: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${business.subdomain}`
+            });
+          } catch (emailError) {
+            console.error('Error sending interest response email:', emailError);
+            // Don't throw, just log the error so the prospect update still happens
+          }
           
           // Mark prospect as interested
           await supabase
@@ -333,7 +363,90 @@ export const emailResponseHandler = inngest.createFunction(
               status: 'interested',
               last_response_at: new Date().toISOString()
             })
-            .eq('email', responseData.fromEmail);
+            .eq('email', responseData.fromEmail)
+            .eq('business_id', businessId);
+        });
+      }
+
+      // If response is negative or neutral, handle with AI sales agent
+      if (!responseData.isPositive) {
+        await step.run("handle-objection-with-ai", async () => {
+          try {
+            // Import AI sales agent functions
+            const { handleEmailObjection, sendObjectionResponse, scheduleObjectionFollowUp } = await import('@/lib/ai-sales-agent.js');
+            
+            // Get prospect data
+            const { data: prospect, error: prospectError } = await supabase
+              .from('prospects')
+              .select('*')
+              .eq('email', responseData.fromEmail)
+              .eq('business_id', businessId)
+              .single();
+
+            if (prospectError) {
+              console.error('Error fetching prospect data:', prospectError);
+              throw new Error(`Could not fetch prospect data: ${prospectError.message}`);
+            }
+
+            if (!prospect) {
+              console.warn(`Prospect not found: ${responseData.fromEmail} for business ${businessId}`);
+              return;
+            }
+
+            // Handle the objection with AI
+            const objectionResult = await handleEmailObjection(
+              businessId, 
+              prospect, 
+              responseData.text, 
+              emailData.emailId
+            );
+
+            if (!objectionResult || !objectionResult.aiResponse) {
+              console.error('Invalid objection result from AI sales agent');
+              return;
+            }
+
+            // Send AI-generated response if confidence is high enough
+            if (objectionResult.aiResponse.confidence > 0.6) {
+              await sendObjectionResponse(businessId, prospect, objectionResult.aiResponse);
+              
+              // Schedule follow-up
+              await scheduleObjectionFollowUp(
+                businessId, 
+                prospect, 
+                objectionResult.objectionType, 
+                objectionResult.nextAction
+              );
+            } else {
+              // Log for human review if confidence is low
+              await logActivity(businessId, {
+                type: 'email_needs_human_review',
+                icon: '👤',
+                message: `Low confidence objection from ${prospect.name || prospect.email} needs human review`,
+                details: `Objection: "${responseData.text.substring(0, 100)}..."`,
+                metadata: {
+                  prospectEmail: responseData.fromEmail,
+                  objectionText: responseData.text,
+                  confidence: objectionResult.aiResponse.confidence
+                }
+              });
+            }
+          } catch (aiError) {
+            console.error('Error in AI objection handling:', aiError);
+            
+            // Log for human review if AI fails
+            await logActivity(businessId, {
+              type: 'email_needs_human_review',
+              icon: '🚨',
+              message: `AI objection handling failed for ${responseData.fromEmail}`,
+              details: `Error: ${aiError.message}. Original message: "${responseData.text.substring(0, 100)}..."`,
+              metadata: {
+                prospectEmail: responseData.fromEmail,
+                error: aiError.message,
+                originalText: responseData.text
+              }
+            });
+          }
         });
       }
 
@@ -514,3 +627,109 @@ export const weeklyPerformanceReport = inngest.createFunction(
     }
   }
 );
+
+/**
+ * Send response email to interested prospects
+ * @param {string} businessId - Business ID
+ * @param {string} prospectEmail - Prospect's email
+ * @param {Object} business - Business data
+ */
+async function sendInterestResponse(businessId, prospectEmail, business) {
+  try {
+    // Validate environment variables
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY environment variable is required');
+    }
+    
+    if (!process.env.NEXT_PUBLIC_WEBSITE_BASE_URL) {
+      throw new Error('NEXT_PUBLIC_WEBSITE_BASE_URL environment variable is required');
+    }
+
+    if (!process.env.FROM_EMAIL) {
+      throw new Error('FROM_EMAIL environment variable is required');
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
+    const businessUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL}/sites/${business.subdomain}`;
+    const businessName = business.businessName || business.name || 'Our Business';
+    const subject = `Great to hear from you! Here's what you're looking for 🎯`;
+    
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a2b48;">Thanks for your interest!</h2>
+        
+        <p style="font-size: 16px; line-height: 1.6;">
+          I'm excited that you're interested in learning more about ${businessName}!
+        </p>
+        
+        <div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="color: #007bff; margin: 0 0 10px 0;">👆 Next Steps:</h3>
+          <p style="margin: 0; font-size: 16px;">
+            Visit our website to see our offerings and get started:
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${businessUrl}" style="background: linear-gradient(135deg, #007bff 0%, #00b8d9 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold; display: inline-block;">
+            Visit ${businessName} →
+          </a>
+        </div>
+        
+        <p style="color: #666; font-size: 14px;">
+          Have questions? Just reply to this email and I'll get back to you personally.
+        </p>
+        
+        <p style="color: #666; font-size: 14px;">
+          Best regards,<br>
+          ${business.form_data?.name || businessName} Team
+        </p>
+        
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This email was sent by an AI assistant on behalf of ${businessName}
+        </p>
+      </div>
+    `;
+
+    const result = await resend.emails.send({
+      from: process.env.FROM_EMAIL,
+      to: prospectEmail,
+      subject,
+      html: htmlBody,
+      tags: [
+        { name: 'business_id', value: businessId },
+        { name: 'email_type', value: 'interest_response' },
+        { name: 'ai_generated', value: 'true' }
+      ]
+    });
+
+    if (result.error) {
+      throw new Error(`Resend API error: ${result.error.message}`);
+    }
+
+    if (!result.data || !result.data.id) {
+      throw new Error('Invalid response from Resend API - missing email ID');
+    }
+
+    // Log the email send
+    await logActivity(businessId, {
+      type: ActivityTypes.EMAIL_SENT,
+      icon: '🎯',
+      message: `Interest response sent to ${prospectEmail}`,
+      details: `Directed to business website: ${businessUrl}`,
+      metadata: {
+        prospectEmail,
+        businessUrl,
+        emailType: 'interest_response'
+      }
+    });
+
+    console.log(`✅ Interest response sent to ${prospectEmail}`);
+    return { success: true, emailId: result.data?.id };
+
+  } catch (error) {
+    console.error('Error sending interest response:', error);
+    throw error;
+  }
+}

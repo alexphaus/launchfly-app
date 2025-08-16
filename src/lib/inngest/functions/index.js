@@ -16,6 +16,11 @@ export {
 } from './customer-acquisition';
 
 export { 
+  followUpHandler, 
+  followUpScheduler 
+} from './follow-up-handler';
+
+export { 
   growthStrategyOrchestrator,
   customerAcquisitionCampaign,
   coldEmailCampaignOrchestrator,
@@ -37,4 +42,6 @@ export const functions = [
   require('./growth-strategies').coldEmailCampaignOrchestrator,
   require('./growth-strategies').handleColdEmailBatchSent,
   require('./conversion-optimizer').conversionOptimizer,
+  require('./follow-up-handler').followUpHandler,
+  require('./follow-up-handler').followUpScheduler,
 ];

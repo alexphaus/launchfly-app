@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
 import OptimizedHero from '@/components/launchfly-ui/OptimizedHero';
 import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
+import { CartProvider } from '@/hooks/useCart';
 import { 
   getVisitorId, 
   getVisitorSegment, 
@@ -358,14 +359,23 @@ export default async function DynamicWebsite({ params }) {
   // If no layout exists or layout is empty, create a fallback layout
   if (!layout || layout.length === 0) {
     console.log('Creating fallback layout for:', subdomain);
+    
+    // Detect if this is an e-commerce business
+    const isEcommerce = businessData.businessModel === 'ecommerce' || 
+                       businessData.isEcommerce ||
+                       (businessData.products && businessData.products.some(p => p.category || p.sku || p.variants));
+    
     layout = [
       {
         component: 'NavBar',
         props: {
           businessName: businessData.businessName || businessData.name || 'Your Business',
           logo: businessData.logo || '🚀',
-          links: ['About', 'Services', 'Pricing', 'Contact'],
-          ctaText: 'Get Started'
+          links: isEcommerce ? 
+            ['Home', 'Products', 'Categories', 'About', 'Contact'] :
+            ['About', 'Services', 'Pricing', 'Contact'],
+          ctaText: 'Get Started',
+          isEcommerce: isEcommerce
         }
       },
       {
@@ -373,7 +383,7 @@ export default async function DynamicWebsite({ params }) {
         props: {
           title: businessData.tagline || 'Transform Your Vision Into Reality',
           subtitle: `Welcome to ${businessData.businessName || businessData.name || 'Your Business'}`,
-          ctaText: 'Get Started Today'
+          ctaText: isEcommerce ? 'Shop Now' : 'Get Started Today'
         }
       },
       {
@@ -394,11 +404,19 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'TestimonialSlider',
         props: {
-          title: 'What Our Clients Say',
+          title: `What Our ${isEcommerce ? 'Customers' : 'Clients'} Say`,
           testimonials: businessData.testimonials || []
         }
       },
-      {
+      ...(isEcommerce ? [{
+        component: 'EcommerceProductGrid',
+        props: {
+          title: 'Featured Products',
+          subtitle: 'Discover our amazing collection',
+          products: businessData.products || [],
+          categories: [...new Set((businessData.products || []).map(p => p.category).filter(Boolean))]
+        }
+      }] : [{
         component: 'PricingTable',
         props: {
           title: 'Choose Your Plan',
@@ -406,18 +424,18 @@ export default async function DynamicWebsite({ params }) {
             name: product.name,
             price: product.price,
             description: product.description,
-            features: ['Feature 1', 'Feature 2', 'Feature 3'],
+            features: product.features || ['Feature 1', 'Feature 2', 'Feature 3'],
             ctaText: 'Get Started',
             popular: false
           })) || []
         }
-      },
+      }]),
       {
         component: 'CallToAction',
         props: {
-          title: 'Ready to Get Started?',
-          subtitle: 'Join us today and transform your business',
-          ctaText: 'Start Now'
+          title: isEcommerce ? 'Start Shopping Today' : 'Ready to Get Started?',
+          subtitle: isEcommerce ? 'Discover amazing products with fast shipping' : 'Join us today and transform your business',
+          ctaText: isEcommerce ? 'Browse Products' : 'Start Now'
         }
       },
       {
@@ -442,44 +460,72 @@ export default async function DynamicWebsite({ params }) {
   );
 
   return (
-    <ThemedLayout theme={theme}>
-      <div className="dynamic-website">
-        {/* Inject tracking script */}
-        <TrackingScript config={trackingConfig} />
-        
-        {layout.map((section, index) => {
-          // Use OptimizedHero for Hero components
-          if (section.component === 'Hero' && heroVariant) {
-            const personalizedProps = personalizeContent(
-              { ...section.props, ...heroVariant.variant.props },
-              segments,
-              businessData
-            );
+    <CartProvider>
+      <ThemedLayout theme={theme}>
+        <div className="dynamic-website">
+          {/* Inject tracking script */}
+          <TrackingScript config={trackingConfig} />
+          
+          {layout.map((section, index) => {
+            // Use OptimizedHero for Hero components
+            if (section.component === 'Hero' && heroVariant) {
+              const personalizedProps = personalizeContent(
+                { ...section.props, ...heroVariant.variant.props },
+                segments,
+                businessData
+              );
+              
+              return (
+                <OptimizedHero
+                  key={index}
+                  {...personalizedProps}
+                  variant={heroVariant.variant}
+                  segments={segments}
+                />
+              );
+            }
+            
+            // Handle e-commerce product grids
+            if (section.component === 'EcommerceProductGrid') {
+              // Populate products from business data if not already set
+              const props = { ...section.props };
+              if (!props.products || props.products.length === 0) {
+                props.products = businessData.products || [];
+              }
+              
+              // Extract categories from products
+              if (!props.categories || props.categories.length === 0) {
+                const categories = [...new Set(
+                  (props.products || [])
+                    .map(p => p.category)
+                    .filter(Boolean)
+                )];
+                props.categories = categories;
+              }
+              
+              return (
+                <LaunchflyUI.EcommerceProductGrid
+                  key={index}
+                  {...props}
+                />
+              );
+            }
+            
+            const Component = LaunchflyUI[section.component];
+            if (!Component) {
+              console.warn(`Component ${section.component} not found`);
+              return null;
+            }
             
             return (
-              <OptimizedHero
+              <Component
                 key={index}
-                {...personalizedProps}
-                variant={heroVariant.variant}
-                segments={segments}
+                {...section.props}
               />
             );
-          }
-          
-          const Component = LaunchflyUI[section.component];
-          if (!Component) {
-            console.warn(`Component ${section.component} not found`);
-            return null;
-          }
-          
-          return (
-            <Component
-              key={index}
-              {...section.props}
-            />
-          );
-        })}
-      </div>
-    </ThemedLayout>
+          })}
+        </div>
+      </ThemedLayout>
+    </CartProvider>
   );
 }

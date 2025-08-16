@@ -303,8 +303,12 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
 async function generateWebsite(opportunity) {
   try {
     console.log('Starting website generation for:', opportunity.businessName);
+    
+    // Determine if this is an e-commerce business
+    const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
+    
     const prompt = `
-      Create a professional website theme and layout for this business:
+      Create a professional website theme and layout for this ${isEcommerce ? 'e-commerce' : 'service'} business:
       ${JSON.stringify(opportunity)}
       
       IMPORTANT: For Hero backgrounds, create stunning visual elements using CSS:
@@ -319,11 +323,19 @@ async function generateWebsite(opportunity) {
       - Include specific details that make them believable
       - Show clear value provided by the business
       
-      IMPORTANT: For pricing plans, ensure each plan has:
-      - Realistic pricing for the business type
-      - Clear feature differentiation
-      - Appropriate call-to-action text (ctaText) like "Get Started", "Start Free Trial", "Contact Sales"
-      - Mark the middle plan as popular (popular: true)
+      ${isEcommerce ? `
+      IMPORTANT: For e-commerce layout, include:
+      - EcommerceProductGrid component instead of PricingTable
+      - Navigation with cart functionality
+      - Product categories and filtering
+      - Customer reviews and ratings
+      - Shopping-focused features
+      ` : `
+      IMPORTANT: For service business, include:
+      - PricingTable with service packages
+      - Professional service-focused content
+      - Clear value propositions
+      `}
       
       Return a JSON object with:
       {
@@ -345,8 +357,9 @@ async function generateWebsite(opportunity) {
             "props": {
               "businessName": "Name",
               "logo": "Emoji",
-              "links": ["About", "Services", "Pricing", "Contact"],
-              "ctaText": "Get Started"
+              "links": ${isEcommerce ? '["Home", "Products", "Categories", "About", "Contact"]' : '["Home", "About", "Services", "Pricing", "Contact"]'},
+              "ctaText": "Get Started",
+              "isEcommerce": ${isEcommerce}
             }
           },
           {
@@ -354,11 +367,22 @@ async function generateWebsite(opportunity) {
             "props": {
               "title": "Hero title based on business",
               "subtitle": "Compelling subtitle",
-              "ctaText": "Get Started",
-              "ctaLink": "#contact",
+              "ctaText": "${isEcommerce ? 'Shop Now' : 'Get Started'}",
+              "ctaLink": "${isEcommerce ? '#products' : '#contact'}",
               "background": "Use the heroBackground from theme for stunning CSS-only visuals"
             }
           },
+          ${isEcommerce ? `
+          {
+            "component": "EcommerceProductGrid",
+            "props": {
+              "title": "Featured Products",
+              "subtitle": "Discover our best-selling items",
+              "products": [], // Will be populated with generated products
+              "categories": [] // Will be populated based on products
+            }
+          },
+          ` : ''}
           {
             "component": "FeatureGrid", 
             "props": {
@@ -375,7 +399,7 @@ async function generateWebsite(opportunity) {
           {
             "component": "TestimonialSlider",
             "props": {
-              "title": "What Our Clients Say",
+              "title": "What Our ${isEcommerce ? 'Customers' : 'Clients'} Say",
               "testimonials": [
                 {
                   "name": "First Name + Last Name",
@@ -383,24 +407,11 @@ async function generateWebsite(opportunity) {
                   "content": "Specific testimonial about results achieved with this business - include numbers, timeframes, or specific benefits. Make it realistic and believable for this business type.",
                   "avatar": "👨‍💼 or 👩‍💼 or similar professional emoji",
                   "rating": 5
-                },
-                {
-                  "name": "Different Name",
-                  "role": "Different relevant job title", 
-                  "content": "Another specific testimonial highlighting different benefits of this business. Include specific details that show real value.",
-                  "avatar": "👩‍� or 👨‍🚀 or other professional emoji",
-                  "rating": 5
-                },
-                {
-                  "name": "Third Name",
-                  "role": "Third relevant role",
-                  "content": "Third testimonial focusing on another key benefit or outcome customers get from this business.",
-                  "avatar": "Different professional emoji", 
-                  "rating": 5
                 }
               ]
             }
           },
+          ${!isEcommerce ? `
           {
             "component": "PricingTable",
             "props": {
@@ -419,48 +430,28 @@ async function generateWebsite(opportunity) {
                   ],
                   "ctaText": "Get Started",
                   "popular": false
-                },
-                {
-                  "name": "Premium Plan Name",
-                  "price": "$XX", 
-                  "period": "month",
-                  "description": "Most popular choice with additional features",
-                  "features": [
-                    "All Basic features",
-                    "Premium feature 1",
-                    "Premium feature 2",
-                    "Premium feature 3"
-                  ],
-                  "ctaText": "Start Free Trial",
-                  "popular": true
-                },
-                {
-                  "name": "Enterprise Plan Name",
-                  "price": "$XX",
-                  "period": "month",
-                  "description": "For serious businesses",
-                  "features": [
-                    "All Premium features",
-                    "Enterprise feature 1",
-                    "Enterprise feature 2"
-                  ],
-                  "ctaText": "Contact Sales", 
-                  "popular": false
                 }
               ]
             }
           },
+          ` : ''}
           {
             "component": "CallToAction",
             "props": {
-              "title": "Ready to Get Started?",
-              "ctaText": "Start Now"
+              "title": "${isEcommerce ? 'Start Shopping Today' : 'Ready to Get Started?'}",
+              "subtitle": "${isEcommerce ? 'Discover amazing products with fast shipping' : 'Join thousands of satisfied customers today'}",
+              "ctaText": "${isEcommerce ? 'Browse Products' : 'Start Now'}"
             }
           },
           {
             "component": "Footer",
             "props": {
-              "businessName": "Use business name"
+              "companyName": "Business Name",
+              "links": [
+                { "href": "#privacy", "label": "Privacy Policy" },
+                { "href": "#terms", "label": "Terms of Service" },
+                { "href": "#shipping", "label": "${isEcommerce ? 'Shipping Info' : 'Support'}" }
+              ]
             }
           }
         ]
@@ -538,24 +529,59 @@ async function createProducts(opportunity) {
     }
 
     console.log('Starting product creation for:', opportunity.businessName);
+    
+    // Determine if this is an e-commerce business
+    const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
+    
     const prompt = `
-      Create 3 compelling product or service offerings for this business:
+      Create ${isEcommerce ? '6-8' : '3'} compelling ${isEcommerce ? 'physical products' : 'service offerings'} for this business:
       ${JSON.stringify(opportunity)}
       
-      Each product should have:
-      - A clear name
-      - A compelling description
-      - An appropriate price point for the target market
+      ${isEcommerce ? `
+      For e-commerce products, each product should have:
+      - A specific product name
+      - An appropriate price for physical goods
+      - A detailed product description
+      - Product category
+      - Available variants (colors, sizes, etc.) if applicable
+      - Stock status
+      - Product ratings (4.0-5.0)
+      - High-quality product features
+      - SKU identifier
       
-      Return as a JSON object with a "products" array containing objects with name, price, and description.
-      Example format:
+      Return as a JSON object with a "products" array containing objects with:
       {
-        "products": [
-          {"name": "Product Name", "price": "$99", "description": "Product description"},
-          {"name": "Product Name 2", "price": "$199", "description": "Product description 2"},
-          {"name": "Product Name 3", "price": "$299", "description": "Product description 3"}
-        ]
+        "name": "Product Name",
+        "price": "$XX.XX",
+        "originalPrice": "$XX.XX", // if on sale
+        "description": "Detailed product description",
+        "category": "product category",
+        "sku": "PRODUCT-SKU",
+        "inStock": true,
+        "rating": 4.5,
+        "reviewCount": 127,
+        "images": ["product-image-1.jpg"], // placeholder image names
+        "variants": [
+          {"name": "Black", "color": "#000000", "available": true},
+          {"name": "White", "color": "#ffffff", "available": true}
+        ],
+        "features": ["Feature 1", "Feature 2", "Feature 3"],
+        "sale": false
       }
+      ` : `
+      For service offerings, each should have:
+      - A clear service name
+      - An appropriate price point for the target market
+      - A compelling description
+      
+      Return as a JSON object with a "products" array containing objects with:
+      {
+        "name": "Service Name",
+        "price": "$XXX",
+        "description": "Service description",
+        "features": ["Feature 1", "Feature 2", "Feature 3"]
+      }
+      `}
     `;
 
     console.log('Calling OpenAI for product creation...');
@@ -899,6 +925,7 @@ async function handleLaunchError(sessionId, businessId) {
  */
 function generateDefaultLayout(opportunity, cssBackground = null) {
   const background = cssBackground || getBusinessCSSBackground(opportunity.niche, opportunity.businessType);
+  const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
   
   return [
     {
@@ -906,8 +933,11 @@ function generateDefaultLayout(opportunity, cssBackground = null) {
       props: {
         businessName: opportunity.businessName || 'Your Business',
         logo: '🚀',
-        links: ['About', 'Services', 'Pricing', 'Contact'],
-        ctaText: 'Get Started'
+        links: isEcommerce ? 
+          ['Home', 'Products', 'Categories', 'About', 'Contact'] :
+          ['About', 'Services', 'Pricing', 'Contact'],
+        ctaText: 'Get Started',
+        isEcommerce: isEcommerce
       }
     },
     {
@@ -915,7 +945,7 @@ function generateDefaultLayout(opportunity, cssBackground = null) {
       props: {
         title: opportunity.solution || 'Transform Your Business',
         subtitle: opportunity.problem || 'Professional solutions tailored to your needs',
-        ctaText: 'Get Started Today',
+        ctaText: isEcommerce ? 'Shop Now' : 'Get Started Today',
         background: background
       }
     },
@@ -927,22 +957,30 @@ function generateDefaultLayout(opportunity, cssBackground = null) {
           {
             icon: '⚡',
             title: 'Fast & Reliable',
-            description: 'Quick turnaround times with consistent quality results'
+            description: isEcommerce ? 'Quick shipping with quality products' : 'Quick turnaround times with consistent quality results'
           },
           {
             icon: '🎯',
-            title: 'Targeted Solutions',
-            description: 'Customized approaches designed for your specific needs'
+            title: isEcommerce ? 'Curated Selection' : 'Targeted Solutions',
+            description: isEcommerce ? 'Hand-picked products for quality and value' : 'Customized approaches designed for your specific needs'
           },
           {
             icon: '🚀',
-            title: 'Growth Focused',
-            description: 'Strategies that scale with your business success'
+            title: isEcommerce ? 'Customer Focused' : 'Growth Focused',
+            description: isEcommerce ? 'Exceptional service and support' : 'Strategies that scale with your business success'
           }
         ]
       }
     },
-    {
+    ...(isEcommerce ? [{
+      component: 'EcommerceProductGrid',
+      props: {
+        title: 'Featured Products',
+        subtitle: 'Discover our amazing collection',
+        products: [], // Will be populated with generated products
+        categories: []
+      }
+    }] : [{
       component: 'PricingTable',
       props: {
         title: 'Our Packages',
@@ -967,13 +1005,13 @@ function generateDefaultLayout(opportunity, cssBackground = null) {
           }
         ]
       }
-    },
+    }]),
     {
       component: 'CallToAction',
       props: {
-        title: 'Ready to Get Started?',
-        subtitle: 'Join thousands of satisfied customers today',
-        ctaText: 'Start Now'
+        title: isEcommerce ? 'Start Shopping Today' : 'Ready to Get Started?',
+        subtitle: isEcommerce ? 'Discover amazing products with fast shipping' : 'Join thousands of satisfied customers today',
+        ctaText: isEcommerce ? 'Browse Products' : 'Start Now'
       }
     },
     {

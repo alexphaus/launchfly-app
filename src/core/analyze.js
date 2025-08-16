@@ -124,7 +124,7 @@ export async function analyzeOpportunity(userData, sessionId) {
       
       Name: ${name}
       Skills/Interests: ${skills}
-      Business Type: ${businessType}
+      Business Type: ${businessType || 'Not specified'}
       Goal: ${goal}
       Preferences: ${preferences || 'None'}
       
@@ -135,6 +135,14 @@ export async function analyzeOpportunity(userData, sessionId) {
       4. Has low competition or a unique angle
       5. Can generate revenue quickly
       
+      IMPORTANT: Determine the optimal business model based on the user's skills and preferences:
+      - "ecommerce": For physical products, retail, inventory-based businesses
+      - "service": For consulting, agencies, professional services
+      - "saas": For software products and digital tools
+      - "content": For courses, coaching, digital products
+      - "marketplace": For platforms connecting buyers/sellers
+      - "local": For location-based services
+      
       Return a JSON object with:
       {
         "businessName": "Creative and memorable business name",
@@ -144,7 +152,9 @@ export async function analyzeOpportunity(userData, sessionId) {
         "uniqueAdvantage": "What makes this opportunity special",
         "profitPotential": "Estimated monthly revenue range",
         "validationStrategy": "How to quickly test this business idea",
-        "confidence": 0.85 // 0-1 score of how promising this opportunity is
+        "confidence": 0.85, // 0-1 score of how promising this opportunity is
+        "businessModel": "ecommerce|service|saas|content|marketplace|local",
+        "isEcommerce": true/false // true if this is a physical product business
       }
     `;
 

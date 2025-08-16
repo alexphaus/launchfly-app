@@ -2,22 +2,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useCart } from '@/hooks/useCart';
 import Link from 'next/link';
 
-export default function PurchaseSuccess({ params }) {
+export default function PurchaseSuccess() {
+  const params = useParams();
   const [sessionData, setSessionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
+  const { clearCart } = useCart || (() => ({ clearCart: () => {} }));
 
   useEffect(() => {
     if (sessionId) {
+      // Clear the cart since purchase was successful
+      if (clearCart) {
+        clearCart();
+      }
+      
       // You could fetch session details from Stripe if needed
       // For now, we'll just show a success message
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, clearCart]);
 
   if (loading) {
     return (
@@ -73,19 +81,19 @@ export default function PurchaseSuccess({ params }) {
         {/* Action Buttons */}
         <div className="space-y-3">
           <Link
-            href={`/sites/${params.subdomain}`}
+            href={`/${params.subdomain}`}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-block"
           >
-            Return to Website
+            Continue Shopping
           </Link>
           
           <p className="text-sm text-gray-500">
             Questions? Contact support at{' '}
             <a 
-              href="mailto:support@launchfly.ai" 
+              href={`/${params.subdomain}#contact`}
               className="text-blue-600 hover:underline"
             >
-              support@launchfly.ai
+              our support team
             </a>
           </p>
         </div>

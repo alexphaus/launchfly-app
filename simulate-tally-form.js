@@ -9,8 +9,8 @@
  * Usage: node simulate-tally-form.js [email] [name]
  */
 
-import { nanoid } from 'nanoid';
-import { exec } from 'child_process';
+const { nanoid } = require('nanoid');
+const { exec } = require('child_process');
 
 // Configuration
 const LOCAL_URL = 'http://localhost:3000';

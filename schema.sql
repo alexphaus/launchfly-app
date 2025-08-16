@@ -58,6 +58,9 @@ CREATE TABLE public.businesses (
   email_ramp_stage integer DEFAULT 0,
   manual_approval_required boolean DEFAULT true,
   approved_at timestamp with time zone,
+  ai_objections_handled integer DEFAULT 0,
+  ai_response_rate numeric DEFAULT 0.00,
+  ai_conversation_count integer DEFAULT 0,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -79,9 +82,21 @@ CREATE TABLE public.clicks (
   dest_url text NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT clicks_pkey PRIMARY KEY (id),
-  CONSTRAINT clicks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
   CONSTRAINT clicks_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id),
+  CONSTRAINT clicks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
   CONSTRAINT clicks_email_id_fkey FOREIGN KEY (email_id) REFERENCES public.emails(id)
+);
+CREATE TABLE public.email_conversations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  prospect_email text NOT NULL,
+  message_type text NOT NULL CHECK (message_type = ANY (ARRAY['initial'::text, 'objection'::text, 'ai_response'::text, 'follow_up'::text])),
+  content text NOT NULL,
+  objection_type text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT email_conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT email_conversations_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.email_outreach (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -109,8 +124,8 @@ CREATE TABLE public.email_replies (
   sentiment text,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT email_replies_pkey PRIMARY KEY (id),
-  CONSTRAINT email_replies_email_id_fkey FOREIGN KEY (email_id) REFERENCES public.emails(id),
-  CONSTRAINT email_replies_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+  CONSTRAINT email_replies_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT email_replies_email_id_fkey FOREIGN KEY (email_id) REFERENCES public.emails(id)
 );
 CREATE TABLE public.emails (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -128,6 +143,19 @@ CREATE TABLE public.emails (
   CONSTRAINT emails_pkey PRIMARY KEY (id),
   CONSTRAINT emails_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.campaigns(id),
   CONSTRAINT emails_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.follow_up_tasks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  prospect_email text NOT NULL,
+  objection_type text,
+  follow_up_date timestamp with time zone NOT NULL,
+  status text NOT NULL DEFAULT 'scheduled'::text CHECK (status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'cancelled'::text, 'failed'::text])),
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT follow_up_tasks_pkey PRIMARY KEY (id),
+  CONSTRAINT follow_up_tasks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.growth_experiments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -226,6 +254,10 @@ CREATE TABLE public.prospects (
   contacted_at timestamp with time zone,
   last_response_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
+  last_objection_type text,
+  last_ai_response text,
+  objection_count integer DEFAULT 0,
+  conversation_count integer DEFAULT 0,
   CONSTRAINT prospects_pkey PRIMARY KEY (id),
   CONSTRAINT prospects_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
@@ -256,8 +288,8 @@ CREATE TABLE public.sessions (
   inngest_job_id uuid,
   completed_at timestamp with time zone,
   CONSTRAINT sessions_pkey PRIMARY KEY (id),
-  CONSTRAINT sessions_inngest_job_id_fkey FOREIGN KEY (inngest_job_id) REFERENCES public.inngest_jobs(id),
-  CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+  CONSTRAINT sessions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT sessions_inngest_job_id_fkey FOREIGN KEY (inngest_job_id) REFERENCES public.inngest_jobs(id)
 );
 CREATE TABLE public.suppression_list (
   email text NOT NULL,

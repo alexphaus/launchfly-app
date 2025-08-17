@@ -168,6 +168,31 @@ export async function POST(request) {
 
       console.log('Sale processing completed successfully');
 
+      // 🚀 TRIGGER FULFILLMENT SYSTEM
+      // After sale is recorded, automatically start delivering value to customer
+      try {
+        console.log('🎯 Triggering fulfillment for sale:', sale.id);
+        
+        const fulfillmentResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/fulfillment/trigger`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            saleId: sale.id
+          })
+        });
+        
+        if (fulfillmentResponse.ok) {
+          console.log('✅ Fulfillment triggered successfully');
+        } else {
+          console.error('❌ Failed to trigger fulfillment:', await fulfillmentResponse.text());
+        }
+      } catch (fulfillmentError) {
+        console.error('❌ Error triggering fulfillment:', fulfillmentError);
+        // Don't fail the webhook if fulfillment fails - we can retry later
+      }
+
     } catch (error) {
       console.error('Error processing sale:', error);
       console.error('Error details:', {

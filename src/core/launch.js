@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { nanoid } from 'nanoid';
 import { getCuratedOffers } from '../offers/library';
+import { generateProductImagesBatch } from '../lib/product-image-generator';
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,

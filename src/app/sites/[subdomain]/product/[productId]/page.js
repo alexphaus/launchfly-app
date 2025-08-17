@@ -182,10 +182,29 @@ export default function ProductPage() {
           {/* Product Image/Icon */}
           <div className="bg-white rounded-2xl p-12 shadow-lg flex items-center justify-center">
             <div className="text-center">
-              <div className="text-8xl mb-6">
-                {product.icon || '📦'}
-              </div>
-              <div className="space-y-2">
+              {/* Show AI-generated image if available, otherwise fallback to icon */}
+              {product.images && product.images.length > 0 ? (
+                <div className="w-full max-w-md mx-auto">
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    className="w-full h-auto rounded-xl shadow-lg object-cover"
+                    onError={(e) => {
+                      // Fallback to icon if image fails to load
+                      e.target.style.display = 'none';
+                      e.target.nextElementSibling.style.display = 'block';
+                    }}
+                  />
+                  <div className="text-8xl mb-6" style={{ display: 'none' }}>
+                    {product.icon || '📦'}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-8xl mb-6">
+                  {product.icon || '📦'}
+                </div>
+              )}
+              <div className="space-y-2 mt-6">
                 <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                   {businessData.name}
                 </div>

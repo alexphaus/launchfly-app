@@ -203,6 +203,54 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       const updateResult = await updateBusinessProgress(businessId, { products });
       console.log('Product update result:', updateResult);
       
+      // For e-commerce businesses, automatically generate product images
+      const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
+      if (isEcommerce && products && products.length > 0) {
+        console.log('🎨 Detected e-commerce business - automatically generating product images...');
+        
+        try {
+          // Update progress to show we're generating images
+          await supabase
+            .from('sessions')
+            .update({ progress: 68 })
+            .eq('id', sessionId);
+          
+          // Generate images for all products
+          const imageResults = await generateProductImagesBatch(products, businessData);
+          
+          // Update products with generated image URLs
+          const updatedProducts = products.map(product => {
+            const productId = product.id || product.name.toLowerCase().replace(/\s+/g, '-');
+            const result = imageResults.find(r => r.productId === productId);
+            
+            if (result && result.images.length > 0) {
+              return {
+                ...product,
+                images: result.images,
+                hasGeneratedImages: true,
+                imageGeneratedAt: new Date().toISOString()
+              };
+            }
+            
+            return product;
+          });
+          
+          // Update business data with images
+          businessData.products = updatedProducts;
+          
+          // Save updated products with images to database
+          await updateBusinessProgress(businessId, { products: updatedProducts });
+          
+          const successCount = imageResults.filter(r => r.success).length;
+          console.log(`✅ Successfully generated images for ${successCount}/${products.length} products`);
+          
+        } catch (imageError) {
+          console.error('⚠️ Failed to generate product images during business creation:', imageError);
+          // Don't fail the entire business creation if image generation fails
+          console.log('Continuing business creation without images - can be generated later via dashboard');
+        }
+      }
+      
       // Also update session progress after successful product creation
       await supabase
         .from('sessions')

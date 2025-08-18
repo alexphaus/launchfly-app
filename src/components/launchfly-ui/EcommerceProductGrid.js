@@ -1,9 +1,10 @@
 // src/components/launchfly-ui/EcommerceProductGrid.js
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCart } from '@/hooks/useCart';
 import EcommerceProductCard from './EcommerceProductCard';
+import { preloadImages, extractProductImageUrls } from '@/lib/image-utils';
 
 export default function EcommerceProductGrid({ 
   title = "Our Products",
@@ -14,6 +15,35 @@ export default function EcommerceProductGrid({
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('name');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Preload product images immediately when component mounts or products change
+  useEffect(() => {
+    if (products && products.length > 0) {
+      const imageUrls = extractProductImageUrls(products);
+      if (imageUrls.length > 0) {
+        console.log('Aggressively preloading product images:', imageUrls.length);
+        
+        // Preload images immediately with high priority
+        imageUrls.forEach((url, index) => {
+          const img = new Image();
+          img.fetchPriority = 'high';
+          img.loading = 'eager';
+          img.src = url;
+          
+          // For the first few images, force them into cache with a tiny timeout
+          if (index < 4) {
+            setTimeout(() => {
+              const link = document.createElement('link');
+              link.rel = 'preload';
+              link.as = 'image';
+              link.href = url;
+              document.head.appendChild(link);
+            }, index * 10);
+          }
+        });
+      }
+    }
+  }, [products]);
 
   // Filter products based on category and search
   const filteredProducts = products

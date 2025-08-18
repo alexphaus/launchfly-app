@@ -1,19 +1,30 @@
 // src/components/launchfly-ui/ProductCard.js
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { isValidImageUrl, getProductImageUrl } from '@/lib/image-utils';
 
 export default function ProductCard({ 
   product,
   featured = false 
 }) {
+  const [imageError, setImageError] = useState(false);
   const params = useParams();
   
   if (!product) return null;
 
   const productId = product.id || product.name.toLowerCase().replace(/\s+/g, '-');
-  const productUrl = `/sites/${params.subdomain}/product/${productId}`;
+  const productUrl = `/sites/${params.subdomain}/product/${encodeURIComponent(productId)}`;
+
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
+  // Check if we have a valid image URL
+  const productImageUrl = getProductImageUrl(product);
+  const hasValidImage = !!productImageUrl && !imageError;
 
   return (
     <div 
@@ -36,9 +47,22 @@ export default function ProductCard({
 
       {/* Product Icon/Image */}
       <div className="text-center mb-6">
-        <div className="text-4xl mb-3">
-          {product.icon || '📦'}
-        </div>
+        {hasValidImage ? (
+          <div className="w-24 h-24 mx-auto mb-3 relative overflow-hidden rounded-lg">
+            <img
+              src={productImageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              onError={handleImageError}
+              loading="eager"
+              decoding="async"
+            />
+          </div>
+        ) : (
+          <div className="text-4xl mb-3">
+            {product.icon || product.emoji || '📦'}
+          </div>
+        )}
         <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-dark, #1f2937)' }}>
           {product.name}
         </h3>

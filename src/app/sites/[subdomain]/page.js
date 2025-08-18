@@ -3,6 +3,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
 import OptimizedHero from '@/components/launchfly-ui/OptimizedHero';
+import ImagePreloader from '@/components/ImagePreloader';
 import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
 import { CartProvider } from '@/hooks/useCart';
 import { 
@@ -465,6 +466,11 @@ export default async function DynamicWebsite({ params }) {
         <div className="dynamic-website">
           {/* Inject tracking script */}
           <TrackingScript config={trackingConfig} />
+          
+          {/* Aggressive image preloading for e-commerce products */}
+          {businessData.products && businessData.products.length > 0 && (
+            <ImagePreloader products={businessData.products} />
+          )}
           
           {layout.map((section, index) => {
             // Use OptimizedHero for Hero components

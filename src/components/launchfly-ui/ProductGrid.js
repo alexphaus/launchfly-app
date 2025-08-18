@@ -1,7 +1,9 @@
 // src/components/launchfly-ui/ProductGrid.js
 'use client';
 
+import { useEffect } from 'react';
 import ProductCard from './ProductCard';
+import { preloadImages, extractProductImageUrls } from '@/lib/image-utils';
 
 export default function ProductGrid({ 
   title = "Our Products",
@@ -57,6 +59,17 @@ export default function ProductGrid({
   ];
 
   const displayProducts = products.length > 0 ? products : defaultProducts;
+
+  // Preload product images when component mounts or products change
+  useEffect(() => {
+    if (displayProducts && displayProducts.length > 0) {
+      const imageUrls = extractProductImageUrls(displayProducts);
+      if (imageUrls.length > 0) {
+        console.log('Preloading product images in grid:', imageUrls);
+        preloadImages(imageUrls);
+      }
+    }
+  }, [displayProducts]);
 
   if (displayProducts.length === 0) {
     return null;

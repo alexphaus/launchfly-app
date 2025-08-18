@@ -5,9 +5,10 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '@/hooks/useCart';
+import { isValidImageUrl, getProductImageUrl } from '@/lib/image-utils';
 
 export default function EcommerceProductCard({ product }) {
-  const [isImageLoading, setIsImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
   const [showQuickView, setShowQuickView] = useState(false);
   const { addToCart } = useCart();
   const params = useParams();
@@ -15,7 +16,7 @@ export default function EcommerceProductCard({ product }) {
   if (!product) return null;
 
   const productId = product.id || product.name.toLowerCase().replace(/\s+/g, '-');
-  const productUrl = `/sites/${params.subdomain}/product/${productId}`;
+  const productUrl = `/sites/${params.subdomain}/product/${encodeURIComponent(productId)}`;
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -33,6 +34,14 @@ export default function EcommerceProductCard({ product }) {
       button.style.backgroundColor = '';
     }, 1500);
   };
+
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
+  // Check if we have a valid image URL
+  const productImageUrl = getProductImageUrl(product);
+  const hasValidImage = !!productImageUrl && !imageError;
 
   const renderStars = (rating) => {
     const stars = [];
@@ -106,17 +115,18 @@ export default function EcommerceProductCard({ product }) {
 
       <Link href={productUrl} className="block">
         {/* Product Image */}
-        <div className="aspect-square overflow-hidden bg-gray-100">
-          {product.images && product.images.length > 0 ? (
+        <div className="aspect-square overflow-hidden bg-gray-100 relative">
+          {hasValidImage ? (
             <img
-              src={product.images[0]}
+              src={productImageUrl}
               alt={product.name}
-              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-                isImageLoading ? 'opacity-0' : 'opacity-100'
-              }`}
-              onLoad={() => setIsImageLoading(false)}
+              className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
+              onError={handleImageError}
+              loading="eager"
+              decoding="async"
             />
           ) : (
+            /* Fallback for no image or error */
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
               <span className="text-6xl">
                 {product.icon || product.emoji || '📦'}

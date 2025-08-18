@@ -26,15 +26,19 @@ export default function ProductPage() {
   async function loadBusinessAndProduct() {
     try {
       const subdomain = await params.subdomain;
-      const productId = await params.productId;
+      const rawProductId = await params.productId;
+      
+      // URL decode the product ID to handle special characters like &
+      const productId = decodeURIComponent(rawProductId);
 
       // Get business data
       const { data: business, error: businessError } = await supabase
         .from('businesses')
         .select('*')
         .eq('subdomain', subdomain)
-        .eq('status', 'ready')
         .single();
+
+      console.log('Business lookup result:', { business: business ? 'found' : 'not found', error: businessError });
 
       if (businessError || !business) {
         console.error('Business not found:', businessError);
@@ -48,11 +52,23 @@ export default function ProductPage() {
       const businessContent = business.business_data;
       let foundProduct = null;
 
+      console.log('Looking for product:', productId);
+      console.log('Available products:', businessContent?.products?.map(p => ({
+        name: p.name,
+        id: p.id || p.name.toLowerCase().replace(/\s+/g, '-'),
+      })));
+
       // Look for products in different places in the business data
       if (businessContent?.products && Array.isArray(businessContent.products)) {
         foundProduct = businessContent.products.find(p => {
           const pId = p.id || p.name.toLowerCase().replace(/\s+/g, '-');
           const pName = p.name.toLowerCase().replace(/\s+/g, '-');
+          console.log('Comparing:', {
+            searchingFor: productId,
+            productId: pId,
+            productName: pName,
+            originalName: p.name
+          });
           return pId === productId || pName === productId || p.name === productId;
         });
       }

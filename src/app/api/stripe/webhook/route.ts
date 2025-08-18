@@ -14,7 +14,8 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
-  const sig = headers().get('stripe-signature') as string;
+  const headersList = await headers();
+  const sig = headersList.get('stripe-signature') as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
   let event;

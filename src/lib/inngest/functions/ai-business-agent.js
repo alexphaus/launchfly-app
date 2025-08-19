@@ -533,11 +533,3 @@ async function implementCompetitiveAction(businessId, action) {
 async function implementStrategicAction(businessId, action) {
   // Implementation for strategic actions
 }
-
-export {
-  hourlyOptimization,
-  dailyMarketResearch,
-  weeklyCompetitorAnalysis,
-  monthlyStrategyReview,
-  performanceMonitor
-};

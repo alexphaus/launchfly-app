@@ -1,5 +1,6 @@
 // src/app/api/generate/product-images/route.js
 import { generateProductImagesBatch } from '@/lib/product-image-generator';
+import { generateAndStoreProductImagesBatch, migrateExpiredImages } from '@/lib/product-image-storage';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -9,9 +10,16 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const { businessId, productIds, generateAll = false } = await request.json();
+    const { businessId, productIds, generateAll = false, migrateExpired = false } = await request.json();
     
     console.log('🎨 Starting product image generation for business:', businessId);
+    
+    // Handle migration of expired images
+    if (migrateExpired) {
+      console.log('🔄 Migrating expired images...');
+      const migrationResult = await migrateExpiredImages(businessId);
+      return Response.json(migrationResult);
+    }
     
     // Get business data
     const { data: business, error: businessError } = await supabase
@@ -37,10 +45,10 @@ export async function POST(request) {
       return Response.json({ error: 'No products found to generate images for' }, { status: 400 });
     }
     
-    console.log('📸 Generating images for', products.length, 'products');
+    console.log('📸 Generating and storing images for', products.length, 'products');
     
-    // Generate images for all products
-    const imageResults = await generateProductImagesBatch(products, business.business_data);
+    // Generate images with automatic storage
+    const imageResults = await generateAndStoreProductImagesBatch(products, business.business_data, businessId);
     
     // Update products with generated image URLs
     const updatedProducts = products.map(product => {
@@ -52,7 +60,8 @@ export async function POST(request) {
           ...product,
           images: result.images,
           hasGeneratedImages: true,
-          imageGeneratedAt: new Date().toISOString()
+          imageGeneratedAt: new Date().toISOString(),
+          imagesPermanentlyStored: result.stored || false
         };
       }
       
@@ -81,21 +90,24 @@ export async function POST(request) {
     // Calculate success metrics
     const successCount = imageResults.filter(r => r.success).length;
     const failureCount = imageResults.length - successCount;
+    const storedCount = imageResults.filter(r => r.stored).length;
     
     console.log('✅ Image generation completed:', {
       total: imageResults.length,
       successful: successCount,
-      failed: failureCount
+      failed: failureCount,
+      stored: storedCount
     });
     
     return Response.json({
       success: true,
-      message: `Generated images for ${successCount} products`,
+      message: `Generated images for ${successCount} products (${storedCount} stored permanently)`,
       results: imageResults,
       summary: {
         total: imageResults.length,
         successful: successCount,
-        failed: failureCount
+        failed: failureCount,
+        stored: storedCount
       },
       updatedProducts
     });

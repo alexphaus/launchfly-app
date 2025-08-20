@@ -625,8 +625,11 @@ async function storeContent(content, saleId, contentType) {
     return null;
   }
   
-  // Return access link
-  return `${process.env.NEXT_PUBLIC_BASE_URL}/fulfillment/${data.id}`;
+  // Return access link - use local URL for development
+  const baseUrl = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:3000' 
+    : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
+  return `${baseUrl}/fulfillment/${data.id}`;
 }
 
 /**

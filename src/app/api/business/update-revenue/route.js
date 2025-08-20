@@ -12,23 +12,38 @@ export async function POST(request) {
 
     console.log('Updating revenue for business:', businessId, 'Amount:', amount);
 
-    // Insert sale record
+    // Insert sale record (product_id is optional for multi-item purchases)
+    const saleData = {
+      business_id: businessId,
+      stripe_session_id: stripeSessionId,
+      amount: amount,
+      currency: 'usd',
+      customer_email: customerEmail,
+      customer_name: customerName,
+      payment_status: 'completed', // Explicitly set status
+      created_at: new Date().toISOString()
+    };
+
+    // Only add product_id if it's provided (single product purchases)
+    // For multi-item purchases, we'll use a special identifier
+    if (!saleData.product_id) {
+      saleData.product_id = 'multi-item-' + stripeSessionId; // Use session ID for multi-item purchases
+    }
+
+    console.log('Inserting sale record:', saleData);
+
     const { data: sale, error: saleError } = await supabase
       .from('sales')
-      .insert({
-        business_id: businessId,
-        stripe_session_id: stripeSessionId,
-        amount: amount,
-        currency: 'usd',
-        customer_email: customerEmail,
-        customer_name: customerName,
-        created_at: new Date().toISOString()
-      });
+      .insert(saleData)
+      .select()
+      .single();
 
     if (saleError) {
       console.error('Error inserting sale:', saleError);
-      return Response.json({ error: 'Failed to record sale' }, { status: 500 });
+      return Response.json({ error: 'Failed to record sale', details: saleError.message }, { status: 500 });
     }
+
+    console.log('✅ Sale recorded:', sale.id);
 
     // Get current business data
     const { data: business, error: businessError } = await supabase

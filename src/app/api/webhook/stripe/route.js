@@ -64,37 +64,81 @@ export async function POST(request) {
         throw new Error('Missing business_id in metadata');
       }
       
-      if (!metadata.product_id) {
-        throw new Error('Missing product_id in metadata');
+      // Check if this is a single product or multi-item purchase
+      const isMultiItem = metadata.items_count && parseInt(metadata.items_count) > 1;
+      
+      if (!isMultiItem && !metadata.product_id) {
+        throw new Error('Missing product_id in metadata for single product purchase');
       }
       
-      // Record the sale in database - match your actual schema
-      const saleData = {
-        business_id: metadata.business_id,
-        product_id: metadata.product_id,
-        amount: session.amount_total / 100, // Convert from cents
-        currency: 'usd',
-        customer_email: session.customer_details?.email || metadata.customer_email,
-        customer_name: session.customer_details?.name || metadata.customer_name || 'Unknown',
-        stripe_session_id: session.id,
-        payment_status: 'completed'
-      };
+      let saleRecords = [];
+      
+      if (isMultiItem) {
+        // Handle multi-item purchase
+        console.log('Processing multi-item purchase with', metadata.items_count, 'items');
+        
+        // For multi-item purchases, we need to retrieve the line items from Stripe
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+          expand: ['data.price.product']
+        });
+        
+        // Create a sale record for the total amount (multi-item sale)
+        const multiItemSaleData = {
+          business_id: metadata.business_id,
+          product_id: 'multi-item-' + session.id, // Use session ID as unique identifier for multi-item
+          amount: session.amount_total / 100, // Total amount in dollars
+          currency: 'usd',
+          customer_email: session.customer_details?.email || metadata.customer_email,
+          customer_name: session.customer_details?.name || metadata.customer_name || 'Unknown',
+          stripe_session_id: session.id,
+          payment_status: 'completed'
+        };
 
-      console.log('Inserting sale data:', saleData);
+        console.log('Inserting multi-item sale data:', multiItemSaleData);
 
-      // Insert sale record
-      const { data: sale, error: saleError } = await supabase
-        .from('sales')
-        .insert([saleData])
-        .select()
-        .single();
+        const { data: sale, error: saleError } = await supabase
+          .from('sales')
+          .insert([multiItemSaleData])
+          .select()
+          .single();
 
-      if (saleError) {
-        console.error('Error recording sale:', saleError);
-        throw saleError;
+        if (saleError) {
+          console.error('Error recording multi-item sale:', saleError);
+          throw saleError;
+        }
+
+        saleRecords.push(sale);
+        console.log('Multi-item sale recorded:', sale.id);
+        
+      } else {
+        // Handle single product purchase (existing logic)
+        const saleData = {
+          business_id: metadata.business_id,
+          product_id: metadata.product_id,
+          amount: session.amount_total / 100, // Convert from cents
+          currency: 'usd',
+          customer_email: session.customer_details?.email || metadata.customer_email,
+          customer_name: session.customer_details?.name || metadata.customer_name || 'Unknown',
+          stripe_session_id: session.id,
+          payment_status: 'completed'
+        };
+
+        console.log('Inserting single product sale data:', saleData);
+
+        const { data: sale, error: saleError } = await supabase
+          .from('sales')
+          .insert([saleData])
+          .select()
+          .single();
+
+        if (saleError) {
+          console.error('Error recording sale:', saleError);
+          throw saleError;
+        }
+
+        saleRecords.push(sale);
+        console.log('Single product sale recorded:', sale.id);
       }
-
-      console.log('Sale recorded:', sale.id);
 
       // Check if this is the first sale
       const { data: business, error: businessError } = await supabase
@@ -108,7 +152,7 @@ export async function POST(request) {
         throw businessError;
       }
 
-  const isFirstSale = !business.first_sale_date;
+      const isFirstSale = !business.first_sale_date;
       const newTotalRevenue = (business.total_revenue || 0) + (session.amount_total / 100);
 
       // Update business with sale info
@@ -118,10 +162,10 @@ export async function POST(request) {
       };
 
       if (isFirstSale) {
-  const firstTime = new Date().toISOString();
-  businessUpdates.first_sale_date = firstTime;
-  // Also mark guarantees' first payment timestamp
-  businessUpdates.first_payment_at = firstTime;
+        const firstTime = new Date().toISOString();
+        businessUpdates.first_sale_date = firstTime;
+        // Also mark guarantees' first payment timestamp
+        businessUpdates.first_payment_at = firstTime;
       }
 
       const { error: updateError } = await supabase
@@ -133,6 +177,8 @@ export async function POST(request) {
         console.error('Error updating business:', updateError);
         throw updateError;
       }
+
+      console.log(`✅ Revenue updated! Previous: $${business.total_revenue || 0}, New: $${newTotalRevenue}`);
 
       // Send success email to business owner
       const businessOwnerEmail = business.form_data?.email || metadata.business_owner_email;
@@ -149,13 +195,18 @@ export async function POST(request) {
         }
         const businessOwnerName = profile?.full_name || business.form_data.name;
 
+        // For email notification, use appropriate product name
+        const productName = isMultiItem 
+          ? metadata.item_names || 'Multiple Items'
+          : metadata.product_name;
+
         await sendSaleNotification({
           businessOwnerEmail,
           businessOwnerName,
           businessName: business.name,
-          customerName: saleData.customer_name,
-          customerEmail: saleData.customer_email,
-          productName: metadata.product_name,
+          customerName: saleRecords[0].customer_name,
+          customerEmail: saleRecords[0].customer_email,
+          productName: productName,
           amount: session.amount_total / 100,
           isFirstSale,
           totalRevenue: newTotalRevenue,
@@ -171,22 +222,25 @@ export async function POST(request) {
       // 🚀 TRIGGER FULFILLMENT SYSTEM
       // After sale is recorded, automatically start delivering value to customer
       try {
-        console.log('🎯 Triggering fulfillment for sale:', sale.id);
+        console.log('🎯 Triggering fulfillment for sale(s):', saleRecords.map(s => s.id));
         
-        const fulfillmentResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/fulfillment/trigger`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            saleId: sale.id
-          })
-        });
-        
-        if (fulfillmentResponse.ok) {
-          console.log('✅ Fulfillment triggered successfully');
-        } else {
-          console.error('❌ Failed to trigger fulfillment:', await fulfillmentResponse.text());
+        // Trigger fulfillment for each sale record
+        for (const sale of saleRecords) {
+          const fulfillmentResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/fulfillment/trigger`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              saleId: sale.id
+            })
+          });
+          
+          if (fulfillmentResponse.ok) {
+            console.log('✅ Fulfillment triggered successfully for sale:', sale.id);
+          } else {
+            console.error('❌ Failed to trigger fulfillment for sale:', sale.id, await fulfillmentResponse.text());
+          }
         }
       } catch (fulfillmentError) {
         console.error('❌ Error triggering fulfillment:', fulfillmentError);

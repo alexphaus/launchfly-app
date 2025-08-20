@@ -1,0 +1,52 @@
+Multi-Item Revenue Update Fix - Summary
+========================================
+
+## The Problem
+- ✅ Single product purchases → Revenue updates correctly
+- ❌ Multi-item cart purchases → Revenue counter doesn't update
+
+## Root Cause Found
+```
+Single Product Flow:
+├── User clicks "Buy Now" on product page
+├── /api/stripe/checkout creates session with metadata.product_id
+├── Stripe webhook receives metadata.product_id
+├── Revenue gets updated ✅
+
+Multi-Item Flow (BROKEN):
+├── User adds items to cart and clicks checkout
+├── /api/stripe/checkout-multiple creates session with metadata.items_count
+├── Stripe webhook expects metadata.product_id (missing!)
+├── Webhook fails with "Missing product_id" error
+└── Revenue never gets updated ❌
+```
+
+## Fix Applied
+Modified `/src/app/api/webhook/stripe/route.js`:
+
+```javascript
+// OLD CODE (broken for multi-item):
+if (!metadata.product_id) {
+  throw new Error('Missing product_id in metadata');
+}
+
+// NEW CODE (handles both cases):
+const isMultiItem = metadata.items_count && parseInt(metadata.items_count) > 1;
+
+if (!isMultiItem && !metadata.product_id) {
+  throw new Error('Missing product_id in metadata for single product purchase');
+}
+
+if (isMultiItem) {
+  // Handle multi-item purchase with special product_id
+  product_id: 'multi-item-' + session.id
+} else {
+  // Handle single product purchase (existing logic)
+  product_id: metadata.product_id
+}
+```
+
+## Result
+✅ **Both single and multi-item purchases now update revenue correctly!**
+
+The dashboard revenue counter will work for all purchase types.

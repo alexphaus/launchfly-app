@@ -5,7 +5,6 @@ New modules added under `src/lib/**` to support a compliant cold email revenue l
 <!-- Deployment trigger update -->
  
 Environment variables (see `.env.example` in repo root):
-
 ```
 RESEND_API_KEY=
 SENDER_EMAIL=noreply@launchfly.ai

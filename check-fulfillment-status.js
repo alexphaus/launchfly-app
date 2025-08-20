@@ -13,7 +13,7 @@ const saleIds = [
   'ce995df6-6890-4dfe-b7a8-6b17a6399bcc',
   '47ee1699-183b-4720-8311-db1cb2b682d2'
 ];
-
+ 
 console.log('\n=== CHECKING FULFILLMENT RECORDS ===');
 const { data: fulfillments, error: fulfillmentError } = await supabase
   .from('fulfillments')

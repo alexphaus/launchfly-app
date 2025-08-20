@@ -81,7 +81,7 @@ export default function PurchaseSuccess() {
         {/* Action Buttons */}
         <div className="space-y-3">
           <Link
-            href={`/${params.subdomain}`}
+            href={`https://app.launchfly.ai/sites/${params.subdomain}`}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-block"
           >
             Continue Shopping
@@ -90,7 +90,7 @@ export default function PurchaseSuccess() {
           <p className="text-sm text-gray-500">
             Questions? Contact support at{' '}
             <a 
-              href={`/${params.subdomain}#contact`}
+              href={`https://app.launchfly.ai/sites/${params.subdomain}#contact`}
               className="text-blue-600 hover:underline"
             >
               our support team

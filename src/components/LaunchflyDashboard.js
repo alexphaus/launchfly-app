@@ -1,7 +1,6 @@
 // src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2 } from 'lucide-react';
-import ConversionOptimizationCard from './ConversionOptimizationCard';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1484,14 +1483,6 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           businessData={businessData}
           business={business}
         />
-
-        {/* Conversion Optimization - Show after website is ready */}
-        {(generationStage === 'complete' || business?.status === 'ready') && (
-          <ConversionOptimizationCard 
-            business={business}
-            businessData={businessData}
-          />
-        )}
 
         {/* Simple Next Steps - Only show after generation */}
         {!setupComplete && (

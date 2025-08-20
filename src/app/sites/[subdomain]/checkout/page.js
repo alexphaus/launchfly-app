@@ -5,10 +5,12 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useCart, CartProvider } from '@/hooks/useCart';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { SocialProofWidget, TrustBadges, UrgencyBanner } from '@/components/SocialProof';
+import { OrderBumps } from '@/components/OrderBumps';
 
 function CheckoutPage() {
   const params = useParams();
-  const { cart, getCartTotal, clearCart } = useCart();
+  const { cart, getCartTotal, clearCart, cartSessionId, customerInfo: cartCustomerInfo, setCustomerData, addToCart, updateCartSession } = useCart();
   const [businessData, setBusinessData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -23,9 +25,33 @@ function CheckoutPage() {
 
   const supabase = createClientComponentClient();
 
+  // Initialize customer info from cart data
+  useEffect(() => {
+    if (cartCustomerInfo && !customerInfo.email && !customerInfo.name) {
+      setCustomerInfo(prev => ({
+        ...prev,
+        name: cartCustomerInfo.name || '',
+        email: cartCustomerInfo.email || ''
+      }));
+    }
+  }, [cartCustomerInfo]);
+
   useEffect(() => {
     loadBusinessData();
   }, []);
+
+  // Update cart customer data when form changes (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if ((customerInfo.email || customerInfo.name) && 
+          (customerInfo.email !== cartCustomerInfo?.email || 
+           customerInfo.name !== cartCustomerInfo?.name)) {
+        setCustomerData(customerInfo.email, customerInfo.name);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [customerInfo.email, customerInfo.name]);
 
   async function loadBusinessData() {
     try {
@@ -62,6 +88,9 @@ function CheckoutPage() {
     setProcessingPayment(true);
 
     try {
+      // Update cart session for abandoned cart tracking before checkout
+      await updateCartSession();
+      
       const subdomain = await params.subdomain;
       
       // For multi-item checkout, we'll need to create a combined checkout session
@@ -268,6 +297,14 @@ function CheckoutPage() {
                 </div>
               </div>
             </div>
+
+            {/* Social Proof Section */}
+            <div className="mt-8">
+              <SocialProofWidget businessId={businessData?.id} />
+            </div>
+
+            {/* Urgency Banner */}
+            <UrgencyBanner businessId={businessData?.id} className="mt-6" />
           </div>
 
           {/* Order Summary */}
@@ -275,6 +312,14 @@ function CheckoutPage() {
             <h2 className="text-xl font-bold mb-6" style={{ color: 'var(--text-dark)' }}>
               Order Summary
             </h2>
+            
+            {/* Order Bumps */}
+            <OrderBumps 
+              businessId={businessData?.id} 
+              cart={cart}
+              onAddToCart={addToCart}
+              className="mb-6"
+            />
             
             <div className="bg-white rounded-xl p-6 shadow-lg">
               {/* Cart Items */}
@@ -338,8 +383,11 @@ function CheckoutPage() {
                 )}
               </button>
 
+              {/* Trust Badges */}
+              <TrustBadges className="mt-4 mb-4" />
+
               {/* Security Notice */}
-              <div className="flex items-center justify-center text-sm text-gray-500 mt-4">
+              <div className="flex items-center justify-center text-sm text-gray-500">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 0h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>

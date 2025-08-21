@@ -2,8 +2,6 @@
 
 New modules added under `src/lib/**` to support a compliant cold email revenue loop with SPF/DKIM/DMARC checks, suppression list, Resend sending with caps, Stripe webhook idempotency, and metrics endpoints.
 
-<!-- Deployment trigger: v1.7.1-fixes branch test -->
- 
 Environment variables (see `.env.example` in repo root):
 ```
 RESEND_API_KEY=

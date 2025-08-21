@@ -1,4 +1,4 @@
-## Revenue Engine (v1.7.1)
+## Revenue Engine (v1.8.0-stable)
 
 New modules added under `src/lib/**` to support a compliant cold email revenue loop with SPF/DKIM/DMARC checks, suppression list, Resend sending with caps, Stripe webhook idempotency, and metrics endpoints.
 

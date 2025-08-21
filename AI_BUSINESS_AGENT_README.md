@@ -1,7 +1,7 @@
 # 24/7 AI Business Agent Documentation
 
 ## Overview
-
+ 
 The 24/7 AI Business Agent is an advanced automation system that continuously optimizes user businesses by:
 
 - **Real-time A/B testing** of landing pages, emails, pricing, and offers

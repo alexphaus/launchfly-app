@@ -1,5 +1,6 @@
 // src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2 } from 'lucide-react';
 
 // --- DESIGN SYSTEM ---
@@ -654,6 +655,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
 
 // --- COMPONENT: Real-time AI Activity Feed ---
 const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) => {
+  const router = useRouter();
   const [activities, setActivities] = useState([]);
   const [currentStage, setCurrentStage] = useState('');
   const [previousBusinessData, setPreviousBusinessData] = useState({});
@@ -901,37 +903,7 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
             ))}
           </div>
           
-          {/* View Details Button */}
-          {generationStage === 'complete' && sessionId && (
-            <button
-              onClick={() => window.location.href = `/dashboard/${sessionId}/ai-activity`}
-              style={{
-                background: 'transparent',
-                border: `1px solid ${theme.colors.primary}`,
-                borderRadius: '8px',
-                padding: '6px 12px',
-                color: theme.colors.primary,
-                fontSize: '12px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = theme.colors.primary;
-                e.target.style.color = 'white';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = 'transparent';
-                e.target.style.color = theme.colors.primary;
-              }}
-            >
-              View Details
-              <ChevronRight size={14} />
-            </button>
-          )}
+
         </div>
       </div>
 
@@ -953,9 +925,11 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
           activities.slice(0, 6).map((activity, index) => (
             <div
               key={activity.id}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 if (generationStage === 'complete' && sessionId) {
-                  window.location.href = `/dashboard/${sessionId}/ai-activity`;
+                  router.push(`/dashboard/${sessionId}/ai-activity`);
                 }
               }}
               style={{

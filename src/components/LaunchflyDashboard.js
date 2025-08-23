@@ -1388,7 +1388,18 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease'
+            }}
+            onClick={() => window.location.reload()}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
             <span style={{ fontSize: '24px' }}>🚀</span>
             <span style={{ fontSize: '20px', fontWeight: '800', color: theme.colors.textDark }}>
               Launchfly

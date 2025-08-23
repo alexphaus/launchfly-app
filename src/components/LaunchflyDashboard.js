@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2 } from 'lucide-react';
+import UserProfile from './UserProfile';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1408,18 +1409,26 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            fontSize: '13px',
-            color: theme.colors.textGray
+            gap: '16px'
           }}>
             <div style={{
-              width: '8px',
-              height: '8px',
-              background: theme.colors.success,
-              borderRadius: '50%',
-              animation: 'pulse 2s infinite'
-            }} />
-            AI Active
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '13px',
+              color: theme.colors.textGray
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                background: theme.colors.success,
+                borderRadius: '50%',
+                animation: 'pulse 2s infinite'
+              }} />
+              AI Active
+            </div>
+            
+            <UserProfile theme={theme} />
           </div>
         </div>
       </header>

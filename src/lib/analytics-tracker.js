@@ -225,13 +225,23 @@ export function getTrackingConfig(visitorId, businessId, experimentData = null) 
  */
 export function generateTrackingScript(config) {
   return `
-    ${ANALYTICS_SCRIPT}
-    // Initialize tracker with configuration
-    window.addEventListener('DOMContentLoaded', function() {
-      if (window.LaunchflyTracker) {
-        window.LaunchflyTracker.init(${JSON.stringify(config)});
+    // Defer analytics initialization to avoid blocking page load
+    (function() {
+      function initAnalytics() {
+        ${ANALYTICS_SCRIPT}
+        if (window.LaunchflyTracker) {
+          window.LaunchflyTracker.init(${JSON.stringify(config)});
+        }
       }
-    });
+      
+      // Use requestIdleCallback to initialize when browser is idle
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(initAnalytics, { timeout: 2000 });
+      } else {
+        // Fallback for browsers without requestIdleCallback
+        setTimeout(initAnalytics, 1000);
+      }
+    })();
   `;
 }
 
@@ -245,6 +255,7 @@ export function TrackingScript({ config }) {
     <script
       dangerouslySetInnerHTML={{ __html: script }}
       defer
+      async
     />
   );
 }

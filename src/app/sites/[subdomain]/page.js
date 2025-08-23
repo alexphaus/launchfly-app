@@ -4,6 +4,8 @@ import { cookies } from 'next/headers';
 import * as LaunchflyUI from '@/components/launchfly-ui';
 import OptimizedHero from '@/components/launchfly-ui/OptimizedHero';
 import ImagePreloader from '@/components/ImagePreloader';
+import { LazySection } from '@/components/LazyComponent';
+import PerformanceMonitor from '@/components/PerformanceMonitor';
 import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
 import { CartProvider } from '@/hooks/useCart';
 import { 
@@ -467,9 +469,16 @@ export default async function DynamicWebsite({ params }) {
           {/* Inject tracking script */}
           <TrackingScript config={trackingConfig} />
           
-          {/* Aggressive image preloading for e-commerce products */}
+          {/* Performance monitoring */}
+          <PerformanceMonitor businessId={businessId} enabled={!!businessId} />
+          
+          {/* Optimized image preloading for e-commerce products */}
           {businessData.products && businessData.products.length > 0 && (
-            <ImagePreloader products={businessData.products} />
+            <ImagePreloader 
+              products={businessData.products} 
+              priority="high" 
+              maxImages={6} 
+            />
           )}
           
           {layout.map((section, index) => {
@@ -491,7 +500,7 @@ export default async function DynamicWebsite({ params }) {
               );
             }
             
-            // Handle e-commerce product grids
+            // Handle e-commerce product grids with lazy loading
             if (section.component === 'EcommerceProductGrid') {
               // Populate products from business data if not already set
               const props = { ...section.props };
@@ -510,10 +519,11 @@ export default async function DynamicWebsite({ params }) {
               }
               
               return (
-                <LaunchflyUI.EcommerceProductGrid
-                  key={index}
-                  {...props}
-                />
+                <LazySection key={index} rootMargin="50px">
+                  <LaunchflyUI.EcommerceProductGrid
+                    {...props}
+                  />
+                </LazySection>
               );
             }
             
@@ -523,12 +533,16 @@ export default async function DynamicWebsite({ params }) {
               return null;
             }
             
-            return (
-              <Component
-                key={index}
-                {...section.props}
-              />
-            );
+            // Lazy load non-critical components (everything except Hero and NavBar)
+            if (['Hero', 'NavBar'].includes(section.component)) {
+              return <Component key={index} {...section.props} />;
+            } else {
+              return (
+                <LazySection key={index} rootMargin="100px">
+                  <Component {...section.props} />
+                </LazySection>
+              );
+            }
           })}
         </div>
       </ThemedLayout>

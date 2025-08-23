@@ -16,31 +16,29 @@ export default function EcommerceProductGrid({
   const [sortBy, setSortBy] = useState('name');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Preload product images immediately when component mounts or products change
+  // Optimized image preloading - only preload visible/critical images
   useEffect(() => {
     if (products && products.length > 0) {
       const imageUrls = extractProductImageUrls(products);
       if (imageUrls.length > 0) {
-        console.log('Aggressively preloading product images:', imageUrls.length);
+        console.log('Smart preloading for', Math.min(imageUrls.length, 6), 'critical product images');
         
-        // Preload images immediately with high priority
-        imageUrls.forEach((url, index) => {
-          const img = new Image();
-          img.fetchPriority = 'high';
-          img.loading = 'eager';
-          img.src = url;
-          
-          // For the first few images, force them into cache with a tiny timeout
-          if (index < 4) {
-            setTimeout(() => {
+        // Only preload the first 6 images (above the fold)
+        const criticalImages = imageUrls.slice(0, 6);
+        
+        // Use requestIdleCallback to avoid blocking main thread
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            criticalImages.forEach((url, index) => {
               const link = document.createElement('link');
               link.rel = 'preload';
               link.as = 'image';
               link.href = url;
+              link.fetchPriority = index < 3 ? 'high' : 'low';
               document.head.appendChild(link);
-            }, index * 10);
-          }
-        });
+            });
+          }, { timeout: 1000 });
+        }
       }
     }
   }, [products]);

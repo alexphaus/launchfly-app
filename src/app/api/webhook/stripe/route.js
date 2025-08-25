@@ -224,22 +224,97 @@ export async function POST(request) {
       try {
         console.log('🎯 Triggering fulfillment for sale(s):', saleRecords.map(s => s.id));
         
+        // Import fulfillment function directly for better reliability
+        const { fulfillOrder } = await import('@/lib/fulfillment-core');
+        
         // Trigger fulfillment for each sale record
         for (const sale of saleRecords) {
-          const fulfillmentResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/fulfillment/trigger`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              saleId: sale.id
-            })
-          });
-          
-          if (fulfillmentResponse.ok) {
-            console.log('✅ Fulfillment triggered successfully for sale:', sale.id);
-          } else {
-            console.error('❌ Failed to trigger fulfillment for sale:', sale.id, await fulfillmentResponse.text());
+          try {
+            // Get business data for this sale
+            const { data: business, error: businessError } = await supabase
+              .from('businesses')
+              .select('*')
+              .eq('id', sale.business_id)
+              .single();
+              
+            if (businessError || !business) {
+              console.error('❌ Business not found for sale:', sale.id, businessError);
+              continue;
+            }
+            
+            // Check if fulfillment already exists
+            const { data: existingFulfillment } = await supabase
+              .from('fulfillments')
+              .select('id, status')
+              .eq('sale_id', sale.id)
+              .single();
+              
+            if (existingFulfillment) {
+              console.log('⚠️ Fulfillment already exists for sale:', sale.id);
+              continue;
+            }
+            
+            // Create fulfillment record
+            const { data: fulfillment, error: fulfillmentError } = await supabase
+              .from('fulfillments')
+              .insert({
+                sale_id: sale.id,
+                status: 'processing',
+                fulfillment_type: 'auto_generated'
+              })
+              .select()
+              .single();
+              
+            if (fulfillmentError) {
+              console.error('❌ Error creating fulfillment record for sale:', sale.id, fulfillmentError);
+              continue;
+            }
+            
+            console.log('📦 Starting fulfillment process for sale:', sale.id);
+            
+            // Start fulfillment process (async, don't wait)
+            fulfillOrder(sale, business)
+              .then(result => {
+                console.log('✅ Fulfillment completed successfully for sale:', sale.id);
+                
+                // Update fulfillment record
+                supabase
+                  .from('fulfillments')
+                  .update({
+                    status: 'completed',
+                    delivered_items: result.delivered_items,
+                    total_value: result.delivered_items.reduce((sum, item) => {
+                      const value = parseInt(item.content.estimated_value?.replace(/[^0-9]/g, '') || '0');
+                      return sum + value;
+                    }, 0),
+                    fulfillment_type: result.plan.type,
+                    completed_at: new Date().toISOString()
+                  })
+                  .eq('id', fulfillment.id)
+                  .then(({ error }) => {
+                    if (error) console.error('Error updating fulfillment:', error);
+                  });
+              })
+              .catch(error => {
+                console.error('❌ Fulfillment failed for sale:', sale.id, error);
+                
+                // Update fulfillment record with error
+                supabase
+                  .from('fulfillments')
+                  .update({
+                    status: 'failed',
+                    error_message: error.message
+                  })
+                  .eq('id', fulfillment.id)
+                  .then(({ error: updateError }) => {
+                    if (updateError) console.error('Error updating fulfillment error:', updateError);
+                  });
+              });
+              
+            console.log('✅ Fulfillment initiated for sale:', sale.id);
+            
+          } catch (saleError) {
+            console.error('❌ Error processing fulfillment for sale:', sale.id, saleError);
           }
         }
       } catch (fulfillmentError) {

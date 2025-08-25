@@ -12,7 +12,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { inngest } from '../inngest/client';
+import { inngest } from '../inngest.js';
 import { AIBusinessAgent } from '../ai-business-agent';
 import { RevenueGraphAnalyzer } from './revenue-graph-analyzer';
 import { BusinessMarketplace } from './business-marketplace';
@@ -74,7 +74,7 @@ export class CentralAIBrain {
       .from('businesses')
       .select('*')
       .eq('status', 'ready')
-      .not('business_data->ai_agent_enabled', 'is', false);
+      .eq('ai_agent_enabled', true);
 
     for (const business of businesses || []) {
       const agent = new AIBusinessAgent(business.id);

@@ -13,6 +13,7 @@ import { inngest, EVENTS } from '../client';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { logActivity } from '@/lib/activity-logger';
+import { runActiveOptimization } from '@/lib/ai-optimization/active-optimizer';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -43,9 +44,9 @@ export const hourlyOptimization = inngest.createFunction(
     const businesses = await step.run('fetch-active-businesses', async () => {
       const { data, error } = await supabase
         .from('businesses')
-        .select('id, subdomain, business_data, total_revenue')
+        .select('id, subdomain, business_data, total_revenue, ai_agent_enabled')
         .eq('status', 'ready')
-        .not('business_data->ai_agent_enabled', 'is', false);
+        .eq('ai_agent_enabled', true);
       
       if (error) {
         console.error('Error fetching businesses:', error);
@@ -60,7 +61,10 @@ export const hourlyOptimization = inngest.createFunction(
     // Optimize each business
     for (const business of businesses) {
       await step.run(`optimize-business-${business.id}`, async () => {
-        await optimizeBusiness(business);
+        console.log(`🤖 Running active optimization for business ${business.id}`);
+        const result = await runActiveOptimization(business.id);
+        console.log(`✅ Optimization completed for ${business.id}:`, result);
+        return result;
       });
     }
     
@@ -92,7 +96,7 @@ export const dailyMarketResearch = inngest.createFunction(
         .from('businesses')
         .select('id, business_data, created_at')
         .eq('status', 'ready')
-        .not('business_data->ai_agent_enabled', 'is', false);
+        .eq('ai_agent_enabled', true);
       
       return data || [];
     });
@@ -127,7 +131,7 @@ export const weeklyCompetitorAnalysis = inngest.createFunction(
         .from('businesses')
         .select('*')
         .eq('status', 'ready')
-        .not('business_data->ai_agent_enabled', 'is', false);
+        .eq('ai_agent_enabled', true);
       
       return data || [];
     });
@@ -162,7 +166,7 @@ export const monthlyStrategyReview = inngest.createFunction(
         .from('businesses')
         .select('*')
         .eq('status', 'ready')
-        .not('business_data->ai_agent_enabled', 'is', false);
+        .eq('ai_agent_enabled', true);
       
       return data || [];
     });

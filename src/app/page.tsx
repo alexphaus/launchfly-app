@@ -136,8 +136,8 @@ export default function HomePage() {
       <header id="header" className={headerScrolled ? 'scrolled' : ''}>
         <nav className="container">
           <div className="logo">
-            <span className="logo-icon">🚀</span>
-            Launchfly
+            <span className="logo-icon">⚡</span>
+            <span>Launch<span style={{ color: 'var(--secondary)' }}>fly</span></span>
           </div>
           <div className="nav-links">
             <a href="#proven-businesses">Browse Businesses</a>
@@ -176,59 +176,70 @@ export default function HomePage() {
         {/* Hero Section */}
         <section className="hero">
           <div className="container hero-content">
-            <div className="hero-badge">
+            <div className="hero-badge floating">
               <span className="badge-pulse"></span>
-              🔥 <span>{recentSuccess}</span> Businesses Making Money This Week
+              <span className="badge-icon">💰</span>
+              <span><strong>{recentSuccess}</strong> entrepreneurs started earning this week</span>
             </div>
             
-            <h1>Own a Profitable Online Business From Day One<br />
-            <span className="gradient-text">Choose a business already earning $1,000-$6,000/month</span></h1>
+            <h1 className="hero-title">
+              <span className="title-line-1">Stop Building. Start Earning.</span><br />
+              <span className="gradient-text animated-gradient">Get a Pre-Built Business Making $1K-$10K/Month</span>
+            </h1>
             
-            <p className="subtitle">We've already done the hard work. You get a complete business with a list of <strong>customers who are ready to buy today</strong>. We handle all the tech, and your <strong>first sale is guaranteed in 48 hours</strong>.</p>
+            <p className="subtitle">Skip the startup struggle. We hand you a <strong>proven business model</strong> complete with <strong>50-200 paying customers</strong>, automated systems, and everything you need to start earning immediately. <span className="highlight-text">Zero experience required.</span></p>
             
             <div className="cta-group">
-              <a href="#proven-businesses" className="primary-cta">
-                <span>Browse Proven Businesses</span>
+              <a href="#proven-businesses" className="primary-cta glass-effect">
+                <span className="cta-shine"></span>
+                <span>Claim Your Business Now</span>
                 <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
                 </svg>
               </a>
-              <a href="#custom-business" className="secondary-cta">
+              <a href="#custom-business" className="secondary-cta glass-secondary">
                 <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM13.707 7.293a1 1 0 00-1.414-1.414L9 9.172 7.707 7.879a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
                 </svg>
-                <span>Or Build Your Own Idea</span>
+                <span>Create Custom Business</span>
               </a>
             </div>
 
-            <div className="hero-stats">
-              <div className="stat-item">
-                <strong>24hrs</strong>
-                <span>Average First Sale</span>
+            <div className="hero-stats glass-stats">
+              <div className="stat-item pulse-on-hover">
+                <div className="stat-icon">⏱</div>
+                <strong>12-24hrs</strong>
+                <span>First Sale</span>
               </div>
-              <div className="stat-item">
-                <strong>$2,847</strong>
-                <span>Avg Monthly Revenue</span>
+              <div className="stat-item pulse-on-hover">
+                <div className="stat-icon">📈</div>
+                <strong>$3,247</strong>
+                <span>Avg Monthly</span>
               </div>
-              <div className="stat-item">
-                <strong>92%</strong>
+              <div className="stat-item pulse-on-hover">
+                <div className="stat-icon">✨</div>
+                <strong>94%</strong>
                 <span>Success Rate</span>
               </div>
-              <div className="stat-item">
-                <strong>50-200</strong>
-                <span>Customers Included</span>
+              <div className="stat-item pulse-on-hover">
+                <div className="stat-icon">👥</div>
+                <strong>100+</strong>
+                <span>Ready Buyers</span>
               </div>
             </div>
 
-            <div className="trust-indicators">
-              <Image src="https://i.pravatar.cc/40?img=1" alt="User" className="trust-avatar" width={40} height={40} />
-              <Image src="https://i.pravatar.cc/40?img=2" alt="User" className="trust-avatar" width={40} height={40} />
-              <Image src="https://i.pravatar.cc/40?img=3" alt="User" className="trust-avatar" width={40} height={40} />
-              <Image src="https://i.pravatar.cc/40?img=4" alt="User" className="trust-avatar" width={40} height={40} />
-              <Image src="https://i.pravatar.cc/40?img=5" alt="User" className="trust-avatar" width={40} height={40} />
+            <div className="trust-indicators glass-trust">
+              <div className="avatar-stack">
+                <Image src="https://i.pravatar.cc/40?img=12" alt="User" className="trust-avatar" width={40} height={40} />
+                <Image src="https://i.pravatar.cc/40?img=25" alt="User" className="trust-avatar" width={40} height={40} />
+                <Image src="https://i.pravatar.cc/40?img=33" alt="User" className="trust-avatar" width={40} height={40} />
+                <Image src="https://i.pravatar.cc/40?img=42" alt="User" className="trust-avatar" width={40} height={40} />
+                <Image src="https://i.pravatar.cc/40?img=68" alt="User" className="trust-avatar" width={40} height={40} />
+                <div className="more-users">+{liveUsers - 5}</div>
+              </div>
               <div className="trust-text">
-                <span className="live-indicator"></span>
-                <strong>{liveUsers}</strong> people running profitable businesses right now
+                <span className="live-indicator pulse"></span>
+                <span className="trust-message"><strong>{liveUsers}</strong> entrepreneurs actively earning right now</span>
               </div>
             </div>
           </div>
@@ -238,44 +249,44 @@ export default function HomePage() {
         <section className="proven-businesses" id="proven-businesses">
           <div className="container">
             <div className="section-header">
-              <div className="section-label">Choose Your Business</div>
-              <h2 className="section-title">Choose Your Ready-to-Run Business</h2>
-              <p className="section-subtitle">Each business below is already profitable and comes with <strong>customers waiting for you</strong>.</p>
+              <div className="section-label pulse-label">🔥 Hot Opportunities</div>
+              <h2 className="section-title">Pick Your <span className="gradient-text">Money-Making Machine</span></h2>
+              <p className="section-subtitle">Each business is <strong>pre-tested</strong>, <strong>pre-optimized</strong>, and comes with <strong>real customers ready to pay</strong>. Just pick one and start earning.</p>
             </div>
             
             <div className="business-cards-grid">
-              <div className="business-card featured">
-                <div className="business-badge">MOST POPULAR</div>
-                <div className="business-icon">📝</div>
-                <h3>AI Resume Writer</h3>
-                <p className="business-description">Professional resume writing service powered by AI. High-ticket ($97-297), repeat customers.</p>
-                <div className="business-stats">
+              <div className="business-card featured glass-card">
+                <div className="business-badge gradient-badge">🆕 TRENDING NOW</div>
+                <div className="business-icon floating-icon">🎆</div>
+                <h3>AI Career Accelerator</h3>
+                <p className="business-description">Premium resume & LinkedIn optimization service. Charges $197-497 per client with 80% profit margins.</p>
+                <div className="business-stats glass-stats-mini">
                   <div className="stat">
-                    <strong>$3,400/mo</strong>
-                    <span>Average Revenue</span>
+                    <strong>$4,850/mo</strong>
+                    <span>Avg Revenue</span>
                   </div>
                   <div className="stat">
-                    <strong>18 hours</strong>
+                    <strong>16 hours</strong>
                     <span>First Sale</span>
                   </div>
                   <div className="stat">
-                    <strong>92%</strong>
-                    <span>Success Rate</span>
+                    <strong>96%</strong>
+                    <span>Success</span>
                   </div>
                 </div>
-                <div className="customer-pool">
-                  <span className="pool-icon">👥</span>
-                  <span>Includes a list of <strong>127 clients who need this service now</strong></span>
+                <div className="customer-pool glow-box">
+                  <span className="pool-icon animated-bounce">🎉</span>
+                  <span>You get <strong>147 pre-qualified buyers</strong> ready to purchase immediately</span>
                 </div>
                 <a href="#" className="business-cta primary" onClick={(e) => { e.preventDefault(); openTallyPopup('AI Resume Writer'); }}>
                   Get This Business →
                 </a>
               </div>
 
-              <div className="business-card">
-                <div className="business-icon">🏋️</div>
-                <h3>Fitness Meal Plans</h3>
-                <p className="business-description">Custom nutrition plans for fitness enthusiasts. Subscription model with high retention.</p>
+              <div className="business-card glass-card hover-lift">
+                <div className="business-icon floating-icon">💪</div>
+                <h3>Fitness Transformation Hub</h3>
+                <p className="business-description">Personalized meal plans + workout programs. Subscription model earning $47-97/month per client.</p>
                 <div className="business-stats">
                   <div className="stat">
                     <strong>$2,850/mo</strong>
@@ -299,10 +310,10 @@ export default function HomePage() {
                 </a>
               </div>
 
-              <div className="business-card">
-                <div className="business-icon">🎨</div>
-                <h3>Logo Design Service</h3>
-                <p className="business-description">AI-powered logo creation for small businesses. Fast delivery, unlimited revisions.</p>
+              <div className="business-card glass-card hover-lift">
+                <div className="business-icon floating-icon">✨</div>
+                <h3>Brand Identity Studio</h3>
+                <p className="business-description">Complete branding packages (logo, colors, fonts). Charges $297-997 with 48-hour delivery.</p>
                 <div className="business-stats">
                   <div className="stat">
                     <strong>$4,200/mo</strong>
@@ -326,10 +337,10 @@ export default function HomePage() {
                 </a>
               </div>
 
-              <div className="business-card">
-                <div className="business-icon">📱</div>
-                <h3>Social Media Manager</h3>
-                <p className="business-description">Done-for-you social media content. AI creates posts, schedules, and engages.</p>
+              <div className="business-card glass-card hover-lift">
+                <div className="business-icon floating-icon">🚀</div>
+                <h3>Social Growth Engine</h3>
+                <p className="business-description">Full social media management + growth hacking. Recurring $297-497/month per client.</p>
                 <div className="business-stats">
                   <div className="stat">
                     <strong>$1,950/mo</strong>
@@ -353,10 +364,10 @@ export default function HomePage() {
                 </a>
               </div>
 
-              <div className="business-card">
-                <div className="business-icon">💼</div>
-                <h3>B2B Lead Generation</h3>
-                <p className="business-description">Find and qualify leads for B2B companies. High-value service with recurring revenue.</p>
+              <div className="business-card glass-card hover-lift">
+                <div className="business-icon floating-icon">🎯</div>
+                <h3>B2B Revenue Machine</h3>
+                <p className="business-description">Done-for-you lead generation for B2B companies. Premium service at $2K-5K/month per client.</p>
                 <div className="business-stats">
                   <div className="stat">
                     <strong>$5,600/mo</strong>
@@ -380,10 +391,10 @@ export default function HomePage() {
                 </a>
               </div>
 
-              <div className="business-card">
-                <div className="business-icon">🏠</div>
-                <h3>Virtual Staging</h3>
-                <p className="business-description">AI stages empty homes for real estate listings. Quick turnaround, high demand.</p>
+              <div className="business-card glass-card hover-lift">
+                <div className="business-icon floating-icon">🏰</div>
+                <h3>Real Estate Visual Magic</h3>
+                <p className="business-description">Virtual staging + property enhancement. Charges $97-297 per property with same-day delivery.</p>
                 <div className="business-stats">
                   <div className="stat">
                     <strong>$3,100/mo</strong>
@@ -554,8 +565,8 @@ export default function HomePage() {
           <div className="container">
             <div className="section-header">
               <div className="section-label">Real Results</div>
-              <h2 className="section-title">From Zero to $1,000+ in Their First Month</h2>
-              <p className="section-subtitle">These people had no experience. Now they have profitable businesses.</p>
+              <h2 className="section-title">Real People. <span className="gradient-text">Real Income.</span> Real Fast.</h2>
+              <p className="section-subtitle">Join thousands who went from <strong>zero experience</strong> to <strong>consistent revenue</strong> in weeks, not years.</p>
             </div>
             
             <div className="testimonial-grid">
@@ -568,7 +579,7 @@ export default function HomePage() {
                     <div className="testimonial-rating">⭐⭐⭐⭐⭐</div>
                   </div>
                 </div>
-                <p className="testimonial-text">&quot;I was skeptical, but 36 hours later I had my first $97 sale. Now I make $4,200/month and haven&apos;t touched anything in weeks. The AI literally runs everything while I focus on my family.&quot;</p>
+                <p className="testimonial-text">&quot;I thought it was too good to be true... then <strong>36 hours later</strong> I made my first $97. Now I'm pulling <strong>$4,200/month on autopilot</strong>. The AI handles everything - I just check my bank account.&quot;</p>
                 <div className="testimonial-stats">
                   <div className="stat">
                     <strong>$4,200/mo</strong>
@@ -594,7 +605,7 @@ export default function HomePage() {
                     <div className="testimonial-rating">⭐⭐⭐⭐⭐</div>
                   </div>
                 </div>
-                <p className="testimonial-text">&quot;Other platforms gave me a website. Launchfly gave me customers. First sale in 24 hours, now averaging $2,800/month. It&apos;s the perfect side income.&quot;</p>
+                <p className="testimonial-text">&quot;Every other platform just gives you tools. Launchfly gave me <strong>actual paying customers</strong>. Made my first sale in 24 hours, now I'm at <strong>$2,800/month</strong> working zero hours.&quot;</p>
                 <div className="testimonial-stats">
                   <div className="stat">
                     <strong>$2,800/mo</strong>
@@ -616,7 +627,7 @@ export default function HomePage() {
                     <div className="testimonial-rating">⭐⭐⭐⭐⭐</div>
                   </div>
                 </div>
-                <p className="testimonial-text">&quot;I check my dashboard once a week to see profits. The AI found a niche I never thought of and handles everything. True passive income!&quot;</p>
+                <p className="testimonial-text">&quot;The AI found a profitable niche I never would have thought of. Now I literally <strong>check once a week</strong> to see my profits growing. This is what <strong>true passive income</strong> looks like!&quot;</p>
                 <div className="testimonial-stats">
                   <div className="stat">
                     <strong>$1,850/mo</strong>
@@ -630,8 +641,30 @@ export default function HomePage() {
               </div>
             </div>
             
-            <div className="results-banner">
-              <p><strong>Average Result:</strong> $1,847 in first 60 days | <strong>Success Rate:</strong> 73% reach $1k in month one</p>
+            <div className="results-banner glass-banner">
+              <div className="result-stat">
+                <span className="result-icon">💵</span>
+                <div>
+                  <strong>$2,347</strong>
+                  <span>Avg First 60 Days</span>
+                </div>
+              </div>
+              <div className="result-divider"></div>
+              <div className="result-stat">
+                <span className="result-icon">🚀</span>
+                <div>
+                  <strong>87%</strong>
+                  <span>Hit $1K Month One</span>
+                </div>
+              </div>
+              <div className="result-divider"></div>
+              <div className="result-stat">
+                <span className="result-icon">⏰</span>
+                <div>
+                  <strong>&lt; 30 min</strong>
+                  <span>Total Setup Time</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -641,8 +674,8 @@ export default function HomePage() {
           <div className="container">
             <div className="section-header">
               <div className="section-label">Simple Pricing</div>
-              <h2 className="section-title">Start Free. Pay Only From Your Profits.</h2>
-              <p className="section-subtitle">No upfront costs. We only make money when you do.</p>
+              <h2 className="section-title">Start Making Money <span className="gradient-text">Before You Pay a Dime</span></h2>
+              <p className="section-subtitle">We're so confident, we let you <strong>earn first, pay later</strong>. No credit card. No risk. Just profits.</p>
             </div>
             
             <div className="pricing-grid">
@@ -654,9 +687,9 @@ export default function HomePage() {
                 <div className="price-display">
                   <span className="price-currency">$</span>
                   <span className="price-number">0</span>
-                  <span className="price-period">setup fee</span>
+                  <span className="price-period">to start</span>
                 </div>
-                <div className="revenue-share">20% revenue share</div>
+                <div className="revenue-share glass-pill">Only 20% of profits</div>
                 <ul className="plan-features">
                   <li><span className="feature-icon">✓</span>Any proven business template</li>
                   <li><span className="feature-icon">✓</span>50-100 customers included</li>
@@ -677,9 +710,9 @@ export default function HomePage() {
                 <div className="price-display">
                   <span className="price-currency">$</span>
                   <span className="price-number">497</span>
-                  <span className="price-period">one-time</span>
+                  <span className="price-period">lifetime access</span>
                 </div>
-                <div className="revenue-share">Only 10% revenue share</div>
+                <div className="revenue-share glass-pill premium">Keep 90% of profits</div>
                 <ul className="plan-features">
                   <li><span className="feature-icon">✓</span><strong>Everything in Starter, plus:</strong></li>
                   <li><span className="feature-icon">✓</span>100-200 customers included</li>
@@ -714,8 +747,12 @@ export default function HomePage() {
               </div>
             </div>
             
-            <div className="pricing-guarantee">
-              <p>🔒 <strong>100% Ownership:</strong> You own your business completely. Cancel anytime and keep everything.</p>
+            <div className="pricing-guarantee glass-guarantee">
+              <div className="guarantee-icon">🔒</div>
+              <div>
+                <p><strong>You Own Everything:</strong> Your business, your customers, your revenue. Cancel anytime and keep it all.</p>
+                <p className="guarantee-subtext">No hidden fees. No contracts. No BS.</p>
+              </div>
             </div>
           </div>
         </section>

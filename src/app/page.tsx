@@ -470,42 +470,75 @@ export default function HomePage() {
         </section>
 
         {/* Problem/Solution Section */}
-        <section className="problem-solution">
+        <section className="problem-solution" id="problem-solution">
           <div className="container">
             <div className="section-header">
-              <div className="section-label">The Breakthrough</div>
-              <h2 className="section-title">Why Buying a Proven Business Changes Everything</h2>
-              <p className="section-subtitle">Skip years of trial and error. Start with what already works.</p>
+              <div className="section-label pulse-label">🚀 The Shortcut to Success</div>
+              <h2 className="section-title">Two Paths. <span className="gradient-text">One Clear Winner.</span></h2>
+              <p className="section-subtitle">See why starting from scratch is obsolete. The future is buying proven success.</p>
             </div>
             
-            <div className="comparison-grid">
-              <div className="comparison-card problem">
-                <div className="card-icon">❌</div>
-                <h3>Starting From Scratch</h3>
-                <ul>
-                  <li>Starting with zero customers and zero income</li>
-                  <li>Wasting months hoping your idea works</li>
-                  <li>Facing the 95% failure rate for new businesses</li>
-                  <li>Burn through savings</li>
-                  <li>Learn expensive lessons</li>
+            <div className="transformation-container glass-effect">
+              <div className="pathway old-way">
+                <div className="pathway-header">
+                  <div className="pathway-icon-bg">
+                    <span className="pathway-icon">😫</span>
+                  </div>
+                  <h3>Starting From Scratch</h3>
+                  <div className="pathway-tag tag-danger">The Hard Path</div>
+                </div>
+                <ul className="pathway-list">
+                  <li>
+                    <span className="list-icon">❌</span>
+                    <p><strong>Zero Customers, Zero Income</strong><br/>Start from nothing and hope people care.</p>
+                  </li>
+                  <li>
+                    <span className="list-icon">❌</span>
+                    <p><strong>Months of Guesswork</strong><br/>Waste time and money on an unproven idea.</p>
+                  </li>
+                  <li>
+                    <span className="list-icon">❌</span>
+                    <p><strong>95% Failure Rate</strong><br/>Join the statistic of businesses that don't make it.</p>
+                  </li>
+                  <li>
+                    <span className="list-icon">❌</span>
+                    <p><strong>Expensive Lessons</strong><br/>Burn through your savings to learn what works.</p>
+                  </li>
                 </ul>
               </div>
-              
-              <div className="comparison-card solution">
-                <div className="card-icon">✅</div>
-                <h3>Buying Proven Business</h3>
-                <ul>
-                  <li>50-200 customers ready to buy</li>
-                  <li>Proven model already profitable</li>
-                  <li>92% success rate guaranteed</li>
-                  <li>Revenue from day one</li>
-                  <li>AI handles everything</li>
+
+              <div className="transformation-divider">
+                <div className="vs-circle">VS</div>
+                <div className="pathway-line"></div>
+              </div>
+
+              <div className="pathway new-way">
+                <div className="pathway-header">
+                  <div className="pathway-icon-bg">
+                    <span className="pathway-icon">😎</span>
+                  </div>
+                  <h3>Buying Proven Business</h3>
+                  <div className="pathway-tag tag-success">The Smart Path</div>
+                </div>
+                <ul className="pathway-list">
+                  <li>
+                    <span className="list-icon">✅</span>
+                    <p><strong>50-200+ Customers</strong><br/>Get a list of people ready to buy from day one.</p>
+                  </li>
+                  <li>
+                    <span className="list-icon">✅</span>
+                    <p><strong>Proven Profitable Model</strong><br/>Step into a business that's already making money.</p>
+                  </li>
+                  <li>
+                    <span className="list-icon">✅</span>
+                    <p><strong>92% Success Rate</strong><br/>Your revenue is guaranteed. We remove the risk.</p>
+                  </li>
+                  <li>
+                    <span className="list-icon">✅</span>
+                    <p><strong>AI Handles Everything</strong><br/>Your business runs on autopilot, 24/7.</p>
+                  </li>
                 </ul>
               </div>
-            </div>
-            
-            <div className="difference-banner">
-              <p><strong>The Magic:</strong> You're not gambling on a new idea. You're buying into a proven system with real customers waiting.</p>
             </div>
           </div>
         </section>
@@ -556,42 +589,78 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
 
-            {/* AI Automation Showcase */}
-            <div className="automation-showcase">
-              <h3>Your 24/7 AI Business Manager Does Everything:</h3>
-              <div className="automation-grid">
-                <div className="automation-item">
-                  <span className="item-icon">🔍</span>
-                  <span>Finds Ideal Customers</span>
+        {/* AI Automation Showcase */}
+        <section className="ai-automation-hub-section">
+          <div className="ai-automation-hub">
+            <div className="container">
+              <div className="hub-header">
+                <h3>Your 24/7 AI Business Manager Does Everything:</h3>
+              </div>
+              <div className="automation-network">
+                <div className="central-hub">
+                  <div className="hub-logo">
+                    <span className="logo-icon">⚡</span>
+                    <span>Launchfly AI</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">📧</span>
-                  <span>Sends Personalized Outreach</span>
+
+                <h4 className="group-label label-top">LEAD GENERATION</h4>
+                <div className="automation-node node-1">
+                  <div className="node-content">
+                    <span className="node-icon">🔍</span>
+                    <span className="node-label">Finds Ideal Customers</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">💬</span>
-                  <span>Handles All Conversations</span>
+                <div className="automation-node node-2">
+                  <div className="node-content">
+                    <span className="node-icon">📧</span>
+                    <span className="node-label">Sends Outreach</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">💳</span>
-                  <span>Processes Payments</span>
+
+                <h4 className="group-label label-right">GROWTH</h4>
+                <div className="automation-node node-3">
+                  <div className="node-content">
+                    <span className="node-icon">📈</span>
+                    <span className="node-label">Scales Revenue</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">📊</span>
-                  <span>Optimizes Pricing</span>
+                <div className="automation-node node-4">
+                  <div className="node-content">
+                    <span className="node-icon">🎯</span>
+                    <span className="node-label">Runs Ad Campaigns</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">🎯</span>
-                  <span>Runs Ad Campaigns</span>
+
+                <h4 className="group-label label-bottom">OPTIMIZATION</h4>
+                <div className="automation-node node-5">
+                  <div className="node-content">
+                    <span className="node-icon">📊</span>
+                    <span className="node-label">Optimizes Pricing</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">📈</span>
-                  <span>Scales Revenue</span>
+                <div className="automation-node node-6">
+                  <div className="node-content">
+                    <span className="node-icon">🔄</span>
+                    <span className="node-label">A/B Tests Everything</span>
+                  </div>
                 </div>
-                <div className="automation-item">
-                  <span className="item-icon">🔄</span>
-                  <span>A/B Tests Everything</span>
+
+                <h4 className="group-label label-left">SALES</h4>
+                <div className="automation-node node-7">
+                  <div className="node-content">
+                    <span className="node-icon">💬</span>
+                    <span className="node-label">Handles Conversations</span>
+                  </div>
+                </div>
+                <div className="automation-node node-8">
+                  <div className="node-content">
+                    <span className="node-icon">💳</span>
+                    <span className="node-label">Processes Payments</span>
+                  </div>
                 </div>
               </div>
             </div>

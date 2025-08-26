@@ -419,13 +419,51 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="custom-business-option" id="custom-business">
+            <div className="custom-business-option glass-card" id="custom-business">
               <div className="custom-business-content">
-                <h3>Have Your Own Business Idea?</h3>
-                <p>We can also build a custom AI-powered business based on your expertise, interests, or ideas. Same guarantees apply.</p>
-                <a href="#" className="custom-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Custom Business'); }}>
-                  Build Custom Business →
-                </a>
+                <div className="custom-icon">💡</div>
+                <h3>Got Your Own Million-Dollar Idea?</h3>
+                <p>Tell us your vision and we'll build a <strong>custom AI-powered business</strong> around it. Same guarantees, same results.</p>
+                
+                <div className="idea-input-container">
+                  <div className="input-group">
+                    <input 
+                      type="text" 
+                      placeholder="Describe your business idea in a few words..."
+                      className="idea-input"
+                      maxLength={100}
+                    />
+                    <button 
+                      className="idea-submit-btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                        const idea = input?.value || 'Custom Business';
+                        openTallyPopup(`Custom: ${idea}`);
+                      }}
+                    >
+                      <span>Build My Idea</span>
+                      <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+                        <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="idea-examples">
+                    <span className="examples-label">💭 Ideas:</span>
+                    <button className="example-tag" onClick={(e) => {
+                      const input = document.querySelector('.idea-input') as HTMLInputElement;
+                      if (input) input.value = 'Pet grooming service';
+                    }}>Pet grooming service</button>
+                    <button className="example-tag" onClick={(e) => {
+                      const input = document.querySelector('.idea-input') as HTMLInputElement;
+                      if (input) input.value = 'Online tutoring platform';
+                    }}>Online tutoring</button>
+                    <button className="example-tag" onClick={(e) => {
+                      const input = document.querySelector('.idea-input') as HTMLInputElement;
+                      if (input) input.value = 'Local delivery service';
+                    }}>Local delivery</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

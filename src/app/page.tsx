@@ -181,10 +181,10 @@ export default function HomePage() {
               🔥 <span>{recentSuccess}</span> Businesses Making Money This Week
             </div>
             
-            <h1>Buy a Proven Online Business<br />
-            <span className="gradient-text">That's Already Making $1,000-6,000/Month</span></h1>
+            <h1>Own a Profitable Online Business From Day One<br />
+            <span className="gradient-text">Choose a business already earning $1,000-$6,000/month</span></h1>
             
-            <p className="subtitle">Skip the startup phase. Get an AI-powered business with <strong>50-200 pre-warmed customers</strong>, active revenue streams, and running ad campaigns. <strong>First sale guaranteed in 48 hours or we pay you $100.</strong></p>
+            <p className="subtitle">We've already done the hard work. You get a complete business with a list of <strong>customers who are ready to buy today</strong>. We handle all the tech, and your <strong>first sale is guaranteed in 48 hours</strong>.</p>
             
             <div className="cta-group">
               <a href="#proven-businesses" className="primary-cta">
@@ -239,8 +239,8 @@ export default function HomePage() {
           <div className="container">
             <div className="section-header">
               <div className="section-label">Choose Your Business</div>
-              <h2 className="section-title">Proven Businesses Making Real Money Right Now</h2>
-              <p className="section-subtitle">Each comes with 50-200 pre-qualified customers, running ads, and AI optimization</p>
+              <h2 className="section-title">Choose Your Ready-to-Run Business</h2>
+              <p className="section-subtitle">Each business below is already profitable and comes with <strong>customers waiting for you</strong>.</p>
             </div>
             
             <div className="business-cards-grid">
@@ -265,7 +265,7 @@ export default function HomePage() {
                 </div>
                 <div className="customer-pool">
                   <span className="pool-icon">👥</span>
-                  <span>127 job seekers ready to buy</span>
+                  <span>Includes a list of <strong>127 clients who need this service now</strong></span>
                 </div>
                 <a href="#" className="business-cta primary" onClick={(e) => { e.preventDefault(); openTallyPopup('AI Resume Writer'); }}>
                   Get This Business →
@@ -292,7 +292,7 @@ export default function HomePage() {
                 </div>
                 <div className="customer-pool">
                   <span className="pool-icon">👥</span>
-                  <span>94 fitness enthusiasts waiting</span>
+                  <span>Includes a list of <strong>94 clients who need this service now</strong></span>
                 </div>
                 <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Fitness Meal Plans'); }}>
                   Get This Business →
@@ -319,7 +319,7 @@ export default function HomePage() {
                 </div>
                 <div className="customer-pool">
                   <span className="pool-icon">👥</span>
-                  <span>183 businesses need logos</span>
+                  <span>Includes a list of <strong>183 clients who need this service now</strong></span>
                 </div>
                 <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Logo Design Service'); }}>
                   Get This Business →
@@ -346,7 +346,7 @@ export default function HomePage() {
                 </div>
                 <div className="customer-pool">
                   <span className="pool-icon">👥</span>
-                  <span>76 brands seeking help</span>
+                  <span>Includes a list of <strong>76 clients who need this service now</strong></span>
                 </div>
                 <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Social Media Manager'); }}>
                   Get This Business →
@@ -373,7 +373,7 @@ export default function HomePage() {
                 </div>
                 <div className="customer-pool">
                   <span className="pool-icon">👥</span>
-                  <span>52 companies need leads</span>
+                  <span>Includes a list of <strong>52 clients who need this service now</strong></span>
                 </div>
                 <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('B2B Lead Generation'); }}>
                   Get This Business →
@@ -400,7 +400,7 @@ export default function HomePage() {
                 </div>
                 <div className="customer-pool">
                   <span className="pool-icon">👥</span>
-                  <span>108 realtors interested</span>
+                  <span>Includes a list of <strong>108 clients who need this service now</strong></span>
                 </div>
                 <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Virtual Staging'); }}>
                   Get This Business →
@@ -434,9 +434,9 @@ export default function HomePage() {
                 <div className="card-icon">❌</div>
                 <h3>Starting From Scratch</h3>
                 <ul>
-                  <li>No customers = No revenue</li>
-                  <li>Months to find product-market fit</li>
-                  <li>95% fail in first year</li>
+                  <li>Starting with zero customers and zero income</li>
+                  <li>Wasting months hoping your idea works</li>
+                  <li>Facing the 95% failure rate for new businesses</li>
                   <li>Burn through savings</li>
                   <li>Learn expensive lessons</li>
                 </ul>
@@ -817,6 +817,16 @@ export default function HomePage() {
                 </button>
                 <div className="faq-answer">
                   <p>100% real, no catch. If you don&apos;t make $1,000 in 60 days, we keep working for free until you do. If you don&apos;t get a customer in 48 hours, we send you $100. We can guarantee this because our system works—and we only make money when you do.</p>
+                </div>
+              </div>
+              
+              <div className="faq-item">
+                <button className="faq-question">
+                  <span>This seems too good to be true. What's the catch?</span>
+                  <span className="faq-icon">+</span>
+                </button>
+                <div className="faq-answer">
+                  <p>There's no catch. We build and test dozens of online businesses internally. We find the customers, prove the business can make money, and then package it for a new owner. You get to skip all the risk and failure of the startup phase. We only make money when we successfully sell a profitable business, so it's in our interest to make sure you succeed from day one.</p>
                 </div>
               </div>
               

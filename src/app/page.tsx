@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState(12);
@@ -33,9 +36,17 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    // Header scroll effect
+    // Mark page as loaded
+    setIsLoading(false);
+    document.body.classList.add('loaded');
+    
+    // Header scroll effect with debounce
+    let scrollTimer: NodeJS.Timeout;
     const handleScroll = () => {
-      setHeaderScrolled(window.scrollY > 10);
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        setHeaderScrolled(window.scrollY > 10);
+      }, 10);
     };
 
     // FAQ functionality
@@ -54,7 +65,7 @@ export default function HomePage() {
       }
     };
 
-    // Intersection Observer for animations
+    // Intersection Observer for animations with better performance
     const observerOptions = {
       threshold: 0.1,
       rootMargin: '0px 0px -50px 0px'
@@ -64,6 +75,8 @@ export default function HomePage() {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           entry.target.classList.add('visible');
+          // Unobserve after animation to improve performance
+          observer.unobserve(entry.target);
         }
       });
     }, observerOptions);
@@ -105,9 +118,15 @@ export default function HomePage() {
     window.addEventListener('scroll', handleScroll);
     document.addEventListener('click', handleFaqClick);
 
-    // Observe elements for animations
-    const elementsToObserve = document.querySelectorAll('.timeline-item, .testimonial-card, .pricing-card, .guarantee-item, .faq-item');
-    elementsToObserve.forEach(el => observer.observe(el));
+    // Observe elements for animations with delay
+    setTimeout(() => {
+      const elementsToObserve = document.querySelectorAll('.timeline-item, .testimonial-card, .pricing-card, .guarantee-item, .faq-item, .business-card');
+      elementsToObserve.forEach((el, index) => {
+        // Add staggered animation delay
+        (el as HTMLElement).style.setProperty('--card-index', index.toString());
+        observer.observe(el);
+      });
+    }, 100);
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
@@ -120,16 +139,39 @@ export default function HomePage() {
     };
   }, []);
 
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-    document.body.classList.toggle('menu-open', !mobileMenuOpen);
-  };
+  const toggleMobileMenu = useCallback(() => {
+    setMobileMenuOpen(prev => {
+      const newState = !prev;
+      document.body.classList.toggle('menu-open', newState);
+      // Prevent body scroll when menu is open
+      document.body.style.overflow = newState ? 'hidden' : '';
+      return newState;
+    });
+  }, []);
 
-  const closeMobileMenu = () => {
+  const closeMobileMenu = useCallback(() => {
     setMobileMenuOpen(false);
     document.body.classList.remove('menu-open');
-  };
+    document.body.style.overflow = '';
+  }, []);
+  
+  // Handle escape key for mobile menu
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        closeMobileMenu();
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [mobileMenuOpen, closeMobileMenu]);
 
+  // Show loading state briefly
+  if (isLoading) {
+    return null;
+  }
+  
   return (
     <>
       {/* Header */}
@@ -147,19 +189,26 @@ export default function HomePage() {
             <a href="#guarantee">Guarantee</a>
           </div>
           <div className="nav-cta-container">
-            <a href="#" className="nav-cta" onClick={(e) => { e.preventDefault(); openTallyPopup(); }}>
-              <span className="pulse-dot"></span>
+            <button 
+              className="nav-cta" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                openTallyPopup(); 
+              }}
+              aria-label="Get started with Launchfly"
+            >
+              <span className="pulse-dot" aria-hidden="true"></span>
               Get Customers Now →
-            </a>
+            </button>
           </div>
           <button 
             className={`mobile-menu-toggle ${mobileMenuOpen ? 'active' : ''}`} 
             onClick={toggleMobileMenu}
             aria-label="Toggle menu"
           >
-            <span></span>
-            <span></span>
-            <span></span>
+            <span aria-hidden="true"></span>
+            <span aria-hidden="true"></span>
+            <span aria-hidden="true"></span>
           </button>
         </nav>
         <div className={`mobile-nav-links ${mobileMenuOpen ? 'active' : ''}`}>
@@ -168,7 +217,16 @@ export default function HomePage() {
           <a href="#proof" className="mobile-nav-link" onClick={closeMobileMenu}>Success Stories</a>
           <a href="#pricing" className="mobile-nav-link" onClick={closeMobileMenu}>Pricing</a>
           <a href="#guarantee" className="mobile-nav-link" onClick={closeMobileMenu}>Guarantee</a>
-          <a href="#" className="mobile-nav-cta" onClick={(e) => { e.preventDefault(); openTallyPopup(); }}>Get Started Now</a>
+          <button 
+            className="mobile-nav-cta" 
+            onClick={(e) => { 
+              e.preventDefault(); 
+              closeMobileMenu();
+              openTallyPopup(); 
+            }}
+          >
+            Get Started Now
+          </button>
         </div>
       </header>
 
@@ -190,15 +248,31 @@ export default function HomePage() {
             <p className="subtitle">Skip the startup struggle. We hand you a <strong>proven business model</strong> complete with <strong>50-200 paying customers</strong>, automated systems, and everything you need to start earning immediately. <span className="highlight-text">Zero experience required.</span></p>
             
             <div className="cta-group">
-              <a href="#proven-businesses" className="primary-cta glass-effect">
-                <span className="cta-shine"></span>
-                <span>Claim Your Business Now</span>
-                <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
+              <a 
+                href="#proven-businesses" 
+                className="primary-cta"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const element = document.getElementById('proven-businesses');
+                  element?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                <span className="cta-shine" aria-hidden="true"></span>
+                <span>Browse Business Templates</span>
+                <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
                 </svg>
               </a>
-              <a href="#custom-business" className="secondary-cta glass-secondary">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
+              <a 
+                href="#custom-business" 
+                className="secondary-cta glass-secondary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const element = document.getElementById('custom-business');
+                  element?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true">
                   <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
                 </svg>
                 <span>Create Custom Business</span>
@@ -230,11 +304,19 @@ export default function HomePage() {
 
             <div className="trust-indicators glass-trust">
               <div className="avatar-stack">
-                <Image src="https://i.pravatar.cc/40?img=12" alt="User" className="trust-avatar" width={40} height={40} />
-                <Image src="https://i.pravatar.cc/40?img=25" alt="User" className="trust-avatar" width={40} height={40} />
-                <Image src="https://i.pravatar.cc/40?img=33" alt="User" className="trust-avatar" width={40} height={40} />
-                <Image src="https://i.pravatar.cc/40?img=42" alt="User" className="trust-avatar" width={40} height={40} />
-                <Image src="https://i.pravatar.cc/40?img=68" alt="User" className="trust-avatar" width={40} height={40} />
+                <Image 
+                  src="https://i.pravatar.cc/40?img=12" 
+                  alt="User" 
+                  className="trust-avatar" 
+                  width={40} 
+                  height={40}
+                  loading="eager"
+                  unoptimized
+                />
+                <Image src="https://i.pravatar.cc/40?img=25" alt="User" className="trust-avatar" width={40} height={40} unoptimized />
+                <Image src="https://i.pravatar.cc/40?img=33" alt="User" className="trust-avatar" width={40} height={40} unoptimized />
+                <Image src="https://i.pravatar.cc/40?img=42" alt="User" className="trust-avatar" width={40} height={40} unoptimized />
+                <Image src="https://i.pravatar.cc/40?img=68" alt="User" className="trust-avatar" width={40} height={40} unoptimized />
                 <div className="more-users">+{liveUsers - 5}</div>
               </div>
               <div className="trust-text">
@@ -278,9 +360,16 @@ export default function HomePage() {
                   <span className="pool-icon animated-bounce">🎉</span>
                   <span>You get <strong>147 pre-qualified buyers</strong> ready to purchase immediately</span>
                 </div>
-                <a href="#" className="business-cta primary" onClick={(e) => { e.preventDefault(); openTallyPopup('AI Resume Writer'); }}>
+                <button 
+                  className="business-cta primary" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('AI Resume Writer'); 
+                  }}
+                  aria-label="Get AI Career Accelerator business"
+                >
                   Get This Business →
-                </a>
+                </button>
               </div>
 
               <div className="business-card glass-card hover-lift">
@@ -305,9 +394,16 @@ export default function HomePage() {
                   <span className="pool-icon">👥</span>
                   <span>Includes a list of <strong>94 clients who need this service now</strong></span>
                 </div>
-                <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Fitness Meal Plans'); }}>
+                <button 
+                  className="business-cta" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('Fitness Meal Plans'); 
+                  }}
+                  aria-label="Get Fitness Transformation Hub business"
+                >
                   Get This Business →
-                </a>
+                </button>
               </div>
 
               <div className="business-card glass-card hover-lift">
@@ -332,9 +428,16 @@ export default function HomePage() {
                   <span className="pool-icon">👥</span>
                   <span>Includes a list of <strong>183 clients who need this service now</strong></span>
                 </div>
-                <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Logo Design Service'); }}>
+                <button 
+                  className="business-cta" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('Logo Design Service'); 
+                  }}
+                  aria-label="Get Brand Identity Studio business"
+                >
                   Get This Business →
-                </a>
+                </button>
               </div>
 
               <div className="business-card glass-card hover-lift">
@@ -359,9 +462,16 @@ export default function HomePage() {
                   <span className="pool-icon">👥</span>
                   <span>Includes a list of <strong>76 clients who need this service now</strong></span>
                 </div>
-                <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Social Media Manager'); }}>
+                <button 
+                  className="business-cta" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('Social Media Manager'); 
+                  }}
+                  aria-label="Get Social Growth Engine business"
+                >
                   Get This Business →
-                </a>
+                </button>
               </div>
 
               <div className="business-card glass-card hover-lift">
@@ -386,9 +496,16 @@ export default function HomePage() {
                   <span className="pool-icon">👥</span>
                   <span>Includes a list of <strong>52 clients who need this service now</strong></span>
                 </div>
-                <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('B2B Lead Generation'); }}>
+                <button 
+                  className="business-cta" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('B2B Lead Generation'); 
+                  }}
+                  aria-label="Get B2B Revenue Machine business"
+                >
                   Get This Business →
-                </a>
+                </button>
               </div>
 
               <div className="business-card glass-card hover-lift">
@@ -413,9 +530,16 @@ export default function HomePage() {
                   <span className="pool-icon">👥</span>
                   <span>Includes a list of <strong>108 clients who need this service now</strong></span>
                 </div>
-                <a href="#" className="business-cta" onClick={(e) => { e.preventDefault(); openTallyPopup('Virtual Staging'); }}>
+                <button 
+                  className="business-cta" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('Virtual Staging'); 
+                  }}
+                  aria-label="Get Real Estate Visual Magic business"
+                >
                   Get This Business →
-                </a>
+                </button>
               </div>
             </div>
 
@@ -432,6 +556,7 @@ export default function HomePage() {
                       placeholder="Describe your business idea in a few words..."
                       className="idea-input"
                       maxLength={100}
+                      aria-label="Enter your business idea"
                     />
                     <button 
                       className="idea-submit-btn"
@@ -441,6 +566,7 @@ export default function HomePage() {
                         const idea = input?.value || 'Custom Business';
                         openTallyPopup(`Custom: ${idea}`);
                       }}
+                      aria-label="Build your custom business idea"
                     >
                       <span>Build My Idea</span>
                       <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
@@ -450,18 +576,33 @@ export default function HomePage() {
                   </div>
                   <div className="idea-examples">
                     <span className="examples-label">💭 Ideas:</span>
-                    <button className="example-tag" onClick={(e) => {
+                    <button className="example-tag"                       onClick={() => {
+                        const input = document.querySelector('.idea-input') as HTMLInputElement;
+                        if (input) {
+                          input.value = 'Pet grooming service';
+                          input.focus();
+                        }
+                    }}
+                    aria-label="Use Pet grooming service as business idea"
+                    >Pet grooming service</button>
+                    <button className="example-tag" onClick={() => {
                       const input = document.querySelector('.idea-input') as HTMLInputElement;
-                      if (input) input.value = 'Pet grooming service';
-                    }}>Pet grooming service</button>
-                    <button className="example-tag" onClick={(e) => {
+                      if (input) {
+                        input.value = 'Online tutoring platform';
+                        input.focus();
+                      }
+                    }}
+                    aria-label="Use Online tutoring platform as business idea"
+                    >Online tutoring</button>
+                    <button className="example-tag" onClick={() => {
                       const input = document.querySelector('.idea-input') as HTMLInputElement;
-                      if (input) input.value = 'Online tutoring platform';
-                    }}>Online tutoring</button>
-                    <button className="example-tag" onClick={(e) => {
-                      const input = document.querySelector('.idea-input') as HTMLInputElement;
-                      if (input) input.value = 'Local delivery service';
-                    }}>Local delivery</button>
+                      if (input) {
+                        input.value = 'Local delivery service';
+                        input.focus();
+                      }
+                    }}
+                    aria-label="Use Local delivery service as business idea"
+                    >Local delivery</button>
                   </div>
                 </div>
               </div>
@@ -679,7 +820,15 @@ export default function HomePage() {
             <div className="testimonial-grid">
               <div className="testimonial-card featured">
                 <div className="testimonial-header">
-                  <Image src="https://i.pravatar.cc/60?img=7" alt="Sarah M." className="testimonial-avatar" width={60} height={60} />
+                  <Image 
+                    src="https://i.pravatar.cc/60?img=7" 
+                    alt="Sarah M." 
+                    className="testimonial-avatar" 
+                    width={60} 
+                    height={60}
+                    loading="lazy"
+                    unoptimized
+                  />
                   <div>
                     <h4>Sarah Mitchell</h4>
                     <p>Former Teacher</p>
@@ -705,7 +854,15 @@ export default function HomePage() {
               
               <div className="testimonial-card">
                 <div className="testimonial-header">
-                  <Image src="https://i.pravatar.cc/60?img=11" alt="David R." className="testimonial-avatar" width={60} height={60} />
+                  <Image 
+                    src="https://i.pravatar.cc/60?img=11" 
+                    alt="David R." 
+                    className="testimonial-avatar" 
+                    width={60} 
+                    height={60}
+                    loading="lazy"
+                    unoptimized
+                  />
                   <div>
                     <h4>David Rodriguez</h4>
                     <p>Marketing Manager</p>
@@ -727,7 +884,15 @@ export default function HomePage() {
               
               <div className="testimonial-card">
                 <div className="testimonial-header">
-                  <Image src="https://i.pravatar.cc/60?img=9" alt="Emma K." className="testimonial-avatar" width={60} height={60} />
+                  <Image 
+                    src="https://i.pravatar.cc/60?img=9" 
+                    alt="Emma K." 
+                    className="testimonial-avatar" 
+                    width={60} 
+                    height={60}
+                    loading="lazy"
+                    unoptimized
+                  />
                   <div>
                     <h4>Emma Kim</h4>
                     <p>Stay-at-Home Mom</p>
@@ -805,7 +970,16 @@ export default function HomePage() {
                   <li><span className="feature-icon">✓</span>$1,000 revenue guarantee</li>
                   <li><span className="feature-icon">✓</span>Community support</li>
                 </ul>
-                <a href="#" className="plan-cta secondary" onClick={(e) => { e.preventDefault(); openTallyPopup('Starter'); }}>Start Free</a>
+                <button 
+                className="plan-cta secondary" 
+                onClick={(e) => { 
+                  e.preventDefault(); 
+                  openTallyPopup('Starter'); 
+                }}
+                aria-label="Start with Starter plan for free"
+              >
+                Start Free
+              </button>
               </div>
               
               <div className="pricing-card popular">
@@ -828,7 +1002,16 @@ export default function HomePage() {
                   <li><span className="feature-icon">✓</span>Weekly strategy calls</li>
                   <li><span className="feature-icon">✓</span>Custom business option</li>
                 </ul>
-                <a href="#" className="plan-cta primary" onClick={(e) => { e.preventDefault(); openTallyPopup('Professional'); }}>Get Started Now</a>
+                <button 
+                  className="plan-cta primary" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('Professional'); 
+                  }}
+                  aria-label="Get started with Professional plan"
+                >
+                  Get Started Now
+                </button>
               </div>
               
               <div className="pricing-card">
@@ -850,7 +1033,16 @@ export default function HomePage() {
                   <li><span className="feature-icon">✓</span>1-on-1 coaching</li>
                   <li><span className="feature-icon">✓</span>Custom integrations</li>
                 </ul>
-                <a href="#" className="plan-cta secondary" onClick={(e) => { e.preventDefault(); openTallyPopup('Scale'); }}>Contact Us</a>
+                <button 
+                  className="plan-cta secondary" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    openTallyPopup('Scale'); 
+                  }}
+                  aria-label="Contact us about Scale plan"
+                >
+                  Contact Us
+                </button>
               </div>
             </div>
             
@@ -1018,9 +1210,16 @@ export default function HomePage() {
             <h2>Your Profitable Business is One Click Away</h2>
             <p>Join 4,127+ people already making passive income with AI. Set up once, profit forever.</p>
             
-            <a href="#" className="primary-cta large" onClick={(e) => { e.preventDefault(); openTallyPopup(); }}>
+            <button 
+              className="primary-cta large" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                openTallyPopup(); 
+              }}
+              aria-label="Start getting customers with Launchfly"
+            >
               <span>Get My First Customer Now →</span>
-            </a>
+            </button>
             
             <div className="final-trust">
               <div className="trust-item">
@@ -1048,7 +1247,7 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer>
+      <footer role="contentinfo">
         <div className="container footer-content">
           <div className="footer-main">
             <div className="footer-brand">
@@ -1057,14 +1256,14 @@ export default function HomePage() {
                 Launchfly
               </div>
               <p>AI-powered businesses that actually make money.</p>
-              <div className="footer-social">
-                <a href="#" aria-label="Twitter">𝕏</a>
-                <a href="#" aria-label="LinkedIn">in</a>
-                <a href="#" aria-label="YouTube">▶</a>
+                              <div className="footer-social">
+                <a href="#" aria-label="Follow us on Twitter" rel="noopener noreferrer">𝕏</a>
+                <a href="#" aria-label="Follow us on LinkedIn" rel="noopener noreferrer">in</a>
+                <a href="#" aria-label="Subscribe on YouTube" rel="noopener noreferrer">▶</a>
               </div>
             </div>
             
-            <div className="footer-links">
+            <div className="footer-links" role="navigation" aria-label="Footer navigation">
               <div className="footer-column">
                 <h4>Product</h4>
                 <a href="#how-it-works">How It Works</a>

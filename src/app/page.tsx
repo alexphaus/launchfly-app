@@ -748,59 +748,77 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <h4 className="group-label label-top">LEAD GENERATION</h4>
-                <div className="automation-node node-1">
-                  <div className="node-content">
-                    <span className="node-icon">🔍</span>
-                    <span className="node-label">Finds Ideal Customers</span>
+                <div className="automation-groups">
+                  <div className="automation-group group-top">
+                    <h4 className="group-label">LEAD GENERATION</h4>
+                    <div className="group-nodes">
+                      <div className="automation-node node-1">
+                        <div className="node-content" data-label="Finds Ideal Customers">
+                          <span className="node-icon">🔍</span>
+                          <span className="node-label">Finds Ideal Customers</span>
+                        </div>
+                      </div>
+                      <div className="automation-node node-2">
+                        <div className="node-content" data-label="Sends Outreach">
+                          <span className="node-icon">📧</span>
+                          <span className="node-label">Sends Outreach</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="automation-node node-2">
-                  <div className="node-content">
-                    <span className="node-icon">📧</span>
-                    <span className="node-label">Sends Outreach</span>
-                  </div>
-                </div>
 
-                <h4 className="group-label label-right">GROWTH</h4>
-                <div className="automation-node node-3">
-                  <div className="node-content">
-                    <span className="node-icon">📈</span>
-                    <span className="node-label">Scales Revenue</span>
+                  <div className="automation-group group-right">
+                    <h4 className="group-label">GROWTH</h4>
+                    <div className="group-nodes">
+                      <div className="automation-node node-3">
+                        <div className="node-content" data-label="Scales Revenue">
+                          <span className="node-icon">📈</span>
+                          <span className="node-label">Scales Revenue</span>
+                        </div>
+                      </div>
+                      <div className="automation-node node-4">
+                        <div className="node-content" data-label="Runs Ad Campaigns">
+                          <span className="node-icon">🎯</span>
+                          <span className="node-label">Runs Ad Campaigns</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="automation-node node-4">
-                  <div className="node-content">
-                    <span className="node-icon">🎯</span>
-                    <span className="node-label">Runs Ad Campaigns</span>
-                  </div>
-                </div>
 
-                <h4 className="group-label label-bottom">OPTIMIZATION</h4>
-                <div className="automation-node node-5">
-                  <div className="node-content">
-                    <span className="node-icon">📊</span>
-                    <span className="node-label">Optimizes Pricing</span>
+                  <div className="automation-group group-bottom">
+                    <h4 className="group-label">OPTIMIZATION</h4>
+                    <div className="group-nodes">
+                      <div className="automation-node node-5">
+                        <div className="node-content" data-label="Optimizes Pricing">
+                          <span className="node-icon">📊</span>
+                          <span className="node-label">Optimizes Pricing</span>
+                        </div>
+                      </div>
+                      <div className="automation-node node-6">
+                        <div className="node-content" data-label="A/B Tests Everything">
+                          <span className="node-icon">🔄</span>
+                          <span className="node-label">A/B Tests Everything</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="automation-node node-6">
-                  <div className="node-content">
-                    <span className="node-icon">🔄</span>
-                    <span className="node-label">A/B Tests Everything</span>
-                  </div>
-                </div>
 
-                <h4 className="group-label label-left">SALES</h4>
-                <div className="automation-node node-7">
-                  <div className="node-content">
-                    <span className="node-icon">💬</span>
-                    <span className="node-label">Handles Conversations</span>
-                  </div>
-                </div>
-                <div className="automation-node node-8">
-                  <div className="node-content">
-                    <span className="node-icon">💳</span>
-                    <span className="node-label">Processes Payments</span>
+                  <div className="automation-group group-left">
+                    <h4 className="group-label">SALES</h4>
+                    <div className="group-nodes">
+                      <div className="automation-node node-7">
+                        <div className="node-content" data-label="Handles Conversations">
+                          <span className="node-icon">💬</span>
+                          <span className="node-label">Handles Conversations</span>
+                        </div>
+                      </div>
+                      <div className="automation-node node-8">
+                        <div className="node-content" data-label="Processes Payments">
+                          <span className="node-icon">💳</span>
+                          <span className="node-label">Processes Payments</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

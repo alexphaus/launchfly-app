@@ -1002,34 +1002,36 @@ export default function HomePage() {
               
               <div className="pricing-card popular">
                 <div className="popular-badge">BEST VALUE</div>
-                <div className="plan-header">
-                  <h3>Professional</h3>
-                  <p className="plan-tagline">Maximum profit potential</p>
+                <div className="pricing-card-inner">
+                  <div className="plan-header">
+                    <h3>Professional</h3>
+                    <p className="plan-tagline">Maximum profit potential</p>
+                  </div>
+                  <div className="price-display">
+                    <span className="price-currency">$</span>
+                    <span className="price-number">497</span>
+                    <span className="price-period">lifetime access</span>
+                  </div>
+                  <div className="revenue-share glass-pill premium">Keep 90% of profits</div>
+                  <ul className="plan-features">
+                    <li><span className="feature-icon">✓</span><strong>Everything in Starter, plus:</strong></li>
+                    <li><span className="feature-icon">✓</span>100-200 customers included</li>
+                    <li><span className="feature-icon">✓</span>Priority customer allocation</li>
+                    <li><span className="feature-icon">✓</span>Advanced AI optimization</li>
+                    <li><span className="feature-icon">✓</span>Weekly strategy calls</li>
+                    <li><span className="feature-icon">✓</span>Custom business option</li>
+                  </ul>
+                  <button 
+                    className="plan-cta primary" 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      openTallyPopup('Professional'); 
+                    }}
+                    aria-label="Get started with Professional plan"
+                  >
+                    Get Started Now
+                  </button>
                 </div>
-                <div className="price-display">
-                  <span className="price-currency">$</span>
-                  <span className="price-number">497</span>
-                  <span className="price-period">lifetime access</span>
-                </div>
-                <div className="revenue-share glass-pill premium">Keep 90% of profits</div>
-                <ul className="plan-features">
-                  <li><span className="feature-icon">✓</span><strong>Everything in Starter, plus:</strong></li>
-                  <li><span className="feature-icon">✓</span>100-200 customers included</li>
-                  <li><span className="feature-icon">✓</span>Priority customer allocation</li>
-                  <li><span className="feature-icon">✓</span>Advanced AI optimization</li>
-                  <li><span className="feature-icon">✓</span>Weekly strategy calls</li>
-                  <li><span className="feature-icon">✓</span>Custom business option</li>
-                </ul>
-                <button 
-                  className="plan-cta primary" 
-                  onClick={(e) => { 
-                    e.preventDefault(); 
-                    openTallyPopup('Professional'); 
-                  }}
-                  aria-label="Get started with Professional plan"
-                >
-                  Get Started Now
-                </button>
               </div>
               
               <div className="pricing-card">

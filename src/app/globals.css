@@ -1383,13 +1383,29 @@ h1 {
 
 .pricing-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 40px;
     max-width: 1200px;
     margin: 0 auto;
     position: relative;
     z-index: 1;
     padding-top: 28px; /* Add space for badges */
+}
+
+/* Desktop specific - ensure 3 cards in a row */
+@media (min-width: 1024px) {
+    .pricing-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+    }
+}
+
+/* Tablet - 2 cards per row, Scale card below */
+@media (max-width: 1023px) and (min-width: 769px) {
+    .pricing-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 32px;
+    }
 }
 
 .pricing-card {
@@ -1447,14 +1463,46 @@ h1 {
 }
 
 .pricing-card.popular {
-    border: 2px solid var(--primary);
+    background: transparent;
+    border: none;
+    padding: 0;
+    box-shadow: none;
+    overflow: visible;
     transform: scale(1.05);
+    z-index: 5;
+}
+
+.pricing-card.popular:hover {
+    transform: translateY(-8px) scale(1.05);
+    box-shadow: none;
+}
+
+.pricing-card.popular::before {
+    content: none;
+}
+
+.pricing-card-inner {
+    height: 100%;
+    background: var(--gradient-card);
+    border-radius: 24px;
+    padding: 48px;
+    position: relative;
+    transition: all var(--animation-duration-normal) var(--animation-curve);
+    overflow: hidden;
+    border: 2px solid var(--primary);
     box-shadow: var(--shadow-glow);
     background: linear-gradient(145deg, #ffffff 0%, rgba(99, 102, 241, 0.02) 100%);
 }
 
-.pricing-card.popular::before {
+.pricing-card-inner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
     background: var(--gradient-accent);
+    border-radius: 22px 22px 0 0;
 }
 
 .popular-badge {

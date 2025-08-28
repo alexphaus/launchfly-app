@@ -14,25 +14,9 @@ export default function HomePage() {
   const [recentSuccess, setRecentSuccess] = useState(142);
   const [countdown, setCountdown] = useState({ days: 2, hours: 14, minutes: 32 });
 
-  // Generate session ID
-  const [sessionId] = useState(() => 
-    `session_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`
-  );
-
-  // Tally popup function
-  const openTallyPopup = (plan = 'Default') => {
-    if (typeof window !== 'undefined' && window.Tally) {
-      window.Tally.openPopup('mOqz1Y', {
-        layout: 'modal',
-        width: 700,
-        hideTitle: true,
-        hiddenFields: {
-          sessionID: sessionId,
-          plan: plan,
-          source: 'hybrid-main'
-        }
-      });
-    }
+  // Navigation to marketplace
+  const goToMarketplace = () => {
+    router.push('/marketplace');
   };
 
   useEffect(() => {
@@ -193,7 +177,7 @@ export default function HomePage() {
               className="nav-cta" 
               onClick={(e) => { 
                 e.preventDefault(); 
-                openTallyPopup(); 
+                goToMarketplace(); 
               }}
               aria-label="Get started with Launchfly"
             >
@@ -222,7 +206,7 @@ export default function HomePage() {
             onClick={(e) => { 
               e.preventDefault(); 
               closeMobileMenu();
-              openTallyPopup(); 
+              goToMarketplace(); 
             }}
           >
             Get Started Now
@@ -364,7 +348,7 @@ export default function HomePage() {
                   className="business-cta primary" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('AI Resume Writer'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Get AI Career Accelerator business"
                 >
@@ -398,7 +382,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Fitness Meal Plans'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Get Fitness Transformation Hub business"
                 >
@@ -432,7 +416,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Logo Design Service'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Get Brand Identity Studio business"
                 >
@@ -466,7 +450,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Social Media Manager'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Get Social Growth Engine business"
                 >
@@ -500,7 +484,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('B2B Lead Generation'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Get B2B Revenue Machine business"
                 >
@@ -534,7 +518,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Virtual Staging'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Get Real Estate Visual Magic business"
                 >
@@ -564,7 +548,7 @@ export default function HomePage() {
                         e.preventDefault();
                         const input = e.currentTarget.previousElementSibling as HTMLInputElement;
                         const idea = input?.value || 'Custom Business';
-                        openTallyPopup(`Custom: ${idea}`);
+                        goToMarketplace();
                       }}
                       aria-label="Build your custom business idea"
                     >
@@ -992,7 +976,7 @@ export default function HomePage() {
                 className="plan-cta secondary" 
                 onClick={(e) => { 
                   e.preventDefault(); 
-                  openTallyPopup('Starter'); 
+                  goToMarketplace(); 
                 }}
                 aria-label="Start with Starter plan for free"
               >
@@ -1025,7 +1009,7 @@ export default function HomePage() {
                     className="plan-cta primary" 
                     onClick={(e) => { 
                       e.preventDefault(); 
-                      openTallyPopup('Professional'); 
+                      goToMarketplace(); 
                     }}
                     aria-label="Get started with Professional plan"
                   >
@@ -1057,7 +1041,7 @@ export default function HomePage() {
                   className="plan-cta secondary" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Scale'); 
+                    goToMarketplace(); 
                   }}
                   aria-label="Contact us about Scale plan"
                 >
@@ -1234,7 +1218,7 @@ export default function HomePage() {
               className="primary-cta large" 
               onClick={(e) => { 
                 e.preventDefault(); 
-                openTallyPopup(); 
+                goToMarketplace(); 
               }}
               aria-label="Start getting customers with Launchfly"
             >
@@ -1328,11 +1312,3 @@ export default function HomePage() {
   );
 }
 
-// Declare global Tally interface for TypeScript
-declare global {
-  interface Window {
-    Tally: {
-      openPopup: (formId: string, options: any) => void;
-    };
-  }
-}

@@ -1,0 +1,523 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+import { trackOnboardingStart, trackStepCompleted, trackValidationError, trackOnboardingCompleted } from '../../../lib/onboarding-analytics';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// Business template configurations
+const BUSINESS_TEMPLATES = {
+  'ai-career': {
+    name: 'AI Career Accelerator',
+    icon: '🎆',
+    description: 'Premium resume & LinkedIn optimization service',
+    pricing: '$197-497 per client',
+    avgRevenue: '$4,850/mo'
+  },
+  'fitness': {
+    name: 'Fitness Transformation Hub',
+    icon: '💪',
+    description: 'Personalized meal plans + workout programs',
+    pricing: '$47-97/month per client',
+    avgRevenue: '$2,850/mo'
+  },
+  'branding': {
+    name: 'Brand Identity Studio',
+    icon: '✨',
+    description: 'Complete branding packages (logo, colors, fonts)',
+    pricing: '$297-997 per project',
+    avgRevenue: '$4,200/mo'
+  },
+  'social': {
+    name: 'Social Growth Engine',
+    icon: '🚀',
+    description: 'Full social media management + growth hacking',
+    pricing: '$297-497/month per client',
+    avgRevenue: '$1,950/mo'
+  },
+  'b2b': {
+    name: 'B2B Revenue Machine',
+    icon: '🎯',
+    description: 'Done-for-you lead generation for B2B companies',
+    pricing: '$2K-5K/month per client',
+    avgRevenue: '$5,600/mo'
+  },
+  'realestate': {
+    name: 'Real Estate Visual Magic',
+    icon: '🏰',
+    description: 'Virtual staging + property enhancement',
+    pricing: '$97-297 per property',
+    avgRevenue: '$3,100/mo'
+  }
+};
+
+export default function QuickStartOnboarding() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Form data
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    name: '',
+    template: searchParams.get('template') || '',
+    plan: searchParams.get('plan') || 'starter',
+    businessName: '',
+    subdomain: ''
+  });
+
+  const selectedTemplate = BUSINESS_TEMPLATES[formData.template as keyof typeof BUSINESS_TEMPLATES];
+
+  // Track onboarding start
+  useEffect(() => {
+    trackOnboardingStart('quick-start', formData.template, formData.plan);
+  }, [formData.template, formData.plan]);
+
+  // Auto-generate business name and subdomain based on template
+  useEffect(() => {
+    if (selectedTemplate && !formData.businessName) {
+      setFormData(prev => ({
+        ...prev,
+        businessName: selectedTemplate.name,
+        subdomain: generateSubdomain(selectedTemplate.name)
+      }));
+    }
+  }, [selectedTemplate, formData.businessName]);
+
+  const generateSubdomain = (businessName: string) => {
+    return businessName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 20) + '-' + Math.random().toString(36).substr(2, 4);
+  };
+
+  const validateStep = (step: number) => {
+    const newErrors: Record<string, string> = {};
+
+    if (step === 1) {
+      if (!formData.email) newErrors.email = 'Email is required';
+      else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Please enter a valid email';
+      
+      if (!formData.password) newErrors.password = 'Password is required';
+      else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
+      
+      if (!formData.name) newErrors.name = 'Name is required';
+    }
+
+    if (step === 2) {
+      if (!formData.businessName) newErrors.businessName = 'Business name is required';
+      if (!formData.subdomain) newErrors.subdomain = 'Subdomain is required';
+    }
+
+    // Track validation errors
+    Object.entries(newErrors).forEach(([field, error]) => {
+      trackValidationError(step, field, error);
+    });
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      const stepNames = ['account_creation', 'business_customization', 'review'];
+      trackStepCompleted(currentStep, stepNames[currentStep - 1], {
+        template: formData.template,
+        plan: formData.plan
+      });
+      setCurrentStep(prev => prev + 1);
+    }
+  };
+
+  const handleBack = () => {
+    setCurrentStep(prev => prev - 1);
+  };
+
+  const handleSubmit = async () => {
+    if (!validateStep(currentStep)) return;
+
+    setIsLoading(true);
+    try {
+      // Create user account
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.name
+          }
+        }
+      });
+
+      if (authError) throw authError;
+
+      // Submit business creation request
+      const response = await fetch('/api/wizard/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          niche: selectedTemplate?.name || 'Custom Business',
+          skills: selectedTemplate?.description || '',
+          availability: 'part-time',
+          subdomain: formData.subdomain,
+          budget: formData.plan === 'professional' ? 'high' : 'medium',
+          plan: formData.plan,
+          businessName: formData.businessName,
+          template: formData.template
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create business');
+      }
+
+      const result = await response.json();
+      
+      // Track successful completion
+      trackOnboardingCompleted({
+        template: formData.template,
+        plan: formData.plan,
+        businessName: formData.businessName,
+        subdomain: formData.subdomain,
+        sessionId: result.sessionId
+      });
+      
+      // Redirect to dashboard with session ID
+      router.push(`/dashboard/${result.sessionId}`);
+      
+    } catch (error) {
+      console.error('Onboarding error:', error);
+      setErrors({ submit: (error as Error).message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider: 'google') => {
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/onboarding/quick-start?step=2&template=${formData.template}&plan=${formData.plan}`
+        }
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Social login error:', error);
+      setErrors({ social: (error as Error).message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderStep1 = () => (
+    <>
+      <div className="onboarding-header">
+        <div className="onboarding-logo">
+          <span className="onboarding-logo-icon">⚡</span>
+          <span className="onboarding-logo-text">Launchfly</span>
+        </div>
+        <div className="onboarding-progress">
+          <div className="progress-step active"></div>
+          <div className="progress-step"></div>
+          <div className="progress-step"></div>
+        </div>
+      </div>
+
+      <div className="onboarding-content">
+        <h1 className="onboarding-title">Create Your Account</h1>
+        <p className="onboarding-subtitle">
+          {selectedTemplate ? 
+            `Get started with ${selectedTemplate.name} in just a few minutes` :
+            'Get started with your new business in just a few minutes'
+          }
+        </p>
+
+        {selectedTemplate && (
+          <div style={{ 
+            background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+            padding: '1rem',
+            borderRadius: '12px',
+            marginBottom: '1.5rem',
+            border: '1px solid rgba(59, 130, 246, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>{selectedTemplate.icon}</span>
+              <h3 style={{ margin: 0, color: '#1e40af' }}>{selectedTemplate.name}</h3>
+            </div>
+            <p style={{ margin: 0, color: '#1e40af', fontSize: '0.9rem' }}>
+              {selectedTemplate.description} • {selectedTemplate.pricing}
+            </p>
+          </div>
+        )}
+
+        <div className="social-login">
+          <button 
+            className="social-btn" 
+            onClick={() => handleSocialLogin('google')}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <div className="loading-spinner"></div>
+            ) : (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                  <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continue with Google
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="divider">
+          <span>or sign up with email</span>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
+          <div className="form-group">
+            <label className="form-label">Full Name</label>
+            <input
+              type="text"
+              className={`form-input ${errors.name ? 'error' : ''}`}
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter your full name"
+            />
+            {errors.name && <div className="form-error">{errors.name}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Email Address</label>
+            <input
+              type="email"
+              className={`form-input ${errors.email ? 'error' : ''}`}
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              placeholder="Enter your email"
+            />
+            {errors.email && <div className="form-error">{errors.email}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              className={`form-input ${errors.password ? 'error' : ''}`}
+              value={formData.password}
+              onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+              placeholder="Create a password (6+ characters)"
+            />
+            {errors.password && <div className="form-error">{errors.password}</div>}
+          </div>
+
+          {errors.social && <div className="form-error">{errors.social}</div>}
+
+          <button type="submit" className="btn btn-primary btn-full" disabled={isLoading}>
+            {isLoading ? <div className="loading-spinner"></div> : 'Continue'}
+          </button>
+        </form>
+      </div>
+    </>
+  );
+
+  const renderStep2 = () => (
+    <>
+      <div className="onboarding-header">
+        <div className="onboarding-logo">
+          <span className="onboarding-logo-icon">⚡</span>
+          <span className="onboarding-logo-text">Launchfly</span>
+        </div>
+        <div className="onboarding-progress">
+          <div className="progress-step completed"></div>
+          <div className="progress-step active"></div>
+          <div className="progress-step"></div>
+        </div>
+      </div>
+
+      <div className="onboarding-content">
+        <h1 className="onboarding-title">Customize Your Business</h1>
+        <p className="onboarding-subtitle">
+          Let's set up your business details and get your website ready
+        </p>
+
+        <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
+          <div className="form-group">
+            <label className="form-label">Business Name</label>
+            <input
+              type="text"
+              className={`form-input ${errors.businessName ? 'error' : ''}`}
+              value={formData.businessName}
+              onChange={(e) => setFormData(prev => ({ ...prev, businessName: e.target.value }))}
+              placeholder="Enter your business name"
+            />
+            {errors.businessName && <div className="form-error">{errors.businessName}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Website Address</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input
+                type="text"
+                className={`form-input ${errors.subdomain ? 'error' : ''}`}
+                value={formData.subdomain}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+                }))}
+                placeholder="your-business"
+                style={{ flex: 1 }}
+              />
+              <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>.launchfly.com</span>
+            </div>
+            {errors.subdomain && <div className="form-error">{errors.subdomain}</div>}
+          </div>
+
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={handleBack}
+              style={{ flex: 1 }}
+            >
+              Back
+            </button>
+            <button 
+              type="submit" 
+              className="btn btn-primary" 
+              style={{ flex: 2 }}
+              disabled={isLoading}
+            >
+              {isLoading ? <div className="loading-spinner"></div> : 'Continue'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+
+  const renderStep3 = () => (
+    <>
+      <div className="onboarding-header">
+        <div className="onboarding-logo">
+          <span className="onboarding-logo-icon">⚡</span>
+          <span className="onboarding-logo-text">Launchfly</span>
+        </div>
+        <div className="onboarding-progress">
+          <div className="progress-step completed"></div>
+          <div className="progress-step completed"></div>
+          <div className="progress-step active"></div>
+        </div>
+      </div>
+
+      <div className="onboarding-content">
+        <h1 className="onboarding-title">Ready to Launch!</h1>
+        <p className="onboarding-subtitle">
+          Review your business setup and launch your AI-powered business
+        </p>
+
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: '1.5rem', 
+          borderRadius: '12px', 
+          marginBottom: '2rem',
+          border: '1px solid #e2e8f0'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#1a1a1a' }}>Business Summary</h3>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Business Name:</span>
+              <span style={{ fontWeight: '600' }}>{formData.businessName}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Website:</span>
+              <span style={{ fontWeight: '600' }}>{formData.subdomain}.launchfly.com</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Template:</span>
+              <span style={{ fontWeight: '600' }}>{selectedTemplate?.name || 'Custom'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Plan:</span>
+              <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>{formData.plan}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ 
+          background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)', 
+          padding: '1.5rem', 
+          borderRadius: '12px', 
+          marginBottom: '2rem',
+          border: '1px solid rgba(34, 197, 94, 0.2)'
+        }}>
+          <h4 style={{ margin: '0 0 0.5rem 0', color: '#15803d', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>✨</span> What happens next?
+          </h4>
+          <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#15803d' }}>
+            <li>AI creates your custom business website</li>
+            <li>Your customer database is transferred</li>
+            <li>Automated systems start running</li>
+            <li>First customers contacted within 24 hours</li>
+          </ul>
+        </div>
+
+        {errors.submit && <div className="form-error" style={{ marginBottom: '1rem' }}>{errors.submit}</div>}
+
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            onClick={handleBack}
+            style={{ flex: 1 }}
+          >
+            Back
+          </button>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleSubmit}
+            style={{ flex: 2 }}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <div className="loading-spinner"></div>
+                Creating Business...
+              </>
+            ) : (
+              <>
+                🚀 Launch My Business
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {currentStep === 1 && renderStep1()}
+      {currentStep === 2 && renderStep2()}
+      {currentStep === 3 && renderStep3()}
+    </>
+  );
+}

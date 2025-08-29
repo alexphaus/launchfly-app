@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { trackCTAClick } from '../lib/onboarding-analytics';
 
 export default function HomePage() {
   const router = useRouter();
@@ -19,19 +20,23 @@ export default function HomePage() {
     `session_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`
   );
 
-  // Tally popup function
-  const openTallyPopup = (plan = 'Default') => {
-    if (typeof window !== 'undefined' && window.Tally) {
-      window.Tally.openPopup('mOqz1Y', {
-        layout: 'modal',
-        width: 700,
-        hideTitle: true,
-        hiddenFields: {
-          sessionID: sessionId,
-          plan: plan,
-          source: 'hybrid-main'
-        }
-      });
+  // Navigation functions for new onboarding flow
+  const handleGetStarted = (plan = 'starter', location = 'unknown') => {
+    trackCTAClick('get_started', location, undefined, plan);
+    router.push(`/onboarding?plan=${plan}`);
+  };
+
+  const handleSelectTemplate = (template: string, location = 'business_cards') => {
+    trackCTAClick('select_template', location, template);
+    router.push(`/onboarding?template=${encodeURIComponent(template)}`);
+  };
+
+  const handleCustomBusiness = (idea = '', location = 'custom_section') => {
+    trackCTAClick('custom_business', location, undefined, undefined);
+    if (idea) {
+      router.push(`/onboarding/custom?idea=${encodeURIComponent(idea)}`);
+    } else {
+      router.push('/onboarding/custom');
     }
   };
 
@@ -193,7 +198,7 @@ export default function HomePage() {
               className="nav-cta" 
               onClick={(e) => { 
                 e.preventDefault(); 
-                openTallyPopup(); 
+                handleGetStarted('starter', 'header_nav'); 
               }}
               aria-label="Get started with Launchfly"
             >
@@ -222,7 +227,7 @@ export default function HomePage() {
             onClick={(e) => { 
               e.preventDefault(); 
               closeMobileMenu();
-              openTallyPopup(); 
+              handleGetStarted(); 
             }}
           >
             Get Started Now
@@ -249,12 +254,11 @@ export default function HomePage() {
             
             <div className="cta-group">
               <a 
-                href="#proven-businesses" 
+                href="/templates" 
                 className="primary-cta"
                 onClick={(e) => {
                   e.preventDefault();
-                  const element = document.getElementById('proven-businesses');
-                  element?.scrollIntoView({ behavior: 'smooth' });
+                  router.push('/templates');
                 }}
               >
                 <span className="cta-shine" aria-hidden="true"></span>
@@ -364,7 +368,7 @@ export default function HomePage() {
                   className="business-cta primary" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('AI Resume Writer'); 
+                    handleSelectTemplate('ai-career'); 
                   }}
                   aria-label="Get AI Career Accelerator business"
                 >
@@ -398,7 +402,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Fitness Meal Plans'); 
+                    handleSelectTemplate('fitness'); 
                   }}
                   aria-label="Get Fitness Transformation Hub business"
                 >
@@ -432,7 +436,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Logo Design Service'); 
+                    handleSelectTemplate('branding'); 
                   }}
                   aria-label="Get Brand Identity Studio business"
                 >
@@ -466,7 +470,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Social Media Manager'); 
+                    handleSelectTemplate('social'); 
                   }}
                   aria-label="Get Social Growth Engine business"
                 >
@@ -500,7 +504,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('B2B Lead Generation'); 
+                    handleSelectTemplate('b2b'); 
                   }}
                   aria-label="Get B2B Revenue Machine business"
                 >
@@ -534,7 +538,7 @@ export default function HomePage() {
                   className="business-cta" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Virtual Staging'); 
+                    handleSelectTemplate('realestate'); 
                   }}
                   aria-label="Get Real Estate Visual Magic business"
                 >
@@ -563,8 +567,8 @@ export default function HomePage() {
                       onClick={(e) => {
                         e.preventDefault();
                         const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                        const idea = input?.value || 'Custom Business';
-                        openTallyPopup(`Custom: ${idea}`);
+                        const idea = input?.value || '';
+                        handleCustomBusiness(idea);
                       }}
                       aria-label="Build your custom business idea"
                     >
@@ -992,7 +996,7 @@ export default function HomePage() {
                 className="plan-cta secondary" 
                 onClick={(e) => { 
                   e.preventDefault(); 
-                  openTallyPopup('Starter'); 
+                  handleGetStarted('starter'); 
                 }}
                 aria-label="Start with Starter plan for free"
               >
@@ -1025,7 +1029,7 @@ export default function HomePage() {
                     className="plan-cta primary" 
                     onClick={(e) => { 
                       e.preventDefault(); 
-                      openTallyPopup('Professional'); 
+                      handleGetStarted('professional'); 
                     }}
                     aria-label="Get started with Professional plan"
                   >
@@ -1057,7 +1061,7 @@ export default function HomePage() {
                   className="plan-cta secondary" 
                   onClick={(e) => { 
                     e.preventDefault(); 
-                    openTallyPopup('Scale'); 
+                    handleGetStarted('scale'); 
                   }}
                   aria-label="Contact us about Scale plan"
                 >
@@ -1234,7 +1238,7 @@ export default function HomePage() {
               className="primary-cta large" 
               onClick={(e) => { 
                 e.preventDefault(); 
-                openTallyPopup(); 
+                handleGetStarted('starter', 'final_cta'); 
               }}
               aria-label="Start getting customers with Launchfly"
             >
@@ -1328,11 +1332,4 @@ export default function HomePage() {
   );
 }
 
-// Declare global Tally interface for TypeScript
-declare global {
-  interface Window {
-    Tally: {
-      openPopup: (formId: string, options: any) => void;
-    };
-  }
-}
+

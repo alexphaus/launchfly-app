@@ -13,11 +13,24 @@ const supabase = createClient(
  */
 export async function POST(request) {
   try {
-    const { businessId, message, sessionId } = await request.json();
+    const { businessId, message, sessionId, businessContext } = await request.json();
 
-    if (!businessId || !message) {
+    if (!message) {
       return NextResponse.json(
-        { error: 'Business ID and message are required' },
+        { error: 'Message is required' },
+        { status: 400 }
+      );
+    }
+
+    // Support idea analysis without a businessId
+    if (businessContext === 'idea-analysis' && !businessId) {
+      const analysis = analyzeBusinessIdeaFromMessage(message);
+      return NextResponse.json(analysis);
+    }
+
+    if (!businessId) {
+      return NextResponse.json(
+        { error: 'Business ID is required for this request' },
         { status: 400 }
       );
     }
@@ -191,6 +204,43 @@ function generateAIResponse(message, business, recentActivities) {
       'What meetings are booked?',
       'Pause all activities'
     ]
+  };
+}
+
+/**
+ * Lightweight heuristic analysis for business idea text
+ * Returns a structured object used by custom onboarding step
+ */
+function analyzeBusinessIdeaFromMessage(message) {
+  const text = String(message || '').toLowerCase();
+
+  // Rough heuristics
+  const premiumKeywords = ['b2b', 'enterprise', 'saas', 'consult', 'agency'];
+  const consumerKeywords = ['fitness', 'pet', 'resume', 'coaching', 'branding'];
+
+  let viabilityScore = 7;
+  if (premiumKeywords.some(k => text.includes(k))) viabilityScore += 2;
+  if (consumerKeywords.some(k => text.includes(k))) viabilityScore += 1;
+  viabilityScore = Math.max(3, Math.min(10, viabilityScore));
+
+  // Naive name generation from keywords
+  const firstWord = (text.match(/[a-zA-Z]+/g) || ['Nova'])[0];
+  const suggestedBusinessName = `${firstWord.charAt(0).toUpperCase() + firstWord.slice(1)} Lab`;
+
+  const revenueModel = premiumKeywords.some(k => text.includes(k))
+    ? 'Retainer + performance-based pricing'
+    : 'Tiered subscription with one-time setup fee';
+
+  const keySuccessFactors = premiumKeywords.some(k => text.includes(k))
+    ? 'Clear ICP definition, multi-touch outreach, case studies, and ROI proof'
+    : 'Compelling offer, trust signals, and simple onboarding experience';
+
+  return {
+    success: true,
+    viabilityScore,
+    suggestedBusinessName,
+    revenueModel,
+    keySuccessFactors
   };
 }
 

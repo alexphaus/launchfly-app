@@ -176,7 +176,8 @@ export default function QuickStartOnboarding() {
           budget: formData.plan === 'professional' ? 'high' : 'medium',
           plan: formData.plan,
           businessName: formData.businessName,
-          template: formData.template
+          template: formData.template,
+          userId: authData.user?.id
         })
       });
 

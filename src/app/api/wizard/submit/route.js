@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 // POST /api/wizard/submit
-// Payload: { name, email, niche, skills, availability, subdomain, budget, plan }
+// Payload: { name, email, niche, skills, availability, subdomain, budget, plan, userId? }
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -20,7 +20,8 @@ export async function POST(request) {
       availability,
       subdomain: desiredSubdomain,
       budget,
-      plan = 'starter'
+      plan = 'starter',
+      userId: providedUserId
     } = body || {};
 
     if (!email) {
@@ -29,32 +30,41 @@ export async function POST(request) {
 
     const sessionId = nanoid();
 
-    // Create or fetch user profile
-    let userId;
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { full_name: name || 'User' }
-    });
+    // Resolve user id: accept provided userId or create/find
+    let userId = providedUserId;
+    if (!userId) {
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: { full_name: name || 'User' }
+      });
 
-    if (authError && authError.message !== 'User already registered') {
-      throw authError;
-    }
+      if (authError && authError.message !== 'User already registered') {
+        throw authError;
+      }
 
-    if (authData?.user?.id) {
-      userId = authData.user.id;
-    } else {
-      const { data: existing, error: findErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
-      if (findErr || !existing) throw new Error('Unable to find existing user');
-      userId = existing.id;
+      if (authData?.user?.id) {
+        userId = authData.user.id;
+      } else {
+        // Fetch existing auth user by email via profiles or auth admin list
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .single();
+        if (existingProfile?.id) {
+          userId = existingProfile.id;
+        } else {
+          throw new Error('Unable to resolve user account');
+        }
+      }
     }
 
     // Upsert profile with plan
-    const planTier = (plan || 'starter').toLowerCase();
+    // Normalize plan aliases
+    const normalized = String(plan || 'starter').toLowerCase();
+    const aliasMap = { professional: 'pro', professional_lifetime: 'pro', lifetime: 'pro' };
+    const planTier = aliasMap[normalized] || normalized;
     await supabase
       .from('profiles')
       .upsert({ id: userId, email, full_name: name || 'User', plan: planTier }, { onConflict: 'id' });

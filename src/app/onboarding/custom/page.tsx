@@ -160,7 +160,8 @@ export default function CustomBusinessOnboarding() {
           businessName: formData.businessName,
           customIdea: formData.businessIdea,
           targetAudience: formData.targetAudience,
-          aiAnalysis: aiAnalysis
+          aiAnalysis: aiAnalysis,
+          userId: authData.user?.id
         })
       });
 

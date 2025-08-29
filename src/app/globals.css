@@ -2723,14 +2723,22 @@ footer {
 
 .input-group {
     display: flex;
-    gap: 0;
+    flex-direction: column;
+    gap: 12px;
     margin-bottom: 20px;
     background: white;
     border-radius: 16px;
-    padding: 4px;
+    padding: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     border: 2px solid rgba(124, 58, 237, 0.1);
     transition: all 0.3s ease;
+    position: relative;
+}
+
+@media (min-width: 769px) {
+    .input-group {
+        padding-bottom: 60px;
+    }
 }
 
 .input-group:focus-within {
@@ -2747,6 +2755,10 @@ footer {
     background: transparent;
     color: var(--text-dark);
     border-radius: 12px;
+    resize: none;
+    min-height: 100px;
+    line-height: 1.5;
+    font-family: inherit;
 }
 
 .idea-input::placeholder {
@@ -2757,10 +2769,10 @@ footer {
     background: var(--gradient-primary);
     color: white;
     border: none;
-    padding: 16px 24px;
+    padding: 12px 20px;
     border-radius: 12px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 14px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2770,6 +2782,17 @@ footer {
     position: relative;
     overflow: hidden;
     flex-shrink: 0;
+    height: fit-content;
+    align-self: flex-end;
+}
+
+@media (min-width: 769px) {
+    .idea-submit-btn {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        margin-top: 0;
+    }
 }
 
 .idea-submit-btn::before {
@@ -4005,6 +4028,54 @@ button {
 .loaded {
     opacity: 1;
     transition: opacity 0.3s ease;
+}
+
+/* Browse All Templates Section */
+.browse-all-templates {
+    text-align: center;
+    margin: 48px 0;
+    position: relative;
+}
+
+.browse-all-templates .primary-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    padding: 0;
+    background: none;
+    color: var(--primary);
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: none;
+    position: relative;
+    overflow: visible;
+    text-decoration: none;
+}
+
+.browse-all-templates .primary-cta:hover {
+    color: var(--primary-dark);
+    transform: none;
+    box-shadow: none;
+    text-decoration: underline;
+}
+
+.browse-all-templates .primary-cta:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+    .browse-all-templates {
+        margin: 32px 0;
+    }
+    
+    .browse-all-templates .primary-cta {
+        font-size: 16px;
+    }
 }
 
 /* Final polish touches */

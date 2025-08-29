@@ -547,6 +547,20 @@ export default function HomePage() {
               </div>
             </div>
 
+            <div className="browse-all-templates">
+              <button 
+                className="browse-templates-link primary-cta"
+                onClick={(e) => { 
+                  e.preventDefault(); 
+                  router.push('/templates');
+                }}
+                aria-label="Browse all business templates"
+              >
+                <span className="cta-shine"></span>
+                Browse All Templates →
+              </button>
+            </div>
+
             <div className="custom-business-option glass-card" id="custom-business">
               <div className="custom-business-content">
                 <div className="custom-icon">💡</div>
@@ -555,18 +569,18 @@ export default function HomePage() {
                 
                 <div className="idea-input-container">
                   <div className="input-group">
-                    <input 
-                      type="text" 
+                    <textarea 
                       placeholder="Describe your business idea in a few words..."
                       className="idea-input"
-                      maxLength={100}
+                      maxLength={200}
+                      rows={3}
                       aria-label="Enter your business idea"
                     />
                     <button 
                       className="idea-submit-btn"
                       onClick={(e) => {
                         e.preventDefault();
-                        const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                        const input = e.currentTarget.previousElementSibling as HTMLTextAreaElement;
                         const idea = input?.value || '';
                         handleCustomBusiness(idea);
                       }}
@@ -985,7 +999,7 @@ export default function HomePage() {
                 </div>
                 <div className="revenue-share glass-pill">Only 20% of profits</div>
                 <ul className="plan-features">
-                  <li><span className="feature-icon">✓</span>Any proven business template</li>
+                  <li><span className="feature-icon">✓</span>Access to 3-5 starter templates</li>
                   <li><span className="feature-icon">✓</span>50-100 customers included</li>
                   <li><span className="feature-icon">✓</span>AI automation suite</li>
                   <li><span className="feature-icon">✓</span>48-hour sale guarantee</li>
@@ -1019,11 +1033,11 @@ export default function HomePage() {
                   <div className="revenue-share glass-pill premium">Keep 90% of profits</div>
                   <ul className="plan-features">
                     <li><span className="feature-icon">✓</span><strong>Everything in Starter, plus:</strong></li>
+                    <li><span className="feature-icon">✓</span>Unlock all premium templates</li>
+                    <li><span className="feature-icon">✓</span>Build a custom business with AI</li>
                     <li><span className="feature-icon">✓</span>100-200 customers included</li>
                     <li><span className="feature-icon">✓</span>Priority customer allocation</li>
                     <li><span className="feature-icon">✓</span>Advanced AI optimization</li>
-                    <li><span className="feature-icon">✓</span>Weekly strategy calls</li>
-                    <li><span className="feature-icon">✓</span>Custom business option</li>
                   </ul>
                   <button 
                     className="plan-cta primary" 

@@ -15,6 +15,8 @@ interface BusinessTemplate {
   category: string;
   difficulty: string;
   featured?: boolean;
+  tier: 'starter' | 'premium';
+  price?: string;
 }
 
 const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
@@ -28,7 +30,8 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     customers: 147,
     category: 'Professional Services',
     difficulty: 'Beginner',
-    featured: true
+    featured: true,
+    tier: 'premium'
   },
   'fitness': {
     name: 'Fitness Transformation Hub',
@@ -39,7 +42,8 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     successRate: '88%',
     customers: 94,
     category: 'Health & Fitness',
-    difficulty: 'Beginner'
+    difficulty: 'Beginner',
+    tier: 'starter'
   },
   'branding': {
     name: 'Brand Identity Studio',
@@ -50,7 +54,8 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     successRate: '95%',
     customers: 183,
     category: 'Creative Services',
-    difficulty: 'Intermediate'
+    difficulty: 'Intermediate',
+    tier: 'premium'
   },
   'social': {
     name: 'Social Growth Engine',
@@ -61,7 +66,8 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     successRate: '84%',
     customers: 76,
     category: 'Marketing',
-    difficulty: 'Intermediate'
+    difficulty: 'Intermediate',
+    tier: 'starter'
   },
   'b2b': {
     name: 'B2B Revenue Machine',
@@ -72,7 +78,8 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     successRate: '78%',
     customers: 52,
     category: 'B2B Services',
-    difficulty: 'Advanced'
+    difficulty: 'Advanced',
+    tier: 'premium'
   },
   'realestate': {
     name: 'Real Estate Visual Magic',
@@ -83,7 +90,33 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     successRate: '90%',
     customers: 108,
     category: 'Real Estate',
-    difficulty: 'Beginner'
+    difficulty: 'Beginner',
+    tier: 'starter'
+  },
+  // Add more starter templates
+  'content-creation': {
+    name: 'Content Creation Studio',
+    icon: '📝',
+    description: 'Blog posts, social media content, and copywriting services. Simple recurring revenue model.',
+    avgRevenue: '$1,800/mo',
+    firstSale: '18 hours',
+    successRate: '85%',
+    customers: 67,
+    category: 'Content & Writing',
+    difficulty: 'Beginner',
+    tier: 'starter'
+  },
+  'virtual-assistant': {
+    name: 'Virtual Assistant Agency',
+    icon: '🤖',
+    description: 'Administrative support and task automation for busy professionals. Easy to scale.',
+    avgRevenue: '$2,200/mo',
+    firstSale: '22 hours',
+    successRate: '82%',
+    customers: 89,
+    category: 'Business Services',
+    difficulty: 'Beginner',
+    tier: 'starter'
   }
 };
 
@@ -91,18 +124,30 @@ export default function TemplatesPage() {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All');
+  const [selectedTier, setSelectedTier] = useState('All');
 
   const categories = ['All', ...new Set(Object.values(BUSINESS_TEMPLATES).map(t => t.category))];
   const difficulties = ['All', 'Beginner', 'Intermediate', 'Advanced'];
+  const tiers = ['All', 'Starter (Free)', 'Premium'];
 
   const filteredTemplates = Object.entries(BUSINESS_TEMPLATES).filter(([key, template]) => {
     const categoryMatch = selectedCategory === 'All' || template.category === selectedCategory;
     const difficultyMatch = selectedDifficulty === 'All' || template.difficulty === selectedDifficulty;
-    return categoryMatch && difficultyMatch;
+    const tierMatch = selectedTier === 'All' || 
+      (selectedTier === 'Starter (Free)' && template.tier === 'starter') ||
+      (selectedTier === 'Premium' && template.tier === 'premium');
+    return categoryMatch && difficultyMatch && tierMatch;
   });
 
   const handleSelectTemplate = (templateKey: string) => {
-    router.push(`/onboarding/quick-start?template=${templateKey}`);
+    const template = BUSINESS_TEMPLATES[templateKey];
+    if (template.tier === 'premium') {
+      // For premium templates, redirect to upgrade page or show upgrade modal
+      router.push(`/onboarding?plan=professional&template=${templateKey}`);
+    } else {
+      // For starter templates, proceed normally
+      router.push(`/onboarding/quick-start?template=${templateKey}`);
+    }
   };
 
   return (
@@ -147,6 +192,45 @@ export default function TemplatesPage() {
 
         .back-link:hover {
           color: #764ba2;
+        }
+
+        .pricing-info {
+          display: flex;
+          gap: 1rem;
+          justify-content: center;
+          margin-top: 2rem;
+          flex-wrap: wrap;
+        }
+
+        .pricing-card-mini {
+          background: white;
+          border-radius: 12px;
+          padding: 1rem 1.5rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          text-align: center;
+          min-width: 200px;
+        }
+
+        .pricing-card-mini.starter {
+          border: 2px solid #3b82f6;
+        }
+
+        .pricing-card-mini.professional {
+          border: 2px solid #f59e0b;
+          background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        }
+
+        .pricing-card-mini h4 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1rem;
+          color: #1a1a1a;
+        }
+
+        .pricing-card-mini p {
+          margin: 0;
+          font-size: 0.875rem;
+          color: #6b7280;
+          font-weight: 500;
         }
 
         .filters {
@@ -269,6 +353,8 @@ export default function TemplatesPage() {
         .template-tag.difficulty-beginner { background: #dcfce7; color: #166534; }
         .template-tag.difficulty-intermediate { background: #fef3c7; color: #92400e; }
         .template-tag.difficulty-advanced { background: #fecaca; color: #991b1b; }
+        .template-tag.tier-starter { background: #dbeafe; color: #1e40af; }
+        .template-tag.tier-premium { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
 
         .template-description {
           color: #6b7280;
@@ -398,8 +484,19 @@ export default function TemplatesPage() {
         <div className="templates-header">
           <h1 className="templates-title">Choose Your Business Template</h1>
           <p className="templates-subtitle">
-            Each template comes with proven customers, automated systems, and everything you need to start earning immediately.
+            Start with <strong>5 free templates</strong> or unlock <strong>all premium templates</strong> with the Professional plan. Each comes with proven customers and automated systems.
           </p>
+          
+          <div className="pricing-info">
+            <div className="pricing-card-mini starter">
+              <h4>🆓 Starter Plan</h4>
+              <p>5 free templates • 20% revenue share</p>
+            </div>
+            <div className="pricing-card-mini professional">
+              <h4>⭐ Professional Plan</h4>
+              <p>All templates • Custom AI • $497 lifetime • 10% revenue share</p>
+            </div>
+          </div>
         </div>
 
         <div className="filters">
@@ -428,6 +525,19 @@ export default function TemplatesPage() {
               ))}
             </select>
           </div>
+
+          <div className="filter-group">
+            <label className="filter-label">Plan</label>
+            <select 
+              className="filter-select"
+              value={selectedTier}
+              onChange={(e) => setSelectedTier(e.target.value)}
+            >
+              {tiers.map(tier => (
+                <option key={tier} value={tier}>{tier}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="templates-grid">
@@ -448,6 +558,9 @@ export default function TemplatesPage() {
                 <span className="template-tag">{template.category}</span>
                 <span className={`template-tag difficulty-${template.difficulty.toLowerCase()}`}>
                   {template.difficulty}
+                </span>
+                <span className={`template-tag tier-${template.tier}`}>
+                  {template.tier === 'starter' ? 'Free Plan' : 'Pro Plan'}
                 </span>
               </div>
 
@@ -480,7 +593,7 @@ export default function TemplatesPage() {
               </div>
 
               <button className="template-cta">
-                Get This Business →
+                {template.tier === 'starter' ? 'Start Free →' : 'Upgrade to Pro →'}
               </button>
             </div>
           ))}
@@ -488,7 +601,7 @@ export default function TemplatesPage() {
 
         <div className="custom-option">
           <h3>💡 Have Your Own Idea?</h3>
-          <p>Tell us your vision and we'll build a custom AI-powered business around it. Same guarantees, same results.</p>
+          <p>Tell us your vision and we'll build a custom AI-powered business around it. <strong>Included in Professional plan</strong> or available separately.</p>
           <Link href="/onboarding/custom" className="custom-cta">
             Build Custom Business
           </Link>

@@ -63,6 +63,7 @@ export default function QuickStartOnboarding() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -77,10 +78,26 @@ export default function QuickStartOnboarding() {
 
   const selectedTemplate = BUSINESS_TEMPLATES[formData.template as keyof typeof BUSINESS_TEMPLATES];
 
-  // Track onboarding start
+  // Track onboarding start and check for payment success
   useEffect(() => {
     trackOnboardingStart('quick-start', formData.template, formData.plan);
-  }, [formData.template, formData.plan]);
+    
+    // Check if returning from successful payment
+    const sessionId = searchParams.get('session_id');
+    if (sessionId && searchParams.get('payment') === 'success') {
+      setPaymentSessionId(sessionId);
+      // Restore form data from URL params
+      const businessName = searchParams.get('businessName');
+      const subdomain = searchParams.get('subdomain');
+      if (businessName) {
+        setFormData(prev => ({ ...prev, businessName: decodeURIComponent(businessName) }));
+      }
+      if (subdomain) {
+        setFormData(prev => ({ ...prev, subdomain: decodeURIComponent(subdomain) }));
+      }
+      setCurrentStep(3); // Skip to final step after payment
+    }
+  }, [formData.template, formData.plan, searchParams]);
 
   // Auto-generate business name and subdomain based on template
   useEffect(() => {
@@ -129,15 +146,52 @@ export default function QuickStartOnboarding() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = () => {
-    if (validateStep(currentStep)) {
-      const stepNames = ['account_creation', 'business_customization', 'review'];
-      trackStepCompleted(currentStep, stepNames[currentStep - 1], {
-        template: formData.template,
-        plan: formData.plan
-      });
-      setCurrentStep(prev => prev + 1);
+  const handleNext = async () => {
+    if (!validateStep(currentStep)) return;
+    
+    // If moving from step 2 to step 3 with professional plan, redirect to checkout
+    if (currentStep === 2 && formData.plan === 'professional' && !paymentSessionId) {
+      setIsLoading(true);
+      try {
+        // Create checkout session
+        const response = await fetch('/api/stripe/professional-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            name: formData.name,
+            template: formData.template,
+            businessName: formData.businessName,
+            subdomain: formData.subdomain,
+            returnUrl: window.location.href
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create checkout session');
+        }
+
+        const { url } = await response.json();
+        
+        // Save form data to localStorage before redirecting
+        localStorage.setItem('launchfly_onboarding_data', JSON.stringify(formData));
+        
+        // Redirect to Stripe Checkout
+        window.location.href = url;
+      } catch (error) {
+        console.error('Checkout error:', error);
+        setErrors({ submit: 'Failed to start checkout. Please try again.' });
+        setIsLoading(false);
+      }
+      return;
     }
+    
+    const stepNames = ['account_creation', 'business_customization', 'review'];
+    trackStepCompleted(currentStep, stepNames[currentStep - 1], {
+      template: formData.template,
+      plan: formData.plan
+    });
+    setCurrentStep(prev => prev + 1);
   };
 
   const handleBack = () => {
@@ -177,7 +231,8 @@ export default function QuickStartOnboarding() {
           plan: formData.plan,
           businessName: formData.businessName,
           template: formData.template,
-          userId: authData.user?.id
+          userId: authData.user?.id,
+          paymentSessionId: paymentSessionId // Include payment session ID for professional plan
         })
       });
 
@@ -458,7 +513,12 @@ export default function QuickStartOnboarding() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#6b7280' }}>Plan:</span>
-              <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>{formData.plan}</span>
+              <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>
+                {formData.plan}
+                {formData.plan === 'professional' && paymentSessionId && (
+                  <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>✓ Paid</span>
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -481,6 +541,20 @@ export default function QuickStartOnboarding() {
           </ul>
         </div>
 
+        {formData.plan === 'professional' && !paymentSessionId && (
+          <div style={{ 
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
+            padding: '1rem', 
+            borderRadius: '8px', 
+            marginBottom: '1rem',
+            border: '1px solid rgba(251, 191, 36, 0.3)'
+          }}>
+            <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
+              <strong>⚠️ Payment Required:</strong> Professional plan requires a one-time payment of $497 to proceed.
+            </p>
+          </div>
+        )}
+        
         {errors.submit && <div className="form-error" style={{ marginBottom: '1rem' }}>{errors.submit}</div>}
 
         <div style={{ display: 'flex', gap: '1rem' }}>

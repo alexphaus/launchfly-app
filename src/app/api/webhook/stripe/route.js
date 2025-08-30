@@ -59,6 +59,71 @@ export async function POST(request) {
     console.log('Session customer_details:', session.customer_details);
     
     try {
+      // Check if this is a platform subscription payment (Professional plan)
+      if (metadata.product_type === 'platform_subscription' && metadata.plan === 'professional') {
+        console.log('Processing Professional plan subscription');
+        
+        // Record the platform subscription payment
+        const subscriptionData = {
+          user_email: metadata.user_email,
+          user_name: metadata.user_name,
+          plan: 'professional',
+          amount: session.amount_total / 100, // Convert from cents
+          currency: 'usd',
+          stripe_session_id: session.id,
+          payment_status: 'completed',
+          metadata: {
+            template: metadata.template,
+            business_name: metadata.business_name,
+            subdomain: metadata.subdomain
+          }
+        };
+        
+        console.log('Recording Professional plan subscription:', subscriptionData);
+        
+        const { data: subscription, error: subError } = await supabase
+          .from('platform_subscriptions')
+          .insert([subscriptionData])
+          .select()
+          .single();
+        
+        if (subError) {
+          console.error('Error recording platform subscription:', subError);
+          throw subError;
+        }
+        
+        console.log('Professional plan subscription recorded:', subscription.id);
+        
+        // Send confirmation email
+        try {
+          await resend.emails.send({
+            from: 'Launchfly <notifications@launchfly.com>',
+            to: metadata.user_email,
+            subject: 'Welcome to Launchfly Professional! 🚀',
+            html: `
+              <h2>Welcome to Launchfly Professional!</h2>
+              <p>Hi ${metadata.user_name},</p>
+              <p>Thank you for upgrading to Launchfly Professional! Your payment of $497 has been successfully processed.</p>
+              <h3>What's Next?</h3>
+              <ul>
+                <li>Complete your business setup in the onboarding flow</li>
+                <li>Access all premium templates</li>
+                <li>Keep 90% of all profits (only 10% revenue share)</li>
+                <li>Get priority customer allocation</li>
+              </ul>
+              <p>You can continue your setup by returning to the onboarding flow.</p>
+              <p>If you have any questions, feel free to reach out to our support team.</p>
+              <p>Best regards,<br>The Launchfly Team</p>
+            `
+          });
+        } catch (emailError) {
+          console.error('Failed to send Professional plan confirmation email:', emailError);
+        }
+        
+        return new Response('Professional plan webhook processed', { status: 200 });
+      }
+      
+      // Regular business sale processing
       // Validate required metadata
       if (!metadata.business_id) {
         throw new Error('Missing business_id in metadata');

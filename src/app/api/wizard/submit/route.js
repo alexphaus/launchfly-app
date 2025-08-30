@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 // POST /api/wizard/submit
-// Payload: { name, email, niche, skills, availability, subdomain, budget, plan, userId? }
+// Payload: { name, email, niche, skills, availability, subdomain, budget, plan, userId?, paymentSessionId? }
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -21,11 +21,39 @@ export async function POST(request) {
       subdomain: desiredSubdomain,
       budget,
       plan = 'starter',
-      userId: providedUserId
+      userId: providedUserId,
+      paymentSessionId
     } = body || {};
 
     if (!email) {
       return Response.json({ error: 'Email is required' }, { status: 400 });
+    }
+
+    // Check if professional plan requires payment verification
+    const normalizedPlan = String(plan || 'starter').toLowerCase();
+    const isProfessionalPlan = ['professional', 'pro', 'professional_lifetime', 'lifetime'].includes(normalizedPlan);
+    
+    if (isProfessionalPlan && paymentSessionId) {
+      // Verify payment session
+      const { data: subscription, error: subError } = await supabase
+        .from('platform_subscriptions')
+        .select('*')
+        .eq('stripe_session_id', paymentSessionId)
+        .eq('user_email', email)
+        .single();
+      
+      if (subError || !subscription) {
+        console.error('Payment verification failed:', subError);
+        return Response.json({ 
+          error: 'Professional plan requires valid payment. Please complete the checkout process.' 
+        }, { status: 400 });
+      }
+      
+      console.log('Professional plan payment verified:', subscription.id);
+    } else if (isProfessionalPlan && !paymentSessionId) {
+      return Response.json({ 
+        error: 'Professional plan requires payment. Please complete the checkout process.' 
+      }, { status: 400 });
     }
 
     const sessionId = nanoid();
@@ -102,7 +130,8 @@ export async function POST(request) {
         session_id: sessionId,
         guarantee_start_at: new Date().toISOString(),
         plan_tier: planTier,
-        rev_share_percent: revSharePercent
+        rev_share_percent: revSharePercent,
+        paid_plan_session_id: isProfessionalPlan ? paymentSessionId : null
       })
       .select()
       .single();

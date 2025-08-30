@@ -17,6 +17,7 @@ export default function CustomBusinessOnboarding() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -32,6 +33,38 @@ export default function CustomBusinessOnboarding() {
     subdomain: '',
     plan: 'professional' // Custom businesses default to professional
   });
+
+  // Check for payment success on component mount
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    if (sessionId && searchParams.get('payment') === 'success') {
+      setPaymentSessionId(sessionId);
+      
+      // Restore form data from localStorage
+      const savedData = localStorage.getItem('launchfly_custom_onboarding_data');
+      if (savedData) {
+        try {
+          const parsedData = JSON.parse(savedData);
+          setFormData(prev => ({ ...prev, ...parsedData }));
+          localStorage.removeItem('launchfly_custom_onboarding_data'); // Clean up
+        } catch (error) {
+          console.error('Error restoring form data:', error);
+        }
+      }
+      
+      // Restore form data from URL params if available
+      const businessName = searchParams.get('businessName');
+      const subdomain = searchParams.get('subdomain');
+      if (businessName) {
+        setFormData(prev => ({ ...prev, businessName: decodeURIComponent(businessName) }));
+      }
+      if (subdomain) {
+        setFormData(prev => ({ ...prev, subdomain: decodeURIComponent(subdomain) }));
+      }
+      
+      setCurrentStep(4); // Skip to final step after payment
+    }
+  }, [searchParams]);
 
   const validateStep = (step: number) => {
     const newErrors: Record<string, string> = {};
@@ -119,6 +152,43 @@ export default function CustomBusinessOnboarding() {
       }
     }
 
+    // If moving from step 3 to step 4 with professional plan, redirect to checkout
+    if (currentStep === 3 && formData.plan === 'professional' && !paymentSessionId) {
+      setIsLoading(true);
+      try {
+        // Create checkout session
+        const response = await fetch('/api/stripe/professional-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            name: formData.name,
+            template: 'custom',
+            businessName: formData.businessName,
+            subdomain: formData.subdomain,
+            returnUrl: window.location.href
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create checkout session');
+        }
+
+        const { url } = await response.json();
+        
+        // Save form data to localStorage before redirecting
+        localStorage.setItem('launchfly_custom_onboarding_data', JSON.stringify(formData));
+        
+        // Redirect to Stripe Checkout
+        window.location.href = url;
+      } catch (error) {
+        console.error('Checkout error:', error);
+        setErrors({ submit: 'Failed to start checkout. Please try again.' });
+        setIsLoading(false);
+      }
+      return;
+    }
+
     setCurrentStep(prev => prev + 1);
   };
 
@@ -161,7 +231,8 @@ export default function CustomBusinessOnboarding() {
           customIdea: formData.businessIdea,
           targetAudience: formData.targetAudience,
           aiAnalysis: aiAnalysis,
-          userId: authData.user?.id
+          userId: authData.user?.id,
+          paymentSessionId: paymentSessionId // Include payment session ID for professional plan
         })
       });
 
@@ -558,6 +629,20 @@ export default function CustomBusinessOnboarding() {
           Final step - set up your business details and launch
         </p>
 
+        {paymentSessionId && (
+          <div style={{ 
+            background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)', 
+            padding: '1rem', 
+            borderRadius: '8px', 
+            marginBottom: '1.5rem',
+            border: '1px solid rgba(34, 197, 94, 0.3)'
+          }}>
+            <p style={{ margin: 0, color: '#15803d', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>✅</span> <strong>Payment Confirmed!</strong> Your Professional plan is active.
+            </p>
+          </div>
+        )}
+
         <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
           <div className="form-group">
             <label className="form-label">Business Name</label>
@@ -590,6 +675,20 @@ export default function CustomBusinessOnboarding() {
             {errors.subdomain && <div className="form-error">{errors.subdomain}</div>}
           </div>
 
+          {formData.plan === 'professional' && !paymentSessionId && (
+            <div style={{ 
+              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
+              padding: '1rem', 
+              borderRadius: '8px', 
+              marginBottom: '1rem',
+              border: '1px solid rgba(251, 191, 36, 0.3)'
+            }}>
+              <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
+                <strong>⚠️ Payment Required:</strong> Professional plan requires a one-time payment of $497 to proceed.
+              </p>
+            </div>
+          )}
+          
           {errors.submit && <div className="form-error" style={{ marginBottom: '1rem' }}>{errors.submit}</div>}
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>

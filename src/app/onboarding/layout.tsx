@@ -193,6 +193,10 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
           border-color: #ef4444;
         }
 
+        .form-input.success {
+          border-color: #10b981;
+        }
+
         .form-error {
           color: #ef4444;
           font-size: 0.875rem;

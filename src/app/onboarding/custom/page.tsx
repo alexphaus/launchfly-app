@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import PlanPreviewModal from '../../../components/PlanPreviewModal';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,11 +14,17 @@ export default function CustomBusinessOnboarding() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // Start with plan selection
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+  const [subdomainStatus, setSubdomainStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    suggestion: string | null;
+  }>({ checking: false, available: null, suggestion: null });
+  const [showPlanPreview, setShowPlanPreview] = useState(false);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -31,7 +38,7 @@ export default function CustomBusinessOnboarding() {
     timeCommitment: '',
     businessName: '',
     subdomain: '',
-    plan: 'professional' // Custom businesses default to professional
+    plan: '' // User will select plan in step 0
   });
 
   // Check for payment success on component mount
@@ -62,12 +69,100 @@ export default function CustomBusinessOnboarding() {
         setFormData(prev => ({ ...prev, subdomain: decodeURIComponent(subdomain) }));
       }
       
-      setCurrentStep(4); // Skip to final step after payment
+      setCurrentStep(5); // Skip to final step after payment
     }
   }, [searchParams]);
 
+  const checkSubdomainAvailability = async (subdomain: string) => {
+    if (!subdomain || subdomain.length < 3) {
+      setSubdomainStatus({ checking: false, available: null, suggestion: null });
+      return;
+    }
+
+    setSubdomainStatus({ checking: true, available: null, suggestion: null });
+
+    try {
+      const response = await fetch(`/api/check-subdomain?subdomain=${encodeURIComponent(subdomain)}`);
+      const result = await response.json();
+
+      if (response.ok) {
+        setSubdomainStatus({
+          checking: false,
+          available: result.available,
+          suggestion: result.suggestion
+        });
+
+        if (!result.available && result.error) {
+          setErrors(prev => ({ ...prev, subdomain: result.error }));
+        } else if (result.available) {
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.subdomain;
+            return newErrors;
+          });
+        }
+      } else {
+        setSubdomainStatus({ checking: false, available: null, suggestion: null });
+      }
+    } catch (error) {
+      console.error('Error checking subdomain:', error);
+      setSubdomainStatus({ checking: false, available: null, suggestion: null });
+    }
+  };
+
+  // Debounced subdomain checking
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.subdomain) {
+        checkSubdomainAvailability(formData.subdomain);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.subdomain]);
+
+  const handleProceedToCheckout = async () => {
+    setIsLoading(true);
+    try {
+      // Create checkout session
+      const response = await fetch('/api/stripe/professional-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          name: formData.name,
+          template: 'custom',
+          businessName: formData.businessName,
+          subdomain: formData.subdomain,
+          returnUrl: window.location.href
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create checkout session');
+      }
+
+      const { url } = await response.json();
+      
+      // Save form data to localStorage before redirecting
+      localStorage.setItem('launchfly_custom_onboarding_data', JSON.stringify(formData));
+      
+      // Redirect to Stripe Checkout
+      window.location.href = url;
+    } catch (error) {
+      console.error('Checkout error:', error);
+      setErrors({ submit: 'Failed to start checkout. Please try again.' });
+      setIsLoading(false);
+      setShowPlanPreview(false);
+    }
+  };
+
   const validateStep = (step: number) => {
     const newErrors: Record<string, string> = {};
+
+    if (step === 0) {
+      if (!formData.plan) newErrors.plan = 'Please select a plan';
+    }
 
     if (step === 1) {
       if (!formData.email) newErrors.email = 'Email is required';
@@ -85,7 +180,7 @@ export default function CustomBusinessOnboarding() {
       if (!formData.skills) newErrors.skills = 'Skills/interests are required';
     }
 
-    if (step === 4) {
+    if (step === 5) {
       if (!formData.businessName) newErrors.businessName = 'Business name is required';
       if (!formData.subdomain) newErrors.subdomain = 'Subdomain is required';
     }
@@ -152,40 +247,9 @@ export default function CustomBusinessOnboarding() {
       }
     }
 
-    // If moving from step 3 to step 4 with professional plan, redirect to checkout
-    if (currentStep === 3 && formData.plan === 'professional' && !paymentSessionId) {
-      setIsLoading(true);
-      try {
-        // Create checkout session
-        const response = await fetch('/api/stripe/professional-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            name: formData.name,
-            template: 'custom',
-            businessName: formData.businessName,
-            subdomain: formData.subdomain,
-            returnUrl: window.location.href
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to create checkout session');
-        }
-
-        const { url } = await response.json();
-        
-        // Save form data to localStorage before redirecting
-        localStorage.setItem('launchfly_custom_onboarding_data', JSON.stringify(formData));
-        
-        // Redirect to Stripe Checkout
-        window.location.href = url;
-      } catch (error) {
-        console.error('Checkout error:', error);
-        setErrors({ submit: 'Failed to start checkout. Please try again.' });
-        setIsLoading(false);
-      }
+    // If moving from step 4 to step 5 with professional plan, show plan preview
+    if (currentStep === 4 && formData.plan === 'professional' && !paymentSessionId) {
+      setShowPlanPreview(true);
       return;
     }
 
@@ -193,7 +257,7 @@ export default function CustomBusinessOnboarding() {
   };
 
   const handleBack = () => {
-    setCurrentStep(prev => prev - 1);
+    setCurrentStep(prev => Math.max(0, prev - 1));
   };
 
   const handleSubmit = async () => {
@@ -271,6 +335,152 @@ export default function CustomBusinessOnboarding() {
       setIsLoading(false);
     }
   };
+
+  const renderStep0 = () => (
+    <>
+      <div className="onboarding-header">
+        <div className="onboarding-logo">
+          <span className="onboarding-logo-icon">⚡</span>
+          <span className="onboarding-logo-text">Launchfly</span>
+        </div>
+        <div className="onboarding-progress">
+          <div className="progress-step active"></div>
+          <div className="progress-step"></div>
+          <div className="progress-step"></div>
+          <div className="progress-step"></div>
+          <div className="progress-step"></div>
+        </div>
+      </div>
+
+      <div className="onboarding-content">
+        <h1 className="onboarding-title">Choose Your Plan</h1>
+        <p className="onboarding-subtitle">
+          Select the plan that best fits your business goals
+        </p>
+
+        {formData.businessIdea && (
+          <div style={{ 
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            padding: '1rem',
+            borderRadius: '12px',
+            marginBottom: '1.5rem',
+            border: '1px solid rgba(245, 158, 11, 0.2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>💡</span>
+              <h3 style={{ margin: 0, color: '#92400e' }}>Your Business Idea</h3>
+            </div>
+            <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
+              "{formData.businessIdea}"
+            </p>
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gap: '1rem', marginBottom: '2rem' }}>
+          {/* Starter Plan */}
+          <div 
+            className={`plan-card ${formData.plan === 'starter' ? 'selected' : ''}`}
+            onClick={() => setFormData(prev => ({ ...prev, plan: 'starter' }))}
+            style={{
+              border: formData.plan === 'starter' ? '2px solid #667eea' : '2px solid #e5e7eb',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              cursor: 'pointer',
+              background: formData.plan === 'starter' ? 'rgba(102, 126, 234, 0.05)' : 'white',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: '#1a1a1a' }}>Starter</h3>
+              <div style={{ 
+                background: '#10b981', 
+                color: 'white', 
+                padding: '0.25rem 0.75rem', 
+                borderRadius: '20px', 
+                fontSize: '0.75rem', 
+                fontWeight: '600' 
+              }}>
+                FREE
+              </div>
+            </div>
+            <p style={{ color: '#6b7280', margin: '0 0 1rem 0', fontSize: '0.9rem' }}>
+              Perfect for testing your business idea
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#374151' }}>
+              <li>20% revenue share</li>
+              <li>Access to starter templates</li>
+              <li>50-100 customers included</li>
+              <li>Community support</li>
+            </ul>
+          </div>
+
+          {/* Professional Plan */}
+          <div 
+            className={`plan-card ${formData.plan === 'professional' ? 'selected' : ''}`}
+            onClick={() => setFormData(prev => ({ ...prev, plan: 'professional' }))}
+            style={{
+              border: formData.plan === 'professional' ? '2px solid #667eea' : '2px solid #e5e7eb',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              cursor: 'pointer',
+              background: formData.plan === 'professional' ? 'rgba(102, 126, 234, 0.05)' : 'white',
+              transition: 'all 0.2s ease',
+              position: 'relative'
+            }}
+          >
+            <div style={{ 
+              position: 'absolute', 
+              top: '-10px', 
+              left: '50%', 
+              transform: 'translateX(-50%)', 
+              background: '#667eea', 
+              color: 'white', 
+              padding: '0.25rem 1rem', 
+              borderRadius: '20px', 
+              fontSize: '0.75rem', 
+              fontWeight: '600' 
+            }}>
+              RECOMMENDED
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, color: '#1a1a1a' }}>Professional</h3>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                color: 'white', 
+                padding: '0.25rem 0.75rem', 
+                borderRadius: '20px', 
+                fontSize: '0.75rem', 
+                fontWeight: '600' 
+              }}>
+                $497 LIFETIME
+              </div>
+            </div>
+            <p style={{ color: '#6b7280', margin: '0 0 1rem 0', fontSize: '0.9rem' }}>
+              Maximum profit potential with premium features
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#374151' }}>
+              <li><strong>Only 10% revenue share</strong></li>
+              <li>Access to ALL premium templates</li>
+              <li>100-200 customers included</li>
+              <li>Priority customer allocation</li>
+              <li>Advanced AI optimization</li>
+              <li>Priority support</li>
+            </ul>
+          </div>
+        </div>
+
+        {errors.plan && <div className="form-error" style={{ marginBottom: '1rem' }}>{errors.plan}</div>}
+
+        <button 
+          className="btn btn-primary btn-full" 
+          onClick={handleNext}
+          disabled={!formData.plan}
+        >
+          Continue with {formData.plan ? (formData.plan === 'starter' ? 'Starter (Free)' : 'Professional') : 'Selected Plan'}
+        </button>
+      </div>
+    </>
+  );
 
   const renderStep1 = () => (
     <>
@@ -396,6 +606,7 @@ export default function CustomBusinessOnboarding() {
           <div className="progress-step active"></div>
           <div className="progress-step"></div>
           <div className="progress-step"></div>
+          <div className="progress-step"></div>
         </div>
       </div>
 
@@ -513,6 +724,89 @@ export default function CustomBusinessOnboarding() {
           <div className="progress-step completed"></div>
           <div className="progress-step active"></div>
           <div className="progress-step"></div>
+          <div className="progress-step"></div>
+        </div>
+      </div>
+
+      <div className="onboarding-content">
+        <h1 className="onboarding-title">Review Your Details</h1>
+        <p className="onboarding-subtitle">
+          Let's review your business idea details before AI analysis
+        </p>
+
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: '1.5rem', 
+          borderRadius: '12px', 
+          marginBottom: '2rem',
+          border: '1px solid #e2e8f0'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#1a1a1a' }}>Business Summary</h3>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Plan:</span>
+              <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>
+                {formData.plan}
+                {formData.plan === 'professional' && (
+                  <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>($497 lifetime)</span>
+                )}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Business Idea:</span>
+              <span style={{ fontWeight: '600', maxWidth: '60%', textAlign: 'right' }}>
+                {formData.businessIdea}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Target Audience:</span>
+              <span style={{ fontWeight: '600', maxWidth: '60%', textAlign: 'right' }}>
+                {formData.targetAudience}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Your Skills:</span>
+              <span style={{ fontWeight: '600', maxWidth: '60%', textAlign: 'right' }}>
+                {formData.skills}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            onClick={handleBack}
+            style={{ flex: 1 }}
+          >
+            Back
+          </button>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleNext}
+            style={{ flex: 2 }}
+          >
+            Analyze My Idea with AI
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderStep4 = () => (
+    <>
+      <div className="onboarding-header">
+        <div className="onboarding-logo">
+          <span className="onboarding-logo-icon">⚡</span>
+          <span className="onboarding-logo-text">Launchfly</span>
+        </div>
+        <div className="onboarding-progress">
+          <div className="progress-step completed"></div>
+          <div className="progress-step completed"></div>
+          <div className="progress-step active"></div>
+          <div className="progress-step"></div>
+          <div className="progress-step"></div>
         </div>
       </div>
 
@@ -608,7 +902,7 @@ export default function CustomBusinessOnboarding() {
     </>
   );
 
-  const renderStep4 = () => (
+  const renderStep5 = () => (
     <>
       <div className="onboarding-header">
         <div className="onboarding-logo">
@@ -616,6 +910,7 @@ export default function CustomBusinessOnboarding() {
           <span className="onboarding-logo-text">Launchfly</span>
         </div>
         <div className="onboarding-progress">
+          <div className="progress-step completed"></div>
           <div className="progress-step completed"></div>
           <div className="progress-step completed"></div>
           <div className="progress-step completed"></div>
@@ -659,20 +954,82 @@ export default function CustomBusinessOnboarding() {
           <div className="form-group">
             <label className="form-label">Website Address</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                type="text"
-                className={`form-input ${errors.subdomain ? 'error' : ''}`}
-                value={formData.subdomain}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-                }))}
-                placeholder="your-business"
-                style={{ flex: 1 }}
-              />
+              <div style={{ flex: 1, position: 'relative' }}>
+                <input
+                  type="text"
+                  className={`form-input ${errors.subdomain ? 'error' : subdomainStatus.available === false ? 'error' : subdomainStatus.available === true ? 'success' : ''}`}
+                  value={formData.subdomain}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+                  }))}
+                  placeholder="your-business"
+                  style={{ 
+                    paddingRight: subdomainStatus.checking || subdomainStatus.available !== null ? '2.5rem' : '1rem'
+                  }}
+                />
+                {subdomainStatus.checking && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.75rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)'
+                  }}>
+                    <div className="loading-spinner" style={{ width: '16px', height: '16px' }}></div>
+                  </div>
+                )}
+                {!subdomainStatus.checking && subdomainStatus.available === true && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.75rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    color: '#10b981',
+                    fontWeight: 'bold'
+                  }}>
+                    ✓
+                  </div>
+                )}
+                {!subdomainStatus.checking && subdomainStatus.available === false && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.75rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    color: '#ef4444',
+                    fontWeight: 'bold'
+                  }}>
+                    ✗
+                  </div>
+                )}
+              </div>
               <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>.launchfly.com</span>
             </div>
             {errors.subdomain && <div className="form-error">{errors.subdomain}</div>}
+            {!errors.subdomain && subdomainStatus.available === false && subdomainStatus.suggestion && (
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                Try: <button 
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, subdomain: subdomainStatus.suggestion! }))}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    color: '#667eea', 
+                    textDecoration: 'underline', 
+                    cursor: 'pointer',
+                    padding: 0,
+                    font: 'inherit'
+                  }}
+                >
+                  {subdomainStatus.suggestion}
+                </button>
+              </div>
+            )}
+            {!errors.subdomain && subdomainStatus.available === true && (
+              <div style={{ fontSize: '0.875rem', color: '#10b981', marginTop: '0.5rem' }}>
+                ✓ Available! Your website will be {formData.subdomain}.launchfly.com
+              </div>
+            )}
           </div>
 
           {formData.plan === 'professional' && !paymentSessionId && (
@@ -725,10 +1082,21 @@ export default function CustomBusinessOnboarding() {
 
   return (
     <>
+      {currentStep === 0 && renderStep0()}
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
       {currentStep === 3 && renderStep3()}
       {currentStep === 4 && renderStep4()}
+      {currentStep === 5 && renderStep5()}
+      
+      <PlanPreviewModal
+        isOpen={showPlanPreview}
+        onClose={() => setShowPlanPreview(false)}
+        onConfirm={handleProceedToCheckout}
+        selectedPlan="professional"
+        businessName={formData.businessName}
+        subdomain={formData.subdomain}
+      />
     </>
   );
 }

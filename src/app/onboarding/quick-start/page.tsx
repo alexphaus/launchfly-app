@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { trackOnboardingStart, trackStepCompleted, trackValidationError, trackOnboardingCompleted } from '../../../lib/onboarding-analytics';
+import PlanPreviewModal from '../../../components/PlanPreviewModal';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,6 +65,12 @@ export default function QuickStartOnboarding() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
+  const [subdomainStatus, setSubdomainStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    suggestion: string | null;
+  }>({ checking: false, available: null, suggestion: null });
+  const [showPlanPreview, setShowPlanPreview] = useState(false);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -119,6 +126,90 @@ export default function QuickStartOnboarding() {
       .slice(0, 20) + '-' + Math.random().toString(36).substr(2, 4);
   };
 
+  const checkSubdomainAvailability = async (subdomain: string) => {
+    if (!subdomain || subdomain.length < 3) {
+      setSubdomainStatus({ checking: false, available: null, suggestion: null });
+      return;
+    }
+
+    setSubdomainStatus({ checking: true, available: null, suggestion: null });
+
+    try {
+      const response = await fetch(`/api/check-subdomain?subdomain=${encodeURIComponent(subdomain)}`);
+      const result = await response.json();
+
+      if (response.ok) {
+        setSubdomainStatus({
+          checking: false,
+          available: result.available,
+          suggestion: result.suggestion
+        });
+
+        if (!result.available && result.error) {
+          setErrors(prev => ({ ...prev, subdomain: result.error }));
+        } else if (result.available) {
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.subdomain;
+            return newErrors;
+          });
+        }
+      } else {
+        setSubdomainStatus({ checking: false, available: null, suggestion: null });
+      }
+    } catch (error) {
+      console.error('Error checking subdomain:', error);
+      setSubdomainStatus({ checking: false, available: null, suggestion: null });
+    }
+  };
+
+  // Debounced subdomain checking
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.subdomain) {
+        checkSubdomainAvailability(formData.subdomain);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.subdomain]);
+
+  const handleProceedToCheckout = async () => {
+    setIsLoading(true);
+    try {
+      // Create checkout session
+      const response = await fetch('/api/stripe/professional-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          name: formData.name,
+          template: formData.template,
+          businessName: formData.businessName,
+          subdomain: formData.subdomain,
+          returnUrl: window.location.href
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create checkout session');
+      }
+
+      const { url } = await response.json();
+      
+      // Save form data to localStorage before redirecting
+      localStorage.setItem('launchfly_onboarding_data', JSON.stringify(formData));
+      
+      // Redirect to Stripe Checkout
+      window.location.href = url;
+    } catch (error) {
+      console.error('Checkout error:', error);
+      setErrors({ submit: 'Failed to start checkout. Please try again.' });
+      setIsLoading(false);
+      setShowPlanPreview(false);
+    }
+  };
+
   const validateStep = (step: number) => {
     const newErrors: Record<string, string> = {};
 
@@ -149,40 +240,9 @@ export default function QuickStartOnboarding() {
   const handleNext = async () => {
     if (!validateStep(currentStep)) return;
     
-    // If moving from step 2 to step 3 with professional plan, redirect to checkout
+    // If moving from step 2 to step 3 with professional plan, show plan preview
     if (currentStep === 2 && formData.plan === 'professional' && !paymentSessionId) {
-      setIsLoading(true);
-      try {
-        // Create checkout session
-        const response = await fetch('/api/stripe/professional-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            name: formData.name,
-            template: formData.template,
-            businessName: formData.businessName,
-            subdomain: formData.subdomain,
-            returnUrl: window.location.href
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to create checkout session');
-        }
-
-        const { url } = await response.json();
-        
-        // Save form data to localStorage before redirecting
-        localStorage.setItem('launchfly_onboarding_data', JSON.stringify(formData));
-        
-        // Redirect to Stripe Checkout
-        window.location.href = url;
-      } catch (error) {
-        console.error('Checkout error:', error);
-        setErrors({ submit: 'Failed to start checkout. Please try again.' });
-        setIsLoading(false);
-      }
+      setShowPlanPreview(true);
       return;
     }
     
@@ -431,20 +491,82 @@ export default function QuickStartOnboarding() {
           <div className="form-group">
             <label className="form-label">Website Address</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                type="text"
-                className={`form-input ${errors.subdomain ? 'error' : ''}`}
-                value={formData.subdomain}
-                onChange={(e) => setFormData(prev => ({ 
-                  ...prev, 
-                  subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-                }))}
-                placeholder="your-business"
-                style={{ flex: 1 }}
-              />
+              <div style={{ flex: 1, position: 'relative' }}>
+                <input
+                  type="text"
+                  className={`form-input ${errors.subdomain ? 'error' : subdomainStatus.available === false ? 'error' : subdomainStatus.available === true ? 'success' : ''}`}
+                  value={formData.subdomain}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+                  }))}
+                  placeholder="your-business"
+                  style={{ 
+                    paddingRight: subdomainStatus.checking || subdomainStatus.available !== null ? '2.5rem' : '1rem'
+                  }}
+                />
+                {subdomainStatus.checking && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.75rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)'
+                  }}>
+                    <div className="loading-spinner" style={{ width: '16px', height: '16px' }}></div>
+                  </div>
+                )}
+                {!subdomainStatus.checking && subdomainStatus.available === true && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.75rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    color: '#10b981',
+                    fontWeight: 'bold'
+                  }}>
+                    ✓
+                  </div>
+                )}
+                {!subdomainStatus.checking && subdomainStatus.available === false && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    right: '0.75rem', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    color: '#ef4444',
+                    fontWeight: 'bold'
+                  }}>
+                    ✗
+                  </div>
+                )}
+              </div>
               <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>.launchfly.com</span>
             </div>
             {errors.subdomain && <div className="form-error">{errors.subdomain}</div>}
+            {!errors.subdomain && subdomainStatus.available === false && subdomainStatus.suggestion && (
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                Try: <button 
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, subdomain: subdomainStatus.suggestion! }))}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    color: '#667eea', 
+                    textDecoration: 'underline', 
+                    cursor: 'pointer',
+                    padding: 0,
+                    font: 'inherit'
+                  }}
+                >
+                  {subdomainStatus.suggestion}
+                </button>
+              </div>
+            )}
+            {!errors.subdomain && subdomainStatus.available === true && (
+              <div style={{ fontSize: '0.875rem', color: '#10b981', marginTop: '0.5rem' }}>
+                ✓ Available! Your website will be {formData.subdomain}.launchfly.com
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
@@ -593,6 +715,15 @@ export default function QuickStartOnboarding() {
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
       {currentStep === 3 && renderStep3()}
+      
+      <PlanPreviewModal
+        isOpen={showPlanPreview}
+        onClose={() => setShowPlanPreview(false)}
+        onConfirm={handleProceedToCheckout}
+        selectedPlan="professional"
+        businessName={formData.businessName}
+        subdomain={formData.subdomain}
+      />
     </>
   );
 }

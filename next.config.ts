@@ -35,13 +35,13 @@ const nextConfig: NextConfig = {
       config.externals = [...(config.externals || []), '@opentelemetry/auto-instrumentations-node'];
     }
     
-    // Production optimizations
-    if (!dev) {
+    // Production optimizations - CLIENT ONLY to avoid server vendor-chunk issues
+    if (!dev && !isServer) {
       // Enable tree shaking
       config.optimization.usedExports = true;
       config.optimization.sideEffects = false;
-      
-      // Split chunks for better caching
+
+      // Split chunks for better caching (client-side only)
       config.optimization.splitChunks = {
         chunks: 'all',
         cacheGroups: {

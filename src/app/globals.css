@@ -61,10 +61,18 @@
     --shadow-glass: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
+/*
+  Important: avoid globally zeroing margin/padding which can override
+  component and Tailwind utility spacing used by generated sites.
+  Keep box-sizing reset globally; scope spacing baseline to body only.
+*/
 * {
+    box-sizing: border-box;
+}
+
+body {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
 }
 
 html {
@@ -87,17 +95,18 @@ body.menu-open {
     overflow: hidden;
 }
 
-main {
+/* Scope main layout styles to homepage only to avoid conflicts with generated sites */
+.launchfly-homepage main {
     padding-top: 72px;
 }
 
-.container {
+.launchfly-homepage .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 24px;
 }
 
-section {
+.launchfly-homepage section {
     padding: 96px 0;
     position: relative;
 }
@@ -333,7 +342,8 @@ section {
     }
 }
 
-h1 {
+/* Scope heading styles to homepage only */
+.launchfly-homepage h1 {
     font-size: clamp(48px, 6vw, 72px);
     font-weight: 900;
     line-height: 1.05;
@@ -2047,25 +2057,26 @@ h1 {
 }
 
 /* 13. Professional Footer */
-footer {
+/* Scope footer styles to homepage only */
+.launchfly-homepage footer {
     background: var(--text-dark);
     color: var(--text-light);
     padding: 64px 0 32px;
 }
 
-.footer-main {
+.launchfly-homepage .footer-main {
     display: grid;
     grid-template-columns: 1fr 2fr;
     gap: 64px;
     margin-bottom: 48px;
 }
 
-.footer-brand .logo {
+.launchfly-homepage .footer-brand .logo {
     color: white;
     margin-bottom: 16px;
 }
 
-.footer-brand p {
+.launchfly-homepage .footer-brand p {
     color: var(--text-light);
     margin-bottom: 24px;
     opacity: 0.8;
@@ -3962,12 +3973,12 @@ footer {
     }
 }
 
-/* Prevent layout shift on image load */
-img {
+/* Prevent layout shift on image load - scoped to homepage */
+.launchfly-homepage img {
     aspect-ratio: attr(width) / attr(height);
 }
 
-/* Improve form elements on mobile */
+/* Improve form elements on mobile - keep global for accessibility */
 input,
 textarea,
 button {

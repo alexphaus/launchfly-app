@@ -144,6 +144,16 @@ export async function POST(request) {
       .insert({ id: sessionId, business_id: business.id, stage: 'pending', progress: 0 });
     if (sessErr) throw sessErr;
 
+    // Fire-and-forget: initialize monetization (offers + Stripe Connect)
+    // Non-blocking to keep onboarding snappy; failures are logged by the initializer
+    try {
+      fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/money/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
+      }).catch(() => {});
+    } catch (_) {}
+
     return Response.json({ success: true, sessionId, businessId: business.id, subdomain: safeSubdomain });
   } catch (error) {
     console.error('Wizard submit error:', error);

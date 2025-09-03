@@ -3,6 +3,7 @@ import { inngest, EVENTS } from '../client';
 import { createClient } from '@supabase/supabase-js';
 import { analyzeOpportunity } from '@/core/analyze';
 import { launchBusiness } from '@/core/launch';
+import { initializeMonetizationForBusiness } from '@/lib/money/initializer';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -119,6 +120,15 @@ export const generateBusiness = inngest.createFunction(
           .eq('id', sessionId);
       });
       
+      // Monetization: ensure offers and Stripe Connect are fully ready
+      await step.run('initialize-monetization', async () => {
+        try {
+          await initializeMonetizationForBusiness({ businessId, eagerConnectLink: true });
+        } catch (e) {
+          console.error('Monetization initialization failed:', e);
+        }
+      });
+
       // Trigger growth campaigns after business is ready
       await step.sendEvent('trigger-initial-growth', {
         name: EVENTS.GROWTH_CAMPAIGN_STARTED,

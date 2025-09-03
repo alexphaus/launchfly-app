@@ -1,134 +1,116 @@
-// test-revenue-engine.js
-// Simple test script to validate revenue engine components
+#!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+/**
+ * Test script for Revenue Generation Engine
+ */
 
-console.log('🧪 Testing Launchfly Revenue Engine Implementation\n');
+import { createClient } from '@supabase/supabase-js';
+import { config } from 'dotenv';
 
-// Test 1: Check if all required files exist
-const requiredFiles = [
-  'src/lib/email-health/preflight.ts',
-  'src/lib/email-health/compliance.ts', 
-  'src/lib/email-health/ramp.ts',
-  'src/lib/senders/resend.ts',
-  'src/lib/events.ts',
-  'src/lib/links.ts',
-  'src/lib/payments/stripe.ts',
-  'src/lib/manual-override.ts',
-  'src/lib/offer-validate.ts',
-  'src/lib/prospects/index.ts',
-  'src/lib/prospects/seedCsv.ts',
-  'src/app/api/unsubscribe/[token]/route.ts',
-  'src/app/api/r/[slug]/route.ts',
-  'src/app/api/stripe/webhook/route.ts',
-  'src/app/api/metrics/[businessId]/route.ts',
-  'src/app/api/health.json/route.ts',
-  'supabase/migrations/2025XXXX_engine.sql',
-  'scripts/e2e-seed.ts',
-  'data/seeds/logo-design.csv'
-];
+config();
 
-console.log('📁 Checking file structure...');
-let filesExist = 0;
-for (const file of requiredFiles) {
-  const exists = fs.existsSync(path.join(__dirname, file));
-  console.log(`${exists ? '✅' : '❌'} ${file}`);
-  if (exists) filesExist++;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+const API_BASE = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
+async function testRevenueEngine() {
+  console.log('\n🚀 Testing Revenue Engine...\n');
+  
+  let businessId = null;
+  
+  try {
+    // 1. Create test business
+    console.log('1. Creating test business...');
+    const { data: business } = await supabase
+      .from('businesses')
+      .insert({
+        name: 'Test Revenue Business',
+        email: 'test@example.com',
+        subdomain: `test-${Date.now()}`,
+        business_type: 'ecommerce'
+      })
+      .select()
+      .single();
+    
+    businessId = business.id;
+    console.log('   ✓ Business created:', businessId);
+    
+    // 2. Initialize revenue engine
+    console.log('\n2. Initializing revenue engine...');
+    const response = await fetch(`${API_BASE}/api/revenue-engine/initialize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessId: businessId,
+        templateId: 'ecommerce-dropship'
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to initialize revenue engine');
+    }
+    
+    const result = await response.json();
+    console.log('   ✓ Revenue engine initialized');
+    console.log('   • Revenue streams:', result.data.revenueStreams);
+    console.log('   • Projected monthly: $' + result.data.projectedMonthlyRevenue);
+    
+    // 3. Check revenue streams
+    console.log('\n3. Checking revenue streams...');
+    const { data: streams } = await supabase
+      .from('revenue_streams')
+      .select('*')
+      .eq('business_id', businessId);
+    
+    console.log('   ✓ Active streams:', streams.length);
+    
+    // 4. Check products
+    console.log('\n4. Checking products...');
+    const { data: products } = await supabase
+      .from('products')
+      .select('*')
+      .eq('business_id', businessId);
+    
+    console.log('   ✓ Products created:', products.length);
+    
+    // 5. Test analytics
+    console.log('\n5. Testing analytics...');
+    const analyticsResponse = await fetch(
+      `${API_BASE}/api/revenue-engine/analytics?businessId=${businessId}`
+    );
+    
+    if (!analyticsResponse.ok) {
+      throw new Error('Failed to get analytics');
+    }
+    
+    console.log('   ✓ Analytics working');
+    
+    console.log('\n✅ All tests passed!');
+    console.log('💰 Revenue engine is ready for beta users.\n');
+    
+    // Cleanup
+    await cleanup(businessId);
+    
+  } catch (error) {
+    console.error('\n❌ Test failed:', error.message);
+    if (businessId) await cleanup(businessId);
+    process.exit(1);
+  }
 }
 
-console.log(`\n📊 File Structure: ${filesExist}/${requiredFiles.length} files found (${Math.round(filesExist/requiredFiles.length*100)}%)\n`);
-
-// Test 2: Check environment variables structure
-console.log('🔧 Checking environment configuration...');
-const envExample = fs.readFileSync(path.join(__dirname, '.env.example'), 'utf8');
-const requiredEnvVars = [
-  'RESEND_API_KEY',
-  'SENDER_EMAIL', 
-  'DAILY_SEND_CAP',
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'SUPABASE_SERVICE_KEY'
-];
-
-let envConfigured = 0;
-for (const envVar of requiredEnvVars) {
-  const mentioned = envExample.includes(envVar) || process.env[envVar];
-  console.log(`${mentioned ? '✅' : '❌'} ${envVar}`);
-  if (mentioned) envConfigured++;
+async function cleanup(businessId) {
+  console.log('\nCleaning up test data...');
+  
+  // Delete test data
+  await supabase.from('revenue_streams').delete().eq('business_id', businessId);
+  await supabase.from('products').delete().eq('business_id', businessId);
+  await supabase.from('businesses').delete().eq('id', businessId);
+  
+  console.log('✓ Cleanup complete');
 }
 
-console.log(`\n📊 Environment: ${envConfigured}/${requiredEnvVars.length} variables configured (${Math.round(envConfigured/requiredEnvVars.length*100)}%)\n`);
-
-// Test 3: Check database schema
-console.log('🗄️  Checking database schema...');
-const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-const requiredTables = [
-  'campaigns',
-  'emails', 
-  'clicks',
-  'email_replies',
-  'suppression_list',
-  'prospects',
-  'businesses'
-];
-
-let tablesFound = 0;
-for (const table of requiredTables) {
-  const found = schema.includes(`CREATE TABLE public.${table}`) || schema.includes(`create table if not exists public.${table}`);
-  console.log(`${found ? '✅' : '❌'} ${table} table`);
-  if (found) tablesFound++;
-}
-
-console.log(`\n📊 Database Schema: ${tablesFound}/${requiredTables.length} tables found (${Math.round(tablesFound/requiredTables.length*100)}%)\n`);
-
-// Test 4: Check CSV data
-console.log('📋 Checking test data...');
-try {
-  const csvData = fs.readFileSync(path.join(__dirname, 'data/seeds/logo-design.csv'), 'utf8');
-  const lines = csvData.trim().split('\n');
-  const hasHeader = lines[0].includes('name,email,company');
-  const hasData = lines.length > 1;
-  console.log(`${hasHeader ? '✅' : '❌'} CSV header format`);
-  console.log(`${hasData ? '✅' : '❌'} CSV test data (${lines.length - 1} prospects)`);
-} catch (e) {
-  console.log('❌ CSV file not found or readable');
-}
-
-// Test 5: Check package.json scripts
-console.log('\n⚙️  Checking NPM scripts...');
-const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-const requiredScripts = ['e2e:seed', 'dev', 'build'];
-let scriptsFound = 0;
-for (const script of requiredScripts) {
-  const found = packageJson.scripts && packageJson.scripts[script];
-  console.log(`${found ? '✅' : '❌'} ${script} script`);
-  if (found) scriptsFound++;
-}
-
-// Summary
-console.log('\n🎯 REVENUE ENGINE TEST SUMMARY');
-console.log('=====================================');
-const overallScore = Math.round(((filesExist/requiredFiles.length) + (envConfigured/requiredEnvVars.length) + (tablesFound/requiredTables.length) + (scriptsFound/requiredScripts.length)) / 4 * 100);
-
-console.log(`📁 File Structure:     ${Math.round(filesExist/requiredFiles.length*100)}%`);
-console.log(`🔧 Environment:        ${Math.round(envConfigured/requiredEnvVars.length*100)}%`);
-console.log(`🗄️  Database Schema:    ${Math.round(tablesFound/requiredTables.length*100)}%`);
-console.log(`⚙️  NPM Scripts:        ${Math.round(scriptsFound/requiredScripts.length*100)}%`);
-console.log(`\n🏆 OVERALL SCORE:      ${overallScore}%`);
-
-if (overallScore >= 90) {
-  console.log('🎉 Excellent! Revenue engine is well implemented.');
-} else if (overallScore >= 75) {
-  console.log('✅ Good! Revenue engine has solid implementation with minor gaps.');
-} else if (overallScore >= 60) {
-  console.log('⚠️  Fair. Revenue engine has basic structure but needs work.');
-} else {
-  console.log('❌ Poor. Revenue engine implementation has significant gaps.');
-}
-
-console.log('\n📖 Next steps:');
-console.log('1. Start dev server: npm run dev');
-console.log('2. Run seed test: npm run e2e:seed');
-console.log('3. Test endpoints: curl http://localhost:3000/api/health.json');
+// Run test
+testRevenueEngine();

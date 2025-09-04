@@ -403,7 +403,7 @@ const LiveWebsiteCard = ({ subdomain, visitors = 0, businessData, generationStag
     >
       {/* Header */}
       <div style={{
-        background: showContent.colors ? themeColors.gradient : 'linear-gradient(135deg, #e5e7eb 0%, #f3f4f6 100%)',
+        background: showContent.colors ? themeColors.gradient.replace(/;\s*$/, '') : 'linear-gradient(135deg, #e5e7eb 0%, #f3f4f6 100%)',
         padding: '24px',
         color: showContent.colors ? 'white' : '#6b7280',
         transition: 'all 1s ease'

@@ -29,35 +29,10 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@supabase/supabase-js', 'lucide-react'],
   },
   
-  webpack: (config, { isServer, dev }) => {
+  webpack: (config, { isServer }) => {
     // Fix OpenTelemetry module resolution issues
     if (isServer) {
       config.externals = [...(config.externals || []), '@opentelemetry/auto-instrumentations-node'];
-    }
-    
-    // Production optimizations - CLIENT ONLY to avoid server vendor-chunk issues
-    if (!dev && !isServer) {
-      // Enable tree shaking
-      config.optimization.usedExports = true;
-      config.optimization.sideEffects = false;
-
-      // Split chunks for better caching (client-side only)
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        cacheGroups: {
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            chunks: 'all',
-          },
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            enforce: true,
-          },
-        },
-      };
     }
     
     return config;

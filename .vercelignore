@@ -1,0 +1,36 @@
+# Debug and test files
+debug-*.js
+test-*.js
+*-test.js
+check-*.js
+simulate-*.js
+comprehensive-test.js
+unit-test.js
+*.test.js
+*.spec.js
+
+# Development files
+.env.local
+.env.development
+
+# Documentation
+*.md
+docs/
+
+# Scripts that aren't needed in production
+scripts/
+analyze-*.js
+diagnose-*.js
+fix-*.js
+manual-*.js
+migrate-*.js
+trigger-*.js
+update-*.js
+show-*.js
+
+# Data files
+data/
+
+# Temporary files
+*.tmp
+*.log

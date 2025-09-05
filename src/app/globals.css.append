@@ -1,0 +1,86 @@
+
+/* Testimonial Placeholder Styles */
+.testimonial-placeholder {
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 80px 40px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.placeholder-content h3 {
+    font-size: 28px;
+    color: var(--text-dark);
+    margin-bottom: 20px;
+    font-weight: 700;
+}
+
+.placeholder-content p {
+    color: var(--text-body);
+    margin-bottom: 16px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+}
+
+.placeholder-cta {
+    margin-top: 24px;
+}
+
+.placeholder-cta a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.placeholder-cta a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.methodology-link {
+    text-align: center;
+    margin-top: 40px;
+}
+
+.methodology-link a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+    font-size: 14px;
+}
+
+.methodology-link a:hover {
+    text-decoration: underline;
+}
+
+/* Additional style improvements for quality cta */
+.quality-cta {
+    display: inline-block;
+    margin-top: 24px;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 12px 24px;
+    border: 2px solid var(--primary);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.quality-cta:hover {
+    background: var(--primary);
+    color: white;
+}
+
+/* Business features style */
+.business-features {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-light);
+    font-size: 14px;
+    color: var(--text-muted);
+}

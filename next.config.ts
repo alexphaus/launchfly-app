@@ -29,18 +29,10 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@supabase/supabase-js', 'lucide-react'],
   },
   
-  webpack: (config, { isServer, nextRuntime }) => {
+  webpack: (config, { isServer }) => {
     // Fix OpenTelemetry module resolution issues
     if (isServer) {
       config.externals = [...(config.externals || []), '@opentelemetry/auto-instrumentations-node'];
-    }
-    
-    // Fix for Next.js 15.4.2 route group build issues
-    if (isServer && nextRuntime === 'nodejs') {
-      config.optimization = {
-        ...config.optimization,
-        concatenateModules: false,
-      };
     }
     
     return config;

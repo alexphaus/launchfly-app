@@ -1500,7 +1500,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
               theme={theme}
             />
             
-            <UserProfile theme={theme} />
+            <UserProfile theme={theme} session={session} business={business} />
           </div>
         </div>
       </header>

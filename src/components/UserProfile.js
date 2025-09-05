@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Settings, CreditCard, LogOut, ChevronDown, Mail, Smartphone } from 'lucide-react';
 
-const UserProfile = ({ theme }) => {
+const UserProfile = ({ theme, session, business }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -22,18 +22,45 @@ const UserProfile = ({ theme }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Mock user data - replace with actual auth state
+  // Set user data from session and business data
   useEffect(() => {
-    // Check for existing user session
-    const mockUser = {
-      name: 'John Doe',
-      email: 'john@example.com',
-      avatar: null,
-      subscription: 'Pro',
-      isAuthenticated: false // Set to true when user is logged in
-    };
-    setUser(mockUser);
-  }, []);
+    if (session && business) {
+      // Extract user data from business form_data or session
+      const formData = business.form_data || {};
+      const userName = formData.name || formData.full_name || business.owner_name || 'User';
+      const userEmail = formData.email || business.email || business.owner_email;
+      const userPlan = business.plan || formData.plan || 'starter';
+      
+      // Map plan names to display names
+      const planDisplayMap = {
+        'starter': 'Starter',
+        'pro': 'Pro',
+        'professional': 'Pro',
+        'scale': 'Scale',
+        'enterprise': 'Enterprise'
+      };
+      
+      const user = {
+        name: userName,
+        email: userEmail,
+        avatar: null, // Could be added later from user profile
+        subscription: planDisplayMap[userPlan] || 'Starter',
+        isAuthenticated: true, // User is authenticated if we have session and business data
+        provider: 'email' // Since they signed up with email in onboarding
+      };
+      
+      setUser(user);
+    } else {
+      // No session/business data means not authenticated
+      setUser({
+        name: 'User',
+        email: '',
+        avatar: null,
+        subscription: 'Free',
+        isAuthenticated: false
+      });
+    }
+  }, [session, business]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { trackCTAClick } from '../lib/onboarding-analytics';
+import { trackCTAClick } from '../../lib/onboarding-analytics';
 
 export default function HomePage() {
   const router = useRouter();

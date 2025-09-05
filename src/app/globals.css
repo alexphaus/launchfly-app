@@ -4097,3 +4097,31 @@ button:focus {
         height: 300px;
     }
 }
+
+/* Copy-alignment overrides for credible AI Cofounder tone */
+.animated-gradient { animation: none; }
+.pulse-label, .badge-pulse, .live-indicator { animation: none !important; }
+.floating, .floating-icon { animation: none !important; }
+
+/* Calmer CTAs */
+.primary-cta { box-shadow: var(--shadow-md); }
+.primary-cta::before, .cta-shine { display: none; }
+.primary-cta:hover { transform: translateY(-1px) scale(1.005); box-shadow: var(--shadow-lg); background: var(--gradient-primary); }
+
+/* Header CTA */
+.nav-cta { box-shadow: var(--shadow-xs); }
+.nav-cta:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+
+/* Stats now represent features, not numeric promises */
+.stat-item strong { font-size: 30px; }
+
+/* Softer glass and hover behavior */
+.glass-card { box-shadow: var(--shadow-md); }
+.glass-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.hover-lift:hover { transform: translateY(-4px) scale(1.01); }
+
+/* Calmer badges */
+.gradient-badge, .business-badge, .popular-badge { animation: none; }
+
+/* Results banner subtle */
+.results-banner.glass-banner { box-shadow: var(--shadow-md); gap: 32px; }

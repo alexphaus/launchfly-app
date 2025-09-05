@@ -1,7 +1,7 @@
 // src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2 } from 'lucide-react';
+import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
 import UserProfile from './UserProfile';
 
 // --- DESIGN SYSTEM ---
@@ -209,10 +209,11 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut }) => 
   );
 };
 
-// --- COMPONENT: Money Hero Section ---
-const MoneyHero = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false }) => {
+// --- COMPONENT: Revenue Dropdown for Header ---
+const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme }) => {
   const [displayRevenue, setDisplayRevenue] = useState(totalRevenue);
   const [showCashOutModal, setShowCashOutModal] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   useEffect(() => {
     if (totalRevenue > displayRevenue) {
@@ -223,84 +224,140 @@ const MoneyHero = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = fals
     }
   }, [totalRevenue, displayRevenue]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isDropdownOpen && !event.target.closest('.revenue-dropdown')) {
+        setIsDropdownOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isDropdownOpen]);
+
   return (
-    <div className="money-hero" style={{
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-      borderRadius: '24px',
-      padding: '32px',
-      textAlign: 'center',
-      color: 'white',
-      marginBottom: '24px',
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: '-50%',
-        right: '-20%',
-        width: '400px',
-        height: '400px',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%)',
-        borderRadius: '50%'
-      }} />
-      
-      <div style={{ position: 'relative' }}>
-        <p style={{ fontSize: '14px', opacity: 0.8, marginBottom: '8px' }}>Total Revenue</p>
-        <h1 style={{ 
-          fontSize: '56px', 
-          fontWeight: '900', 
-          marginBottom: '4px',
-          textShadow: '0 4px 20px rgba(0,0,0,0.3)'
+    <div className="revenue-dropdown" style={{ position: 'relative' }}>
+      {/* Revenue Trigger Button */}
+      <button
+        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          padding: '8px 12px',
+          fontSize: '14px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+        }}
+        onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+        onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+      >
+        <DollarSign size={16} />
+        ${displayRevenue.toLocaleString()}
+        <ChevronDown size={14} style={{ 
+          transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.2s ease'
+        }} />
+      </button>
+
+      {/* Dropdown Content */}
+      {isDropdownOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          right: 0,
+          marginTop: '8px',
+          background: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          minWidth: '280px',
+          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.15)',
+          border: `1px solid ${theme.colors.borderLight}`,
+          zIndex: 1000
         }}>
-          ${displayRevenue.toLocaleString()}
-        </h1>
-        
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          gap: '8px',
-          marginBottom: '24px'
-        }}>
-          <TrendingUp size={20} style={{ color: '#10b981' }} />
-          <span style={{ color: '#10b981', fontSize: '18px', fontWeight: '600' }}>
-            ${availableToCashOut.toLocaleString()} available to cash out
-          </span>
+          {/* Revenue Display */}
+          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+            <p style={{ 
+              fontSize: '12px', 
+              color: theme.colors.textGray, 
+              marginBottom: '4px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}>
+              Total Revenue
+            </p>
+            <h3 style={{ 
+              fontSize: '32px', 
+              fontWeight: '900', 
+              color: theme.colors.textDark,
+              marginBottom: '8px'
+            }}>
+              ${displayRevenue.toLocaleString()}
+            </h3>
+            
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '6px',
+              marginBottom: '16px'
+            }}>
+              <Wallet size={16} style={{ color: '#10b981' }} />
+              <span style={{ color: '#10b981', fontSize: '14px', fontWeight: '600' }}>
+                ${availableToCashOut.toLocaleString()} available
+              </span>
+            </div>
+          </div>
+          
+          {/* Cash Out Button */}
+          <button
+            disabled={!canCashOut}
+            onClick={() => {
+              if (canCashOut) {
+                setShowCashOutModal(true);
+                setIsDropdownOpen(false);
+              }
+            }}
+            style={{
+              width: '100%',
+              background: canCashOut ? theme.gradients.success : theme.colors.bgGray,
+              border: 'none',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              color: canCashOut ? 'white' : theme.colors.textGray,
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: canCashOut ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease',
+              opacity: canCashOut ? 1 : 0.6
+            }}
+            onMouseEnter={e => canCashOut && (e.target.style.transform = 'translateY(-1px)')}
+            onMouseLeave={e => canCashOut && (e.target.style.transform = 'translateY(0)')}
+          >
+            <DollarSign size={16} />
+            {canCashOut ? 'Cash Out Now' : 'Nothing to cash out yet'}
+          </button>
         </div>
-        
-        <button
-          disabled={!canCashOut}
-          onClick={() => canCashOut && setShowCashOutModal(true)}
-          style={{
-            background: canCashOut ? theme.gradients.success : 'rgba(255,255,255,0.1)',
-            border: 'none',
-            padding: '16px 32px',
-            borderRadius: '12px',
-            color: 'white',
-            fontSize: '18px',
-            fontWeight: '700',
-            cursor: canCashOut ? 'pointer' : 'not-allowed',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.3s',
-            opacity: canCashOut ? 1 : 0.5
-          }}
-          onMouseEnter={e => canCashOut && (e.target.style.transform = 'scale(1.05)')}
-          onMouseLeave={e => canCashOut && (e.target.style.transform = 'scale(1)')}
-        >
-          <DollarSign size={24} />
-          {canCashOut ? 'Cash Out Now' : 'Nothing to cash out yet'}
-        </button>
-        
-        {/* Cash Out Modal */}
-        <CashOutModal
-          isOpen={showCashOutModal}
-          onClose={() => setShowCashOutModal(false)}
-          totalRevenue={totalRevenue}
-          availableToCashOut={availableToCashOut}
-        />
-      </div>
+      )}
+      
+      {/* Cash Out Modal */}
+      <CashOutModal
+        isOpen={showCashOutModal}
+        onClose={() => setShowCashOutModal(false)}
+        totalRevenue={totalRevenue}
+        availableToCashOut={availableToCashOut}
+      />
     </div>
   );
 };
@@ -1428,6 +1485,21 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
               AI Active
             </div>
             
+            {/* Revenue Dropdown */}
+            <RevenueDropdown 
+              totalRevenue={totalRevenue}
+              availableToCashOut={
+                // Use real available cash out data from business
+                business?.available_to_cash_out || 
+                business?.cashable_amount || 
+                businessData.availableToCashOut || 
+                // If we have real revenue, use a small percentage as available
+                (totalRevenue > 0 ? Math.max(totalRevenue * 0.1, 5) : 0) // 10% of revenue or $5 minimum
+              }
+              canCashOut={totalRevenue > 0} // Allow cashout when there's any revenue
+              theme={theme}
+            />
+            
             <UserProfile theme={theme} />
           </div>
         </div>
@@ -1439,19 +1511,6 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         margin: '0 auto',
         padding: '0 24px'
       }}>
-        {/* Money Display - Always show for motivation */}
-        <MoneyHero 
-          totalRevenue={totalRevenue}
-          availableToCashOut={
-            // Use real available cash out data from business
-            business?.available_to_cash_out || 
-            business?.cashable_amount || 
-            businessData.availableToCashOut || 
-            // If we have real revenue, use a small percentage as available
-            (totalRevenue > 0 ? Math.max(totalRevenue * 0.1, 5) : 0) // 10% of revenue or $5 minimum
-          }
-          canCashOut={totalRevenue > 0} // Allow cashout when there's any revenue
-        />
 
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 

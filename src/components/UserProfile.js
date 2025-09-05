@@ -2,9 +2,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { User, Settings, CreditCard, LogOut, ChevronDown, Mail, Smartphone } from 'lucide-react';
 
 const UserProfile = ({ theme, session, business }) => {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -249,7 +251,9 @@ const UserProfile = ({ theme, session, business }) => {
                 <button
                   className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
                   onClick={() => {
-                    console.log('Settings clicked');
+                    if (session?.id) {
+                      router.push(`/dashboard/${session.id}/settings`);
+                    }
                     setIsOpen(false);
                   }}
                 >

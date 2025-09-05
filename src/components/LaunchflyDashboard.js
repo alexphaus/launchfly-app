@@ -1232,7 +1232,8 @@ const InsightsCard = ({ isSetupComplete, generationStage, businessData, business
 };
 
 // --- COMPONENT: Simple Next Steps ---
-const NextSteps = ({ onComplete, generationStage, setupStatus, onConnect }) => {
+const NextSteps = ({ onComplete, generationStage, setupStatus, onConnect, sessionId }) => {
+  const router = useRouter();
   const steps = [
     {
       id: 'bank',
@@ -1281,35 +1282,32 @@ const NextSteps = ({ onComplete, generationStage, setupStatus, onConnect }) => {
           <button
             key={step.id}
             onClick={() => {
-              if (step.completed) return;
-              if (step.id === 'bank' && onConnect) {
-                return onConnect();
+              if (sessionId) {
+                router.push(`/dashboard/${sessionId}/settings`);
               }
-              return onComplete(step.id);
             }}
-            disabled={step.completed}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '16px',
               padding: '16px',
-              background: step.completed ? '#f3f4f6' : '#f0f9ff',
-              border: `2px solid ${step.completed ? '#e5e7eb' : '#3b82f6'}`,
+              background: step.completed ? '#f0f9ff' : '#f0f9ff',
+              border: `2px solid ${step.completed ? '#10b981' : '#3b82f6'}`,
               borderRadius: '12px',
-              cursor: step.completed ? 'default' : 'pointer',
+              cursor: 'pointer',
               transition: 'all 0.2s',
               textAlign: 'left',
               width: '100%'
             }}
-            onMouseEnter={e => !step.completed && (e.currentTarget.style.transform = 'translateX(4px)')}
-            onMouseLeave={e => !step.completed && (e.currentTarget.style.transform = 'translateX(0)')}
+            onMouseEnter={e => (e.currentTarget.style.transform = 'translateX(4px)')}
+            onMouseLeave={e => (e.currentTarget.style.transform = 'translateX(0)')}
           >
             <span style={{ fontSize: '28px' }}>{step.icon}</span>
             <div style={{ flex: 1 }}>
               <p style={{ 
                 fontWeight: '600', 
                 fontSize: '16px',
-                color: step.completed ? theme.colors.textGray : theme.colors.textDark
+                color: theme.colors.textDark
               }}>
                 {step.title}
               </p>
@@ -1543,6 +1541,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             onComplete={handleStepComplete}
             generationStage={generationStage}
             setupStatus={setupStatus}
+            sessionId={session?.id}
             onConnect={async () => {
               try {
                 const email = business?.form_data?.email;

@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import "./globals.css";
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
@@ -18,9 +18,9 @@ export const metadata: Metadata = {
   }
 };
 
-export const viewport: Viewport = {
+export const viewport = {
   width: 'device-width',
-  initialScale: 1.0,
+  initialScale: 1,
 };
 
 export default function RootLayout({

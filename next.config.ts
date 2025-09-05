@@ -29,6 +29,9 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@supabase/supabase-js', 'lucide-react'],
   },
   
+  // Fix for build issues with route groups in Next.js 15.4.2
+  output: 'standalone',
+  
   webpack: (config, { isServer }) => {
     // Fix OpenTelemetry module resolution issues
     if (isServer) {

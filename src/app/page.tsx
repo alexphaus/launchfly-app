@@ -203,7 +203,7 @@ export default function HomePage() {
               aria-label="Get started with Launchfly"
             >
               <span className="pulse-dot" aria-hidden="true"></span>
-              Get Customers Now →
+              Start free
             </button>
           </div>
           <button 
@@ -241,16 +241,16 @@ export default function HomePage() {
           <div className="container hero-content">
             <div className="hero-badge floating">
               <span className="badge-pulse"></span>
-              <span className="badge-icon">💰</span>
-              <span><strong>{recentSuccess}</strong> entrepreneurs started earning this week</span>
+              <span className="badge-icon">🤖</span>
+              <span><strong>{recentSuccess}</strong> businesses launched this week</span>
             </div>
             
             <h1 className="hero-title">
-              <span className="title-line-1">Stop Building. Start Earning.</span><br />
-              <span className="gradient-text animated-gradient">Get a Pre-Built Business Making $1K-$10K/Month</span>
+              <span className="title-line-1">Meet your AI Cofounder</span><br />
+              <span className="gradient-text animated-gradient">Launch a validated service business in days</span>
             </h1>
             
-            <p className="subtitle">Skip the startup struggle. We hand you a <strong>proven business model</strong> complete with <strong>50-200 paying customers</strong>, automated systems, and everything you need to start earning immediately. <span className="highlight-text">Zero experience required.</span></p>
+            <p className="subtitle">Launch faster with an AI cofounder. It configures your funnel, outreach, and automations—so you can focus on decisions and delivery.</p>
             
             <div className="cta-group">
               <a 
@@ -286,23 +286,23 @@ export default function HomePage() {
             <div className="hero-stats glass-stats">
               <div className="stat-item pulse-on-hover">
                 <div className="stat-icon">⏱</div>
-                <strong>12-24hrs</strong>
-                <span>First Sale</span>
+                <strong>Fast</strong>
+                <span>Setup</span>
               </div>
               <div className="stat-item pulse-on-hover">
                 <div className="stat-icon">📈</div>
-                <strong>$3,247</strong>
-                <span>Avg Monthly</span>
+                <strong>Automated</strong>
+                <span>Outreach</span>
               </div>
               <div className="stat-item pulse-on-hover">
                 <div className="stat-icon">✨</div>
-                <strong>94%</strong>
-                <span>Success Rate</span>
+                <strong>Guided</strong>
+                <span>Playbooks</span>
               </div>
               <div className="stat-item pulse-on-hover">
                 <div className="stat-icon">👥</div>
-                <strong>100+</strong>
-                <span>Ready Buyers</span>
+                <strong>Lead</strong>
+                <span>Inbox</span>
               </div>
             </div>
 
@@ -325,7 +325,7 @@ export default function HomePage() {
               </div>
               <div className="trust-text">
                 <span className="live-indicator pulse"></span>
-                <span className="trust-message"><strong>{liveUsers}</strong> entrepreneurs actively earning right now</span>
+                <span className="trust-message"><strong>{liveUsers}</strong> entrepreneurs active right now</span>
               </div>
             </div>
           </div>
@@ -335,9 +335,9 @@ export default function HomePage() {
         <section className="proven-businesses" id="proven-businesses">
           <div className="container">
             <div className="section-header">
-              <div className="section-label pulse-label">🔥 Hot Opportunities</div>
-              <h2 className="section-title">Pick Your <span className="gradient-text">Money-Making Machine</span></h2>
-              <p className="section-subtitle">Each business is <strong>pre-tested</strong>, <strong>pre-optimized</strong>, and comes with <strong>real customers ready to pay</strong>. Just pick one and start earning.</p>
+              <div className="section-label pulse-label">Templates</div>
+              <h2 className="section-title">Choose a <span className="gradient-text">validated template</span></h2>
+              <p className="section-subtitle">Each template includes a conversion‑ready funnel and automations. Customize and go live fast.</p>
             </div>
             
             <div className="business-cards-grid">
@@ -564,8 +564,8 @@ export default function HomePage() {
             <div className="custom-business-option glass-card" id="custom-business">
               <div className="custom-business-content">
                 <div className="custom-icon">💡</div>
-                <h3>Got Your Own Million-Dollar Idea?</h3>
-                <p>Tell us your vision and we'll build a <strong>custom AI-powered business</strong> around it. Same guarantees, same results.</p>
+                <h3>Have your own idea?</h3>
+                <p>Tell us your vision and we’ll configure a <strong>custom AI‑powered operating system</strong> around it.</p>
                 
                 <div className="idea-input-container">
                   <div className="input-group">
@@ -632,9 +632,9 @@ export default function HomePage() {
         <section className="problem-solution" id="problem-solution">
           <div className="container">
             <div className="section-header">
-              <div className="section-label pulse-label">🚀 The Shortcut to Success</div>
-              <h2 className="section-title">Two Paths. <span className="gradient-text">One Clear Winner.</span></h2>
-              <p className="section-subtitle">See why starting from scratch is obsolete. The future is buying proven success.</p>
+              <div className="section-label pulse-label">Manual vs AI‑assisted</div>
+              <h2 className="section-title">Two paths. <span className="gradient-text">Choose AI‑assisted.</span></h2>
+              <p className="section-subtitle">See how AI speeds up validation, outreach, and operations—without the usual guesswork.</p>
             </div>
             
             <div className="transformation-container glass-effect">
@@ -643,13 +643,13 @@ export default function HomePage() {
                   <div className="pathway-icon-bg">
                     <span className="pathway-icon">😫</span>
                   </div>
-                  <h3>Starting From Scratch</h3>
+                  <h3>Starting from scratch</h3>
                   <div className="pathway-tag tag-danger">The Hard Path</div>
                 </div>
                 <ul className="pathway-list">
                   <li>
                     <span className="list-icon">❌</span>
-                    <p><strong>Zero Customers, Zero Income</strong><br/>Start from nothing and hope people care.</p>
+                    <p><strong>No customers at the start</strong><br/>Start from nothing and hope people care.</p>
                   </li>
                   <li>
                     <span className="list-icon">❌</span>
@@ -657,7 +657,7 @@ export default function HomePage() {
                   </li>
                   <li>
                     <span className="list-icon">❌</span>
-                    <p><strong>95% Failure Rate</strong><br/>Join the statistic of businesses that don't make it.</p>
+                    <p><strong>High failure risk</strong><br/>Hard to validate quickly without data.</p>
                   </li>
                   <li>
                     <span className="list-icon">❌</span>
@@ -676,25 +676,25 @@ export default function HomePage() {
                   <div className="pathway-icon-bg">
                     <span className="pathway-icon">😎</span>
                   </div>
-                  <h3>Buying Proven Business</h3>
+                  <h3>Launch with AI assistance</h3>
                   <div className="pathway-tag tag-success">The Smart Path</div>
                 </div>
                 <ul className="pathway-list">
                   <li>
                     <span className="list-icon">✅</span>
-                    <p><strong>50-200+ Customers</strong><br/>Get a list of people ready to buy from day one.</p>
+                    <p><strong>Pre‑qualified lead lists</strong><br/>Reach relevant buyers from day one.</p>
                   </li>
                   <li>
                     <span className="list-icon">✅</span>
-                    <p><strong>Proven Profitable Model</strong><br/>Step into a business that's already making money.</p>
+                    <p><strong>Validated model & playbooks</strong><br/>Start with funnels and offers that convert.</p>
                   </li>
                   <li>
                     <span className="list-icon">✅</span>
-                    <p><strong>92% Success Rate</strong><br/>Your revenue is guaranteed. We remove the risk.</p>
+                    <p><strong>Clear milestones</strong><br/>Guidance and support if timelines slip.</p>
                   </li>
                   <li>
                     <span className="list-icon">✅</span>
-                    <p><strong>AI Handles Everything</strong><br/>Your business runs on autopilot, 24/7.</p>
+                    <p><strong>Automation for routine tasks</strong><br/>AI handles outreach, follow‑ups, and ops.</p>
                   </li>
                 </ul>
               </div>
@@ -706,45 +706,45 @@ export default function HomePage() {
         <section className="how-it-works" id="how-it-works">
           <div className="container">
             <div className="section-header">
-              <div className="section-label">How It Works</div>
-              <h2 className="section-title">Your Business Live in 30 Minutes</h2>
-              <p className="section-subtitle">Choose proven business → Get customers → Make money. It's that simple.</p>
+              <div className="section-label">How it works</div>
+              <h2 className="section-title">Go live fast with your AI cofounder</h2>
+              <p className="section-subtitle">Pick a template → Configure your stack → Start engaging leads.</p>
             </div>
             
             <div className="timeline">
               <div className="timeline-item">
                 <div className="timeline-marker">1</div>
                 <div className="timeline-content">
-                  <div className="timeline-time">5 minutes</div>
-                  <h3>Choose Your Business</h3>
-                  <p>Browse our proven businesses or describe your own idea. Each proven business comes with verified revenue data and customer pools.</p>
+                  <div className="timeline-time">Step 1</div>
+                  <h3>Pick a template or share your idea</h3>
+                  <p>Browse templates or describe your idea. We’ll align on goals and niche fit.</p>
                 </div>
               </div>
               
               <div className="timeline-item">
                 <div className="timeline-marker">2</div>
                 <div className="timeline-content">
-                  <div className="timeline-time">15 minutes</div>
-                  <h3>AI Clones & Customizes</h3>
-                  <p>Our AI instantly creates your version with custom branding, optimized pricing, and personalized sales copy. Everything's ready to sell.</p>
+                  <div className="timeline-time">Step 2</div>
+                  <h3>AI configures your stack</h3>
+                  <p>Branding, funnel, outreach sequences, CRM, and payments—ready to run.</p>
                 </div>
               </div>
               
               <div className="timeline-item">
                 <div className="timeline-marker">3</div>
                 <div className="timeline-content">
-                  <div className="timeline-time">Immediately</div>
-                  <h3>Customers Transferred</h3>
-                  <p>50-200 pre-qualified customers are assigned to your business. These are real people who've already shown interest in your service.</p>
+                  <div className="timeline-time">Step 3</div>
+                  <h3>Start engaging leads</h3>
+                  <p>Your funnel and outreach begin working. Track conversations in one inbox.</p>
                 </div>
               </div>
               
               <div className="timeline-item">
                 <div className="timeline-marker">4</div>
                 <div className="timeline-content">
-                  <div className="timeline-time">24-48 hours</div>
-                  <h3>First Sale Guaranteed</h3>
-                  <p>AI reaches out to your customer pool with personalized offers. Your first sale typically happens within 24 hours or we pay you $100.</p>
+                  <div className="timeline-time">Step 4</div>
+                  <h3>Launch and iterate</h3>
+                  <p>Review performance and let AI optimize pricing, offers, and campaigns over time.</p>
                 </div>
               </div>
             </div>
@@ -756,7 +756,7 @@ export default function HomePage() {
           <div className="ai-automation-hub">
             <div className="container">
               <div className="hub-header">
-                <h3>Your 24/7 AI Business Manager Does Everything:</h3>
+                <h3>What your AI cofounder handles</h3>
               </div>
               <div className="automation-network">
                 <div className="central-hub">
@@ -848,9 +848,9 @@ export default function HomePage() {
         <section className="proof-section" id="proof">
           <div className="container">
             <div className="section-header">
-              <div className="section-label">Real Results</div>
-              <h2 className="section-title">Real People. <span className="gradient-text">Real Income.</span> Real Fast.</h2>
-              <p className="section-subtitle">Join thousands who went from <strong>zero experience</strong> to <strong>consistent revenue</strong> in weeks, not years.</p>
+              <div className="section-label">Real stories</div>
+              <h2 className="section-title">Real founders. <span className="gradient-text">Real results.</span></h2>
+              <p className="section-subtitle">How people launched faster with AI help. Individual outcomes vary based on niche and effort.</p>
             </div>
             
             <div className="testimonial-grid">
@@ -871,19 +871,19 @@ export default function HomePage() {
                     <div className="testimonial-rating">⭐⭐⭐⭐⭐</div>
                   </div>
                 </div>
-                <p className="testimonial-text">&quot;I thought it was too good to be true... then <strong>36 hours later</strong> I made my first $97. Now I'm pulling <strong>$4,200/month on autopilot</strong>. The AI handles everything - I just check my bank account.&quot;</p>
+                <p className="testimonial-text">&quot;I launched far faster than I expected. The AI took care of outreach and follow‑ups so I could focus on approvals and delivery.&quot;</p>
                 <div className="testimonial-stats">
                   <div className="stat">
-                    <strong>$4,200/mo</strong>
-                    <span>Passive Income</span>
+                    <strong>Faster launch</strong>
+                    <span>From idea to live</span>
                   </div>
                   <div className="stat">
-                    <strong>36 hours</strong>
-                    <span>To First Sale</span>
+                    <strong>First leads</strong>
+                    <span>Arrived quickly</span>
                   </div>
                   <div className="stat">
-                    <strong>0 hours</strong>
-                    <span>Weekly Work</span>
+                    <strong>Light</strong>
+                    <span>Weekly review</span>
                   </div>
                 </div>
               </div>
@@ -905,15 +905,15 @@ export default function HomePage() {
                     <div className="testimonial-rating">⭐⭐⭐⭐⭐</div>
                   </div>
                 </div>
-                <p className="testimonial-text">&quot;Every other platform just gives you tools. Launchfly gave me <strong>actual paying customers</strong>. Made my first sale in 24 hours, now I'm at <strong>$2,800/month</strong> working zero hours.&quot;</p>
+                <p className="testimonial-text">&quot;Every other platform just gives you pieces. Launchfly connected everything and kept me on track with clear next steps.&quot;</p>
                 <div className="testimonial-stats">
                   <div className="stat">
-                    <strong>$2,800/mo</strong>
-                    <span>Average Revenue</span>
+                    <strong>Clarity</strong>
+                    <span>End‑to‑end setup</span>
                   </div>
                   <div className="stat">
-                    <strong>24 hours</strong>
-                    <span>To First Sale</span>
+                    <strong>Momentum</strong>
+                    <span>Faster first wins</span>
                   </div>
                 </div>
               </div>
@@ -935,15 +935,15 @@ export default function HomePage() {
                     <div className="testimonial-rating">⭐⭐⭐⭐⭐</div>
                   </div>
                 </div>
-                <p className="testimonial-text">&quot;The AI found a profitable niche I never would have thought of. Now I literally <strong>check once a week</strong> to see my profits growing. This is what <strong>true passive income</strong> looks like!&quot;</p>
+                <p className="testimonial-text">&quot;The AI highlighted a niche I hadn’t considered and kept improving my offers with small, evidence‑based tweaks.&quot;</p>
                 <div className="testimonial-stats">
                   <div className="stat">
-                    <strong>$1,850/mo</strong>
-                    <span>Pure Profit</span>
+                    <strong>Better fit</strong>
+                    <span>Niche discovery</span>
                   </div>
                   <div className="stat">
-                    <strong>30 min</strong>
-                    <span>Total Setup</span>
+                    <strong>Continuous</strong>
+                    <span>Optimization</span>
                   </div>
                 </div>
               </div>
@@ -951,26 +951,26 @@ export default function HomePage() {
             
             <div className="results-banner glass-banner">
               <div className="result-stat">
-                <span className="result-icon">💵</span>
+                <span className="result-icon">⚡</span>
                 <div>
-                  <strong>$2,347</strong>
-                  <span>Avg First 60 Days</span>
+                  <strong>Fast setup</strong>
+                  <span>Typical under a day</span>
                 </div>
               </div>
               <div className="result-divider"></div>
               <div className="result-stat">
-                <span className="result-icon">🚀</span>
+                <span className="result-icon">🔁</span>
                 <div>
-                  <strong>87%</strong>
-                  <span>Hit $1K Month One</span>
+                  <strong>Automations</strong>
+                  <span>Outreach & ops</span>
                 </div>
               </div>
               <div className="result-divider"></div>
               <div className="result-stat">
-                <span className="result-icon">⏰</span>
+                <span className="result-icon">🔒</span>
                 <div>
-                  <strong>&lt; 30 min</strong>
-                  <span>Total Setup Time</span>
+                  <strong>Ownership</strong>
+                  <span>You own assets</span>
                 </div>
               </div>
             </div>
@@ -981,9 +981,9 @@ export default function HomePage() {
         <section className="pricing" id="pricing">
           <div className="container">
             <div className="section-header">
-              <div className="section-label">Simple Pricing</div>
-              <h2 className="section-title">Start Making Money <span className="gradient-text">Before You Pay a Dime</span></h2>
-              <p className="section-subtitle">We're so confident, we let you <strong>earn first, pay later</strong>. No credit card. No risk. Just profits.</p>
+              <div className="section-label">Pricing</div>
+              <h2 className="section-title">Simple pricing <span className="gradient-text">that scales with you</span></h2>
+              <p className="section-subtitle">Start free. Upgrade when you’re ready.</p>
             </div>
             
             <div className="pricing-grid">
@@ -997,13 +997,11 @@ export default function HomePage() {
                   <span className="price-number">0</span>
                   <span className="price-period">to start</span>
                 </div>
-                <div className="revenue-share glass-pill">Only 20% of profits</div>
+                <div className="revenue-share glass-pill">Flexible revenue share</div>
                 <ul className="plan-features">
-                  <li><span className="feature-icon">✓</span>Access to 3-5 starter templates</li>
-                  <li><span className="feature-icon">✓</span>50-100 customers included</li>
+                  <li><span className="feature-icon">✓</span>Access to starter templates</li>
                   <li><span className="feature-icon">✓</span>AI automation suite</li>
-                  <li><span className="feature-icon">✓</span>48-hour sale guarantee</li>
-                  <li><span className="feature-icon">✓</span>$1,000 revenue guarantee</li>
+                  <li><span className="feature-icon">✓</span>Setup wizard</li>
                   <li><span className="feature-icon">✓</span>Community support</li>
                 </ul>
                 <button 
@@ -1030,14 +1028,13 @@ export default function HomePage() {
                     <span className="price-number">497</span>
                     <span className="price-period">lifetime access</span>
                   </div>
-                  <div className="revenue-share glass-pill premium">Keep 90% of profits</div>
+                  <div className="revenue-share glass-pill premium">Keep more of your profits</div>
                   <ul className="plan-features">
                     <li><span className="feature-icon">✓</span><strong>Everything in Starter, plus:</strong></li>
                     <li><span className="feature-icon">✓</span>Unlock all premium templates</li>
                     <li><span className="feature-icon">✓</span>Build a custom business with AI</li>
-                    <li><span className="feature-icon">✓</span>100-200 customers included</li>
-                    <li><span className="feature-icon">✓</span>Priority customer allocation</li>
-                    <li><span className="feature-icon">✓</span>Advanced AI optimization</li>
+                    <li><span className="feature-icon">✓</span>Advanced automations & optimization</li>
+                    <li><span className="feature-icon">✓</span>Priority support</li>
                   </ul>
                   <button 
                     className="plan-cta primary" 
@@ -1062,13 +1059,13 @@ export default function HomePage() {
                   <span className="price-number">1,997</span>
                   <span className="price-period">one-time</span>
                 </div>
-                <div className="revenue-share">Only 5% revenue share</div>
+                <div className="revenue-share">Low revenue share</div>
                 <ul className="plan-features">
                   <li><span className="feature-icon">✓</span><strong>Everything in Professional, plus:</strong></li>
                   <li><span className="feature-icon">✓</span>Launch up to 5 businesses</li>
-                  <li><span className="feature-icon">✓</span>200+ customers per business</li>
-                  <li><span className="feature-icon">✓</span>White-label options</li>
-                  <li><span className="feature-icon">✓</span>1-on-1 coaching</li>
+                  <li><span className="feature-icon">✓</span>Multi‑business management</li>
+                  <li><span className="feature-icon">✓</span>White‑label options</li>
+                  <li><span className="feature-icon">✓</span>1‑on‑1 coaching</li>
                   <li><span className="feature-icon">✓</span>Custom integrations</li>
                 </ul>
                 <button 
@@ -1094,7 +1091,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Guarantee Section */}
+        {/* Success Milestones Section */}
         <section className="guarantee-section" id="guarantee">
           <div className="container">
             <div className="guarantee-wrapper">
@@ -1104,32 +1101,32 @@ export default function HomePage() {
                     <path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z"/>
                   </svg>
                 </div>
-                <h2>Our Triple-Lock Guarantee</h2>
-                <p>We&apos;re so confident in our system, we guarantee your success three ways:</p>
+                <h2>Clear Success Milestones</h2>
+                <p>We align on milestones and support you to reach them. If timelines slip, we extend help and resources.</p>
               </div>
               
               <div className="guarantee-grid">
                 <div className="guarantee-item">
                   <div className="guarantee-number">1</div>
-                  <h3>48-Hour Customer Guarantee</h3>
-                  <p>Get your first paying customer within 48 hours or we pay you $100 cash. No questions asked.</p>
+                  <h3>Go‑live milestone</h3>
+                  <p>Get your funnel, outreach, and payments live quickly with hands‑on guidance.</p>
                 </div>
                 
                 <div className="guarantee-item">
                   <div className="guarantee-number">2</div>
-                  <h3>$1,000 Revenue Guarantee</h3>
-                  <p>Make at least $1,000 in your first 60 days or we work free until you do. That&apos;s our promise.</p>
+                  <h3>First‑lead milestone</h3>
+                  <p>If first qualified leads take longer than expected, we add playbooks and extra support.</p>
                 </div>
                 
                 <div className="guarantee-item">
                   <div className="guarantee-number">3</div>
-                  <h3>Zero Work Guarantee</h3>
-                  <p>After the 30-minute setup, if you have to do any work to maintain your business, we refund everything.</p>
+                  <h3>Optimization support</h3>
+                  <p>We keep tuning pricing, offers, and campaigns with you as data comes in.</p>
                 </div>
               </div>
               
               <div className="guarantee-footer">
-                <p><strong>Why can we guarantee this?</strong> Because our AI system works. 73% of users hit $1k in their first month. We only succeed when you do.</p>
+                <p><strong>Why this works:</strong> We only succeed when your business is active and growing. Our incentives are aligned with yours.</p>
               </div>
             </div>
           </div>
@@ -1146,21 +1143,21 @@ export default function HomePage() {
             <div className="faq-grid">
               <div className="faq-item">
                 <button className="faq-question">
-                  <span>Do I really not have to do any work?</span>
+                  <span>How much work is required?</span>
                   <span className="faq-icon">+</span>
                 </button>
                 <div className="faq-answer">
-                  <p>After the initial 30-minute setup, you literally do nothing. The AI finds customers, talks to them, sells to them, and handles everything. You just check your dashboard weekly to see your profits. We built this for people who want truly passive income.</p>
+                  <p>Expect a light weekly review cadence. The AI handles outreach, follow‑ups, and day‑to‑day ops. You review decisions, approve messaging, and handle delivery when needed.</p>
                 </div>
               </div>
               
               <div className="faq-item">
                 <button className="faq-question">
-                  <span>How can you guarantee customers in 48 hours?</span>
+                  <span>How fast will I see results?</span>
                   <span className="faq-icon">+</span>
                 </button>
                 <div className="faq-answer">
-                  <p>Our AI doesn&apos;t just build a website and hope. It actively hunts for customers using proven methods: targeted outreach, paid ads, content marketing, and more. It&apos;s running 24/7 across multiple channels to find and convert buyers. We&apos;ve done this successfully 4,127+ times.</p>
+                  <p>Timing varies by niche and offer. Many users start engaging leads within days. If milestones take longer than expected, we extend support and provide additional playbooks.</p>
                 </div>
               </div>
               
@@ -1170,7 +1167,7 @@ export default function HomePage() {
                   <span className="faq-icon">+</span>
                 </button>
                 <div className="faq-answer">
-                  <p>ChatGPT writes copy. We deliver customers. Our AI doesn&apos;t just create content—it runs your entire business: finding leads, nurturing them, closing sales, processing payments, optimizing prices, scaling campaigns. It&apos;s the difference between a tool and a complete automated business system.</p>
+                  <p>ChatGPT writes copy. We deliver an operating system: lead sourcing, personalized outreach, deal tracking, payments, pricing optimization, and campaign scaling—integrated end‑to‑end.</p>
                 </div>
               </div>
               
@@ -1180,17 +1177,17 @@ export default function HomePage() {
                   <span className="faq-icon">+</span>
                 </button>
                 <div className="faq-answer">
-                  <p>Perfect! 67% of our successful users had zero online business experience. The AI handles everything technical. You don&apos;t need to know marketing, sales, coding, or anything else. If you can answer 5 simple questions about your interests, you can have a profitable business.</p>
+                  <p>You don’t need to know marketing or code. The AI configures the stack and suggests next steps. You’ll review key decisions and focus on your strengths.</p>
                 </div>
               </div>
               
               <div className="faq-item">
                 <button className="faq-question">
-                  <span>Is the $1,000 guarantee real? What&apos;s the catch?</span>
+                  <span>What happens if milestones are delayed?</span>
                   <span className="faq-icon">+</span>
                 </button>
                 <div className="faq-answer">
-                  <p>100% real, no catch. If you don&apos;t make $1,000 in 60 days, we keep working for free until you do. If you don&apos;t get a customer in 48 hours, we send you $100. We can guarantee this because our system works—and we only make money when you do.</p>
+                  <p>We extend help. That can include additional playbooks, campaign reviews, and configuration support—at no extra cost.</p>
                 </div>
               </div>
               
@@ -1210,33 +1207,21 @@ export default function HomePage() {
                   <span className="faq-icon">+</span>
                 </button>
                 <div className="faq-answer">
-                  <p>Yes! Our Starter plan is completely free to begin. We only take a small percentage of revenue you actually make. No upfront costs, no credit card required to start, no hidden fees. We believe in our system so much that we only profit when you do.</p>
+                  <p>Yes. Our Starter plan is free to begin. You can upgrade for advanced features when you’re ready.</p>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Urgency Section */}
+        {/* Capacity Section */}
         <section className="urgency-section">
           <div className="container">
             <div className="urgency-wrapper">
               <div className="urgency-icon">⚡</div>
               <div className="urgency-content">
-                <h3>Limited Capacity This Week</h3>
-                <p>We can only properly support 50 new businesses per week to maintain our guarantee.</p>
-                <div className="spots-counter">
-                  <span className="spots-number" style={{ color: spotsLeft <= 5 ? '#ef4444' : undefined }}>{spotsLeft}</span>
-                  <span className="spots-text">spots remaining</span>
-                </div>
-              </div>
-              <div className="urgency-timer">
-                <p>Next price increase in:</p>
-                <div className="timer">
-                  <span className="timer-unit"><span>{countdown.days}</span> days</span>
-                  <span className="timer-unit"><span>{countdown.hours}</span> hrs</span>
-                  <span className="timer-unit"><span>{countdown.minutes}</span> min</span>
-                </div>
+                <h3>Limited onboarding each week</h3>
+                <p>We open a limited number of onboarding slots each week to maintain quality.</p>
               </div>
             </div>
           </div>
@@ -1245,8 +1230,8 @@ export default function HomePage() {
         {/* Final CTA */}
         <section className="final-cta">
           <div className="container final-cta-content">
-            <h2>Your Profitable Business is One Click Away</h2>
-            <p>Join 4,127+ people already making passive income with AI. Set up once, profit forever.</p>
+            <h2>Launch faster with your AI cofounder</h2>
+            <p>Start free—see it build with you.</p>
             
             <button 
               className="primary-cta large" 
@@ -1256,7 +1241,7 @@ export default function HomePage() {
               }}
               aria-label="Start getting customers with Launchfly"
             >
-              <span>Get My First Customer Now →</span>
+              <span>Start free</span>
             </button>
             
             <div className="final-trust">
@@ -1270,14 +1255,14 @@ export default function HomePage() {
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
                 </svg>
-                <span>Start free, pay from profits</span>
+                <span>Start free, upgrade when ready</span>
               </div>
               <div className="trust-item">
                 <svg viewBox="0 0 20 20" fill="currentColor">
                   <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z"/>
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd"/>
                 </svg>
-                <span>Triple money-back guarantee</span>
+                <span>Clear success milestones</span>
               </div>
             </div>
           </div>
@@ -1293,7 +1278,7 @@ export default function HomePage() {
                 <span className="logo-icon">🚀</span>
                 Launchfly
               </div>
-              <p>AI-powered businesses that actually make money.</p>
+              <p>AI cofounder for your service business.</p>
                               <div className="footer-social">
                 <a href="#" aria-label="Follow us on Twitter" rel="noopener noreferrer">𝕏</a>
                 <a href="#" aria-label="Follow us on LinkedIn" rel="noopener noreferrer">in</a>

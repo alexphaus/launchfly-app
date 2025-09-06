@@ -52,7 +52,7 @@ export class AIMemorySystem {
           embedding: embedding,
           importance_score: memory.importance || 0.5,
           success_indicator: memory.success || null,
-          timestamp: new Date().toISOString(),
+          memory_timestamp: new Date().toISOString(),
           metadata: {
             source: memory.source || 'observation',
             confidence: memory.confidence || 0.8,
@@ -67,7 +67,8 @@ export class AIMemorySystem {
       this.shortTermMemory.set(memory.key || Date.now(), {
         ...memory,
         embedding,
-        category
+        category,
+        memory_timestamp: new Date().toISOString()
       });
 
       // Learn from this memory if it's a result
@@ -282,13 +283,13 @@ export class AIMemorySystem {
 
       // Archive old detailed memories
       const cutoffDate = new Date();
-      cutoffDate.setDays(cutoffDate.getDate() - 30);
+      cutoffDate.setDate(cutoffDate.getDate() - 30);
       
       await supabase
         .from('ai_memories')
         .update({ archived: true })
         .eq('business_id', this.businessId)
-        .lt('timestamp', cutoffDate.toISOString());
+        .lt('memory_timestamp', cutoffDate.toISOString());
 
       return { consolidated: clusters.length, archived: memories.length };
     } catch (error) {
@@ -317,7 +318,7 @@ export class AIMemorySystem {
           learning: generalizedLearning,
           contributor_id: this.businessId,
           verified: false,
-          timestamp: new Date().toISOString()
+          knowledge_timestamp: new Date().toISOString()
         });
 
     } catch (error) {
@@ -410,12 +411,15 @@ export class AIMemorySystem {
   rankMemories(memories, query) {
     return memories.sort((a, b) => {
       // Factor in relevance, recency, and importance
+      const timestampA = a.memory_timestamp || a.timestamp || new Date().toISOString();
+      const timestampB = b.memory_timestamp || b.timestamp || new Date().toISOString();
+      
       const scoreA = (a.similarity || 0) * 0.5 + 
                     (a.importance_score || 0) * 0.3 +
-                    (1 / (Date.now() - new Date(a.timestamp).getTime())) * 0.2;
+                    (1 / (Date.now() - new Date(timestampA).getTime())) * 0.2;
       const scoreB = (b.similarity || 0) * 0.5 + 
                     (b.importance_score || 0) * 0.3 +
-                    (1 / (Date.now() - new Date(b.timestamp).getTime())) * 0.2;
+                    (1 / (Date.now() - new Date(timestampB).getTime())) * 0.2;
       return scoreB - scoreA;
     });
   }
@@ -446,9 +450,10 @@ export class AIMemorySystem {
     
     // Based on number of relevant memories and their quality
     const avgImportance = memories.reduce((sum, m) => sum + (m.importance_score || 0), 0) / memories.length;
-    const recencyFactor = memories.some(m => 
-      new Date(m.timestamp) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    ) ? 1.2 : 1;
+    const recencyFactor = memories.some(m => {
+      const timestamp = m.memory_timestamp || m.timestamp || new Date().toISOString();
+      return new Date(timestamp) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }) ? 1.2 : 1;
     
     return Math.min(0.95, (memories.length / 10) * avgImportance * recencyFactor);
   }

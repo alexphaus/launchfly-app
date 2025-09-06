@@ -2,10 +2,13 @@
  * Revenue Intelligence System
  * 
  * Predicts revenue, identifies opportunities, and optimizes pricing
+ * Integrates with Central AI Brain and Revenue Graph for enhanced predictions
  */
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { getCentralAIBrain } from '../central-ai-brain/orchestrator.js';
+import { getRevenueGuaranteeEngine } from '../guarantee-engine/revenue-guarantee.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,13 +22,18 @@ const openai = new OpenAI({
 export class RevenueIntelligence {
   constructor(businessId) {
     this.businessId = businessId;
+    this.revenueGraph = null; // Lazy loaded
+    this.guaranteeEngine = null; // Lazy loaded
   }
 
   /**
-   * Generate revenue forecast using AI and historical data
+   * Generate revenue forecast using AI, historical data, and Revenue Graph intelligence
    */
   async generateForecast() {
     try {
+      // Initialize integrations if needed
+      await this.initializeIntegrations();
+      
       // Get historical revenue data
       const { data: historicalData } = await supabase
         .from('business_metrics')
@@ -33,8 +41,62 @@ export class RevenueIntelligence {
         .eq('business_id', this.businessId)
         .order('created_at', { ascending: true });
 
+      // Get business context
+      const { data: business } = await supabase
+        .from('businesses')
+        .select('business_data, created_at')
+        .eq('id', this.businessId)
+        .single();
+      
+      // Get Revenue Graph predictions
+      let revenueGraphPredictions = null;
+      if (this.revenueGraph && business) {
+        const businessType = business.business_data?.businessType || 'service';
+        const industry = business.business_data?.industry || 'general';
+        
+        // Get similar business performance
+        const patterns = await this.revenueGraph.getBestStrategiesForBusiness(
+          businessType,
+          industry
+        );
+        
+        // Get average revenue trajectory for similar businesses
+        revenueGraphPredictions = await this.revenueGraph.getRevenueTrajectory(
+          businessType,
+          industry
+        );
+      }
+      
+      // Check guarantee status for urgency
+      let guaranteeContext = null;
+      if (this.guaranteeEngine) {
+        const { data: guarantee } = await supabase
+          .from('revenue_guarantees')
+          .select('*')
+          .eq('business_id', this.businessId)
+          .eq('status', 'active')
+          .single();
+        
+        if (guarantee) {
+          const hoursUntilFirstSale = Math.max(0, 
+            (new Date(guarantee.first_sale_deadline) - new Date()) / (1000 * 60 * 60)
+          );
+          const daysUntilRevenue = Math.max(0,
+            (new Date(guarantee.revenue_target_deadline) - new Date()) / (1000 * 60 * 60 * 24)
+          );
+          
+          guaranteeContext = {
+            firstSaleUrgent: hoursUntilFirstSale < 24,
+            revenueTargetUrgent: daysUntilRevenue < 30,
+            targetRevenue: guarantee.revenue_target,
+            hoursUntilFirstSale,
+            daysUntilRevenue
+          };
+        }
+      }
+
       if (!historicalData || historicalData.length < 7) {
-        return this.generateInitialForecast();
+        return this.generateInitialForecast(revenueGraphPredictions, guaranteeContext);
       }
 
       // Analyze trends
@@ -43,14 +105,15 @@ export class RevenueIntelligence {
       // Get external factors
       const factors = await this.getExternalFactors();
       
-      // Generate forecast using GPT-4
+      // Generate forecast using GPT-4 with integrated intelligence
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: `You are a revenue forecasting expert. Generate accurate revenue predictions 
-                     based on historical data, trends, and market factors.`
+            content: `You are a revenue forecasting expert with access to Revenue Graph intelligence.
+                     Generate accurate revenue predictions based on historical data, proven patterns,
+                     and guarantee requirements.`
           },
           {
             role: "user",
@@ -58,12 +121,21 @@ export class RevenueIntelligence {
                      Trends: ${JSON.stringify(trends)}
                      External factors: ${JSON.stringify(factors)}
                      
-                     Generate forecast for next 30 days with:
+                     Revenue Graph Predictions (similar businesses): ${JSON.stringify(revenueGraphPredictions)}
+                     Guarantee Context: ${JSON.stringify(guaranteeContext)}
+                     
+                     Generate forecast for next 30 days that:
+                     1. Incorporates Revenue Graph patterns for similar businesses
+                     2. Accounts for guarantee requirements if urgent
+                     3. Provides realistic but optimistic projections
+                     
+                     Include:
                      - Daily revenue predictions
-                     - Confidence intervals
+                     - Confidence intervals (boosted by Revenue Graph data)
                      - Key growth drivers
                      - Risk factors
-                     - Recommended actions`
+                     - Recommended actions (prioritize if guarantee at risk)
+                     - Probability of meeting guarantee targets`
           }
         ],
         temperature: 0.3,
@@ -71,6 +143,12 @@ export class RevenueIntelligence {
       });
 
       const forecast = JSON.parse(response.choices[0].message.content);
+      
+      // Boost confidence if backed by Revenue Graph
+      if (revenueGraphPredictions) {
+        forecast.confidence = Math.min(0.9, (forecast.confidence || 0.7) * 1.15);
+        forecast.revenueGraphBacked = true;
+      }
 
       // Store forecast
       await supabase
@@ -86,6 +164,22 @@ export class RevenueIntelligence {
     } catch (error) {
       console.error('Error generating forecast:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Initialize integrations with existing systems
+   */
+  async initializeIntegrations() {
+    if (!this.revenueGraph) {
+      const centralBrain = getCentralAIBrain();
+      if (centralBrain) {
+        this.revenueGraph = centralBrain.revenueAnalyzer;
+      }
+    }
+    
+    if (!this.guaranteeEngine) {
+      this.guaranteeEngine = getRevenueGuaranteeEngine();
     }
   }
 
@@ -304,17 +398,56 @@ export class RevenueIntelligence {
     return 'winter';
   }
 
-  async generateInitialForecast() {
+  async generateInitialForecast(revenueGraphPredictions = null, guaranteeContext = null) {
     // For new businesses without historical data
-    return {
-      forecast: Array(30).fill(0).map((_, i) => ({
+    // Use Revenue Graph predictions if available
+    
+    let baseRevenue = 100;
+    let growthRate = 0.05;
+    let confidence = 0.5;
+    let message = 'Initial forecast based on industry averages';
+    
+    if (revenueGraphPredictions) {
+      // Use Revenue Graph data for better initial predictions
+      baseRevenue = revenueGraphPredictions.avgFirstMonthRevenue || 150;
+      growthRate = revenueGraphPredictions.avgGrowthRate || 0.1;
+      confidence = 0.7; // Higher confidence with Revenue Graph data
+      message = 'Initial forecast based on Revenue Graph patterns for similar businesses';
+    }
+    
+    const forecast = Array(30).fill(0).map((_, i) => {
+      let dailyRevenue = baseRevenue * (1 + growthRate * i / 30);
+      
+      // Boost early revenue if guarantee is urgent
+      if (guaranteeContext?.firstSaleUrgent && i < 2) {
+        dailyRevenue *= 2; // Double efforts for first 2 days
+      }
+      
+      return {
         day: i + 1,
-        revenue: 100 + Math.random() * 50,
-        confidence: 0.5
-      })),
-      confidence: 0.5,
-      message: 'Initial forecast based on industry averages'
+        revenue: dailyRevenue + (Math.random() - 0.5) * dailyRevenue * 0.2,
+        confidence: confidence
+      };
+    });
+    
+    const result = {
+      forecast,
+      confidence,
+      message,
+      revenueGraphBacked: !!revenueGraphPredictions
     };
+    
+    if (guaranteeContext) {
+      result.guaranteeStatus = {
+        firstSaleTarget: guaranteeContext.firstSaleUrgent ? 'URGENT' : 'ON_TRACK',
+        revenueTarget: guaranteeContext.revenueTargetUrgent ? 'AT_RISK' : 'ON_TRACK',
+        recommendedActions: guaranteeContext.firstSaleUrgent ? 
+          ['Launch immediate acquisition campaign', 'Activate all channels', 'Consider paid ads'] :
+          ['Continue normal growth trajectory']
+      };
+    }
+    
+    return result;
   }
 
   async findPricingOpportunities() {

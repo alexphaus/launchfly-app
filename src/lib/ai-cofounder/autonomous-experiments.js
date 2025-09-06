@@ -3,11 +3,14 @@
  * 
  * Continuously runs A/B tests, experiments, and optimizations
  * without human intervention. Learns what works and scales it.
+ * Integrates with existing Growth Engine for experiment execution.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { AIMemorySystem } from './memory-system.js';
+import { inngest } from '../inngest/client.js';
+import { getCentralAIBrain } from '../central-ai-brain/orchestrator.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -24,45 +27,83 @@ export class AutonomousExperiments {
     this.memory = new AIMemorySystem(businessId);
     this.activeExperiments = new Map();
     this.experimentQueue = [];
+    this.revenueGraph = null; // Lazy loaded
   }
 
   /**
-   * Generate and queue new experiments based on data
+   * Generate and queue new experiments based on data and Revenue Graph insights
    */
   async generateExperiments() {
     try {
+      // Initialize Revenue Graph if needed
+      if (!this.revenueGraph) {
+        const centralBrain = getCentralAIBrain();
+        if (centralBrain) {
+          this.revenueGraph = centralBrain.revenueAnalyzer;
+        }
+      }
+      
       // Analyze current performance
       const metrics = await this.getCurrentMetrics();
       
       // Get insights from memory
       const insights = await this.memory.recall('What experiments should we run?');
       
-      // Generate experiment ideas using GPT-4
+      // Get business context for Revenue Graph
+      const { data: business } = await supabase
+        .from('businesses')
+        .select('business_data')
+        .eq('id', this.businessId)
+        .single();
+      
+      // Get proven patterns from Revenue Graph
+      let revenueGraphPatterns = [];
+      if (this.revenueGraph && business) {
+        const businessType = business.business_data?.businessType || 'service';
+        const industry = business.business_data?.industry || 'general';
+        
+        revenueGraphPatterns = await this.revenueGraph.getBestStrategiesForBusiness(
+          businessType,
+          industry
+        );
+      }
+      
+      // Generate experiment ideas using GPT-4 with Revenue Graph intelligence
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: `You are a growth experimentation expert. Generate high-impact experiments 
-                     that can be run autonomously. Focus on experiments that:
-                     1. Have clear success metrics
-                     2. Can be implemented programmatically
-                     3. Will provide valuable learnings
-                     4. Have reasonable risk/reward ratios`
+            content: `You are a growth experimentation expert with access to proven revenue patterns.
+                     Generate high-impact experiments based on what has worked for similar businesses.
+                     Focus on experiments that:
+                     1. Are based on Revenue Graph proven patterns
+                     2. Have clear success metrics
+                     3. Can be implemented programmatically
+                     4. Will provide valuable learnings
+                     5. Have reasonable risk/reward ratios`
           },
           {
             role: "user",
             content: `Current metrics: ${JSON.stringify(metrics)}
                      Past insights: ${JSON.stringify(insights)}
                      
-                     Generate 5-10 experiment ideas with:
-                     - Hypothesis
+                     Proven Revenue Patterns: ${JSON.stringify(revenueGraphPatterns.slice(0, 5))}
+                     
+                     Generate 5-10 experiment ideas that:
+                     1. Test variations of proven patterns
+                     2. Adapt successful strategies to this business
+                     3. Can be executed through Growth Engine
+                     
+                     For each experiment provide:
+                     - Hypothesis (based on Revenue Graph data)
                      - Test type (A/B, multivariate, etc.)
                      - Variables to test
                      - Success metrics
                      - Implementation requirements
                      - Risk assessment
-                     - Expected impact`
+                     - Expected impact (with confidence from Revenue Graph)
+                     - Growth Engine compatibility`
           }
         ],
         temperature: 0.8,
@@ -71,12 +112,28 @@ export class AutonomousExperiments {
 
       const experiments = JSON.parse(response.choices[0].message.content);
 
-      // Prioritize experiments
-      const prioritized = await this.prioritizeExperiments(experiments.ideas);
+      // Prioritize experiments based on Revenue Graph confidence
+      const prioritized = await this.prioritizeExperiments(
+        experiments.ideas,
+        revenueGraphPatterns
+      );
 
-      // Queue experiments
+      // Queue experiments for Growth Engine execution
       for (const experiment of prioritized) {
         await this.queueExperiment(experiment);
+        
+        // Also trigger Growth Engine if high priority
+        if (experiment.priority === 'high' && experiment.growthEngineCompatible) {
+          await inngest.send({
+            name: 'growth-campaign/started',
+            data: {
+              businessId: this.businessId,
+              experimentId: experiment.id,
+              campaignType: 'experiment',
+              experiment
+            }
+          });
+        }
       }
 
       return prioritized;
@@ -456,11 +513,31 @@ export class AutonomousExperiments {
   }
 
   // Helper methods
-  async prioritizeExperiments(experiments) {
-    // Score and sort experiments by potential impact
+  async prioritizeExperiments(experiments, revenueGraphPatterns = []) {
+    // Create a map of Revenue Graph confidence scores
+    const rgConfidence = new Map();
+    for (const pattern of revenueGraphPatterns) {
+      rgConfidence.set(pattern.channel, pattern.confidence_score || 0.5);
+    }
+    
+    // Score and sort experiments by potential impact with Revenue Graph boost
     return experiments.sort((a, b) => {
-      const scoreA = (a.expectedImpact || 0) * (a.confidence || 0) / (a.risk || 1);
-      const scoreB = (b.expectedImpact || 0) * (b.confidence || 0) / (b.risk || 1);
+      // Base score calculation
+      let scoreA = (a.expectedImpact || 0) * (a.confidence || 0) / (a.risk || 1);
+      let scoreB = (b.expectedImpact || 0) * (b.confidence || 0) / (b.risk || 1);
+      
+      // Apply Revenue Graph confidence boost
+      if (a.channel && rgConfidence.has(a.channel)) {
+        scoreA *= (1 + rgConfidence.get(a.channel));
+      }
+      if (b.channel && rgConfidence.has(b.channel)) {
+        scoreB *= (1 + rgConfidence.get(b.channel));
+      }
+      
+      // Prioritize Growth Engine compatible experiments
+      if (a.growthEngineCompatible) scoreA *= 1.2;
+      if (b.growthEngineCompatible) scoreB *= 1.2;
+      
       return scoreB - scoreA;
     });
   }

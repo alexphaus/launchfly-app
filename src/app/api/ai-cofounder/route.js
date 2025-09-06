@@ -1,12 +1,20 @@
 /**
- * API endpoint for Enhanced AI Cofounder
+ * API endpoint for Enhanced AI Cofounder with Integrated Revenue Systems
  * 
- * Provides control and interaction with the AI cofounder system
+ * Provides control and interaction with the unified AI system that coordinates:
+ * - AI Cofounder (memory, learning, autonomous thinking)
+ * - Central AI Brain (cross-business intelligence)
+ * - Revenue Graph Database (conversion patterns)
+ * - Guarantee Engine (revenue guarantees)
+ * - Real Acquisition Engine (customer acquisition)
+ * - Growth Engine (experiments and optimization)
  */
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { EnhancedAICofounder } from '@/lib/ai-cofounder/enhanced-orchestrator';
+import { getCentralAIBrain } from '@/lib/central-ai-brain/orchestrator';
+import { getRevenueGuaranteeEngine } from '@/lib/guarantee-engine/revenue-guarantee';
 import { inngest } from '@/lib/inngest/client';
 
 const supabase = createClient(
@@ -16,6 +24,9 @@ const supabase = createClient(
 
 // Store active cofounder instances
 const activeCofounders = new Map();
+
+// Initialize Central AI Brain singleton
+let centralBrain = null;
 
 /**
  * GET /api/ai-cofounder
@@ -85,6 +96,67 @@ export async function GET(request) {
           .limit(50);
 
         return NextResponse.json({ metrics, activities });
+      
+      case 'integrated-status':
+        // Get comprehensive status from all integrated systems
+        const integratedStatus = {
+          aiCofounder: cofounder.getStatus(),
+          businessId,
+          integrations: {}
+        };
+        
+        // Get Central AI Brain status
+        if (centralBrain) {
+          integratedStatus.integrations.centralBrain = {
+            active: true,
+            totalBusinesses: centralBrain.businessAgents.size,
+            systemMetrics: centralBrain.systemMetrics
+          };
+        }
+        
+        // Get Revenue Graph status
+        if (centralBrain?.revenueAnalyzer) {
+          const { data: patterns } = await supabase
+            .from('revenue_patterns')
+            .select('count')
+            .limit(1);
+          
+          integratedStatus.integrations.revenueGraph = {
+            active: true,
+            patternsStored: patterns?.[0]?.count || 0
+          };
+        }
+        
+        // Get Guarantee status
+        const guaranteeEngine = getRevenueGuaranteeEngine();
+        if (guaranteeEngine) {
+          const { data: guarantee } = await supabase
+            .from('revenue_guarantees')
+            .select('*')
+            .eq('business_id', businessId)
+            .eq('status', 'active')
+            .single();
+          
+          integratedStatus.integrations.guaranteeEngine = {
+            active: true,
+            currentGuarantee: guarantee
+          };
+        }
+        
+        // Get Growth Engine status
+        const { data: growthSessions } = await supabase
+          .from('growth_sessions')
+          .select('*')
+          .eq('business_id', businessId)
+          .eq('status', 'active')
+          .limit(1);
+        
+        integratedStatus.integrations.growthEngine = {
+          active: growthSessions?.length > 0,
+          activeSessions: growthSessions?.length || 0
+        };
+        
+        return NextResponse.json(integratedStatus);
 
       default:
         return NextResponse.json({
@@ -127,10 +199,27 @@ export async function POST(request) {
 
     switch (action) {
       case 'initialize':
+        // Initialize Central AI Brain if not already done
+        if (!centralBrain) {
+          try {
+            const { CentralAIBrain } = await import('@/lib/central-ai-brain/orchestrator');
+            centralBrain = new CentralAIBrain();
+            await centralBrain.initialize();
+            console.log('✅ Central AI Brain initialized for integrated operation');
+          } catch (error) {
+            console.warn('Central AI Brain initialization failed, continuing without it:', error);
+          }
+        }
+        
         const initResult = await cofounder.initialize();
         return NextResponse.json({
           success: true,
-          result: initResult
+          result: initResult,
+          integrations: {
+            centralBrain: !!centralBrain,
+            revenueGraph: !!centralBrain?.revenueAnalyzer,
+            guaranteeEngine: !!getRevenueGuaranteeEngine()
+          }
         });
 
       case 'start':

@@ -2,7 +2,12 @@
  * Enhanced AI Cofounder Orchestrator
  * 
  * The brain that coordinates all AI systems to run a business autonomously.
- * This is the true "AI Cofounder" that thinks, plans, executes, and learns.
+ * This integrates with existing revenue systems for maximum power:
+ * - Central AI Brain for cross-business intelligence
+ * - Revenue Graph Database for conversion patterns
+ * - Growth Engine for experiments
+ * - Guarantee Engine for trust building
+ * - Real Acquisition Engine for customer acquisition
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -13,6 +18,11 @@ import { ConversationEngine } from './conversation-engine.js';
 import { AutonomousExperiments } from './autonomous-experiments.js';
 import { VisionAnalyzer } from './vision-analyzer.js';
 import { RevenueIntelligence } from './revenue-intelligence.js';
+
+// Import existing revenue systems
+import { getCentralAIBrain } from '../central-ai-brain/orchestrator.js';
+import { getRevenueGuaranteeEngine } from '../guarantee-engine/revenue-guarantee.js';
+import { getRealAcquisitionEngine } from '../traffic-engine/real-acquisition.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -26,12 +36,20 @@ const openai = new OpenAI({
 export class EnhancedAICofounder {
   constructor(businessId) {
     this.businessId = businessId;
+    
+    // AI Cofounder components
     this.memory = new AIMemorySystem(businessId);
     this.planner = new AdaptivePlanner(businessId);
     this.conversationEngine = new ConversationEngine(businessId);
     this.experiments = new AutonomousExperiments(businessId);
     this.vision = new VisionAnalyzer(businessId);
     this.revenue = new RevenueIntelligence(businessId);
+    
+    // Integrate with existing revenue systems
+    this.centralBrain = null; // Lazy loaded
+    this.revenueGraph = null; // Lazy loaded
+    this.guaranteeEngine = null; // Lazy loaded
+    this.acquisitionEngine = null; // Lazy loaded
     
     this.state = {
       mode: 'autonomous', // autonomous, supervised, collaborative
@@ -49,15 +67,21 @@ export class EnhancedAICofounder {
    */
   async initialize() {
     try {
-      console.log('🤖 AI Cofounder initializing...');
+      console.log('🤖 AI Cofounder initializing with integrated revenue systems...');
 
       // Load business context
       const context = await this.loadBusinessContext();
       
+      // Initialize integration with existing systems
+      await this.initializeIntegrations();
+      
       // Restore memory and state
       await this.restoreState();
       
-      // Analyze current situation
+      // Sync with Revenue Graph Database
+      await this.syncWithRevenueGraph();
+      
+      // Analyze current situation with integrated intelligence
       const situation = await this.analyzeSituation(context);
       
       // Create initial plan if needed
@@ -68,24 +92,114 @@ export class EnhancedAICofounder {
 
       // Start autonomous operation
       await this.startAutonomousOperation();
+      
+      // Start guarantee tracking if new business
+      if (context.created_at && new Date(context.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)) {
+        await this.guaranteeEngine?.startGuaranteeTracking(this.businessId);
+      }
 
       // Log initialization
       await this.memory.remember({
-        content: 'AI Cofounder initialized and operational',
+        content: 'AI Cofounder initialized with integrated revenue systems',
         category: 'operational_metric',
         importance: 0.9,
-        context: { situation, mode: this.state.mode }
+        context: { 
+          situation, 
+          mode: this.state.mode,
+          integrations: {
+            centralBrain: !!this.centralBrain,
+            revenueGraph: !!this.revenueGraph,
+            guaranteeEngine: !!this.guaranteeEngine,
+            acquisitionEngine: !!this.acquisitionEngine
+          }
+        }
       });
 
       return {
         status: 'initialized',
         mode: this.state.mode,
         currentFocus: this.state.focus,
-        plan: this.planner.currentPlan?.objectives
+        plan: this.planner.currentPlan?.objectives,
+        integrations: {
+          centralBrain: !!this.centralBrain,
+          revenueGraph: !!this.revenueGraph,
+          guaranteeEngine: !!this.guaranteeEngine
+        }
       };
     } catch (error) {
       console.error('Error initializing AI Cofounder:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Initialize integrations with existing revenue systems
+   */
+  async initializeIntegrations() {
+    try {
+      // Get Central AI Brain instance
+      this.centralBrain = getCentralAIBrain();
+      if (this.centralBrain) {
+        this.revenueGraph = this.centralBrain.revenueAnalyzer;
+        console.log('✅ Connected to Central AI Brain and Revenue Graph');
+      }
+      
+      // Get Guarantee Engine
+      this.guaranteeEngine = getRevenueGuaranteeEngine();
+      if (this.guaranteeEngine) {
+        console.log('✅ Connected to Revenue Guarantee Engine');
+      }
+      
+      // Get Acquisition Engine
+      this.acquisitionEngine = getRealAcquisitionEngine();
+      if (this.acquisitionEngine) {
+        console.log('✅ Connected to Real Acquisition Engine');
+      }
+    } catch (error) {
+      console.error('Warning: Some integrations failed to initialize:', error);
+      // Continue anyway - the AI Cofounder can work standalone
+    }
+  }
+  
+  /**
+   * Sync memories with Revenue Graph patterns
+   */
+  async syncWithRevenueGraph() {
+    if (!this.revenueGraph) return;
+    
+    try {
+      // Get business type and industry
+      const context = await this.loadBusinessContext();
+      const businessType = context.business_data?.businessType || 'service';
+      const industry = context.business_data?.industry || 'general';
+      
+      // Get best strategies from Revenue Graph
+      const bestStrategies = await this.revenueGraph.getBestStrategiesForBusiness(
+        businessType, 
+        industry
+      );
+      
+      // Store Revenue Graph insights in memory
+      if (bestStrategies && bestStrategies.length > 0) {
+        for (const strategy of bestStrategies.slice(0, 5)) {
+          await this.memory.remember({
+            content: `Proven strategy: ${strategy.channel} achieves ${strategy.conversion_rate}% conversion with ${strategy.avg_order_value} AOV`,
+            category: 'market_insight',
+            importance: strategy.confidence_score || 0.7,
+            success: true,
+            context: {
+              source: 'revenue_graph',
+              strategy,
+              businessType,
+              industry
+            }
+          });
+        }
+      }
+      
+      console.log(`📊 Synced ${bestStrategies?.length || 0} proven strategies from Revenue Graph`);
+    } catch (error) {
+      console.error('Error syncing with Revenue Graph:', error);
     }
   }
 
@@ -189,7 +303,7 @@ export class EnhancedAICofounder {
   }
 
   /**
-   * Make strategic decisions based on perception
+   * Make strategic decisions based on perception with integrated intelligence
    */
   async makeDecisions(perception, memories) {
     try {
@@ -198,24 +312,59 @@ export class EnhancedAICofounder {
         situation: perception.summary,
         metrics: perception.metrics
       });
+      
+      // Get Revenue Graph intelligence
+      let revenuePatterns = [];
+      if (this.revenueGraph) {
+        const context = await this.loadBusinessContext();
+        revenuePatterns = await this.revenueGraph.getBestStrategiesForBusiness(
+          context.business_data?.businessType || 'service',
+          context.business_data?.industry || 'general'
+        );
+      }
+      
+      // Check guarantee status
+      let guaranteeStatus = null;
+      if (this.guaranteeEngine) {
+        const { data } = await supabase
+          .from('revenue_guarantees')
+          .select('*')
+          .eq('business_id', this.businessId)
+          .eq('status', 'active')
+          .single();
+        guaranteeStatus = data;
+      }
+      
+      // Get acquisition opportunities
+      let acquisitionStrategy = null;
+      if (this.acquisitionEngine) {
+        const context = await this.loadBusinessContext();
+        acquisitionStrategy = await this.acquisitionEngine.selectAcquisitionStrategy(context);
+      }
 
-      // Use GPT-4 for strategic thinking
+      // Use GPT-4 for strategic thinking with integrated context
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: `You are an AI business cofounder with perfect memory and strategic thinking.
-                     Your role is to make optimal decisions for business growth.
+            content: `You are an AI business cofounder with perfect memory and access to proven revenue patterns.
+                     Your role is to make optimal decisions for business growth using integrated intelligence.
                      
                      Current mode: ${this.state.mode}
                      Current focus: ${this.state.focus}
                      Confidence: ${this.state.confidence}
                      
+                     You have access to:
+                     - Revenue Graph: Proven conversion patterns from thousands of businesses
+                     - Guarantee Engine: Must achieve first sale in 48 hours
+                     - Acquisition Engine: Multiple customer acquisition channels
+                     - Central AI Brain: Cross-business learning
+                     
                      Make decisions that are:
-                     1. Data-driven and evidence-based
-                     2. Aligned with business goals
-                     3. Executable autonomously
+                     1. Based on proven patterns from Revenue Graph
+                     2. Aligned with guarantee requirements
+                     3. Executable through existing systems
                      4. Measurable in impact
                      5. Risk-aware but growth-oriented`
           },
@@ -225,12 +374,21 @@ export class EnhancedAICofounder {
                      Memories: ${JSON.stringify(memories.insights)}
                      Recommendations: ${JSON.stringify(recommendations)}
                      
+                     Revenue Graph Patterns: ${JSON.stringify(revenuePatterns.slice(0, 3))}
+                     Guarantee Status: ${JSON.stringify(guaranteeStatus)}
+                     Acquisition Options: ${JSON.stringify(acquisitionStrategy)}
+                     
                      Decide on immediate actions across:
-                     1. Customer acquisition
-                     2. Product optimization
-                     3. Revenue growth
-                     4. Market positioning
+                     1. Customer acquisition (use proven channels)
+                     2. Product optimization (based on Revenue Graph)
+                     3. Revenue growth (meet guarantee targets)
+                     4. Market positioning (leverage Central AI Brain insights)
                      5. Operational efficiency
+                     
+                     Prioritize actions that:
+                     - Have worked for similar businesses (Revenue Graph)
+                     - Can be executed through existing systems
+                     - Will meet guarantee requirements
                      
                      Provide specific, actionable decisions with priority and expected impact.`
           }
@@ -241,7 +399,7 @@ export class EnhancedAICofounder {
 
       const decisions = JSON.parse(response.choices[0].message.content);
 
-      // Validate decisions against constraints
+      // Validate decisions against constraints and existing systems
       const validatedDecisions = await this.validateDecisions(decisions);
 
       return validatedDecisions;
@@ -578,10 +736,45 @@ export class EnhancedAICofounder {
 
   async executeOutreach(outreach) {
     const results = [];
-    for (const campaign of outreach) {
-      const result = await this.conversationEngine.generateProactiveOutreach(campaign);
-      results.push(result);
+    
+    // Use existing acquisition engine if available
+    if (this.acquisitionEngine && outreach.length > 0) {
+      try {
+        const context = await this.loadBusinessContext();
+        
+        for (const campaign of outreach) {
+          // Launch through real acquisition engine
+          const acquisitionResult = await this.acquisitionEngine.launchChannels(
+            context,
+            {
+              channels: [campaign.channel || 'email'],
+              targetProspects: campaign.targetCount || 100,
+              message: campaign.message
+            }
+          );
+          
+          results.push({
+            ...acquisitionResult,
+            campaign: campaign.id,
+            executedThrough: 'acquisition_engine'
+          });
+        }
+      } catch (error) {
+        console.error('Error using acquisition engine, falling back:', error);
+        // Fall back to conversation engine
+        for (const campaign of outreach) {
+          const result = await this.conversationEngine.generateProactiveOutreach(campaign);
+          results.push(result);
+        }
+      }
+    } else {
+      // Use conversation engine directly
+      for (const campaign of outreach) {
+        const result = await this.conversationEngine.generateProactiveOutreach(campaign);
+        results.push(result);
+      }
     }
+    
     return results;
   }
 

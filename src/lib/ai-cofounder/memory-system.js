@@ -6,10 +6,12 @@
  * - Context-aware retrieval
  * - Learning from successes and failures
  * - Cross-business intelligence sharing
+ * - Integration with Revenue Graph Database for proven patterns
  */
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
+import { getCentralAIBrain } from '../central-ai-brain/orchestrator.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -25,6 +27,7 @@ export class AIMemorySystem {
     this.businessId = businessId;
     this.shortTermMemory = new Map(); // For current session
     this.workingMemory = []; // For current task context
+    this.revenueGraph = null; // Lazy loaded connection to Revenue Graph
   }
 
   /**
@@ -151,14 +154,22 @@ export class AIMemorySystem {
   }
 
   /**
-   * Get context-aware recommendations based on memory
+   * Get context-aware recommendations based on memory and Revenue Graph
    */
   async getRecommendations(context) {
     try {
+      // Initialize Revenue Graph connection if needed
+      if (!this.revenueGraph) {
+        const centralBrain = getCentralAIBrain();
+        if (centralBrain) {
+          this.revenueGraph = centralBrain.revenueAnalyzer;
+        }
+      }
+      
       // Recall relevant memories
       const { memories, insights } = await this.recall(context.query || context.situation);
       
-      // Find similar successful patterns
+      // Find similar successful patterns from this business
       const { data: patterns } = await supabase
         .from('ai_learning_patterns')
         .select('*')
@@ -166,15 +177,37 @@ export class AIMemorySystem {
         .gte('success_rate', 0.7)
         .order('success_rate', { ascending: false })
         .limit(5);
+      
+      // Get proven strategies from Revenue Graph
+      let revenueGraphStrategies = [];
+      if (this.revenueGraph) {
+        // Get business context for Revenue Graph lookup
+        const { data: business } = await supabase
+          .from('businesses')
+          .select('business_data')
+          .eq('id', this.businessId)
+          .single();
+        
+        if (business) {
+          const businessType = business.business_data?.businessType || 'service';
+          const industry = business.business_data?.industry || 'general';
+          
+          revenueGraphStrategies = await this.revenueGraph.getBestStrategiesForBusiness(
+            businessType,
+            industry
+          );
+        }
+      }
 
-      // Generate recommendations using GPT-4
+      // Generate recommendations using GPT-4 with integrated intelligence
       const recommendations = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: `You are an AI business strategist with perfect memory. 
-                     Use past experiences and successful patterns to recommend actions.`
+            content: `You are an AI business strategist with perfect memory and access to proven revenue patterns. 
+                     Use past experiences, successful patterns, and Revenue Graph intelligence to recommend actions.
+                     Prioritize strategies that have worked for similar businesses.`
           },
           {
             role: "user",
@@ -184,17 +217,31 @@ export class AIMemorySystem {
                      
                      Insights: ${JSON.stringify(insights)}
                      
-                     Successful patterns: ${JSON.stringify(patterns)}
+                     Successful patterns (this business): ${JSON.stringify(patterns)}
                      
-                     Provide 3-5 specific, actionable recommendations based on what has worked before.
-                     Include confidence scores and expected outcomes.`
+                     Proven strategies (Revenue Graph): ${JSON.stringify(revenueGraphStrategies.slice(0, 3))}
+                     
+                     Provide 3-5 specific, actionable recommendations that:
+                     1. Are based on what has worked before (either for this business or similar ones)
+                     2. Leverage proven Revenue Graph patterns
+                     3. Can be executed autonomously
+                     4. Include confidence scores and expected outcomes
+                     5. Specify which system should execute them (acquisition engine, growth engine, etc.)`
           }
         ],
         temperature: 0.7,
         response_format: { type: "json_object" }
       });
 
-      return JSON.parse(recommendations.choices[0].message.content);
+      const result = JSON.parse(recommendations.choices[0].message.content);
+      
+      // Add Revenue Graph confidence boost
+      if (revenueGraphStrategies.length > 0) {
+        result.revenueGraphBacked = true;
+        result.confidence = Math.min(0.95, (result.confidence || 0.7) * 1.2);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error getting recommendations:', error);
       return { recommendations: [], confidence: 0 };

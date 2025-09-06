@@ -33,6 +33,8 @@ export const EVENTS = {
   EMAIL_RESPONSE_RECEIVED: 'customer/email.response',
   OPTIMIZATION_STARTED: 'customer/optimization.started',
   WEEKLY_REPORT_SCHEDULED: 'customer/report.weekly',
+  // Lead nurturing
+  NURTURE_SCHEDULED: 'customer/nurture.scheduled',
   
   // Analytics events
   VISITOR_TRACKED: 'analytics/visitor.tracked',

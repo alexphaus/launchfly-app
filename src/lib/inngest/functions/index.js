@@ -35,6 +35,8 @@ export {
   performanceMonitor
 } from './ai-business-agent';
 
+export { nurtureSequence } from './nurture-sequence';
+
 // Export all functions as an array for the Inngest serve handler
 export const functions = [
   require('./generate-business').generateBusiness,
@@ -57,4 +59,5 @@ export const functions = [
   require('./ai-business-agent').weeklyCompetitorAnalysis,
   require('./ai-business-agent').monthlyStrategyReview,
   require('./ai-business-agent').performanceMonitor,
+  require('./nurture-sequence').nurtureSequence,
 ];

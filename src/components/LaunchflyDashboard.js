@@ -1527,6 +1527,71 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           sessionId={session?.id}
         />
 
+        {/* Automations: AI Cofounder Controls */}
+        {generationStage === 'complete' && (
+          <div style={{
+            background: 'white',
+            borderRadius: '20px',
+            padding: '24px',
+            boxShadow: theme.shadows.lg,
+            marginBottom: '24px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '12px',
+                background: theme.gradients.primary, display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <Bot size={22} color="white" />
+              </div>
+              <h3 style={{ fontSize: '20px', fontWeight: '700', color: theme.colors.textDark }}>Automations</h3>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {/* Follow-ups */}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/followups/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId: business.id }) });
+                    const data = await res.json();
+                    alert(data.success ? `Triggered ${data.tasksTriggered} follow-ups` : (data.error || 'Failed'));
+                  } catch (e) { alert(e.message); }
+                }}
+                style={{
+                  background: '#f8fafc', border: `1px solid ${theme.colors.borderLight}`,
+                  borderRadius: '12px', padding: '16px', textAlign: 'left', cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Mail size={18} color={theme.colors.primary} />
+                  <strong>Run follow-ups</strong>
+                </div>
+                <p style={{ margin: 0, color: theme.colors.textGray, fontSize: '13px' }}>AI follows up with prospects who replied or showed interest.</p>
+              </button>
+
+              {/* Lead Nurturing */}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/nurture/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId: business.id, theme: 'education', max: 25 }) });
+                    const data = await res.json();
+                    alert(data.success ? 'Nurture sequence scheduled' : (data.error || 'Failed'));
+                  } catch (e) { alert(e.message); }
+                }}
+                style={{
+                  background: '#f8fafc', border: `1px solid ${theme.colors.borderLight}`,
+                  borderRadius: '12px', padding: '16px', textAlign: 'left', cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <TrendingUp size={18} color={theme.colors.primary} />
+                  <strong>Start lead nurturing</strong>
+                </div>
+                <p style={{ margin: 0, color: theme.colors.textGray, fontSize: '13px' }}>Send value-first emails to warm up prospects over time.</p>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Insights */}
         <InsightsCard 
           isSetupComplete={setupComplete}
@@ -1534,6 +1599,34 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           businessData={businessData}
           business={business}
         />
+
+        {/* Lead Inbox */}
+        {generationStage === 'complete' && (
+          <div style={{
+            background: 'white', borderRadius: '20px', padding: '24px', boxShadow: theme.shadows.lg,
+            marginBottom: '24px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <Mail size={20} color={theme.colors.textDark} />
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>Lead Inbox</h3>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/leads/inbox?businessId=${business.id}`);
+                    const data = await res.json();
+                    if (data.success) {
+                      alert(`Latest ${Math.min(5, data.inbox.length)} leads:\n` + data.inbox.slice(0,5).map(i => `${i.prospect?.name || i.email}: ${i.lastMessage.slice(0,60)}`).join('\n'));
+                    } else { alert(data.error || 'Failed'); }
+                  } catch (e) { alert(e.message); }
+                }}
+                style={{ marginLeft: 'auto', background: theme.gradients.primary, color: 'white', border: 'none', borderRadius: '10px', padding: '8px 12px', cursor: 'pointer' }}
+              >
+                Refresh
+              </button>
+            </div>
+            <p style={{ color: theme.colors.textGray, margin: 0, fontSize: '13px' }}>AI organizes replies and flags hot prospects for you.</p>
+          </div>
+        )}
 
         {/* Simple Next Steps - Only show after generation */}
         {!setupComplete && (

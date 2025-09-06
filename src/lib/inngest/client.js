@@ -37,4 +37,16 @@ export const EVENTS = {
   // Analytics events
   VISITOR_TRACKED: 'analytics/visitor.tracked',
   SALE_RECORDED: 'analytics/sale.recorded',
+  
+  // Enhanced AI Cofounder events
+  AI_COFOUNDER_STARTED: 'ai-cofounder/started',
+  AI_COFOUNDER_THINKING: 'ai-cofounder/thinking',
+  AI_COFOUNDER_DECISION_MADE: 'ai-cofounder/decision.made',
+  AI_COFOUNDER_PLAN_CREATED: 'ai-cofounder/plan.created',
+  AI_COFOUNDER_PLAN_ADAPTED: 'ai-cofounder/plan.adapted',
+  AI_COFOUNDER_EXPERIMENT_LAUNCHED: 'ai-cofounder/experiment.launched',
+  AI_COFOUNDER_EXPERIMENT_COMPLETED: 'ai-cofounder/experiment.completed',
+  AI_COFOUNDER_MEMORY_STORED: 'ai-cofounder/memory.stored',
+  AI_COFOUNDER_CONVERSATION_STARTED: 'ai-cofounder/conversation.started',
+  AI_COFOUNDER_REVENUE_FORECAST: 'ai-cofounder/revenue.forecast',
 };

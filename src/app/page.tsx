@@ -361,8 +361,8 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="customer-pool glow-box">
-                  <span className="pool-icon animated-bounce">🎉</span>
-                  <span>You get <strong>147 pre-qualified buyers</strong> ready to purchase immediately</span>
+                  <span className="pool-icon">📋</span>
+                  <span>Includes <strong>conversion-ready funnel</strong> and lead sourcing playbooks</span>
                 </div>
                 <button 
                   className="business-cta primary" 
@@ -395,8 +395,8 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="customer-pool">
-                  <span className="pool-icon">👥</span>
-                  <span>Includes a list of <strong>94 clients who need this service now</strong></span>
+                  <span className="pool-icon">📋</span>
+                  <span>Includes <strong>funnel templates</strong> and lead sourcing guidance</span>
                 </div>
                 <button 
                   className="business-cta" 
@@ -429,8 +429,8 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="customer-pool">
-                  <span className="pool-icon">👥</span>
-                  <span>Includes a list of <strong>183 clients who need this service now</strong></span>
+                  <span className="pool-icon">📋</span>
+                  <span>Includes <strong>proven templates</strong> and automation setup</span>
                 </div>
                 <button 
                   className="business-cta" 
@@ -463,8 +463,8 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="customer-pool">
-                  <span className="pool-icon">👥</span>
-                  <span>Includes a list of <strong>76 clients who need this service now</strong></span>
+                  <span className="pool-icon">📋</span>
+                  <span>Includes <strong>outreach templates</strong> and automation workflows</span>
                 </div>
                 <button 
                   className="business-cta" 
@@ -497,8 +497,8 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="customer-pool">
-                  <span className="pool-icon">👥</span>
-                  <span>Includes a list of <strong>52 clients who need this service now</strong></span>
+                  <span className="pool-icon">📋</span>
+                  <span>Includes <strong>B2B playbooks</strong> and lead generation setup</span>
                 </div>
                 <button 
                   className="business-cta" 
@@ -531,8 +531,8 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="customer-pool">
-                  <span className="pool-icon">👥</span>
-                  <span>Includes a list of <strong>108 clients who need this service now</strong></span>
+                  <span className="pool-icon">📋</span>
+                  <span>Includes <strong>visual templates</strong> and client acquisition tools</span>
                 </div>
                 <button 
                   className="business-cta" 

@@ -28,12 +28,9 @@ export {
 } from './growth-strategies';
 
 export {
-  hourlyOptimization,
-  dailyMarketResearch,
-  weeklyCompetitorAnalysis,
-  monthlyStrategyReview,
-  performanceMonitor
-} from './ai-business-agent';
+  agentTick,
+  runAgentCycle
+} from './adaptive-ai-agent';
 
 // Export all functions as an array for the Inngest serve handler
 export const functions = [
@@ -52,9 +49,6 @@ export const functions = [
   require('./conversion-optimizer').conversionOptimizer,
   require('./follow-up-handler').followUpHandler,
   require('./follow-up-handler').followUpScheduler,
-  require('./ai-business-agent').hourlyOptimization,
-  require('./ai-business-agent').dailyMarketResearch,
-  require('./ai-business-agent').weeklyCompetitorAnalysis,
-  require('./ai-business-agent').monthlyStrategyReview,
-  require('./ai-business-agent').performanceMonitor,
+  require('./adaptive-ai-agent').agentTick,
+  require('./adaptive-ai-agent').runAgentCycle,
 ];

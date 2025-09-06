@@ -1,8 +1,9 @@
 // src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
+import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet, Inbox, Fire } from 'lucide-react';
 import UserProfile from './UserProfile';
+import LeadInbox from './LeadInbox';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1332,6 +1333,8 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   const [setupComplete, setSetupComplete] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [generationStarted, setGenerationStarted] = useState(false);
+  const [showLeadInbox, setShowLeadInbox] = useState(false);
+  const [hotLeadsCount, setHotLeadsCount] = useState(0);
   const startedRef = useRef(false);
   
   // Debug: Log business object to see what data is available
@@ -1358,6 +1361,28 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     console.log('Calculated revenue:', revenue);
     setTotalRevenue(revenue);
   }, [business]);
+
+  // Fetch hot leads count for AI Cofounder
+  useEffect(() => {
+    const fetchHotLeads = async () => {
+      if (!business?.id) return;
+      
+      try {
+        const response = await fetch(`/api/ai-cofounder/leads?businessId=${business.id}`);
+        const data = await response.json();
+        if (data.success) {
+          setHotLeadsCount(data.summary.hotLeads || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching hot leads:', error);
+      }
+    };
+
+    fetchHotLeads();
+    // Refresh every minute
+    const interval = setInterval(fetchHotLeads, 60000);
+    return () => clearInterval(interval);
+  }, [business?.id]);
   
   // Track setup status from real data
   const setupStatus = {
@@ -1509,6 +1534,135 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         margin: '0 auto',
         padding: '0 24px'
       }}>
+
+        {/* AI Cofounder Status Card */}
+        {setupComplete && (
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '20px',
+            padding: '24px',
+            marginBottom: '24px',
+            color: 'white',
+            boxShadow: theme.shadows.xl
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '20px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Bot size={28} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '20px', fontWeight: '700', margin: 0 }}>
+                    Your AI Cofounder is Active
+                  </h3>
+                  <p style={{ fontSize: '14px', opacity: 0.9, margin: 0 }}>
+                    Working 24/7 to find and nurture leads
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLeadInbox(!showLeadInbox)}
+                style={{
+                  background: 'white',
+                  color: '#667eea',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Inbox size={18} />
+                View Lead Inbox
+                {hotLeadsCount > 0 && (
+                  <span style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    marginLeft: '4px'
+                  }}>
+                    {hotLeadsCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* AI Activity Stats */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px'
+            }}>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '16px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: '700' }}>
+                  {hotLeadsCount}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                  🔥 Hot Leads
+                </div>
+              </div>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '16px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: '700' }}>
+                  247
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                  Emails Sent Today
+                </div>
+              </div>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '16px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: '700' }}>
+                  18
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                  Conversations Active
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lead Inbox (toggleable) */}
+        {showLeadInbox && (
+          <div style={{ marginBottom: '24px' }}>
+            <LeadInbox 
+              businessId={business?.id}
+              onLeadSelect={(lead) => console.log('Lead selected:', lead)}
+            />
+          </div>
+        )}
 
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 

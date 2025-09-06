@@ -35,6 +35,14 @@ export {
   performanceMonitor
 } from './ai-business-agent';
 
+export {
+  dailyAICofounderOperations,
+  sendFollowUp,
+  sendNurturingContent,
+  reactivationCampaign,
+  processEmailResponse
+} from './ai-cofounder';
+
 // Export all functions as an array for the Inngest serve handler
 export const functions = [
   require('./generate-business').generateBusiness,
@@ -57,4 +65,9 @@ export const functions = [
   require('./ai-business-agent').weeklyCompetitorAnalysis,
   require('./ai-business-agent').monthlyStrategyReview,
   require('./ai-business-agent').performanceMonitor,
+  require('./ai-cofounder').dailyAICofounderOperations,
+  require('./ai-cofounder').sendFollowUp,
+  require('./ai-cofounder').sendNurturingContent,
+  require('./ai-cofounder').reactivationCampaign,
+  require('./ai-cofounder').processEmailResponse,
 ];

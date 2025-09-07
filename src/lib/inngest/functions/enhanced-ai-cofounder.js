@@ -26,7 +26,7 @@ export const aiCofounderThink = inngest.createFunction(
       key: 'event.data.businessId'
     }
   },
-  { cron: '*/5 * * * *' }, // Every 5 minutes
+  { cron: '0 */2 * * *' }, // Every 2 hours (was 5 min - too expensive!)
   async ({ event, step }) => {
     // Get all active businesses
     const { data: businesses } = await step.run('get-active-businesses', async () => {
@@ -137,7 +137,7 @@ export const monitorExperiments = inngest.createFunction(
     id: 'monitor-experiments',
     name: 'Monitor Active Experiments',
   },
-  { cron: '*/30 * * * *' }, // Every 30 minutes
+  { cron: '0 */4 * * *' }, // Every 4 hours (was 30 min - too expensive!)
   async ({ event, step }) => {
     // Get active experiments
     const { data: experiments } = await step.run('get-experiments', async () => {

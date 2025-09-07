@@ -247,7 +247,7 @@ export async function generatePersonalizedEmail(prospect, businessData) {
     `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: "You are an expert at writing high-converting cold emails." },
         { role: "user", content: prompt }

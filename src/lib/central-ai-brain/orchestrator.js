@@ -293,7 +293,7 @@ export class CentralAIBrain {
    */
   async generateSystemInsights(systemAnalysis) {
     const insights = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{
         role: "user",
         content: `Analyze this system performance data and provide strategic insights:

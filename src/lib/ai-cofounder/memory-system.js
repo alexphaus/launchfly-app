@@ -202,7 +202,7 @@ export class AIMemorySystem {
 
       // Generate recommendations using GPT-4 with integrated intelligence
       const recommendations = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -234,7 +234,25 @@ export class AIMemorySystem {
         response_format: { type: "json_object" }
       });
 
-      const result = JSON.parse(recommendations.choices[0].message.content);
+      let result;
+      try {
+        result = JSON.parse(recommendations.choices[0].message.content);
+      } catch (parseError) {
+        console.warn('Failed to parse recommendations JSON, using fallback:', parseError);
+        // Fallback recommendations
+        result = {
+          recommendations: [
+            {
+              action: 'Continue customer acquisition',
+              confidence: 0.7,
+              expectedOutcome: 'Steady growth',
+              system: 'acquisition_engine'
+            }
+          ],
+          confidence: 0.7,
+          reasoning: 'Using fallback recommendations due to JSON parsing error'
+        };
+      }
       
       // Add Revenue Graph confidence boost
       if (revenueGraphStrategies.length > 0) {
@@ -354,11 +372,20 @@ export class AIMemorySystem {
 
   // Helper methods
   async generateEmbedding(text) {
-    const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text
-    });
-    return response.data[0].embedding;
+    try {
+      const response = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: text
+      });
+      return response.data[0].embedding;
+    } catch (err) {
+      // On quota error, skip embeddings gracefully
+      if (String(err).includes('insufficient_quota') || String(err).includes('429')) {
+        console.warn('Embedding quota hit; returning null embedding');
+        return null;
+      }
+      throw err;
+    }
   }
 
   async categorizeMemory(content) {
@@ -376,7 +403,7 @@ export class AIMemorySystem {
 
     // Use GPT to categorize
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: process.env.AI_INSIGHTS_MODEL || "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -428,7 +455,7 @@ export class AIMemorySystem {
     if (memories.length === 0) return null;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -460,7 +487,7 @@ export class AIMemorySystem {
 
   async analyzeOutcome(outcome) {
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -513,7 +540,7 @@ export class AIMemorySystem {
 
   async synthesizeCluster(cluster) {
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",

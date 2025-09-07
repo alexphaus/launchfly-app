@@ -97,7 +97,7 @@ async function analyzeCustomerIntent(saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: "You are an expert at understanding customer psychology and purchase intent." },
       { role: "user", content: prompt }
@@ -376,7 +376,7 @@ async function generatePersonalizedRoutine(saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: "You are a top skincare expert and dermatologist with 20+ years of experience." },
       { role: "user", content: prompt }
@@ -419,7 +419,7 @@ async function generateBusinessAudit(saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: "You are a senior business consultant with expertise in growth strategy and operations." },
       { role: "user", content: prompt }
@@ -461,7 +461,7 @@ async function generateActionPlan(saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: "You are a strategic planning expert who creates actionable business plans." },
       { role: "user", content: prompt }
@@ -505,7 +505,7 @@ async function generateExpertGuide(saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: `You are a top expert in ${niche} with 15+ years of industry experience and insider knowledge.` },
       { role: "user", content: prompt }
@@ -548,7 +548,7 @@ async function generateStrategicAnalysis(saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: "You are a senior strategy consultant from a top-tier consulting firm." },
       { role: "user", content: prompt }
@@ -582,7 +582,7 @@ async function generateGenericValue(deliverable, saleData, businessData) {
   `;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages: [
       { role: "system", content: "You are an expert consultant who delivers high-value content and insights." },
       { role: "user", content: prompt }

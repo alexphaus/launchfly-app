@@ -134,7 +134,7 @@ export class VisionAnalyzer {
     // In production, this would generate actual design variants
     // Using GPT-4 to suggest variants for now
     const response = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",

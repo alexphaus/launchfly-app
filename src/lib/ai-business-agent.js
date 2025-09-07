@@ -139,7 +139,7 @@ export class AIBusinessAgent {
    */
   async performMarketResearch(business) {
     const research = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{
         role: "user",
         content: `Research the ${business.industry} market for ${business.businessName}. 
@@ -222,7 +222,7 @@ export class AIBusinessAgent {
     
     // AI determines if pricing should be adjusted
     const pricingAnalysis = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{
         role: "user",
         content: `Analyze pricing strategy for ${business.businessName}:

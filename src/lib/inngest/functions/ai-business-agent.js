@@ -305,7 +305,7 @@ async function performMarketResearch(business) {
     `;
     
     const research = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: researchPrompt }],
       temperature: 0.7
     });
@@ -370,7 +370,7 @@ async function analyzeCompetitors(business) {
     `;
     
     const analysis = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: competitorPrompt }],
       temperature: 0.6
     });
@@ -438,7 +438,7 @@ async function reviewBusinessStrategy(business) {
     `;
     
     const review = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: strategyPrompt }],
       temperature: 0.5
     });

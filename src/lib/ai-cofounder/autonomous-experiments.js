@@ -70,7 +70,7 @@ export class AutonomousExperiments {
       
       // Generate experiment ideas using GPT-4 with Revenue Graph intelligence
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -110,11 +110,29 @@ export class AutonomousExperiments {
         response_format: { type: "json_object" }
       });
 
-      const experiments = JSON.parse(response.choices[0].message.content);
+      let experiments;
+      try {
+        experiments = JSON.parse(response.choices[0].message.content);
+      } catch (parseError) {
+        console.warn('Failed to parse experiments JSON, using fallback:', parseError);
+        // Fallback experiments
+        experiments = {
+          ideas: [
+            {
+              name: 'Email Subject Line Test',
+              hypothesis: 'Different subject lines will improve open rates',
+              type: 'email',
+              priority: 'medium',
+              growthEngineCompatible: true,
+              channel: 'email'
+            }
+          ]
+        };
+      }
 
       // Prioritize experiments based on Revenue Graph confidence
       const prioritized = await this.prioritizeExperiments(
-        experiments.ideas,
+        experiments.ideas || experiments,
         revenueGraphPatterns
       );
 
@@ -254,7 +272,7 @@ export class AutonomousExperiments {
     // Generate variants using GPT-4
     for (let i = 0; i < (experiment.variantCount || 3); i++) {
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -448,7 +466,7 @@ export class AutonomousExperiments {
     try {
       // Use GPT-4 to generate follow-up ideas
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",

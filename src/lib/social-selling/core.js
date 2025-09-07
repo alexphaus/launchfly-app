@@ -135,7 +135,7 @@ export class DiscoveryBot {
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: "You are a customer psychology expert specializing in social media behavior analysis." },
           { role: "user", content: prompt }
@@ -189,7 +189,7 @@ export class DiscoveryBot {
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: "You are a social media targeting expert with deep knowledge of platform-specific communities." },
           { role: "user", content: prompt }
@@ -342,7 +342,7 @@ export class EngagementBot {
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: "You are a social selling strategist who specializes in warming up prospects before direct outreach." },
           { role: "user", content: prompt }
@@ -544,7 +544,7 @@ export class ConversionBot {
 
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-3.5-turbo",
         messages: [
           { role: "system", content: "You are a social selling expert who writes DMs that start conversations, not sound like spam." },
           { role: "user", content: prompt }

@@ -38,7 +38,24 @@ export class ActiveAIOptimizer {
    * Run comprehensive business optimization
    */
   async optimizeBusiness() {
-    console.log(`🤖 Starting active optimization for business ${this.businessId}`);
+    console.log(`🤖 Legacy optimizer deprecated - Enhanced AI Cofounder now handles optimization for business ${this.businessId}`);
+    
+    // Check if Enhanced AI Cofounder is available
+    try {
+      const response = await fetch(`/api/ai-cofounder?businessId=${this.businessId}&action=status`);
+      const data = await response.json();
+      
+      if (data.status?.running) {
+        console.log('✅ Enhanced AI Cofounder is active - skipping legacy optimization');
+        return { 
+          success: true, 
+          message: 'Enhanced AI Cofounder is handling optimization',
+          optimizations: []
+        };
+      }
+    } catch (error) {
+      console.log('Enhanced AI Cofounder not available, running legacy optimization...');
+    }
     
     try {
       // Get business data
@@ -167,7 +184,7 @@ export class ActiveAIOptimizer {
     `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.7

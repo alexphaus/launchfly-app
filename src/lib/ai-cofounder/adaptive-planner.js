@@ -42,9 +42,9 @@ export class AdaptivePlanner {
       // Get current business state
       const businessState = await this.analyzeBusinessState();
 
-      // Generate adaptive plan using GPT-4
+      // Generate adaptive plan (with cost-aware model)
       const planResponse = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: process.env.AI_PLANNING_MODEL || "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -54,11 +54,13 @@ export class AdaptivePlanner {
                      2. Time-bound with milestones
                      3. Resource-aware
                      4. Risk-conscious
-                     5. Adaptable to changing conditions`
+                     5. Adaptable to changing conditions
+                     
+                     IMPORTANT: Always respond with valid JSON format.`
           },
           {
             role: "user",
-            content: `Create a comprehensive business plan:
+            content: `Create a comprehensive business plan and return it as JSON:
                      
                      Goals: ${JSON.stringify(goals)}
                      Context: ${JSON.stringify(context)}
@@ -66,21 +68,51 @@ export class AdaptivePlanner {
                      Historical Insights: ${JSON.stringify(memories.insights)}
                      Proven Strategies: ${JSON.stringify(sharedKnowledge)}
                      
-                     Generate a plan with:
+                     Generate a plan with these fields in JSON format:
                      - Strategic objectives with success metrics
                      - Tactical tasks with dependencies
                      - Resource allocation
                      - Risk mitigation strategies
                      - Adaptation triggers and contingencies
                      - Timeline with milestones
-                     - Expected outcomes with confidence levels`
+                     - Expected outcomes with confidence levels
+                     
+                     Return the response as a valid JSON object.`
           }
         ],
         temperature: 0.7,
         response_format: { type: "json_object" }
       });
 
-      const plan = JSON.parse(planResponse.choices[0].message.content);
+      let plan;
+      try {
+        plan = JSON.parse(planResponse.choices[0].message.content);
+      } catch (parseError) {
+        console.warn('Failed to parse plan JSON, using fallback:', parseError);
+        // Fallback plan structure
+        plan = {
+          objectives: [
+            {
+              id: 'revenue_growth',
+              description: 'Generate first revenue within 48 hours',
+              target: '$1000',
+              timeline: '30 days',
+              priority: 'high'
+            }
+          ],
+          tasks: [
+            {
+              id: 'customer_acquisition',
+              description: 'Launch customer acquisition campaign',
+              dependencies: [],
+              resources: ['email', 'social_media'],
+              timeline: '2 days'
+            }
+          ],
+          confidence: 0.7,
+          reasoning: 'Using fallback plan due to JSON parsing error'
+        };
+      }
 
       // Enhance plan with execution strategies
       const enhancedPlan = await this.enhancePlanWithExecutionStrategies(plan);
@@ -97,18 +129,23 @@ export class AdaptivePlanner {
           confidence_score: enhancedPlan.confidence || 0.7,
           expected_revenue: enhancedPlan.expectedRevenue || 0,
           adaptation_count: 0
-        });
+        })
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Error storing plan in database:', error);
+        // Continue without storing in database
+      }
 
       this.currentPlan = enhancedPlan;
       
-      // Remember the plan creation
+      // Remember the plan creation with safe property access
+      const objectiveCount = (enhancedPlan && enhancedPlan.objectives && enhancedPlan.objectives.length) || 0;
       await this.memory.remember({
-        content: `Created new business plan with ${enhancedPlan.objectives.length} objectives`,
+        content: `Created new business plan with ${objectiveCount} objectives`,
         category: 'strategy_decision',
         importance: 0.9,
-        context: { planId: data[0].id, goals }
+        context: { planId: data?.[0]?.id, goals }
       });
 
       return enhancedPlan;
@@ -285,9 +322,20 @@ export class AdaptivePlanner {
         recentHistory
       });
 
-      // Generate adapted plan
-      const adaptationResponse = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+      // Daily adaptation cap
+      const dailyCap = Number(process.env.AI_DAILY_ADAPT_CAP || 4);
+      const today = new Date().toISOString().slice(0, 10);
+      const todaysAdaptations = (this.currentPlan?.adaptationHistory || []).filter(a => (a.timestamp || '').startsWith(today)).length;
+      if (todaysAdaptations >= dailyCap) {
+        console.log(`Adaptation skipped: daily cap ${dailyCap} reached`);
+        return this.currentPlan;
+      }
+
+      // Generate adapted plan (fallback on 429)
+      let adaptationResponse;
+      try {
+        adaptationResponse = await openai.chat.completions.create({
+          model: process.env.AI_ADAPT_MODEL || "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -296,25 +344,56 @@ export class AdaptivePlanner {
           },
           {
             role: "user",
-            content: `Adapt this plan:
+            content: `Adapt this plan and return as JSON:
                      
                      Current Plan: ${JSON.stringify(this.currentPlan)}
                      Adaptation Reason: ${reason}
                      Recent Results: ${JSON.stringify(recentHistory)}
                      Recommendations: ${JSON.stringify(recommendations)}
                      
-                     Provide adapted plan with:
+                     Provide adapted plan with these JSON fields:
                      - Modified tasks and timeline
                      - New strategies to address issues
                      - Updated success metrics
-                     - Risk mitigation updates`
+                     - Risk mitigation updates
+                     
+                     Return as valid JSON object.`
           }
         ],
-        temperature: 0.6,
-        response_format: { type: "json_object" }
-      });
+          temperature: 0.6,
+          response_format: { type: "json_object" }
+        });
+      } catch (err) {
+        if (String(err).includes('insufficient_quota') || String(err).includes('429')) {
+          console.warn('Adaptation quota hit; falling back to gpt-3.5-turbo');
+          adaptationResponse = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+              {
+                role: "system",
+                content: `You are an adaptive business strategist. Return valid JSON.`
+              },
+              {
+                role: "user",
+                content: `Adapt this plan and return as JSON:\n\nCurrent Plan: ${JSON.stringify(this.currentPlan)}\nAdaptation Reason: ${reason}\nRecent Results: ${JSON.stringify(recentHistory)}\nRecommendations: ${JSON.stringify(recommendations)}\n\nReturn as valid JSON object.`
+              }
+            ],
+            temperature: 0.6,
+            response_format: { type: "json_object" }
+          });
+        } else {
+          throw err;
+        }
+      }
 
-      const adaptedPlan = JSON.parse(adaptationResponse.choices[0].message.content);
+      let adaptedPlan;
+      try {
+        adaptedPlan = JSON.parse(adaptationResponse.choices[0].message.content);
+      } catch (parseError) {
+        console.warn('Failed to parse adapted plan JSON, using current plan:', parseError);
+        // Keep current plan if adaptation fails
+        adaptedPlan = this.currentPlan;
+      }
 
       // Track adaptation
       if (!this.currentPlan.adaptationHistory) {
@@ -421,9 +500,11 @@ export class AdaptivePlanner {
         plan: this.currentPlan
       });
 
-      // Use GPT-4 to decide specific next actions
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+      // Decide specific next actions (cost-aware model with 429 fallback)
+      let response;
+      try {
+        response = await openai.chat.completions.create({
+          model: process.env.AI_DECISIONS_MODEL || "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -435,14 +516,45 @@ export class AdaptivePlanner {
             content: `Progress: ${JSON.stringify(progress)}
                      Recommendations: ${JSON.stringify(recommendations)}
                      
-                     Provide 3-5 specific next actions with priority and expected impact.`
+                     Provide 3-5 specific next actions with priority and expected impact.
+                     Return response as JSON object with an "actions" array.`
           }
         ],
-        temperature: 0.6,
-        response_format: { type: "json_object" }
-      });
+          temperature: 0.6,
+          response_format: { type: "json_object" }
+        });
+      } catch (err) {
+        if (String(err).includes('insufficient_quota') || String(err).includes('429')) {
+          console.warn('Decisions quota hit; falling back to gpt-3.5-turbo');
+          response = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+              { role: "system", content: "Return valid JSON only." },
+              { role: "user", content: `Progress: ${JSON.stringify(progress)}\nProvide 3-5 next actions as JSON with an \"actions\" array.` }
+            ],
+            temperature: 0.4,
+            response_format: { type: "json_object" }
+          });
+        } else {
+          throw err;
+        }
+      }
 
-      return JSON.parse(response.choices[0].message.content);
+      try {
+        return JSON.parse(response.choices[0].message.content);
+      } catch (parseError) {
+        console.warn('Failed to parse next actions JSON, using fallback:', parseError);
+        return {
+          actions: [
+            {
+              id: 'continue_acquisition',
+              description: 'Continue customer acquisition efforts',
+              priority: 'high',
+              expectedImpact: 'Generate leads and revenue'
+            }
+          ]
+        };
+      }
     } catch (error) {
       console.error('Error deciding next actions:', error);
       return { actions: [] };
@@ -543,15 +655,27 @@ export class AdaptivePlanner {
   }
 
   async enhancePlanWithExecutionStrategies(plan) {
-    // Add execution strategies to each task
+    // Add execution strategies to each task with safe property access
+    if (!plan) {
+      return {
+        objectives: [],
+        tasks: [],
+        confidence: 0.5,
+        status: 'fallback'
+      };
+    }
+    
     return {
       ...plan,
-      tasks: plan.tasks?.map(task => ({
+      objectives: plan.objectives || [],
+      tasks: (plan.tasks || []).map(task => ({
         ...task,
         executionStrategy: this.getExecutionStrategy(task.type),
         estimatedDuration: this.estimateTaskDuration(task),
         requiredResources: this.identifyRequiredResources(task)
-      }))
+      })),
+      confidence: plan.confidence || 0.7,
+      status: 'enhanced'
     };
   }
 

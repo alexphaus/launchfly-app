@@ -304,7 +304,7 @@ export class RevenueGraphAnalyzer {
     Provide 3-5 specific, actionable recommendations to improve this business based on what actually works for similar businesses.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7
     });

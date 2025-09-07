@@ -60,6 +60,10 @@ export class EnhancedAICofounder {
     
     this.isRunning = false;
     this.lastDecisionTime = null;
+
+    // Throttling helpers (not persisted)
+    this.lastRecommendationsAt = 0;
+    this.cachedRecommendations = null;
   }
 
   /**
@@ -307,11 +311,18 @@ export class EnhancedAICofounder {
    */
   async makeDecisions(perception, memories) {
     try {
-      // Get recommendations from memory
-      const recommendations = await this.memory.getRecommendations({
-        situation: perception.summary,
-        metrics: perception.metrics
-      });
+      // Throttled recommendations (hourly by default)
+      const recIntervalMs = Number(process.env.AI_RECS_INTERVAL_MINUTES || 60) * 60 * 1000;
+      let recommendations = this.cachedRecommendations;
+      const now = Date.now();
+      if (!recommendations || (now - this.lastRecommendationsAt) > recIntervalMs) {
+        recommendations = await this.memory.getRecommendations({
+          situation: perception.summary,
+          metrics: perception.metrics
+        });
+        this.cachedRecommendations = recommendations;
+        this.lastRecommendationsAt = now;
+      }
       
       // Get Revenue Graph intelligence
       let revenuePatterns = [];
@@ -342,9 +353,9 @@ export class EnhancedAICofounder {
         acquisitionStrategy = await this.acquisitionEngine.selectAcquisitionStrategy(context);
       }
 
-      // Use GPT-4 for strategic thinking with integrated context
+      // Use GPT (cheap where possible) for strategic thinking with integrated context
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: process.env.AI_DECISIONS_MODEL || "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
@@ -390,14 +401,44 @@ export class EnhancedAICofounder {
                      - Can be executed through existing systems
                      - Will meet guarantee requirements
                      
-                     Provide specific, actionable decisions with priority and expected impact.`
+                     Provide specific, actionable decisions with priority and expected impact.
+                     
+                     IMPORTANT: Respond with valid JSON only. Use this exact format:
+                     {
+                       "actions": [
+                         {
+                           "type": "customer_acquisition",
+                           "description": "Action description",
+                           "priority": "high",
+                           "channel": "email"
+                         }
+                       ],
+                       "reasoning": "Why these actions were chosen"
+                     }`
           }
         ],
-        temperature: 0.7,
+        temperature: 0.3,
         response_format: { type: "json_object" }
       });
 
-      const decisions = JSON.parse(response.choices[0].message.content);
+      let decisions;
+      try {
+        decisions = JSON.parse(response.choices[0].message.content);
+      } catch (parseError) {
+        console.warn('Failed to parse AI decision JSON, using fallback:', parseError);
+        // Fallback to basic decision structure
+        decisions = {
+          actions: [
+            {
+              type: 'customer_acquisition',
+              description: 'Continue customer acquisition efforts',
+              priority: 'high',
+              channel: 'email'
+            }
+          ],
+          reasoning: 'Using fallback decisions due to JSON parsing error'
+        };
+      }
 
       // Validate decisions against constraints and existing systems
       const validatedDecisions = await this.validateDecisions(decisions);
@@ -558,11 +599,17 @@ export class EnhancedAICofounder {
    * Calculate optimal delay between thinking cycles
    */
   calculateThinkingDelay() {
+    // Env override
+    const envMinutes = Number(process.env.AI_THINK_INTERVAL_MINUTES);
+    if (Number.isFinite(envMinutes) && envMinutes > 0) {
+      return envMinutes * 60 * 1000;
+    }
+
     // Adjust based on activity and urgency
     if (this.state.mode === 'autonomous') {
-      return 5 * 60 * 1000; // 5 minutes
+      return 15 * 60 * 1000; // default 15 minutes to reduce cost
     } else if (this.state.mode === 'supervised') {
-      return 15 * 60 * 1000; // 15 minutes
+      return 30 * 60 * 1000; // 30 minutes
     } else {
       return 60 * 60 * 1000; // 1 hour
     }
@@ -646,9 +693,9 @@ export class EnhancedAICofounder {
   }
 
   async analyzeSituation(context) {
-    // Analyze current business situation
+    // Analyze current business situation with safe property access
     return {
-      stage: context.stage || 'launch',
+      stage: (context && context.stage) || 'launch',
       health: 'good',
       opportunities: [],
       threats: []

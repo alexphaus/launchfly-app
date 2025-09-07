@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
 import UserProfile from './UserProfile';
+import EnhancedAICofounderDashboard from './EnhancedAICofounderDashboard';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1519,13 +1520,23 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           business={business}
         />
 
-        {/* Real-time AI Activity */}
-        <AIActivityFeed 
-          generationStage={generationStage}
-          businessData={businessData}
-          business={business}
-          sessionId={session?.id}
-        />
+        {/* Enhanced AI Cofounder Dashboard */}
+        {generationStage === 'complete' && business?.id && (
+          <EnhancedAICofounderDashboard 
+            business={business}
+            sessionId={session?.id}
+          />
+        )}
+
+        {/* Fallback: Real-time AI Activity for incomplete generation */}
+        {generationStage !== 'complete' && (
+          <AIActivityFeed 
+            generationStage={generationStage}
+            businessData={businessData}
+            business={business}
+            sessionId={session?.id}
+          />
+        )}
 
         {/* Insights */}
         <InsightsCard 

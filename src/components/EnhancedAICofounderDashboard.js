@@ -64,7 +64,9 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('progress'); // progress, activity, chat
+  const [activeTab, setActiveTab] = useState('progress'); // progress, activity
+  const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   useEffect(() => {
     if (business?.id) {
@@ -442,8 +444,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
         }}>
           {[
             { id: 'progress', label: 'Progress', icon: <TrendingUp size={16} /> },
-            { id: 'activity', label: 'Live Activity', icon: <Activity size={16} /> },
-            { id: 'chat', label: 'Chat', icon: <MessageCircle size={16} /> }
+            { id: 'activity', label: 'Live Activity', icon: <Activity size={16} /> }
           ].map(tab => (
             <button
               key={tab.id}
@@ -453,13 +454,6 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
                 if (tab.id === 'activity') {
                   fetchActivities();
                   fetchAccomplishments();
-                } else if (tab.id === 'chat' && chatMessages.length === 0) {
-                  setChatMessages([{
-                    id: 1,
-                    type: 'ai',
-                    content: `Hi! I'm working on getting your first customers for ${business.business_data?.businessName || 'your business'}. Ask me anything about your business progress or what I'm doing.`,
-                    timestamp: new Date().toISOString()
-                  }]);
                 }
               }}
               style={{
@@ -514,6 +508,24 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
           business={business}
         />
       )}
+    
+    {/* Floating Chat Popup */}
+    <FloatingChat 
+      isOpen={chatOpen}
+      onToggle={() => {
+        setChatOpen(!chatOpen);
+        if (!chatOpen && hasUnreadMessages) {
+          setHasUnreadMessages(false);
+        }
+      }}
+      messages={chatMessages}
+      input={chatInput}
+      loading={chatLoading}
+      onInputChange={setChatInput}
+      onSubmit={handleChatSubmit}
+      business={business}
+      hasUnread={hasUnreadMessages}
+    />
     </div>
   );
 }
@@ -941,31 +953,41 @@ const ProgressTab = ({ business, cofounderStatus, activities, onAction }) => {
           Preview Outreach
         </button>
         
-        <button
-          onClick={() => document.querySelector('[data-tab-id="chat"]')?.click()}
-          style={{
-            flex: 1,
-            minWidth: '140px',
-            background: theme.gradients.primary,
-            border: 'none',
-            borderRadius: '8px',
-            padding: '10px 16px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            color: 'white',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          <MessageCircle size={16} />
-          Chat with AI
-        </button>
+         <button
+           onClick={() => {
+             setChatOpen(true);
+             if (chatMessages.length === 0) {
+               setChatMessages([{
+                 id: 1,
+                 type: 'ai',
+                 content: `Hi! I'm working on getting your first customers for ${business?.business_data?.businessName || 'your business'}. Ask me anything about your business progress or what I'm doing.`,
+                 timestamp: new Date().toISOString()
+               }]);
+             }
+           }}
+           style={{
+             flex: 1,
+             minWidth: '140px',
+             background: theme.gradients.primary,
+             border: 'none',
+             borderRadius: '8px',
+             padding: '10px 16px',
+             cursor: 'pointer',
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'center',
+             gap: '8px',
+             fontSize: '14px',
+             fontWeight: '600',
+             color: 'white',
+             transition: 'all 0.2s'
+           }}
+           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+         >
+           <MessageCircle size={16} />
+           Chat with AI
+         </button>
       </div>
     </div>
   );
@@ -1446,3 +1468,224 @@ const ChatMessage = ({ message }) => (
     </div>
   </div>
 );
+
+// Floating Chat Component
+const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChange, onSubmit, business, hasUnread }) => {
+  return (
+    <>
+      {/* Chat Toggle Button */}
+      <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        zIndex: 1000
+      }}>
+        <button
+          onClick={onToggle}
+          style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            background: theme.gradients.primary,
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(0, 123, 255, 0.3)',
+            transition: 'all 0.3s ease',
+            position: 'relative'
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          {isOpen ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          ) : (
+            <MessageCircle size={24} color="white" />
+          )}
+          
+          {/* Unread indicator */}
+          {hasUnread && !isOpen && (
+            <div style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              width: '12px',
+              height: '12px',
+              background: '#ef4444',
+              borderRadius: '50%',
+              border: '2px solid white',
+              animation: 'pulse 2s infinite'
+            }} />
+          )}
+        </button>
+      </div>
+
+      {/* Chat Window */}
+      {isOpen && (
+        <div style={{
+          position: 'fixed',
+          bottom: '90px',
+          right: '24px',
+          width: '360px',
+          height: '480px',
+          background: 'white',
+          borderRadius: '16px',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+          border: '1px solid #e5e7eb',
+          zIndex: 999,
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'slideInUp 0.3s ease'
+        }}>
+          {/* Chat Header */}
+          <div style={{
+            padding: '16px',
+            borderBottom: '1px solid #e5e7eb',
+            borderRadius: '16px 16px 0 0',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                background: theme.gradients.ai,
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Brain size={16} color="white" />
+              </div>
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: '600', margin: 0, color: theme.colors.textDark }}>
+                  AI Cofounder
+                </h4>
+                <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: 0 }}>
+                  Working on {business?.business_data?.businessName || 'your business'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat Messages */}
+          <div style={{ 
+            flex: 1, 
+            overflowY: 'auto', 
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            {messages.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                color: theme.colors.textGray,
+                fontSize: '14px',
+                marginTop: '40px'
+              }}>
+                <Brain size={32} color={theme.colors.textLight} style={{ margin: '0 auto 12px' }} />
+                <p>Hi! Ask me anything about your business progress.</p>
+              </div>
+            ) : (
+              messages.map(message => (
+                <ChatMessage key={message.id} message={message} />
+              ))
+            )}
+            
+            {loading && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                padding: '8px',
+                color: theme.colors.textGray
+              }}>
+                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: '13px' }}>AI is thinking...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Input */}
+          <div style={{
+            padding: '16px',
+            borderTop: '1px solid #e5e7eb',
+            borderRadius: '0 0 16px 16px'
+          }}>
+            <form onSubmit={onSubmit} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => onInputChange(e.target.value)}
+                placeholder="Ask about your progress..."
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  border: `1px solid ${theme.colors.textLight}`,
+                  borderRadius: '20px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  background: '#f8fafc'
+                }}
+                onFocus={(e) => e.target.style.borderColor = theme.colors.primary}
+                onBlur={(e) => e.target.style.borderColor = theme.colors.textLight}
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  background: theme.gradients.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+                  opacity: loading || !input.trim() ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => !loading && input.trim() && (e.currentTarget.style.transform = 'scale(1.05)')}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <Send size={16} />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSS for animations */}
+      <style jsx>{`
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes pulse {
+          0%, 100% { 
+            opacity: 1; 
+            transform: scale(1);
+          }
+          50% { 
+            opacity: 0.8; 
+            transform: scale(1.05);
+          }
+        }
+      `}</style>
+    </>
+  );
+};

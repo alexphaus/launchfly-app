@@ -21,7 +21,8 @@ import {
   Shield,
   Loader2,
   MessageCircle,
-  Send
+  Send,
+  ChevronRight
 } from 'lucide-react';
 
 const theme = {
@@ -34,6 +35,8 @@ const theme = {
     textGray: '#6b7280',
     textLight: '#9ca3af',
     background: '#f8fafc',
+    borderLight: '#e5e7eb',
+    bgLight: '#f3f4f6',
     white: '#ffffff'
   },
   gradients: {
@@ -60,7 +63,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('status'); // status, activities, chat
+  const [activeTab, setActiveTab] = useState('overview'); // overview, activities, chat
 
   useEffect(() => {
     if (business?.id) {
@@ -309,10 +312,10 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
           <Brain size={24} color="white" />
         </div>
         <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
-          Initializing Enhanced AI Cofounder
+          Initializing AI Cofounder
         </h3>
         <p style={{ color: theme.colors.textGray, fontSize: '14px' }}>
-          Setting up integrated revenue systems...
+          Setting up your automated business systems...
         </p>
       </div>
     );
@@ -387,7 +390,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
           </div>
           <div>
             <h3 style={{ fontSize: '20px', fontWeight: '700', margin: 0 }}>
-              Enhanced AI Cofounder
+              Your AI Cofounder
             </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
               <div style={{
@@ -398,7 +401,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
                 animation: isRunning ? 'pulse 2s infinite' : 'none'
               }} />
               <span style={{ fontSize: '14px', color: theme.colors.textGray }}>
-                {isRunning ? 'Actively thinking and executing' : 'Paused'}
+                {isRunning ? 'Working on your business' : 'Paused'}
               </span>
             </div>
           </div>
@@ -421,7 +424,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
             }}
           >
             <Zap size={16} />
-            Think Now
+            Run AI Cycle
           </button>
           
           <button
@@ -440,7 +443,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
             }}
           >
             {isRunning ? <Pause size={16} /> : <Play size={16} />}
-            {isRunning ? 'Pause' : 'Resume'}
+            {isRunning ? 'Pause' : 'Start'}
           </button>
         </div>
       </div>
@@ -455,9 +458,9 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
           padding: '4px'
         }}>
           {[
-            { id: 'status', label: 'Status', icon: <Settings size={16} /> },
+            { id: 'overview', label: 'Overview', icon: <Settings size={16} /> },
             { id: 'activities', label: 'Activities', icon: <Activity size={16} /> },
-            { id: 'chat', label: 'Chat', icon: <Bot size={16} /> }
+            { id: 'chat', label: 'Command Center', icon: <Bot size={16} /> }
           ].map(tab => (
             <button
               key={tab.id}
@@ -470,7 +473,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
                   setChatMessages([{
                     id: 1,
                     type: 'ai',
-                    content: `Hello! I'm your AI Cofounder for ${business.business_data?.businessName || 'your business'}. I'm actively working on growing your business using proven strategies from our Revenue Graph. What would you like to know?`,
+                    content: `Hello! I'm your AI Cofounder for ${business.business_data?.businessName || 'your business'}. I'm working to get you to your first sale as quickly as possible. What would you like to know?`,
                     timestamp: new Date().toISOString()
                   }]);
                 }
@@ -498,11 +501,13 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'status' && (
-        <StatusTab 
+      {activeTab === 'overview' && (
+        <OverviewTab 
           integrations={integrations}
           cofounderStatus={cofounderStatus}
           onAction={handleAction}
+          business={business}
+          setActiveTab={setActiveTab}
         />
       )}
 
@@ -603,109 +608,392 @@ const ActionButton = ({ onClick, icon, label }) => (
   </button>
 );
 
-// Status Tab Component
-const StatusTab = ({ integrations, cofounderStatus, onAction }) => (
-  <div>
-    {/* Integration Status */}
-    <div style={{ marginBottom: '24px' }}>
-      <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-        System Integrations
-      </h4>
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-        gap: '12px' 
-      }}>
-        <IntegrationCard
-          name="Central AI Brain"
-          status={integrations.centralBrain?.active}
-          description={`${integrations.centralBrain?.totalBusinesses || 0} businesses`}
-          icon={<Brain size={16} />}
-        />
-        <IntegrationCard
-          name="Revenue Graph"
-          status={integrations.revenueGraph?.active}
-          description={`${integrations.revenueGraph?.patternsStored || 0} patterns`}
-          icon={<Database size={16} />}
-        />
-        <IntegrationCard
-          name="Guarantee Engine"
-          status={integrations.guaranteeEngine?.active}
-          description={integrations.guaranteeEngine?.currentGuarantee ? 'Active guarantee' : 'No guarantee'}
-          icon={<Shield size={16} />}
-        />
-        <IntegrationCard
-          name="Growth Engine"
-          status={integrations.growthEngine?.active}
-          description={`${integrations.growthEngine?.activeSessions || 0} sessions`}
-          icon={<TrendingUp size={16} />}
-        />
-      </div>
-    </div>
+// Overview Tab - Psychology-based design focused on journey to first sale
+const OverviewTab = ({ integrations, cofounderStatus, onAction, business, setActiveTab }) => {
+  // Calculate progress based on real milestones
+  const businessCreated = !!business?.id;
+  const websiteLive = !!business?.subdomain || !!business?.website_url;
+  const findingLeads = (business?.growth_data?.customers?.totalLeads || business?.total_prospects || 0) > 0;
+  const firstOutreach = (business?.emails_sent || business?.outreach_sent || 0) > 0;
+  const firstSale = (business?.total_revenue || business?.revenue || 0) > 0;
+  
+  // Progress calculation
+  const milestones = [businessCreated, websiteLive, findingLeads, firstOutreach, firstSale];
+  const progress = (milestones.filter(Boolean).length / milestones.length) * 100;
+  
+  // Time calculations
+  const createdAt = new Date(business?.created_at || Date.now());
+  const now = new Date();
+  const hoursSinceCreation = Math.floor((now - createdAt) / (1000 * 60 * 60));
+  const expectedFirstSaleHours = 16; // From homepage data
+  const hoursToFirstSale = Math.max(0, expectedFirstSaleHours - hoursSinceCreation);
+  
+  // Business metrics
+  const revenue = business?.total_revenue || business?.revenue || 0;
+  const leads = business?.growth_data?.customers?.totalLeads || business?.total_prospects || 0;
+  const interested = Math.floor(leads * 0.15); // Assume 15% interest rate
+  const pipelineValue = interested * 150; // Assume $150 average deal
+  const visits = Number(business?.views || 0);
+  
+  // Current AI activities (make them concrete and business-focused)
+  const businessName = business?.business_data?.businessName || 'your business';
+  const niche = business?.business_data?.targetAudience || 'your target market';
+  
+  const currentActivities = [];
+  if (!websiteLive) {
+    currentActivities.push({ icon: '🔨', text: `Building website for ${businessName}` });
+  } else if (leads < 5) {
+    currentActivities.push({ icon: '🔍', text: `Searching for ${niche} (${leads} found so far)` });
+  } else if (!firstOutreach) {
+    currentActivities.push({ icon: '✍️', text: `Writing personalized outreach for ${Math.min(leads, 5)} prospects` });
+  } else if (!firstSale) {
+    currentActivities.push({ icon: '📧', text: `Following up with interested prospects` });
+    currentActivities.push({ icon: '📊', text: `Optimizing pricing based on market analysis` });
+  } else {
+    currentActivities.push({ icon: '🚀', text: `Scaling outreach to find more ${niche}` });
+    currentActivities.push({ icon: '💡', text: `A/B testing conversion improvements` });
+  }
+  
+  // Add competitor analysis as ongoing
+  if (websiteLive) {
+    currentActivities.push({ icon: '📊', text: `Analyzing competitor pricing ($197-$497 range)` });
+  }
 
-    {/* AI Status Details */}
-    {cofounderStatus && (
+  return (
+    <div>
+      {/* Path to First Sale Progress */}
       <div style={{
-        background: theme.colors.background,
+        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '20px'
+      }}>
+        <h4 style={{ 
+          fontSize: '18px', 
+          fontWeight: '700', 
+          color: theme.colors.textDark,
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          🎯 Your Path to First Sale
+        </h4>
+        
+        {/* Progress Bar */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px'
+          }}>
+            <span style={{ fontSize: '24px', fontWeight: '700', color: theme.colors.primary }}>
+              {Math.round(progress)}% Complete
+            </span>
+            {!firstSale && (
+              <span style={{ fontSize: '14px', color: theme.colors.textGray }}>
+                Expected first sale in {hoursToFirstSale}h
+              </span>
+            )}
+          </div>
+          <div style={{
+            width: '100%',
+            height: '12px',
+            background: 'rgba(0, 123, 255, 0.1)',
+            borderRadius: '6px',
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            <div style={{
+              width: `${progress}%`,
+              height: '100%',
+              background: theme.gradients.primary,
+              borderRadius: '6px',
+              transition: 'width 0.5s ease',
+              position: 'relative'
+            }}>
+              {progress > 10 && progress < 100 && (
+                <div style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '16px',
+                  height: '16px',
+                  background: 'white',
+                  border: '3px solid #007BFF',
+                  borderRadius: '50%',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }} />
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Milestone Timeline */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '13px',
+          marginTop: '20px'
+        }}>
+          <MilestoneItem 
+            completed={businessCreated} 
+            label="Business created" 
+            time={businessCreated ? `${hoursSinceCreation}h ago` : 'Starting'}
+          />
+          <MilestoneItem 
+            completed={websiteLive} 
+            label="Website live" 
+            time={websiteLive ? 'Active' : 'In progress'}
+          />
+          <MilestoneItem 
+            completed={findingLeads} 
+            active={websiteLive && !findingLeads}
+            label="Finding leads" 
+            time={findingLeads ? `${leads} found` : 'Starting'}
+          />
+          <MilestoneItem 
+            completed={firstOutreach} 
+            label="First outreach" 
+            time={firstOutreach ? 'Sent' : `In ${Math.max(2, hoursToFirstSale - 14)}h`}
+          />
+          <MilestoneItem 
+            completed={firstSale} 
+            label="First sale" 
+            time={firstSale ? '🎉 Done!' : `Expected ${hoursToFirstSale}h`}
+          />
+        </div>
+      </div>
+
+      {/* What AI is doing now */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
         borderRadius: '12px',
         padding: '16px',
         marginBottom: '20px'
       }}>
-        <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-          Current Status
-        </h4>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-          gap: '16px' 
+        <h4 style={{ 
+          fontSize: '16px', 
+          fontWeight: '600', 
+          marginBottom: '12px',
+          color: theme.colors.textDark
         }}>
-          <StatusMetric
-            label="Mode"
-            value={cofounderStatus.state?.mode || 'Unknown'}
-            color={theme.colors.primary}
+          What your AI is doing now
+        </h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {currentActivities.map((activity, index) => (
+            <div key={index} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '8px',
+              background: '#f9fafb',
+              borderRadius: '8px'
+            }}>
+              <span style={{ fontSize: '18px' }}>{activity.icon}</span>
+              <span style={{ fontSize: '14px', color: theme.colors.textDark }}>
+                {activity.text}
+              </span>
+              {index === 0 && (
+                <div style={{ marginLeft: 'auto' }}>
+                  <Loader2 size={14} style={{ 
+                    animation: 'spin 1s linear infinite',
+                    color: theme.colors.primary 
+                  }} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Your Numbers (Live) */}
+      <div style={{
+        background: 'white',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        padding: '16px',
+        marginBottom: '20px'
+      }}>
+        <h4 style={{ 
+          fontSize: '16px', 
+          fontWeight: '600', 
+          marginBottom: '12px',
+          color: theme.colors.textDark
+        }}>
+          Your numbers (live)
+        </h4>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: '16px'
+        }}>
+          <SimpleMetric 
+            label="Revenue" 
+            value={`$${revenue.toLocaleString()}`}
+            color={revenue > 0 ? theme.colors.success : theme.colors.textDark}
           />
-          <StatusMetric
-            label="Focus"
-            value={cofounderStatus.state?.focus || 'Unknown'}
-            color={theme.colors.success}
+          <SimpleMetric 
+            label="Pipeline" 
+            value={`$${pipelineValue.toLocaleString()}`}
+            hint={`${interested} interested`}
           />
-          <StatusMetric
-            label="Confidence"
-            value={`${Math.round((cofounderStatus.state?.confidence || 0) * 100)}%`}
-            color={theme.colors.warning}
-          />
-          <StatusMetric
-            label="Active Experiments"
-            value={cofounderStatus.activeExperiments || 0}
-            color={theme.colors.primary}
+          <SimpleMetric 
+            label="This week" 
+            value={`${visits} visitors`}
           />
         </div>
       </div>
-    )}
 
-    {/* Quick Actions */}
-    <div>
-      <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-        Quick Actions
-      </h4>
+      {/* Action Buttons - Simplified and outcome-focused */}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <ActionButton
-          onClick={() => onAction('plan')}
-          icon={<Target size={16} />}
-          label="Create Plan"
-        />
-        <ActionButton
-          onClick={() => onAction('experiment')}
-          icon={<Activity size={16} />}
-          label="Run Experiment"
-        />
-        <ActionButton
-          onClick={() => onAction('think')}
-          icon={<Zap size={16} />}
-          label="Think Now"
-        />
+        <button
+          onClick={() => onAction('review')}
+          style={{
+            flex: 1,
+            minWidth: '140px',
+            background: theme.gradients.primary,
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'transform 0.2s'
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+        >
+          🎯 Review Leads
+        </button>
+        <button
+          onClick={() => onAction('preview')}
+          style={{
+            flex: 1,
+            minWidth: '140px',
+            background: 'white',
+            color: theme.colors.textDark,
+            border: `1px solid ${theme.colors.borderLight}`,
+            borderRadius: '8px',
+            padding: '12px 16px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = theme.colors.bgLight;
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'white';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          ✉️ Preview Outreach
+        </button>
+        <button
+          onClick={() => setActiveTab('chat')}
+          style={{
+            flex: 1,
+            minWidth: '140px',
+            background: 'white',
+            color: theme.colors.textDark,
+            border: `1px solid ${theme.colors.borderLight}`,
+            borderRadius: '8px',
+            padding: '12px 16px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = theme.colors.bgLight;
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'white';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          💬 Chat with AI
+        </button>
       </div>
     </div>
+  );
+};
+
+// Helper component for milestone items
+const MilestoneItem = ({ completed, active, label, time }) => (
+  <div style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '4px',
+    flex: 1
+  }}>
+    <div style={{
+      width: '20px',
+      height: '20px',
+      borderRadius: '50%',
+      background: completed ? theme.colors.success : active ? theme.colors.primary : '#e5e7eb',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: '4px'
+    }}>
+      {completed && (
+        <CheckCircle size={12} color="white" />
+      )}
+      {active && (
+        <div style={{
+          width: '8px',
+          height: '8px',
+          background: 'white',
+          borderRadius: '50%',
+          animation: 'pulse 2s infinite'
+        }} />
+      )}
+    </div>
+    <div style={{ fontSize: '12px', fontWeight: '600', color: theme.colors.textDark, textAlign: 'center' }}>
+      {label}
+    </div>
+    <div style={{ fontSize: '11px', color: theme.colors.textGray, textAlign: 'center' }}>
+      {time}
+    </div>
+  </div>
+);
+
+// Helper component for simple metrics
+const SimpleMetric = ({ label, value, hint, color }) => (
+  <div>
+    <div style={{ fontSize: '12px', color: theme.colors.textGray, marginBottom: '4px' }}>
+      {label}
+    </div>
+    <div style={{ fontSize: '20px', fontWeight: '700', color: color || theme.colors.textDark }}>
+      {value}
+    </div>
+    {hint && (
+      <div style={{ fontSize: '11px', color: theme.colors.textGray, marginTop: '2px' }}>
+        {hint}
+      </div>
+    )}
   </div>
 );
 

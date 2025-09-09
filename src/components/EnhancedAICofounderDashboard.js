@@ -1,7 +1,7 @@
 // Enhanced AI Cofounder Dashboard Component
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Bot, 
   Brain, 
@@ -1441,36 +1441,88 @@ const AccomplishmentItem = ({ accomplishment }) => (
   </div>
 );
 
-// Chat Message Component
-const ChatMessage = ({ message }) => (
+// Enhanced Chat Message Component
+const EnhancedChatMessage = ({ message }) => (
   <div style={{
-    marginBottom: '12px',
     display: 'flex',
-    justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start'
+    justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start',
+    marginBottom: '16px'
   }}>
     <div style={{
       maxWidth: '80%',
-      padding: '8px 12px',
-      borderRadius: '12px',
+      padding: '12px 16px',
+      borderRadius: message.type === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
       background: message.type === 'user' ? theme.colors.primary : theme.colors.background,
       color: message.type === 'user' ? 'white' : theme.colors.textDark,
       fontSize: '14px',
-      lineHeight: '1.4'
+      lineHeight: '1.4',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)'
     }}>
       {message.content}
       <div style={{
         fontSize: '11px',
         opacity: 0.7,
-        marginTop: '4px'
+        marginTop: '6px',
+        textAlign: message.type === 'user' ? 'right' : 'left'
       }}>
-        {new Date(message.timestamp).toLocaleTimeString()}
+        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>
   </div>
 );
 
+// Legacy Chat Message Component (kept for compatibility)
+const ChatMessage = ({ message }) => (
+  <EnhancedChatMessage message={message} />
+);
+
 // Floating Chat Component
 const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChange, onSubmit, business, hasUnread }) => {
+  const messagesEndRef = useRef(null);
+  
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Enhanced suggestions based on business context
+  const getSmartSuggestions = () => {
+    const revenue = business?.total_revenue || business?.revenue || 0;
+    const leads = business?.growth_data?.customers?.totalLeads || business?.total_prospects || 0;
+    const hasWebsite = !!business?.subdomain || !!business?.website_url;
+    
+    if (revenue > 0) {
+      return [
+        "How can I scale to $10k/month?",
+        "What's working best right now?",
+        "Show me my conversion metrics"
+      ];
+    } else if (leads > 0) {
+      return [
+        "How do I convert these leads?",
+        "What should I say in follow-ups?",
+        "When will I get my first sale?"
+      ];
+    } else if (hasWebsite) {
+      return [
+        "How do I get more visitors?",
+        "Where should I find customers?",
+        "What's my next step?"
+      ];
+    } else {
+      return [
+        "What are you working on?",
+        "When will my site be ready?",
+        "How does this work?"
+      ];
+    }
+  };
+
+  const suggestions = getSmartSuggestions();
+  const showSuggestions = messages.length <= 1 || (messages.length > 0 && messages[messages.length - 1].type === 'ai');
   return (
     <>
       {/* Chat Toggle Button */}
@@ -1579,7 +1631,7 @@ const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChang
             padding: '16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px'
+            gap: '12px'
           }}>
             {messages.length === 0 ? (
               <div style={{
@@ -1593,22 +1645,84 @@ const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChang
               </div>
             ) : (
               messages.map(message => (
-                <ChatMessage key={message.id} message={message} />
+                <EnhancedChatMessage key={message.id} message={message} />
               ))
             )}
             
             {loading && (
               <div style={{ 
                 display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                padding: '8px',
-                color: theme.colors.textGray
+                justifyContent: 'flex-start',
+                marginBottom: '12px'
               }}>
-                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ fontSize: '13px' }}>AI is thinking...</span>
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '16px 16px 16px 4px',
+                  background: theme.colors.background,
+                  color: theme.colors.textGray,
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                  AI is thinking...
+                </div>
               </div>
             )}
+
+            {/* Smart Suggestions */}
+            {showSuggestions && messages.length > 0 && !loading && (
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                marginTop: '8px',
+                justifyContent: 'flex-start'
+              }}>
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      onInputChange(suggestion);
+                      // Auto-submit after a brief delay
+                      setTimeout(() => {
+                        const event = new Event('submit', { bubbles: true, cancelable: true });
+                        Object.defineProperty(event, 'preventDefault', {
+                          value: () => {},
+                          writable: false
+                        });
+                        onSubmit(event);
+                      }, 100);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${theme.colors.textLight}`,
+                      borderRadius: '16px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      color: theme.colors.textGray,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = theme.colors.background;
+                      e.target.style.borderColor = theme.colors.primary;
+                      e.target.style.color = theme.colors.primary;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'transparent';
+                      e.target.style.borderColor = theme.colors.textLight;
+                      e.target.style.color = theme.colors.textGray;
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Chat Input */}
@@ -1617,42 +1731,46 @@ const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChang
             borderTop: '1px solid #e5e7eb',
             borderRadius: '0 0 16px 16px'
           }}>
-            <form onSubmit={onSubmit} style={{ display: 'flex', gap: '8px' }}>
+            <form onSubmit={onSubmit} style={{ 
+              display: 'flex', 
+              gap: '8px',
+              padding: '12px',
+              background: theme.colors.background,
+              borderRadius: '12px',
+              border: `1px solid ${theme.colors.textLight}`
+            }}>
               <input
                 type="text"
                 value={input}
                 onChange={(e) => onInputChange(e.target.value)}
-                placeholder="Ask about your progress..."
+                onKeyPress={(e) => e.key === 'Enter' && !loading && input.trim() && onSubmit(e)}
+                placeholder="Ask AI about current activities..."
                 style={{
                   flex: 1,
-                  padding: '10px 12px',
-                  border: `1px solid ${theme.colors.textLight}`,
-                  borderRadius: '20px',
-                  fontSize: '14px',
+                  border: 'none',
+                  background: 'transparent',
                   outline: 'none',
-                  background: '#f8fafc'
+                  fontSize: '14px',
+                  color: theme.colors.textDark,
+                  padding: '4px 8px'
                 }}
-                onFocus={(e) => e.target.style.borderColor = theme.colors.primary}
-                onBlur={(e) => e.target.style.borderColor = theme.colors.textLight}
               />
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  background: theme.gradients.primary,
-                  color: 'white',
+                  background: input.trim() ? theme.colors.primary : theme.colors.textGray,
                   border: 'none',
-                  borderRadius: '50%',
-                  cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
-                  opacity: loading || !input.trim() ? 0.6 : 1,
+                  borderRadius: '8px',
+                  padding: '8px',
+                  color: 'white',
+                  cursor: input.trim() ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  transition: 'all 0.2s'
+                  transition: 'all 0.2s ease'
                 }}
-                onMouseEnter={e => !loading && input.trim() && (e.currentTarget.style.transform = 'scale(1.05)')}
+                onMouseEnter={e => input.trim() && !loading && (e.currentTarget.style.transform = 'scale(1.05)')}
                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
               >
                 <Send size={16} />

@@ -1,7 +1,7 @@
 // Enhanced AI Cofounder Dashboard Component
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Bot, 
   Brain, 
@@ -1471,6 +1471,51 @@ const ChatMessage = ({ message }) => (
 
 // Floating Chat Component
 const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChange, onSubmit, business, hasUnread }) => {
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isOpen]);
+
+  // Smart suggestions inspired by AIActivityPage behavior
+  const getSmartSuggestions = () => {
+    const revenue = business?.total_revenue || business?.revenue || 0;
+    const leads = business?.growth_data?.customers?.totalLeads || business?.total_prospects || 0;
+    const hasWebsite = !!business?.subdomain || !!business?.website_url;
+
+    if (revenue > 0) {
+      return [
+        'How can I scale to $10k/month?',
+        'What\'s working best right now?',
+        'Show me my conversion metrics'
+      ];
+    } else if (leads > 0) {
+      return [
+        'How do I convert these leads?',
+        'What should I say in follow-ups?',
+        'When will I get my first sale?'
+      ];
+    } else if (hasWebsite) {
+      return [
+        'How do I get more visitors?',
+        'Where should I find customers?',
+        'What\'s my next step?'
+      ];
+    }
+    return [
+      'What are you working on?',
+      'When will my site be ready?',
+      'How does this work?'
+    ];
+  };
+
+  const suggestions = getSmartSuggestions();
+  const showSuggestions = messages.length === 0 || (messages.length > 0 && messages[messages.length - 1].type === 'ai');
+
   return (
     <>
       {/* Chat Toggle Button */}
@@ -1600,15 +1645,72 @@ const FloatingChat = ({ isOpen, onToggle, messages, input, loading, onInputChang
             {loading && (
               <div style={{ 
                 display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                padding: '8px',
-                color: theme.colors.textGray
+                justifyContent: 'flex-start',
+                marginBottom: '12px'
               }}>
-                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ fontSize: '13px' }}>AI is thinking...</span>
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '16px 16px 16px 4px',
+                  background: theme.colors.background,
+                  color: theme.colors.textGray,
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                  AI is typing...
+                </div>
               </div>
             )}
+
+            {/* Smart Suggestions */}
+            {showSuggestions && !loading && (
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                marginTop: '8px',
+                justifyContent: 'flex-start'
+              }}>
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      onInputChange(suggestion);
+                      setTimeout(() => {
+                        const event = new Event('submit', { bubbles: true, cancelable: true });
+                        onSubmit(event);
+                      }, 100);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${theme.colors.textLight}`,
+                      borderRadius: '16px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      color: theme.colors.textGray,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = theme.colors.background;
+                      e.target.style.borderColor = theme.colors.primary;
+                      e.target.style.color = theme.colors.primary;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'transparent';
+                      e.target.style.borderColor = theme.colors.textLight;
+                      e.target.style.color = theme.colors.textGray;
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Chat Input */}

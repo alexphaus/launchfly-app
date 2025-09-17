@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
 import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
+import CustomersCard from './CustomersCard';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1641,6 +1642,9 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           businessData={businessData}
           business={business}
         />
+
+        {/* Customer Activity */}
+        {generationStage === 'complete' && <CustomersCard business={business} />}
 
         {/* Simple Next Steps - Only show after generation */}
         {!setupComplete && (

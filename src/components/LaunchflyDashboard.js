@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
 import UserProfile from './UserProfile';
-import EnhancedAICofounderDashboard from './EnhancedAICofounderDashboard';
 import FloatingChat from './FloatingChat';
 
 // --- DESIGN SYSTEM ---

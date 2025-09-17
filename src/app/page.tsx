@@ -183,8 +183,8 @@ export default function HomePage() {
       <header id="header" className={headerScrolled ? 'scrolled' : ''}>
         <nav className="container">
           <div className="logo">
-            <span className="logo-icon">⚡</span>
-            <span>Launch<span style={{ color: 'var(--secondary)' }}>fly</span></span>
+            <span className="logo-icon">🚀</span>
+            <span>Launchfly</span>
           </div>
           <div className="nav-links">
             <a href="#proven-businesses">Browse Businesses</a>
@@ -761,7 +761,7 @@ export default function HomePage() {
               <div className="automation-network">
                 <div className="central-hub">
                   <div className="hub-logo">
-                    <span className="logo-icon">⚡</span>
+                    <span className="logo-icon">🚀</span>
                     <span>Launchfly AI</span>
                   </div>
                 </div>
@@ -1276,7 +1276,7 @@ export default function HomePage() {
             <div className="footer-brand">
               <div className="logo">
                 <span className="logo-icon">🚀</span>
-                Launchfly
+                <span>Launchfly</span>
               </div>
               <p>AI cofounder for your service business.</p>
                               <div className="footer-social">

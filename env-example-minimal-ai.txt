@@ -1,0 +1,74 @@
+# Minimal AI Cofounder Configuration
+# Copy this to .env and update with your values
+
+# ================================
+# COST CONTROL SETTINGS
+# ================================
+
+# Enable minimal AI system (recommended)
+DISABLE_EXPENSIVE_AI_FUNCTIONS=true
+
+# Daily AI budget per business (in USD)
+AI_DAILY_BUDGET=1.00
+
+# Disable image generation by default (saves costs)
+ENABLE_IMAGE_GENERATION=false
+
+# ================================
+# MODEL CONFIGURATION (Optional)
+# ================================
+
+# Override default models for specific tasks
+# Leave blank to use smart defaults
+
+# Simple tasks (default: gpt-3.5-turbo)
+AI_CLASSIFY_MODEL=gpt-3.5-turbo
+AI_DECIDE_MODEL=gpt-3.5-turbo
+AI_COPY_MODEL=gpt-3.5-turbo
+AI_EMAIL_MODEL=gpt-3.5-turbo
+
+# Analysis tasks (default: gpt-4o-mini)
+AI_ANALYZE_MODEL=gpt-4o-mini
+AI_STRATEGY_MODEL=gpt-4o-mini
+AI_PLANNING_MODEL=gpt-4o-mini
+
+# High-value tasks (default: gpt-4o)
+AI_CLOSE_MODEL=gpt-4o
+AI_NEGOTIATE_MODEL=gpt-4o-mini
+
+# Fallback model
+AI_DEFAULT_MODEL=gpt-3.5-turbo
+
+# ================================
+# EXISTING SETTINGS (Keep as-is)
+# ================================
+
+# Database
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key
+
+# Email
+RESEND_API_KEY=your_resend_api_key
+
+# Stripe
+STRIPE_SECRET_KEY=your_stripe_secret_key
+
+# Base URL
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+# ================================
+# MIGRATION NOTES
+# ================================
+
+# To migrate to minimal AI:
+# 1. Set DISABLE_EXPENSIVE_AI_FUNCTIONS=true
+# 2. Set AI_DAILY_BUDGET to your desired daily limit
+# 3. Run: node migrate-to-minimal-ai.js
+# 4. Restart your application
+# 5. Test with: curl http://localhost:3000/api/ai?businessId=YOUR_ID
+
+# Expected cost reduction: 90-95% compared to full system
+

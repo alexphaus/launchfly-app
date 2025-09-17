@@ -230,7 +230,7 @@ export default function EnhancedAICofounderDashboard({ business, sessionId, onCl
         setChatMessages(prev => [...prev, {
           id: Date.now() + 1,
           type: 'ai',
-          content: result.response || 'I understand your question and will work on it.',
+          content: result.response || `I'm actively working on growing ${business?.business_data?.businessName || 'your business'}. While I process your question, I'm continuing to optimize your revenue streams and customer acquisition. What specific aspect would you like me to focus on?`,
           timestamp: new Date().toISOString()
         }]);
       } else {

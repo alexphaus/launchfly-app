@@ -48,8 +48,25 @@ export {
   sendUserDigest
 } from './enhanced-ai-cofounder';
 
-// Export all functions as an array for the Inngest serve handler
-export const functions = [
+// Import minimal functions
+import { minimalFunctions } from './minimal-functions.js';
+import { weeklyDigestFunctions } from './weekly-digest-function.js';
+
+// Check if expensive functions should be disabled
+const DISABLE_EXPENSIVE_FUNCTIONS = process.env.DISABLE_EXPENSIVE_AI_FUNCTIONS === 'true';
+
+// Export functions based on configuration
+export const functions = DISABLE_EXPENSIVE_FUNCTIONS ? [
+  // Only minimal, event-driven functions
+  // Always include core business generation so onboarding can progress
+  require('./generate-business').generateBusiness,
+  ...minimalFunctions,
+  // Weekly digest (cheap, data-only)
+  ...weeklyDigestFunctions,
+  // Keep essential event-driven functions from existing system
+  require('./follow-up-handler').followUpHandler, // Event-driven
+] : [
+  // Full system (legacy - not recommended due to high costs)
   require('./generate-business').generateBusiness,
   require('./cold-outreach').enhancedColdEmailOutreach,
   require('./growth-engine').growthEngine,

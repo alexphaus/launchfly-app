@@ -1,11 +1,14 @@
-// src/app/api/business/[id]/customers/route.js
+// src/app/api/business/[businessId]/customers/route.js
 import { NextResponse } from 'next/server';
 
-export async function GET(request, { params }) {
-  const { id: businessId } = params;
+export async function GET(request, context) {
+  const { businessId } = await context.params;
 
   if (!businessId) {
-    return NextResponse.json({ success: false, error: 'Business ID is required' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: 'Business ID is required' },
+      { status: 400 }
+    );
   }
 
   // In a real application, you would fetch this data from your database
@@ -23,3 +26,5 @@ export async function GET(request, { params }) {
 
   return NextResponse.json({ success: true, customers: mockCustomers });
 }
+
+

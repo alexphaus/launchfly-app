@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
 import UserProfile from './UserProfile';
-// Removed EnhancedAICofounderDashboard in favor of AIActivityFeed
+import EnhancedAICofounderDashboard from './EnhancedAICofounderDashboard';
+import FloatingChat from './FloatingChat';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1334,6 +1335,112 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [generationStarted, setGenerationStarted] = useState(false);
   const startedRef = useRef(false);
+
+  // State for FloatingChat
+  const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [cofounderStatus, setCofounderStatus] = useState(null);
+  const [activities, setActivities] = useState([]);
+
+  // Fetch cofounder status and activities for chat context
+  useEffect(() => {
+    if (business?.id) {
+      fetchCofounderStatus();
+      fetchActivities();
+      const interval = setInterval(() => {
+        fetchCofounderStatus();
+        fetchActivities();
+      }, 5000); // Poll every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [business?.id]);
+
+  const fetchCofounderStatus = async () => {
+    try {
+      const response = await fetch(`/api/ai-cofounder?businessId=${business.id}&action=status`);
+      const data = await response.json();
+      if (response.ok) {
+        setCofounderStatus(data.status);
+      }
+    } catch (err) {
+      console.error('Error fetching cofounder status:', err);
+    }
+  };
+
+  const fetchActivities = async () => {
+    try {
+      const response = await fetch(`/api/business/${business.id}/activities?limit=5`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setActivities(data.activities);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching activities for chat:', err);
+    }
+  };
+
+  const handleChatSubmit = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatLoading(true);
+
+    const newMessages = [...chatMessages, {
+      id: Date.now(),
+      type: 'user',
+      content: userMessage,
+      timestamp: new Date().toISOString()
+    }];
+    setChatMessages(newMessages);
+
+    try {
+      const response = await fetch('/api/ai-cofounder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: business.id,
+          action: 'conversation',
+          data: {
+            message: userMessage,
+            context: {
+              business: business.business_data,
+              recentActivities: activities,
+              status: cofounderStatus
+            }
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setChatMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          type: 'ai',
+          content: result.response || `I'm actively working on growing your business. What can I help with?`,
+          timestamp: new Date().toISOString()
+        }]);
+      } else {
+        throw new Error('AI response error');
+      }
+    } catch (err) {
+      console.error('Chat error:', err);
+      setChatMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: 'I had a technical issue, but I\'m still working on your business in the background.',
+        timestamp: new Date().toISOString()
+      }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
   
   // Debug: Log business object to see what data is available
   console.log('Business object:', business);
@@ -1520,7 +1627,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           business={business}
         />
 
-        {/* AI Activity Feed (restored) */}
+        {/* Real-time AI Activity Feed */}
         <AIActivityFeed 
           generationStage={generationStage}
           businessData={businessData}
@@ -1561,6 +1668,23 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           />
         )}
       </main>
+
+      <FloatingChat
+        isOpen={chatOpen}
+        onToggle={() => {
+          setChatOpen(!chatOpen);
+          if (!chatOpen && hasUnreadMessages) {
+            setHasUnreadMessages(false);
+          }
+        }}
+        messages={chatMessages}
+        input={chatInput}
+        loading={chatLoading}
+        onInputChange={setChatInput}
+        onSubmit={handleChatSubmit}
+        business={business}
+        hasUnread={hasUnreadMessages}
+      />
 
       {/* CSS Animations */}
       <style jsx>{`

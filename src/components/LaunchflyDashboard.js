@@ -5,6 +5,7 @@ import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Z
 import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
 import CustomersCard from './CustomersCard';
+import BusinessManagementCard from './BusinessManagementCard';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1642,6 +1643,9 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           businessData={businessData}
           business={business}
         />
+
+        {/* Business Management */}
+        {generationStage === 'complete' && <BusinessManagementCard business={business} />}
 
         {/* Customer Activity */}
         {generationStage === 'complete' && <CustomersCard business={business} />}

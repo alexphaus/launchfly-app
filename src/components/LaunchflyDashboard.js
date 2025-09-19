@@ -5,6 +5,7 @@ import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Z
 import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
 import CustomersCard from './CustomersCard';
+import BusinessHealthDashboard from './BusinessHealthDashboard'; // Import the new component
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1617,6 +1618,13 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         margin: '0 auto',
         padding: '0 24px'
       }}>
+
+        {/* Business Health Dashboard */}
+        <BusinessHealthDashboard 
+          business={business}
+          session={session}
+          setupStatus={setupStatus}
+        />
 
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 

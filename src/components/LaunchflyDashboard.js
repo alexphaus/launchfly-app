@@ -34,7 +34,7 @@ const theme = {
 };
 
 // --- COMPONENT: Cash Out Modal ---
-const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut }) => {
+const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, business }) => {
   if (!isOpen) return null;
 
   return (
@@ -179,9 +179,62 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut }) => 
             Cancel
           </button>
           <button
-            onClick={() => {
-              // Here you would integrate with your payment processor
-              alert('Cash out initiated! You will receive an email confirmation shortly.');
+            onClick={async () => {
+              try {
+                console.log('🚀 Initiating cashout for business:', business?.id);
+                console.log('💰 Amount:', availableToCashOut);
+                console.log('📧 Email:', business?.form_data?.email || business?.email);
+                
+                const response = await fetch('/api/cashout/request', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    businessId: business?.id,
+                    amount: availableToCashOut
+                  })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                  alert(`Cash out initiated! $${availableToCashOut} will be transferred to your bank account within 1-2 business days.`);
+                  // Refresh the page to show updated balance
+                  window.location.reload();
+                } else {
+                  // Handle different error types
+                  if (result.action === 'connect_bank') {
+                    console.log('🏦 Starting Connect Express onboarding...');
+                    console.log('🆔 Business ID:', business?.id);
+                    console.log('📧 Email:', business?.form_data?.email || business?.email);
+                    
+                    // Start Connect onboarding using existing implementation
+                    const connectResponse = await fetch('/api/stripe/connect', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        businessId: business?.id,
+                        email: business?.form_data?.email || business?.email
+                      })
+                    });
+                    
+                    const connectResult = await connectResponse.json();
+                    console.log('🔗 Connect result:', connectResult);
+                    if (connectResponse.ok && connectResult.url) {
+                      window.location.href = connectResult.url;
+                    } else {
+                      alert(`Bank connection failed: ${connectResult.error}`);
+                    }
+                  } else if (result.action === 'complete_onboarding') {
+                    alert('Please complete your bank account setup first. You will be redirected to finish the process.');
+                    // Could redirect to complete onboarding here
+                  } else {
+                    alert(`Cashout failed: ${result.error}`);
+                  }
+                }
+              } catch (error) {
+                console.error('Cashout error:', error);
+                alert('Cashout failed. Please try again.');
+              }
               onClose();
             }}
             style={{
@@ -213,19 +266,22 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut }) => 
 };
 
 // --- COMPONENT: Revenue Dropdown for Header ---
-const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme }) => {
-  const [displayRevenue, setDisplayRevenue] = useState(totalRevenue);
+const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme, business }) => {
+  const [displayAvailable, setDisplayAvailable] = useState(availableToCashOut);
   const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   useEffect(() => {
-    if (totalRevenue > displayRevenue) {
+    if (availableToCashOut > displayAvailable) {
       const timer = setTimeout(() => {
-        setDisplayRevenue(prev => Math.min(prev + 100, totalRevenue));
+        setDisplayAvailable(prev => Math.min(prev + 50, availableToCashOut));
       }, 25);
       return () => clearTimeout(timer);
+    } else if (availableToCashOut < displayAvailable) {
+      // Handle decrease (after cashout)
+      setDisplayAvailable(availableToCashOut);
     }
-  }, [totalRevenue, displayRevenue]);
+  }, [availableToCashOut, displayAvailable]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -263,7 +319,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
         onMouseLeave={e => e.target.style.transform = 'scale(1)'}
       >
         <DollarSign size={16} />
-        ${displayRevenue.toLocaleString()}
+        ${displayAvailable.toLocaleString()}
         <ChevronDown size={14} style={{ 
           transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s ease'
@@ -294,7 +350,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               textTransform: 'uppercase',
               letterSpacing: '0.5px'
             }}>
-              Total Revenue
+              Available to Cash Out
             </p>
             <h3 style={{ 
               fontSize: '32px', 
@@ -302,7 +358,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               color: theme.colors.textDark,
               marginBottom: '8px'
             }}>
-              ${displayRevenue.toLocaleString()}
+              ${displayAvailable.toLocaleString()}
             </h3>
             
             <div style={{ 
@@ -312,20 +368,49 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               gap: '6px',
               marginBottom: '16px'
             }}>
-              <Wallet size={16} style={{ color: '#10b981' }} />
-              <span style={{ color: '#10b981', fontSize: '14px', fontWeight: '600' }}>
-                ${availableToCashOut.toLocaleString()} available
+              <span style={{ color: theme.colors.textGray, fontSize: '14px', fontWeight: '500' }}>
+                From ${totalRevenue.toLocaleString()} total revenue
               </span>
             </div>
           </div>
           
           {/* Cash Out Button */}
-          <button
+            <button
             disabled={!canCashOut}
-            onClick={() => {
+            onClick={async () => {
               if (canCashOut) {
-                setShowCashOutModal(true);
-                setIsDropdownOpen(false);
+                // First check if bank account is properly connected
+                try {
+                  const statusResponse = await fetch(`/api/stripe/connect/status?businessId=${business?.id}`);
+                  const statusResult = await statusResponse.json();
+                  
+                  if (statusResponse.ok && statusResult.connected) {
+                    // Bank account is connected, show cashout modal
+                    setShowCashOutModal(true);
+                    setIsDropdownOpen(false);
+                  } else {
+                    // Need to connect or complete bank setup
+                    const connectResponse = await fetch('/api/stripe/connect', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        businessId: business?.id,
+                        email: business?.form_data?.email || business?.email
+                      })
+                    });
+                    
+                    const connectResult = await connectResponse.json();
+                    if (connectResponse.ok && connectResult.url) {
+                      setIsDropdownOpen(false);
+                      window.location.href = connectResult.url;
+                    } else {
+                      alert(`Bank connection failed: ${connectResult.error}`);
+                    }
+                  }
+                } catch (error) {
+                  console.error('Connect status check error:', error);
+                  alert('Unable to check bank account status. Please try again.');
+                }
               }
             }}
             style={{
@@ -360,6 +445,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
         onClose={() => setShowCashOutModal(false)}
         totalRevenue={totalRevenue}
         availableToCashOut={availableToCashOut}
+        business={business}
       />
     </div>
   );
@@ -1596,15 +1682,12 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             <RevenueDropdown 
               totalRevenue={totalRevenue}
               availableToCashOut={
-                // Use real available cash out data from business
-                business?.available_to_cash_out || 
-                business?.cashable_amount || 
-                businessData.availableToCashOut || 
-                // If we have real revenue, use a small percentage as available
-                (totalRevenue > 0 ? Math.max(totalRevenue * 0.1, 5) : 0) // 10% of revenue or $5 minimum
+                // Use the new available_balance field
+                parseFloat(business?.available_balance || 0)
               }
-              canCashOut={totalRevenue > 0} // Allow cashout when there's any revenue
+              canCashOut={parseFloat(business?.available_balance || 0) > 0} // Allow cashout when there's available balance
               theme={theme}
+              business={business}
             />
             
             <UserProfile theme={theme} session={session} business={business} />

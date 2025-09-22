@@ -227,11 +227,12 @@ export class StripeConnectManager {
       const launchflyFee = saleAmount * revenueShare.percentage;
       const businessRevenue = saleAmount - launchflyFee;
 
-      // Update business revenue
+      // Update business revenue and available balance
       await supabase
         .from('businesses')
         .update({
           total_revenue: (business.total_revenue || 0) + businessRevenue,
+          available_balance: (business.available_balance || 0) + businessRevenue,
           last_sale_date: new Date().toISOString(),
           first_payment_at: business.first_payment_at || new Date().toISOString()
         })

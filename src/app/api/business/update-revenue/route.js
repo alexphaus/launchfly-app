@@ -48,7 +48,7 @@ export async function POST(request) {
     // Get current business data
     const { data: business, error: businessError } = await supabase
       .from('businesses')
-      .select('total_revenue, first_sale_date')
+      .select('total_revenue, available_balance, first_sale_date')
       .eq('id', businessId)
       .single();
 
@@ -57,13 +57,16 @@ export async function POST(request) {
       return Response.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Calculate new total revenue
+    // Calculate new total revenue and available balance
     const currentRevenue = business?.total_revenue || 0;
+    const currentAvailable = business?.available_balance || 0;
     const newTotal = currentRevenue + amount;
+    const newAvailable = currentAvailable + amount;
 
-    // Update business revenue
+    // Update business revenue and available balance
     const updates = { 
-      total_revenue: newTotal, 
+      total_revenue: newTotal,
+      available_balance: newAvailable,
       last_sale_date: new Date().toISOString() 
     };
 
@@ -83,11 +86,14 @@ export async function POST(request) {
     }
 
     console.log(`✅ Revenue updated! Previous: $${currentRevenue}, New: $${newTotal}`);
+    console.log(`✅ Available balance updated! Previous: $${currentAvailable}, New: $${newAvailable}`);
 
     return Response.json({ 
       success: true, 
       previousRevenue: currentRevenue,
       newRevenue: newTotal,
+      previousAvailable: currentAvailable,
+      newAvailable: newAvailable,
       saleAmount: amount
     });
 

@@ -1,9 +1,7 @@
 // src/components/BusinessManagementCard.js
-import React, { useState } from 'react';
+import React from 'react';
 import { Edit, Palette, Settings, ChevronRight } from 'lucide-react';
-import ManageProductsPage from './ManageProductsPage';
-import CustomizeWebsitePage from './CustomizeWebsitePage';
-import BusinessSettingsPage from './BusinessSettingsPage';
+import { useRouter } from 'next/navigation';
 
 const theme = {
   colors: {
@@ -70,33 +68,11 @@ const ManagementAction = ({ icon, title, description, onClick }) => (
 );
 
 const BusinessManagementCard = ({ business }) => {
-  const [currentPage, setCurrentPage] = useState(null);
-
+  const router = useRouter();
   if (!business) return null;
 
-  // Handle navigation to different management pages
-  const handleNavigation = (page) => {
-    setCurrentPage(page);
-  };
+  const sessionId = business.session_id;
 
-  const handleBack = () => {
-    setCurrentPage(null);
-  };
-
-  // Render the appropriate page based on currentPage state
-  if (currentPage === 'products') {
-    return <ManageProductsPage business={business} onBack={handleBack} />;
-  }
-
-  if (currentPage === 'website') {
-    return <CustomizeWebsitePage business={business} onBack={handleBack} />;
-  }
-
-  if (currentPage === 'settings') {
-    return <BusinessSettingsPage business={business} onBack={handleBack} />;
-  }
-
-  // Default: Show the management card with options
   return (
     <div style={{
       background: 'white',
@@ -127,19 +103,19 @@ const BusinessManagementCard = ({ business }) => {
           icon={<Edit size={20} />}
           title="Manage Products"
           description="Edit prices, descriptions, and add new products."
-          onClick={() => handleNavigation('products')}
+          onClick={() => router.push(`/dashboard/${sessionId}/manage/products`)}
         />
         <ManagementAction 
           icon={<Palette size={20} />}
           title="Customize Website"
           description="Change colors, fonts, and marketing copy."
-          onClick={() => handleNavigation('website')}
+          onClick={() => router.push(`/dashboard/${sessionId}/manage/website`)}
         />
         <ManagementAction 
           icon={<Settings size={20} />}
           title="Business Settings"
           description="Update your business name and other details."
-          onClick={() => handleNavigation('settings')}
+          onClick={() => router.push(`/dashboard/${sessionId}/manage/settings`)}
         />
       </div>
     </div>

@@ -306,7 +306,7 @@ export default async function DynamicWebsite({ params }) {
   if (!businessData) {
     businessData = mockBusinessData[subdomain];
   }
-  
+   
   if (!businessData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

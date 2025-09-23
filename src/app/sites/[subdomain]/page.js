@@ -8,6 +8,7 @@ import { LazySection } from '@/components/LazyComponent';
 import PerformanceMonitor from '@/components/PerformanceMonitor';
 import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
 import { CartProvider } from '@/hooks/useCart';
+import VisitorTracker from '@/components/VisitorTracker';
 import { 
   getVisitorId, 
   getVisitorSegment, 
@@ -293,6 +294,23 @@ export default async function DynamicWebsite({ params }) {
           })
           .eq('id', businessId);
       }
+      
+      // Track visitor for analytics
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/analytics/visitor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessId: businessId,
+            subdomain: subdomain,
+            pageUrl: '/',
+            visitorId: visitorId
+          })
+        });
+      } catch (visitorError) {
+        // Don't fail the page load if visitor tracking fails
+        console.log('Visitor tracking failed:', visitorError.message);
+      }
     } else {
       console.log('📦 Using mock data for:', subdomain);
     }
@@ -466,6 +484,9 @@ export default async function DynamicWebsite({ params }) {
     <CartProvider>
       <ThemedLayout theme={theme}>
         <div className="dynamic-website">
+          {/* Visitor tracking for analytics */}
+          <VisitorTracker businessId={businessId} subdomain={subdomain} />
+          
           {/* Inject tracking script */}
           <TrackingScript config={trackingConfig} />
           

@@ -154,7 +154,7 @@ const UserProfile = ({ theme, session, business }) => {
       {/* Profile Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
+        className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
         style={{
           background: isOpen ? theme.colors.bgLight : 'transparent'
         }}
@@ -163,8 +163,8 @@ const UserProfile = ({ theme, session, business }) => {
         <div
           className="flex items-center justify-center rounded-full text-white font-semibold text-sm"
           style={{
-            width: '32px',
-            height: '32px',
+            width: '40px',
+            height: '40px',
             background: user.isAuthenticated 
               ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.primaryDark} 100%)`
               : theme.colors.textGray,
@@ -183,14 +183,7 @@ const UserProfile = ({ theme, session, business }) => {
         </div>
 
         {/* Dropdown Arrow */}
-        <ChevronDown 
-          size={14} 
-          style={{ 
-            color: theme.colors.textGray,
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s ease'
-          }} 
-        />
+        
       </button>
 
       {/* Dropdown Menu */}

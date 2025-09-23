@@ -34,7 +34,7 @@ const theme = {
 };
 
 // --- COMPONENT: Cash Out Modal ---
-const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, business }) => {
+const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, business, bankDetails }) => {
   if (!isOpen) return null;
 
   return (
@@ -106,10 +106,10 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
         }}>
           <p style={{ fontSize: '16px', opacity: 0.9, margin: '0 0 8px 0' }}>Available to Cash Out</p>
           <h3 style={{ fontSize: '48px', fontWeight: '900', margin: '0 0 12px 0' }}>
-            ${availableToCashOut.toLocaleString()}
+            ${availableToCashOut.toFixed(2)}
           </h3>
           <p style={{ fontSize: '14px', opacity: 0.8, margin: 0 }}>
-            From ${totalRevenue.toLocaleString()} total revenue
+            From ${totalRevenue.toFixed(2)} total revenue
           </p>
         </div>
 
@@ -129,10 +129,10 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
             <span style={{ fontSize: '24px' }}>🏦</span>
             <div>
               <p style={{ fontSize: '16px', fontWeight: '600', color: '#1a2b48', margin: 0 }}>
-                Bank Account
+                {bankDetails?.bank_name || 'Bank Account'}
               </p>
               <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                •••• •••• •••• 1234
+                {bankDetails?.last4 ? `•••• •••• •••• ${bankDetails.last4}` : 'Securely connected via Stripe'}
               </p>
             </div>
           </div>
@@ -266,9 +266,8 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
 };
 
 // --- COMPONENT: Revenue Dropdown for Header ---
-const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme, business }) => {
+const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme, business, onCashOutClick }) => {
   const [displayAvailable, setDisplayAvailable] = useState(availableToCashOut);
-  const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   useEffect(() => {
@@ -319,7 +318,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
         onMouseLeave={e => e.target.style.transform = 'scale(1)'}
       >
         <DollarSign size={16} />
-        ${displayAvailable.toLocaleString()}
+        ${displayAvailable.toFixed(2)}
         <ChevronDown size={14} style={{ 
           transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s ease'
@@ -357,8 +356,8 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               fontWeight: '900', 
               color: theme.colors.textDark,
               marginBottom: '8px'
-            }}>
-              ${displayAvailable.toLocaleString()}
+            }}            >
+              ${displayAvailable.toFixed(2)}
             </h3>
             
             <div style={{ 
@@ -369,7 +368,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               marginBottom: '16px'
             }}>
               <span style={{ color: theme.colors.textGray, fontSize: '14px', fontWeight: '500' }}>
-                From ${totalRevenue.toLocaleString()} total revenue
+                From ${totalRevenue.toFixed(2)} total revenue
               </span>
             </div>
           </div>
@@ -377,40 +376,10 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
           {/* Cash Out Button */}
             <button
             disabled={!canCashOut}
-            onClick={async () => {
+            onClick={() => {
               if (canCashOut) {
-                // First check if bank account is properly connected
-                try {
-                  const statusResponse = await fetch(`/api/stripe/connect/status?businessId=${business?.id}`);
-                  const statusResult = await statusResponse.json();
-                  
-                  if (statusResponse.ok && statusResult.connected) {
-                    // Bank account is connected, show cashout modal
-                    setShowCashOutModal(true);
-                    setIsDropdownOpen(false);
-                  } else {
-                    // Need to connect or complete bank setup
-                    const connectResponse = await fetch('/api/stripe/connect', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        businessId: business?.id,
-                        email: business?.form_data?.email || business?.email
-                      })
-                    });
-                    
-                    const connectResult = await connectResponse.json();
-                    if (connectResponse.ok && connectResult.url) {
-                      setIsDropdownOpen(false);
-                      window.location.href = connectResult.url;
-                    } else {
-                      alert(`Bank connection failed: ${connectResult.error}`);
-                    }
-                  }
-                } catch (error) {
-                  console.error('Connect status check error:', error);
-                  alert('Unable to check bank account status. Please try again.');
-                }
+                onCashOutClick();
+                setIsDropdownOpen(false);
               }
             }}
             style={{
@@ -438,15 +407,6 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
           </button>
         </div>
       )}
-      
-      {/* Cash Out Modal */}
-      <CashOutModal
-        isOpen={showCashOutModal}
-        onClose={() => setShowCashOutModal(false)}
-        totalRevenue={totalRevenue}
-        availableToCashOut={availableToCashOut}
-        business={business}
-      />
     </div>
   );
 };
@@ -1419,7 +1379,10 @@ const NextSteps = ({ onComplete, generationStage, setupStatus, onConnect, sessio
 // --- MAIN DASHBOARD COMPONENT ---
 const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete }) => {
   const [setupComplete, setSetupComplete] = useState(false);
+  const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [availableBalance, setAvailableBalance] = useState(0);
+  const [bankDetails, setBankDetails] = useState(null);
   const [generationStarted, setGenerationStarted] = useState(false);
   const startedRef = useRef(false);
 
@@ -1529,6 +1492,27 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     }
   };
   
+  // Fetch bank details when cashout modal is opened
+  const handleOpenCashOutModal = async () => {
+    if (!business?.stripe_connect_account_id) {
+      // Handle case where bank is not connected - maybe trigger onboarding
+      console.log('Bank not connected, cannot fetch details.');
+      setShowCashOutModal(true); // Still show modal, it will handle the connect flow
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/stripe/connect/status?businessId=${business.id}`);
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setBankDetails(result.account_details);
+      }
+    } catch (error) {
+      console.error('Failed to fetch bank details:', error);
+    }
+    setShowCashOutModal(true);
+  };
+
   // Debug: Log business object to see what data is available
   console.log('Business object:', business);
   
@@ -1688,6 +1672,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
               canCashOut={parseFloat(business?.available_balance || 0) > 0} // Allow cashout when there's available balance
               theme={theme}
               business={business}
+              onCashOutClick={handleOpenCashOutModal}
             />
             
             <UserProfile theme={theme} session={session} business={business} />
@@ -1774,6 +1759,16 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         onSubmit={handleChatSubmit}
         business={business}
         hasUnread={hasUnreadMessages}
+      />
+
+      {/* Cash Out Modal */}
+      <CashOutModal
+        isOpen={showCashOutModal}
+        onClose={() => setShowCashOutModal(false)}
+        totalRevenue={totalRevenue}
+        availableToCashOut={parseFloat(business?.available_balance || 0)}
+        business={business}
+        bankDetails={bankDetails}
       />
 
       {/* CSS Animations */}

@@ -40,6 +40,9 @@ export async function GET(request) {
     // Get Connect account details from Stripe
     const account = await stripe.accounts.retrieve(business.stripe_connect_account_id);
 
+    // Get external account details (bank account or debit card)
+    const externalAccount = account.external_accounts?.data[0];
+
     // Check if account is fully onboarded
     const isFullyOnboarded = account.details_submitted && 
                             account.charges_enabled && 
@@ -80,7 +83,11 @@ export async function GET(request) {
         details_submitted: account.details_submitted,
         country: account.country,
         default_currency: account.default_currency,
-        business_type: account.business_type
+        business_type: account.business_type,
+        // Add external account info if available
+        bank_name: externalAccount?.bank_name,
+        last4: externalAccount?.last4,
+        account_type: externalAccount?.object // 'bank_account' or 'card'
       },
       requirements: {
         currently_due: account.requirements?.currently_due || [],

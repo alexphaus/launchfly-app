@@ -6,6 +6,9 @@ import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
 import CustomersCard from './CustomersCard';
 import BusinessManagementCard from './BusinessManagementCard';
+import ManageProductsPage from './ManageProductsPage';
+import CustomizeWebsitePage from './CustomizeWebsitePage';
+import BusinessSettingsPage from './BusinessSettingsPage';
 
 // --- DESIGN SYSTEM ---
 const theme = {
@@ -1754,6 +1757,44 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   const [bankDetails, setBankDetails] = useState(null);
   const [generationStarted, setGenerationStarted] = useState(false);
   const startedRef = useRef(false);
+  
+  // Management page navigation state
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [businessData, setBusinessData] = useState(business);
+
+  // Update business data when business prop changes
+  useEffect(() => {
+    setBusinessData(business);
+  }, [business]);
+
+  // Navigation handlers for management pages
+  const handleNavigateToManagementPage = (page) => {
+    setCurrentPage(page);
+  };
+
+  const handleBackToDashboard = () => {
+    setCurrentPage('dashboard');
+  };
+
+  const handlePhoneUpdate = (phoneNumber) => {
+    // Update business data with new phone number
+    setBusinessData(prev => ({
+      ...prev,
+      phone_number: phoneNumber
+    }));
+    if (onPhoneCapture) {
+      onPhoneCapture(phoneNumber);
+    }
+  };
+
+  const handleBankUpdate = (bankData) => {
+    // Update business data with bank connection status
+    setBusinessData(prev => ({
+      ...prev,
+      bank_connected: true,
+      ...bankData
+    }));
+  };
 
   // State for FloatingChat
   const [chatOpen, setChatOpen] = useState(false);
@@ -1979,8 +2020,39 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     }
   };
 
-  const businessData = business?.business_data || {};
+  const businessDataForGeneration = business?.business_data || {};
   const generationStage = session?.stage || 'pending';
+
+  // Handle different page views
+  if (currentPage === 'products') {
+    return (
+      <ManageProductsPage 
+        session={session}
+        business={businessData}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
+
+  if (currentPage === 'customize') {
+    return (
+      <CustomizeWebsitePage 
+        session={session}
+        business={businessData}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
+
+  if (currentPage === 'settings') {
+    return (
+      <BusinessSettingsPage 
+        session={session}
+        business={businessData}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
 
   return (
     <div style={{ 
@@ -2074,7 +2146,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         <LiveWebsiteCard 
           subdomain={business?.subdomain}
           visitors={business?.views || 0}
-          businessData={businessData}
+          businessData={businessDataForGeneration}
           generationStage={generationStage}
           business={business}
         />
@@ -2083,7 +2155,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         <InsightsCard 
           isSetupComplete={setupComplete}
           generationStage={generationStage}
-          businessData={businessData}
+          businessData={businessDataForGeneration}
           business={business}
         />
 
@@ -2093,13 +2165,18 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         {/* Real-time AI Activity Feed - Show how AI is working */}
         <AIActivityFeed 
           generationStage={generationStage}
-          businessData={businessData}
+          businessData={businessDataForGeneration}
           business={business}
           sessionId={session?.id}
         />
 
         {/* Business Management - Tools and settings after performance data */}
-        {generationStage === 'complete' && <BusinessManagementCard business={business} />}
+        {generationStage === 'complete' && (
+          <BusinessManagementCard 
+            business={business} 
+            onNavigate={handleNavigateToManagementPage}
+          />
+        )}
 
         {/* Simple Next Steps - Only show after generation */}
         {!setupComplete && (

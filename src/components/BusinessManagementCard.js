@@ -66,8 +66,14 @@ const ManagementAction = ({ icon, title, description, onClick }) => (
   </button>
 );
 
-const BusinessManagementCard = ({ business }) => {
+const BusinessManagementCard = ({ business, onNavigate }) => {
   if (!business) return null;
+
+  const handleNavigate = (page) => {
+    if (onNavigate) {
+      onNavigate(page);
+    }
+  };
 
   return (
     <div style={{
@@ -99,19 +105,19 @@ const BusinessManagementCard = ({ business }) => {
           icon={<Edit size={20} />}
           title="Manage Products"
           description="Edit prices, descriptions, and add new products."
-          onClick={() => alert('Navigate to product management page.')}
+          onClick={() => handleNavigate('products')}
         />
         <ManagementAction 
           icon={<Palette size={20} />}
           title="Customize Website"
           description="Change colors, fonts, and marketing copy."
-          onClick={() => alert('Navigate to website customization page.')}
+          onClick={() => handleNavigate('customize')}
         />
         <ManagementAction 
           icon={<Settings size={20} />}
           title="Business Settings"
           description="Update your business name and other details."
-          onClick={() => alert('Navigate to business settings page.')}
+          onClick={() => handleNavigate('settings')}
         />
       </div>
     </div>

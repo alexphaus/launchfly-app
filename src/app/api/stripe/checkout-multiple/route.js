@@ -8,6 +8,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Helper function to check if Connect account is ready for transfers
+async function isConnectAccountReady(connectAccountId) {
+  if (!connectAccountId) return false;
+  
+  try {
+    const account = await stripe.accounts.retrieve(connectAccountId);
+    return account.charges_enabled && account.payouts_enabled && account.details_submitted;
+  } catch (error) {
+    console.error('Error checking Connect account:', error);
+    return false;
+  }
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -72,15 +85,15 @@ export async function POST(request) {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IT', 'ES', 'NL']
       },
       
-      // Connect account and application fee (if business has Stripe Connect)
-      ...(business.stripe_connect_account_id ? {
+      // Connect account and application fee (only if account is verified and ready)
+      ...(await isConnectAccountReady(business.stripe_connect_account_id) ? {
         payment_intent_data: {
+          application_fee_amount: applicationFeeAmount,
           transfer_data: {
             destination: business.stripe_connect_account_id,
           },
-          application_fee_amount: applicationFeeAmount,
         },
-        on_behalf_of: business.stripe_connect_account_id,
+        // Note: on_behalf_of is removed as it's not needed for Express accounts
       } : {}),
       
       metadata: {

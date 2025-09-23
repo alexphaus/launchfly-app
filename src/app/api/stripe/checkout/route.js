@@ -11,6 +11,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// Helper function to check if Connect account is ready for transfers
+async function isConnectAccountReady(connectAccountId) {
+  if (!connectAccountId) return false;
+  
+  try {
+    const account = await stripe.accounts.retrieve(connectAccountId);
+    return account.charges_enabled && account.payouts_enabled && account.details_submitted;
+  } catch (error) {
+    console.error('Error checking Connect account:', error);
+    return false;
+  }
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -46,6 +59,9 @@ export async function POST(request) {
     const feeMap = { starter: 20, pro: 10, scale: 5 };
     const plan = (business.plan_tier || 'starter').toLowerCase();
     const feePercent = feeMap[plan] ?? 20;
+    
+    console.log('Business plan:', plan, 'Fee percent:', feePercent);
+    console.log('Connect account ID:', business.stripe_connect_account_id);
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create({
@@ -67,14 +83,15 @@ export async function POST(request) {
       success_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/sites/${subdomain}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/sites/${subdomain}`,
       customer_email: customerEmail,
-      ...(business.stripe_connect_account_id ? {
+      // Only add Connect features if account is verified and ready
+      ...(await isConnectAccountReady(business.stripe_connect_account_id) ? {
         payment_intent_data: {
+          application_fee_amount: Math.round((productPrice * feePercent / 100) * 100),
           transfer_data: {
             destination: business.stripe_connect_account_id,
           },
-          application_fee_amount: Math.round((productPrice * feePercent / 100) * 100),
         },
-        on_behalf_of: business.stripe_connect_account_id,
+        // Note: on_behalf_of is removed as it's not needed for Express accounts
       } : {}),
       metadata: {
         business_id: businessId,
@@ -96,8 +113,18 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Stripe checkout error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      stack: error.stack
+    });
     return new Response(
-      JSON.stringify({ error: 'Failed to create checkout session' }), 
+      JSON.stringify({ 
+        error: 'Failed to create checkout session',
+        details: error.message,
+        type: error.type 
+      }), 
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

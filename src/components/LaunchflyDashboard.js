@@ -401,7 +401,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
         onMouseLeave={e => e.target.style.transform = 'scale(1)'}
       >
         <DollarSign size={16} />
-        ${displayAvailable.toFixed(2)}
+        {displayAvailable.toFixed(2)}
         <ChevronDown size={14} style={{ 
           transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s ease'
@@ -440,7 +440,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               color: theme.colors.textDark,
               marginBottom: '8px'
             }}            >
-              ${displayAvailable.toFixed(2)}
+              {displayAvailable.toFixed(2)}
             </h3>
             
             <div style={{ 

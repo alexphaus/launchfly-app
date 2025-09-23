@@ -29,16 +29,45 @@ const theme = {
 };
 
 const ManageProducts = ({ session, business, onBack }) => {
-  const [products, setProducts] = useState([...(business?.business_data?.products || [])]);
+  const [products, setProducts] = useState([]);
+  const [productSource, setProductSource] = useState(null);
   const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState({});
 
+  useEffect(() => {
+    const layout = business?.business_data?.layout;
+    let foundInLayout = false;
+    if (layout) {
+      const productSection = layout.find(
+        (section) =>
+          section.component === 'PricingTable' ||
+          section.component === 'ProductGrid' ||
+          section.component === 'EcommerceProductGrid'
+      );
+      if (productSection) {
+        const productsOrPlans = productSection.props.products || productSection.props.plans;
+        if (productsOrPlans) {
+          setProducts(JSON.parse(JSON.stringify(productsOrPlans))); // Deep copy to avoid mutation
+          setProductSource('layout');
+          foundInLayout = true;
+        }
+      }
+    }
+    if (!foundInLayout) {
+      setProducts(JSON.parse(JSON.stringify(business?.business_data?.products || [])));
+      setProductSource('products');
+    }
+  }, [business]);
+
+
   const validateProduct = (product) => {
-    if (!product.name.trim()) return 'Name is required';
-    if (!product.price.trim() || isNaN(parseFloat(product.price))) return 'Valid price is required';
-    if (!product.description.trim()) return 'Description is required';
+    if (!product.name?.trim()) return 'Name is required';
+    const priceString = (product.price || '').toString();
+    const numericPrice = parseFloat(priceString.replace(/[^0-9.]/g, ''));
+    if (!priceString.trim() || isNaN(numericPrice)) return 'Valid price is required';
+    if (!product.description?.trim()) return 'Description is required';
     return null;
   };
 
@@ -79,12 +108,39 @@ const ManageProducts = ({ session, business, onBack }) => {
     setErrors({});
 
     try {
+      let businessDataUpdates = {};
+
+      if (productSource === 'layout') {
+        const layout = JSON.parse(JSON.stringify(business.business_data.layout)); // Deep copy
+        const productSectionIndex = layout.findIndex(
+          (section) =>
+            section.component === 'PricingTable' ||
+            section.component === 'ProductGrid' ||
+            section.component === 'EcommerceProductGrid'
+        );
+
+        if (productSectionIndex > -1) {
+          const section = layout[productSectionIndex];
+          if (section.props.plans) {
+            section.props.plans = products;
+          } else {
+            section.props.products = products;
+          }
+          businessDataUpdates = { layout: layout };
+        } else {
+          // Fallback if section somehow disappears, though this shouldn't happen
+          businessDataUpdates = { products: products };
+        }
+      } else { // 'products' or null
+        businessDataUpdates = { products: products };
+      }
+
       const response = await fetch('/api/business/update-progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId: business.id,
-          partialData: { products }
+          partialData: businessDataUpdates
         })
       });
 

@@ -34,19 +34,66 @@ const BusinessSettings = ({ session, business, onBack }) => {
     businessName: business?.business_data?.businessName || business?.name || '',
     tagline: business?.business_data?.tagline || '',
     ownerName: business?.owner_name || '',
-    email: business?.email || business?.form_data?.email || ''
+    email: business?.email || business?.form_data?.email || '',
+    subdomain: business?.subdomain || ''
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState({});
+  const [subdomainStatus, setSubdomainStatus] = useState({ checking: false, available: true, message: '' });
 
   const handleChange = (field, value) => {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
 
+  const validateSubdomain = async (sub) => {
+    if (!sub) {
+        setSubdomainStatus({ checking: false, available: false, message: '' });
+        return 'Subdomain is required';
+    }
+    if (!/^[a-z0-9-]{3,63}$/.test(sub)) {
+        setSubdomainStatus({ checking: false, available: false, message: 'Invalid format.' });
+        return 'Subdomain must be 3-63 lowercase letters, numbers, or hyphens';
+    }
+    if (sub.startsWith('-') || sub.endsWith('-')) {
+        setSubdomainStatus({ checking: false, available: false, message: 'Cannot start/end with hyphen.' });
+        return 'Subdomain cannot start or end with hyphen';
+    }
+    
+    if (sub === business.subdomain) {
+        setSubdomainStatus({ checking: false, available: true, message: 'This is your current subdomain.' });
+        return null;
+    }
+
+    setSubdomainStatus({ checking: true, available: false, message: 'Checking availability...' });
+    
+    try {
+      const response = await fetch(`/api/business/check-subdomain?subdomain=${encodeURIComponent(sub)}&businessId=${business.id}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to check subdomain');
+      
+      setSubdomainStatus({ 
+        checking: false, 
+        available: data.available, 
+        message: data.available ? 'Available!' : 'Subdomain already taken'
+      });
+      
+      return data.available ? null : 'Subdomain already taken';
+    } catch (error) {
+      setSubdomainStatus({ checking: false, available: false, message: 'Error checking availability' });
+      return 'Error checking subdomain';
+    }
+  };
+
   const handleSave = async () => {
     if (!settings.businessName.trim()) {
       setErrors({ businessName: 'Business name is required' });
+      return;
+    }
+
+    const subdomainError = await validateSubdomain(settings.subdomain);
+    if (subdomainError) {
+      setErrors({ subdomain: subdomainError });
       return;
     }
 
@@ -76,9 +123,10 @@ const BusinessSettings = ({ session, business, onBack }) => {
       const businessUpdates = {};
       if (settings.ownerName !== business.owner_name) businessUpdates.owner_name = settings.ownerName;
       if (settings.email !== business.email) businessUpdates.email = settings.email;
+      if (settings.subdomain !== business.subdomain) businessUpdates.subdomain = settings.subdomain.toLowerCase();
 
       if (Object.keys(businessUpdates).length > 0) {
-        await fetch('/api/business/update', { // Assume a general update endpoint, or adjust
+        const updateResponse = await fetch('/api/business/update', { // Assume a general update endpoint, or adjust
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -86,6 +134,10 @@ const BusinessSettings = ({ session, business, onBack }) => {
             updates: businessUpdates
           })
         });
+        if (!updateResponse.ok) {
+            const result = await updateResponse.json();
+            throw new Error(result.error || 'Failed to update business details.');
+        }
       }
 
       setSaveSuccess(true);
@@ -143,7 +195,7 @@ const BusinessSettings = ({ session, business, onBack }) => {
       </header>
 
       <main style={{ maxWidth: '720px', margin: '0 auto', padding: '0 24px' }}>
-        <div style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: theme.shadows.lg }}>
+        <div style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: theme.shadows.lg, marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <Building size={24} color={theme.colors.primary} />
             <h2 style={{ fontSize: '20px', fontWeight: '700', color: theme.colors.textDark }}>Business Details</h2>
@@ -179,6 +231,37 @@ const BusinessSettings = ({ session, business, onBack }) => {
                   fontSize: '16px'
                 }}
               />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', color: theme.colors.textGray, marginBottom: '4px' }}>Subdomain</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  value={settings.subdomain}
+                  onChange={(e) => {
+                    const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                    handleChange('subdomain', value);
+                  }}
+                  onBlur={(e) => validateSubdomain(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    paddingRight: '110px',
+                    border: `2px solid ${errors.subdomain ? theme.colors.error : (subdomainStatus.available && settings.subdomain ? theme.colors.success : theme.colors.borderLight)}`,
+                    borderRadius: '8px',
+                    fontSize: '16px'
+                  }}
+                />
+                <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: theme.colors.textGray }}>
+                  .launchfly.ai
+                </span>
+              </div>
+              {subdomainStatus.checking ? (
+                 <p style={{ fontSize: '14px', color: theme.colors.textGray, marginTop: '4px' }}>{subdomainStatus.message}</p>
+              ) : subdomainStatus.message && (
+                 <p style={{ fontSize: '14px', color: subdomainStatus.available ? theme.colors.success : theme.colors.error, marginTop: '4px' }}>{subdomainStatus.message}</p>
+              )}
+              {errors.subdomain && <p style={{ color: theme.colors.error, fontSize: '14px', marginTop: '4px' }}>{errors.subdomain}</p>}
             </div>
             
             <div>

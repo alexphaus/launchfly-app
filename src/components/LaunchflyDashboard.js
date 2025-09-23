@@ -440,7 +440,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               color: theme.colors.textDark,
               marginBottom: '8px'
             }}            >
-              {displayAvailable.toFixed(2)}
+              ${displayAvailable.toFixed(2)}
             </h3>
             
             <div style={{ 

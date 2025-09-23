@@ -40,18 +40,41 @@ export async function GET(request) {
     // Get Connect account details from Stripe
     const account = await stripe.accounts.retrieve(business.stripe_connect_account_id);
 
-    // Get external account details (bank account or debit card)
-    const externalAccount = account.external_accounts?.data[0];
+    // List external accounts to check available_payout_methods for 'instant'
+    let hasInstantMethod = false;
+    let externalAccount = null;
+    try {
+      const [cards, banks] = await Promise.all([
+        stripe.accounts.listExternalAccounts(business.stripe_connect_account_id, { object: 'card', limit: 100 }),
+        stripe.accounts.listExternalAccounts(business.stripe_connect_account_id, { object: 'bank_account', limit: 100 })
+      ]);
+      const all = [...(cards?.data || []), ...(banks?.data || [])];
+      hasInstantMethod = all.some((a) => Array.isArray(a.available_payout_methods) && a.available_payout_methods.includes('instant'));
+      externalAccount = all[0] || null;
+    } catch (e) {
+      // ignore; default to false
+      hasInstantMethod = false;
+    }
+
+    // Retrieve balance to determine instant availability
+    let instantAvailable = 0;
+    try {
+      const balance = await stripe.balance.retrieve({ stripeAccount: business.stripe_connect_account_id });
+      const instant = balance.instant_available || [];
+      instantAvailable = instant
+        .filter((b) => b.currency === 'usd')
+        .reduce((sum, b) => sum + (b.amount || 0), 0);
+    } catch (e) {
+      instantAvailable = 0;
+    }
 
     // Check if account is fully onboarded
-    const isFullyOnboarded = account.details_submitted && 
-                            account.charges_enabled && 
-                            account.payouts_enabled;
+    const isFullyOnboarded = account.details_submitted && account.charges_enabled && account.payouts_enabled;
 
     // Check for any requirements
     const hasRequirements = account.requirements?.currently_due?.length > 0 ||
-                           account.requirements?.eventually_due?.length > 0 ||
-                           account.requirements?.past_due?.length > 0;
+      account.requirements?.eventually_due?.length > 0 ||
+      account.requirements?.past_due?.length > 0;
 
     // Determine status
     let status = 'not_connected';
@@ -71,11 +94,13 @@ export async function GET(request) {
       message = 'Onboarding not completed';
     }
 
+    const instantEligible = isFullyOnboarded && hasInstantMethod;
+
     return Response.json({
       success: true,
       connected: isFullyOnboarded,
-      status: status,
-      message: message,
+      status,
+      message,
       account_details: {
         id: account.id,
         charges_enabled: account.charges_enabled,
@@ -84,10 +109,13 @@ export async function GET(request) {
         country: account.country,
         default_currency: account.default_currency,
         business_type: account.business_type,
-        // Add external account info if available
         bank_name: externalAccount?.bank_name,
         last4: externalAccount?.last4,
-        account_type: externalAccount?.object // 'bank_account' or 'card'
+        account_type: externalAccount?.object
+      },
+      payout_options: {
+        instantEligible,
+        instantAvailableUsd: Math.floor(instantAvailable) / 100
       },
       requirements: {
         currently_due: account.requirements?.currently_due || [],
@@ -99,10 +127,7 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('Connect status check error:', error);
-    return Response.json({ 
-      error: 'Failed to check Connect status', 
-      details: error.message 
-    }, { status: 500 });
+    return Response.json({ error: 'Failed to check Connect status', details: error.message }, { status: 500 });
   }
 }
 
@@ -115,22 +140,17 @@ export async function POST(request) {
       return Response.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
-    // Update business record if needed
     await supabase
       .from('businesses')
-      .update({ 
-        stripe_connect_account_id: connectAccountId,
-        updated_at: new Date().toISOString()
-      })
+      .update({ stripe_connect_account_id: connectAccountId, updated_at: new Date().toISOString() })
       .eq('id', businessId);
 
-    // Log status change activity
     const statusMessages = {
-      'connected': 'Bank account successfully connected! You can now receive payouts.',
-      'pending_verification': 'Bank details submitted and under review.',
-      'requires_action': 'Additional information needed to complete setup.',
-      'incomplete': 'Bank account setup needs to be completed.',
-      'restricted': 'Account temporarily restricted - please contact support.'
+      connected: 'Bank account successfully connected! You can now receive payouts.',
+      pending_verification: 'Bank details submitted and under review.',
+      requires_action: 'Additional information needed to complete setup.',
+      incomplete: 'Bank account setup needs to be completed.',
+      restricted: 'Account temporarily restricted - please contact support.'
     };
 
     await supabase
@@ -141,23 +161,13 @@ export async function POST(request) {
         icon: status === 'connected' ? '✅' : status === 'requires_action' ? '⚠️' : '🏦',
         message: statusMessages[status] || 'Bank account status updated',
         details: requirements ? `Requirements: ${requirements.join(', ')}` : null,
-        metadata: {
-          connect_account_id: connectAccountId,
-          status: status,
-          requirements: requirements
-        }
+        metadata: { connect_account_id: connectAccountId, status, requirements }
       });
 
-    return Response.json({
-      success: true,
-      message: 'Connect status updated successfully'
-    });
+    return Response.json({ success: true, message: 'Connect status updated successfully' });
 
   } catch (error) {
     console.error('Connect status update error:', error);
-    return Response.json({ 
-      error: 'Failed to update Connect status', 
-      details: error.message 
-    }, { status: 500 });
+    return Response.json({ error: 'Failed to update Connect status', details: error.message }, { status: 500 });
   }
 }

@@ -11,13 +11,32 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(request) {
   try {
-    const { businessId, amount, payoutSpeed = 'standard', instantFee = 0 } = await request.json();
+    const { businessId, amount, speed } = await request.json(); // speed: 'instant' | 'standard'
 
     if (!businessId || !amount || amount <= 0) {
       return Response.json({ error: 'Invalid request parameters' }, { status: 400 });
     }
 
-    console.log('Processing cashout request:', { businessId, amount, payoutSpeed, instantFee });
+    const payoutSpeed = speed === 'instant' ? 'instant' : 'standard';
+
+    console.log('Processing cashout request:', { businessId, amount, payoutSpeed });
+
+    // Rate limiting: Check recent cashout attempts
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: recentCashouts, error: rateLimitError } = await supabase
+      .from('cashout_transactions')
+      .select('id, created_at')
+      .eq('business_id', businessId)
+      .gte('created_at', oneHourAgo);
+
+    if (rateLimitError) {
+      console.error('Rate limit check error:', rateLimitError);
+    } else if (recentCashouts && recentCashouts.length >= 5) {
+      return Response.json({ 
+        error: 'Too many cashout requests. Please wait before trying again.',
+        code: 'rate_limited'
+      }, { status: 429 });
+    }
 
     // Get business data
     const { data: business, error: businessError } = await supabase
@@ -31,20 +50,13 @@ export async function POST(request) {
       return Response.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Check available balance (for instant, we need to check against the full amount including fee)
+    // Check available balance
     const availableBalance = parseFloat(business.available_balance || 0);
-    const totalRequired = payoutSpeed === 'instant' ? amount + instantFee : amount;
-    
-    if (availableBalance < totalRequired) {
+    if (availableBalance < amount) {
       return Response.json({ 
         error: 'Insufficient funds', 
         available: availableBalance,
-        requested: totalRequired,
-        breakdown: payoutSpeed === 'instant' ? {
-          payout: amount,
-          fee: instantFee,
-          total: totalRequired
-        } : null
+        requested: amount 
       }, { status: 400 });
     }
 
@@ -56,43 +68,82 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // Verify Connect account status with Stripe
-    try {
-      const connectAccount = await stripe.accounts.retrieve(business.stripe_connect_account_id);
+    // If instant, verify eligibility and compute fee (~1.5%)
+    let fee = 0;
+    let instantUsd = 0;
+    let hasInstantMethod = false;
+    if (payoutSpeed === 'instant') {
+      // Production limits for instant payouts
+      const DAILY_INSTANT_LIMIT = 50000; // $50k daily
+      const MONTHLY_INSTANT_LIMIT = 1000000; // $1M monthly
+      const INSTANT_FEE_RATE = 0.015; // 1.5%
+      const INSTANT_FEE_MIN = 0.50; // $0.50 minimum
+
+      // Check daily instant payout limit
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: dailyCashouts } = await supabase
+        .from('cashout_transactions')
+        .select('amount')
+        .eq('business_id', businessId)
+        .eq('status', 'completed')
+        .like('payment_method_details', '%"speed":"instant"%')
+        .gte('created_at', oneDayAgo);
+
+      const dailyTotal = (dailyCashouts || []).reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+      if (dailyTotal + amount > DAILY_INSTANT_LIMIT) {
+        return Response.json({ 
+          error: `Daily instant payout limit exceeded. Limit: $${DAILY_INSTANT_LIMIT.toLocaleString()}, used today: $${dailyTotal.toFixed(2)}`,
+          code: 'daily_limit_exceeded'
+        }, { status: 400 });
+      }
+
+      // 1. available_payout_methods check on external accounts
+      try {
+        const [cards, banks] = await Promise.all([
+          stripe.accounts.listExternalAccounts(business.stripe_connect_account_id, { object: 'card', limit: 100 }),
+          stripe.accounts.listExternalAccounts(business.stripe_connect_account_id, { object: 'bank_account', limit: 100 })
+        ]);
+        const all = [...(cards?.data || []), ...(banks?.data || [])];
+        hasInstantMethod = all.some((a) => Array.isArray(a.available_payout_methods) && a.available_payout_methods.includes('instant'));
+      } catch (e) {
+        hasInstantMethod = false;
+      }
+      if (!hasInstantMethod) {
+        return Response.json({ 
+          error: 'To enable instant payouts, please add a debit card in your account settings. Bank-only accounts typically receive standard payouts (1-2 business days).',
+          code: 'instant_not_supported',
+          action: 'add_debit_card'
+        }, { status: 400 });
+      }
+
+      // 2. Instant balance sufficiency
+      try {
+        const balance = await stripe.balance.retrieve({ stripeAccount: business.stripe_connect_account_id });
+        instantUsd = (balance.instant_available || [])
+          .filter((b) => b.currency === 'usd')
+          .reduce((s, b) => s + (b.amount || 0), 0) / 100;
+      } catch (e) {
+        instantUsd = 0;
+      }
       
-      // Check if account is fully onboarded and can receive payouts
-      if (!connectAccount.payouts_enabled) {
+      const effectiveInstantLimit = Math.min(instantUsd, DAILY_INSTANT_LIMIT - dailyTotal);
+      if (amount > effectiveInstantLimit) {
         return Response.json({ 
-          error: 'Bank account setup incomplete. Please complete your bank account verification.',
-          action: 'complete_onboarding',
-          connect_account_id: business.stripe_connect_account_id
+          error: `Amount exceeds instant payout availability. Available for instant: $${effectiveInstantLimit.toFixed(2)}`,
+          instantAvailable: effectiveInstantLimit,
+          code: 'instant_limit_exceeded'
         }, { status: 400 });
       }
 
-      // Check if account has any restrictions
-      if (connectAccount.requirements?.disabled_reason) {
+      // 3. Fee calculation with production constants
+      fee = Math.max(INSTANT_FEE_MIN, Math.round(amount * INSTANT_FEE_RATE * 100) / 100);
+      if (availableBalance < amount + fee) {
         return Response.json({ 
-          error: `Account restricted: ${connectAccount.requirements.disabled_reason}. Please contact support.`,
-          action: 'contact_support'
+          error: `Insufficient funds to cover instant payout fee. Available: $${availableBalance.toFixed(2)}, needed: $${(amount + fee).toFixed(2)} (includes $${fee.toFixed(2)} instant fee)`,
+          fee,
+          code: 'insufficient_funds_with_fee'
         }, { status: 400 });
       }
-
-      // Check for pending requirements
-      const currentlyDue = connectAccount.requirements?.currently_due || [];
-      if (currentlyDue.length > 0) {
-        return Response.json({ 
-          error: 'Additional information required to complete bank setup.',
-          action: 'complete_requirements',
-          requirements: currentlyDue
-        }, { status: 400 });
-      }
-
-    } catch (stripeError) {
-      console.error('Error verifying Connect account:', stripeError);
-      return Response.json({ 
-        error: 'Unable to verify bank account status. Please try again.',
-        action: 'retry'
-      }, { status: 500 });
     }
 
     // Create cashout transaction record
@@ -105,9 +156,8 @@ export async function POST(request) {
         processor: 'stripe',
         payment_method_details: {
           stripe_connect_account_id: business.stripe_connect_account_id,
-          payout_speed: payoutSpeed,
-          instant_fee: instantFee,
-          net_amount: amount
+          speed: payoutSpeed,
+          fee
         }
       })
       .select()
@@ -119,153 +169,160 @@ export async function POST(request) {
     }
 
     try {
-      let transfer, payout;
-      
+      // Create Stripe transfer to connected account (move funds from platform to connected)
+      const transfer = await stripe.transfers.create({
+        amount: Math.round(amount * 100), // cents
+        currency: 'usd',
+        destination: business.stripe_connect_account_id,
+        description: `Launchfly Cashout Transfer - ${business.name}`,
+        metadata: {
+          business_id: businessId,
+          cashout_transaction_id: cashoutTransaction.id
+        }
+      });
+
+      // If instant, trigger an instant payout from the connected account to external account
+      let payout = null;
       if (payoutSpeed === 'instant') {
-        // For instant payouts, we first transfer to the Connect account, then create an instant payout
-        transfer = await stripe.transfers.create({
-          amount: Math.round(amount * 100), // Convert to cents (net amount)
-          currency: 'usd',
-          destination: business.stripe_connect_account_id,
-          description: `Launchfly Instant Cashout - ${business.name}`,
-          metadata: {
-            business_id: businessId,
-            cashout_transaction_id: cashoutTransaction.id,
-            business_name: business.name,
-            payout_speed: 'instant'
-          }
-        });
-
-        // Then create instant payout from the Connect account
         payout = await stripe.payouts.create({
-          amount: Math.round(amount * 100), // Net amount to user
+          amount: Math.round(amount * 100),
           currency: 'usd',
-          method: 'instant',
-          description: `Instant payout - ${business.name}`,
-          metadata: {
-            business_id: businessId,
-            cashout_transaction_id: cashoutTransaction.id,
-            transfer_id: transfer.id
-          }
-        }, {
-          stripeAccount: business.stripe_connect_account_id
-        });
-        
-        console.log('✅ Instant payout created:', payout.id);
-      } else {
-        // Standard transfer - Stripe handles the payout timing automatically
-        transfer = await stripe.transfers.create({
-          amount: Math.round(amount * 100), // Convert to cents
-          currency: 'usd',
-          destination: business.stripe_connect_account_id,
-          description: `Launchfly Standard Cashout - ${business.name}`,
-          metadata: {
-            business_id: businessId,
-            cashout_transaction_id: cashoutTransaction.id,
-            business_name: business.name,
-            payout_speed: 'standard'
-          }
-        });
+          method: 'instant'
+        }, { stripeAccount: business.stripe_connect_account_id });
       }
 
-      // Update cashout transaction with Stripe IDs
-      const updateData = {
-        processor_transaction_id: transfer.id,
-        status: payoutSpeed === 'instant' ? 'completed' : 'processing',
-        processed_at: new Date().toISOString()
-      };
-      
-      if (payout) {
-        updateData.payment_method_details = {
-          ...cashoutTransaction.payment_method_details,
-          payout_id: payout.id,
-          payout_method: 'instant'
-        };
-        updateData.completed_at = new Date().toISOString();
-      }
-
-      await supabase
-        .from('cashout_transactions')
-        .update(updateData)
-        .eq('id', cashoutTransaction.id);
-
-      // Deduct total amount (including fee for instant) from available_balance
-      const newAvailableBalance = availableBalance - totalRequired;
+      // Deduct amount and any fee from available_balance
+      const newAvailableBalance = availableBalance - amount - fee;
       await supabase
         .from('businesses')
-        .update({
-          available_balance: newAvailableBalance
-        })
+        .update({ available_balance: newAvailableBalance })
         .eq('id', businessId);
 
-      // Log activity
-      const activityMessage = payoutSpeed === 'instant' 
-        ? `Instant cashout completed: $${amount.toFixed(2)}`
-        : `Cashout initiated: $${amount.toFixed(2)}`;
-      
-      const activityDetails = payoutSpeed === 'instant'
-        ? `Funds transferred instantly to your bank account (Fee: $${instantFee.toFixed(2)})`
-        : `Funds will be transferred to your bank account within 1-2 business days`;
+      // Update cashout transaction
+      await supabase
+        .from('cashout_transactions')
+        .update({
+          processor_transaction_id: transfer.id,
+          status: 'processing',
+          processed_at: new Date().toISOString(),
+          payment_method_details: {
+            stripe_connect_account_id: business.stripe_connect_account_id,
+            speed: payoutSpeed,
+            fee,
+            transfer_id: transfer.id,
+            payout_id: payout?.id || null
+          }
+        })
+        .eq('id', cashoutTransaction.id);
 
+      // Log activity
       await supabase
         .from('ai_activities')
         .insert({
           business_id: businessId,
-          type: payoutSpeed === 'instant' ? 'instant_cashout_completed' : 'cashout_requested',
-          icon: payoutSpeed === 'instant' ? '⚡' : '💰',
-          message: activityMessage,
-          details: activityDetails,
+          type: 'cashout_requested',
+          icon: '💰',
+          message: `Cashout initiated: $${amount.toFixed(2)} (${payoutSpeed === 'instant' ? 'Instant' : 'Standard'})`,
+          details: payoutSpeed === 'instant' ? `Instant payout fee $${fee.toFixed(2)} deducted` : 'Funds will be transferred within 1-2 business days',
           metadata: {
             amount: amount,
-            instant_fee: instantFee,
-            net_amount: amount,
-            payout_speed: payoutSpeed,
             transfer_id: transfer.id,
-            payout_id: payout?.id,
+            payout_id: payout?.id || null,
+            speed: payoutSpeed,
+            fee,
             remaining_balance: newAvailableBalance
           }
         });
 
-      console.log('✅ Cashout request processed successfully:', transfer.id);
-
-      const successMessage = payoutSpeed === 'instant'
-        ? `Instant cashout completed! $${amount.toFixed(2)} has been transferred to your bank account.`
-        : `Cashout initiated successfully. $${amount.toFixed(2)} will be transferred within 1-2 business days.`;
+      console.log('✅ Cashout request processed successfully:', transfer.id, payout?.id);
 
       return Response.json({
         success: true,
         cashoutId: cashoutTransaction.id,
         transferId: transfer.id,
-        payoutId: payout?.id,
+        payoutId: payout?.id || null,
         amount: amount,
-        instantFee: instantFee,
-        netAmount: amount,
-        payoutSpeed: payoutSpeed,
+        fee,
         newAvailableBalance: newAvailableBalance,
-        message: successMessage
+        message: payoutSpeed === 'instant'
+          ? 'Instant cashout initiated. You will see funds momentarily.'
+          : 'Cashout initiated. Funds will be transferred within 1-2 business days.'
       });
 
     } catch (stripeError) {
-      console.error('Stripe transfer failed:', stripeError);
+      console.error('Stripe transfer/payout failed:', stripeError);
       
-      // Update transaction status to failed
+      // Enhanced error logging
       await supabase
         .from('cashout_transactions')
-        .update({
-          status: 'failed',
+        .update({ 
+          status: 'failed', 
           failure_reason: stripeError.message,
-          processed_at: new Date().toISOString()
+          processed_at: new Date().toISOString(),
+          payment_method_details: {
+            ...cashoutTransaction.payment_method_details,
+            error_code: stripeError.code,
+            error_type: stripeError.type
+          }
         })
         .eq('id', cashoutTransaction.id);
 
+      // Log failed cashout activity
+      await supabase
+        .from('ai_activities')
+        .insert({
+          business_id: businessId,
+          type: 'cashout_failed',
+          icon: '❌',
+          message: `Cashout failed: $${amount.toFixed(2)}`,
+          details: `Error: ${stripeError.message}`,
+          metadata: {
+            amount,
+            speed: payoutSpeed,
+            error_code: stripeError.code,
+            error_type: stripeError.type
+          }
+        });
+
+      // User-friendly error messages
+      const userFriendlyErrors = {
+        'account_invalid': 'Your bank account setup is incomplete. Please update your account information.',
+        'insufficient_funds': 'Insufficient funds in your Stripe account. Please try a smaller amount.',
+        'payout_method_unavailable': 'This payout method is temporarily unavailable. Please try again later.',
+        'instant_payouts_unsupported': 'Instant payouts are not available for your account type. Please use standard payouts.',
+        'balance_insufficient': 'Insufficient balance for instant payout. Please try a smaller amount or use standard payout.'
+      };
+
+      const userMessage = userFriendlyErrors[stripeError.code] || 'Payment processing failed. Please try again or contact support.';
+
       return Response.json({ 
-        error: 'Payment processing failed', 
-        details: stripeError.message 
+        error: userMessage,
+        code: stripeError.code,
+        technical_details: stripeError.message 
       }, { status: 500 });
     }
 
   } catch (error) {
     console.error('Cashout request error:', error);
-    return Response.json({ error: 'Internal server error' }, { status: 500 });
+    
+    // Log system errors
+    await supabase
+      .from('ai_activities')
+      .insert({
+        business_id: businessId,
+        type: 'cashout_system_error',
+        icon: '🚨',
+        message: 'Cashout system error occurred',
+        details: error.message,
+        metadata: {
+          error_stack: error.stack,
+          timestamp: new Date().toISOString()
+        }
+      }).catch(() => {}); // Don't fail if logging fails
+
+    return Response.json({ 
+      error: 'Internal server error. Our team has been notified.',
+      code: 'system_error'
+    }, { status: 500 });
   }
 }

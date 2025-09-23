@@ -35,45 +35,24 @@ const theme = {
 
 // --- COMPONENT: Cash Out Modal ---
 const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, business, bankDetails }) => {
-  const [payoutSpeed, setPayoutSpeed] = useState('standard');
-  const [instantEligible, setInstantEligible] = useState(false);
-  const [instantFee, setInstantFee] = useState(0);
-  
-  // Calculate instant payout fee (1.5% with $0.50 minimum)
-  const calculateInstantFee = (amount) => {
-    return Math.max(amount * 0.015, 0.50);
-  };
+  const [speed, setSpeed] = useState('standard'); // 'standard' | 'instant'
+  const [feePreview, setFeePreview] = useState(0);
+  const [netAmount, setNetAmount] = useState(availableToCashOut);
 
-  // Update fee when amount or speed changes
   useEffect(() => {
-    if (payoutSpeed === 'instant') {
-      setInstantFee(calculateInstantFee(availableToCashOut));
+    if (speed === 'instant' && bankDetails?.instantEligible) {
+      const fee = Math.max(0.5, Math.round(availableToCashOut * 0.015 * 100) / 100);
+      setFeePreview(fee);
+      setNetAmount(Math.max(0, availableToCashOut - fee));
     } else {
-      setInstantFee(0);
-    }
-  }, [payoutSpeed, availableToCashOut]);
-
-  // Check instant payout eligibility when modal opens
-  useEffect(() => {
-    if (isOpen && business?.stripe_connect_account_id) {
-      checkInstantEligibility();
-    }
-  }, [isOpen, business?.stripe_connect_account_id]);
-
-  const checkInstantEligibility = async () => {
-    try {
-      const response = await fetch(`/api/stripe/connect/instant-eligibility?businessId=${business.id}`);
-      const result = await response.json();
-      if (response.ok) {
-        setInstantEligible(result.eligible);
+      setFeePreview(0);
+      setNetAmount(availableToCashOut);
+      // Auto-fallback to standard if instant not eligible
+      if (speed === 'instant' && !bankDetails?.instantEligible) {
+        setSpeed('standard');
       }
-    } catch (error) {
-      console.error('Error checking instant eligibility:', error);
-      setInstantEligible(false);
     }
-  };
-
-  const netAmount = payoutSpeed === 'instant' ? availableToCashOut - instantFee : availableToCashOut;
+  }, [speed, availableToCashOut, bankDetails?.instantEligible]);
 
   if (!isOpen) return null;
 
@@ -153,108 +132,6 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
           </p>
         </div>
 
-        {/* Payout Speed Selection */}
-        <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ fontSize: '18px', fontWeight: '700', color: '#1a2b48', marginBottom: '16px' }}>
-            Payout Speed
-          </h4>
-          
-          {/* Standard Payout Option */}
-          <div 
-            onClick={() => setPayoutSpeed('standard')}
-            style={{
-              border: `2px solid ${payoutSpeed === 'standard' ? '#10b981' : '#e5e7eb'}`,
-              borderRadius: '12px',
-              padding: '16px',
-              marginBottom: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              background: payoutSpeed === 'standard' ? '#f0f9ff' : 'white'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  border: `2px solid ${payoutSpeed === 'standard' ? '#10b981' : '#d1d5db'}`,
-                  background: payoutSpeed === 'standard' ? '#10b981' : 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  {payoutSpeed === 'standard' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'white' }} />}
-                </div>
-                <div>
-                  <p style={{ fontSize: '16px', fontWeight: '600', color: '#1a2b48', margin: 0 }}>
-                    Standard Transfer
-                  </p>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                    1-2 business days • Free
-                  </p>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '18px', fontWeight: '700', color: '#10b981', margin: 0 }}>
-                  ${availableToCashOut.toFixed(2)}
-                </p>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-                  No fees
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Instant Payout Option */}
-          <div 
-            onClick={() => instantEligible && setPayoutSpeed('instant')}
-            style={{
-              border: `2px solid ${payoutSpeed === 'instant' ? '#f59e0b' : '#e5e7eb'}`,
-              borderRadius: '12px',
-              padding: '16px',
-              marginBottom: '12px',
-              cursor: instantEligible ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s',
-              background: payoutSpeed === 'instant' ? '#fef3c7' : instantEligible ? 'white' : '#f9fafb',
-              opacity: instantEligible ? 1 : 0.6
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  border: `2px solid ${payoutSpeed === 'instant' ? '#f59e0b' : '#d1d5db'}`,
-                  background: payoutSpeed === 'instant' ? '#f59e0b' : 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  {payoutSpeed === 'instant' && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'white' }} />}
-                </div>
-                <div>
-                  <p style={{ fontSize: '16px', fontWeight: '600', color: '#1a2b48', margin: 0 }}>
-                    Instant Transfer ⚡
-                  </p>
-                  <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                    {instantEligible ? 'Within minutes • Small fee' : 'Not available for this account'}
-                  </p>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '18px', fontWeight: '700', color: instantEligible ? '#f59e0b' : '#9ca3af', margin: 0 }}>
-                  ${netAmount.toFixed(2)}
-                </p>
-                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-                  {instantEligible ? `Fee: $${instantFee.toFixed(2)}` : 'Not eligible'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Payment Method */}
         <div style={{ marginBottom: '24px' }}>
           <h4 style={{ fontSize: '18px', fontWeight: '700', color: '#1a2b48', marginBottom: '16px' }}>
@@ -282,27 +159,101 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
 
         {/* Processing Info */}
         <div style={{
-          background: payoutSpeed === 'instant' ? '#fef3c7' : '#f0f9ff',
-          border: `1px solid ${payoutSpeed === 'instant' ? '#fbbf24' : '#3b82f6'}`,
+          background: '#fef3c7',
+          border: '1px solid #fbbf24',
           borderRadius: '12px',
           padding: '16px',
           marginBottom: '24px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '20px' }}>
-              {payoutSpeed === 'instant' ? '⚡' : '🏦'}
-            </span>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: payoutSpeed === 'instant' ? '#92400e' : '#1e40af', margin: 0 }}>
-              {payoutSpeed === 'instant' ? 'Instant Transfer' : 'Standard Transfer'}
+            <span style={{ fontSize: '20px' }}>⚡</span>
+            <p style={{ fontSize: '16px', fontWeight: '600', color: '#92400e', margin: 0 }}>
+              {speed === 'instant' ? 'Instant Transfer' : 'Standard Transfer'}
             </p>
           </div>
-          <p style={{ fontSize: '14px', color: payoutSpeed === 'instant' ? '#92400e' : '#1e40af', margin: 0 }}>
-            {payoutSpeed === 'instant' 
-              ? `$${netAmount.toFixed(2)} will arrive in your account within minutes`
-              : `$${netAmount.toFixed(2)} will be transferred within 1-2 business days`
-            }
+          <p style={{ fontSize: '14px', color: '#92400e', margin: 0 }}>
+            {speed === 'instant' ? 'Funds typically arrive in minutes (fee applies)' : 'Funds will be transferred to your account within 1-2 business days (free)'}
           </p>
         </div>
+
+        {/* Speed Selector */}
+        <div style={{ marginBottom: '16px' }}>
+          <h4 style={{ fontSize: '16px', fontWeight: '700', color: '#1a2b48', marginBottom: '8px' }}>Payout Speed</h4>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setSpeed('standard')}
+              style={{
+                flex: 1,
+                background: speed === 'standard' ? '#e5f9f1' : '#f3f4f6',
+                border: `2px solid ${speed === 'standard' ? '#10b981' : '#e5e7eb'}`,
+                borderRadius: '10px',
+                padding: '10px 12px',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Free (1–2 days)
+            </button>
+            <button
+              onClick={() => bankDetails?.instantEligible && setSpeed('instant')}
+              disabled={!bankDetails?.instantEligible}
+              style={{
+                flex: 1,
+                background: speed === 'instant' ? '#fff7ed' : '#f3f4f6',
+                border: `2px solid ${speed === 'instant' ? '#f59e0b' : '#e5e7eb'}`,
+                borderRadius: '10px',
+                padding: '10px 12px',
+                cursor: bankDetails?.instantEligible ? 'pointer' : 'not-allowed',
+                fontWeight: 600,
+                opacity: bankDetails?.instantEligible ? 1 : 0.5
+              }}
+            >
+              {bankDetails?.instantEligible ? 'Instant (fee)' : 'Instant (unavailable)'}
+            </button>
+          </div>
+          
+          {/* Instant eligibility message */}
+          {!bankDetails?.instantEligible && (
+            <div style={{
+              marginTop: '8px',
+              padding: '8px 12px',
+              background: '#fef3c7',
+              border: '1px solid #f59e0b',
+              borderRadius: '8px',
+              fontSize: '13px',
+              color: '#92400e'
+            }}>
+              💡 Add a debit card to your Stripe account to enable instant payouts
+            </div>
+          )}
+        </div>
+
+        {/* Instant Fee Breakdown */}
+        {speed === 'instant' && bankDetails?.instantEligible && (
+          <div style={{
+            background: '#fff7ed',
+            border: '1px solid #f59e0b',
+            borderRadius: '10px',
+            padding: '12px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            color: '#92400e'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Instant payout fee (1.5%, min $0.50)</span>
+              <span>${feePreview.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontWeight: 700 }}>
+              <span>You receive</span>
+              <span>${netAmount.toFixed(2)}</span>
+            </div>
+            {bankDetails?.instantAvailable < availableToCashOut && (
+              <div style={{ marginTop: '8px', padding: '8px', background: '#fef3c7', borderRadius: '6px', fontSize: '12px' }}>
+                ⚠️ Instant limit: ${bankDetails?.instantAvailable?.toFixed(2) || '0.00'} available
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -328,55 +279,37 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
           <button
             onClick={async () => {
               try {
-                console.log('🚀 Initiating cashout for business:', business?.id);
-                console.log('💰 Amount:', availableToCashOut);
-                console.log('📧 Email:', business?.form_data?.email || business?.email);
-                
                 const response = await fetch('/api/cashout/request', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     businessId: business?.id,
-                    amount: netAmount,
-                    payoutSpeed: payoutSpeed,
-                    instantFee: payoutSpeed === 'instant' ? instantFee : 0
+                    amount: availableToCashOut,
+                    speed
                   })
                 });
 
                 const result = await response.json();
                 
                 if (response.ok) {
-                  const timeframe = payoutSpeed === 'instant' ? 'within minutes' : 'within 1-2 business days';
-                  alert(`Cash out initiated! $${netAmount.toFixed(2)} will be transferred to your bank account ${timeframe}.`);
-                  // Refresh the page to show updated balance
+                  alert(speed === 'instant' 
+                    ? `Instant cashout initiated! $${netAmount.toFixed(2)} will arrive shortly (fee $${(feePreview).toFixed(2)}).`
+                    : `Cashout initiated! $${availableToCashOut.toFixed(2)} will reach your bank in 1–2 business days.`);
                   window.location.reload();
                 } else {
-                  // Handle different error types
+                  // Enhanced error handling with user-friendly messages
                   if (result.action === 'connect_bank') {
-                    console.log('🏦 Starting Connect Express onboarding...');
-                    console.log('🆔 Business ID:', business?.id);
-                    console.log('📧 Email:', business?.form_data?.email || business?.email);
-                    
-                    // Start Connect onboarding using existing implementation
-                    const connectResponse = await fetch('/api/stripe/connect', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        businessId: business?.id,
-                        email: business?.form_data?.email || business?.email
-                      })
-                    });
-                    
-                    const connectResult = await connectResponse.json();
-                    console.log('🔗 Connect result:', connectResult);
-                    if (connectResponse.ok && connectResult.url) {
-                      window.location.href = connectResult.url;
-                    } else {
-                      alert(`Bank connection failed: ${connectResult.error}`);
-                    }
-                  } else if (result.action === 'complete_onboarding') {
-                    alert('Please complete your bank account setup first. You will be redirected to finish the process.');
-                    // Could redirect to complete onboarding here
+                    alert('Please connect your bank account first.');
+                  } else if (result.code === 'rate_limited') {
+                    alert('Too many cashout requests. Please wait an hour before trying again.');
+                  } else if (result.code === 'instant_not_supported') {
+                    alert('Instant payouts require a debit card. Please add one in your Stripe account settings or use standard payout.');
+                  } else if (result.code === 'daily_limit_exceeded') {
+                    alert('Daily instant payout limit reached. Please try again tomorrow or use standard payout.');
+                  } else if (result.code === 'instant_limit_exceeded') {
+                    alert(`Amount exceeds instant availability. Maximum instant: $${result.instantAvailable?.toFixed(2) || '0.00'}`);
+                  } else if (result.code === 'insufficient_funds_with_fee') {
+                    alert(`Insufficient funds to cover instant fee. Fee: $${result.fee?.toFixed(2) || '0.00'}`);
                   } else {
                     alert(`Cashout failed: ${result.error}`);
                   }
@@ -1642,12 +1575,11 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     }
   };
   
-  // Fetch bank details when cashout modal is opened
+  // Fetch bank details and instant eligibility when cashout modal is opened
   const handleOpenCashOutModal = async () => {
     if (!business?.stripe_connect_account_id) {
-      // Handle case where bank is not connected - maybe trigger onboarding
       console.log('Bank not connected, cannot fetch details.');
-      setShowCashOutModal(true); // Still show modal, it will handle the connect flow
+      setShowCashOutModal(true);
       return;
     }
 
@@ -1655,7 +1587,11 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
       const response = await fetch(`/api/stripe/connect/status?businessId=${business.id}`);
       const result = await response.json();
       if (response.ok && result.success) {
-        setBankDetails(result.account_details);
+        setBankDetails({
+          ...result.account_details,
+          instantEligible: result.payout_options?.instantEligible || false,
+          instantAvailable: result.payout_options?.instantAvailableUsd || 0
+        });
       }
     } catch (error) {
       console.error('Failed to fetch bank details:', error);

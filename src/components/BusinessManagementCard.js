@@ -1,5 +1,8 @@
 // src/components/BusinessManagementCard.js
+'use client';
+
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Edit, Palette, Settings, ChevronRight } from 'lucide-react';
 
 const theme = {
@@ -67,6 +70,8 @@ const ManagementAction = ({ icon, title, description, onClick }) => (
 );
 
 const BusinessManagementCard = ({ business }) => {
+  const router = useRouter();
+
   if (!business) return null;
 
   return (
@@ -99,19 +104,19 @@ const BusinessManagementCard = ({ business }) => {
           icon={<Edit size={20} />}
           title="Manage Products"
           description="Edit prices, descriptions, and add new products."
-          onClick={() => alert('Navigate to product management page.')}
+          onClick={() => router.push(`/dashboard/${business.session_id}/manage-products`)}
         />
         <ManagementAction 
           icon={<Palette size={20} />}
           title="Customize Website"
           description="Change colors, fonts, and marketing copy."
-          onClick={() => alert('Navigate to website customization page.')}
+          onClick={() => router.push(`/dashboard/${business.session_id}/customize-website`)}
         />
         <ManagementAction 
           icon={<Settings size={20} />}
           title="Business Settings"
           description="Update your business name and other details."
-          onClick={() => alert('Navigate to business settings page.')}
+          onClick={() => router.push(`/dashboard/${business.session_id}/business-settings`)}
         />
       </div>
     </div>

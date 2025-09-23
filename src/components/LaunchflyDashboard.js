@@ -1003,6 +1003,51 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
   const [realActivitiesLoaded, setRealActivitiesLoaded] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
 
+  // Helper function to determine if an activity should show a progress spinner
+  const shouldShowSpinner = (activity) => {
+    const activityText = (activity.text || '').toLowerCase();
+
+    // BLOCKLIST: Keywords for completed events that should NEVER have a spinner.
+    const completedKeywords = [
+      'visitor viewed',
+      'visitor spent',
+      'visitor returned',
+      'visitor switched',
+      'scrolled to',
+      'setup skipped or failed',
+      'are ready for checkout',
+      'viewed page',
+      'spent 14s on page',
+      'returned to page'
+    ];
+
+    if (completedKeywords.some(keyword => activityText.includes(keyword))) {
+      return false;
+    }
+
+    // ALLOWLIST: Conditions for showing a spinner.
+    // Condition 1: The type is explicitly 'working'.
+    if (activity.type === 'working') {
+      return true;
+    }
+
+    // Condition 2: The text contains explicit "AI is working" phrases.
+    const aiWorkIndicators = [
+      'ai is now actively hunting',
+      'ai is working',
+      'ai is processing',
+      'ai is analyzing',
+      'ai is generating'
+    ];
+
+    if (aiWorkIndicators.some(indicator => activityText.includes(indicator))) {
+      return true;
+    }
+
+    // Default to no spinner.
+    return false;
+  };
+  
   // Fetch real activities from API when business is available
   useEffect(() => {
     if (business?.id && generationStage === 'complete' && !realActivitiesLoaded) {
@@ -1334,7 +1379,7 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
                   overflowWrap: 'break-word'
                 }}>
                   {activity.text}
-                  {activity.type === 'working' && (
+                  {shouldShowSpinner(activity) && (
                     <span style={{ 
                       display: 'inline-block',
                       marginLeft: '8px',

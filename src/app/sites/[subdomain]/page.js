@@ -294,23 +294,7 @@ export default async function DynamicWebsite({ params }) {
           })
           .eq('id', businessId);
       }
-      
-      // Track visitor for analytics
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/analytics/visitor`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            businessId: businessId,
-            subdomain: subdomain,
-            pageUrl: '/',
-            visitorId: visitorId
-          })
-        });
-      } catch (visitorError) {
-        // Don't fail the page load if visitor tracking fails
-        console.log('Visitor tracking failed:', visitorError.message);
-      }
+      // Note: Visitor tracking is handled client-side via VisitorTracker to avoid SSR reference issues
     } else {
       console.log('📦 Using mock data for:', subdomain);
     }

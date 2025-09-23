@@ -1782,15 +1782,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           business={business}
         />
 
-        {/* Real-time AI Activity Feed */}
-        <AIActivityFeed 
-          generationStage={generationStage}
-          businessData={businessData}
-          business={business}
-          sessionId={session?.id}
-        />
-
-        {/* Insights */}
+        {/* Insights - Revenue & Performance Metrics First */}
         <InsightsCard 
           isSetupComplete={setupComplete}
           generationStage={generationStage}
@@ -1798,11 +1790,19 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           business={business}
         />
 
-        {/* Business Management */}
-        {generationStage === 'complete' && <BusinessManagementCard business={business} />}
-
-        {/* Customer Activity */}
+        {/* Customer Activity - Group with business performance */}
         {generationStage === 'complete' && <CustomersCard business={business} />}
+
+        {/* Real-time AI Activity Feed - Show how AI is working */}
+        <AIActivityFeed 
+          generationStage={generationStage}
+          businessData={businessData}
+          business={business}
+          sessionId={session?.id}
+        />
+
+        {/* Business Management - Tools and settings after performance data */}
+        {generationStage === 'complete' && <BusinessManagementCard business={business} />}
 
         {/* Simple Next Steps - Only show after generation */}
         {!setupComplete && (

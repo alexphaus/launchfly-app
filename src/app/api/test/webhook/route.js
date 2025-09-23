@@ -7,6 +7,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+import { calculateRevenueShare } from '@/lib/revenue-share-calculator';
+
 export async function POST(request) {
   try {
     const event = await request.json();
@@ -33,16 +35,23 @@ export async function POST(request) {
         customer_name: session.customer_details?.name || null
       });
 
-      // Update business revenue
+      // Update business revenue and available balance with revenue share
       const { data: biz } = await supabase
         .from('businesses')
-        .select('total_revenue, first_sale_date')
+        .select('total_revenue, available_balance, first_sale_date, plan_tier')
         .eq('id', businessId)
         .single();
 
-      const newTotal = (biz?.total_revenue || 0) + amount;
+      // Calculate revenue share
+      const revenueShare = calculateRevenueShare(biz, amount);
+      const newTotal = (biz?.total_revenue || 0) + amount; // Full amount for tracking
+      const newAvailable = (biz?.available_balance || 0) + revenueShare.businessAmount; // Only business portion
+      
+      console.log(`💰 Test Revenue Share: $${amount} sale → $${revenueShare.launchflyFee.toFixed(2)} to Launchfly (${(revenueShare.percentage * 100).toFixed(1)}%), $${revenueShare.businessAmount.toFixed(2)} to business`);
+      
       const updates = { 
-        total_revenue: newTotal, 
+        total_revenue: newTotal,
+        available_balance: newAvailable,
         last_sale_date: new Date().toISOString() 
       };
       

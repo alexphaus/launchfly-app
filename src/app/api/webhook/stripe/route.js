@@ -11,6 +11,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+import { calculateRevenueShare } from '@/lib/revenue-share-calculator';
+
 // Health check endpoint
 export async function GET() {
   return Response.json({ 
@@ -208,7 +210,7 @@ export async function POST(request) {
       // Check if this is the first sale
       const { data: business, error: businessError } = await supabase
         .from('businesses')
-        .select('user_id, name, subdomain, form_data, launch_date, created_at, views, first_sale_date, total_revenue, session_id')
+        .select('user_id, name, subdomain, form_data, launch_date, created_at, views, first_sale_date, total_revenue, available_balance, session_id, plan_tier')
         .eq('id', metadata.business_id)
         .single();
 
@@ -218,11 +220,19 @@ export async function POST(request) {
       }
 
       const isFirstSale = !business.first_sale_date;
-      const newTotalRevenue = (business.total_revenue || 0) + (session.amount_total / 100);
+      const saleAmount = session.amount_total / 100;
+      
+      // Calculate revenue share
+      const revenueShare = calculateRevenueShare(business, saleAmount);
+      const newTotalRevenue = (business.total_revenue || 0) + saleAmount; // Full amount for tracking
+      const newAvailableBalance = (business.available_balance || 0) + revenueShare.businessAmount; // Only business portion
+      
+      console.log(`💰 Revenue Share: $${saleAmount} sale → $${revenueShare.launchflyFee.toFixed(2)} to Launchfly (${(revenueShare.percentage * 100).toFixed(1)}%), $${revenueShare.businessAmount.toFixed(2)} to business`);
 
       // Update business with sale info
       const businessUpdates = {
         total_revenue: newTotalRevenue,
+        available_balance: newAvailableBalance,
         last_sale_date: new Date().toISOString(),
       };
 

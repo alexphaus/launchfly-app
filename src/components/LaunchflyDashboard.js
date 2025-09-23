@@ -1,7 +1,7 @@
 // src/components/LaunchflyDashboard.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet } from 'lucide-react';
+import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet, X } from 'lucide-react';
 import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
 import CustomersCard from './CustomersCard';
@@ -31,6 +31,157 @@ const theme = {
     success: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
     purple: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
   }
+};
+
+// --- COMPONENT: Activity Detail Modal ---
+const ActivityDetailModal = ({ activity, onClose }) => {
+  if (!activity) return null;
+
+  const getDetailedInfo = (activity) => {
+    switch (activity.type) {
+      case 'email_sent':
+        return {
+          title: 'Cold Email Sent',
+          details: [
+            { label: 'Recipient', value: activity.metadata?.recipientEmail || 'Contact' },
+            { label: 'Company', value: activity.metadata?.recipientCompany || 'N/A' },
+            { label: 'Subject', value: activity.metadata?.subject || 'N/A' },
+            { label: 'Campaign', value: activity.metadata?.campaignId || 'Cold Outreach' }
+          ]
+        };
+      case 'prospect_search':
+        return {
+          title: 'Prospect Discovery',
+          details: [
+            { label: 'Industry', value: activity.metadata?.industry || 'N/A' },
+            { label: 'Prospects Found', value: activity.metadata?.count || 0 },
+            { label: 'Source', value: activity.metadata?.source || 'Database' },
+            { label: 'Search Terms', value: activity.metadata?.searchTerms || 'N/A' }
+          ]
+        };
+      case 'success':
+        return {
+          title: 'AI Success Activity',
+          details: [
+            { label: 'Type', value: 'Customer Acquisition' },
+            { label: 'Status', value: 'Completed' },
+            { label: 'Time', value: activity.time }
+          ]
+        };
+      case 'working':
+        return {
+          title: 'AI Working Activity',
+          details: [
+            { label: 'Type', value: 'Active Process' },
+            { label: 'Status', value: 'In Progress' },
+            { label: 'Time', value: activity.time }
+          ]
+        };
+      default:
+        return {
+          title: 'AI Activity',
+          details: [
+            { label: 'Type', value: activity.type || 'General' },
+            { label: 'Status', value: 'Completed' },
+            { label: 'Time', value: activity.time }
+          ]
+        };
+    }
+  };
+
+  const info = getDetailedInfo(activity);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '20px'
+    }}>
+      <div style={{
+        background: theme.colors.white,
+        borderRadius: '20px',
+        padding: '32px',
+        maxWidth: '500px',
+        width: '100%',
+        maxHeight: '80vh',
+        overflow: 'auto',
+        boxShadow: theme.shadows.xl
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>
+            {info.title}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              color: theme.colors.textGray
+            }}
+          >
+            <X size={24} />
+          </button>
+        </div>
+        
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '24px',
+          padding: '16px',
+          background: theme.colors.bgLight,
+          borderRadius: '12px'
+        }}>
+          <span style={{ fontSize: '24px' }}>{activity.icon}</span>
+          <div>
+            <p style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: theme.colors.textDark }}>
+              {activity.text}
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textGray, margin: 0 }}>
+              {activity.time}
+            </p>
+          </div>
+        </div>
+        
+        {activity.details && (
+          <div style={{ marginBottom: '24px' }}>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: theme.colors.textDark }}>
+              Description
+            </h4>
+            <p style={{ fontSize: '14px', color: theme.colors.textGray, lineHeight: '1.5' }}>
+              {activity.details}
+            </p>
+          </div>
+        )}
+        
+        <div>
+          <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: theme.colors.textDark }}>
+            Details
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {info.details.map((detail, index) => (
+              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', color: theme.colors.textGray }}>{detail.label}</span>
+                <span style={{ fontSize: '14px', fontWeight: '500', color: theme.colors.textDark }}>
+                  {detail.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // --- COMPONENT: Cash Out Modal ---
@@ -850,6 +1001,7 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
   const [currentStage, setCurrentStage] = useState('');
   const [previousBusinessData, setPreviousBusinessData] = useState({});
   const [realActivitiesLoaded, setRealActivitiesLoaded] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   // Fetch real activities from API when business is available
   useEffect(() => {
@@ -881,11 +1033,22 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
 
   const fetchRealActivities = async () => {
     try {
-      const response = await fetch(`/api/business/${business.id}/activities?limit=6`);
+      // Fetch up to 100 activities for better scrolling experience
+      const response = await fetch(`/api/business/${business.id}/activities?limit=100`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.activities.length > 0) {
           console.log(`📊 Fetched ${data.activities.length} real customer acquisition activities`);
+          
+          // Filter activities to max 1 week ago for performance
+          const oneWeekAgo = new Date();
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+          
+          const filteredActivities = data.activities.filter(activity => {
+            if (!activity.created_at && !activity.timestamp) return true; // Keep activities without dates
+            const activityDate = new Date(activity.created_at || activity.timestamp);
+            return activityDate >= oneWeekAgo;
+          });
           
           // Add transition activity to show the switch to real activities
           const transitionActivity = {
@@ -897,8 +1060,8 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
             details: 'Customer acquisition engine fully activated'
           };
           
-          // Combine transition with real activities
-          const allActivities = [transitionActivity, ...data.activities];
+          // Combine transition with filtered real activities (limit to 100 total for performance)
+          const allActivities = [transitionActivity, ...filteredActivities].slice(0, 100);
           setActivities(allActivities);
           return;
         } else {
@@ -1097,7 +1260,18 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '16px',
+        maxHeight: '400px', // Fixed height to prevent card expansion
+        overflowY: 'auto', // Enable vertical scrolling
+        overflowX: 'hidden', // Disable horizontal scrolling
+        paddingRight: '4px', // Add some padding for scrollbar
+        scrollbarWidth: 'thin', // Firefox
+        scrollbarColor: '#c1c1c1 #f1f1f1', // Firefox
+        WebkitScrollbarWidth: '6px', // Webkit browsers
+      }}>
         {activities.length === 0 ? (
           <div style={{ 
             padding: '40px', 
@@ -1112,22 +1286,21 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
             <p>Initializing AI systems...</p>
           </div>
         ) : (
-          activities.slice(0, 6).map((activity, index) => (
+          activities.map((activity, index) => (
             <div
               key={activity.id}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (generationStage === 'complete' && sessionId) {
-                  router.push(`/dashboard/${sessionId}/ai-activity`);
+                  setSelectedActivity(activity);
                 }
               }}
               style={{
                 display: 'flex',
                 gap: '12px',
                 alignItems: 'start',
-                opacity: index === 0 ? 1 : 0.8 - (index * 0.12),
-                transform: `translateX(${index === 0 ? 0 : index * 3}px)`,
+                opacity: index < 3 ? 1 : 0.9, // Keep first 3 items fully opaque, others slightly faded
                 transition: 'all 0.3s',
                 animation: index === 0 ? 'slideInLeft 0.5s ease' : 'none',
                 cursor: generationStage === 'complete' && sessionId ? 'pointer' : 'default',
@@ -1145,7 +1318,7 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
               }}
             >
               <span style={{ fontSize: '20px', flexShrink: 0 }}>{activity.icon}</span>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ 
                   fontSize: '15px',
                   color: activity.type === 'success' ? theme.colors.success : 
@@ -1156,7 +1329,9 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
                          theme.colors.textDark,
                   fontWeight: activity.type === 'working' ? '600' : '500',
                   margin: 0,
-                  marginBottom: '4px'
+                  marginBottom: '4px',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word'
                 }}>
                   {activity.text}
                   {activity.type === 'working' && (
@@ -1169,8 +1344,15 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
                     </span>
                   )}
                 </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ fontSize: '13px', color: theme.colors.textGray, margin: 0 }}>{activity.time}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minWidth: 0 }}>
+                  <p style={{ 
+                    fontSize: '13px', 
+                    color: theme.colors.textGray, 
+                    margin: 0,
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    flex: 1
+                  }}>{activity.time}</p>
                   {generationStage === 'complete' && sessionId && (
                     <ChevronRight size={14} style={{ color: theme.colors.textGray, opacity: 0.6 }} />
                   )}
@@ -1180,6 +1362,14 @@ const AIActivityFeed = ({ generationStage, businessData, business, sessionId }) 
           ))
         )}
       </div>
+      
+      {/* Activity Detail Modal */}
+      {selectedActivity && (
+        <ActivityDetailModal
+          activity={selectedActivity}
+          onClose={() => setSelectedActivity(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,6 +1,9 @@
 // src/components/BusinessManagementCard.js
-import React from 'react';
+import React, { useState } from 'react';
 import { Edit, Palette, Settings, ChevronRight } from 'lucide-react';
+import ManageProductsPage from './ManageProductsPage';
+import CustomizeWebsitePage from './CustomizeWebsitePage';
+import BusinessSettingsPage from './BusinessSettingsPage';
 
 const theme = {
   colors: {
@@ -67,8 +70,33 @@ const ManagementAction = ({ icon, title, description, onClick }) => (
 );
 
 const BusinessManagementCard = ({ business }) => {
+  const [currentPage, setCurrentPage] = useState(null);
+
   if (!business) return null;
 
+  // Handle navigation to different management pages
+  const handleNavigation = (page) => {
+    setCurrentPage(page);
+  };
+
+  const handleBack = () => {
+    setCurrentPage(null);
+  };
+
+  // Render the appropriate page based on currentPage state
+  if (currentPage === 'products') {
+    return <ManageProductsPage business={business} onBack={handleBack} />;
+  }
+
+  if (currentPage === 'website') {
+    return <CustomizeWebsitePage business={business} onBack={handleBack} />;
+  }
+
+  if (currentPage === 'settings') {
+    return <BusinessSettingsPage business={business} onBack={handleBack} />;
+  }
+
+  // Default: Show the management card with options
   return (
     <div style={{
       background: 'white',
@@ -99,19 +127,19 @@ const BusinessManagementCard = ({ business }) => {
           icon={<Edit size={20} />}
           title="Manage Products"
           description="Edit prices, descriptions, and add new products."
-          onClick={() => alert('Navigate to product management page.')}
+          onClick={() => handleNavigation('products')}
         />
         <ManagementAction 
           icon={<Palette size={20} />}
           title="Customize Website"
           description="Change colors, fonts, and marketing copy."
-          onClick={() => alert('Navigate to website customization page.')}
+          onClick={() => handleNavigation('website')}
         />
         <ManagementAction 
           icon={<Settings size={20} />}
           title="Business Settings"
           description="Update your business name and other details."
-          onClick={() => alert('Navigate to business settings page.')}
+          onClick={() => handleNavigation('settings')}
         />
       </div>
     </div>

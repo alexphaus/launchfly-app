@@ -1,6 +1,7 @@
 // src/components/CustomersCard.js
 import React, { useState, useEffect } from 'react';
-import { Users, Mail, DollarSign, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Users, Mail, DollarSign, ChevronRight, TrendingUp, UserPlus } from 'lucide-react';
 
 const theme = {
   colors: {
@@ -17,19 +18,22 @@ const theme = {
 };
 
 const CustomersCard = ({ business }) => {
+  const router = useRouter();
   const [customers, setCustomers] = useState([]);
+  const [stats, setStats] = useState({ total: 0, newThisWeek: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (business?.id) {
       fetchCustomers();
+      fetchCustomerStats();
     }
   }, [business?.id]);
 
   const fetchCustomers = async () => {
-    setLoading(true);
     try {
-      const response = await fetch(`/api/business/${business.id}/customers`);
+      // Fetch only recent customers for the card preview
+      const response = await fetch(`/api/business/${business.id}/customers?limit=3`);
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -37,9 +41,26 @@ const CustomersCard = ({ business }) => {
         }
       }
     } catch (error) {
-      console.error('Error fetching customers:', error);
+      console.error('Error fetching recent customers:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCustomerStats = async () => {
+    try {
+      const response = await fetch(`/api/business/${business.id}/customers/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setStats({
+            total: data.stats.totalCustomers,
+            newThisWeek: data.stats.newThisWeek,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching customer stats:', error);
     }
   };
 
@@ -64,30 +85,72 @@ const CustomersCard = ({ business }) => {
       boxShadow: theme.shadows.lg,
       marginBottom: '24px'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          background: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
-          borderRadius: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <Users size={24} color="white" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            background: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Users size={24} color="white" />
+          </div>
+          <h3 style={{ fontSize: '20px', fontWeight: '700', color: theme.colors.textDark }}>
+            Your Customers
+          </h3>
         </div>
-        <h3 style={{ fontSize: '20px', fontWeight: '700', color: theme.colors.textDark }}>
-          Your Customers
-        </h3>
+      </div>
+      
+      {/* Customer Stats */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '16px',
+        marginBottom: '24px',
+        paddingBottom: '24px',
+        borderBottom: `1px solid ${theme.colors.borderLight}`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <UserPlus size={20} color={theme.colors.primary} />
+          <div>
+            <p style={{ fontSize: '22px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>
+              {stats.newThisWeek}
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textGray, margin: 0 }}>
+              New This Week
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <TrendingUp size={20} color={theme.colors.success} />
+          <div>
+            <p style={{ fontSize: '22px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>
+              {stats.total}
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textGray, margin: 0 }}>
+              Total Customers
+            </p>
+          </div>
+        </div>
       </div>
 
+      <p style={{ fontSize: '14px', fontWeight: '600', color: theme.colors.textGray, marginBottom: '16px', textTransform: 'uppercase' }}>
+        Recent Activity
+      </p>
+
       {loading ? (
-        <p style={{ color: theme.colors.textGray }}>Loading customers...</p>
+        <p style={{ color: theme.colors.textGray, textAlign: 'center' }}>Loading customers...</p>
       ) : customers.length === 0 ? (
-        <p style={{ color: theme.colors.textGray }}>No customer activity yet. The AI is on the hunt!</p>
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <p style={{ color: theme.colors.textGray }}>No customer activity yet.</p>
+          <p style={{ color: theme.colors.textGray, fontSize: '14px' }}>The AI is on the hunt!</p>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {customers.slice(0, 3).map(customer => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {customers.map(customer => (
             <div key={customer.id} style={{
               display: 'flex',
               alignItems: 'center',
@@ -129,8 +192,10 @@ const CustomersCard = ({ business }) => {
         </div>
       )}
 
-      {customers.length > 3 && (
-        <button style={{
+      {stats.total > 0 && (
+        <button 
+          onClick={() => router.push(`/dashboard/${business.session_id}/customers`)}
+          style={{
           width: '100%',
           marginTop: '20px',
           padding: '12px',
@@ -143,9 +208,13 @@ const CustomersCard = ({ business }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '8px'
-        }}>
-          View All Customers
+          gap: '8px',
+          transition: 'background 0.2s'
+        }}
+        onMouseEnter={e => e.target.style.background = theme.colors.bgLight}
+        onMouseLeave={e => e.target.style.background = 'transparent'}
+        >
+          Manage All Customers
           <ChevronRight size={16} />
         </button>
       )}

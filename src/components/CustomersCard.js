@@ -123,6 +123,44 @@ const generateMockCustomers = () => {
           { id: 'mock1-3', icon: '💬', text: 'Replied to email: "Interested, tell me more."', time: '1 day ago' },
           { id: 'mock1-4', icon: '💰', text: 'Purchased "Pro Plan"', time: 'Just now' },
         ]
+      },
+      {
+        id: 'mock-anonymous',
+        name: 'Website Customer (Example)',
+        email: 'No email provided',
+        status: 'Converted',
+        company: 'N/A',
+        lastContacted: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+        activities: [
+          { id: 'mock3-1', icon: '🌐', text: 'Visited landing page', time: '1 hour ago' },
+          { id: 'mock3-2', icon: '🛒', text: 'Added "Starter Kit" to cart', time: '55 minutes ago' },
+          { id: 'mock3-3', icon: '💰', text: 'Purchased "Starter Kit"', time: '50 minutes ago' },
+        ]
+      },
+      {
+        id: 'mock-john-smith',
+        name: 'John Smith (Example)',
+        email: 'john.smith@example.com',
+        status: 'Lead',
+        company: 'Solutions Co.',
+        lastContacted: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+        activities: [
+            { id: 'mock2-1', icon: '🔍', text: 'Identified as a high-potential lead in "Tech" industry', time: '3 days ago' },
+            { id: 'mock2-2', icon: '📧', text: 'Sent initial outreach email', time: '1 day ago' },
+        ]
+      },
+      {
+        id: 'mock-visitor',
+        name: 'Website Visitor (Example)',
+        email: 'No email provided',
+        status: 'Lead',
+        company: 'N/A',
+        lastContacted: new Date(Date.now() - 1800000).toISOString(), // 30 minutes ago
+        activities: [
+          { id: 'mock4-1', icon: '🌐', text: 'Visited landing page from Google search', time: '30 minutes ago' },
+          { id: 'mock4-2', icon: '👀', text: 'Viewed "Pro Plan" product page', time: '28 minutes ago' },
+          { id: 'mock4-3', icon: '🛒', text: 'Added "Pro Plan" to cart', time: '25 minutes ago' },
+        ]
       }
     ];
   };
@@ -142,16 +180,23 @@ const CustomersCard = ({ business }) => {
   const fetchCustomerData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/business/${business.id}/activities?limit=100`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.activities) {
-          const prospects = new Map();
-          
-          data.activities.forEach(activity => {
-            const email = activity.metadata?.recipientEmail;
+      // Fetch both activities and actual purchases
+      const [activitiesResponse, purchasesResponse] = await Promise.all([
+        fetch(`/api/business/${business.id}/activities?limit=100`),
+        fetch(`/api/business/${business.id}/purchases`)
+      ]);
 
-            // Simple check for customer-related activities
+      const prospects = new Map();
+
+      // Process AI activities first
+      if (activitiesResponse.ok) {
+        const activitiesData = await activitiesResponse.json();
+        if (activitiesData.success && activitiesData.activities) {
+          activitiesData.activities.forEach(activity => {
+            const email = activity.metadata?.recipientEmail;
+            const isPurchase = (activity.type === 'deal_won' || activity.type === 'converted' || activity.text?.toLowerCase().includes('purchase'));
+
+            // Handle email-based prospects
             if (email) {
               if (!prospects.has(email)) {
                 prospects.set(email, {
@@ -166,25 +211,129 @@ const CustomersCard = ({ business }) => {
               }
 
               const prospect = prospects.get(email);
-              prospect.activities.push(activity);
+              prospect.activities.push({
+                id: activity.id,
+                icon: activity.icon || '📧',
+                text: activity.message || activity.text,
+                time: new Date(activity.created_at).toLocaleString()
+              });
               
-              // Simplistic status update logic
+              // Update status based on activity
               if (activity.type === 'deal_won' || activity.type === 'converted') {
                 prospect.status = 'Converted';
               } else if (activity.type === 'lead') {
                 prospect.status = 'Lead';
               }
+            } else if (isPurchase || activity.type === 'website_purchase' || activity.type === 'anonymous_purchase') {
+                // Handle anonymous purchases from activities
+                const customerId = `anonymous-${activity.id}`;
+                if (!prospects.has(customerId)) {
+                    prospects.set(customerId, {
+                        id: customerId,
+                        name: 'Website Customer',
+                        email: 'No email provided',
+                        status: 'Converted',
+                        company: 'N/A',
+                        lastContacted: activity.created_at || new Date().toISOString(),
+                        activities: []
+                    });
+                }
+                prospects.get(customerId).activities.push({
+                  id: activity.id,
+                  icon: activity.icon || '💰',
+                  text: activity.message || activity.text,
+                  time: new Date(activity.created_at).toLocaleString()
+                });
+            } else if (activity.type === 'visitor_activity' || activity.type === 'page_view' || activity.type === 'cart_activity') {
+                // Handle website visitors
+                const visitorId = activity.metadata?.visitorId || `visitor-${activity.id}`;
+                if (!prospects.has(visitorId)) {
+                    prospects.set(visitorId, {
+                        id: visitorId,
+                        name: 'Website Visitor',
+                        email: 'No email provided',
+                        status: 'Lead',
+                        company: 'N/A',
+                        lastContacted: activity.created_at || new Date().toISOString(),
+                        activities: []
+                    });
+                }
+                const visitor = prospects.get(visitorId);
+                visitor.activities.push({
+                  id: activity.id,
+                  icon: activity.icon || '🌐',
+                  text: activity.message || activity.text,
+                  time: new Date(activity.created_at).toLocaleString()
+                });
+                
+                if (activity.type === 'cart_activity' || activity.text?.toLowerCase().includes('cart')) {
+                    visitor.status = 'Contacted';
+                }
             }
           });
-          
-          const customerList = Array.from(prospects.values()).sort((a, b) => new Date(b.lastContacted) - new Date(a.lastContacted));
-          const mockCustomers = generateMockCustomers();
-          const combinedList = [...mockCustomers, ...customerList];
-          setCustomers(combinedList);
         }
       }
+
+      // Process real Stripe purchases
+      if (purchasesResponse.ok) {
+        const purchasesData = await purchasesResponse.json();
+        console.log('💳 Purchases API response:', purchasesData);
+        if (purchasesData.success && purchasesData.purchases) {
+          purchasesData.purchases.forEach(purchase => {
+            const email = purchase.customerEmail;
+            const customerId = email || `purchase-${purchase.id}`;
+            
+            if (!prospects.has(customerId)) {
+              prospects.set(customerId, {
+                id: customerId,
+                name: purchase.customerName || (email ? 'Customer' : 'Anonymous Customer'),
+                email: email || 'No email provided',
+                status: purchase.status === 'fulfilled' || purchase.status === 'completed' ? 'Converted' : 'Contacted',
+                company: 'N/A',
+                lastContacted: purchase.createdAt,
+                activities: []
+              });
+            }
+
+            const customer = prospects.get(customerId);
+            
+            // Add purchase activity
+            const purchaseText = purchase.type === 'order' 
+              ? `Purchased order for $${purchase.amount} ${purchase.currency?.toUpperCase()}`
+              : `Purchased product for $${purchase.amount} ${purchase.currency?.toUpperCase()}`;
+              
+            customer.activities.push({
+              id: purchase.id,
+              icon: '💰',
+              text: purchaseText,
+              time: new Date(purchase.createdAt).toLocaleString()
+            });
+
+            // Update status to converted if purchase was successful
+            if (purchase.status === 'fulfilled' || purchase.status === 'completed') {
+              customer.status = 'Converted';
+            }
+
+            // Update last contacted time if this purchase is more recent
+            if (new Date(purchase.createdAt) > new Date(customer.lastContacted)) {
+              customer.lastContacted = purchase.createdAt;
+            }
+          });
+        }
+      } else {
+        console.error('❌ Purchases API failed:', purchasesResponse.status, purchasesResponse.statusText);
+        const errorText = await purchasesResponse.text();
+        console.error('Error details:', errorText);
+      }
+          
+      const customerList = Array.from(prospects.values()).sort((a, b) => new Date(b.lastContacted) - new Date(a.lastContacted));
+      console.log('👥 Total real customers found:', customerList.length);
+      const mockCustomers = generateMockCustomers();
+      const combinedList = [...mockCustomers, ...customerList];
+      setCustomers(combinedList);
+      
     } catch (error) {
-      console.error('Error fetching customer activities:', error);
+      console.error('Error fetching customer data:', error);
     } finally {
       setLoading(false);
     }
@@ -290,21 +439,44 @@ const CustomersCard = ({ business }) => {
       )}
 
       {customers.length > 5 && (
-        <button style={{
-          width: '100%',
-          marginTop: '20px',
-          padding: '12px',
-          background: 'transparent',
-          border: `1px solid ${theme.colors.borderLight}`,
-          borderRadius: '12px',
-          color: theme.colors.textDark,
-          fontWeight: '600',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px'
-        }}>
+        <button 
+          onClick={() => {
+            // Navigate to customers page
+            if (typeof window !== 'undefined') {
+              const currentPath = window.location.pathname;
+              const sessionId = currentPath.split('/dashboard/')[1]?.split('/')[0];
+              if (sessionId) {
+                window.location.href = `/dashboard/${sessionId}/customers`;
+              }
+            }
+          }}
+          style={{
+            width: '100%',
+            marginTop: '20px',
+            padding: '12px',
+            background: 'transparent',
+            border: `1px solid ${theme.colors.borderLight}`,
+            borderRadius: '12px',
+            color: theme.colors.textDark,
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = theme.colors.bgLight;
+            e.currentTarget.style.borderColor = theme.colors.primary;
+            e.currentTarget.style.color = theme.colors.primary;
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = theme.colors.borderLight;
+            e.currentTarget.style.color = theme.colors.textDark;
+          }}
+        >
           View All Customers ({customers.length})
           <ChevronRight size={16} />
         </button>

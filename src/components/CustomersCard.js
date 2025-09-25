@@ -109,6 +109,7 @@ const CustomerDetailModal = ({ customer, onClose }) => {
 };
 
 const generateMockCustomers = () => {
+  return [];
     return [
       {
         id: 'mock-jane-doe',

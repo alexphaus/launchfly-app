@@ -166,7 +166,7 @@ const generateMockCustomers = () => {
   };
 
 
-const CustomersCard = ({ business }) => {
+const CustomersCard = ({ business, onViewAll }) => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState(null); // State for modal
@@ -440,16 +440,7 @@ const CustomersCard = ({ business }) => {
 
       {customers.length > 5 && (
         <button 
-          onClick={() => {
-            // Navigate to customers page
-            if (typeof window !== 'undefined') {
-              const currentPath = window.location.pathname;
-              const sessionId = currentPath.split('/dashboard/')[1]?.split('/')[0];
-              if (sessionId) {
-                window.location.href = `/dashboard/${sessionId}/customers`;
-              }
-            }
-          }}
+          onClick={() => onViewAll && onViewAll()}
           style={{
             width: '100%',
             marginTop: '20px',
@@ -469,12 +460,10 @@ const CustomersCard = ({ business }) => {
           onMouseEnter={e => {
             e.currentTarget.style.background = theme.colors.bgLight;
             e.currentTarget.style.borderColor = theme.colors.primary;
-            e.currentTarget.style.color = theme.colors.primary;
           }}
           onMouseLeave={e => {
             e.currentTarget.style.background = 'transparent';
             e.currentTarget.style.borderColor = theme.colors.borderLight;
-            e.currentTarget.style.color = theme.colors.textDark;
           }}
         >
           View All Customers ({customers.length})

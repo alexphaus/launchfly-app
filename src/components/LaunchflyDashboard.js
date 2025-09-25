@@ -5,6 +5,7 @@ import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Z
 import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
 import CustomersCard from './CustomersCard';
+import AllCustomersPage from './AllCustomersPage';
 import BusinessManagementCard from './BusinessManagementCard';
 
 // --- DESIGN SYSTEM ---
@@ -1749,6 +1750,7 @@ const NextSteps = ({ onComplete, generationStage, setupStatus, onConnect, sessio
 const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete }) => {
   const [setupComplete, setSetupComplete] = useState(false);
   const [showCashOutModal, setShowCashOutModal] = useState(false);
+  const [showAllCustomers, setShowAllCustomers] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [bankDetails, setBankDetails] = useState(null);
@@ -1982,6 +1984,16 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   const businessData = business?.business_data || {};
   const generationStage = session?.stage || 'pending';
 
+  // Show All Customers page if requested
+  if (showAllCustomers) {
+    return (
+      <AllCustomersPage
+        business={business}
+        onBack={() => setShowAllCustomers(false)}
+      />
+    );
+  }
+
   return (
     <div style={{ 
       minHeight: '100vh',
@@ -2087,8 +2099,13 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           business={business}
         />
 
-        {/* Customer Activity - Group with business performance */}
-        {generationStage === 'complete' && <CustomersCard business={business} />}
+         {/* Customer Activity - Group with business performance */}
+         {generationStage === 'complete' && (
+           <CustomersCard 
+             business={business} 
+             onViewAll={() => setShowAllCustomers(true)}
+           />
+         )}
 
         {/* Real-time AI Activity Feed - Show how AI is working */}
         <AIActivityFeed 

@@ -1,6 +1,7 @@
 // src/app/api/cashout/request/route.js
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { Resend } from 'resend';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -8,6 +9,70 @@ const supabase = createClient(
 );
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Helper function to notify founder about cashout requests
+async function notifyFounderAboutCashout(business, amount, speed, status, errorMessage = null) {
+  try {
+    const statusEmoji = status === 'success' ? '✅' : '❌';
+    const statusText = status === 'success' ? 'Successful' : 'Failed';
+    
+    let emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1f2937;">${statusEmoji} Cashout Request ${statusText}</h2>
+        
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #374151;">Business Details:</h3>
+          <p><strong>Business Name:</strong> ${business.name || 'N/A'}</p>
+          <p><strong>Business ID:</strong> ${business.id}</p>
+          <p><strong>Subdomain:</strong> ${business.subdomain || 'N/A'}</p>
+          <p><strong>User ID:</strong> ${business.user_id || 'N/A'}</p>
+        </div>
+        
+        <div style="background-color: ${status === 'success' ? '#d1fae5' : '#fee2e2'}; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #374151;">Cashout Details:</h3>
+          <p><strong>Amount:</strong> $${amount.toFixed(2)}</p>
+          <p><strong>Speed:</strong> ${speed === 'instant' ? 'Instant' : 'Standard (1-2 days)'}</p>
+          <p><strong>Available Balance:</strong> $${parseFloat(business.available_balance || 0).toFixed(2)}</p>
+          <p><strong>Total Revenue:</strong> $${parseFloat(business.total_revenue || 0).toFixed(2)}</p>
+          <p><strong>Status:</strong> ${statusText}</p>
+          <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+        </div>
+    `;
+    
+    if (errorMessage) {
+      emailHtml += `
+        <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ef4444;">
+          <h3 style="margin-top: 0; color: #991b1b;">Error Details:</h3>
+          <p style="color: #7f1d1d;">${errorMessage}</p>
+          <p style="font-size: 12px; color: #991b1b; margin-top: 10px;">
+            <strong>Action Required:</strong> You may need to manually process this cashout or contact the user.
+          </p>
+        </div>
+      `;
+    }
+    
+    emailHtml += `
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
+          <p>This is an automated notification from Launchfly cashout system.</p>
+          ${status === 'error' ? '<p><strong>Manual intervention may be required.</strong></p>' : ''}
+        </div>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: process.env.SENDER_EMAIL || 'noreply@launchfly.ai',
+      to: 'axpg31@gmail.com',
+      subject: `${statusEmoji} Cashout ${statusText}: $${amount.toFixed(2)} - ${business.name || business.subdomain}`,
+      html: emailHtml
+    });
+
+    console.log(`✅ Founder notification email sent for cashout: ${status}`);
+  } catch (emailError) {
+    console.error('Failed to send founder notification email:', emailError);
+    // Don't fail the cashout if email fails
+  }
+}
 
 export async function POST(request) {
   try {
@@ -116,11 +181,10 @@ export async function POST(request) {
         }, { status: 400 });
       }
 
-      // 2. Instant balance sufficiency
+      // 2. Instant balance sufficiency - check in any available currency
       try {
         const balance = await stripe.balance.retrieve({ stripeAccount: business.stripe_connect_account_id });
         instantUsd = (balance.instant_available || [])
-          .filter((b) => b.currency === 'usd')
           .reduce((s, b) => s + (b.amount || 0), 0) / 100;
       } catch (e) {
         instantUsd = 0;
@@ -169,15 +233,39 @@ export async function POST(request) {
     }
 
     try {
+      // Detect available currency from platform balance
+      let platformCurrency = 'eur'; // Default to EUR
+      let transferAmount = amount;
+      
+      try {
+        const platformBalance = await stripe.balance.retrieve();
+        const availableBalances = platformBalance.available || [];
+        
+        // Find the first currency with sufficient balance
+        for (const bal of availableBalances) {
+          const balanceAmount = bal.amount / 100;
+          if (balanceAmount >= amount && bal.currency) {
+            platformCurrency = bal.currency;
+            break;
+          }
+        }
+        
+        console.log(`Using platform currency: ${platformCurrency.toUpperCase()}`);
+      } catch (balanceError) {
+        console.warn('Could not retrieve platform balance, using EUR as default:', balanceError);
+      }
+      
       // Create Stripe transfer to connected account (move funds from platform to connected)
       const transfer = await stripe.transfers.create({
-        amount: Math.round(amount * 100), // cents
-        currency: 'usd',
+        amount: Math.round(transferAmount * 100), // cents
+        currency: platformCurrency,
         destination: business.stripe_connect_account_id,
         description: `Launchfly Cashout Transfer - ${business.name}`,
         metadata: {
           business_id: businessId,
-          cashout_transaction_id: cashoutTransaction.id
+          cashout_transaction_id: cashoutTransaction.id,
+          original_amount_usd: amount,
+          transfer_currency: platformCurrency
         }
       });
 
@@ -185,8 +273,8 @@ export async function POST(request) {
       let payout = null;
       if (payoutSpeed === 'instant') {
         payout = await stripe.payouts.create({
-          amount: Math.round(amount * 100),
-          currency: 'usd',
+          amount: Math.round(transferAmount * 100),
+          currency: platformCurrency,
           method: 'instant'
         }, { stripeAccount: business.stripe_connect_account_id });
       }
@@ -235,6 +323,9 @@ export async function POST(request) {
         });
 
       console.log('✅ Cashout request processed successfully:', transfer.id, payout?.id);
+
+      // Notify founder about successful cashout
+      await notifyFounderAboutCashout(business, amount, payoutSpeed, 'success');
 
       return Response.json({
         success: true,
@@ -295,6 +386,15 @@ export async function POST(request) {
 
       const userMessage = userFriendlyErrors[stripeError.code] || 'Payment processing failed. Please try again or contact support.';
 
+      // Notify founder about failed cashout
+      await notifyFounderAboutCashout(
+        business, 
+        amount, 
+        payoutSpeed, 
+        'error', 
+        `Stripe Error: ${stripeError.message} (Code: ${stripeError.code || 'N/A'})`
+      );
+
       return Response.json({ 
         error: userMessage,
         code: stripeError.code,
@@ -304,6 +404,19 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Cashout request error:', error);
+    
+    // Try to get business info for notification
+    const businessId = error.businessId || request.businessId;
+    let business = null;
+    if (businessId) {
+      const { data } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('id', businessId)
+        .single()
+        .catch(() => ({ data: null }));
+      business = data;
+    }
     
     // Log system errors
     await supabase
@@ -319,6 +432,17 @@ export async function POST(request) {
           timestamp: new Date().toISOString()
         }
       }).catch(() => {}); // Don't fail if logging fails
+
+    // Notify founder about system error
+    if (business) {
+      await notifyFounderAboutCashout(
+        business,
+        0, // Amount unknown in system error
+        'unknown',
+        'error',
+        `System Error: ${error.message}`
+      );
+    }
 
     return Response.json({ 
       error: 'Internal server error. Our team has been notified.',

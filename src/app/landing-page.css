@@ -1,125 +1,41 @@
-/* src/app/globals.css */
-@import "tailwindcss";
+/* Launchfly V2 Landing Page - Revenue-Focused Design */
+/* This file contains styles ONLY for the new landing page */
+/* Completely isolated from globals.css to avoid conflicts */
 
-/* Launchfly Modern Premium Design - Unique & Trust-Building */
-
-/* 1. CSS Variables & Global Styles */
-:root {
-    /* Premium Gradient-Rich Color Palette - Deep Purple to Pink Gradient */
-    --primary: #7c3aed;        /* Rich purple */
-  --primary-dark: #6d28d9;
-  --primary-light: #ede9fe;
-    --secondary: #ec4899;      /* Vibrant pink */
-  --secondary-dark: #db2777;
-  --secondary-light: #fce7f3;
-    --accent: #14b8a6;         /* Teal accent */
-  --accent-light: #ccfbf1;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  
-    /* Animation Performance Variables */
-    --animation-duration-fast: 0.2s;
-    --animation-duration-normal: 0.3s;
-    --animation-duration-slow: 0.6s;
-    --animation-curve: cubic-bezier(0.4, 0, 0.2, 1);
-    
-    /* Enhanced Text Colors */
-  --text-dark: #0f172a;      
-  --text-body: #475569;      
-  --text-light: #94a3b8;
-  --text-muted: #64748b;
-  --white: #ffffff;
-  
-    /* Modern Backgrounds */
-  --bg-light: #fafbfc;       
-  --bg-section: #ffffff;
-  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  --border-light: #e2e8f0;
-  --border-medium: #cbd5e1;
-  
-    /* Premium Gradients */
-  --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
-  --gradient-secondary: linear-gradient(135deg, #14b8a6 0%, #0891b2 100%);
-  --gradient-accent: linear-gradient(135deg, #f59e0b 0%, #dc2626 100%);
-  --gradient-hero: linear-gradient(180deg, #fafbfc 0%, rgba(237, 233, 254, 0.3) 40%, rgba(252, 231, 243, 0.3) 100%);
-    --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.8) 100%);
-    --gradient-mesh: radial-gradient(circle at 20% 80%, rgba(124, 58, 237, 0.15) 0%, transparent 50%), 
-                     radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
-                     radial-gradient(circle at 40% 40%, rgba(20, 184, 166, 0.1) 0%, transparent 50%);
-    --gradient-glow: linear-gradient(135deg, rgba(124, 58, 237, 0.4) 0%, rgba(236, 72, 153, 0.4) 100%);
-    
-    /* Enhanced Shadows */
-    --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-    --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.15), 0 0 40px rgba(236, 72, 153, 0.1);
-    --shadow-accent: 0 4px 14px 0 rgba(20, 184, 166, 0.25);
-    --shadow-glass: 0 8px 32px rgba(31, 38, 135, 0.15);
+.homepage_v2_root {
+  /* Scope all variables locally to avoid conflicts with globals.css */
+  --lf-v2-primary: #007BFF;
+  --lf-v2-primary-dark: #0056b3;
+  --lf-v2-success: #28a745;
+  --lf-v2-warning: #f59e0b;
+  --lf-v2-danger: #dc3545;
+  --lf-v2-text-dark: #1A2B48;
+  --lf-v2-text-gray: #5A6982;
+  --lf-v2-bg-light: #F9FAFB;
+  --lf-v2-white: #ffffff;
+  --lf-v2-border: #E4E7EB;
+  --lf-v2-gradient-primary: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  --lf-v2-gradient-success: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  --lf-v2-gradient-gold: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  --lf-v2-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --lf-v2-shadow-md: 0 4px 8px rgba(26, 43, 72, 0.1);
+  --lf-v2-shadow-lg: 0 12px 20px rgba(26, 43, 72, 0.1);
+  --lf-v2-shadow-xl: 0 24px 32px rgba(26, 43, 72, 0.12);
 }
 
-/*
-  Important: avoid globally zeroing margin/padding which can override
-  component and Tailwind utility spacing used by generated sites.
-  Keep box-sizing reset globally; scope spacing baseline to body only.
-*/
-* {
+/* Reset styles only within the landing page scope */
+.launchfly-homepage-v2 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
-body {
-    margin: 0;
-    padding: 0;
-}
-
-html {
-  scroll-padding-top: 80px;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.7;
-  color: var(--text-body);
-  background: var(--bg-gradient);
-  -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body.menu-open {
-  overflow: hidden;
-}
-
-/* Optimize heavy animations on mobile - accessibility */
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
-/* ============================================
-   OLD LANDING PAGE STYLES REMOVED
-   Reduced file size by ~4000 lines (70%)
-   Date: 2025-10-10
-   Reason: Switched to new V2 landing page
-   ============================================ */
-
-
-/* ============================================
-   NEW LANDING PAGE V2 STYLES
-   Scoped to .launchfly-homepage-v2
-   ============================================ */
-
-/* Launchfly V2 Landing Page - Revenue-Focused Design */
-
 .launchfly-homepage-v2 {
   overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  color: var(--lf-v2-text-dark);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 .launchfly-homepage-v2 .container {
@@ -134,13 +50,13 @@ body.menu-open {
   top: 0;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border, #E4E7EB);
+  border-bottom: 1px solid var(--lf-v2-border);
   z-index: 1000;
   transition: all 0.3s ease;
 }
 
 .launchfly-homepage-v2 header.scrolled {
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 header nav {
@@ -158,7 +74,7 @@ body.menu-open {
   gap: 8px;
   font-size: 24px;
   font-weight: 700;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .logo-icon {
@@ -172,18 +88,18 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .nav-links a {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s;
 }
 
 .launchfly-homepage-v2 .nav-links a:hover {
-  color: #007BFF;
+  color: var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .nav-cta {
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -198,7 +114,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .nav-cta:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 20px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-lg);
 }
 
 .launchfly-homepage-v2 .pulse-dot {
@@ -206,10 +122,10 @@ body.menu-open {
   height: 8px;
   background: #fff;
   border-radius: 50%;
-  animation: v2-pulse 2s infinite;
+  animation: pulse 2s infinite;
 }
 
-@keyframes v2-pulse {
+@keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.2); }
 }
@@ -236,10 +152,10 @@ body.menu-open {
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 24px;
-  animation: v2-float 3s ease-in-out infinite;
+  animation: float 3s ease-in-out infinite;
 }
 
-@keyframes v2-float {
+@keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
@@ -247,9 +163,9 @@ body.menu-open {
 .launchfly-homepage-v2 .badge-pulse {
   width: 8px;
   height: 8px;
-  background: #28a745;
+  background: var(--lf-v2-success);
   border-radius: 50%;
-  animation: v2-pulse 2s infinite;
+  animation: pulse 2s infinite;
 }
 
 .launchfly-homepage-v2 .badge-icon {
@@ -265,32 +181,32 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .title-main {
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .title-highlight {
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .launchfly-homepage-v2 .title-sub {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 32px;
   font-weight: 600;
 }
 
 .launchfly-homepage-v2 .hero-subtitle {
   font-size: 20px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   max-width: 800px;
   margin: 0 auto 32px;
   line-height: 1.6;
 }
 
 .launchfly-homepage-v2 .hero-subtitle strong {
-  color: #007BFF;
+  color: var(--lf-v2-primary);
   font-weight: 600;
 }
 
@@ -299,7 +215,7 @@ body.menu-open {
   align-items: center;
   gap: 12px;
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #f59e0b;
+  border: 2px solid var(--lf-v2-warning);
   padding: 16px 24px;
   border-radius: 12px;
   margin: 0 auto 40px;
@@ -307,7 +223,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .guarantee-badge-hero svg {
-  color: #f59e0b;
+  color: var(--lf-v2-warning);
   flex-shrink: 0;
 }
 
@@ -317,14 +233,14 @@ body.menu-open {
 
 .launchfly-homepage-v2 .guarantee-badge-hero strong {
   display: block;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   font-size: 16px;
   font-weight: 700;
   margin-bottom: 4px;
 }
 
 .launchfly-homepage-v2 .guarantee-badge-hero span {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 14px;
 }
 
@@ -337,7 +253,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .primary-cta {
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
   border: none;
   padding: 16px 32px;
@@ -349,18 +265,18 @@ body.menu-open {
   align-items: center;
   gap: 12px;
   transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 .primary-cta:hover {
   transform: translateY(-2px);
-  box-shadow: 0 24px 32px rgba(26, 43, 72, 0.12);
+  box-shadow: var(--lf-v2-shadow-xl);
 }
 
 .launchfly-homepage-v2 .secondary-cta {
   background: white;
-  color: #007BFF;
-  border: 2px solid #007BFF;
+  color: var(--lf-v2-primary);
+  border: 2px solid var(--lf-v2-primary);
   padding: 16px 32px;
   border-radius: 12px;
   font-size: 18px;
@@ -373,7 +289,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .secondary-cta:hover {
-  background: #007BFF;
+  background: var(--lf-v2-primary);
   color: white;
   transform: translateY(-2px);
 }
@@ -387,7 +303,7 @@ body.menu-open {
   padding: 32px;
   background: white;
   border-radius: 16px;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 .stat-item {
@@ -403,12 +319,12 @@ body.menu-open {
   display: block;
   font-size: 24px;
   font-weight: 700;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   margin-bottom: 4px;
 }
 
 .launchfly-homepage-v2 .stat-item span {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 14px;
 }
 
@@ -440,7 +356,7 @@ body.menu-open {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #007BFF;
+  background: var(--lf-v2-primary);
   color: white;
   display: flex;
   align-items: center;
@@ -455,15 +371,15 @@ body.menu-open {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
 }
 
 .launchfly-homepage-v2 .live-indicator {
   width: 8px;
   height: 8px;
-  background: #28a745;
+  background: var(--lf-v2-success);
   border-radius: 50%;
-  animation: v2-pulse 2s infinite;
+  animation: pulse 2s infinite;
 }
 
 /* Problem Section */
@@ -480,8 +396,7 @@ body.menu-open {
   margin: 0 auto;
 }
 
-.launchfly-homepage-v2 .problem-card, 
-.launchfly-homepage-v2 .solution-card {
+.launchfly-homepage-v2 .problem-card, .launchfly-homepage-v2 .solution-card {
   padding: 40px;
   border-radius: 16px;
   text-align: center;
@@ -494,33 +409,30 @@ body.menu-open {
 
 .launchfly-homepage-v2 .solution-card {
   background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
-  border: 2px solid #007BFF;
+  border: 2px solid var(--lf-v2-primary);
 }
 
-.launchfly-homepage-v2 .problem-icon, 
-.launchfly-homepage-v2 .solution-icon {
+.launchfly-homepage-v2 .problem-icon, .launchfly-homepage-v2 .solution-icon {
   font-size: 48px;
   margin-bottom: 16px;
   display: block;
 }
 
-.launchfly-homepage-v2 .problem-card h3, 
-.launchfly-homepage-v2 .solution-card h3 {
+.launchfly-homepage-v2 .problem-card h3, .launchfly-homepage-v2 .solution-card h3 {
   font-size: 24px;
   margin-bottom: 16px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
-.launchfly-homepage-v2 .problem-card p, 
-.launchfly-homepage-v2 .solution-card p {
-  color: #5A6982;
+.launchfly-homepage-v2 .problem-card p, .launchfly-homepage-v2 .solution-card p {
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
 }
 
-/* Differentiator Section */
+/* Differentiator Section - AI Fulfillment */
 .launchfly-homepage-v2 .differentiator-section {
   padding: 80px 0;
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
 }
 
 .launchfly-homepage-v2 .section-header {
@@ -530,7 +442,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .section-label {
   display: inline-block;
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
   padding: 6px 16px;
   border-radius: 50px;
@@ -542,14 +454,14 @@ body.menu-open {
 .launchfly-homepage-v2 .section-header h2 {
   font-size: 42px;
   font-weight: 800;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   margin-bottom: 16px;
   line-height: 1.2;
 }
 
 .launchfly-homepage-v2 .section-header p {
   font-size: 18px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   max-width: 700px;
   margin: 0 auto;
 }
@@ -565,7 +477,7 @@ body.menu-open {
   padding: 40px;
   border-radius: 16px;
   background: white;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 .comparison-card.old {
@@ -573,7 +485,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .comparison-card.new {
-  border: 2px solid #28a745;
+  border: 2px solid var(--lf-v2-success);
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
 }
 
@@ -588,7 +500,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .comparison-card li {
   padding: 12px 0;
-  border-bottom: 1px solid #E4E7EB;
+  border-bottom: 1px solid var(--lf-v2-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -599,14 +511,14 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .comparison-card strong {
-  color: #007BFF;
+  color: var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .fulfillment-example {
   background: white;
   padding: 48px;
   border-radius: 20px;
-  box-shadow: 0 12px 20px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-lg);
   max-width: 900px;
   margin: 0 auto;
 }
@@ -614,12 +526,12 @@ body.menu-open {
 .launchfly-homepage-v2 .fulfillment-example h3 {
   font-size: 28px;
   margin-bottom: 16px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .example-scenario {
   font-size: 18px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   margin-bottom: 32px;
   font-style: italic;
 }
@@ -640,7 +552,7 @@ body.menu-open {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
   display: flex;
   align-items: center;
@@ -652,13 +564,13 @@ body.menu-open {
 
 .launchfly-homepage-v2 .step strong {
   display: block;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   font-size: 18px;
   margin-bottom: 4px;
 }
 
 .launchfly-homepage-v2 .step p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
 }
 
 .launchfly-homepage-v2 .example-result {
@@ -667,11 +579,11 @@ body.menu-open {
   border-radius: 12px;
   text-align: center;
   font-size: 18px;
-  border: 2px solid #f59e0b;
+  border: 2px solid var(--lf-v2-warning);
 }
 
 .launchfly-homepage-v2 .example-result strong {
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   font-weight: 700;
 }
 
@@ -690,7 +602,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .offer-card {
   background: white;
-  border: 2px solid #E4E7EB;
+  border: 2px solid var(--lf-v2-border);
   border-radius: 20px;
   padding: 32px;
   transition: all 0.3s;
@@ -699,12 +611,12 @@ body.menu-open {
 
 .launchfly-homepage-v2 .offer-card:hover {
   transform: translateY(-8px);
-  box-shadow: 0 24px 32px rgba(26, 43, 72, 0.12);
-  border-color: #007BFF;
+  box-shadow: var(--lf-v2-shadow-xl);
+  border-color: var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .offer-card.featured {
-  border-color: #f59e0b;
+  border-color: var(--lf-v2-warning);
   background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
 }
 
@@ -713,7 +625,7 @@ body.menu-open {
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  background: var(--lf-v2-gradient-gold);
   color: white;
   padding: 6px 16px;
   border-radius: 50px;
@@ -731,7 +643,7 @@ body.menu-open {
 .launchfly-homepage-v2 .offer-card h3 {
   font-size: 24px;
   margin-bottom: 16px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   text-align: center;
 }
 
@@ -743,19 +655,19 @@ body.menu-open {
 .launchfly-homepage-v2 .price {
   font-size: 42px;
   font-weight: 800;
-  color: #007BFF;
+  color: var(--lf-v2-primary);
   display: block;
 }
 
 .launchfly-homepage-v2 .your-profit {
   display: block;
-  color: #28a745;
+  color: var(--lf-v2-success);
   font-weight: 600;
   margin-top: 4px;
 }
 
 .launchfly-homepage-v2 .offer-desc {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   margin-bottom: 24px;
   line-height: 1.6;
   text-align: center;
@@ -778,17 +690,17 @@ body.menu-open {
 .launchfly-homepage-v2 .offer-stats strong {
   display: block;
   font-size: 18px;
-  color: #007BFF;
+  color: var(--lf-v2-primary);
   margin-bottom: 4px;
 }
 
 .launchfly-homepage-v2 .offer-stats span {
   font-size: 12px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
 }
 
 .launchfly-homepage-v2 .offer-fulfillment {
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 16px;
@@ -796,7 +708,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .offer-fulfillment strong {
   display: block;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   margin-bottom: 12px;
   font-size: 14px;
 }
@@ -808,7 +720,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .offer-fulfillment li {
   padding: 6px 0;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 14px;
   padding-left: 20px;
   position: relative;
@@ -818,35 +730,35 @@ body.menu-open {
   content: "✓";
   position: absolute;
   left: 0;
-  color: #28a745;
+  color: var(--lf-v2-success);
   font-weight: bold;
 }
 
 .launchfly-homepage-v2 .offer-target {
   text-align: center;
   padding-top: 16px;
-  border-top: 1px solid #E4E7EB;
-  color: #5A6982;
+  border-top: 1px solid var(--lf-v2-border);
+  color: var(--lf-v2-text-gray);
   font-size: 14px;
 }
 
 .launchfly-homepage-v2 .offers-cta {
   text-align: center;
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 40px;
   border-radius: 16px;
 }
 
 .launchfly-homepage-v2 .offers-cta p {
   font-size: 18px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   margin-bottom: 24px;
 }
 
 /* How It Works */
 .launchfly-homepage-v2 .how-section {
   padding: 80px 0;
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
 }
 
 .launchfly-homepage-v2 .steps-grid {
@@ -861,7 +773,7 @@ body.menu-open {
   padding: 32px;
   border-radius: 16px;
   text-align: center;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
   transition: transform 0.3s;
   position: relative;
 }
@@ -878,14 +790,14 @@ body.menu-open {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
   font-size: 24px;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 .step-icon {
@@ -896,17 +808,17 @@ body.menu-open {
 .launchfly-homepage-v2 .step-card h3 {
   font-size: 20px;
   margin-bottom: 12px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .step-card p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
   margin-bottom: 16px;
 }
 
 .launchfly-homepage-v2 .step-time {
-  color: #007BFF;
+  color: var(--lf-v2-primary);
   font-weight: 600;
   font-size: 14px;
 }
@@ -916,13 +828,13 @@ body.menu-open {
   padding: 40px;
   border-radius: 16px;
   text-align: center;
-  box-shadow: 0 12px 20px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-lg);
 }
 
 .launchfly-homepage-v2 .automation-badge h3 {
   font-size: 24px;
   margin-bottom: 24px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .automation-list {
@@ -933,12 +845,12 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .automation-list span {
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 12px 24px;
   border-radius: 50px;
   font-weight: 600;
-  color: #1A2B48;
-  border: 2px solid #28a745;
+  color: var(--lf-v2-text-dark);
+  border: 2px solid var(--lf-v2-success);
 }
 
 /* Guarantee Section */
@@ -952,12 +864,12 @@ body.menu-open {
   width: 80px;
   height: 80px;
   margin: 0 auto 24px;
-  background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  background: var(--lf-v2-gradient-gold);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12px 20px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-lg);
 }
 
 .launchfly-homepage-v2 .guarantee-seal svg {
@@ -969,12 +881,12 @@ body.menu-open {
 .launchfly-homepage-v2 .guarantee-section h2 {
   font-size: 42px;
   margin-bottom: 16px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .guarantee-intro {
   font-size: 20px;
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   margin-bottom: 48px;
 }
 
@@ -989,12 +901,12 @@ body.menu-open {
   background: white;
   padding: 32px;
   border-radius: 16px;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 .promise-card.main {
   grid-column: 1 / -1;
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
 }
 
@@ -1009,11 +921,11 @@ body.menu-open {
 .launchfly-homepage-v2 .promise-card h3 {
   font-size: 22px;
   margin-bottom: 12px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .promise-card p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
 }
 
@@ -1029,11 +941,11 @@ body.menu-open {
 .launchfly-homepage-v2 .guarantee-why h3 {
   font-size: 24px;
   margin-bottom: 16px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .guarantee-why p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.8;
   margin-bottom: 12px;
 }
@@ -1053,7 +965,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .testimonial-card {
   background: white;
-  border: 2px solid #E4E7EB;
+  border: 2px solid var(--lf-v2-border);
   padding: 32px;
   border-radius: 16px;
   transition: all 0.3s;
@@ -1061,12 +973,12 @@ body.menu-open {
 
 .launchfly-homepage-v2 .testimonial-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 20px rgba(26, 43, 72, 0.1);
-  border-color: #007BFF;
+  box-shadow: var(--lf-v2-shadow-lg);
+  border-color: var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .testimonial-revenue {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  background: var(--lf-v2-gradient-success);
   color: white;
   padding: 12px 20px;
   border-radius: 8px;
@@ -1077,7 +989,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .testimonial-text {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
   margin-bottom: 24px;
   font-style: italic;
@@ -1098,11 +1010,11 @@ body.menu-open {
 
 .launchfly-homepage-v2 .testimonial-author strong {
   display: block;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .testimonial-author span {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 14px;
 }
 
@@ -1110,30 +1022,30 @@ body.menu-open {
   display: flex;
   gap: 16px;
   padding-top: 16px;
-  border-top: 1px solid #E4E7EB;
+  border-top: 1px solid var(--lf-v2-border);
 }
 
 .launchfly-homepage-v2 .testimonial-stats span {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 13px;
 }
 
 .launchfly-homepage-v2 .results-disclaimer {
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 24px;
   border-radius: 12px;
-  border-left: 4px solid #007BFF;
+  border-left: 4px solid var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .results-disclaimer p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
 }
 
 /* Pricing */
 .launchfly-homepage-v2 .pricing-section {
   padding: 80px 0;
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
 }
 
 .launchfly-homepage-v2 .pricing-grid {
@@ -1145,7 +1057,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .pricing-card {
   background: white;
-  border: 2px solid #E4E7EB;
+  border: 2px solid var(--lf-v2-border);
   border-radius: 20px;
   padding: 40px;
   transition: all 0.3s;
@@ -1154,11 +1066,11 @@ body.menu-open {
 
 .launchfly-homepage-v2 .pricing-card:hover {
   transform: translateY(-8px);
-  box-shadow: 0 24px 32px rgba(26, 43, 72, 0.12);
+  box-shadow: var(--lf-v2-shadow-xl);
 }
 
 .launchfly-homepage-v2 .pricing-card.popular {
-  border-color: #007BFF;
+  border-color: var(--lf-v2-primary);
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   transform: scale(1.05);
 }
@@ -1168,7 +1080,7 @@ body.menu-open {
   top: -16px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
   padding: 8px 24px;
   border-radius: 50px;
@@ -1180,7 +1092,7 @@ body.menu-open {
 .launchfly-homepage-v2 .plan-name {
   font-size: 28px;
   font-weight: 800;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   margin-bottom: 8px;
 }
 
@@ -1191,11 +1103,11 @@ body.menu-open {
 .launchfly-homepage-v2 .price-amount {
   font-size: 56px;
   font-weight: 800;
-  color: #007BFF;
+  color: var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .price-period {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 16px;
   display: block;
   margin-top: 4px;
@@ -1203,7 +1115,7 @@ body.menu-open {
 
 .launchfly-homepage-v2 .price-save {
   display: inline-block;
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  background: var(--lf-v2-gradient-success);
   color: white;
   padding: 4px 12px;
   border-radius: 50px;
@@ -1213,7 +1125,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .plan-tagline {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   margin-bottom: 24px;
 }
 
@@ -1224,8 +1136,8 @@ body.menu-open {
 
 .launchfly-homepage-v2 .plan-features li {
   padding: 12px 0;
-  color: #5A6982;
-  border-bottom: 1px solid #E4E7EB;
+  color: var(--lf-v2-text-gray);
+  border-bottom: 1px solid var(--lf-v2-border);
 }
 
 .launchfly-homepage-v2 .plan-features li:last-child {
@@ -1233,7 +1145,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .plan-revshare {
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 16px;
   border-radius: 12px;
   text-align: center;
@@ -1241,14 +1153,14 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .plan-revshare span {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   font-size: 14px;
 }
 
 .launchfly-homepage-v2 .plan-revshare strong {
   display: block;
   font-size: 32px;
-  color: #007BFF;
+  color: var(--lf-v2-primary);
   font-weight: 800;
 }
 
@@ -1263,12 +1175,12 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .plan-guarantee svg {
-  color: #28a745;
+  color: var(--lf-v2-success);
   flex-shrink: 0;
 }
 
 .launchfly-homepage-v2 .plan-guarantee span {
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   font-size: 14px;
   font-weight: 600;
 }
@@ -1285,23 +1197,23 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .plan-cta.primary {
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   color: white;
 }
 
 .launchfly-homepage-v2 .plan-cta.primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 20px rgba(26, 43, 72, 0.1);
+  box-shadow: var(--lf-v2-shadow-lg);
 }
 
 .launchfly-homepage-v2 .plan-cta.secondary {
   background: white;
-  color: #007BFF;
-  border: 2px solid #007BFF;
+  color: var(--lf-v2-primary);
+  border: 2px solid var(--lf-v2-primary);
 }
 
 .launchfly-homepage-v2 .plan-cta.secondary:hover {
-  background: #007BFF;
+  background: var(--lf-v2-primary);
   color: white;
 }
 
@@ -1316,20 +1228,20 @@ body.menu-open {
 .launchfly-homepage-v2 .pricing-notes h3 {
   font-size: 24px;
   margin-bottom: 16px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
 }
 
 .launchfly-homepage-v2 .pricing-notes p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
   margin-bottom: 16px;
 }
 
 .launchfly-homepage-v2 .pricing-example {
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 20px;
   border-radius: 12px;
-  border-left: 4px solid #007BFF;
+  border-left: 4px solid var(--lf-v2-primary);
 }
 
 /* FAQ */
@@ -1347,7 +1259,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .faq-item {
-  background: #F9FAFB;
+  background: var(--lf-v2-bg-light);
   padding: 24px;
   border-radius: 12px;
   border: 2px solid transparent;
@@ -1355,25 +1267,25 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .faq-item:hover {
-  border-color: #007BFF;
-  box-shadow: 0 4px 8px rgba(26, 43, 72, 0.1);
+  border-color: var(--lf-v2-primary);
+  box-shadow: var(--lf-v2-shadow-md);
 }
 
 .launchfly-homepage-v2 .faq-item h3 {
   font-size: 18px;
-  color: #1A2B48;
+  color: var(--lf-v2-text-dark);
   margin-bottom: 12px;
 }
 
 .launchfly-homepage-v2 .faq-item p {
-  color: #5A6982;
+  color: var(--lf-v2-text-gray);
   line-height: 1.6;
 }
 
 /* Final CTA */
 .launchfly-homepage-v2 .final-cta-section {
   padding: 80px 0;
-  background: linear-gradient(135deg, #007BFF 0%, #00B8D9 100%);
+  background: var(--lf-v2-gradient-primary);
   text-align: center;
   color: white;
 }
@@ -1401,7 +1313,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .final-cta-guarantee svg {
-  color: #f59e0b;
+  color: var(--lf-v2-warning);
   flex-shrink: 0;
 }
 
@@ -1424,7 +1336,7 @@ body.menu-open {
   padding: 20px 48px;
   font-size: 20px;
   background: white;
-  color: #007BFF;
+  color: var(--lf-v2-primary);
   margin-bottom: 32px;
 }
 
@@ -1453,7 +1365,7 @@ body.menu-open {
 
 /* Footer */
 .launchfly-homepage-v2 footer {
-  background: #1A2B48;
+  background: var(--lf-v2-text-dark);
   color: white;
   padding: 60px 0 24px;
 }
@@ -1511,7 +1423,7 @@ body.menu-open {
 }
 
 .launchfly-homepage-v2 .highlight {
-  color: #007BFF;
+  color: var(--lf-v2-primary);
 }
 
 /* Responsive */
@@ -1540,6 +1452,35 @@ body.menu-open {
   
   .launchfly-homepage-v2 .mobile-menu-toggle {
     display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 30px;
+    height: 30px;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .launchfly-homepage-v2 .mobile-menu-toggle span {
+    display: block;
+    width: 25px;
+    height: 3px;
+    background: var(--lf-v2-text-dark);
+    margin: 3px 0;
+    transition: 0.3s;
+  }
+  
+  .launchfly-homepage-v2 .mobile-menu-toggle.active span:nth-child(1) {
+    transform: rotate(-45deg) translate(-5px, 5px);
+  }
+  
+  .launchfly-homepage-v2 .mobile-menu-toggle.active span:nth-child(2) {
+    opacity: 0;
+  }
+  
+  .launchfly-homepage-v2 .mobile-menu-toggle.active span:nth-child(3) {
+    transform: rotate(45deg) translate(-5px, -5px);
   }
   
   .launchfly-homepage-v2 .hero-title {
@@ -1567,8 +1508,7 @@ body.menu-open {
     flex-direction: column;
   }
   
-  .launchfly-homepage-v2 .primary-cta, 
-  .launchfly-homepage-v2 .secondary-cta {
+  .launchfly-homepage-v2 .primary-cta, .launchfly-homepage-v2 .secondary-cta {
     width: 100%;
   }
 }

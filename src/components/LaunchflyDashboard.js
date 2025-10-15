@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { DollarSign, Globe, Bot, Clock, TrendingUp, ChevronRight, ChevronDown, Zap, Eye, Mail, CheckCircle, Sparkles, Loader2, Wallet, X } from 'lucide-react';
 import UserProfile from './UserProfile';
 import FloatingChat from './FloatingChat';
-import CustomersCard from './CustomersCard';
+import CustomersCard from './EnhancedCustomerCard';
 import AllCustomersPage from './AllCustomersPage';
 import BusinessManagementCard from './BusinessManagementCard';
 

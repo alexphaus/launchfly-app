@@ -277,10 +277,10 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
         }}>
           <p style={{ fontSize: '16px', opacity: 0.9, margin: '0 0 8px 0' }}>Available to Cash Out</p>
           <h3 style={{ fontSize: '48px', fontWeight: '900', margin: '0 0 12px 0' }}>
-            ${availableToCashOut.toFixed(2)}
+            ${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </h3>
           <p style={{ fontSize: '14px', opacity: 0.8, margin: 0 }}>
-            From ${totalRevenue.toFixed(2)} total revenue
+            From ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total revenue
           </p>
         </div>
 
@@ -393,15 +393,15 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Instant payout fee (1.5%, min $0.50)</span>
-              <span>${feePreview.toFixed(2)}</span>
+              <span>${feePreview.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontWeight: 700 }}>
               <span>You receive</span>
-              <span>${netAmount.toFixed(2)}</span>
+              <span>${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             {bankDetails?.instantAvailable < availableToCashOut && (
               <div style={{ marginTop: '8px', padding: '8px', background: '#fef3c7', borderRadius: '6px', fontSize: '12px' }}>
-                ⚠️ Instant limit: ${bankDetails?.instantAvailable?.toFixed(2) || '0.00'} available
+                ⚠️ Instant limit: ${bankDetails?.instantAvailable?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'} available
               </div>
             )}
           </div>
@@ -445,8 +445,8 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                 
                 if (response.ok) {
                   alert(speed === 'instant' 
-                    ? `Instant cashout initiated! $${netAmount.toFixed(2)} will arrive shortly (fee $${(feePreview).toFixed(2)}).`
-                    : `Cashout initiated! $${availableToCashOut.toFixed(2)} will reach your bank in 1–2 business days.`);
+                    ? `Instant cashout initiated! $${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will arrive shortly (fee $${(feePreview).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`
+                    : `Cashout initiated! $${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will reach your bank in 1–2 business days.`);
                   window.location.reload();
                 } else {
                   // Enhanced error handling with user-friendly messages
@@ -459,9 +459,9 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                   } else if (result.code === 'daily_limit_exceeded') {
                     alert('Daily instant payout limit reached. Please try again tomorrow or use standard payout.');
                   } else if (result.code === 'instant_limit_exceeded') {
-                    alert(`Amount exceeds instant availability. Maximum instant: $${result.instantAvailable?.toFixed(2) || '0.00'}`);
+                    alert(`Amount exceeds instant availability. Maximum instant: $${result.instantAvailable?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`);
                   } else if (result.code === 'insufficient_funds_with_fee') {
-                    alert(`Insufficient funds to cover instant fee. Fee: $${result.fee?.toFixed(2) || '0.00'}`);
+                    alert(`Insufficient funds to cover instant fee. Fee: $${result.fee?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`);
                   } else {
                     alert(`Cashout failed: ${result.error}`);
                   }
@@ -553,7 +553,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
         onMouseLeave={e => e.target.style.transform = 'scale(1)'}
       >
         <DollarSign size={16} />
-        {displayAvailable.toFixed(2)}
+        {displayAvailable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         <ChevronDown size={14} style={{ 
           transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s ease'
@@ -592,7 +592,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               color: theme.colors.textDark,
               marginBottom: '8px'
             }}            >
-              ${displayAvailable.toFixed(2)}
+              ${displayAvailable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             
             <div style={{ 
@@ -603,7 +603,7 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               marginBottom: '16px'
             }}>
               <span style={{ color: theme.colors.textGray, fontSize: '14px', fontWeight: '500' }}>
-                From ${totalRevenue.toFixed(2)} total revenue
+                From ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total revenue
               </span>
             </div>
           </div>
@@ -2040,23 +2040,6 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             alignItems: 'center',
             gap: '16px'
           }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '13px',
-              color: theme.colors.textGray
-            }}>
-              <div style={{
-                width: '8px',
-                height: '8px',
-                background: theme.colors.success,
-                borderRadius: '50%',
-                animation: 'pulse 2s infinite'
-              }} />
-              AI Active
-            </div>
-            
             {/* Revenue Dropdown */}
             <RevenueDropdown 
               totalRevenue={totalRevenue}

@@ -318,7 +318,7 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
 
           {/* Display Notes */}
           {notes.length > 0 ? (
-            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <div>
               {notes.map((n, idx) => (
                 <div key={idx} style={{
                   background: theme.colors.bgLight,
@@ -345,7 +345,7 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
           <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: theme.colors.textDark }}>
             Activity History
           </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '300px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {customer.activities.map((activity) => (
               <div key={activity.id} style={{
                 display: 'flex',
@@ -395,14 +395,28 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
 
       const prospects = new Map();
 
+      // Email normalizer to avoid runtime errors and duplicates
+      const normalizeEmail = (value) => {
+        if (!value) return '';
+        if (typeof value === 'string') return value.trim().toLowerCase();
+        if (Array.isArray(value)) return String(value[0] || '').trim().toLowerCase();
+        if (typeof value === 'object' && value.email) return String(value.email).trim().toLowerCase();
+        try {
+          return String(value).trim().toLowerCase();
+        } catch {
+          return '';
+        }
+      };
+
       // Process AI activities
       if (activitiesResponse.ok) {
         const activitiesData = await activitiesResponse.json();
         if (activitiesData.success && activitiesData.activities) {
           activitiesData.activities.forEach(activity => {
-            const email = activity.metadata?.recipientEmail;
-            
-            if (email) {
+            // Normalize email for consistent grouping (trim + lowercase)
+            const email = normalizeEmail(activity.metadata?.recipientEmail);
+
+            if (email && email.includes('@')) {
               if (!prospects.has(email)) {
                 prospects.set(email, {
                   id: email,
@@ -439,13 +453,15 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
         const purchasesData = await purchasesResponse.json();
         if (purchasesData.success && purchasesData.purchases) {
           purchasesData.purchases.forEach(purchase => {
-            const email = purchase.customerEmail || `purchase-${purchase.id}`;
-            
+            // Normalize email when available
+            const normalizedEmail = normalizeEmail(purchase.customerEmail);
+            const email = (normalizedEmail && normalizedEmail.includes('@')) ? normalizedEmail : `purchase-${purchase.id}`;
+
             if (!prospects.has(email)) {
               prospects.set(email, {
                 id: email,
                 name: purchase.customerName || 'Customer',
-                email: purchase.customerEmail || 'No email provided',
+                email: normalizedEmail || 'No email provided',
                 status: 'Converted',
                 company: 'N/A',
                 lastContacted: purchase.createdAt,
@@ -584,12 +600,13 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
         <p style={{ color: theme.colors.textGray }}>No customer activity yet. The AI is on the hunt!</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {customers.slice(0, 5).map(customer => {
+          {customers.slice(0, 5).map((customer, index) => {
             const engagementScore = calculateEngagementScore(customer.activities);
             const leadTempColor = getLeadTempColor(customer);
             
             return (
-              <div key={customer.id} onClick={() => setSelectedCustomer(customer)} style={{
+              // Use a stable unique key by combining normalized email with index fallback
+              <div key={`${customer.id || customer.email || 'customer'}-${index}`} onClick={() => setSelectedCustomer(customer)} style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',

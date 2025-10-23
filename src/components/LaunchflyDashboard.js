@@ -186,7 +186,7 @@ const ActivityDetailModal = ({ activity, onClose }) => {
 };
 
 // --- COMPONENT: Cash Out Modal ---
-const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, business, bankDetails }) => {
+const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, business, bankDetails, todayRevenue = 0 }) => {
   const [speed, setSpeed] = useState('standard'); // 'standard' | 'instant'
   const [feePreview, setFeePreview] = useState(0);
   const [netAmount, setNetAmount] = useState(availableToCashOut);
@@ -279,8 +279,16 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
           <h3 style={{ fontSize: '48px', fontWeight: '900', margin: '0 0 12px 0' }}>
             ${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </h3>
-          <p style={{ fontSize: '14px', opacity: 0.8, margin: 0 }}>
-            From ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total revenue
+          <p style={{ fontSize: '14px', opacity: 0.8, margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            {todayRevenue > 0 && (
+              <>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontWeight: '600' }}>
+                  ↑ +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today
+                </span>
+                <span>•</span>
+              </>
+            )}
+            <span>${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total</span>
           </p>
         </div>
 
@@ -501,7 +509,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
 };
 
 // --- COMPONENT: Revenue Dropdown for Header ---
-const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme, business, onCashOutClick }) => {
+const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme, business, onCashOutClick, todayRevenue = 0 }) => {
   const [displayAvailable, setDisplayAvailable] = useState(availableToCashOut);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
@@ -600,10 +608,26 @@ const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut 
               alignItems: 'center', 
               justifyContent: 'center', 
               gap: '6px',
-              marginBottom: '16px'
+              marginBottom: '16px',
+              flexWrap: 'wrap'
             }}>
+              {todayRevenue > 0 && (
+                <>
+                  <span style={{ 
+                    color: '#10b981', 
+                    fontSize: '14px', 
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2px'
+                  }}>
+                    ↑ +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today
+                  </span>
+                  <span style={{ color: theme.colors.textGray }}>•</span>
+                </>
+              )}
               <span style={{ color: theme.colors.textGray, fontSize: '14px', fontWeight: '500' }}>
-                From ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total revenue
+                ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total
               </span>
             </div>
           </div>
@@ -1752,6 +1776,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [showAllCustomers, setShowAllCustomers] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [todayRevenue, setTodayRevenue] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [bankDetails, setBankDetails] = useState(null);
   const [generationStarted, setGenerationStarted] = useState(false);
@@ -1771,9 +1796,11 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
     if (business?.id) {
       fetchCofounderStatus();
       fetchActivities();
+      fetchTodayRevenue();
       const interval = setInterval(() => {
         fetchCofounderStatus();
         fetchActivities();
+        fetchTodayRevenue();
       }, 5000); // Poll every 5 seconds
       return () => clearInterval(interval);
     }
@@ -1802,6 +1829,28 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
       }
     } catch (err) {
       console.error('Error fetching activities for chat:', err);
+    }
+  };
+
+  const fetchTodayRevenue = async () => {
+    if (!business?.id) return;
+    
+    try {
+      // Calculate today's start in ISO format
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStart = today.toISOString();
+      
+      const response = await fetch(`/api/business/${business.id}/sales?since=${todayStart}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.sales) {
+          const todayTotal = data.sales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
+          setTodayRevenue(todayTotal);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching today revenue:', err);
     }
   };
 
@@ -2043,6 +2092,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             {/* Revenue Dropdown */}
             <RevenueDropdown 
               totalRevenue={totalRevenue}
+              todayRevenue={todayRevenue}
               availableToCashOut={
                 // Use the new available_balance field
                 parseFloat(business?.available_balance || 0)
@@ -2149,6 +2199,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         isOpen={showCashOutModal}
         onClose={() => setShowCashOutModal(false)}
         totalRevenue={totalRevenue}
+        todayRevenue={todayRevenue}
         availableToCashOut={parseFloat(business?.available_balance || 0)}
         business={business}
         bankDetails={bankDetails}

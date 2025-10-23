@@ -508,6 +508,144 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
   );
 };
 
+// --- COMPONENT: Money Hero Card ---
+const MoneyHeroCard = ({ totalRevenue, todayRevenue, availableBalance, onWithdraw, theme }) => {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      borderRadius: '20px',
+      padding: '32px',
+      color: 'white',
+      marginBottom: '24px',
+      boxShadow: '0 10px 30px rgba(102, 126, 234, 0.3)',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Decorative background elements */}
+      <div style={{
+        position: 'absolute',
+        top: '-50px',
+        right: '-50px',
+        width: '200px',
+        height: '200px',
+        background: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: '50%',
+        pointerEvents: 'none'
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: '-30px',
+        left: '-30px',
+        width: '150px',
+        height: '150px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '50%',
+        pointerEvents: 'none'
+      }} />
+
+      {/* Content */}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        {/* Header */}
+        <div style={{ 
+          fontSize: '16px', 
+          opacity: 0.9, 
+          marginBottom: '12px',
+          fontWeight: '500',
+          letterSpacing: '0.5px'
+        }}>
+          💰 Your Earnings
+        </div>
+
+        {/* Main Amount */}
+        <div style={{ 
+          fontSize: '48px', 
+          fontWeight: '900', 
+          marginBottom: '16px',
+          lineHeight: '1'
+        }}>
+          ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+
+        {/* Today's Change */}
+        {todayRevenue > 0 && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: 'rgba(16, 185, 129, 0.2)',
+            padding: '8px 16px',
+            borderRadius: '12px',
+            fontSize: '16px',
+            fontWeight: '600',
+            marginBottom: '24px',
+            border: '1px solid rgba(16, 185, 129, 0.3)'
+          }}>
+            <span style={{ fontSize: '18px' }}>↑</span>
+            +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today
+          </div>
+        )}
+
+        {/* Withdraw Section */}
+        <div style={{
+          marginTop: todayRevenue > 0 ? '24px' : '8px',
+          paddingTop: '24px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.2)'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '16px'
+          }}>
+            <div>
+              <div style={{ fontSize: '13px', opacity: 0.8, marginBottom: '4px' }}>
+                Available to Withdraw
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: '700' }}>
+                ${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            <button
+              onClick={onWithdraw}
+              disabled={availableBalance <= 0}
+              style={{
+                background: availableBalance > 0 ? 'white' : 'rgba(255, 255, 255, 0.3)',
+                color: availableBalance > 0 ? '#667eea' : 'rgba(255, 255, 255, 0.6)',
+                border: 'none',
+                padding: '14px 28px',
+                borderRadius: '12px',
+                fontSize: '16px',
+                fontWeight: '700',
+                cursor: availableBalance > 0 ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s ease',
+                boxShadow: availableBalance > 0 ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={e => {
+                if (availableBalance > 0) {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
+                }
+              }}
+              onMouseLeave={e => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = availableBalance > 0 ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none';
+              }}
+            >
+              Withdraw to Bank
+              <span style={{ fontSize: '18px' }}>→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- COMPONENT: Revenue Dropdown for Header ---
 const RevenueDropdown = ({ totalRevenue = 0, availableToCashOut = 0, canCashOut = false, theme, business, onCashOutClick, todayRevenue = 0 }) => {
   const [displayAvailable, setDisplayAvailable] = useState(availableToCashOut);
@@ -2114,6 +2252,15 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
         margin: '0 auto',
         padding: '0 24px'
       }}>
+
+        {/* Money Hero Card - PayPal Style */}
+        <MoneyHeroCard
+          totalRevenue={totalRevenue}
+          todayRevenue={todayRevenue}
+          availableBalance={parseFloat(business?.available_balance || 0)}
+          onWithdraw={handleOpenCashOutModal}
+          theme={theme}
+        />
 
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 

@@ -508,37 +508,39 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
   );
 };
 
-// --- COMPONENT: Money Hero Card ---
-const MoneyHeroCard = ({ totalRevenue, todayRevenue, availableBalance, onWithdraw, theme }) => {
+// --- COMPONENT: Money Hero Card (PayPal Style) ---
+const MoneyHeroCard = ({ totalRevenue, todayRevenue, availableBalance, onCashOutClick, theme }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      borderRadius: '20px',
+      background: 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
+      borderRadius: '24px',
       padding: '32px',
       color: 'white',
       marginBottom: '24px',
-      boxShadow: '0 10px 30px rgba(102, 126, 234, 0.3)',
+      boxShadow: '0 10px 40px rgba(0, 112, 243, 0.3)',
       position: 'relative',
       overflow: 'hidden'
     }}>
       {/* Decorative background elements */}
       <div style={{
         position: 'absolute',
-        top: '-50px',
-        right: '-50px',
-        width: '200px',
-        height: '200px',
+        top: '-80px',
+        right: '-80px',
+        width: '250px',
+        height: '250px',
         background: 'rgba(255, 255, 255, 0.1)',
         borderRadius: '50%',
         pointerEvents: 'none'
       }} />
       <div style={{
         position: 'absolute',
-        bottom: '-30px',
-        left: '-30px',
-        width: '150px',
-        height: '150px',
-        background: 'rgba(255, 255, 255, 0.05)',
+        bottom: '-50px',
+        left: '-50px',
+        width: '180px',
+        height: '180px',
+        background: 'rgba(255, 255, 255, 0.08)',
         borderRadius: '50%',
         pointerEvents: 'none'
       }} />
@@ -547,97 +549,109 @@ const MoneyHeroCard = ({ totalRevenue, todayRevenue, availableBalance, onWithdra
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Header */}
         <div style={{ 
-          fontSize: '16px', 
+          fontSize: '15px', 
           opacity: 0.9, 
-          marginBottom: '12px',
+          marginBottom: '8px',
           fontWeight: '500',
-          letterSpacing: '0.5px'
+          letterSpacing: '0.3px'
         }}>
-          💰 Your Earnings
+          💰 Your Balance
         </div>
 
-        {/* Main Amount */}
+        {/* Main Amount - Available Balance */}
         <div style={{ 
-          fontSize: '48px', 
+          fontSize: '52px', 
           fontWeight: '900', 
-          marginBottom: '16px',
-          lineHeight: '1'
+          marginBottom: '12px',
+          lineHeight: '1',
+          letterSpacing: '-0.5px'
         }}>
-          ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          ${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
 
-        {/* Today's Change */}
-        {todayRevenue > 0 && (
+        {/* Today's Change and Total Earned */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px',
+          flexWrap: 'wrap',
+          marginBottom: todayRevenue > 0 ? '28px' : '16px'
+        }}>
+          {todayRevenue > 0 && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(16, 185, 129, 0.25)',
+              padding: '10px 18px',
+              borderRadius: '12px',
+              fontSize: '16px',
+              fontWeight: '700',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <span style={{ fontSize: '20px' }}>↑</span>
+              +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today
+            </div>
+          )}
+          
           <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(16, 185, 129, 0.2)',
-            padding: '8px 16px',
-            borderRadius: '12px',
             fontSize: '16px',
-            fontWeight: '600',
-            marginBottom: '24px',
-            border: '1px solid rgba(16, 185, 129, 0.3)'
+            opacity: 0.9,
+            fontWeight: '500'
           }}>
-            <span style={{ fontSize: '18px' }}>↑</span>
-            +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today
+            • ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total earned
           </div>
-        )}
+        </div>
 
-        {/* Withdraw Section */}
+        {/* Cash Out Button Section */}
         <div style={{
-          marginTop: todayRevenue > 0 ? '24px' : '8px',
-          paddingTop: '24px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.2)'
+          marginTop: '28px',
+          paddingTop: '28px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.25)'
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '16px'
+            gap: '20px'
           }}>
             <div>
-              <div style={{ fontSize: '13px', opacity: 0.8, marginBottom: '4px' }}>
-                Available to Withdraw
+              <div style={{ fontSize: '13px', opacity: 0.85, marginBottom: '6px', letterSpacing: '0.3px' }}>
+                Ready to withdraw
               </div>
-              <div style={{ fontSize: '24px', fontWeight: '700' }}>
+              <div style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-0.5px' }}>
                 ${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
 
             <button
-              onClick={onWithdraw}
+              onClick={onCashOutClick}
               disabled={availableBalance <= 0}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
               style={{
-                background: availableBalance > 0 ? 'white' : 'rgba(255, 255, 255, 0.3)',
-                color: availableBalance > 0 ? '#667eea' : 'rgba(255, 255, 255, 0.6)',
+                background: availableBalance > 0 ? 'white' : 'rgba(255, 255, 255, 0.2)',
+                color: availableBalance > 0 ? '#0070f3' : 'rgba(255, 255, 255, 0.5)',
                 border: 'none',
-                padding: '14px 28px',
-                borderRadius: '12px',
+                padding: '16px 32px',
+                borderRadius: '14px',
                 fontSize: '16px',
                 fontWeight: '700',
                 cursor: availableBalance > 0 ? 'pointer' : 'not-allowed',
                 transition: 'all 0.2s ease',
-                boxShadow: availableBalance > 0 ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
+                boxShadow: availableBalance > 0 ? '0 4px 16px rgba(0, 0, 0, 0.15)' : 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
-              }}
-              onMouseEnter={e => {
-                if (availableBalance > 0) {
-                  e.target.style.transform = 'translateY(-2px)';
-                  e.target.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)';
-                }
-              }}
-              onMouseLeave={e => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = availableBalance > 0 ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none';
+                gap: '10px',
+                transform: isHovered && availableBalance > 0 ? 'translateY(-2px)' : 'translateY(0)',
+                opacity: availableBalance <= 0 ? 0.5 : 1
               }}
             >
-              Withdraw to Bank
-              <span style={{ fontSize: '18px' }}>→</span>
+              <DollarSign size={20} />
+              <span>Cash Out Now</span>
+              <span style={{ fontSize: '18px', transition: 'transform 0.2s', transform: isHovered ? 'translateX(3px)' : 'translateX(0)' }}>→</span>
             </button>
           </div>
         </div>
@@ -2258,7 +2272,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           totalRevenue={totalRevenue}
           todayRevenue={todayRevenue}
           availableBalance={parseFloat(business?.available_balance || 0)}
-          onWithdraw={handleOpenCashOutModal}
+          onCashOutClick={handleOpenCashOutModal}
           theme={theme}
         />
 

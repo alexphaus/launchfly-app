@@ -489,6 +489,11 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
       }
           
       const customerList = Array.from(prospects.values())
+        .map(customer => ({
+          ...customer,
+          // Sort activities by time, most recent first
+          activities: customer.activities.sort((a, b) => new Date(b.time) - new Date(a.time))
+        }))
         .sort((a, b) => new Date(b.lastContacted) - new Date(a.lastContacted));
       
       setCustomers(customerList);

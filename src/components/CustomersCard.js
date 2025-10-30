@@ -216,7 +216,8 @@ const CustomersCard = ({ business, onViewAll }) => {
                 id: activity.id,
                 icon: activity.icon || '📧',
                 text: activity.message || activity.text,
-                time: new Date(activity.created_at).toLocaleString()
+                time: new Date(activity.created_at).toLocaleString(),
+                timestamp: activity.created_at // Keep raw timestamp for sorting
               });
               
               // Update status based on activity
@@ -243,7 +244,8 @@ const CustomersCard = ({ business, onViewAll }) => {
                   id: activity.id,
                   icon: activity.icon || '💰',
                   text: activity.message || activity.text,
-                  time: new Date(activity.created_at).toLocaleString()
+                  time: new Date(activity.created_at).toLocaleString(),
+                  timestamp: activity.created_at // Keep raw timestamp for sorting
                 });
             } else if (activity.type === 'visitor_activity' || activity.type === 'page_view' || activity.type === 'cart_activity') {
                 // Handle website visitors
@@ -264,7 +266,8 @@ const CustomersCard = ({ business, onViewAll }) => {
                   id: activity.id,
                   icon: activity.icon || '🌐',
                   text: activity.message || activity.text,
-                  time: new Date(activity.created_at).toLocaleString()
+                  time: new Date(activity.created_at).toLocaleString(),
+                  timestamp: activity.created_at // Keep raw timestamp for sorting
                 });
                 
                 if (activity.type === 'cart_activity' || activity.text?.toLowerCase().includes('cart')) {
@@ -307,7 +310,8 @@ const CustomersCard = ({ business, onViewAll }) => {
               id: purchase.id,
               icon: '💰',
               text: purchaseText,
-              time: new Date(purchase.createdAt).toLocaleString()
+              time: new Date(purchase.createdAt).toLocaleString(),
+              timestamp: purchase.createdAt // Keep raw timestamp for sorting
             });
 
             // Update status to converted if purchase was successful
@@ -327,7 +331,15 @@ const CustomersCard = ({ business, onViewAll }) => {
         console.error('Error details:', errorText);
       }
           
-      const customerList = Array.from(prospects.values()).sort((a, b) => new Date(b.lastContacted) - new Date(a.lastContacted));
+      const customerList = Array.from(prospects.values())
+        .map(customer => ({
+          ...customer,
+          // Sort activities by timestamp, most recent first
+          activities: customer.activities.sort((a, b) => 
+            new Date(b.timestamp || b.time) - new Date(a.timestamp || a.time)
+          )
+        }))
+        .sort((a, b) => new Date(b.lastContacted) - new Date(a.lastContacted));
       console.log('👥 Total real customers found:', customerList.length);
       const mockCustomers = generateMockCustomers();
       const combinedList = [...mockCustomers, ...customerList];

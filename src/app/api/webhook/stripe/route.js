@@ -12,6 +12,7 @@ const supabase = createClient(
 );
 
 import { calculateRevenueShare } from '@/lib/revenue-share-calculator';
+import { sendSaleSms, sendMilestoneSms } from '@/lib/sms-notifications';
 
 // Health check endpoint
 export async function GET() {
@@ -290,6 +291,39 @@ export async function POST(request) {
           visitorCount: business.views || 0,
           sessionId: business.session_id
         });
+
+        // Send SMS notification to business owner
+        await sendSaleSms({
+          userId: business.user_id,
+          businessId: business.id,
+          businessName: business.name,
+          amount: session.amount_total / 100,
+          customerName: saleRecords[0].customer_name,
+          isFirstSale,
+          totalRevenue: newTotalRevenue
+        });
+
+        // Check for revenue milestones and send SMS
+        const milestones = [
+          { threshold: 1000, key: '1k_revenue' },
+          { threshold: 5000, key: '5k_revenue' },
+          { threshold: 10000, key: '10k_revenue' },
+          { threshold: 50000, key: '50k_revenue' },
+          { threshold: 100000, key: '100k_revenue' }
+        ];
+
+        const previousRevenue = business.total_revenue || 0;
+        for (const milestone of milestones) {
+          if (previousRevenue < milestone.threshold && newTotalRevenue >= milestone.threshold) {
+            await sendMilestoneSms({
+              userId: business.user_id,
+              businessId: business.id,
+              businessName: business.name,
+              milestone: milestone.key,
+              amount: milestone.threshold
+            });
+          }
+        }
       }
 
       console.log('Sale processing completed successfully');

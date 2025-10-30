@@ -36,6 +36,9 @@ const SettingsPage = ({ session, business, onBack, onPhoneUpdate, onBankUpdate }
   const [phoneSuccess, setPhoneSuccess] = useState(false);
   const [bankSuccess, setBankSuccess] = useState(false);
   const [errors, setErrors] = useState({});
+  const [smsEnabled, setSmsEnabled] = useState(true);
+  const [isSmsLoading, setIsSmsLoading] = useState(false);
+  const [smsSuccess, setSmsSuccess] = useState(false);
 
   // Get current setup status
   const setupStatus = {
@@ -43,12 +46,29 @@ const SettingsPage = ({ session, business, onBack, onPhoneUpdate, onBankUpdate }
     bank: business?.bank_connected || business?.bank_account || !!business?.stripe_connect_account_id || false
   };
 
-  // Initialize phone number from business data
+  // Initialize phone number and SMS settings from business data
   useEffect(() => {
     if (setupStatus.phone) {
       setPhoneNumber(setupStatus.phone);
     }
-  }, [setupStatus.phone]);
+    
+    // Fetch user's SMS notification preference
+    const fetchSmsPreference = async () => {
+      try {
+        const response = await fetch(`/api/user/sms-settings?userId=${business?.user_id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setSmsEnabled(data.smsEnabled !== false); // Default to true
+        }
+      } catch (error) {
+        console.error('Error fetching SMS settings:', error);
+      }
+    };
+    
+    if (business?.user_id) {
+      fetchSmsPreference();
+    }
+  }, [setupStatus.phone, business?.user_id]);
 
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
@@ -94,6 +114,38 @@ const SettingsPage = ({ session, business, onBack, onPhoneUpdate, onBankUpdate }
       setErrors({ phone: error.message || 'Failed to update phone number' });
     } finally {
       setIsPhoneLoading(false);
+    }
+  };
+
+  const handleSmsToggle = async () => {
+    setIsSmsLoading(true);
+    setErrors({});
+
+    try {
+      const newSmsEnabled = !smsEnabled;
+      
+      const response = await fetch('/api/user/sms-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: business?.user_id,
+          smsEnabled: newSmsEnabled
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update SMS notification settings');
+      }
+
+      setSmsEnabled(newSmsEnabled);
+      setSmsSuccess(true);
+      setTimeout(() => setSmsSuccess(false), 3000);
+
+    } catch (error) {
+      console.error('SMS settings update error:', error);
+      setErrors({ sms: error.message || 'Failed to update SMS settings' });
+    } finally {
+      setIsSmsLoading(false);
     }
   };
 
@@ -371,6 +423,108 @@ const SettingsPage = ({ session, business, onBack, onPhoneUpdate, onBankUpdate }
                 {isPhoneLoading ? 'Saving...' : phoneSuccess ? 'Saved!' : setupStatus.phone ? 'Update' : 'Save'}
               </button>
             </form>
+          </div>
+
+          {/* SMS Notifications Toggle */}
+          <div style={{
+            padding: '20px',
+            border: `2px solid ${smsEnabled ? theme.colors.success : theme.colors.borderLight}`,
+            borderRadius: '12px',
+            marginBottom: '16px',
+            background: smsEnabled ? '#f0f9ff' : 'white'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Bell size={20} color={smsEnabled ? theme.colors.success : theme.colors.textGray} />
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: theme.colors.textDark,
+                  margin: 0
+                }}>
+                  SMS Notifications
+                </h3>
+                {smsEnabled && <CheckCircle size={20} color={theme.colors.success} />}
+              </div>
+              
+              <button
+                onClick={handleSmsToggle}
+                disabled={isSmsLoading || !setupStatus.phone}
+                style={{
+                  background: smsSuccess ? theme.colors.success : smsEnabled ? theme.colors.error : theme.colors.success,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: (isSmsLoading || !setupStatus.phone) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s',
+                  opacity: (isSmsLoading || !setupStatus.phone) ? 0.6 : 1
+                }}
+              >
+                {isSmsLoading ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    Updating...
+                  </>
+                ) : smsSuccess ? (
+                  <>
+                    <CheckCircle size={16} />
+                    Saved!
+                  </>
+                ) : smsEnabled ? (
+                  'Disable'
+                ) : (
+                  'Enable'
+                )}
+              </button>
+            </div>
+            
+            <p style={{ 
+              fontSize: '14px', 
+              color: theme.colors.textGray, 
+              marginBottom: '8px' 
+            }}>
+              {smsEnabled 
+                ? '🎉 You\'ll receive instant SMS alerts for sales, payouts, and milestones'
+                : 'Enable to get instant text notifications for important events'
+              }
+            </p>
+            
+            {!setupStatus.phone && (
+              <p style={{ 
+                fontSize: '13px', 
+                color: theme.colors.orange, 
+                marginTop: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                padding: '8px 12px',
+                borderRadius: '6px'
+              }}>
+                <AlertCircle size={16} />
+                Add your phone number above to enable SMS notifications
+              </p>
+            )}
+            
+            {errors.sms && (
+              <p style={{ 
+                fontSize: '14px', 
+                color: theme.colors.error, 
+                marginTop: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <AlertCircle size={16} />
+                {errors.sms}
+              </p>
+            )}
           </div>
 
           {/* Bank Account Setup */}

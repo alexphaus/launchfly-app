@@ -2241,7 +2241,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
             alignItems: 'center',
             gap: '16px'
           }}>
-            {/* Revenue Dropdown */}
+            {/* Revenue Dropdown
             <RevenueDropdown 
               totalRevenue={totalRevenue}
               todayRevenue={todayRevenue}
@@ -2253,7 +2253,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
               theme={theme}
               business={business}
               onCashOutClick={handleOpenCashOutModal}
-            />
+            /> */}
             
             <UserProfile theme={theme} session={session} business={business} />
           </div>

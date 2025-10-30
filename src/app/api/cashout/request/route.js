@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { Resend } from 'resend';
+import { sendPayoutSms } from '@/lib/sms-notifications';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -327,6 +328,16 @@ export async function POST(request) {
       // Notify founder about successful cashout
       await notifyFounderAboutCashout(business, amount, payoutSpeed, 'success');
 
+      // Send SMS notification to business owner
+      await sendPayoutSms({
+        userId: business.user_id,
+        businessId: business.id,
+        businessName: business.name,
+        amount: amount,
+        speed: payoutSpeed,
+        status: 'success'
+      });
+
       return Response.json({
         success: true,
         cashoutId: cashoutTransaction.id,
@@ -394,6 +405,16 @@ export async function POST(request) {
         'error', 
         `Stripe Error: ${stripeError.message} (Code: ${stripeError.code || 'N/A'})`
       );
+
+      // Send SMS notification about failed payout
+      await sendPayoutSms({
+        userId: business.user_id,
+        businessId: business.id,
+        businessName: business.name,
+        amount: amount,
+        speed: payoutSpeed,
+        status: 'failed'
+      });
 
       return Response.json({ 
         error: userMessage,

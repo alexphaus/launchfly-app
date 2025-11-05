@@ -2,7 +2,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Users, Search, Filter, Mail, Phone, Calendar, DollarSign, X } from 'lucide-react';
+import { ArrowLeft, Users, Search, Filter, Mail, Phone, Calendar, DollarSign, X, Download } from 'lucide-react';
+import { exportToCSV, downloadCSV } from '@/lib/utils/customer-helpers';
 
 const theme = {
   colors: {
@@ -126,6 +127,7 @@ const AllCustomersPage = ({ business, onBack }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (business?.id) {
@@ -327,6 +329,18 @@ const AllCustomersPage = ({ business, onBack }) => {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const csvContent = exportToCSV(filteredCustomers);
+      downloadCSV(csvContent, `customers-${business.name || 'export'}-${Date.now()}.csv`);
+    } catch (error) {
+      console.error('Error exporting customers:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const statusCounts = {
     all: customers.length,
     lead: customers.filter(c => c.status === 'Lead').length,
@@ -386,7 +400,7 @@ const AllCustomersPage = ({ business, onBack }) => {
             background: theme.colors.borderLight 
           }} />
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
             <Users size={24} color={theme.colors.primary} />
             <h1 style={{ 
               fontSize: '24px', 
@@ -407,6 +421,34 @@ const AllCustomersPage = ({ business, onBack }) => {
               {customers.length}
             </span>
           </div>
+          
+          {/* Export CSV Button */}
+          {customers.length > 0 && (
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 20px',
+                background: 'white',
+                border: `2px solid ${theme.colors.borderLight}`,
+                borderRadius: '12px',
+                color: theme.colors.textDark,
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: exporting ? 'not-allowed' : 'pointer',
+                opacity: exporting ? 0.6 : 1,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => !exporting && (e.target.style.borderColor = theme.colors.primary)}
+              onMouseLeave={e => !exporting && (e.target.style.borderColor = theme.colors.borderLight)}
+            >
+              <Download size={16} />
+              {exporting ? 'Exporting...' : 'Export CSV'}
+            </button>
+          )}
         </div>
       </header>
 

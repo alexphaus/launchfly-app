@@ -2,9 +2,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, ChevronRight, X, Mail, MessageSquare, Download, DollarSign, TrendingUp, Tag } from 'lucide-react';
+import { Users, ChevronRight, X, Mail, MessageSquare, DollarSign, TrendingUp, Tag } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/date-format';
-import { calculateEngagementScore, getLeadTemperature, getSuggestedNextAction, exportToCSV, downloadCSV } from '@/lib/utils/customer-helpers';
+import { calculateEngagementScore, getLeadTemperature, getSuggestedNextAction } from '@/lib/utils/customer-helpers';
 
 const theme = {
   colors: {
@@ -377,7 +377,6 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (business?.id) {
@@ -505,18 +504,6 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
     }
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const csvContent = exportToCSV(customers);
-      downloadCSV(csvContent, `customers-${business.name}-${Date.now()}.csv`);
-    } catch (error) {
-      console.error('Error exporting customers:', error);
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const getStatusStyle = (status) => {
     switch (status) {
       case 'Lead':
@@ -530,13 +517,6 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
       default:
         return { background: '#f3f4f6', color: '#4b5563' };
     }
-  };
-
-  const getLeadTempColor = (customer) => {
-    const temp = getLeadTemperature(customer);
-    if (temp === 'hot') return '#ef4444';
-    if (temp === 'warm') return '#f59e0b';
-    return '#3b82f6';
   };
 
   return (
@@ -572,30 +552,6 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
             )}
           </div>
         </div>
-        
-        {customers.length > 0 && (
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 16px',
-              background: 'transparent',
-              border: `2px solid ${theme.colors.borderLight}`,
-              borderRadius: '12px',
-              color: theme.colors.textDark,
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: exporting ? 'not-allowed' : 'pointer',
-              opacity: exporting ? 0.6 : 1
-            }}
-          >
-            <Download size={16} />
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </button>
-        )}
       </div>
 
       {/* Customer List */}
@@ -607,7 +563,6 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {customers.slice(0, 5).map((customer, index) => {
             const engagementScore = calculateEngagementScore(customer.activities);
-            const leadTempColor = getLeadTempColor(customer);
             
             return (
               // Use a stable unique key by combining normalized email with index fallback
@@ -620,23 +575,11 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
                 borderRadius: '12px',
                 border: `1px solid ${theme.colors.borderLight}`,
                 cursor: 'pointer',
-                transition: 'all 0.2s',
-                position: 'relative'
+                transition: 'all 0.2s'
               }}
               onMouseEnter={e => e.currentTarget.style.background = '#f0f0f0'}
               onMouseLeave={e => e.currentTarget.style.background = theme.colors.bgLight}
               >
-                {/* Lead temperature indicator */}
-                <div style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: '4px',
-                  background: leadTempColor,
-                  borderRadius: '12px 0 0 12px'
-                }} />
-                
                 <div style={{
                   width: '40px',
                   height: '40px',

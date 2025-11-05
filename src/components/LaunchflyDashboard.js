@@ -190,6 +190,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
   const [speed, setSpeed] = useState('standard'); // 'standard' | 'instant'
   const [feePreview, setFeePreview] = useState(0);
   const [netAmount, setNetAmount] = useState(availableToCashOut);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (speed === 'instant' && bankDetails?.instantEligible) {
@@ -215,229 +216,486 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
+      background: 'rgba(0, 0, 0, 0.75)',
+      backdropFilter: 'blur(4px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      animation: 'fadeIn 0.3s ease'
+      animation: 'fadeIn 0.2s ease',
+      padding: '20px'
     }}>
       <div style={{
         background: 'white',
-        borderRadius: '24px',
-        padding: '32px',
-        maxWidth: '500px',
-        width: '90%',
+        borderRadius: '28px',
+        padding: '0',
+        maxWidth: '520px',
+        width: '100%',
         maxHeight: '90vh',
-        overflow: 'auto',
-        boxShadow: '0 24px 48px rgba(0, 0, 0, 0.3)',
-        animation: 'slideInUp 0.3s ease'
+        overflow: 'hidden',
+        boxShadow: '0 24px 60px rgba(0, 0, 0, 0.25), 0 8px 16px rgba(0, 0, 0, 0.15)',
+        animation: 'slideInUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        {/* Header */}
+        {/* Header with gradient background */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '24px'
-        }}>
-          <h2 style={{
-            fontSize: '28px',
-            fontWeight: '800',
-            color: '#1a2b48',
-            margin: 0
-          }}>
-            💰 Cash Out
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '24px',
-              cursor: 'pointer',
-              padding: '8px',
-              borderRadius: '8px',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={e => e.target.style.background = '#f3f4f6'}
-            onMouseLeave={e => e.target.style.background = 'none'}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Revenue Summary */}
-        <div style={{
-          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-          borderRadius: '16px',
-          padding: '24px',
+          background: 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
+          padding: '28px 32px',
           color: 'white',
-          marginBottom: '24px',
-          textAlign: 'center'
+          position: 'relative',
+          overflow: 'hidden'
         }}>
-          <p style={{ fontSize: '16px', opacity: 0.9, margin: '0 0 8px 0' }}>Available to Cash Out</p>
-          <h3 style={{ fontSize: '48px', fontWeight: '900', margin: '0 0 12px 0' }}>
-            ${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </h3>
-          <p style={{ fontSize: '14px', opacity: 0.8, margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            {todayRevenue > 0 && (
-              <>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontWeight: '600' }}>
-                  ↑ +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today
-                </span>
-                <span>•</span>
-              </>
-            )}
-            <span>${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total</span>
-          </p>
-        </div>
-
-        {/* Payment Method */}
-        <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ fontSize: '18px', fontWeight: '700', color: '#1a2b48', marginBottom: '16px' }}>
-            Payment Method
-          </h4>
+          {/* Decorative circles */}
           <div style={{
-            border: '2px solid #e5e7eb',
-            borderRadius: '12px',
-            padding: '16px',
+            position: 'absolute',
+            top: '-30px',
+            right: '-30px',
+            width: '120px',
+            height: '120px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '50%'
+          }} />
+          <div style={{
+            position: 'absolute',
+            bottom: '-20px',
+            left: '-20px',
+            width: '80px',
+            height: '80px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '50%'
+          }} />
+          
+          <div style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
+            justifyContent: 'space-between',
+            alignItems: 'start',
+            position: 'relative',
+            zIndex: 1
           }}>
-            <span style={{ fontSize: '24px' }}>🏦</span>
             <div>
-              <p style={{ fontSize: '16px', fontWeight: '600', color: '#1a2b48', margin: 0 }}>
-                {bankDetails?.bank_name || 'Bank Account'}
-              </p>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
-                {bankDetails?.last4 ? `•••• •••• •••• ${bankDetails.last4}` : 'Securely connected via Stripe'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <DollarSign size={28} style={{ strokeWidth: 2.5 }} />
+                <h2 style={{
+                  fontSize: '26px',
+                  fontWeight: '800',
+                  margin: 0,
+                  letterSpacing: '-0.5px'
+                }}>
+                  Cash Out
+                </h2>
+              </div>
+              <p style={{ 
+                fontSize: '15px', 
+                opacity: 0.95, 
+                margin: 0,
+                fontWeight: '500'
+              }}>
+                Transfer your earnings to your bank
               </p>
             </div>
+            <button
+              onClick={onClose}
+              disabled={isSubmitting}
+              style={{
+                background: 'rgba(255, 255, 255, 0.15)',
+                border: 'none',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                padding: '8px',
+                borderRadius: '10px',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backdropFilter: 'blur(10px)',
+                opacity: isSubmitting ? 0.5 : 1
+              }}
+              onMouseEnter={e => !isSubmitting && (e.target.style.background = 'rgba(255, 255, 255, 0.25)')}
+              onMouseLeave={e => !isSubmitting && (e.target.style.background = 'rgba(255, 255, 255, 0.15)')}
+            >
+              <X size={20} color="white" />
+            </button>
           </div>
         </div>
 
-        {/* Processing Info */}
+        {/* Scrollable Content */}
         <div style={{
-          background: '#fef3c7',
-          border: '1px solid #fbbf24',
-          borderRadius: '12px',
-          padding: '16px',
-          marginBottom: '24px'
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          padding: '32px',
+          flex: 1
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '20px' }}>⚡</span>
-            <p style={{ fontSize: '16px', fontWeight: '600', color: '#92400e', margin: 0 }}>
-              {speed === 'instant' ? 'Instant Transfer' : 'Standard Transfer'}
-            </p>
-          </div>
-          <p style={{ fontSize: '14px', color: '#92400e', margin: 0 }}>
-            {speed === 'instant' ? 'Funds typically arrive in minutes (fee applies)' : 'Funds will be transferred to your account within 1-2 business days (free)'}
-          </p>
-        </div>
 
-        {/* Speed Selector */}
-        <div style={{ marginBottom: '16px' }}>
-          <h4 style={{ fontSize: '16px', fontWeight: '700', color: '#1a2b48', marginBottom: '8px' }}>Payout Speed</h4>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setSpeed('standard')}
-              style={{
-                flex: 1,
-                background: speed === 'standard' ? '#e5f9f1' : '#f3f4f6',
-                border: `2px solid ${speed === 'standard' ? '#10b981' : '#e5e7eb'}`,
-                borderRadius: '10px',
-                padding: '10px 12px',
-                cursor: 'pointer',
-                fontWeight: 600
-              }}
-            >
-              Free (1–2 days)
-            </button>
-            <button
-              onClick={() => bankDetails?.instantEligible && setSpeed('instant')}
-              disabled={!bankDetails?.instantEligible}
-              style={{
-                flex: 1,
-                background: speed === 'instant' ? '#fff7ed' : '#f3f4f6',
-                border: `2px solid ${speed === 'instant' ? '#f59e0b' : '#e5e7eb'}`,
-                borderRadius: '10px',
-                padding: '10px 12px',
-                cursor: bankDetails?.instantEligible ? 'pointer' : 'not-allowed',
-                fontWeight: 600,
-                opacity: bankDetails?.instantEligible ? 1 : 0.5
-              }}
-            >
-              {bankDetails?.instantEligible ? 'Instant (fee)' : 'Instant (unavailable)'}
-            </button>
-          </div>
-          
-          {/* Instant eligibility message */}
-          {!bankDetails?.instantEligible && (
-            <div style={{
-              marginTop: '8px',
-              padding: '8px 12px',
-              background: '#fef3c7',
-              border: '1px solid #f59e0b',
-              borderRadius: '8px',
-              fontSize: '13px',
-              color: '#92400e'
+          {/* Amount Summary - Prominent Display */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '32px'
+          }}>
+            <p style={{ 
+              fontSize: '14px', 
+              color: '#6b7280',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              fontWeight: '600',
+              margin: '0 0 12px 0'
             }}>
-              💡 Add a debit card to your Stripe account to enable instant payouts
+              Available Balance
+            </p>
+            <h3 style={{ 
+              fontSize: '56px', 
+              fontWeight: '900', 
+              margin: '0 0 16px 0',
+              color: '#0070f3',
+              letterSpacing: '-2px',
+              lineHeight: '1'
+            }}>
+              ${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              {todayRevenue > 0 && (
+                <>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#dbeafe',
+                    color: '#0070f3',
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '13px',
+                    fontWeight: '600'
+                  }}>
+                    <TrendingUp size={14} />
+                    +${todayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today
+                  </div>
+                </>
+              )}
+              <span style={{ fontSize: '14px', color: '#9ca3af', fontWeight: '500' }}>
+                ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total earned
+              </span>
+            </div>
+          </div>
+
+          {/* Payment Method - Enhanced */}
+          <div style={{ marginBottom: '28px' }}>
+            <h4 style={{ 
+              fontSize: '15px', 
+              fontWeight: '700', 
+              color: '#374151',
+              marginBottom: '14px',
+              letterSpacing: '-0.2px'
+            }}>
+              Deposit To
+            </h4>
+            <div style={{
+              background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+              border: '2px solid #e5e7eb',
+              borderRadius: '16px',
+              padding: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              transition: 'all 0.2s',
+              cursor: 'default'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                background: 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                flexShrink: 0
+              }}>
+                🏦
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '700', 
+                  color: '#111827', 
+                  margin: '0 0 4px 0',
+                  letterSpacing: '-0.3px'
+                }}>
+                  {bankDetails?.bank_name || 'Bank Account'}
+                </p>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#6b7280', 
+                  margin: 0,
+                  fontWeight: '500'
+                }}>
+                  {bankDetails?.last4 ? `•••• •••• •••• ${bankDetails.last4}` : 'Secured by Stripe'}
+                </p>
+              </div>
+              <CheckCircle size={22} color="#0070f3" style={{ flexShrink: 0 }} />
+            </div>
+          </div>
+
+          {/* Speed Selector - Improved UX */}
+          <div style={{ marginBottom: '24px' }}>
+            <h4 style={{ 
+              fontSize: '15px', 
+              fontWeight: '700', 
+              color: '#374151',
+              marginBottom: '14px',
+              letterSpacing: '-0.2px'
+            }}>
+              Transfer Speed
+            </h4>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {/* Standard Option */}
+              <button
+                onClick={() => setSpeed('standard')}
+                disabled={isSubmitting}
+                style={{
+                  flex: 1,
+                  background: speed === 'standard' 
+                    ? 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)'
+                    : '#fafafa',
+                  border: `2px solid ${speed === 'standard' ? '#0070f3' : '#e5e7eb'}`,
+                  borderRadius: '14px',
+                  padding: '16px 14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  textAlign: 'left',
+                  opacity: isSubmitting ? 0.6 : 1
+                }}
+                onMouseEnter={e => !isSubmitting && speed !== 'standard' && (e.target.style.borderColor = '#cbd5e1')}
+                onMouseLeave={e => !isSubmitting && speed !== 'standard' && (e.target.style.borderColor = '#e5e7eb')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <Clock size={18} color={speed === 'standard' ? '#0070f3' : '#6b7280'} />
+                  <span style={{ 
+                    fontSize: '15px', 
+                    fontWeight: '700',
+                    color: speed === 'standard' ? '#0070f3' : '#374151'
+                  }}>
+                    Standard
+                  </span>
+                </div>
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: speed === 'standard' ? '#1e40af' : '#6b7280',
+                  margin: '0 0 6px 0',
+                  fontWeight: '500'
+                }}>
+                  1-2 business days
+                </p>
+                <div style={{
+                  display: 'inline-block',
+                  background: speed === 'standard' ? '#0070f3' : '#10b981',
+                  color: 'white',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                }}>
+                  FREE
+                </div>
+              </button>
+
+              {/* Instant Option */}
+              <button
+                onClick={() => bankDetails?.instantEligible && setSpeed('instant')}
+                disabled={!bankDetails?.instantEligible || isSubmitting}
+                style={{
+                  flex: 1,
+                  background: speed === 'instant' 
+                    ? 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)'
+                    : '#fafafa',
+                  border: `2px solid ${speed === 'instant' ? '#f59e0b' : '#e5e7eb'}`,
+                  borderRadius: '14px',
+                  padding: '16px 14px',
+                  cursor: (!bankDetails?.instantEligible || isSubmitting) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  textAlign: 'left',
+                  opacity: (!bankDetails?.instantEligible || isSubmitting) ? 0.5 : 1
+                }}
+                onMouseEnter={e => !isSubmitting && bankDetails?.instantEligible && speed !== 'instant' && (e.target.style.borderColor = '#cbd5e1')}
+                onMouseLeave={e => !isSubmitting && bankDetails?.instantEligible && speed !== 'instant' && (e.target.style.borderColor = '#e5e7eb')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <Zap size={18} color={speed === 'instant' ? '#d97706' : '#6b7280'} />
+                  <span style={{ 
+                    fontSize: '15px', 
+                    fontWeight: '700',
+                    color: speed === 'instant' ? '#d97706' : '#374151'
+                  }}>
+                    Instant
+                  </span>
+                </div>
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: speed === 'instant' ? '#92400e' : '#6b7280',
+                  margin: '0 0 6px 0',
+                  fontWeight: '500'
+                }}>
+                  {bankDetails?.instantEligible ? 'Within minutes' : 'Not available'}
+                </p>
+                <div style={{
+                  display: 'inline-block',
+                  background: speed === 'instant' ? '#f59e0b' : '#d1d5db',
+                  color: speed === 'instant' ? 'white' : '#6b7280',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                }}>
+                  1.5% FEE
+                </div>
+              </button>
+            </div>
+            
+            {/* Instant eligibility message */}
+            {!bankDetails?.instantEligible && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px 14px',
+                background: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: '12px',
+                fontSize: '13px',
+                color: '#92400e',
+                display: 'flex',
+                alignItems: 'start',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '16px', lineHeight: '1' }}>💡</span>
+                <p style={{ margin: 0, lineHeight: '1.5', fontWeight: '500' }}>
+                  Connect a debit card in your Stripe account to enable instant payouts
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Instant Fee Breakdown - Enhanced */}
+          {speed === 'instant' && bankDetails?.instantEligible && (
+            <div style={{
+              background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+              border: '2px solid #fde68a',
+              borderRadius: '16px',
+              padding: '18px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                marginBottom: '14px',
+                paddingBottom: '12px',
+                borderBottom: '1px solid #fde68a'
+              }}>
+                <Zap size={18} color="#f59e0b" />
+                <span style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '700', 
+                  color: '#92400e',
+                  letterSpacing: '-0.2px'
+                }}>
+                  Instant Transfer Breakdown
+                </span>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#78350f', fontWeight: '500' }}>
+                    Transfer amount
+                  </span>
+                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#78350f' }}>
+                    ${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#78350f', fontWeight: '500' }}>
+                    Instant fee (1.5%, min $0.50)
+                  </span>
+                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#dc2626' }}>
+                    -${feePreview.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                
+                <div style={{
+                  marginTop: '8px',
+                  paddingTop: '12px',
+                  borderTop: '2px solid #fde68a',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontSize: '15px', color: '#78350f', fontWeight: '700' }}>
+                    You receive
+                  </span>
+                  <span style={{ fontSize: '20px', fontWeight: '900', color: '#0070f3', letterSpacing: '-0.5px' }}>
+                    ${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+              
+              {bankDetails?.instantAvailable < availableToCashOut && (
+                <div style={{ 
+                  marginTop: '14px', 
+                  padding: '10px 12px', 
+                  background: '#fef3c7', 
+                  borderRadius: '10px', 
+                  fontSize: '13px',
+                  color: '#92400e',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span>⚠️</span>
+                  <span>
+                    Instant limit: ${bankDetails?.instantAvailable?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'} available
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Instant Fee Breakdown */}
-        {speed === 'instant' && bankDetails?.instantEligible && (
-          <div style={{
-            background: '#fff7ed',
-            border: '1px solid #f59e0b',
-            borderRadius: '10px',
-            padding: '12px',
-            marginBottom: '16px',
-            fontSize: '14px',
-            color: '#92400e'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Instant payout fee (1.5%, min $0.50)</span>
-              <span>${feePreview.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontWeight: 700 }}>
-              <span>You receive</span>
-              <span>${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            </div>
-            {bankDetails?.instantAvailable < availableToCashOut && (
-              <div style={{ marginTop: '8px', padding: '8px', background: '#fef3c7', borderRadius: '6px', fontSize: '12px' }}>
-                ⚠️ Instant limit: ${bankDetails?.instantAvailable?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'} available
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '12px' }}>
+        {/* Action Buttons - Fixed Footer */}
+        <div style={{ 
+          padding: '24px 32px',
+          borderTop: '1px solid #e5e7eb',
+          background: 'white',
+          display: 'flex', 
+          gap: '12px'
+        }}>
           <button
             onClick={onClose}
+            disabled={isSubmitting}
             style={{
               flex: 1,
-              background: '#f3f4f6',
-              border: 'none',
-              borderRadius: '12px',
+              background: 'white',
+              border: '2px solid #e5e7eb',
+              borderRadius: '14px',
               padding: '16px',
               fontSize: '16px',
-              fontWeight: '600',
-              color: '#374151',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
+              fontWeight: '700',
+              color: '#6b7280',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              opacity: isSubmitting ? 0.5 : 1
             }}
-            onMouseEnter={e => e.target.style.background = '#e5e7eb'}
-            onMouseLeave={e => e.target.style.background = '#f3f4f6'}
+            onMouseEnter={e => !isSubmitting && (e.target.style.borderColor = '#cbd5e1')}
+            onMouseLeave={e => !isSubmitting && (e.target.style.borderColor = '#e5e7eb')}
           >
             Cancel
           </button>
           <button
             onClick={async () => {
+              setIsSubmitting(true);
               try {
                 const response = await fetch('/api/cashout/request', {
                   method: 'POST',
@@ -453,54 +711,69 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                 
                 if (response.ok) {
                   alert(speed === 'instant' 
-                    ? `Instant cashout initiated! $${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will arrive shortly (fee $${(feePreview).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`
-                    : `Cashout initiated! $${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will reach your bank in 1–2 business days.`);
+                    ? `✅ Instant cashout initiated! $${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will arrive shortly (fee: $${(feePreview).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).`
+                    : `✅ Cashout initiated! $${availableToCashOut.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will reach your bank in 1–2 business days.`);
                   window.location.reload();
                 } else {
                   // Enhanced error handling with user-friendly messages
                   if (result.action === 'connect_bank') {
-                    alert('Please connect your bank account first.');
+                    alert('❌ Please connect your bank account first.');
                   } else if (result.code === 'rate_limited') {
-                    alert('Too many cashout requests. Please wait an hour before trying again.');
+                    alert('⏰ Too many cashout requests. Please wait an hour before trying again.');
                   } else if (result.code === 'instant_not_supported') {
-                    alert('Instant payouts require a debit card. Please add one in your Stripe account settings or use standard payout.');
+                    alert('💳 Instant payouts require a debit card. Please add one in your Stripe account settings or use standard payout.');
                   } else if (result.code === 'daily_limit_exceeded') {
-                    alert('Daily instant payout limit reached. Please try again tomorrow or use standard payout.');
+                    alert('📅 Daily instant payout limit reached. Please try again tomorrow or use standard payout.');
                   } else if (result.code === 'instant_limit_exceeded') {
-                    alert(`Amount exceeds instant availability. Maximum instant: $${result.instantAvailable?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`);
+                    alert(`⚠️ Amount exceeds instant availability. Maximum instant: $${result.instantAvailable?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`);
                   } else if (result.code === 'insufficient_funds_with_fee') {
-                    alert(`Insufficient funds to cover instant fee. Fee: $${result.fee?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`);
+                    alert(`⚠️ Insufficient funds to cover instant fee. Fee: $${result.fee?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`);
                   } else {
-                    alert(`Cashout failed: ${result.error}`);
+                    alert(`❌ Cashout failed: ${result.error}`);
                   }
+                  setIsSubmitting(false);
                 }
               } catch (error) {
                 console.error('Cashout error:', error);
-                alert('Cashout failed. Please try again.');
+                alert('❌ Cashout failed. Please try again.');
+                setIsSubmitting(false);
               }
-              onClose();
             }}
+            disabled={isSubmitting}
             style={{
               flex: 2,
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              background: isSubmitting 
+                ? '#9ca3af'
+                : 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
               border: 'none',
-              borderRadius: '12px',
+              borderRadius: '14px',
               padding: '16px',
               fontSize: '16px',
-              fontWeight: '700',
+              fontWeight: '800',
               color: 'white',
-              cursor: 'pointer',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '10px',
+              boxShadow: isSubmitting ? 'none' : '0 4px 12px rgba(0, 112, 243, 0.3)',
+              letterSpacing: '-0.3px'
             }}
-            onMouseEnter={e => e.target.style.transform = 'scale(1.02)'}
-            onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+            onMouseEnter={e => !isSubmitting && (e.target.style.transform = 'translateY(-2px)')}
+            onMouseLeave={e => !isSubmitting && (e.target.style.transform = 'translateY(0)')}
           >
-            <DollarSign size={20} />
-            Confirm Cash Out
+            {isSubmitting ? (
+              <>
+                <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                Processing...
+              </>
+            ) : (
+              <>
+                <DollarSign size={20} style={{ strokeWidth: 2.5 }} />
+                Confirm Transfer
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -308,7 +308,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
             zIndex: 1
           }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <DollarSign size={28} style={{ strokeWidth: 2.5 }} />
                 <h2 style={{
                   fontSize: '26px',
@@ -319,14 +319,6 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                   Cash Out
                 </h2>
               </div>
-              <p style={{ 
-                fontSize: '15px', 
-                opacity: 0.95, 
-                margin: 0,
-                fontWeight: '500'
-              }}>
-                Transfer your earnings to your bank
-              </p>
             </div>
             <button
               onClick={onClose}
@@ -2561,6 +2553,28 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
               business={business}
               onCashOutClick={handleOpenCashOutModal}
             /> */}
+            
+            {/* AI Active Indicator */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                background: '#10b981',
+                borderRadius: '50%',
+                animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+              }} />
+              <span style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: theme.colors.textDark
+              }}>
+                AI Active
+              </span>
+            </div>
             
             <UserProfile theme={theme} session={session} business={business} />
           </div>

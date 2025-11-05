@@ -2276,21 +2276,12 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           theme={theme}
         />
 
-        {/* Live Website Preview with Real-time Updates */}
-        <LiveWebsiteCard 
-          subdomain={business?.subdomain}
-          visitors={business?.views || 0}
-          businessData={businessData}
-          generationStage={generationStage}
-          business={business}
-        />
-
-        {/* Insights - Revenue & Performance Metrics First */}
-        <InsightsCard 
-          isSetupComplete={setupComplete}
+        {/* Real-time AI Activity Feed - Show how AI is working */}
+        <AIActivityFeed 
           generationStage={generationStage}
           businessData={businessData}
           business={business}
+          sessionId={session?.id}
         />
 
          {/* Customer Activity - Group with business performance */}
@@ -2301,15 +2292,24 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
            />
          )}
 
-        {/* Real-time AI Activity Feed - Show how AI is working */}
-        <AIActivityFeed 
+        {/* Insights - Revenue & Performance Metrics */}
+        <InsightsCard 
+          isSetupComplete={setupComplete}
           generationStage={generationStage}
           businessData={businessData}
           business={business}
-          sessionId={session?.id}
         />
 
-        {/* Business Management - Tools and settings after performance data */}
+        {/* Live Website Preview with Real-time Updates */}
+        <LiveWebsiteCard 
+          subdomain={business?.subdomain}
+          visitors={business?.views || 0}
+          businessData={businessData}
+          generationStage={generationStage}
+          business={business}
+        />
+
+        {/* Business Management - Tools and settings */}
         {generationStage === 'complete' && <BusinessManagementCard business={business} />}
 
         {/* Simple Next Steps - Only show after generation */}

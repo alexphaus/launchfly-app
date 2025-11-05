@@ -30,6 +30,14 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
   const [notes, setNotes] = useState([]);
   const [addingNote, setAddingNote] = useState(false);
   
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   useEffect(() => {
     if (customer) {
       fetchNotes();
@@ -92,52 +100,81 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div style={{
-        background: theme.colors.white,
-        borderRadius: '20px',
-        padding: '32px',
-        maxWidth: '700px',
-        width: '100%',
-        maxHeight: '90vh',
-        overflow: 'auto',
-        boxShadow: theme.shadows.xl
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px' }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>
-              {customer.name}
-            </h2>
-            <p style={{ fontSize: '16px', color: theme.colors.textGray, margin: '4px 0 12px 0' }}>
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.6)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px',
+        animation: 'fadeIn 0.2s ease'
+      }}
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: theme.colors.white,
+          borderRadius: '20px',
+          padding: '28px',
+          maxWidth: '520px',
+          width: '100%',
+          maxHeight: '85vh',
+          overflow: 'auto',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.2)',
+          animation: 'slideInUp 0.3s ease'
+        }}
+      >
+        {/* Header - Compact */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'start', 
+          marginBottom: '20px',
+          paddingBottom: '16px',
+          borderBottom: `2px solid ${theme.colors.bgLight}`
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+              <h2 style={{ 
+                fontSize: '22px', 
+                fontWeight: '800', 
+                color: theme.colors.textDark, 
+                margin: 0,
+                letterSpacing: '-0.5px'
+              }}>
+                {customer.name}
+              </h2>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: tempColors[leadTemp].bg,
+                color: tempColors[leadTemp].color,
+                padding: '4px 10px',
+                borderRadius: '16px',
+                fontSize: '12px',
+                fontWeight: '700'
+              }}>
+                {tempColors[leadTemp].label}
+              </div>
+            </div>
+            <p style={{ 
+              fontSize: '14px', 
+              color: theme.colors.textGray, 
+              margin: 0,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
               {customer.email}
             </p>
-            
-            {/* Lead Temperature Badge */}
-            <div style={{
-              display: 'inline-block',
-              background: tempColors[leadTemp].bg,
-              color: tempColors[leadTemp].color,
-              padding: '6px 12px',
-              borderRadius: '20px',
-              fontSize: '14px',
-              fontWeight: '600',
-              marginRight: '8px'
-            }}>
-              {tempColors[leadTemp].label}
-            </div>
           </div>
           
           <button
@@ -146,85 +183,106 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              padding: '4px',
-              color: theme.colors.textGray
+              padding: '6px',
+              color: theme.colors.textGray,
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+              flexShrink: 0,
+              marginLeft: '12px'
             }}
+            onMouseEnter={e => e.target.style.background = theme.colors.bgLight}
+            onMouseLeave={e => e.target.style.background = 'transparent'}
           >
-            <X size={24} />
+            <X size={22} />
           </button>
         </div>
 
-        {/* Quick Stats */}
+        {/* Quick Stats - Compact Grid */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
-          gap: '12px',
-          marginBottom: '24px'
+          gridTemplateColumns: 'repeat(2, 1fr)', 
+          gap: '10px',
+          marginBottom: '18px'
         }}>
           <div style={{
             background: theme.colors.bgLight,
-            padding: '12px',
-            borderRadius: '12px'
+            padding: '10px 12px',
+            borderRadius: '10px'
           }}>
-            <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: 0 }}>Company</p>
-            <p style={{ fontSize: '16px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '600' }}>
+            <p style={{ fontSize: '11px', color: theme.colors.textGray, margin: 0, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              Company
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '700' }}>
               {customer.company}
             </p>
           </div>
           
           <div style={{
             background: theme.colors.bgLight,
-            padding: '12px',
-            borderRadius: '12px'
+            padding: '10px 12px',
+            borderRadius: '10px'
           }}>
-            <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: 0 }}>Status</p>
-            <p style={{ fontSize: '16px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '600' }}>
+            <p style={{ fontSize: '11px', color: theme.colors.textGray, margin: 0, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              Status
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '700' }}>
               {customer.status}
             </p>
           </div>
           
           <div style={{
             background: theme.colors.bgLight,
-            padding: '12px',
-            borderRadius: '12px'
+            padding: '10px 12px',
+            borderRadius: '10px'
           }}>
-            <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: 0 }}>Engagement</p>
-            <p style={{ fontSize: '16px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '600' }}>
+            <p style={{ fontSize: '11px', color: theme.colors.textGray, margin: 0, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              Engagement
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '700' }}>
               {engagementScore}/100
             </p>
           </div>
           
           <div style={{
             background: theme.colors.bgLight,
-            padding: '12px',
-            borderRadius: '12px'
+            padding: '10px 12px',
+            borderRadius: '10px'
           }}>
-            <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: 0 }}>Value</p>
-            <p style={{ fontSize: '16px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '600' }}>
+            <p style={{ fontSize: '11px', color: theme.colors.textGray, margin: 0, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              Value
+            </p>
+            <p style={{ fontSize: '14px', color: theme.colors.textDark, margin: '4px 0 0 0', fontWeight: '700' }}>
               ${customer.totalValue || 0}
             </p>
           </div>
         </div>
 
-        {/* Suggested Next Action */}
+        {/* Suggested Next Action - Compact */}
         <div style={{
-          background: '#dbeafe',
-          padding: '12px 16px',
-          borderRadius: '12px',
-          marginBottom: '24px',
+          background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+          padding: '10px 14px',
+          borderRadius: '10px',
+          marginBottom: '16px',
           display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
+          alignItems: 'start',
+          gap: '10px'
         }}>
-          <TrendingUp size={18} color="#0284c7" />
-          <div>
-            <p style={{ fontSize: '12px', color: '#0369a1', margin: 0, fontWeight: '600' }}>Suggested Next Step</p>
-            <p style={{ fontSize: '14px', color: '#075985', margin: '2px 0 0 0' }}>{nextAction}</p>
+          <TrendingUp size={16} color="#0284c7" style={{ marginTop: '2px', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: '11px', color: '#0369a1', margin: 0, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+              Next Step
+            </p>
+            <p style={{ fontSize: '13px', color: '#075985', margin: '4px 0 0 0', fontWeight: '500', lineHeight: '1.4' }}>
+              {nextAction}
+            </p>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+        {/* Quick Actions - Compact */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
           <button
             onClick={handleSendEmail}
             disabled={customer.email === 'No email provided'}
@@ -233,86 +291,109 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px',
-              padding: '12px',
-              background: customer.email === 'No email provided' ? theme.colors.borderLight : theme.colors.primary,
+              gap: '6px',
+              padding: '10px 12px',
+              background: customer.email === 'No email provided' 
+                ? theme.colors.borderLight 
+                : 'linear-gradient(135deg, #007BFF 0%, #0056b3 100%)',
               color: 'white',
               border: 'none',
-              borderRadius: '12px',
-              fontSize: '14px',
-              fontWeight: '600',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: '700',
               cursor: customer.email === 'No email provided' ? 'not-allowed' : 'pointer',
-              opacity: customer.email === 'No email provided' ? 0.5 : 1
+              opacity: customer.email === 'No email provided' ? 0.5 : 1,
+              transition: 'all 0.2s'
             }}
+            onMouseEnter={e => customer.email !== 'No email provided' && (e.target.style.transform = 'translateY(-1px)')}
+            onMouseLeave={e => customer.email !== 'No email provided' && (e.target.style.transform = 'translateY(0)')}
           >
-            <Mail size={18} />
-            Send Email
+            <Mail size={16} />
+            Email
           </button>
           
           <button
-            onClick={() => document.getElementById('note-input').focus()}
+            onClick={() => document.getElementById('note-input')?.focus()}
             style={{
               flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px',
-              padding: '12px',
-              background: 'transparent',
-              color: theme.colors.primary,
-              border: `2px solid ${theme.colors.primary}`,
-              borderRadius: '12px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer'
+              gap: '6px',
+              padding: '10px 12px',
+              background: 'white',
+              color: '#007BFF',
+              border: `2px solid #007BFF`,
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => {
+              e.target.style.background = '#007BFF';
+              e.target.style.color = 'white';
+            }}
+            onMouseLeave={e => {
+              e.target.style.background = 'white';
+              e.target.style.color = '#007BFF';
             }}
           >
-            <MessageSquare size={18} />
-            Add Note
+            <MessageSquare size={16} />
+            Note
           </button>
         </div>
 
-        {/* Notes Section */}
-        <div style={{ marginBottom: '24px' }}>
-          <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: theme.colors.textDark }}>
+        {/* Notes Section - Compact */}
+        <div style={{ marginBottom: '18px' }}>
+          <h4 style={{ 
+            fontSize: '14px', 
+            fontWeight: '700', 
+            marginBottom: '10px', 
+            color: theme.colors.textDark,
+            letterSpacing: '-0.2px'
+          }}>
             Notes
           </h4>
           
-          {/* Add Note */}
-          <div style={{ marginBottom: '16px' }}>
+          {/* Add Note - Compact */}
+          <div style={{ marginBottom: '12px' }}>
             <textarea
               id="note-input"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Add a note about this customer..."
+              placeholder="Add a note..."
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '10px',
                 border: `2px solid ${theme.colors.borderLight}`,
                 borderRadius: '8px',
-                fontSize: '14px',
+                fontSize: '13px',
                 resize: 'vertical',
-                minHeight: '80px',
-                outline: 'none'
+                minHeight: '60px',
+                outline: 'none',
+                fontFamily: 'inherit'
               }}
+              onFocus={e => e.target.style.borderColor = theme.colors.primary}
+              onBlur={e => e.target.style.borderColor = theme.colors.borderLight}
             />
             <button
               onClick={handleAddNote}
               disabled={!note.trim() || addingNote}
               style={{
-                marginTop: '8px',
-                padding: '8px 16px',
-                background: theme.colors.primary,
+                marginTop: '6px',
+                padding: '6px 14px',
+                background: !note.trim() || addingNote ? '#d1d5db' : theme.colors.primary,
                 color: 'white',
                 border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '700',
                 cursor: !note.trim() || addingNote ? 'not-allowed' : 'pointer',
-                opacity: !note.trim() || addingNote ? 0.5 : 1
+                transition: 'all 0.2s'
               }}
             >
-              {addingNote ? 'Adding...' : 'Add Note'}
+              {addingNote ? 'Saving...' : 'Save Note'}
             </button>
           </div>
 
@@ -322,19 +403,21 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
               {notes.map((n, idx) => (
                 <div key={idx} style={{
                   background: theme.colors.bgLight,
-                  padding: '12px',
-                  borderRadius: '8px',
-                  marginBottom: '8px'
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  marginBottom: '6px'
                 }}>
-                  <p style={{ fontSize: '14px', color: theme.colors.textDark, margin: 0 }}>{n.note}</p>
-                  <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '13px', color: theme.colors.textDark, margin: 0, lineHeight: '1.4' }}>
+                    {n.note}
+                  </p>
+                  <p style={{ fontSize: '11px', color: theme.colors.textGray, margin: '4px 0 0 0' }}>
                     {formatRelativeTime(n.created_at)}
                   </p>
                 </div>
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: '14px', color: theme.colors.textGray, fontStyle: 'italic' }}>
+            <p style={{ fontSize: '12px', color: theme.colors.textGray, fontStyle: 'italic', margin: 0 }}>
               No notes yet
             </p>
           )}
@@ -342,30 +425,53 @@ const EnhancedCustomerDetailModal = ({ customer, business, onClose, onRefresh })
 
         {/* Activity History */}
         <div>
-          <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: theme.colors.textDark }}>
+          <h4 style={{ 
+            fontSize: '14px', 
+            fontWeight: '700', 
+            marginBottom: '10px', 
+            color: theme.colors.textDark,
+            letterSpacing: '-0.2px'
+          }}>
             Activity History
           </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {customer.activities.map((activity) => (
-              <div key={activity.id} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px',
-                background: theme.colors.bgLight,
-                borderRadius: '8px'
-              }}>
-                <span style={{ fontSize: '20px' }}>{activity.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: '14px', color: theme.colors.textDark, margin: 0, fontWeight: '500' }}>
-                    {activity.text}
-                  </p>
-                  <p style={{ fontSize: '12px', color: theme.colors.textGray, margin: '4px 0 0 0' }}>
-                    {formatRelativeTime(activity.time)}
-                  </p>
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '8px'
+          }}>
+            {customer.activities && customer.activities.length > 0 ? (
+              customer.activities.map((activity) => (
+                <div key={activity.id} style={{
+                  display: 'flex',
+                  alignItems: 'start',
+                  gap: '10px',
+                  padding: '10px',
+                  background: theme.colors.bgLight,
+                  borderRadius: '8px',
+                  transition: 'all 0.2s'
+                }}>
+                  <span style={{ fontSize: '18px', flexShrink: 0 }}>{activity.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ 
+                      fontSize: '13px', 
+                      color: theme.colors.textDark, 
+                      margin: 0, 
+                      fontWeight: '600',
+                      lineHeight: '1.3'
+                    }}>
+                      {activity.text}
+                    </p>
+                    <p style={{ fontSize: '11px', color: theme.colors.textGray, margin: '4px 0 0 0' }}>
+                      {formatRelativeTime(activity.time)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p style={{ fontSize: '13px', color: theme.colors.textGray, fontStyle: 'italic', textAlign: 'center', padding: '20px 0' }}>
+                No activity yet
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -562,8 +668,6 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {customers.slice(0, 5).map((customer, index) => {
-            const engagementScore = calculateEngagementScore(customer.activities);
-            
             return (
               // Use a stable unique key by combining normalized email with index fallback
               <div key={`${customer.id || customer.email || 'customer'}-${index}`} onClick={() => setSelectedCustomer(customer)} style={{
@@ -606,19 +710,14 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
                   </p>
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                  <div style={{
-                    ...getStatusStyle(customer.status),
-                    padding: '4px 10px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
-                    {customer.status}
-                  </div>
-                  <div style={{ fontSize: '11px', color: theme.colors.textGray }}>
-                    {engagementScore}/100
-                  </div>
+                <div style={{
+                  ...getStatusStyle(customer.status),
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>
+                  {customer.status}
                 </div>
                 
                 <ChevronRight size={16} color={theme.colors.textGray} />

@@ -20,32 +20,46 @@ const theme = {
 
 // --- COMPONENT: Customer Detail Modal ---
 const CustomerDetailModal = ({ customer, onClose }) => {
+  // Lock body scroll when modal is open
+  React.useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   if (!customer) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div style={{
-        background: theme.colors.white,
-        borderRadius: '20px',
-        padding: '32px',
-        maxWidth: '600px',
-        width: '100%',
-        maxHeight: '80vh',
-        overflow: 'auto',
-        boxShadow: theme.shadows.xl
-      }}>
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      }}
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: theme.colors.white,
+          borderRadius: '20px',
+          padding: '32px',
+          maxWidth: '600px',
+          width: '100%',
+          maxHeight: '80vh',
+          overflow: 'auto',
+          boxShadow: theme.shadows.xl
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px' }}>
           <div>
             <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>

@@ -36,6 +36,14 @@ const theme = {
 
 // --- COMPONENT: Activity Detail Modal ---
 const ActivityDetailModal = ({ activity, onClose }) => {
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   if (!activity) return null;
 
   const getDetailedInfo = (activity) => {
@@ -93,29 +101,35 @@ const ActivityDetailModal = ({ activity, onClose }) => {
   const info = getDetailedInfo(activity);
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div style={{
-        background: theme.colors.white,
-        borderRadius: '20px',
-        padding: '32px',
-        maxWidth: '500px',
-        width: '100%',
-        maxHeight: '80vh',
-        overflow: 'auto',
-        boxShadow: theme.shadows.xl
-      }}>
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        padding: '20px'
+      }}
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: theme.colors.white,
+          borderRadius: '20px',
+          padding: '32px',
+          maxWidth: '500px',
+          width: '100%',
+          maxHeight: '80vh',
+          overflow: 'auto',
+          boxShadow: theme.shadows.xl
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '24px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.colors.textDark, margin: 0 }}>
             {info.title}
@@ -192,6 +206,16 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
   const [netAmount, setNetAmount] = useState(availableToCashOut);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = 'unset';
+      };
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (speed === 'instant' && bankDetails?.instantEligible) {
       const fee = Math.max(0.5, Math.round(availableToCashOut * 0.015 * 100) / 100);
@@ -210,37 +234,47 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.75)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      animation: 'fadeIn 0.2s ease',
-      padding: '20px'
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '28px',
-        padding: '0',
-        maxWidth: '520px',
-        width: '100%',
-        maxHeight: '90vh',
-        overflow: 'hidden',
-        boxShadow: '0 24px 60px rgba(0, 0, 0, 0.25), 0 8px 16px rgba(0, 0, 0, 0.15)',
-        animation: 'slideInUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    <div 
+      onClick={(e) => {
+        if (!isSubmitting) {
+          onClose();
+        }
+      }}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
-        flexDirection: 'column'
-      }}>
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        animation: 'fadeIn 0.2s ease',
+        padding: '20px'
+      }}
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'white',
+          borderRadius: '28px',
+          padding: '0',
+          maxWidth: '520px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.25), 0 8px 16px rgba(0, 0, 0, 0.15)',
+          animation: 'slideInUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
         {/* Header with gradient background */}
         <div style={{
-          background: 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
           padding: '28px 32px',
           color: 'white',
           position: 'relative',
@@ -345,7 +379,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
               fontSize: '56px', 
               fontWeight: '900', 
               margin: '0 0 16px 0',
-              color: '#0070f3',
+              color: '#059669',
               letterSpacing: '-2px',
               lineHeight: '1'
             }}>
@@ -364,8 +398,8 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    background: '#dbeafe',
-                    color: '#0070f3',
+                    background: '#dcfce7',
+                    color: '#059669',
                     padding: '6px 12px',
                     borderRadius: '20px',
                     fontSize: '13px',
@@ -407,7 +441,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
               <div style={{
                 width: '48px',
                 height: '48px',
-                background: 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
@@ -436,7 +470,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                   {bankDetails?.last4 ? `•••• •••• •••• ${bankDetails.last4}` : 'Secured by Stripe'}
                 </p>
               </div>
-              <CheckCircle size={22} color="#0070f3" style={{ flexShrink: 0 }} />
+              <CheckCircle size={22} color="#10b981" style={{ flexShrink: 0 }} />
             </div>
           </div>
 
@@ -459,9 +493,9 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                 style={{
                   flex: 1,
                   background: speed === 'standard' 
-                    ? 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)'
+                    ? 'linear-gradient(135deg, #dcfce7 0%, #d1fae5 100%)'
                     : '#fafafa',
-                  border: `2px solid ${speed === 'standard' ? '#0070f3' : '#e5e7eb'}`,
+                  border: `2px solid ${speed === 'standard' ? '#10b981' : '#e5e7eb'}`,
                   borderRadius: '14px',
                   padding: '16px 14px',
                   cursor: isSubmitting ? 'not-allowed' : 'pointer',
@@ -473,18 +507,18 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                 onMouseLeave={e => !isSubmitting && speed !== 'standard' && (e.target.style.borderColor = '#e5e7eb')}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <Clock size={18} color={speed === 'standard' ? '#0070f3' : '#6b7280'} />
+                  <Clock size={18} color={speed === 'standard' ? '#059669' : '#6b7280'} />
                   <span style={{ 
                     fontSize: '15px', 
                     fontWeight: '700',
-                    color: speed === 'standard' ? '#0070f3' : '#374151'
+                    color: speed === 'standard' ? '#059669' : '#374151'
                   }}>
                     Standard
                   </span>
                 </div>
                 <p style={{ 
                   fontSize: '13px', 
-                  color: speed === 'standard' ? '#1e40af' : '#6b7280',
+                  color: speed === 'standard' ? '#065f46' : '#6b7280',
                   margin: '0 0 6px 0',
                   fontWeight: '500'
                 }}>
@@ -492,7 +526,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                 </p>
                 <div style={{
                   display: 'inline-block',
-                  background: speed === 'standard' ? '#0070f3' : '#10b981',
+                  background: speed === 'standard' ? '#10b981' : '#10b981',
                   color: 'white',
                   padding: '4px 10px',
                   borderRadius: '6px',
@@ -635,7 +669,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
                   <span style={{ fontSize: '15px', color: '#78350f', fontWeight: '700' }}>
                     You receive
                   </span>
-                  <span style={{ fontSize: '20px', fontWeight: '900', color: '#0070f3', letterSpacing: '-0.5px' }}>
+                  <span style={{ fontSize: '20px', fontWeight: '900', color: '#059669', letterSpacing: '-0.5px' }}>
                     ${netAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -744,7 +778,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
               flex: 2,
               background: isSubmitting 
                 ? '#9ca3af'
-                : 'linear-gradient(135deg, #0070f3 0%, #00c9ff 100%)',
+                : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               border: 'none',
               borderRadius: '14px',
               padding: '16px',
@@ -757,7 +791,7 @@ const CashOutModal = ({ isOpen, onClose, totalRevenue, availableToCashOut, busin
               alignItems: 'center',
               justifyContent: 'center',
               gap: '10px',
-              boxShadow: isSubmitting ? 'none' : '0 4px 12px rgba(0, 112, 243, 0.3)',
+              boxShadow: isSubmitting ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)',
               letterSpacing: '-0.3px'
             }}
             onMouseEnter={e => !isSubmitting && (e.target.style.transform = 'translateY(-2px)')}
@@ -873,7 +907,7 @@ const MoneyHeroCard = ({ totalRevenue, todayRevenue, availableBalance, onCashOut
             opacity: 0.9,
             fontWeight: '500'
           }}>
-            • ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total earned
+            {todayRevenue > 0 && '• '}${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total earned
           </div>
         </div>
 

@@ -2613,14 +2613,6 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
            />
          )}
 
-        {/* Insights - Revenue & Performance Metrics */}
-        <InsightsCard 
-          isSetupComplete={setupComplete}
-          generationStage={generationStage}
-          businessData={businessData}
-          business={business}
-        />
-
         {/* Live Website Preview with Real-time Updates */}
         <LiveWebsiteCard 
           subdomain={business?.subdomain}
@@ -2630,8 +2622,13 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
           business={business}
         />
 
-        {/* Business Management - Tools and settings */}
-        {generationStage === 'complete' && <BusinessManagementCard business={business} />}
+        {/* Insights - Revenue & Performance Metrics */}
+        <InsightsCard 
+          isSetupComplete={setupComplete}
+          generationStage={generationStage}
+          businessData={businessData}
+          business={business}
+        />
 
         {/* Simple Next Steps - Only show after generation */}
         {!setupComplete && (

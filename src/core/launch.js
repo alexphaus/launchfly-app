@@ -354,159 +354,252 @@ async function generateWebsite(opportunity) {
   try {
     console.log('Starting website generation for:', opportunity.businessName);
     
-    // Determine if this is an e-commerce business
+    // Determine if this is an e-commerce business or lead magnet funnel
     const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
+    const isLeadMagnet = opportunity.businessModel === 'lead_magnet' || opportunity.type === 'lead_magnet'; // New flag
     
-    const prompt = `
-      Create a professional website theme and layout for this ${isEcommerce ? 'e-commerce' : 'service'} business:
-      ${JSON.stringify(opportunity)}
-      
-      IMPORTANT: For Hero backgrounds, create stunning visual elements using CSS:
-      - Use sophisticated gradient backgrounds that match the business type perfectly
-      - Create complementary gradient overlays for text readability  
-      - Ensure the background enhances the business brand and message
-      - Use modern CSS gradients and effects that appeal to the target audience
-      
-      IMPORTANT: Create realistic, specific testimonials based on the business type. Each testimonial should:
-      - Reference actual results or benefits someone would get from this business
-      - Use appropriate names and roles for the target audience
-      - Include specific details that make them believable
-      - Show clear value provided by the business
-      
-      ${isEcommerce ? `
-      IMPORTANT: For e-commerce layout, include:
-      - EcommerceProductGrid component instead of PricingTable
-      - Navigation with cart functionality
-      - Product categories and filtering
-      - Customer reviews and ratings
-      - Shopping-focused features
-      ` : `
-      IMPORTANT: For service business, include:
-      - PricingTable with service packages
-      - Professional service-focused content
-      - Clear value propositions
-      `}
-      
-      Return a JSON object with:
-      {
-        "theme": {
-          "colors": {
-            "primary": "#hexcode (choose colors that work well with gradients)",
-            "secondary": "#hexcode (complementary color)",
-            "textDark": "#1f2937",
-            "textGray": "#6b7280",
-            "borderColor": "#e5e7eb"
+    let prompt;
+    
+    if (isLeadMagnet) {
+      // SPECIAL LEAD MAGNET PROMPT
+      prompt = `
+        Create a high-converting "Squeeze Page" (Lead Magnet Landing Page) for this offer:
+        ${JSON.stringify(opportunity)}
+        
+        The goal is purely to capture emails in exchange for a free resource (PDF/Guide).
+        
+        IMPORTANT: For Hero backgrounds, create stunning visual elements using CSS:
+        - Use sophisticated gradient backgrounds that match the niche
+        - Create complementary gradient overlays for text readability
+        
+        Return a JSON object with:
+        {
+          "theme": {
+            "colors": {
+              "primary": "#hexcode",
+              "secondary": "#hexcode",
+              "textDark": "#1f2937",
+              "textGray": "#6b7280",
+              "borderColor": "#e5e7eb"
+            },
+            "font": "Inter, Poppins, or Montserrat",
+            "gradient": "CSS gradient",
+            "heroBackground": "Sophisticated CSS gradient or pattern"
           },
-          "font": "Inter, Poppins, or Montserrat - choose based on business type",
-          "gradient": "CSS gradient that represents the business type",
-          "heroBackground": "Sophisticated CSS gradient or pattern for hero section"
-        },
-        "layout": [
-          {
-            "component": "NavBar",
-            "props": {
-              "businessName": "Name",
-              "logo": "Emoji",
-              "links": ${isEcommerce ? '["Home", "Products", "Categories", "About", "Contact"]' : '["Home", "About", "Services", "Pricing", "Contact"]'},
-              "ctaText": "Get Started",
-              "isEcommerce": ${isEcommerce}
+          "layout": [
+            {
+              "component": "NavBar",
+              "props": {
+                "businessName": "Name",
+                "logo": "Emoji",
+                "links": [], // NO LINKS for squeeze page to prevent leak
+                "ctaText": "Get Free Guide",
+                "isEcommerce": false
+              }
+            },
+            {
+              "component": "Hero",
+              "props": {
+                "title": "Catchy Headline for the Lead Magnet",
+                "subtitle": "Compelling Subheadline describing the value",
+                "ctaText": "Download Now",
+                "ctaLink": "#signup",
+                "background": "Use the heroBackground from theme",
+                "showEmailCapture": true // New prop for Hero to show email form
+              }
+            },
+            {
+              "component": "FeatureGrid", 
+              "props": {
+                "title": "What You'll Learn",
+                "features": [
+                  { "icon": "📚", "title": "Secret 1", "description": "Benefit 1" },
+                  { "icon": "🚀", "title": "Secret 2", "description": "Benefit 2" },
+                  { "icon": "💡", "title": "Secret 3", "description": "Benefit 3" }
+                ]
+              }
+            },
+            {
+              "component": "TestimonialSlider",
+              "props": {
+                "title": "What People Say",
+                "testimonials": [
+                  {
+                    "name": "Name",
+                    "role": "Reader",
+                    "content": "Short testimonial about the guide's value",
+                    "avatar": "👤",
+                    "rating": 5
+                  }
+                ]
+              }
+            },
+            {
+              "component": "Footer",
+              "props": {
+                "companyName": "Business Name",
+                "links": [
+                  { "href": "#privacy", "label": "Privacy" },
+                  { "href": "#terms", "label": "Terms" }
+                ]
+              }
             }
+          ]
+        }
+      `;
+    } else {
+      // STANDARD PROMPT (Existing logic)
+      prompt = `
+        Create a professional website theme and layout for this ${isEcommerce ? 'e-commerce' : 'service'} business:
+        ${JSON.stringify(opportunity)}
+        
+        IMPORTANT: For Hero backgrounds, create stunning visual elements using CSS:
+        - Use sophisticated gradient backgrounds that match the business type perfectly
+        - Create complementary gradient overlays for text readability  
+        - Ensure the background enhances the business brand and message
+        - Use modern CSS gradients and effects that appeal to the target audience
+        
+        IMPORTANT: Create realistic, specific testimonials based on the business type. Each testimonial should:
+        - Reference actual results or benefits someone would get from this business
+        - Use appropriate names and roles for the target audience
+        - Include specific details that make them believable
+        - Show clear value provided by the business
+        
+        ${isEcommerce ? `
+        IMPORTANT: For e-commerce layout, include:
+        - EcommerceProductGrid component instead of PricingTable
+        - Navigation with cart functionality
+        - Product categories and filtering
+        - Customer reviews and ratings
+        - Shopping-focused features
+        ` : `
+        IMPORTANT: For service business, include:
+        - PricingTable with service packages
+        - Professional service-focused content
+        - Clear value propositions
+        `}
+        
+        Return a JSON object with:
+        {
+          "theme": {
+            "colors": {
+              "primary": "#hexcode (choose colors that work well with gradients)",
+              "secondary": "#hexcode (complementary color)",
+              "textDark": "#1f2937",
+              "textGray": "#6b7280",
+              "borderColor": "#e5e7eb"
+            },
+            "font": "Inter, Poppins, or Montserrat - choose based on business type",
+            "gradient": "CSS gradient that represents the business type",
+            "heroBackground": "Sophisticated CSS gradient or pattern for hero section"
           },
-          {
-            "component": "Hero",
-            "props": {
-              "title": "Hero title based on business",
-              "subtitle": "Compelling subtitle",
-              "ctaText": "${isEcommerce ? 'Shop Now' : 'Get Started'}",
-              "ctaLink": "${isEcommerce ? '#products' : '#contact'}",
-              "background": "Use the heroBackground from theme for stunning CSS-only visuals"
+          "layout": [
+            {
+              "component": "NavBar",
+              "props": {
+                "businessName": "Name",
+                "logo": "Emoji",
+                "links": ${isEcommerce ? '["Home", "Products", "Categories", "About", "Contact"]' : '["Home", "About", "Services", "Pricing", "Contact"]'},
+                "ctaText": "Get Started",
+                "isEcommerce": ${isEcommerce}
+              }
+            },
+            {
+              "component": "Hero",
+              "props": {
+                "title": "Hero title based on business",
+                "subtitle": "Compelling subtitle",
+                "ctaText": "${isEcommerce ? 'Shop Now' : 'Get Started'}",
+                "ctaLink": "${isEcommerce ? '#products' : '#contact'}",
+                "background": "Use the heroBackground from theme for stunning CSS-only visuals"
+              }
+            },
+            ${isEcommerce ? `
+            {
+              "component": "EcommerceProductGrid",
+              "props": {
+                "title": "Featured Products",
+                "subtitle": "Discover our best-selling items",
+                "products": [], // Will be populated with generated products
+                "categories": [] // Will be populated based on products
+              }
+            },
+            ` : ''}
+            {
+              "component": "FeatureGrid", 
+              "props": {
+                "title": "Why Choose Us",
+                "features": [
+                  {
+                    "icon": "⚡",
+                    "title": "Feature 1",
+                    "description": "Feature description"
+                  }
+                ]
+              }
+            },
+            {
+              "component": "TestimonialSlider",
+              "props": {
+                "title": "What Our ${isEcommerce ? 'Customers' : 'Clients'} Say",
+                "testimonials": [
+                  {
+                    "name": "First Name + Last Name",
+                    "role": "Job Title relevant to target customer",
+                    "content": "Specific testimonial about results achieved with this business - include numbers, timeframes, or specific benefits. Make it realistic and believable for this business type.",
+                    "avatar": "👨‍💼 or 👩‍💼 or similar professional emoji",
+                    "rating": 5
+                  }
+                ]
+              }
+            },
+            ${!isEcommerce ? `
+            {
+              "component": "PricingTable",
+              "props": {
+                "title": "Choose Your Plan",
+                "subtitle": "Flexible pricing for every need",
+                "plans": [
+                  {
+                    "name": "Basic Plan Name",
+                    "price": "$XX",
+                    "period": "month",
+                    "description": "Brief description of what this plan offers",
+                    "features": [
+                      "Feature 1 relevant to business",
+                      "Feature 2 relevant to business", 
+                      "Feature 3 relevant to business"
+                    ],
+                    "ctaText": "Get Started",
+                    "popular": false
+                  }
+                ]
+              }
+            },
+            ` : ''}
+            {
+              "component": "CallToAction",
+              "props": {
+                "title": "${isEcommerce ? 'Start Shopping Today' : 'Ready to Get Started?'}",
+                "subtitle": "${isEcommerce ? 'Discover amazing products with fast shipping' : 'Join thousands of satisfied customers today'}",
+                "ctaText": "${isEcommerce ? 'Browse Products' : 'Start Now'}"
+              }
+            },
+            {
+              "component": "Footer",
+              "props": {
+                "companyName": "Business Name",
+                "links": [
+                  { "href": "#privacy", "label": "Privacy Policy" },
+                  { "href": "#terms", "label": "Terms of Service" },
+                  { "href": "#shipping", "label": "${isEcommerce ? 'Shipping Info' : 'Support'}" }
+                ]
+              }
             }
-          },
-          ${isEcommerce ? `
-          {
-            "component": "EcommerceProductGrid",
-            "props": {
-              "title": "Featured Products",
-              "subtitle": "Discover our best-selling items",
-              "products": [], // Will be populated with generated products
-              "categories": [] // Will be populated based on products
-            }
-          },
-          ` : ''}
-          {
-            "component": "FeatureGrid", 
-            "props": {
-              "title": "Why Choose Us",
-              "features": [
-                {
-                  "icon": "⚡",
-                  "title": "Feature 1",
-                  "description": "Feature description"
-                }
-              ]
-            }
-          },
-          {
-            "component": "TestimonialSlider",
-            "props": {
-              "title": "What Our ${isEcommerce ? 'Customers' : 'Clients'} Say",
-              "testimonials": [
-                {
-                  "name": "First Name + Last Name",
-                  "role": "Job Title relevant to target customer",
-                  "content": "Specific testimonial about results achieved with this business - include numbers, timeframes, or specific benefits. Make it realistic and believable for this business type.",
-                  "avatar": "👨‍💼 or 👩‍💼 or similar professional emoji",
-                  "rating": 5
-                }
-              ]
-            }
-          },
-          ${!isEcommerce ? `
-          {
-            "component": "PricingTable",
-            "props": {
-              "title": "Choose Your Plan",
-              "subtitle": "Flexible pricing for every need",
-              "plans": [
-                {
-                  "name": "Basic Plan Name",
-                  "price": "$XX",
-                  "period": "month",
-                  "description": "Brief description of what this plan offers",
-                  "features": [
-                    "Feature 1 relevant to business",
-                    "Feature 2 relevant to business", 
-                    "Feature 3 relevant to business"
-                  ],
-                  "ctaText": "Get Started",
-                  "popular": false
-                }
-              ]
-            }
-          },
-          ` : ''}
-          {
-            "component": "CallToAction",
-            "props": {
-              "title": "${isEcommerce ? 'Start Shopping Today' : 'Ready to Get Started?'}",
-              "subtitle": "${isEcommerce ? 'Discover amazing products with fast shipping' : 'Join thousands of satisfied customers today'}",
-              "ctaText": "${isEcommerce ? 'Browse Products' : 'Start Now'}"
-            }
-          },
-          {
-            "component": "Footer",
-            "props": {
-              "companyName": "Business Name",
-              "links": [
-                { "href": "#privacy", "label": "Privacy Policy" },
-                { "href": "#terms", "label": "Terms of Service" },
-                { "href": "#shipping", "label": "${isEcommerce ? 'Shipping Info' : 'Support'}" }
-              ]
-            }
-          }
-        ]
-      }
-    `;
+          ]
+        }
+      `;
+    }
 
     console.log('Calling OpenAI for website generation...');
     const response = await callOpenAIWithTimeout(() => 

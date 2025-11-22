@@ -77,6 +77,7 @@ export default function HomePage() {
             <span>Launchfly</span>
           </div>
           <div className="nav-links">
+            <a href="/templates">Templates</a>
             <a href="#how-it-works">How It Works</a>
             <a href="#offers">Offers</a>
             <a href="#guarantee">Guarantee</a>

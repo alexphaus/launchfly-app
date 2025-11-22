@@ -91,8 +91,19 @@ export async function POST(request) {
     // Upsert profile with plan
     // Normalize plan aliases
     const normalized = String(plan || 'starter').toLowerCase();
-    const aliasMap = { professional: 'pro', professional_lifetime: 'pro', lifetime: 'pro' };
-    const planTier = aliasMap[normalized] || normalized;
+    const aliasMap = { 
+      professional: 'pro', 
+      professional_lifetime: 'pro', 
+      lifetime: 'pro',
+      growth: 'pro' // Map growth to pro tier
+    };
+    let planTier = aliasMap[normalized] || normalized;
+    
+    // Ensure plan_tier is valid (starter, pro, or scale)
+    if (!['starter', 'pro', 'scale'].includes(planTier)) {
+      console.warn(`Invalid plan_tier: ${planTier}, defaulting to starter`);
+      planTier = 'starter';
+    }
     await supabase
       .from('profiles')
       .upsert({ id: userId, email, full_name: name || 'User', plan: planTier }, { onConflict: 'id' });
@@ -105,17 +116,24 @@ export async function POST(request) {
       .slice(0, 32);
 
     // Map revenue share by plan
-    const revShareMap = { starter: 20, pro: 10, scale: 5 };
+    const revShareMap = { starter: 20, pro: 10, scale: 5, growth: 10 };
     const revSharePercent = revShareMap[planTier] ?? 20;
 
+    // Handle template-specific business types
+    const template = body.template || '';
+    const isLeadMagnet = template === 'lead-magnet';
+    
     const formData = {
       name,
       email,
-      niche,
-      skills,
+      niche: isLeadMagnet ? 'coaching' : niche,
+      skills: isLeadMagnet ? 'Lead generation, email marketing, content creation' : skills,
       availability,
       budget,
-      plan: planTier
+      plan: planTier,
+      template: template,
+      businessModel: isLeadMagnet ? 'lead_magnet' : undefined,
+      type: isLeadMagnet ? 'lead_magnet' : undefined
     };
 
     // Create business

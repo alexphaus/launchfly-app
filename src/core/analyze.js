@@ -105,7 +105,10 @@ export async function analyzeOpportunity(userData, sessionId) {
     .eq('id', sessionId);
   
   // Extract relevant data from user input
-  const { name, skills, businessType, goal, preferences } = userData;
+  const { name, skills, businessType, goal, preferences, template, businessModel, type } = userData;
+  
+  // Check if this is a lead magnet template
+  const isLeadMagnet = template === 'lead-magnet' || businessModel === 'lead_magnet' || type === 'lead_magnet';
   
   console.log('Setting stage to researching');
   // Update session to show we're researching
@@ -136,12 +139,15 @@ export async function analyzeOpportunity(userData, sessionId) {
       5. Can generate revenue quickly
       
       IMPORTANT: Determine the optimal business model based on the user's skills and preferences:
+      - "lead_magnet": For email capture funnels, PDF guides, lead generation (coaches, consultants)
       - "ecommerce": For physical products, retail, inventory-based businesses
       - "service": For consulting, agencies, professional services
       - "saas": For software products and digital tools
       - "content": For courses, coaching, digital products
       - "marketplace": For platforms connecting buyers/sellers
       - "local": For location-based services
+      
+      ${isLeadMagnet ? 'SPECIAL INSTRUCTION: This is a LEAD MAGNET funnel for coaches. Focus on email capture, PDF delivery, and email sequence setup. The business model MUST be "lead_magnet".' : ''}
       
       Return a JSON object with:
       {
@@ -153,8 +159,10 @@ export async function analyzeOpportunity(userData, sessionId) {
         "profitPotential": "Estimated monthly revenue range",
         "validationStrategy": "How to quickly test this business idea",
         "confidence": 0.85, // 0-1 score of how promising this opportunity is
-        "businessModel": "ecommerce|service|saas|content|marketplace|local",
-        "isEcommerce": true/false // true if this is a physical product business
+        "businessModel": "${isLeadMagnet ? 'lead_magnet' : 'ecommerce|service|saas|content|marketplace|local'}",
+        "isEcommerce": false, // false for lead magnets
+        "isLeadMagnet": ${isLeadMagnet ? 'true' : 'false'}, // true if this is a lead magnet funnel
+        "type": "${isLeadMagnet ? 'lead_magnet' : 'standard'}" // lead_magnet or standard
       }
     `;
 

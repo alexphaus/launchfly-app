@@ -54,6 +54,13 @@ const BUSINESS_TEMPLATES = {
     description: 'Virtual staging + property enhancement',
     pricing: '$97-297 per property',
     avgRevenue: '$3,100/mo'
+  },
+  'lead-magnet': {
+    name: 'Lead Magnet Funnel for Coaches',
+    icon: '📧',
+    description: 'Email capture landing page + PDF guide delivery system',
+    pricing: 'Free (email list growth)',
+    avgRevenue: '$1,500/mo'
   }
 };
 

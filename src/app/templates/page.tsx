@@ -117,6 +117,19 @@ const BUSINESS_TEMPLATES: Record<string, BusinessTemplate> = {
     category: 'Business Services',
     difficulty: 'Beginner',
     tier: 'starter'
+  },
+  'lead-magnet': {
+    name: 'Lead Magnet Funnel for Coaches',
+    icon: '📧',
+    description: 'High-converting email capture landing page + PDF guide delivery. Perfect for coaches building their email list.',
+    avgRevenue: '$1,500/mo',
+    firstSale: '24 hours',
+    successRate: '92%',
+    customers: 156,
+    category: 'Marketing & Growth',
+    difficulty: 'Beginner',
+    tier: 'starter',
+    featured: true
   }
 };
 

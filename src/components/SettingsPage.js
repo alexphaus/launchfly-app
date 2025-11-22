@@ -43,7 +43,7 @@ const SettingsPage = ({ session, business, onBack, onPhoneUpdate, onBankUpdate }
   // Get current setup status
   const setupStatus = {
     phone: business?.phone_number || business?.contact_phone || false,
-    bank: business?.bank_connected || business?.bank_account || !!business?.stripe_connect_account_id || false
+    bank: business?.bank_connected || false // Only true if explicitly set after onboarding completion
   };
 
   // Initialize phone number and SMS settings from business data

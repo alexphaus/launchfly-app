@@ -451,6 +451,63 @@ export async function POST(request) {
     }
   }
 
+  // Handle Stripe Connect account updates
+  if (event.type === 'account.updated') {
+    const account = event.data.object;
+    
+    try {
+      console.log('Processing account.updated webhook for Connect account:', account.id);
+      
+      // Check if this is a Connect account (has charges_enabled and payouts_enabled)
+      const isFullyOnboarded = account.details_submitted && account.charges_enabled && account.payouts_enabled;
+      
+      if (isFullyOnboarded) {
+        // Find the business with this Connect account ID
+        const { data: business, error: businessError } = await supabase
+          .from('businesses')
+          .select('id, name')
+          .eq('stripe_connect_account_id', account.id)
+          .single();
+        
+        if (business && !businessError) {
+          // Update bank_connected status
+          const { error: updateError } = await supabase
+            .from('businesses')
+            .update({ 
+              bank_connected: true,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', business.id);
+          
+          if (updateError) {
+            console.error('Error updating bank_connected status:', updateError);
+          } else {
+            console.log(`✅ Bank account connected for business ${business.id} (${business.name})`);
+            
+            // Log activity
+            await supabase
+              .from('ai_activities')
+              .insert({
+                business_id: business.id,
+                type: 'bank_connection_connected',
+                icon: '✅',
+                message: 'Bank account successfully connected! You can now receive payouts.',
+                details: 'Stripe Connect account fully onboarded',
+                metadata: { connect_account_id: account.id }
+              });
+          }
+        } else {
+          console.log('No business found for Connect account:', account.id);
+        }
+      }
+      
+      return Response.json({ received: true, processed: true });
+    } catch (error) {
+      console.error('Error processing account.updated webhook:', error);
+      return Response.json({ received: true, error: error.message }, { status: 500 });
+    }
+  }
+
   return Response.json({ received: true });
 }
 

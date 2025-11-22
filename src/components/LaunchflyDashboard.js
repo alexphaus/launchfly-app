@@ -2425,7 +2425,7 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   
   // Track setup status from real data
   const setupStatus = {
-    bank: business?.bank_connected || business?.bank_account || !!business?.stripe_connect_account_id || false,
+    bank: business?.bank_connected || false, // Only true if explicitly set after onboarding completion
     phone: business?.phone_number || business?.contact_phone || false
   };
   

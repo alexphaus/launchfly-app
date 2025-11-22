@@ -2424,10 +2424,32 @@ const LaunchflyDashboard = ({ session, business, onPhoneCapture, onStepComplete 
   }, [business]);
   
   // Track setup status from real data
+  const [bankConnected, setBankConnected] = useState(business?.bank_connected || false);
   const setupStatus = {
-    bank: business?.bank_connected || false, // Only true if explicitly set after onboarding completion
+    bank: bankConnected, // Use state instead of direct check
     phone: business?.phone_number || business?.contact_phone || false
   };
+  
+  // Sync bank_connected status from Stripe if Connect account exists
+  useEffect(() => {
+    if (business?.id && business?.stripe_connect_account_id && !business?.bank_connected) {
+      // Check Connect status API which will sync bank_connected if account is fully onboarded
+      fetch(`/api/stripe/connect/status?businessId=${business.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.connected) {
+            setBankConnected(true);
+            // Optionally refresh business data
+            if (onStepComplete) {
+              onStepComplete('bank');
+            }
+          }
+        })
+        .catch(err => console.error('Error checking Connect status:', err));
+    } else if (business?.bank_connected) {
+      setBankConnected(true);
+    }
+  }, [business?.id, business?.stripe_connect_account_id, business?.bank_connected]);
   
   // Update setup complete status based on real data
   useEffect(() => {

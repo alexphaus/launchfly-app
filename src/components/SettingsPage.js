@@ -41,10 +41,32 @@ const SettingsPage = ({ session, business, onBack, onPhoneUpdate, onBankUpdate }
   const [smsSuccess, setSmsSuccess] = useState(false);
 
   // Get current setup status
+  const [bankConnected, setBankConnected] = useState(business?.bank_connected || false);
   const setupStatus = {
     phone: business?.phone_number || business?.contact_phone || false,
-    bank: business?.bank_connected || false // Only true if explicitly set after onboarding completion
+    bank: bankConnected // Use state instead of direct check
   };
+  
+  // Sync bank_connected status from Stripe if Connect account exists
+  useEffect(() => {
+    if (business?.id && business?.stripe_connect_account_id && !business?.bank_connected) {
+      // Check Connect status API which will sync bank_connected if account is fully onboarded
+      fetch(`/api/stripe/connect/status?businessId=${business.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.connected) {
+            setBankConnected(true);
+            // Trigger parent update if callback exists
+            if (onBankUpdate) {
+              onBankUpdate(true);
+            }
+          }
+        })
+        .catch(err => console.error('Error checking Connect status:', err));
+    } else if (business?.bank_connected) {
+      setBankConnected(true);
+    }
+  }, [business?.id, business?.stripe_connect_account_id, business?.bank_connected]);
 
   // Initialize phone number and SMS settings from business data
   useEffect(() => {

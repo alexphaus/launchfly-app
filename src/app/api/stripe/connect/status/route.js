@@ -71,6 +71,28 @@ export async function GET(request) {
     // Check if account is fully onboarded
     const isFullyOnboarded = account.details_submitted && account.charges_enabled && account.payouts_enabled;
 
+    // Sync bank_connected status in database if account is fully onboarded
+    if (isFullyOnboarded) {
+      const { data: currentBusiness } = await supabase
+        .from('businesses')
+        .select('bank_connected')
+        .eq('id', businessId)
+        .single();
+      
+      // Only update if bank_connected is not already set to true
+      if (!currentBusiness?.bank_connected) {
+        await supabase
+          .from('businesses')
+          .update({ 
+            bank_connected: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', businessId);
+        
+        console.log(`✅ Synced bank_connected=true for business ${businessId}`);
+      }
+    }
+
     // Check for any requirements
     const hasRequirements = account.requirements?.currently_due?.length > 0 ||
       account.requirements?.eventually_due?.length > 0 ||

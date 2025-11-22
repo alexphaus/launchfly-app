@@ -12,3 +12,4 @@ export { default as TestimonialSlider } from './TestimonialSlider';
 export { default as CallToAction } from './CallToAction';
 export { default as Footer } from './Footer';
 export { default as ShoppingCart } from './ShoppingCart';
+export { default as LeadCapture } from './LeadCapture';

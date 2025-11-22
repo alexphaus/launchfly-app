@@ -105,7 +105,7 @@ export async function analyzeOpportunity(userData, sessionId) {
     .eq('id', sessionId);
   
   // Extract relevant data from user input
-  const { name, skills, businessType, goal, preferences } = userData;
+  const { name, skills, businessType, goal, preferences, template, leadMagnetTopic, leadMagnetLanguage } = userData;
   
   console.log('Setting stage to researching');
   // Update session to show we're researching
@@ -118,45 +118,83 @@ export async function analyzeOpportunity(userData, sessionId) {
     .eq('id', sessionId);
   
   try {
-    // Use AI to analyze the best market opportunity based on user data
-    const prompt = `
-      As a business strategist, analyze these skills and preferences to identify the most profitable business opportunity:
+    let prompt;
+    
+    // SPECIAL HANDLING FOR LEAD MAGNET TEMPLATE
+    if (template === 'lead-magnet' && leadMagnetTopic) {
+      console.log(`🧲 Detected Lead Magnet template for topic: ${leadMagnetTopic}`);
       
-      Name: ${name}
-      Skills/Interests: ${skills}
-      Business Type: ${businessType || 'Not specified'}
-      Goal: ${goal}
-      Preferences: ${preferences || 'None'}
-      
-      Find a specific, profitable market niche that:
-      1. Matches their skills
-      2. Has proven customer demand
-      3. Can be quickly validated
-      4. Has low competition or a unique angle
-      5. Can generate revenue quickly
-      
-      IMPORTANT: Determine the optimal business model based on the user's skills and preferences:
-      - "ecommerce": For physical products, retail, inventory-based businesses
-      - "service": For consulting, agencies, professional services
-      - "saas": For software products and digital tools
-      - "content": For courses, coaching, digital products
-      - "marketplace": For platforms connecting buyers/sellers
-      - "local": For location-based services
-      
-      Return a JSON object with:
-      {
-        "businessName": "Creative and memorable business name",
-        "niche": "Specific target market",
-        "problem": "Clear problem being solved",
-        "solution": "How this business solves it",
-        "uniqueAdvantage": "What makes this opportunity special",
-        "profitPotential": "Estimated monthly revenue range",
-        "validationStrategy": "How to quickly test this business idea",
-        "confidence": 0.85, // 0-1 score of how promising this opportunity is
-        "businessModel": "ecommerce|service|saas|content|marketplace|local",
-        "isEcommerce": true/false // true if this is a physical product business
-      }
-    `;
+      prompt = `
+        As a business strategist, analyze this LEAD MAGNET opportunity for a COACH:
+        
+        Coach Name: ${name}
+        Coaching Topic: ${leadMagnetTopic}
+        Content Language: ${leadMagnetLanguage || 'English'}
+        
+        This coach wants to build an email list by offering a FREE GUIDE/PDF on "${leadMagnetTopic}".
+        The landing page should be designed to capture emails in exchange for this free resource.
+        
+        CRITICAL: This is NOT a "lead generation service business". This is a COACH who wants to give away a free guide to build their audience.
+        
+        Return a JSON object with:
+        {
+          "businessName": "Professional coaching business name related to ${leadMagnetTopic}",
+          "niche": "The specific audience who would want this guide (e.g., 'busy moms', 'new entrepreneurs')",
+          "problem": "The specific problem ${leadMagnetTopic} solves",
+          "solution": "Free expert guide on ${leadMagnetTopic}",
+          "uniqueAdvantage": "Specialized expertise in ${leadMagnetTopic}",
+          "profitPotential": "$2,000-$5,000/month (from coaching upsells)",
+          "validationStrategy": "Promote free guide to capture leads",
+          "confidence": 0.9,
+          "businessModel": "lead_magnet",
+          "isEcommerce": false,
+          "leadMagnet": {
+            "topic": "${leadMagnetTopic}",
+            "language": "${leadMagnetLanguage || 'English'}"
+          }
+        }
+      `;
+    } else {
+      // STANDARD BUSINESS ANALYSIS
+      prompt = `
+        As a business strategist, analyze these skills and preferences to identify the most profitable business opportunity:
+        
+        Name: ${name}
+        Skills/Interests: ${skills}
+        Business Type: ${businessType || 'Not specified'}
+        Goal: ${goal}
+        Preferences: ${preferences || 'None'}
+        
+        Find a specific, profitable market niche that:
+        1. Matches their skills
+        2. Has proven customer demand
+        3. Can be quickly validated
+        4. Has low competition or a unique angle
+        5. Can generate revenue quickly
+        
+        IMPORTANT: Determine the optimal business model based on the user's skills and preferences:
+        - "ecommerce": For physical products, retail, inventory-based businesses
+        - "service": For consulting, agencies, professional services
+        - "saas": For software products and digital tools
+        - "content": For courses, coaching, digital products
+        - "marketplace": For platforms connecting buyers/sellers
+        - "local": For location-based services
+        
+        Return a JSON object with:
+        {
+          "businessName": "Creative and memorable business name",
+          "niche": "Specific target market",
+          "problem": "Clear problem being solved",
+          "solution": "How this business solves it",
+          "uniqueAdvantage": "What makes this opportunity special",
+          "profitPotential": "Estimated monthly revenue range",
+          "validationStrategy": "How to quickly test this business idea",
+          "confidence": 0.85, // 0-1 score of how promising this opportunity is
+          "businessModel": "ecommerce|service|saas|content|marketplace|local",
+          "isEcommerce": true/false // true if this is a physical product business
+        }
+      `;
+    }
 
     // Call AI service to analyze the opportunity
     const response = await callOpenAIWithTimeout(() =>

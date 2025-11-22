@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  serverExternalPackages: ['@opentelemetry/auto-instrumentations-node'],
+  serverExternalPackages: ['@opentelemetry/auto-instrumentations-node', 'pdfkit'],
   
   // Performance optimizations
   images: {

@@ -54,6 +54,13 @@ const BUSINESS_TEMPLATES = {
     description: 'Virtual staging + property enhancement',
     pricing: '$97-297 per property',
     avgRevenue: '$3,100/mo'
+  },
+  'lead-magnet': {
+    name: 'Lead Magnet Funnel',
+    icon: '🧲',
+    description: 'Automated landing page + PDF guide generation',
+    pricing: 'Free Lead Capture',
+    avgRevenue: '$3,200/mo'
   }
 };
 
@@ -80,7 +87,9 @@ export default function QuickStartOnboarding() {
     template: searchParams.get('template') || '',
     plan: searchParams.get('plan') || 'starter',
     businessName: '',
-    subdomain: ''
+    subdomain: '',
+    leadMagnetTopic: '',
+    leadMagnetLanguage: 'English'
   });
 
   const selectedTemplate = BUSINESS_TEMPLATES[formData.template as keyof typeof BUSINESS_TEMPLATES];
@@ -226,6 +235,10 @@ export default function QuickStartOnboarding() {
     if (step === 2) {
       if (!formData.businessName) newErrors.businessName = 'Business name is required';
       if (!formData.subdomain) newErrors.subdomain = 'Subdomain is required';
+      
+      if (formData.template === 'lead-magnet') {
+        if (!formData.leadMagnetTopic) newErrors.leadMagnetTopic = 'Topic is required';
+      }
     }
 
     // Track validation errors
@@ -291,6 +304,8 @@ export default function QuickStartOnboarding() {
           plan: formData.plan,
           businessName: formData.businessName,
           template: formData.template,
+          leadMagnetTopic: formData.leadMagnetTopic,
+          leadMagnetLanguage: formData.leadMagnetLanguage,
           userId: authData.user?.id,
           paymentSessionId: paymentSessionId // Include payment session ID for professional plan
         })
@@ -476,6 +491,43 @@ export default function QuickStartOnboarding() {
         </p>
 
         <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
+          {formData.template === 'lead-magnet' && (
+            <div style={{ 
+              background: '#f0f9ff', 
+              padding: '1.5rem', 
+              borderRadius: '12px', 
+              marginBottom: '2rem',
+              border: '1px solid #bae6fd'
+            }}>
+              <h3 style={{ marginTop: 0, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>🧲</span> Lead Magnet Details
+              </h3>
+              <div className="form-group">
+                <label className="form-label">What topic do you coach on?</label>
+                <input
+                  type="text"
+                  className={`form-input ${errors.leadMagnetTopic ? 'error' : ''}`}
+                  value={formData.leadMagnetTopic}
+                  onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetTopic: e.target.value }))}
+                  placeholder="e.g. Career Transition, Weight Loss for Dads, Public Speaking"
+                />
+                {errors.leadMagnetTopic && <div className="form-error">{errors.leadMagnetTopic}</div>}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Content Language</label>
+                <select 
+                  className="form-input"
+                  value={formData.leadMagnetLanguage}
+                  onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetLanguage: e.target.value }))}
+                >
+                  <option value="English">English</option>
+                  <option value="Spanish">Spanish</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Business Name</label>
             <input

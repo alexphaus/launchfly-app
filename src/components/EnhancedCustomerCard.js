@@ -544,6 +544,7 @@ const EnhancedCustomersCard = ({ business, onViewAll }) => {
               });
               
               // Update status based on activity type
+              if (activity.type === 'lead_magnet') prospect.status = 'Lead';
               if (activity.type === 'email_opened') prospect.status = 'Engaged';
               if (activity.type === 'email_clicked') prospect.status = 'Engaged';
               if (activity.type === 'email_replied') prospect.status = 'Engaged';

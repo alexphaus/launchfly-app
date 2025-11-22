@@ -12,6 +12,78 @@ import { nanoid } from 'nanoid';
 import { getCuratedOffers } from '../offers/library';
 import { generateProductImagesBatch } from '../lib/product-image-generator';
 
+/**
+ * Generate Lead Magnet Content (inline function)
+ */
+async function generateLeadMagnetContent(topic, niche, language = 'English') {
+  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  
+  console.log(`📝 Generating Lead Magnet: "${topic}" in ${language}...`);
+  
+  const prompt = `
+    You are an expert marketing coach. Create a comprehensive, high-value "Expert Guide" (Lead Magnet) and Landing Page copy for a coach specializing in: "${topic}".
+    The content must be in ${language}.
+
+    The guide must be DETAILED and feel like a premium product (worth $500+). 
+    It should be long enough to be a legitimate eBook (approx 2000-2500 words total).
+
+    Return a VALID JSON object with this structure:
+    {
+      "landing_page": {
+        "hero_headline": "Catchy headline (max 10 words)",
+        "hero_subheadline": "Compelling subheadline addressing pain points (max 20 words)",
+        "cta_text": "Action oriented button text",
+        "benefits": ["benefit 1", "benefit 2", "benefit 3", "benefit 4", "benefit 5"],
+        "about_coach": "Short professional bio for a coach in this niche (max 50 words)"
+      },
+      "lead_magnet": {
+        "title": "Title of the guide",
+        "description": "Short description",
+        "content": [
+          {
+            "title": "Introduction: The Hook", 
+            "body": "Write a compelling 300-word introduction that hooks the reader, explains why this topic matters, and outlines what they will learn. Use specific examples."
+          },
+          {
+            "title": "Chapter 1: The Core Methodology", 
+            "body": "Write a detailed 500-word chapter explaining the foundational strategy. Include step-by-step instructions, common pitfalls, and 'insider secrets'."
+          },
+          {
+            "title": "Chapter 2: Implementation Tactics", 
+            "body": "Write a detailed 500-word chapter on how to apply this. Use bullet points, checklists, and actionable advice. Make it practical."
+          },
+          {
+            "title": "Chapter 3: Advanced Strategies", 
+            "body": "Write a detailed 500-word chapter on next-level techniques for those who want faster results. Include a case study example."
+          },
+          {
+            "title": "Conclusion & Next Steps", 
+            "body": "Write a 300-word conclusion summarizing the key takeaways and encouraging them to book a call for personalized help."
+          }
+        ]
+      },
+      "email": {
+        "subject": "Your Free Guide: [Title]",
+        "body": "Email body delivering the guide. Use placeholders like {{name}} if needed. Keep it warm and professional."
+      }
+    }
+  `;
+
+  const completion = await openaiClient.chat.completions.create({
+    messages: [
+      { role: 'system', content: `You are a top marketing coach specializing in ${niche}. You create high-converting lead magnets.` },
+      { role: 'user', content: prompt }
+    ],
+    model: 'gpt-4o',
+    response_format: { type: 'json_object' },
+    temperature: 0.7
+  });
+
+  const content = JSON.parse(completion.choices[0].message.content);
+  console.log('✅ Lead Magnet content generated');
+  return content;
+}
+
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,
   timeout: 30000, // 30 second timeout
@@ -184,6 +256,30 @@ export async function launchBusiness(opportunity, sessionId, businessId) {
       theme: websiteData.theme, 
       layout: websiteData.layout 
     });
+    
+    // Generate Lead Magnet Content if this is a lead magnet business
+    if (opportunity.businessModel === 'lead_magnet' && opportunity.leadMagnet) {
+      console.log('🧲 Generating Lead Magnet Content for:', opportunity.leadMagnet.topic);
+      try {
+        await supabase
+          .from('sessions')
+          .update({ progress: 63 })
+          .eq('id', sessionId);
+
+        const leadMagnetData = await generateLeadMagnetContent(
+          opportunity.leadMagnet.topic,
+          opportunity.niche,
+          opportunity.leadMagnet.language
+        );
+        
+        businessData.leadMagnet = leadMagnetData;
+        await updateBusinessProgress(businessId, { leadMagnet: leadMagnetData });
+        console.log('✅ Lead Magnet Content generated successfully');
+      } catch (error) {
+        console.error('❌ Failed to generate lead magnet content:', error);
+        // Don't fail the whole launch
+      }
+    }
     
     // Create digital products (can be slow)
     console.log('Creating products...');
@@ -361,92 +457,23 @@ async function generateWebsite(opportunity) {
     let prompt;
     
     if (isLeadMagnet) {
-      // SPECIAL LEAD MAGNET PROMPT
-      prompt = `
-        Create a high-converting "Squeeze Page" (Lead Magnet Landing Page) for this offer:
-        ${JSON.stringify(opportunity)}
-        
-        The goal is purely to capture emails in exchange for a free resource (PDF/Guide).
-        
-        IMPORTANT: For Hero backgrounds, create stunning visual elements using CSS:
-        - Use sophisticated gradient backgrounds that match the niche
-        - Create complementary gradient overlays for text readability
-        
-        Return a JSON object with:
-        {
-          "theme": {
-            "colors": {
-              "primary": "#hexcode",
-              "secondary": "#hexcode",
-              "textDark": "#1f2937",
-              "textGray": "#6b7280",
-              "borderColor": "#e5e7eb"
-            },
-            "font": "Inter, Poppins, or Montserrat",
-            "gradient": "CSS gradient",
-            "heroBackground": "Sophisticated CSS gradient or pattern"
+      // For lead magnets, return a simple theme - the layout will be generated from leadMagnet data
+      console.log('🧲 Creating Lead Magnet landing page theme');
+      return {
+        theme: {
+          colors: {
+            primary: "#2563eb",
+            secondary: "#1e40af",
+            textDark: "#1f2937",
+            textGray: "#6b7280",
+            borderColor: "#e5e7eb"
           },
-          "layout": [
-            {
-              "component": "NavBar",
-              "props": {
-                "businessName": "Name",
-                "logo": "Emoji",
-                "links": [], // NO LINKS for squeeze page to prevent leak
-                "ctaText": "Get Free Guide",
-                "isEcommerce": false
-              }
-            },
-            {
-              "component": "Hero",
-              "props": {
-                "title": "Catchy Headline for the Lead Magnet",
-                "subtitle": "Compelling Subheadline describing the value",
-                "ctaText": "Download Now",
-                "ctaLink": "#signup",
-                "background": "Use the heroBackground from theme",
-                "showEmailCapture": true // New prop for Hero to show email form
-              }
-            },
-            {
-              "component": "FeatureGrid", 
-              "props": {
-                "title": "What You'll Learn",
-                "features": [
-                  { "icon": "📚", "title": "Secret 1", "description": "Benefit 1" },
-                  { "icon": "🚀", "title": "Secret 2", "description": "Benefit 2" },
-                  { "icon": "💡", "title": "Secret 3", "description": "Benefit 3" }
-                ]
-              }
-            },
-            {
-              "component": "TestimonialSlider",
-              "props": {
-                "title": "What People Say",
-                "testimonials": [
-                  {
-                    "name": "Name",
-                    "role": "Reader",
-                    "content": "Short testimonial about the guide's value",
-                    "avatar": "👤",
-                    "rating": 5
-                  }
-                ]
-              }
-            },
-            {
-              "component": "Footer",
-              "props": {
-                "companyName": "Business Name",
-                "links": [
-                  { "href": "#privacy", "label": "Privacy" },
-                  { "href": "#terms", "label": "Terms" }
-                ]
-              }
-            }
-          ]
-        }
-      `;
+          font: "Inter",
+          gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          heroBackground: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+        },
+        layout: [] // Will be generated from leadMagnet data in the page renderer
+      };
     } else {
       // STANDARD PROMPT (Existing logic)
       prompt = `
@@ -666,8 +693,40 @@ async function createProducts(opportunity) {
   try {
     console.log('Starting product creation for:', opportunity.businessName);
     
-    // Determine if this is an e-commerce business
+    // Determine if this is an e-commerce business or lead magnet
     const isEcommerce = opportunity.businessModel === 'ecommerce' || opportunity.isEcommerce;
+    const isLeadMagnet = opportunity.businessModel === 'lead_magnet';
+    
+    // For lead magnet businesses, return simple upsell products
+    if (isLeadMagnet) {
+      console.log('Creating Lead Magnet upsell products');
+      return [
+        {
+          id: 'free-guide',
+          name: `Free Guide: ${opportunity.leadMagnet?.topic || 'Expert Guide'}`,
+          price: "$0",
+          description: `Get instant access to our comprehensive guide on ${opportunity.leadMagnet?.topic}`,
+          type: "lead_magnet",
+          features: ["Instant Download", "Actionable Strategies", "Expert Insights"]
+        },
+        {
+          id: 'coaching-call',
+          name: "1-on-1 Coaching Session",
+          price: "$197",
+          description: "Personal coaching session to implement the strategies from the guide",
+          type: "service",
+          features: ["60-Minute Session", "Personalized Action Plan", "Email Follow-up"]
+        },
+        {
+          id: 'done-for-you',
+          name: "Done-For-You Implementation",
+          price: "$497",
+          description: "We implement everything for you while you focus on your goals",
+          type: "service",
+          features: ["Complete Setup", "30 Days of Support", "Results Guaranteed"]
+        }
+      ];
+    }
     
     // For e-commerce businesses, always generate custom physical products
     // For service businesses, use curated offers for consistency

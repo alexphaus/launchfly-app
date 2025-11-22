@@ -361,8 +361,60 @@ export default async function DynamicWebsite({ params }) {
   const theme = businessData.theme || {};
   let layout = businessData.layout || [];
 
+  // Special layout for Lead Magnet Funnels
+  if (businessData.leadMagnet) {
+    const lm = businessData.leadMagnet;
+    // Ensure benefits is an array
+    const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
+    
+    layout = [
+      {
+        component: 'NavBar',
+        props: {
+          businessName: businessData.businessName || businessData.name || 'Your Coach',
+          links: ['Guide', 'About', 'Contact'],
+          ctaText: 'Get Guide'
+        }
+      },
+      {
+        component: 'Hero',
+        props: {
+          title: lm.landing_page?.hero_headline || 'Get Your Free Guide',
+          subtitle: lm.landing_page?.hero_subheadline || 'Learn how to achieve your goals today',
+          ctaText: lm.landing_page?.cta_text || 'Download Now'
+        }
+      },
+      {
+        component: 'LeadCapture',
+        props: {
+          title: "Get Your Free Guide Now",
+          subtitle: "Enter your email below to receive instant access.",
+          ctaText: lm.landing_page?.cta_text || 'Download Now',
+          businessId: businessId,
+          privacyText: "We won't spam you. Unsubscribe anytime."
+        }
+      },
+      {
+        component: 'FeatureGrid',
+        props: {
+          title: 'What You Will Learn',
+          features: benefits.map(b => ({
+            title: b,
+            description: '',
+            icon: '✅'
+          }))
+        }
+      },
+      {
+        component: 'Footer',
+        props: {
+          businessName: businessData.businessName || businessData.name || 'Your Coach'
+        }
+      }
+    ];
+  }
   // If no layout exists or layout is empty, create a fallback layout
-  if (!layout || layout.length === 0) {
+  else if (!layout || layout.length === 0) {
     console.log('Creating fallback layout for:', subdomain);
     
     // Detect if this is an e-commerce business

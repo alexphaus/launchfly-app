@@ -22,7 +22,10 @@ export async function POST(request) {
       budget,
       plan = 'starter',
       userId: providedUserId,
-      paymentSessionId
+      paymentSessionId,
+      leadMagnetTopic,
+      leadMagnetLanguage,
+      template
     } = body || {};
 
     if (!email) {
@@ -115,7 +118,10 @@ export async function POST(request) {
       skills,
       availability,
       budget,
-      plan: planTier
+      plan: planTier,
+      template,
+      leadMagnetTopic,
+      leadMagnetLanguage
     };
 
     // Create business
@@ -152,6 +158,16 @@ export async function POST(request) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
       }).catch(() => {});
+
+      // Trigger Lead Magnet Generation if applicable
+      if (template === 'lead-magnet' && leadMagnetTopic) {
+        fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/lead-magnet/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessId: business.id, topic: leadMagnetTopic, language: leadMagnetLanguage })
+        }).catch((err) => console.error('Lead magnet trigger failed:', err));
+      }
+
     } catch (_) {}
 
     return Response.json({ success: true, sessionId, businessId: business.id, subdomain: safeSubdomain });

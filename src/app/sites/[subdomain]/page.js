@@ -398,6 +398,52 @@ export default async function DynamicWebsite({ params }) {
         }
       },
       {
+        component: 'TestimonialSlider',
+        props: {
+          title: 'What Others Are Saying',
+          testimonials: [
+            {
+              name: 'Sarah M.',
+              role: 'Downloaded the Guide',
+              content: `This guide completely transformed my morning routine! The strategies are practical and I saw results within the first week. Highly recommend!`,
+              avatar: '👩‍💼',
+              rating: 5
+            },
+            {
+              name: 'Mike T.',
+              role: 'Digital Nomad',
+              content: `Finally, a guide that understands the unique challenges of being a digital nomad. The tips are gold and easy to implement anywhere in the world.`,
+              avatar: '👨‍💻',
+              rating: 5
+            },
+            {
+              name: 'Emma L.',
+              role: 'Entrepreneur',
+              content: `I've tried so many productivity guides, but this one actually works. The step-by-step approach made it easy to build a routine that sticks.`,
+              avatar: '👩‍🚀',
+              rating: 5
+            }
+          ]
+        }
+      },
+      {
+        component: 'AboutCoach',
+        props: {
+          title: 'About Your Coach',
+          bio: lm.landing_page?.about_coach || `Expert coach specializing in ${businessData.niche || 'helping you achieve your goals'}.`,
+          businessName: businessData.businessName || businessData.name || 'Your Coach'
+        }
+      },
+      {
+        component: 'CallToAction',
+        props: {
+          title: 'Ready to Transform Your Life?',
+          subtitle: 'Get instant access to your free guide and start your journey today.',
+          ctaText: 'Download Your Free Guide',
+          ctaLink: '#hero'
+        }
+      },
+      {
         component: 'Footer',
         props: {
           businessName: businessData.businessName || businessData.name || 'Your Coach'

@@ -57,6 +57,7 @@ export default function Hero({
 
   return (
     <section 
+      id="hero"
       className="relative py-20 lg:py-28 overflow-hidden min-h-[85vh] flex items-center"
       style={backgroundStyle}
     >

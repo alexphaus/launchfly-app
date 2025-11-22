@@ -372,7 +372,7 @@ export default async function DynamicWebsite({ params }) {
         component: 'NavBar',
         props: {
           businessName: businessData.businessName || businessData.name || 'Your Coach',
-          links: ['Guide', 'About', 'Contact'],
+          links: ['Guide', 'What You Learn', 'About'],
           ctaText: 'Get Guide'
         }
       },
@@ -381,17 +381,9 @@ export default async function DynamicWebsite({ params }) {
         props: {
           title: lm.landing_page?.hero_headline || 'Get Your Free Guide',
           subtitle: lm.landing_page?.hero_subheadline || 'Learn how to achieve your goals today',
-          ctaText: lm.landing_page?.cta_text || 'Download Now'
-        }
-      },
-      {
-        component: 'LeadCapture',
-        props: {
-          title: "Get Your Free Guide Now",
-          subtitle: "Enter your email below to receive instant access.",
           ctaText: lm.landing_page?.cta_text || 'Download Now',
-          businessId: businessId,
-          privacyText: "We won't spam you. Unsubscribe anytime."
+          showEmailCapture: true,
+          businessId: businessId
         }
       },
       {

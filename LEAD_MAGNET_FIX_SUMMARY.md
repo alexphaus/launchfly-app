@@ -125,3 +125,4 @@ When you create a lead magnet business with topic "Time Management for Busy Entr
 - Email capture form to get the free guide
 - No pricing (just upsells in products array for future use)
 
+

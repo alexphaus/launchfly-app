@@ -71,3 +71,4 @@ export default function LeadCapture({ title, subtitle, ctaText, businessId, priv
   );
 }
 
+

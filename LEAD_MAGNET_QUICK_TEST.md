@@ -96,3 +96,4 @@ node test-lead-magnet-e2e.js
 
 This will create a test business and verify all steps automatically.
 
+

@@ -105,7 +105,7 @@ export async function analyzeOpportunity(userData, sessionId) {
     .eq('id', sessionId);
   
   // Extract relevant data from user input
-  const { name, skills, businessType, goal, preferences, template, leadMagnetTopic, leadMagnetLanguage } = userData;
+  const { niche, targetAudience, mainProblem, leadMagnetTitle } = userData;
   
   console.log('Setting stage to researching');
   // Update session to show we're researching
@@ -120,79 +120,42 @@ export async function analyzeOpportunity(userData, sessionId) {
   try {
     let prompt;
     
-    // SPECIAL HANDLING FOR LEAD MAGNET TEMPLATE
-    if (template === 'lead-magnet' && leadMagnetTopic) {
-      console.log(`🧲 Detected Lead Magnet template for topic: ${leadMagnetTopic}`);
+    // NEW FUNNEL GENERATOR LOGIC
+    if (leadMagnetTitle) {
+      console.log(`🧲 Detected Lead Magnet Funnel request: ${leadMagnetTitle}`);
       
       prompt = `
-        As a business strategist, analyze this LEAD MAGNET opportunity for a COACH:
+        You are a world-class marketing strategist. Analyze this Lead Magnet Funnel request:
         
-        Coach Name: ${name}
-        Coaching Topic: ${leadMagnetTopic}
-        Content Language: ${leadMagnetLanguage || 'English'}
+        Niche: ${niche}
+        Target Audience: ${targetAudience}
+        Main Problem: ${mainProblem}
+        Lead Magnet Title: ${leadMagnetTitle}
         
-        This coach wants to build an email list by offering a FREE GUIDE/PDF on "${leadMagnetTopic}".
-        The landing page should be designed to capture emails in exchange for this free resource.
-        
-        CRITICAL: This is NOT a "lead generation service business". This is a COACH who wants to give away a free guide to build their audience.
+        Your goal is to structure a high-converting funnel around this concept.
         
         Return a JSON object with:
         {
-          "businessName": "Professional coaching business name related to ${leadMagnetTopic}",
-          "niche": "The specific audience who would want this guide (e.g., 'busy moms', 'new entrepreneurs')",
-          "problem": "The specific problem ${leadMagnetTopic} solves",
-          "solution": "Free expert guide on ${leadMagnetTopic}",
-          "uniqueAdvantage": "Specialized expertise in ${leadMagnetTopic}",
-          "profitPotential": "$2,000-$5,000/month (from coaching upsells)",
-          "validationStrategy": "Promote free guide to capture leads",
-          "confidence": 0.9,
+          "businessName": "A professional, catchy name for this coaching/consulting business",
+          "niche": "${niche}",
+          "targetAudience": "${targetAudience}",
+          "problem": "${mainProblem}",
+          "solution": "Expert guidance and the '${leadMagnetTitle}' guide",
+          "uniqueAdvantage": "Specialized focus on ${targetAudience}",
+          "profitPotential": "$5,000-$10,000/month",
           "businessModel": "lead_magnet",
-          "isEcommerce": false,
           "leadMagnet": {
-            "topic": "${leadMagnetTopic}",
-            "language": "${leadMagnetLanguage || 'English'}"
+            "title": "${leadMagnetTitle}",
+            "topic": "${niche} - ${mainProblem}",
+            "audience": "${targetAudience}"
           }
         }
       `;
     } else {
-      // STANDARD BUSINESS ANALYSIS
+      // FALLBACK FOR LEGACY REQUESTS (Keep simple)
       prompt = `
-        As a business strategist, analyze these skills and preferences to identify the most profitable business opportunity:
-        
-        Name: ${name}
-        Skills/Interests: ${skills}
-        Business Type: ${businessType || 'Not specified'}
-        Goal: ${goal}
-        Preferences: ${preferences || 'None'}
-        
-        Find a specific, profitable market niche that:
-        1. Matches their skills
-        2. Has proven customer demand
-        3. Can be quickly validated
-        4. Has low competition or a unique angle
-        5. Can generate revenue quickly
-        
-        IMPORTANT: Determine the optimal business model based on the user's skills and preferences:
-        - "ecommerce": For physical products, retail, inventory-based businesses
-        - "service": For consulting, agencies, professional services
-        - "saas": For software products and digital tools
-        - "content": For courses, coaching, digital products
-        - "marketplace": For platforms connecting buyers/sellers
-        - "local": For location-based services
-        
-        Return a JSON object with:
-        {
-          "businessName": "Creative and memorable business name",
-          "niche": "Specific target market",
-          "problem": "Clear problem being solved",
-          "solution": "How this business solves it",
-          "uniqueAdvantage": "What makes this opportunity special",
-          "profitPotential": "Estimated monthly revenue range",
-          "validationStrategy": "How to quickly test this business idea",
-          "confidence": 0.85, // 0-1 score of how promising this opportunity is
-          "businessModel": "ecommerce|service|saas|content|marketplace|local",
-          "isEcommerce": true/false // true if this is a physical product business
-        }
+        Analyze this business request: ${JSON.stringify(userData)}
+        Return a JSON object with businessName, niche, problem, solution, businessModel='service'.
       `;
     }
 
@@ -201,7 +164,7 @@ export async function analyzeOpportunity(userData, sessionId) {
       openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "You are a brilliant business strategist that finds profitable opportunities based on people's skills." },
+          { role: "system", content: "You are a brilliant business strategist." },
           { role: "user", content: prompt }
         ],
         response_format: { type: "json_object" }
@@ -211,28 +174,29 @@ export async function analyzeOpportunity(userData, sessionId) {
     // Parse the AI response
     const opportunity = JSON.parse(response.choices[0].message.content);
     
-    // Add quick wins to the opportunity
-    opportunity.quickWins = await identifyQuickWins(opportunity);
+    // Add quick wins
+    opportunity.quickWins = [
+      "Share your new guide on LinkedIn",
+      "Email 5 potential clients",
+      "Post a teaser on social media"
+    ];
     
     return opportunity;
   } catch (error) {
     console.error("Error analyzing opportunity:", error);
     
-    // Provide fallback data if AI fails
+    // Fallback data
     return {
-      businessName: `${name}'s ${businessType}`,
-      niche: "General market",
-      problem: "Customer needs in this industry",
-      solution: "Professional services",
-      uniqueAdvantage: "Personal expertise and attention",
-      profitPotential: "$2,000-$5,000/month",
-      validationStrategy: "Direct outreach to potential customers",
-      confidence: 0.7,
-      quickWins: [
-        "Create a simple landing page",
-        "Reach out to 10 potential customers",
-        "Offer a limited-time launch discount"
-      ]
+      businessName: "New Venture",
+      niche: niche || "General",
+      problem: mainProblem || "Unknown",
+      solution: leadMagnetTitle || "Consulting",
+      businessModel: "lead_magnet",
+      leadMagnet: {
+        title: leadMagnetTitle || "Free Guide",
+        topic: niche || "Business",
+        audience: targetAudience || "Everyone"
+      }
     };
   }
 }

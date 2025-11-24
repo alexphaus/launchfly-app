@@ -25,7 +25,11 @@ export async function POST(request) {
       paymentSessionId,
       leadMagnetTopic,
       leadMagnetLanguage,
-      template
+      template,
+      // New Funnel Fields
+      targetAudience,
+      mainProblem,
+      leadMagnetTitle
     } = body || {};
 
     if (!email) {
@@ -121,7 +125,11 @@ export async function POST(request) {
       plan: planTier,
       template,
       leadMagnetTopic,
-      leadMagnetLanguage
+      leadMagnetLanguage,
+      // New Funnel Fields
+      targetAudience,
+      mainProblem,
+      leadMagnetTitle
     };
 
     // Create business

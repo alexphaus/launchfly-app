@@ -11,56 +11,56 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// Business template configurations
-const BUSINESS_TEMPLATES = {
-  'ai-career': {
-    name: 'AI Career Accelerator',
-    icon: '🎆',
-    description: 'Premium resume & LinkedIn optimization service',
-    pricing: '$197-497 per client',
-    avgRevenue: '$4,850/mo'
+// Niche templates configuration
+const NICHE_TEMPLATES = {
+  'executive-coaching': {
+    name: 'Executive Coaching',
+    icon: '👔',
+    description: 'Leadership & Strategy',
+    defaultTitle: 'The 5-Pillar Leadership Audit',
+    defaultAudience: 'C-Suite Executives & VPs'
   },
-  'fitness': {
-    name: 'Fitness Transformation Hub',
+  'fitness-coaching': {
+    name: 'Fitness & Health',
     icon: '💪',
-    description: 'Personalized meal plans + workout programs',
-    pricing: '$47-97/month per client',
-    avgRevenue: '$2,850/mo'
+    description: 'Physical Transformation',
+    defaultTitle: '15-Minute Morning Mobility Routine',
+    defaultAudience: 'Busy Professionals'
   },
-  'branding': {
-    name: 'Brand Identity Studio',
-    icon: '✨',
-    description: 'Complete branding packages (logo, colors, fonts)',
-    pricing: '$297-997 per project',
-    avgRevenue: '$4,200/mo'
+  'life-coaching': {
+    name: 'Life & Mindset',
+    icon: '🧘',
+    description: 'Personal Growth',
+    defaultTitle: '7 Days to Mental Clarity Journal',
+    defaultAudience: 'Overwhelmed Achievers'
   },
-  'social': {
-    name: 'Social Growth Engine',
+  'business-coaching': {
+    name: 'Business Growth',
+    icon: '📈',
+    description: 'Scaling & Operations',
+    defaultTitle: 'The $1M Revenue Roadmap',
+    defaultAudience: 'Small Business Owners'
+  },
+  'relationship-coaching': {
+    name: 'Relationships',
+    icon: '❤️',
+    description: 'Connection & Communication',
+    defaultTitle: '5 Scripts for Difficult Conversations',
+    defaultAudience: 'Couples seeking connection'
+  },
+  'career-coaching': {
+    name: 'Career Development',
     icon: '🚀',
-    description: 'Full social media management + growth hacking',
-    pricing: '$297-497/month per client',
-    avgRevenue: '$1,950/mo'
+    description: 'Career Advancement',
+    defaultTitle: 'The Resume That Gets You Hired',
+    defaultAudience: 'Ambitious Professionals'
   },
-  'b2b': {
-    name: 'B2B Revenue Machine',
-    icon: '🎯',
-    description: 'Done-for-you lead generation for B2B companies',
-    pricing: '$2K-5K/month per client',
-    avgRevenue: '$5,600/mo'
-  },
-  'realestate': {
-    name: 'Real Estate Visual Magic',
-    icon: '🏰',
-    description: 'Virtual staging + property enhancement',
-    pricing: '$97-297 per property',
-    avgRevenue: '$3,100/mo'
-  },
-  'lead-magnet': {
-    name: 'Lead Magnet Funnel',
-    icon: '🧲',
-    description: 'Automated landing page + PDF guide generation',
-    pricing: 'Free Lead Capture',
-    avgRevenue: '$3,200/mo'
+  'custom': {
+    name: 'Custom Niche',
+    icon: '✨',
+    description: 'Your Unique Expertise',
+    defaultTitle: 'The Ultimate Guide to [Topic]',
+    defaultAudience: 'Your Ideal Clients'
   }
 };
 
@@ -84,50 +84,61 @@ export default function QuickStartOnboarding() {
     email: '',
     password: '',
     name: '',
-    template: searchParams.get('template') || '',
+    niche: searchParams.get('niche') || 'custom',
     plan: searchParams.get('plan') || 'starter',
-    businessName: '',
     subdomain: '',
-    leadMagnetTopic: '',
+    
+    // Funnel Specifics
+    targetAudience: '',
+    mainProblem: '',
+    leadMagnetTitle: '',
     leadMagnetLanguage: 'English'
   });
 
-  const selectedTemplate = BUSINESS_TEMPLATES[formData.template as keyof typeof BUSINESS_TEMPLATES];
+  const selectedNiche = NICHE_TEMPLATES[formData.niche as keyof typeof NICHE_TEMPLATES] || NICHE_TEMPLATES['custom'];
+
+  // Pre-fill defaults when niche changes
+  useEffect(() => {
+    if (selectedNiche && !formData.targetAudience && formData.niche !== 'custom') {
+      setFormData(prev => ({
+        ...prev,
+        targetAudience: selectedNiche.defaultAudience,
+        leadMagnetTitle: selectedNiche.defaultTitle
+      }));
+    }
+  }, [selectedNiche, formData.niche]);
 
   // Track onboarding start and check for payment success
   useEffect(() => {
-    trackOnboardingStart('quick-start', formData.template, formData.plan);
+    trackOnboardingStart('quick-start', formData.niche, formData.plan);
     
     // Check if returning from successful payment
     const sessionId = searchParams.get('session_id');
     if (sessionId && searchParams.get('payment') === 'success') {
       setPaymentSessionId(sessionId);
       // Restore form data from URL params
-      const businessName = searchParams.get('businessName');
       const subdomain = searchParams.get('subdomain');
-      if (businessName) {
-        setFormData(prev => ({ ...prev, businessName: decodeURIComponent(businessName) }));
-      }
       if (subdomain) {
         setFormData(prev => ({ ...prev, subdomain: decodeURIComponent(subdomain) }));
       }
       setCurrentStep(3); // Skip to final step after payment
     }
-  }, [formData.template, formData.plan, searchParams]);
+  }, [formData.niche, formData.plan, searchParams]);
 
-  // Auto-generate business name and subdomain based on template
+  // Auto-generate subdomain based on niche/title
   useEffect(() => {
-    if (selectedTemplate && !formData.businessName) {
+    if (selectedNiche && !formData.subdomain && formData.leadMagnetTitle) {
+      // Try to make a subdomain from the title or niche
+      const base = formData.leadMagnetTitle.split(' ').slice(0, 3).join('-');
       setFormData(prev => ({
         ...prev,
-        businessName: selectedTemplate.name,
-        subdomain: generateSubdomain(selectedTemplate.name)
+        subdomain: generateSubdomain(base)
       }));
     }
-  }, [selectedTemplate, formData.businessName]);
+  }, [selectedNiche, formData.leadMagnetTitle]);
 
-  const generateSubdomain = (businessName: string) => {
-    return businessName
+  const generateSubdomain = (text: string) => {
+    return text
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-')
       .replace(/-+/g, '-')
@@ -193,8 +204,7 @@ export default function QuickStartOnboarding() {
         body: JSON.stringify({
           email: formData.email,
           name: formData.name,
-          template: formData.template,
-          businessName: formData.businessName,
+          niche: formData.niche,
           subdomain: formData.subdomain,
           returnUrl: window.location.href
         })
@@ -233,12 +243,9 @@ export default function QuickStartOnboarding() {
     }
 
     if (step === 2) {
-      if (!formData.businessName) newErrors.businessName = 'Business name is required';
+      if (!formData.targetAudience) newErrors.targetAudience = 'Target audience is required';
+      if (!formData.leadMagnetTitle) newErrors.leadMagnetTitle = 'Lead magnet title is required';
       if (!formData.subdomain) newErrors.subdomain = 'Subdomain is required';
-      
-      if (formData.template === 'lead-magnet') {
-        if (!formData.leadMagnetTopic) newErrors.leadMagnetTopic = 'Topic is required';
-      }
     }
 
     // Track validation errors
@@ -259,9 +266,9 @@ export default function QuickStartOnboarding() {
       return;
     }
     
-    const stepNames = ['account_creation', 'business_customization', 'review'];
+    const stepNames = ['account_creation', 'funnel_details', 'review'];
     trackStepCompleted(currentStep, stepNames[currentStep - 1], {
-      template: formData.template,
+      niche: formData.niche,
       plan: formData.plan
     });
     setCurrentStep(prev => prev + 1);
@@ -296,18 +303,16 @@ export default function QuickStartOnboarding() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
-          niche: selectedTemplate?.name || 'Custom Business',
-          skills: selectedTemplate?.description || '',
-          availability: 'part-time',
-          subdomain: formData.subdomain,
-          budget: formData.plan === 'professional' ? 'high' : 'medium',
-          plan: formData.plan,
-          businessName: formData.businessName,
-          template: formData.template,
-          leadMagnetTopic: formData.leadMagnetTopic,
+          niche: formData.niche,
+          nicheName: selectedNiche.name,
+          targetAudience: formData.targetAudience,
+          mainProblem: formData.mainProblem,
+          leadMagnetTitle: formData.leadMagnetTitle,
           leadMagnetLanguage: formData.leadMagnetLanguage,
+          subdomain: formData.subdomain,
+          plan: formData.plan,
           userId: authData.user?.id,
-          paymentSessionId: paymentSessionId // Include payment session ID for professional plan
+          paymentSessionId: paymentSessionId
         })
       });
 
@@ -320,9 +325,8 @@ export default function QuickStartOnboarding() {
       
       // Track successful completion
       trackOnboardingCompleted({
-        template: formData.template,
+        niche: formData.niche,
         plan: formData.plan,
-        businessName: formData.businessName,
         subdomain: formData.subdomain,
         sessionId: result.sessionId
       });
@@ -344,7 +348,7 @@ export default function QuickStartOnboarding() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/onboarding/quick-start?step=2&template=${formData.template}&plan=${formData.plan}`
+          redirectTo: `${window.location.origin}/onboarding/quick-start?step=2&niche=${formData.niche}&plan=${formData.plan}`
         }
       });
       if (error) throw error;
@@ -373,29 +377,24 @@ export default function QuickStartOnboarding() {
       <div className="onboarding-content">
         <h1 className="onboarding-title">Create Your Account</h1>
         <p className="onboarding-subtitle">
-          {selectedTemplate ? 
-            `Get started with ${selectedTemplate.name} in just a few minutes` :
-            'Get started with your new business in just a few minutes'
-          }
+          Start building your {selectedNiche.name} funnel in minutes.
         </p>
 
-        {selectedTemplate && (
-          <div style={{ 
-            background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-            padding: '1rem',
-            borderRadius: '12px',
-            marginBottom: '1.5rem',
-            border: '1px solid rgba(59, 130, 246, 0.1)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '1.5rem' }}>{selectedTemplate.icon}</span>
-              <h3 style={{ margin: 0, color: '#1e40af' }}>{selectedTemplate.name}</h3>
-            </div>
-            <p style={{ margin: 0, color: '#1e40af', fontSize: '0.9rem' }}>
-              {selectedTemplate.description} • {selectedTemplate.pricing}
-            </p>
+        <div style={{ 
+          background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+          padding: '1rem',
+          borderRadius: '12px',
+          marginBottom: '1.5rem',
+          border: '1px solid rgba(59, 130, 246, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.5rem' }}>{selectedNiche.icon}</span>
+            <h3 style={{ margin: 0, color: '#1e40af' }}>{selectedNiche.name}</h3>
           </div>
-        )}
+          <p style={{ margin: 0, color: '#1e40af', fontSize: '0.9rem' }}>
+            {selectedNiche.description}
+          </p>
+        </div>
 
         <div className="social-login">
           <button 
@@ -485,63 +484,64 @@ export default function QuickStartOnboarding() {
       </div>
 
       <div className="onboarding-content">
-        <h1 className="onboarding-title">Customize Your Business</h1>
+        <h1 className="onboarding-title">Define Your Funnel</h1>
         <p className="onboarding-subtitle">
-          Let's set up your business details and get your website ready
+          Tell us about your ideal client so we can generate the perfect lead magnet.
         </p>
 
         <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
-          {formData.template === 'lead-magnet' && (
-            <div style={{ 
-              background: '#f0f9ff', 
-              padding: '1.5rem', 
-              borderRadius: '12px', 
-              marginBottom: '2rem',
-              border: '1px solid #bae6fd'
-            }}>
-              <h3 style={{ marginTop: 0, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>🧲</span> Lead Magnet Details
-              </h3>
-              <div className="form-group">
-                <label className="form-label">What topic do you coach on?</label>
-                <input
-                  type="text"
-                  className={`form-input ${errors.leadMagnetTopic ? 'error' : ''}`}
-                  value={formData.leadMagnetTopic}
-                  onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetTopic: e.target.value }))}
-                  placeholder="e.g. Career Transition, Weight Loss for Dads, Public Speaking"
-                />
-                {errors.leadMagnetTopic && <div className="form-error">{errors.leadMagnetTopic}</div>}
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Content Language</label>
-                <select 
-                  className="form-input"
-                  value={formData.leadMagnetLanguage}
-                  onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetLanguage: e.target.value }))}
-                >
-                  <option value="English">English</option>
-                  <option value="Spanish">Spanish</option>
-                </select>
-              </div>
-            </div>
-          )}
-
+          
           <div className="form-group">
-            <label className="form-label">Business Name</label>
+            <label className="form-label">Who is your ideal client?</label>
             <input
               type="text"
-              className={`form-input ${errors.businessName ? 'error' : ''}`}
-              value={formData.businessName}
-              onChange={(e) => setFormData(prev => ({ ...prev, businessName: e.target.value }))}
-              placeholder="Enter your business name"
+              className={`form-input ${errors.targetAudience ? 'error' : ''}`}
+              value={formData.targetAudience}
+              onChange={(e) => setFormData(prev => ({ ...prev, targetAudience: e.target.value }))}
+              placeholder="e.g. Overwhelmed corporate executives"
             />
-            {errors.businessName && <div className="form-error">{errors.businessName}</div>}
+            {errors.targetAudience && <div className="form-error">{errors.targetAudience}</div>}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Website Address</label>
+            <label className="form-label">What is the main problem you solve for them?</label>
+            <input
+              type="text"
+              className={`form-input ${errors.mainProblem ? 'error' : ''}`}
+              value={formData.mainProblem}
+              onChange={(e) => setFormData(prev => ({ ...prev, mainProblem: e.target.value }))}
+              placeholder="e.g. Lack of work-life balance and burnout"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Lead Magnet Title (Free Guide)</label>
+            <input
+              type="text"
+              className={`form-input ${errors.leadMagnetTitle ? 'error' : ''}`}
+              value={formData.leadMagnetTitle}
+              onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetTitle: e.target.value }))}
+              placeholder="e.g. The 5-Step Burnout Recovery Plan"
+            />
+            {errors.leadMagnetTitle && <div className="form-error">{errors.leadMagnetTitle}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Content Language</label>
+            <select 
+              className="form-input"
+              value={formData.leadMagnetLanguage}
+              onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetLanguage: e.target.value }))}
+            >
+              <option value="English">English</option>
+              <option value="Spanish">Spanish</option>
+              <option value="French">French</option>
+              <option value="German">German</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Your Funnel URL</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <div style={{ flex: 1, position: 'relative' }}>
                 <input
@@ -552,7 +552,7 @@ export default function QuickStartOnboarding() {
                     ...prev, 
                     subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
                   }))}
-                  placeholder="your-business"
+                  placeholder="your-funnel-name"
                   style={{ 
                     paddingRight: subdomainStatus.checking || subdomainStatus.available !== null ? '2.5rem' : '1rem'
                   }}
@@ -595,30 +595,6 @@ export default function QuickStartOnboarding() {
               <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>.launchfly.com</span>
             </div>
             {errors.subdomain && <div className="form-error">{errors.subdomain}</div>}
-            {!errors.subdomain && subdomainStatus.available === false && subdomainStatus.suggestion && (
-              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
-                Try: <button 
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, subdomain: subdomainStatus.suggestion! }))}
-                  style={{ 
-                    background: 'none', 
-                    border: 'none', 
-                    color: '#667eea', 
-                    textDecoration: 'underline', 
-                    cursor: 'pointer',
-                    padding: 0,
-                    font: 'inherit'
-                  }}
-                >
-                  {subdomainStatus.suggestion}
-                </button>
-              </div>
-            )}
-            {!errors.subdomain && subdomainStatus.available === true && (
-              <div style={{ fontSize: '0.875rem', color: '#10b981', marginTop: '0.5rem' }}>
-                ✓ Available! Your website will be {formData.subdomain}.launchfly.com
-              </div>
-            )}
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
@@ -661,7 +637,7 @@ export default function QuickStartOnboarding() {
       <div className="onboarding-content">
         <h1 className="onboarding-title">Ready to Launch!</h1>
         <p className="onboarding-subtitle">
-          Review your business setup and launch your AI-powered business
+          Review your details before we generate your funnel.
         </p>
 
         <div style={{ 
@@ -671,28 +647,23 @@ export default function QuickStartOnboarding() {
           marginBottom: '2rem',
           border: '1px solid #e2e8f0'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', color: '#1a1a1a' }}>Business Summary</h3>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#1a1a1a' }}>Funnel Summary</h3>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Business Name:</span>
-              <span style={{ fontWeight: '600' }}>{formData.businessName}</span>
+              <span style={{ color: '#6b7280' }}>Niche:</span>
+              <span style={{ fontWeight: '600' }}>{selectedNiche.name}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Website:</span>
+              <span style={{ color: '#6b7280' }}>Target Audience:</span>
+              <span style={{ fontWeight: '600' }}>{formData.targetAudience}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>Lead Magnet:</span>
+              <span style={{ fontWeight: '600' }}>{formData.leadMagnetTitle}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>URL:</span>
               <span style={{ fontWeight: '600' }}>{formData.subdomain}.launchfly.com</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Template:</span>
-              <span style={{ fontWeight: '600' }}>{selectedTemplate?.name || 'Custom'}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Plan:</span>
-              <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>
-                {formData.plan}
-                {formData.plan === 'professional' && paymentSessionId && (
-                  <span style={{ color: '#10b981', marginLeft: '0.5rem' }}>✓ Paid</span>
-                )}
-              </span>
             </div>
           </div>
         </div>
@@ -708,10 +679,10 @@ export default function QuickStartOnboarding() {
             <span>✨</span> What happens next?
           </h4>
           <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#15803d' }}>
-            <li>AI creates your custom business website</li>
-            <li>Your customer database is transferred</li>
-            <li>Automated systems start running</li>
-            <li>First customers contacted within 24 hours</li>
+            <li>AI writes your PDF Guide ({formData.leadMagnetLanguage})</li>
+            <li>AI builds your Landing Page</li>
+            <li>AI writes your Email Follow-up Sequence</li>
+            <li>Your funnel goes live instantly</li>
           </ul>
         </div>
 
@@ -749,11 +720,11 @@ export default function QuickStartOnboarding() {
             {isLoading ? (
               <>
                 <div className="loading-spinner"></div>
-                Creating Business...
+                Generating Funnel...
               </>
             ) : (
               <>
-                🚀 Launch My Business
+                🚀 Generate My Funnel
               </>
             )}
           </button>
@@ -773,7 +744,7 @@ export default function QuickStartOnboarding() {
         onClose={() => setShowPlanPreview(false)}
         onConfirm={handleProceedToCheckout}
         selectedPlan="professional"
-        businessName={formData.businessName}
+        businessName={formData.leadMagnetTitle}
         subdomain={formData.subdomain}
       />
     </>

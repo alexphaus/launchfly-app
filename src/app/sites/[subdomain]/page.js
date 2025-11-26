@@ -371,7 +371,7 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'NavBar',
         props: {
-          businessName: businessData.businessName || businessData.name || 'Your Coach',
+          businessName: businessData.businessName || businessData.name || 'Local Business',
           links: ['Guide', 'What You Learn', 'About'],
           ctaText: 'Get Guide'
         }
@@ -429,9 +429,10 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'AboutCoach',
         props: {
-          title: 'About Your Coach',
-          bio: lm.landing_page?.about_coach || `Expert coach specializing in ${businessData.niche || 'helping you achieve your goals'}.`,
-          businessName: businessData.businessName || businessData.name || 'Your Coach'
+          title: 'About Us',
+          bio: lm.landing_page?.about_business || lm.landing_page?.about_coach || `Expert service provider specializing in ${businessData.niche || 'serving our local community'}.`,
+          imageUrl: businessData.avatarUrl,
+          businessName: businessData.businessName || businessData.name || 'Local Business'
         }
       },
       {
@@ -446,7 +447,7 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'Footer',
         props: {
-          businessName: businessData.businessName || businessData.name || 'Your Coach'
+          businessName: businessData.businessName || businessData.name || 'Local Business'
         }
       }
     ];

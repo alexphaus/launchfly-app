@@ -2,7 +2,7 @@
 'use client';
 
 export default function AboutCoach({ 
-  title = "About Your Coach",
+  title = "About Us",
   bio = "",
   businessName = ""
 }) {
@@ -21,12 +21,12 @@ export default function AboutCoach({
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             <div className="flex-shrink-0">
               <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-5xl shadow-lg">
-                👤
+                🏢
               </div>
             </div>
             <div className="flex-1 text-center md:text-left">
               <h3 className="text-2xl font-bold mb-4" style={{ color: 'var(--text-dark, #1f2937)' }}>
-                {businessName || 'Your Expert Coach'}
+                {businessName || 'Local Business Owner'}
               </h3>
               <p className="text-lg leading-relaxed" style={{ color: 'var(--text-gray, #6b7280)' }}>
                 {bio}

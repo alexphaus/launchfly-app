@@ -32,46 +32,47 @@ async function generateFunnelContent(opportunity) {
   console.log(`📝 Generating Funnel Content for: "${title}"...`);
   
   const prompt = `
-    You are an expert marketing copywriter. Create a complete "Lead Magnet Funnel" for a coach targeting:
+    You are an expert marketing copywriter for LOCAL SERVICE BUSINESSES. 
+    Create a complete "Lead Magnet Funnel" for a ${niche} business targeting:
     - Niche: ${niche}
     - Audience: ${targetAudience}
     - Main Problem: ${problem}
     - Lead Magnet Title: ${title}
 
+    Instead of a long ebook, generate a "High-Value Actionable Asset" (Checklist, Cheat Sheet, or Coupon).
+
     You must generate THREE things:
-    1. The PDF Guide Content (High value, educational, ~1500 words structure)
-    2. The Landing Page Copy (High converting, persuasive)
-    3. A 5-Day Email Nurture Sequence (To build trust and sell coaching)
+    1. The Asset Content (Single page, high-impact list, calculator, or coupon. NOT chapters.)
+    2. The Landing Page Copy (High converting, persuasive, focused on booking appointments)
+    3. A 5-Day Email Nurture Sequence (To build trust and get them to CALL or BOOK)
 
     Return a VALID JSON object with this EXACT structure:
     {
       "lead_magnet_title": "${title}",
       "lead_magnet_content": [
-        { "title": "Introduction", "body": "..." },
-        { "title": "Chapter 1: The Core Concept", "body": "..." },
-        { "title": "Chapter 2: Actionable Steps", "body": "..." },
-        { "title": "Chapter 3: Advanced Tips", "body": "..." },
-        { "title": "Conclusion & Offer", "body": "..." }
+        { "title": "The Checklist / Guide", "body": "..." },
+        { "title": "Why This Matters", "body": "..." },
+        { "title": "Next Steps (Call Us)", "body": "..." }
       ],
       "landing_page": {
-        "headline": "Catchy headline",
+        "headline": "Catchy headline focused on the result",
         "subheadline": "Persuasive subheadline",
         "benefits": ["benefit 1", "benefit 2", "benefit 3"],
-        "cta_text": "Download Now"
+        "cta_text": "Get It Now"
       },
       "email_sequence": [
-        { "day": 1, "subject": "Here is your guide (PDF inside)", "body": "..." },
+        { "day": 1, "subject": "Here is your ${title}", "body": "..." },
         { "day": 2, "subject": "Did you see this?", "body": "..." },
-        { "day": 3, "subject": "The biggest mistake people make", "body": "..." },
-        { "day": 4, "subject": "A quick story...", "body": "..." },
-        { "day": 5, "subject": "Ready to take the next step?", "body": "..." }
+        { "day": 3, "subject": "A quick tip for your home/business", "body": "..." },
+        { "day": 4, "subject": "Why our customers love us", "body": "..." },
+        { "day": 5, "subject": "Ready to book?", "body": "..." }
       ]
     }
   `;
 
   const completion = await openai.chat.completions.create({
     messages: [
-      { role: 'system', content: `You are a world-class copywriter for ${niche}.` },
+      { role: 'system', content: `You are a world-class copywriter for local businesses like ${niche}.` },
       { role: 'user', content: prompt }
     ],
     model: 'gpt-4o',

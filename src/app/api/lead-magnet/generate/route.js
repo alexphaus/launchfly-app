@@ -9,7 +9,7 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const { businessId, topic, language = 'English' } = await request.json();
+    const { businessId, topic, audience, language = 'English' } = await request.json();
 
     if (!businessId || !topic) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
@@ -18,31 +18,31 @@ export async function POST(request) {
     console.log(`Genering lead magnet for business ${businessId} on topic: ${topic}`);
 
     const prompt = `
-      You are an expert marketing coach. Create a high-converting Lead Magnet (PDF Guide) and Landing Page copy for a coach specializing in: "${topic}".
-      The content must be in ${language}.
-
-      Return a VALID JSON object with this structure:
+      You are an expert marketing strategist for LOCAL SERVICE BUSINESSES. Create a high-converting Lead Magnet Asset (Checklist, Price Guide, or Coupon) and Landing Page copy for a local business specializing in: "${topic}".
+      
+      Target Audience: ${audience || 'Local Homeowners'}
+      Language: ${language}
+      
+      Return a JSON object with this EXACT structure:
       {
+        "lead_magnet_title": "Catchy Title for the Asset",
+        "lead_magnet_content": [
+          { "title": "Section 1", "body": "..." },
+          { "title": "Section 2", "body": "..." },
+          { "title": "Section 3", "body": "..." }
+        ],
         "landing_page": {
-          "hero_headline": "Catchy headline (max 10 words)",
-          "hero_subheadline": "Compelling subheadline addressing pain points (max 20 words)",
-          "cta_text": "Action oriented button text",
-          "benefits": ["benefit 1", "benefit 2", "benefit 3"],
-          "about_coach": "Short professional bio for a coach in this niche (max 50 words)"
+          "headline": "Main Headline for Landing Page",
+          "subheadline": "Supporting subheadline",
+          "cta_text": "Get My Free Quote / Guide",
+          "benefits": ["Benefit 1", "Benefit 2", "Benefit 3"],
+          "about_business": "Short professional bio for a local business in this niche (max 50 words)"
         },
-        "lead_magnet": {
-          "title": "Title of the guide",
-          "description": "Short description",
-          "content": [
-            {"title": "Chapter 1: [Name]", "body": "Detailed content (approx 150 words)..."},
-            {"title": "Chapter 2: [Name]", "body": "Detailed content (approx 150 words)..."},
-            {"title": "Chapter 3: [Name]", "body": "Detailed content (approx 150 words)..."}
-          ]
-        },
-        "email": {
-          "subject": "Your Free Guide: [Title]",
-          "body": "Email body delivering the guide. Use placeholders like {{name}} if needed. Keep it warm and professional."
-        }
+        "email_sequence": [
+          { "day": 1, "subject": "...", "body": "..." },
+          { "day": 2, "subject": "...", "body": "..." },
+          { "day": 3, "subject": "...", "body": "..." }
+        ]
       }
     `;
 

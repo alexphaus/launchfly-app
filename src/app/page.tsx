@@ -92,26 +92,26 @@ export default function HomePage() {
       </header>
 
       <main>
-        {/* Hero Section - Coach Focused */}
+        {/* Hero Section - Local Service Focused */}
         <section className="hero-v2">
           <div className="container">
             {/* Trust Badge */}
             <div className="hero-badge">
               <span className="badge-pulse"></span>
-              <span className="badge-icon">✨</span>
-              <span><strong>New:</strong> AI Lead Magnet Generator for Coaches</span>
+              <span className="badge-icon">🔧</span>
+              <span><strong>New:</strong> Lead Generation for Local Businesses</span>
             </div>
             
             {/* Main Headline */}
             <h1 className="hero-title">
-              <span className="title-main">The AI That Builds Your</span><br />
-              <span className="title-highlight">Lead Magnet Funnel</span><br />
+              <span className="title-main">Turn Website Visitors into</span><br />
+              <span className="title-highlight">Booked Appointments</span><br />
               <span className="title-sub">In Under 30 Seconds</span>
             </h1>
             
             {/* Subheadline - The Promise */}
             <p className="hero-subtitle">
-              Stop struggling with tech. We generate your <strong>PDF Guide</strong>, <strong>Landing Page</strong>, and <strong>5-Day Email Sequence</strong> instantly. Just enter your niche, and AI does the rest.
+              Stop losing customers. We generate your <strong>Price Guide</strong>, <strong>Checklist</strong>, or <strong>Coupon</strong> funnel instantly. Capture leads while you're on the job site.
             </p>
 
             {/* CTA Buttons */}
@@ -131,8 +131,8 @@ export default function HomePage() {
             {/* Stats Bar */}
             <div className="hero-stats">
               <div className="stat-item">
-                <div className="stat-icon">📄</div>
-                <strong>PDF Guide</strong>
+                <div className="stat-icon">📋</div>
+                <strong>Checklist/Guide</strong>
                 <span>Written & Designed</span>
               </div>
               <div className="stat-item">
@@ -163,7 +163,7 @@ export default function HomePage() {
               </div>
               <div className="trust-text">
                 <span className="live-indicator"></span>
-                <span><strong>{liveUsers}</strong> coaches building funnels right now</span>
+                <span><strong>{liveUsers}</strong> local businesses building funnels right now</span>
               </div>
             </div>
           </div>
@@ -176,12 +176,12 @@ export default function HomePage() {
               <div className="problem-card">
                 <span className="problem-icon">😫</span>
                 <h3>The Old Way is Hard</h3>
-                <p>Write a PDF (2 weeks). Hire a designer ($500). Build a landing page (3 days). Write emails (1 week). Figure out how to connect it all (Headache).</p>
+                <p>Hire an agency ($2,000/mo). Wait 3 weeks. Get a complicated website that doesn't convert. Still no leads. Frustrating.</p>
               </div>
               <div className="solution-card">
                 <span className="solution-icon">🚀</span>
                 <h3>The Launchfly Way</h3>
-                <p>Type "I help busy moms lose weight." Click Generate. <strong>Done.</strong> Your PDF, page, and emails are ready to collect leads instantly.</p>
+                <p>Type "I run a plumbing business in Austin." Click Generate. <strong>Done.</strong> Your Price Guide, page, and emails are ready to collect leads instantly.</p>
               </div>
             </div>
           </div>
@@ -198,32 +198,32 @@ export default function HomePage() {
 
             <div className="fulfillment-comparison">
               <div className="comparison-card new">
-                <h3>1. The Lead Magnet (PDF)</h3>
-                <p>A professional, 2,000+ word guide tailored to your niche. Not generic fluff—real, actionable content that positions you as an expert.</p>
+                <h3>1. The Lead Magnet (Asset)</h3>
+                <p>A professional Checklist, Price Guide, or Coupon tailored to your business. Real value that makes homeowners want to give you their info.</p>
                 <ul>
                   <li>✅ Custom written for your niche</li>
                   <li>✅ Professional layout & design</li>
-                  <li>✅ "High-Ticket" perceived value</li>
+                  <li>✅ High perceived value</li>
                 </ul>
               </div>
 
               <div className="comparison-card new">
                 <h3>2. The Landing Page</h3>
-                <p>A clean, distraction-free page designed to do one thing: convert visitors into email subscribers.</p>
+                <p>A clean, distraction-free page designed to do one thing: convert visitors into leads and phone calls.</p>
                 <ul>
                   <li>✅ Mobile responsive</li>
                   <li>✅ Copywriting that converts</li>
-                  <li>✅ Instant download delivery</li>
+                  <li>✅ Click-to-Call ready</li>
                 </ul>
               </div>
 
               <div className="comparison-card new">
                 <h3>3. The Email Sequence</h3>
-                <p>A 5-day automated email series that delivers the guide, builds trust, and pitches your coaching program.</p>
+                <p>A 5-day automated email series that delivers the asset, builds trust, and gets them to book an appointment.</p>
                 <ul>
                   <li>✅ Day 1: Delivery & Welcome</li>
                   <li>✅ Day 2-4: Value & Trust Building</li>
-                  <li>✅ Day 5: The "Work With Me" Pitch</li>
+                  <li>✅ Day 5: The "Book Now" Pitch</li>
                 </ul>
               </div>
             </div>
@@ -242,8 +242,8 @@ export default function HomePage() {
               <div className="step-card">
                 <div className="step-number">1</div>
                 <div className="step-icon">🎯</div>
-                <h3>Enter Your Niche</h3>
-                <p>Tell us who you help and what you help them achieve. Example: "I help software engineers negotiate higher salaries."</p>
+                <h3>Enter Your Business</h3>
+                <p>Tell us what you do and where you are. Example: "I'm a roofer in Dallas looking for storm damage repairs."</p>
               </div>
 
               <div className="step-card">
@@ -257,7 +257,7 @@ export default function HomePage() {
                 <div className="step-number">3</div>
                 <div className="step-icon">🚀</div>
                 <h3>Launch & Collect Leads</h3>
-                <p>Get your link, share it on social media, and watch the leads roll in. We handle the delivery and follow-up.</p>
+                <p>Get your link, share it on Facebook or your truck wrap, and watch the leads roll in. We handle the delivery.</p>
               </div>
             </div>
           </div>
@@ -281,7 +281,7 @@ export default function HomePage() {
                 
                 <ul className="plan-features">
                   <li>✓ Generate unlimited funnels</li>
-                  <li>✓ Preview your PDF Guide</li>
+                  <li>✓ Preview your Asset</li>
                   <li>✓ Preview your Landing Page</li>
                   <li>✓ Preview your Email Sequence</li>
                 </ul>
@@ -344,7 +344,7 @@ export default function HomePage() {
                 <span className="logo-icon">🚀</span>
                 <span>Launchfly</span>
               </div>
-              <p>The AI Lead Magnet Generator for Coaches.</p>
+              <p>The AI Lead Magnet Generator for Local Businesses.</p>
             </div>
             
             <div className="footer-links">

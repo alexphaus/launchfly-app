@@ -13,54 +13,54 @@ const supabase = createClient(
 
 // Niche templates configuration
 const NICHE_TEMPLATES = {
-  'executive-coaching': {
-    name: 'Executive Coaching',
-    icon: '👔',
-    description: 'Leadership & Strategy',
-    defaultTitle: 'The 5-Pillar Leadership Audit',
-    defaultAudience: 'C-Suite Executives & VPs'
+  'plumbing': {
+    name: 'Plumbing',
+    icon: '🔧',
+    description: 'Emergency & Maintenance',
+    defaultTitle: '2025 Plumbing Price Guide',
+    defaultAudience: 'Homeowners'
   },
-  'fitness-coaching': {
-    name: 'Fitness & Health',
+  'hvac': {
+    name: 'HVAC & AC',
+    icon: '❄️',
+    description: 'Heating & Cooling',
+    defaultTitle: 'AC Efficiency Self-Audit Checklist',
+    defaultAudience: 'Homeowners'
+  },
+  'roofing': {
+    name: 'Roofing',
+    icon: '🏠',
+    description: 'Storm Damage & Repair',
+    defaultTitle: 'Storm Damage Self-Inspection Guide',
+    defaultAudience: 'Homeowners'
+  },
+  'landscaping': {
+    name: 'Landscaping',
+    icon: '🌳',
+    description: 'Lawn & Garden',
+    defaultTitle: 'Native Plant & Watering Calendar',
+    defaultAudience: 'Homeowners'
+  },
+  'real-estate': {
+    name: 'Real Estate',
+    icon: '🏡',
+    description: 'Buying & Selling',
+    defaultTitle: 'Neighborhood Price Report 2025',
+    defaultAudience: 'Home Sellers'
+  },
+  'gym-fitness': {
+    name: 'Local Gym / Trainer',
     icon: '💪',
-    description: 'Physical Transformation',
-    defaultTitle: '15-Minute Morning Mobility Routine',
-    defaultAudience: 'Busy Professionals'
-  },
-  'life-coaching': {
-    name: 'Life & Mindset',
-    icon: '🧘',
-    description: 'Personal Growth',
-    defaultTitle: '7 Days to Mental Clarity Journal',
-    defaultAudience: 'Overwhelmed Achievers'
-  },
-  'business-coaching': {
-    name: 'Business Growth',
-    icon: '📈',
-    description: 'Scaling & Operations',
-    defaultTitle: 'The $1M Revenue Roadmap',
-    defaultAudience: 'Small Business Owners'
-  },
-  'relationship-coaching': {
-    name: 'Relationships',
-    icon: '❤️',
-    description: 'Connection & Communication',
-    defaultTitle: '5 Scripts for Difficult Conversations',
-    defaultAudience: 'Couples seeking connection'
-  },
-  'career-coaching': {
-    name: 'Career Development',
-    icon: '🚀',
-    description: 'Career Advancement',
-    defaultTitle: 'The Resume That Gets You Hired',
-    defaultAudience: 'Ambitious Professionals'
+    description: 'Fitness & Health',
+    defaultTitle: '7-Day Meal Prep Plan & Day Pass',
+    defaultAudience: 'Locals wanting to get fit'
   },
   'custom': {
-    name: 'Custom Niche',
+    name: 'Custom Business',
     icon: '✨',
-    description: 'Your Unique Expertise',
-    defaultTitle: 'The Ultimate Guide to [Topic]',
-    defaultAudience: 'Your Ideal Clients'
+    description: 'Your Unique Service',
+    defaultTitle: 'The Ultimate Checklist for [Topic]',
+    defaultAudience: 'Your Ideal Customers'
   }
 };
 
@@ -486,19 +486,19 @@ export default function QuickStartOnboarding() {
       <div className="onboarding-content">
         <h1 className="onboarding-title">Define Your Funnel</h1>
         <p className="onboarding-subtitle">
-          Tell us about your ideal client so we can generate the perfect lead magnet.
+          Tell us about your ideal customer so we can generate the perfect lead magnet.
         </p>
 
         <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
           
           <div className="form-group">
-            <label className="form-label">Who is your ideal client?</label>
+            <label className="form-label">Who is your ideal customer?</label>
             <input
               type="text"
               className={`form-input ${errors.targetAudience ? 'error' : ''}`}
               value={formData.targetAudience}
               onChange={(e) => setFormData(prev => ({ ...prev, targetAudience: e.target.value }))}
-              placeholder="e.g. Overwhelmed corporate executives"
+              placeholder="e.g. Homeowners in Dallas"
             />
             {errors.targetAudience && <div className="form-error">{errors.targetAudience}</div>}
           </div>
@@ -510,18 +510,18 @@ export default function QuickStartOnboarding() {
               className={`form-input ${errors.mainProblem ? 'error' : ''}`}
               value={formData.mainProblem}
               onChange={(e) => setFormData(prev => ({ ...prev, mainProblem: e.target.value }))}
-              placeholder="e.g. Lack of work-life balance and burnout"
+              placeholder="e.g. Leaky pipes and emergency repairs"
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Lead Magnet Title (Free Guide)</label>
+            <label className="form-label">Lead Magnet Title (Free Asset)</label>
             <input
               type="text"
               className={`form-input ${errors.leadMagnetTitle ? 'error' : ''}`}
               value={formData.leadMagnetTitle}
               onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetTitle: e.target.value }))}
-              placeholder="e.g. The 5-Step Burnout Recovery Plan"
+              placeholder="e.g. 2025 Plumbing Price Guide"
             />
             {errors.leadMagnetTitle && <div className="form-error">{errors.leadMagnetTitle}</div>}
           </div>
@@ -679,7 +679,7 @@ export default function QuickStartOnboarding() {
             <span>✨</span> What happens next?
           </h4>
           <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#15803d' }}>
-            <li>AI writes your PDF Guide ({formData.leadMagnetLanguage})</li>
+            <li>AI writes your Asset ({formData.leadMagnetLanguage})</li>
             <li>AI builds your Landing Page</li>
             <li>AI writes your Email Follow-up Sequence</li>
             <li>Your funnel goes live instantly</li>

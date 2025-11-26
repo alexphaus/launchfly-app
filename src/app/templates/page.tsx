@@ -16,58 +16,58 @@ interface NicheTemplate {
 
 const NICHE_TEMPLATES: NicheTemplate[] = [
   {
-    id: 'executive-coaching',
-    name: 'Executive Coaching',
-    icon: '👔',
-    description: 'For coaches helping leaders improve performance and strategy.',
-    leadMagnetType: 'Strategic Framework PDF',
-    targetAudience: 'C-Suite & VPs',
-    exampleTitle: '"The 5-Pillar Leadership Audit"'
+    id: 'plumbing',
+    name: 'Plumbing',
+    icon: '🔧',
+    description: 'For plumbers needing more emergency calls and big jobs.',
+    leadMagnetType: 'Price Guide / Checklist',
+    targetAudience: 'Homeowners',
+    exampleTitle: '"2025 Plumbing Price Guide"'
   },
   {
-    id: 'fitness-coaching',
-    name: 'Fitness & Health',
+    id: 'hvac',
+    name: 'HVAC & AC',
+    icon: '❄️',
+    description: 'For HVAC pros wanting seasonal maintenance contracts.',
+    leadMagnetType: 'Efficiency Checklist',
+    targetAudience: 'Homeowners',
+    exampleTitle: '"AC Efficiency Self-Audit Checklist"'
+  },
+  {
+    id: 'roofing',
+    name: 'Roofing',
+    icon: '🏠',
+    description: 'For roofers looking for storm damage claims.',
+    leadMagnetType: 'Inspection Guide',
+    targetAudience: 'Homeowners',
+    exampleTitle: '"Storm Damage Self-Inspection Guide"'
+  },
+  {
+    id: 'landscaping',
+    name: 'Landscaping',
+    icon: '🌳',
+    description: 'For landscapers wanting recurring maintenance clients.',
+    leadMagnetType: 'Seasonal Calendar',
+    targetAudience: 'Homeowners',
+    exampleTitle: '"Native Plant & Watering Calendar"'
+  },
+  {
+    id: 'real-estate',
+    name: 'Real Estate',
+    icon: '🏡',
+    description: 'For agents needing seller leads in specific neighborhoods.',
+    leadMagnetType: 'Market Report',
+    targetAudience: 'Home Sellers',
+    exampleTitle: '"Neighborhood Price Report 2025"'
+  },
+  {
+    id: 'gym-fitness',
+    name: 'Local Gym / Trainer',
     icon: '💪',
-    description: 'For trainers helping clients achieve physical transformation.',
-    leadMagnetType: 'Workout/Nutrition Plan',
-    targetAudience: 'Busy Professionals',
-    exampleTitle: '"15-Minute Morning Mobility Routine"'
-  },
-  {
-    id: 'life-coaching',
-    name: 'Life & Mindset',
-    icon: '🧘',
-    description: 'For coaches focusing on personal growth and mental clarity.',
-    leadMagnetType: 'Journaling Workbook',
-    targetAudience: 'Overwhelmed Achievers',
-    exampleTitle: '"7 Days to Mental Clarity Journal"'
-  },
-  {
-    id: 'business-coaching',
-    name: 'Business Growth',
-    icon: '📈',
-    description: 'For consultants helping startups and SMBs scale.',
-    leadMagnetType: 'Growth Checklist',
-    targetAudience: 'Founders & Owners',
-    exampleTitle: '"The $1M Revenue Roadmap"'
-  },
-  {
-    id: 'relationship-coaching',
-    name: 'Relationships',
-    icon: '❤️',
-    description: 'For experts helping couples or singles find connection.',
-    leadMagnetType: 'Communication Guide',
-    targetAudience: 'Couples / Singles',
-    exampleTitle: '"5 Scripts for Difficult Conversations"'
-  },
-  {
-    id: 'career-coaching',
-    name: 'Career Development',
-    icon: '🚀',
-    description: 'For coaches helping professionals advance their careers.',
-    leadMagnetType: 'Resume/Interview Guide',
-    targetAudience: 'Job Seekers',
-    exampleTitle: '"The Resume That Gets You Hired"'
+    description: 'For local gyms wanting new members walking in.',
+    leadMagnetType: 'Meal Plan / Pass',
+    targetAudience: 'Locals wanting to get fit',
+    exampleTitle: '"7-Day Meal Prep Plan & Day Pass"'
   }
 ];
 
@@ -88,10 +88,10 @@ export default function TemplatesPage() {
             ← Back to Home
           </Link>
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
-            Choose Your Coaching Niche
+            Choose Your Business Type
           </h1>
           <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-            Select your area of expertise, and we'll generate a complete lead magnet funnel tailored to your audience.
+            Select your industry, and we'll generate a high-converting lead magnet funnel to get you more booked appointments.
           </p>
         </div>
 

@@ -28,7 +28,7 @@ export default function LaunchflyDashboard({ session, business }) {
             {business?.business_name || 'Your Lead Magnet Funnel'}
           </h1>
           <p className="text-slate-600">
-            Your automated coaching funnel is ready. Share your link to start collecting leads.
+            Your automated lead generation funnel is ready. Share your link to start collecting leads.
           </p>
         </div>
 
@@ -42,14 +42,14 @@ export default function LaunchflyDashboard({ session, business }) {
                 <FileText size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900">PDF Guide</h3>
+                <h3 className="font-bold text-slate-900">Lead Magnet Asset</h3>
                 <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
                   Ready
                 </span>
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              Your high-value lead magnet: "{business?.lead_magnet_title || 'The Ultimate Guide'}"
+              Your high-value asset: "{business?.lead_magnet_title || 'The Ultimate Guide'}"
             </p>
             <a 
               href={pdfUrl}
@@ -58,7 +58,7 @@ export default function LaunchflyDashboard({ session, business }) {
               className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
             >
               <Download size={16} />
-              Download PDF
+              Download Asset
             </a>
           </div>
 
@@ -76,7 +76,7 @@ export default function LaunchflyDashboard({ session, business }) {
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              Optimized conversion page to capture emails.
+              Optimized conversion page to capture leads & calls.
             </p>
             <div className="flex gap-2">
               <a 
@@ -112,7 +112,7 @@ export default function LaunchflyDashboard({ session, business }) {
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              {emailCount}-day automated nurture sequence to convert leads.
+              {emailCount}-day automated nurture sequence to get them to call.
             </p>
             <button className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors">
               <Users size={16} />

@@ -125,25 +125,25 @@ export async function analyzeOpportunity(userData, sessionId) {
       console.log(`🧲 Detected Lead Magnet Funnel request: ${leadMagnetTitle}`);
       
       prompt = `
-        You are a world-class marketing strategist. Analyze this Lead Magnet Funnel request:
+        You are a world-class marketing strategist for LOCAL SERVICE BUSINESSES. Analyze this Lead Magnet Funnel request:
         
         Niche: ${niche}
         Target Audience: ${targetAudience}
         Main Problem: ${mainProblem}
         Lead Magnet Title: ${leadMagnetTitle}
         
-        Your goal is to structure a high-converting funnel around this concept.
+        Your goal is to structure a high-converting funnel around this concept to generate LEADS and PHONE CALLS.
         
         Return a JSON object with:
         {
-          "businessName": "A professional, catchy name for this coaching/consulting business",
+          "businessName": "A professional, trustworthy name for this local business",
           "niche": "${niche}",
           "targetAudience": "${targetAudience}",
           "problem": "${mainProblem}",
-          "solution": "Expert guidance and the '${leadMagnetTitle}' guide",
-          "uniqueAdvantage": "Specialized focus on ${targetAudience}",
-          "profitPotential": "$5,000-$10,000/month",
-          "businessModel": "lead_magnet",
+          "solution": "Expert service and the '${leadMagnetTitle}' asset",
+          "uniqueAdvantage": "Local expertise for ${targetAudience}",
+          "profitPotential": "$10,000-$50,000/month",
+          "businessModel": "local_service",
           "leadMagnet": {
             "title": "${leadMagnetTitle}",
             "topic": "${niche} - ${mainProblem}",

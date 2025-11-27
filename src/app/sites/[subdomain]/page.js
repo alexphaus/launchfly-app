@@ -256,6 +256,57 @@ function ThemedLayout({ theme, children }) {
   return <main style={style}>{children}</main>;
 }
 
+function generateSmartTestimonials(businessData) {
+  const niche = businessData.niche?.toLowerCase() || 'service';
+  const name = businessData.businessName || 'Pro Services';
+  const type = businessData.leadMagnet?.title?.toLowerCase().includes('checklist') ? 'checklist' : 'guide';
+  
+  return [
+    {
+      name: 'Jennifer M.',
+      role: 'Local Resident',
+      content: `I was worried about finding a trustworthy ${niche}, but this free ${type} put my mind at ease. It's clear that ${name} knows exactly what they are doing.`,
+      avatar: '👩',
+      rating: 5
+    },
+    {
+      name: 'Michael T.',
+      role: 'Homeowner',
+      content: `This is exactly the information I was looking for. Most companies hide their pricing or process, but ${name} was transparent from the start.`,
+      avatar: '👨',
+      rating: 5
+    },
+    {
+      name: 'Sarah L.',
+      role: 'Client',
+      content: `Super helpful resource! I used the ${type} to evaluate my options and it saved me so much time. Highly recommend giving them a call.`,
+      avatar: '👩‍🦰',
+      rating: 5
+    }
+  ];
+}
+
+function generateSmartFeatures(businessData) {
+  const niche = businessData.niche || 'Service';
+  return [
+    {
+      title: `Expert ${niche} Advice`,
+      description: 'Proven strategies from industry professionals.',
+      icon: '🧠'
+    },
+    {
+      title: 'Save Time & Money',
+      description: 'Avoid common pitfalls and costly mistakes.',
+      icon: '💰'
+    },
+    {
+      title: 'Actionable Steps',
+      description: 'Clear instructions you can implement today.',
+      icon: '📋'
+    }
+  ];
+}
+
 export default async function DynamicWebsite({ params }) {
   // Await params to fix Next.js 15 requirement
   const { subdomain } = await params;
@@ -367,6 +418,24 @@ export default async function DynamicWebsite({ params }) {
     // Ensure benefits is an array
     const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
     
+    const features = benefits.length > 0 
+      ? benefits.map(b => ({
+          title: b,
+          description: 'Practical steps you can implement immediately to see results.',
+          icon: '✅'
+        }))
+      : generateSmartFeatures(businessData);
+
+    // Professional Service Theme Defaults (Blue/Slate)
+    if (!theme.gradient) {
+      theme.gradient = 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)'; // Slate-900 to Blue-900
+      theme.colors = {
+        ...theme.colors,
+        primary: '#2563eb', // Blue-600
+        secondary: '#1e40af', // Blue-800
+      };
+    }
+
     layout = [
       {
         component: 'NavBar',
@@ -383,47 +452,24 @@ export default async function DynamicWebsite({ params }) {
           subtitle: lm.landing_page?.hero_subheadline || 'Learn how to achieve your goals today',
           ctaText: lm.landing_page?.cta_text || 'Download Now',
           showEmailCapture: true,
-          businessId: businessId
+          businessId: businessId,
+          // Add a subtle pattern overlay for professionalism
+          backgroundOverlay: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
         }
       },
       {
         component: 'FeatureGrid',
         props: {
           title: 'What You Will Learn',
-          features: benefits.map(b => ({
-            title: b,
-            description: '',
-            icon: '✅'
-          }))
+          subtitle: 'Inside this free expert guide',
+          features: features
         }
       },
       {
         component: 'TestimonialSlider',
         props: {
           title: 'What Others Are Saying',
-          testimonials: [
-            {
-              name: 'Sarah M.',
-              role: 'Downloaded the Guide',
-              content: `This guide completely transformed my morning routine! The strategies are practical and I saw results within the first week. Highly recommend!`,
-              avatar: '👩‍💼',
-              rating: 5
-            },
-            {
-              name: 'Mike T.',
-              role: 'Digital Nomad',
-              content: `Finally, a guide that understands the unique challenges of being a digital nomad. The tips are gold and easy to implement anywhere in the world.`,
-              avatar: '👨‍💻',
-              rating: 5
-            },
-            {
-              name: 'Emma L.',
-              role: 'Entrepreneur',
-              content: `I've tried so many productivity guides, but this one actually works. The step-by-step approach made it easy to build a routine that sticks.`,
-              avatar: '👩‍🚀',
-              rating: 5
-            }
-          ]
+          testimonials: businessData.testimonials || generateSmartTestimonials(businessData)
         }
       },
       {
@@ -438,10 +484,12 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'CallToAction',
         props: {
-          title: 'Ready to Transform Your Life?',
-          subtitle: 'Get instant access to your free guide and start your journey today.',
-          ctaText: 'Download Your Free Guide',
-          ctaLink: '#hero'
+          title: `Ready to get your ${lm.lead_magnet?.title || 'Free Guide'}?`,
+          subtitle: 'Get instant access to this expert resource and start solving your problem today.',
+          ctaText: 'Download Now',
+          ctaLink: '#hero',
+          secondaryCtaText: (business?.phone_number || businessData?.phone) ? 'Call Us Now' : null,
+          secondaryCtaLink: (business?.phone_number || businessData?.phone) ? `tel:${business?.phone_number || businessData?.phone}` : null
         }
       },
       {

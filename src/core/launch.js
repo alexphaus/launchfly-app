@@ -41,10 +41,11 @@ async function generateFunnelContent(opportunity) {
 
     Instead of a generic "guide", generate a "High-Value Local Offer" (e.g., "Free Inspection Checklist", "$50 Off Voucher", "Price Calculator", "Seasonal Maintenance Guide").
 
-    You must generate THREE things:
+    You must generate FOUR things:
     1. The Asset/Offer Content (The actual coupon text, checklist items, or calculator logic description.)
     2. The Landing Page Copy (High converting, persuasive, focused on getting a QUOTE or CALL)
     3. A 5-Day Email Nurture Sequence (To build trust and get them to CALL or BOOK)
+    4. 3 Realistic Customer Testimonials (Specific to this niche and offer)
 
     Return a VALID JSON object with this EXACT structure:
     {
@@ -60,6 +61,9 @@ async function generateFunnelContent(opportunity) {
         "benefits": ["benefit 1", "benefit 2", "benefit 3"],
         "cta_text": "Get Quote Now"
       },
+      "testimonials": [
+        { "name": "Name", "role": "Local Resident / Homeowner", "content": "Specific praise about the ${niche} service...", "rating": 5 }
+      ],
       "email_sequence": [
         { "day": 1, "subject": "Here is your ${title}", "body": "..." },
         { "day": 2, "subject": "Before you hire a ${niche}...", "body": "..." },

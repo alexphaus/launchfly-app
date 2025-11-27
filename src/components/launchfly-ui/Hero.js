@@ -76,57 +76,72 @@ export default function Hero({
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: Copy */}
             <div className="text-left">
-              <div className="inline-block px-4 py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-bold mb-6">
-                🔥 Free Expert Guide
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-100 text-sm font-semibold mb-8 backdrop-blur-sm">
+                <span className="flex h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+                Free Expert Guide
               </div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-lg">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-sm tracking-tight">
                 {title}
               </h1>
-              <p className="text-xl text-white/90 mb-8 leading-relaxed drop-shadow-md max-w-xl">
+              <p className="text-xl text-slate-200 mb-8 leading-relaxed max-w-xl font-light">
                 {subtitle}
               </p>
               
               {/* Trust Indicators */}
-              <div className="flex items-center gap-4 text-white/80 text-sm">
-                <div className="flex -space-x-2">
+              <div className="flex items-center gap-4 text-slate-300 text-sm border-t border-white/10 pt-6">
+                <div className="flex -space-x-3">
                   {[1,2,3,4].map(i => (
-                    <div key={i} className="w-8 h-8 rounded-full bg-gray-300 border-2 border-white/50"></div>
+                    <div key={i} className="w-10 h-10 rounded-full bg-slate-200 border-2 border-slate-800 flex items-center justify-center text-xs font-bold text-slate-600">
+                      {String.fromCharCode(64 + i)}
+                    </div>
                   ))}
                 </div>
-                <p>Join <strong>500+</strong> others who downloaded this guide.</p>
+                <p>Join <strong>500+</strong> local homeowners who trust us.</p>
               </div>
             </div>
 
             {/* Right: Visual + Form */}
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl transform hover:scale-[1.01] transition-transform duration-300">
+            <div className="bg-white rounded-2xl p-8 shadow-2xl transform hover:scale-[1.01] transition-transform duration-300 border border-slate-200/50">
               {/* CSS Mockup of the Guide */}
-              <div className="flex justify-center mb-8">
-                <div className="relative w-40 h-52 bg-white rounded-r-lg rounded-l-sm shadow-2xl flex flex-col items-center justify-center p-4 text-center border-l-8 border-gray-200 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white to-gray-50 opacity-50"></div>
-                  <div className="text-3xl mb-2">📄</div>
-                  <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                    {title.length > 30 ? 'Expert Guide' : title}
-                  </h3>
-                  <div className="mt-4 w-16 h-1 bg-blue-500 rounded-full"></div>
+              <div className="flex justify-center mb-8 -mt-16">
+                <div className="relative w-48 h-64 bg-slate-50 rounded-lg shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25)] flex flex-col items-center p-6 text-center border border-slate-200 transform rotate-2 hover:rotate-0 transition-transform duration-500">
+                  {/* Binder/Clip effect */}
+                  <div className="absolute -top-3 w-16 h-6 bg-slate-800 rounded-sm shadow-sm z-10"></div>
+                  
+                  <div className="w-full h-full border-2 border-dashed border-slate-200 rounded flex flex-col items-center justify-center bg-white p-4">
+                    <div className="text-4xl mb-3">📋</div>
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest leading-relaxed">
+                      {title.length > 25 ? 'Expert Checklist' : title}
+                    </h3>
+                    <div className="mt-4 w-12 h-1 bg-blue-600 rounded-full"></div>
+                    <div className="mt-2 w-8 h-1 bg-slate-200 rounded-full"></div>
+                  </div>
+                  
+                  {/* Page curl effect */}
+                  <div className="absolute bottom-0 right-0 w-8 h-8 bg-gradient-to-tl from-slate-300 to-transparent opacity-20 rounded-tl-lg"></div>
                 </div>
               </div>
 
               {/* Form */}
               {status === 'success' ? (
-                <div className="text-center py-8 bg-green-500/20 rounded-xl border border-green-400/30">
+                <div className="text-center py-8 bg-green-50 rounded-xl border border-green-100">
                   <div className="text-4xl mb-3">✨</div>
-                  <h3 className="text-xl font-bold text-white mb-2">Check Your Inbox!</h3>
-                  <p className="text-white/90 text-sm">We've sent the guide to {email}.</p>
+                  <h3 className="text-xl font-bold text-green-900 mb-2">Check Your Inbox!</h3>
+                  <p className="text-green-700 text-sm">We've sent the guide to {email}.</p>
                 </div>
               ) : (
                 <form onSubmit={handleCapture} className="space-y-4">
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-bold text-slate-900">Where should we send it?</h3>
+                    <p className="text-sm text-slate-500">Enter your email to get instant access.</p>
+                  </div>
+                  
                   <div className="space-y-2">
-                    <label className="text-white text-sm font-medium ml-1">Where should we send it?</label>
                     <input
                       type="email"
                       required
-                      placeholder="Enter your best email address"
-                      className="w-full px-5 py-4 rounded-xl border border-white/30 bg-white/90 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 placeholder-gray-500 shadow-inner transition-all"
+                      placeholder="name@example.com"
+                      className="w-full px-5 py-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none text-slate-900 placeholder-slate-400 transition-all"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -134,15 +149,17 @@ export default function Hero({
                   <button
                     type="submit"
                     disabled={status === 'loading'}
-                    className="w-full px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-all text-lg shadow-lg transform hover:-translate-y-0.5 flex justify-center items-center"
+                    className="w-full px-8 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all text-lg shadow-lg shadow-blue-600/20 flex justify-center items-center"
                   >
                     {status === 'loading' ? (
-                      <span className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></span>
-                    ) : '👋'} 
-                    {status === 'loading' ? 'Sending...' : (ctaText || 'Get Instant Access')}
+                      <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                    ) : (
+                      <span className="mr-2">Download Now</span>
+                    )} 
                   </button>
-                  <p className="text-xs text-white/60 text-center mt-3">
-                    🔒 100% Secure. Unsubscribe anytime.
+                  <p className="text-xs text-slate-400 text-center mt-4 flex items-center justify-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+                    100% Secure. No spam, ever.
                   </p>
                 </form>
               )}

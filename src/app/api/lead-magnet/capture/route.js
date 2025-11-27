@@ -92,7 +92,20 @@ export async function POST(request) {
       // Generate PDF using dynamic import for safety
       try {
         const PDFDocument = (await import('pdfkit')).default;
-        const pdfBuffer = await generatePDF({ title, content }, PDFDocument);
+        
+        // Prepare rich context for the PDF generator
+        const pdfData = {
+          title,
+          content,
+          businessName: business.business_data.businessName || business.business_data.name || 'Local Business',
+          niche: business.business_data.niche || 'Service',
+          city: business.business_data.city || 'Your City',
+          phone: business.phone_number || business.business_data.phone || '',
+          website: `https://${business.subdomain}.launchfly.app`,
+          email: business.email || business.business_data.email || ''
+        };
+
+        const pdfBuffer = await generatePDF(pdfData, PDFDocument);
         const fileName = title 
           ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
           : 'expert-guide.pdf';
@@ -173,37 +186,164 @@ export async function POST(request) {
 }
 
 /**
- * Generates a PDF buffer from the lead magnet content
+ * Generates a high-value, trust-building PDF guide
  */
 function generatePDF(data, PDFDocument) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const chunks = [];
 
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Title
-      doc.fontSize(24).font('Helvetica-Bold').text(data.title, { align: 'center' });
+      const { title, content, businessName, niche, city, phone, website } = data;
+      const primaryColor = '#2563eb'; // Blue-600
+      const secondaryColor = '#1e40af'; // Blue-800
+      const accentColor = '#f59e0b'; // Amber-500
+
+      // --- Page 1: The "Handshake" Cover ---
+      
+      // Top Branding
+      doc.fontSize(10).font('Helvetica').fillColor('#6b7280')
+         .text(`A Free Resource from ${businessName}`, { align: 'center' });
+      doc.moveDown(4);
+
+      // Icon/Visual Anchor
+      doc.fontSize(60).text('📘', { align: 'center' });
+      doc.moveDown();
+
+      // Main Title (The Promise)
+      doc.fontSize(26).font('Helvetica-Bold').fillColor('#111827')
+         .text(title, { align: 'center' });
+      doc.moveDown();
+
+      // Subtitle (The Context)
+      doc.fontSize(16).font('Helvetica').fillColor('#4b5563')
+         .text(`Essential advice for ${niche} needs in ${city}`, { align: 'center' });
+      
+      doc.moveDown(4);
+      
+      // The "Whisper" (Trust Builder)
+      doc.fontSize(14).font('Helvetica-Oblique').fillColor('#374151')
+         .text('"You can fix small things alone... but if it gets serious, we are here to help."', { align: 'center' });
+
+      // Bottom Branding
+      const bottomY = doc.page.height - 100;
+      doc.text('', 50, bottomY); 
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(primaryColor)
+         .text(businessName, { align: 'center' });
+      doc.fontSize(10).font('Helvetica').fillColor('#9ca3af')
+         .text(`Serving ${city} homeowners with pride`, { align: 'center' });
+
+      doc.addPage();
+
+      // --- Page 2: Quick Intro (Human Connection) ---
+      doc.fontSize(20).font('Helvetica-Bold').fillColor('#111827').text('Introduction');
+      doc.moveDown();
+      
+      doc.fontSize(12).font('Helvetica').fillColor('#374151')
+         .text(`Dear Neighbor,`, { align: 'left' });
+      doc.moveDown();
+      
+      doc.text(`We created this guide because we see too many people in ${city} struggle with simple ${niche} issues that could have been prevented with a little bit of insider knowledge.`, { align: 'justify', lineGap: 4 });
+      doc.moveDown();
+      
+      doc.text(`This isn't a textbook. It's a collection of "quick wins" and practical tips we've gathered over years of service. Use this guide to save money, avoid common mistakes, and keep your home running smoothly.`, { align: 'justify', lineGap: 4 });
+      doc.moveDown(2);
+      
+      doc.font('Helvetica-Bold').text(`- The Team at ${businessName}`);
+      
+      doc.moveDown(2);
+      doc.lineWidth(1).strokeColor('#e5e7eb').moveTo(50, doc.y).lineTo(545, doc.y).stroke();
       doc.moveDown(2);
 
-      // Content
-      const content = data.content || [];
-      content.forEach(chapter => {
-        doc.fontSize(18).font('Helvetica-Bold').text(chapter.title);
-        doc.moveDown(0.5);
-        doc.fontSize(12).font('Helvetica').text(chapter.body, {
-          align: 'justify',
-          lineGap: 2
+      // --- Pages 3+: Actionable Advice (The "Meat") ---
+      
+      if (content && content.length > 0) {
+        content.forEach((chapter, index) => {
+          // Check for space, add page if needed
+          if (doc.y > 650) doc.addPage();
+
+          // Chapter Title
+          doc.fontSize(16).font('Helvetica-Bold').fillColor(primaryColor)
+             .text(`${index + 1}. ${chapter.title}`);
+          doc.moveDown(0.5);
+          
+          // Chapter Body
+          doc.fontSize(12).font('Helvetica').fillColor('#374151')
+             .text(chapter.body, { align: 'justify', lineGap: 3 });
+          doc.moveDown(1.5);
         });
+      } else {
+        // Fallback content if empty
+        doc.fontSize(14).text('Top Tips for Success');
+        doc.moveDown();
+        doc.fontSize(12).text('1. Regular Maintenance: The key to longevity is checking your systems every 6 months.');
+        doc.moveDown();
+        doc.text('2. Professional Inspection: Catch problems early before they become expensive repairs.');
+      }
+
+      doc.addPage();
+
+      // --- Page X: The "Do This Now" Checklist ---
+      // Light background box for checklist
+      doc.rect(50, 50, 495, 740).fill('#f8fafc'); 
+      doc.fillColor('#111827');
+      
+      doc.y = 100;
+      doc.fontSize(24).font('Helvetica-Bold').text('✅ Your Action Checklist', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).font('Helvetica').fillColor('#6b7280').text('Simple steps to take immediately:', { align: 'center' });
+      doc.moveDown(2);
+
+      const checklistItems = [
+        'Review the tips in this guide',
+        `Check your home for early warning signs of ${niche} issues`,
+        `Save ${businessName}'s number in your phone: ${phone || 'See below'}`,
+        'Share this guide with a neighbor who might need it',
+        'Schedule a preventative inspection if you are unsure'
+      ];
+
+      checklistItems.forEach(item => {
+        doc.fontSize(14).font('Helvetica').fillColor('#374151')
+           .text(`[   ]  ${item}`, { indent: 70 });
         doc.moveDown(1.5);
       });
 
-      // Footer
       doc.moveDown(2);
-      doc.fontSize(10).font('Helvetica-Oblique').text('Generated by Launchfly', { align: 'center', color: 'gray' });
+      
+      // --- Page X: Strong CTA & Offer ---
+      // Blue box for CTA
+      const ctaY = doc.y;
+      doc.rect(70, ctaY, 455, 200).fill('#eff6ff'); 
+      doc.fillColor(secondaryColor); 
+      doc.y = ctaY + 30; 
+      
+      doc.fontSize(18).font('Helvetica-Bold').text('Need a Professional Hand?', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(14).font('Helvetica').text('We are just a phone call away.', { align: 'center' });
+      doc.moveDown();
+      
+      if (phone) {
+        doc.fontSize(22).font('Helvetica-Bold').fillColor(primaryColor).text(phone, { align: 'center' });
+        doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text('(Tap to call on mobile)', { align: 'center' });
+      } else {
+        doc.fontSize(16).font('Helvetica-Bold').fillColor(primaryColor).text('Contact us on our website', { align: 'center' });
+      }
+      
+      doc.moveDown();
+      
+      // Mini Offer / "Magic Element"
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(accentColor)
+         .text('🎁 BONUS: Mention this guide for a priority booking!', { align: 'center' });
+
+      doc.moveDown(2);
+      if (website) {
+        doc.fontSize(12).font('Helvetica').fillColor('#2563eb')
+           .text(website, { align: 'center', link: website, underline: true });
+      }
 
       doc.end();
     } catch (e) {

@@ -33,39 +33,39 @@ async function generateFunnelContent(opportunity) {
   
   const prompt = `
     You are an expert marketing copywriter for LOCAL SERVICE BUSINESSES. 
-    Create a complete "Lead Magnet Funnel" for a ${niche} business targeting:
+    Create a complete "Lead Gen Funnel" for a ${niche} business targeting:
     - Niche: ${niche}
     - Audience: ${targetAudience}
     - Main Problem: ${problem}
-    - Lead Magnet Title: ${title}
+    - Offer Title: ${title}
 
-    Instead of a long ebook, generate a "High-Value Actionable Asset" (Checklist, Cheat Sheet, or Coupon).
+    Instead of a generic "guide", generate a "High-Value Local Offer" (e.g., "Free Inspection Checklist", "$50 Off Voucher", "Price Calculator", "Seasonal Maintenance Guide").
 
     You must generate THREE things:
-    1. The Asset Content (Single page, high-impact list, calculator, or coupon. NOT chapters.)
-    2. The Landing Page Copy (High converting, persuasive, focused on booking appointments)
+    1. The Asset/Offer Content (The actual coupon text, checklist items, or calculator logic description.)
+    2. The Landing Page Copy (High converting, persuasive, focused on getting a QUOTE or CALL)
     3. A 5-Day Email Nurture Sequence (To build trust and get them to CALL or BOOK)
 
     Return a VALID JSON object with this EXACT structure:
     {
       "lead_magnet_title": "${title}",
       "lead_magnet_content": [
-        { "title": "The Checklist / Guide", "body": "..." },
-        { "title": "Why This Matters", "body": "..." },
-        { "title": "Next Steps (Call Us)", "body": "..." }
+        { "title": "The Offer / Checklist", "body": "..." },
+        { "title": "Why Choose Us", "body": "..." },
+        { "title": "How to Redeem / Next Steps", "body": "..." }
       ],
       "landing_page": {
-        "headline": "Catchy headline focused on the result",
+        "headline": "Catchy headline focused on the result (e.g. 'Get Your Roof Fixed Today')",
         "subheadline": "Persuasive subheadline",
         "benefits": ["benefit 1", "benefit 2", "benefit 3"],
-        "cta_text": "Get It Now"
+        "cta_text": "Get Quote Now"
       },
       "email_sequence": [
         { "day": 1, "subject": "Here is your ${title}", "body": "..." },
-        { "day": 2, "subject": "Did you see this?", "body": "..." },
-        { "day": 3, "subject": "A quick tip for your home/business", "body": "..." },
-        { "day": 4, "subject": "Why our customers love us", "body": "..." },
-        { "day": 5, "subject": "Ready to book?", "body": "..." }
+        { "day": 2, "subject": "Before you hire a ${niche}...", "body": "..." },
+        { "day": 3, "subject": "See our recent work / Case Study", "body": "..." },
+        { "day": 4, "subject": "Common mistakes to avoid", "body": "..." },
+        { "day": 5, "subject": "Ready to schedule?", "body": "..." }
       ]
     }
   `;

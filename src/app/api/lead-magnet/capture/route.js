@@ -76,16 +76,25 @@ export async function POST(request) {
       });
 
     // 4. Send Email with PDF Attachment
-    const lm = business.business_data?.leadMagnet;
-    if (lm) {
+    // Handle both nested 'leadMagnet' structure and flat structure from launch.js
+    const flatData = business.business_data;
+    const nestedData = business.business_data?.leadMagnet;
+    
+    // Normalize data
+    const title = flatData.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
+    const content = flatData.lead_magnet_content || nestedData?.lead_magnet?.content || [];
+    const emailSequence = flatData.email_sequence || nestedData?.email_sequence || [];
+    const firstEmail = emailSequence.find(e => e.day === 1) || { subject: 'Your Guide', body: 'Here is your guide.' };
+    
+    if (title) {
       let attachments = [];
       
       // Generate PDF using dynamic import for safety
       try {
         const PDFDocument = (await import('pdfkit')).default;
-        const pdfBuffer = await generatePDF(lm, PDFDocument);
-        const fileName = lm.lead_magnet.title 
-          ? `${lm.lead_magnet.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
+        const pdfBuffer = await generatePDF({ title, content }, PDFDocument);
+        const fileName = title 
+          ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
           : 'expert-guide.pdf';
           
         attachments.push({
@@ -100,12 +109,12 @@ export async function POST(request) {
       const html = `
         <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; color: #333;">
           <div style="text-align: center; padding: 20px 0;">
-             <h1 style="color: #1e40af; margin-bottom: 10px;">${lm.lead_magnet.title}</h1>
+             <h1 style="color: #1e40af; margin-bottom: 10px;">${title}</h1>
           </div>
           
           <div style="background: #ffffff; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
             <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-              ${lm.email.body.replace(/\n/g, '<br>')}
+              ${firstEmail.body.replace(/\n/g, '<br>')}
             </p>
             
             <div style="text-align: center; padding: 20px; background: #f0f9ff; border-radius: 8px; margin: 20px 0;">
@@ -118,7 +127,7 @@ export async function POST(request) {
             <!-- Inline backup -->
             <div style="background: #f8fafc; padding: 30px; border-radius: 12px;">
               <h2 style="margin-top: 0; text-align: center; color: #0f172a;">Your Guide (Web View)</h2>
-              ${(lm.lead_magnet.content || []).map(c => `
+              ${(content || []).map(c => `
                 <div style="margin-bottom: 20px;">
                   <h3 style="color: #2563eb; margin-bottom: 10px;">${c.title}</h3>
                   <div style="line-height: 1.6; color: #374151;">${c.body}</div>
@@ -137,11 +146,24 @@ export async function POST(request) {
       await resend.emails.send({
         from: 'Launchfly <hello@launchfly.ai>', 
         to: email,
-        subject: lm.email.subject,
+        subject: firstEmail.subject,
         html: html,
         attachments: attachments
       });
     }
+    
+    // 5. Increment Lead Count
+    // Use direct update instead of RPC to ensure it works without custom SQL functions
+    const { data: currentBiz } = await supabase
+      .from('businesses')
+      .select('total_leads')
+      .eq('id', businessId)
+      .single();
+      
+    await supabase
+      .from('businesses')
+      .update({ total_leads: (currentBiz?.total_leads || 0) + 1 })
+      .eq('id', businessId);
 
     return Response.json({ success: true });
   } catch (error) {
@@ -153,14 +175,9 @@ export async function POST(request) {
 /**
  * Generates a PDF buffer from the lead magnet content
  */
-function generatePDF(lm, PDFDocument) {
+function generatePDF(data, PDFDocument) {
   return new Promise((resolve, reject) => {
     try {
-      // Use Courier font to avoid FS issues with Helvetica in some serverless envs, 
-      // or standard fonts if supported. Standard fonts (Helvetica) are built-in to PDFKit 
-      // but sometimes loading them fails in bundled envs without 'fs'.
-      // Using 'Courier' is safer as it's often simpler, but standard fonts *should* work 
-      // if pdfkit is configured as serverExternalPackage.
       const doc = new PDFDocument({ margin: 50 });
       const chunks = [];
 
@@ -169,17 +186,11 @@ function generatePDF(lm, PDFDocument) {
       doc.on('error', reject);
 
       // Title
-      doc.fontSize(24).font('Helvetica-Bold').text(lm.lead_magnet.title, { align: 'center' });
+      doc.fontSize(24).font('Helvetica-Bold').text(data.title, { align: 'center' });
       doc.moveDown(2);
 
-      // Description
-      if (lm.lead_magnet.description) {
-        doc.fontSize(12).font('Helvetica-Oblique').text(lm.lead_magnet.description, { align: 'center' });
-        doc.moveDown(2);
-      }
-
       // Content
-      const content = lm.lead_magnet.content || [];
+      const content = data.content || [];
       content.forEach(chapter => {
         doc.fontSize(18).font('Helvetica-Bold').text(chapter.title);
         doc.moveDown(0.5);

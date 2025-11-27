@@ -104,14 +104,14 @@ export default function HomePage() {
             
             {/* Main Headline */}
             <h1 className="hero-title">
-              <span className="title-main">Turn Website Visitors into</span><br />
-              <span className="title-highlight">Booked Appointments</span><br />
-              <span className="title-sub">In Under 30 Seconds</span>
+              <span className="title-main">Get More Local Leads in</span><br />
+              <span className="title-highlight">Under 5 Minutes</span><br />
+              <span className="title-sub">Automated Quote Funnels for Local Businesses</span>
             </h1>
             
             {/* Subheadline - The Promise */}
             <p className="hero-subtitle">
-              Stop losing customers. We generate your <strong>Price Guide</strong>, <strong>Checklist</strong>, or <strong>Coupon</strong> funnel instantly. Capture leads while you're on the job site.
+              Stop losing customers to competitors. We build you a <strong>high-converting quote funnel</strong>, set up your email follow-ups, and get you ready to capture leads instantly. No tech skills required.
             </p>
 
             {/* CTA Buttons */}
@@ -175,13 +175,13 @@ export default function HomePage() {
             <div className="problem-grid">
               <div className="problem-card">
                 <span className="problem-icon">😫</span>
-                <h3>The Old Way is Hard</h3>
-                <p>Hire an agency ($2,000/mo). Wait 3 weeks. Get a complicated website that doesn't convert. Still no leads. Frustrating.</p>
+                <h3>Websites Don't Get Quotes</h3>
+                <p>Your "brochure" website looks nice but doesn't get the phone to ring. Customers visit, get confused, and leave without contacting you.</p>
               </div>
               <div className="solution-card">
                 <span className="solution-icon">🚀</span>
-                <h3>The Launchfly Way</h3>
-                <p>Type "I run a plumbing business in Austin." Click Generate. <strong>Done.</strong> Your Price Guide, page, and emails are ready to collect leads instantly.</p>
+                <h3>Funnels Capture Leads</h3>
+                <p>We build a dedicated page designed for one thing: getting their contact info. Offer a coupon, a checklist, or a free quote, and watch your leads double.</p>
               </div>
             </div>
           </div>

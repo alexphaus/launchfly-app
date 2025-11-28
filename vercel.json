@@ -1,14 +1,6 @@
 {
   "crons": [
     {
-      "path": "/api/guarantee/check",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/abandoned-cart",
-      "schedule": "0 0 * * *"
-    },
-    {
       "path": "/api/email-sequence/process",
       "schedule": "0 9 * * *"
     }

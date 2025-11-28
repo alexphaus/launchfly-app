@@ -1,15 +1,10 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
-import { Inter } from 'next/font/google';
 import Script from 'next/script';
 import { Analytics } from "@vercel/analytics/next"
 
-const inter = Inter({ 
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  display: 'swap'
-});
+// Use system font stack for reliability in all environments
 
 export const metadata: Metadata = {
   title: "Launchfly - Guaranteed Customers in 48 Hours | AI-Powered Business",
@@ -31,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif" }}>
         {children}
         <Script 
           src="https://tally.so/widgets/embed.js" 

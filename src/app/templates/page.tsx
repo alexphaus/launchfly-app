@@ -15,6 +15,7 @@ interface NicheTemplate {
 }
 
 const NICHE_TEMPLATES: NicheTemplate[] = [
+  // Service Businesses
   {
     id: 'plumbing',
     name: 'Plumbing',
@@ -68,6 +69,61 @@ const NICHE_TEMPLATES: NicheTemplate[] = [
     leadMagnetType: 'Meal Plan / Pass',
     targetAudience: 'Locals wanting to get fit',
     exampleTitle: '"7-Day Meal Prep Plan & Day Pass"'
+  },
+  // Coaching & Consulting
+  {
+    id: 'business-coach',
+    name: 'Business Coach',
+    icon: '📈',
+    description: 'For coaches helping entrepreneurs scale their business.',
+    leadMagnetType: 'Strategy Framework',
+    targetAudience: 'Business Owners',
+    exampleTitle: '"5-Step Business Growth Blueprint"'
+  },
+  {
+    id: 'life-coach',
+    name: 'Life Coach',
+    icon: '🧭',
+    description: 'For coaches helping clients find clarity and purpose.',
+    leadMagnetType: 'Self-Assessment',
+    targetAudience: 'Individuals seeking change',
+    exampleTitle: '"Life Clarity Self-Assessment"'
+  },
+  {
+    id: 'career-coach',
+    name: 'Career Coach',
+    icon: '💼',
+    description: 'For coaches helping professionals land dream jobs.',
+    leadMagnetType: 'Resume/Interview Guide',
+    targetAudience: 'Job Seekers',
+    exampleTitle: '"Interview Prep Cheat Sheet"'
+  },
+  {
+    id: 'health-coach',
+    name: 'Health & Wellness Coach',
+    icon: '🧘',
+    description: 'For coaches helping clients transform their health.',
+    leadMagnetType: 'Wellness Plan',
+    targetAudience: 'Health-conscious individuals',
+    exampleTitle: '"30-Day Wellness Kickstart Guide"'
+  },
+  {
+    id: 'marketing-consultant',
+    name: 'Marketing Consultant',
+    icon: '🎯',
+    description: 'For consultants helping businesses get more customers.',
+    leadMagnetType: 'Marketing Audit',
+    targetAudience: 'Small Business Owners',
+    exampleTitle: '"Marketing Gaps Checklist"'
+  },
+  {
+    id: 'financial-advisor',
+    name: 'Financial Advisor',
+    icon: '💰',
+    description: 'For advisors helping clients build wealth.',
+    leadMagnetType: 'Planning Guide',
+    targetAudience: 'Professionals 35-55',
+    exampleTitle: '"Retirement Readiness Calculator"'
   }
 ];
 

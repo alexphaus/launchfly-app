@@ -44,6 +44,7 @@ export async function GET(request) {
     // 1. email_sequence_day < 5 (not completed)
     // 2. next_email_at <= now (time to send)
     // 3. status = 'lead' (still a lead, not converted)
+    // 4. accepts_marketing = true (not unsubscribed)
     const { data: pendingLeads, error: fetchError } = await supabase
       .from('customers')
       .select(`
@@ -61,6 +62,7 @@ export async function GET(request) {
       `)
       .eq('status', 'lead')
       .eq('source', 'lead_magnet')
+      .eq('accepts_marketing', true)
       .lt('email_sequence_day', 5)
       .lte('next_email_at', now.toISOString())
       .limit(50); // Process in batches
@@ -124,7 +126,9 @@ export async function GET(request) {
           body: personalizedBody,
           businessName: businessData.businessName || business.name,
           phone: business.phone_number || businessData.phone,
-          day: nextDay
+          day: nextDay,
+          email: lead.email,
+          businessId: business.id
         });
 
         // Send email
@@ -218,9 +222,11 @@ function personalizeEmail(body, data) {
 /**
  * Build HTML email template
  */
-function buildEmailHtml({ subject, body, businessName, phone, day }) {
+function buildEmailHtml({ subject, body, businessName, phone, day, email, businessId }) {
   const ctaText = day >= 4 ? 'Schedule Your Free Consultation' : 'Learn More';
   const ctaLink = phone ? `tel:${phone}` : '#';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://launchfly.ai';
+  const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email || '')}&businessId=${businessId || ''}`;
   
   return `
     <!DOCTYPE html>
@@ -265,6 +271,9 @@ function buildEmailHtml({ subject, body, businessName, phone, day }) {
           </p>
           <p style="margin: 10px 0 0 0; color: #94a3b8; font-size: 11px;">
             You're receiving this because you downloaded our free guide.
+          </p>
+          <p style="margin: 10px 0 0 0;">
+            <a href="${unsubscribeUrl}" style="color: #94a3b8; font-size: 11px; text-decoration: underline;">Unsubscribe</a>
           </p>
         </div>
         

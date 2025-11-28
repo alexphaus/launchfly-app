@@ -113,11 +113,31 @@ async function generateFunnelContent(opportunity) {
         { "name": "First Name L.", "role": "Local Resident", "content": "Specific praise...", "rating": 5, "avatar": "emoji" }
       ],
       "email_sequence": [
-        { "day": 1, "subject": "Here is your ${title}", "body": "..." },
-        { "day": 2, "subject": "Before you hire a ${niche}...", "body": "..." },
-        { "day": 3, "subject": "See our recent work", "body": "..." },
-        { "day": 4, "subject": "Common mistakes to avoid", "body": "..." },
-        { "day": 5, "subject": "Ready to schedule?", "body": "..." }
+        { 
+          "day": 1, 
+          "subject": "Your ${title} is ready - here's what's inside", 
+          "body": "Write a warm, personal welcome email (150-200 words). Start with 'Hey there!' Thank them for downloading. List 3 specific things they'll learn from the guide. Add a personal note like 'I created this guide because I've seen too many people in ${city} get overcharged...' End with 'Reply to this email if you have any questions - I read every message.' Sign off with a name."
+        },
+        { 
+          "day": 2, 
+          "subject": "The 3 questions you MUST ask before hiring a ${niche}", 
+          "body": "Write an educational email (200-250 words). Start with a hook like 'Before you hire anyone for ${niche} work, read this...' Share 3 specific questions they should ask any provider (with explanations why each matters). Include a brief story about a customer who didn't ask these questions and what happened. End with 'We're happy to answer these questions for you - just give us a call at {phone} for a free, no-pressure consultation.'"
+        },
+        { 
+          "day": 3, 
+          "subject": "[Case Study] How we helped Sarah save $2,400", 
+          "body": "Write a story-driven email (200-250 words). Create a realistic case study with: Customer name and situation, The problem they faced, What we did to help, The specific result (use numbers like 'saved $X' or 'completed in X days'). Include a short quote from the customer. End with 'Want results like Sarah? We'd love to help you too. Call {phone} or reply to this email to get started.'"
+        },
+        { 
+          "day": 4, 
+          "subject": "Special offer: 15% off (expires in 72 hours)", 
+          "body": "Write an urgency-driven email (200-250 words). Start with 'I wanted to reach out with something special...' Introduce a limited-time offer (15% off first service OR free add-on worth $X). Explain WHY you're offering this deal (e.g., 'We have availability this week' or 'It's our way of saying thanks'). Create urgency: 'This offer expires in 72 hours.' Make the CTA crystal clear: 'Call {phone} and mention code GUIDE15 to claim your discount.' Add P.S. with reminder of the deadline."
+        },
+        { 
+          "day": 5, 
+          "subject": "Final notice: Your 15% discount expires tonight", 
+          "body": "Write a final urgency email (150-200 words). Start with 'This is it...' Remind them this is the LAST chance for the discount. Quick recap: what they get (service) + the discount + the deadline. Add social proof: 'X other guide readers have already claimed this offer.' Make it easy: 'One quick call to {phone} is all it takes.' Final CTA button. P.S. 'After midnight tonight, this offer is gone. Don't miss out.'"
+        }
       ]
     }
   `;

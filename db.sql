@@ -348,6 +348,7 @@ CREATE TABLE public.businesses (
   guarantee_id uuid,
   paid_plan_session_id character varying,
   available_balance numeric DEFAULT 0,
+  gross_sales_since_cashout numeric DEFAULT 0,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT businesses_guarantee_id_fkey FOREIGN KEY (guarantee_id) REFERENCES public.revenue_guarantees(id),
@@ -440,6 +441,25 @@ CREATE TABLE public.conversion_intelligence (
   last_accessed timestamp with time zone DEFAULT now(),
   CONSTRAINT conversion_intelligence_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.customer_notes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  customer_email text NOT NULL,
+  note text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT customer_notes_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_notes_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.customer_tags (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  customer_email text NOT NULL,
+  tag text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT customer_tags_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_tags_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.customer_testimonials (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -471,6 +491,11 @@ CREATE TABLE public.customers (
   marketing_source text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  email_sequence_day integer DEFAULT 1,
+  email_sequence_started_at timestamp with time zone,
+  next_email_at timestamp with time zone,
+  last_email_sent_at timestamp with time zone,
+  email_sequence_completed_at timestamp with time zone,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
   CONSTRAINT customers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
@@ -865,6 +890,7 @@ CREATE TABLE public.profiles (
   phone_number text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  sms_notifications_enabled boolean DEFAULT true,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
@@ -898,6 +924,8 @@ CREATE TABLE public.prospects (
   notes text,
   tags ARRAY,
   metadata jsonb DEFAULT '{}'::jsonb,
+  updated_at timestamp with time zone DEFAULT now(),
+  total_value numeric DEFAULT 0,
   CONSTRAINT prospects_pkey PRIMARY KEY (id),
   CONSTRAINT prospects_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
@@ -1074,6 +1102,22 @@ CREATE TABLE public.shared_ai_knowledge (
   knowledge_timestamp timestamp with time zone DEFAULT now(),
   CONSTRAINT shared_ai_knowledge_pkey PRIMARY KEY (id),
   CONSTRAINT shared_ai_knowledge_contributor_id_fkey FOREIGN KEY (contributor_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.sms_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  user_id uuid,
+  phone_number text NOT NULL,
+  message_type text NOT NULL,
+  message_content text NOT NULL,
+  twilio_message_id text,
+  status text NOT NULL CHECK (status = ANY (ARRAY['sent'::text, 'failed'::text, 'delivered'::text, 'undelivered'::text])),
+  error_message text,
+  created_at timestamp with time zone DEFAULT now(),
+  delivered_at timestamp with time zone,
+  CONSTRAINT sms_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT sms_notifications_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT sms_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.social_actions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

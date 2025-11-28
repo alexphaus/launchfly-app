@@ -23,18 +23,24 @@ export default function Hero({
     
     setStatus('loading');
     try {
+      console.log('🚀 Submitting lead:', { email, businessId });
       const res = await fetch('/api/lead-magnet/capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, businessId })
       });
       
-      if (!res.ok) throw new Error('Failed to subscribe');
+      const data = await res.json();
+      console.log('📩 Capture response:', data);
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to subscribe');
+      }
       
       setStatus('success');
       setEmail('');
     } catch (err) {
-      console.error(err);
+      console.error('❌ Lead capture error:', err);
       setStatus('error');
     }
   };

@@ -6,7 +6,11 @@
     },
     {
       "path": "/api/abandoned-cart",
-    "schedule": "0 0 * * *"
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/email-sequence/process",
+      "schedule": "0 9 * * *"
     }
   ]
 }

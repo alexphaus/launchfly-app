@@ -22,12 +22,34 @@ export default function LaunchflyDashboard({ session, business }) {
     ? `${window.location.origin}/sites/${business.subdomain}` 
     : (business?.website_url || '#');
   const emailCount = business?.business_data?.email_sequence?.length || 5;
-  const leadCount = leads.length || business?.leads_count || 0;
+  const leadCount = leads.length || business?.total_leads || business?.leads_count || 0;
   
   useEffect(() => {
     if (business?.id) {
       fetchLeads();
       loadChecklist();
+      
+      // Set up real-time subscription for new leads
+      const channel = supabase
+        .channel('leads-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'customers',
+            filter: `business_id=eq.${business.id}`
+          },
+          (payload) => {
+            console.log('New lead received:', payload.new);
+            setLeads(prev => [payload.new, ...prev].slice(0, 10));
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [business?.id]);
 
@@ -35,16 +57,21 @@ export default function LaunchflyDashboard({ session, business }) {
     try {
       const { data, error } = await supabase
         .from('customers')
-        .select('*')
+        .select('*, email_sequence_day')
         .eq('business_id', business.id)
-        .eq('status', 'lead')
+        // Temporarily removed source filter to see all customers
+        // .eq('source', 'lead_magnet')
         .order('created_at', { ascending: false })
         .limit(10);
         
-      if (!error && data) {
+      if (error) {
+        console.error('❌ Error fetching leads:', error);
+        setLeads([]);
+      } else if (data) {
+        console.log(`✅ Fetched ${data.length} leads:`, data.map(l => ({ email: l.email, source: l.source })));
         setLeads(data);
       } else {
-        // Fallback if table doesn't exist yet
+        console.log('⚠️ No data returned from customers query');
         setLeads([]);
       }
     } catch (e) {
@@ -108,13 +135,23 @@ export default function LaunchflyDashboard({ session, business }) {
             <p className="text-sm text-slate-500 mb-6">
               Your hook: "{business?.business_data?.lead_magnet_title || 'Special Offer / Checklist'}"
             </p>
-            <button 
-              onClick={() => setShowOfferModal(true)}
-              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
-            >
-              <FileText size={16} />
-              View Offer Content
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowOfferModal(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
+              >
+                <FileText size={16} />
+                View Offer Content
+              </button>
+              <a
+                href={`/api/lead-magnet/download?businessId=${business?.id}`}
+                download
+                className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                title="Download PDF"
+              >
+                <Download size={16} />
+              </a>
+            </div>
           </div>
 
           {/* Landing Page Card */}
@@ -225,7 +262,7 @@ export default function LaunchflyDashboard({ session, business }) {
                     <tr>
                       <th className="p-4">Email</th>
                       <th className="p-4">Date</th>
-                      <th className="p-4">Status</th>
+                      <th className="p-4">Email Progress</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -234,9 +271,17 @@ export default function LaunchflyDashboard({ session, business }) {
                         <td className="p-4 font-medium text-slate-900">{lead.email}</td>
                         <td className="p-4 text-slate-500">{new Date(lead.created_at).toLocaleDateString()}</td>
                         <td className="p-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            New
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-blue-500 rounded-full transition-all"
+                                style={{ width: `${((lead.email_sequence_day || 1) / 5) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-slate-500 whitespace-nowrap">
+                              {lead.email_sequence_day || 1}/5 emails
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     ))}

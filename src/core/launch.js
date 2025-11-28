@@ -39,35 +39,83 @@ async function generateFunnelContent(opportunity) {
     - Main Problem: ${problem}
     - Offer Title: ${title}
 
-    Instead of a generic "guide", generate a "High-Value Local Offer" (e.g., "Free Inspection Checklist", "$50 Off Voucher", "Price Calculator", "Seasonal Maintenance Guide").
+    IMPORTANT: The PDF should be a "10-minute treasure chest" - small, sharp, immediately usable.
+    NOT a long report. NOT a boring brochure. A practical assistant that gives quick wins.
+    
+    Think of it as: "A friendly guide that whispers: You can fix small things alone… but if it gets serious, call us."
 
-    You must generate FOUR things:
-    1. The Asset/Offer Content (The actual coupon text, checklist items, or calculator logic description.)
-    2. The Landing Page Copy (High converting, persuasive, focused on getting a QUOTE or CALL)
-    3. A 5-Day Email Nurture Sequence (To build trust and get them to CALL or BOOK)
-    4. 3 Realistic Customer Testimonials (Specific to this niche and offer)
+    You must generate FIVE things:
+    
+    1. **RICH PDF CONTENT** (8-12 pages worth of content):
+       - Cover tagline (one powerful promise)
+       - Intro paragraph (why this guide exists, who made it)
+       - 5-7 Common Mistakes people make (real problems, 2-3 sentences each)
+       - 5-7 Quick Tips / Solutions (actionable advice anyone can do)
+       - One Case Study (before/after story with specific details)
+       - 2-Item Action Checklist ("Do these 2 things NOW")
+       - Price ranges (general ballpark costs for common services)
+       - FAQ (3-4 common questions answered)
+       
+    2. **LANDING PAGE COPY** (High converting, persuasive)
+    
+    3. **5-DAY EMAIL SEQUENCE** (To build trust and get them to CALL or BOOK)
+    
+    4. **3 CUSTOMER TESTIMONIALS** (Realistic, specific to this niche)
+    
+    5. **BONUS OFFER** (e.g., "Show this PDF for 10% off your first service")
 
     Return a VALID JSON object with this EXACT structure:
     {
       "lead_magnet_title": "${title}",
+      "lead_magnet_pdf": {
+        "cover_tagline": "One powerful promise line for the cover",
+        "intro": "2-3 sentences about why this guide exists and who created it",
+        "common_mistakes": [
+          { "title": "Mistake name", "description": "2-3 sentences explaining this mistake and its cost" }
+        ],
+        "quick_tips": [
+          { "title": "Tip name", "description": "Simple, actionable advice anyone can do" }
+        ],
+        "case_study": {
+          "customer_name": "First name only",
+          "location": "Neighborhood or city area",
+          "problem": "What happened",
+          "solution": "How it was fixed",
+          "result": "The outcome with specific numbers if possible"
+        },
+        "action_checklist": [
+          "First thing to do right now",
+          "Second thing to do right now"
+        ],
+        "price_ranges": [
+          { "service": "Service name", "range": "$XX - $XXX" }
+        ],
+        "faq": [
+          { "question": "Common question?", "answer": "Clear, helpful answer" }
+        ],
+        "bonus_offer": "Special offer text (e.g., 'Show this PDF and get 10% off your first service')" 
+      },
       "lead_magnet_content": [
         { "title": "The Offer / Checklist", "body": "..." },
         { "title": "Why Choose Us", "body": "..." },
         { "title": "How to Redeem / Next Steps", "body": "..." }
       ],
       "landing_page": {
-        "headline": "Catchy headline focused on the result (e.g. 'Get Your Roof Fixed Today')",
+        "headline": "Catchy headline focused on the result",
         "subheadline": "Persuasive subheadline",
-        "benefits": ["benefit 1", "benefit 2", "benefit 3"],
-        "cta_text": "Get Quote Now"
+        "hero_headline": "Main hero headline",
+        "hero_subheadline": "Supporting subheadline",
+        "benefits": ["benefit 1", "benefit 2", "benefit 3", "benefit 4"],
+        "cta_text": "Get Your Free Guide",
+        "about_business": "2-3 sentences about the business expertise"
       },
       "testimonials": [
-        { "name": "Name", "role": "Local Resident / Homeowner", "content": "Specific praise about the ${niche} service...", "rating": 5 }
+        { "name": "First Name L.", "role": "Local Resident", "content": "Specific praise...", "rating": 5, "avatar": "emoji" }
       ],
       "email_sequence": [
         { "day": 1, "subject": "Here is your ${title}", "body": "..." },
         { "day": 2, "subject": "Before you hire a ${niche}...", "body": "..." },
-        { "day": 3, "subject": "See our recent work / Case Study", "body": "..." },
+        { "day": 3, "subject": "See our recent work", "body": "..." },
         { "day": 4, "subject": "Common mistakes to avoid", "body": "..." },
         { "day": 5, "subject": "Ready to schedule?", "body": "..." }
       ]

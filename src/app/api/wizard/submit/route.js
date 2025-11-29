@@ -152,10 +152,13 @@ export async function POST(request) {
 
     if (bizErr) throw bizErr;
 
-    // Create session
+    // Create session - set stage based on template type
+    // For lead-magnet templates, we'll set to 'generating' so dashboard doesn't trigger Inngest
+    const initialStage = (template === 'lead-magnet' && leadMagnetTopic) ? 'generating' : 'pending';
+    
     const { error: sessErr } = await supabase
       .from('sessions')
-      .insert({ id: sessionId, business_id: business.id, stage: 'pending', progress: 0 });
+      .insert({ id: sessionId, business_id: business.id, stage: initialStage, progress: initialStage === 'generating' ? 30 : 0 });
     if (sessErr) throw sessErr;
 
     // Fire-and-forget: initialize monetization (offers + Stripe Connect)
@@ -168,11 +171,17 @@ export async function POST(request) {
       }).catch(() => {});
 
       // Trigger Lead Magnet Generation if applicable
+      // This is a simpler, faster generation path for lead magnet funnels
       if (template === 'lead-magnet' && leadMagnetTopic) {
         fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/lead-magnet/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessId: business.id, topic: leadMagnetTopic, language: leadMagnetLanguage })
+          body: JSON.stringify({ 
+            businessId: business.id, 
+            topic: leadMagnetTopic, 
+            audience: targetAudience,
+            language: leadMagnetLanguage 
+          })
         }).catch((err) => console.error('Lead magnet trigger failed:', err));
       }
 

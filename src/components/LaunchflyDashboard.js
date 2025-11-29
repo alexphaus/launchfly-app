@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight } from 'lucide-react';
+import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2 } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function LaunchflyDashboard({ session, business }) {
@@ -15,6 +15,12 @@ export default function LaunchflyDashboard({ session, business }) {
   });
   
   const supabase = createClientComponentClient();
+
+  // Check if content is ready
+  const isGenerating = business?.status === 'pending' || business?.status === 'failed' || !business?.business_data?.lead_magnet_content;
+  const hasLeadMagnet = !!business?.business_data?.lead_magnet_content;
+  const hasLandingPage = !!business?.business_data?.landing_page;
+  const hasEmailSequence = !!business?.business_data?.email_sequence;
 
   // Placeholder data if business data isn't fully ready
   const pdfUrl = business?.lead_magnet_url || '#';
@@ -52,6 +58,17 @@ export default function LaunchflyDashboard({ session, business }) {
       };
     }
   }, [business?.id]);
+
+  // Auto-refresh when content is still generating
+  useEffect(() => {
+    if (isGenerating) {
+      const refreshInterval = setInterval(() => {
+        window.location.reload();
+      }, 10000); // Refresh every 10 seconds while generating
+      
+      return () => clearInterval(refreshInterval);
+    }
+  }, [isGenerating]);
 
   const fetchLeads = async () => {
     try {
@@ -106,13 +123,26 @@ export default function LaunchflyDashboard({ session, business }) {
     <div className="min-h-screen bg-slate-50 p-6 md:p-12">
       <div className="max-w-6xl mx-auto">
         
+        {/* Generating Banner */}
+        {isGenerating && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+            <div>
+              <p className="font-medium text-blue-900">Your content is being generated...</p>
+              <p className="text-sm text-blue-700">This usually takes 30-60 seconds. The page will refresh automatically.</p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-10">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            {business?.business_name || 'Your Local Lead System'}
+            {business?.name || business?.business_name || 'Your Local Lead System'}
           </h1>
           <p className="text-slate-600">
-            Your automated quote & lead generation system is live. Share your link to start getting inquiries.
+            {isGenerating 
+              ? "We're building your automated lead generation system. Hang tight!" 
+              : "Your automated quote & lead generation system is live. Share your link to start getting inquiries."}
           </p>
         </div>
 
@@ -120,98 +150,147 @@ export default function LaunchflyDashboard({ session, business }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           
           {/* Offer Card */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+          <div className={`bg-white rounded-xl p-6 shadow-sm border ${hasLeadMagnet ? 'border-slate-100' : 'border-blue-200'}`}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
+              <div className={`p-3 rounded-lg ${hasLeadMagnet ? 'bg-blue-100 text-blue-600' : 'bg-blue-50 text-blue-400'}`}>
                 <FileText size={24} />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900">Lead Offer</h3>
-                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                  Ready
-                </span>
+                {hasLeadMagnet ? (
+                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                    Ready
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin" /> Generating...
+                  </span>
+                )}
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              Your hook: "{business?.business_data?.lead_magnet_title || 'Special Offer / Checklist'}"
+              {hasLeadMagnet 
+                ? `Your hook: "${business?.business_data?.lead_magnet_title || 'Special Offer / Checklist'}"`
+                : 'Creating your lead magnet content...'}
             </p>
             <div className="flex gap-2">
               <button 
-                onClick={() => setShowOfferModal(true)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
+                onClick={() => hasLeadMagnet && setShowOfferModal(true)}
+                disabled={!hasLeadMagnet}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium transition-colors ${
+                  hasLeadMagnet 
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer' 
+                    : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                }`}
               >
                 <FileText size={16} />
                 View Offer Content
               </button>
-              <a
-                href={`/api/lead-magnet/download?businessId=${business?.id}`}
-                download
-                className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                title="Download PDF"
-              >
-                <Download size={16} />
-              </a>
+              {hasLeadMagnet ? (
+                <a
+                  href={`/api/lead-magnet/download?businessId=${business?.id}`}
+                  download
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  title="Download PDF"
+                >
+                  <Download size={16} />
+                </a>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 text-slate-300 rounded-lg cursor-not-allowed">
+                  <Download size={16} />
+                </div>
+              )}
             </div>
           </div>
 
           {/* Landing Page Card */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+          <div className={`bg-white rounded-xl p-6 shadow-sm border ${hasLandingPage ? 'border-slate-100' : 'border-purple-200'}`}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-purple-100 text-purple-600 rounded-lg">
+              <div className={`p-3 rounded-lg ${hasLandingPage ? 'bg-purple-100 text-purple-600' : 'bg-purple-50 text-purple-400'}`}>
                 <Globe size={24} />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900">Landing Page</h3>
-                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                  Live
-                </span>
+                {hasLandingPage ? (
+                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                    Live
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-full flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin" /> Building...
+                  </span>
+                )}
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              Optimized conversion page to capture leads & calls.
+              {hasLandingPage 
+                ? 'Optimized conversion page to capture leads & calls.'
+                : 'Building your landing page...'}
             </p>
             <div className="flex gap-2">
-              <a 
-                href={landingPageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
-              >
-                <ExternalLink size={16} />
-                View Live
-              </a>
-              <button 
-                onClick={handleCopyLink}
-                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
-                title="Copy Link"
-              >
-                {copied ? <CheckCircle size={20} className="text-green-600" /> : <Copy size={20} />}
-              </button>
+              {hasLandingPage ? (
+                <>
+                  <a 
+                    href={landingPageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <ExternalLink size={16} />
+                    View Live
+                  </a>
+                  <button 
+                    onClick={handleCopyLink}
+                    className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                    title="Copy Link"
+                  >
+                    {copied ? <CheckCircle size={20} className="text-green-600" /> : <Copy size={20} />}
+                  </button>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 text-slate-300 rounded-lg cursor-not-allowed">
+                  <Loader2 size={16} className="animate-spin" />
+                  Building...
+                </div>
+              )}
             </div>
           </div>
 
           {/* Email Sequence Card */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
+          <div className={`bg-white rounded-xl p-6 shadow-sm border ${hasEmailSequence ? 'border-slate-100' : 'border-orange-200'}`}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-orange-100 text-orange-600 rounded-lg">
+              <div className={`p-3 rounded-lg ${hasEmailSequence ? 'bg-orange-100 text-orange-600' : 'bg-orange-50 text-orange-400'}`}>
                 <Mail size={24} />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900">Email Sequence</h3>
-                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                  Active
-                </span>
+                {hasEmailSequence ? (
+                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                    Active
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded-full flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin" /> Writing...
+                  </span>
+                )}
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              {emailCount}-day automated nurture sequence to get them to call.
+              {hasEmailSequence 
+                ? `${emailCount}-day automated nurture sequence to get them to call.`
+                : 'Writing your email sequence...'}
             </p>
             <button 
-              onClick={() => setShowEmailModal(true)}
-              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors"
+              onClick={() => hasEmailSequence && setShowEmailModal(true)}
+              disabled={!hasEmailSequence}
+              className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg font-medium transition-colors ${
+                hasEmailSequence 
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer' 
+                  : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+              }`}
             >
-              <Users size={16} />
-              View Emails
+              {hasEmailSequence ? <Users size={16} /> : <Loader2 size={16} className="animate-spin" />}
+              {hasEmailSequence ? 'View Emails' : 'Generating...'}
             </button>
           </div>
         </div>

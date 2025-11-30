@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2 } from 'lucide-react';
+import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function LaunchflyDashboard({ session, business }) {
   const [copied, setCopied] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPlaybookModal, setShowPlaybookModal] = useState(false);
   const [leads, setLeads] = useState([]);
   const [loadingLeads, setLoadingLeads] = useState(true);
+  const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, 30day, playbook
   const [checklist, setChecklist] = useState({
     google: false,
     facebook: false,
-    outreach: false
+    outreach: false,
+    // 30-day plan items
+    week1_templates: false,
+    week1_outreach: false,
+    week1_firstclient: false,
+    week2_deliver: false,
+    week2_tracking: false,
+    week2_proof: false,
+    week3_casestudy: false,
+    week3_ads: false,
+    week4_retainer: false,
+    week4_referral: false
   });
   
   const supabase = createClientComponentClient();
@@ -372,51 +385,261 @@ export default function LaunchflyDashboard({ session, business }) {
 
           {/* Next Steps / Growth Checklist */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-lg">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Share2 size={20} />
-              Get Your First Leads
-            </h2>
-            
-            <div className="space-y-4">
-              <div 
-                onClick={() => toggleChecklist('google')}
-                className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.google ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
+            {/* Tab Navigation */}
+            <div className="flex gap-2 mb-6 border-b border-white/10 pb-4">
+              <button 
+                onClick={() => setActiveTab('quickstart')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'quickstart' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
-                <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${checklist.google ? 'border-green-400 bg-green-400' : 'border-white/30'}`}>
-                  {checklist.google && <CheckCircle size={14} className="text-slate-900" />}
-                </div>
-                <div>
-                  <div className="font-medium">Add link to Google Business Profile</div>
-                  <div className="text-xs text-slate-300 mt-1">Capture local search traffic</div>
-                </div>
-              </div>
-
-              <div 
-                onClick={() => toggleChecklist('facebook')}
-                className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.facebook ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
+                Quick Start
+              </button>
+              <button 
+                onClick={() => setActiveTab('30day')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === '30day' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
-                <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${checklist.facebook ? 'border-green-400 bg-green-400' : 'border-white/30'}`}>
-                  {checklist.facebook && <CheckCircle size={14} className="text-slate-900" />}
-                </div>
-                <div>
-                  <div className="font-medium">Post on Facebook Community Groups</div>
-                  <div className="text-xs text-slate-300 mt-1">Share your special offer</div>
-                </div>
-              </div>
-
-              <div 
-                onClick={() => toggleChecklist('outreach')}
-                className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.outreach ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
+                30-Day Plan
+              </button>
+              <button 
+                onClick={() => setActiveTab('playbook')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'playbook' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
-                <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${checklist.outreach ? 'border-green-400 bg-green-400' : 'border-white/30'}`}>
-                  {checklist.outreach && <CheckCircle size={14} className="text-slate-900" />}
-                </div>
-                <div>
-                  <div className="font-medium">Email/Text 5 past clients</div>
-                  <div className="text-xs text-slate-300 mt-1">Ask for referrals with this link</div>
-                </div>
-              </div>
+                Lead Playbook
+              </button>
             </div>
+
+            {/* Quick Start Tab */}
+            {activeTab === 'quickstart' && (
+              <>
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <Zap size={20} />
+                  Get Your First Leads
+                </h2>
+                
+                <div className="space-y-4">
+                  <div 
+                    onClick={() => toggleChecklist('google')}
+                    className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.google ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
+                  >
+                    <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${checklist.google ? 'border-green-400 bg-green-400' : 'border-white/30'}`}>
+                      {checklist.google && <CheckCircle size={14} className="text-slate-900" />}
+                    </div>
+                    <div>
+                      <div className="font-medium">Add link to Google Business Profile</div>
+                      <div className="text-xs text-slate-300 mt-1">Capture local search traffic</div>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => toggleChecklist('facebook')}
+                    className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.facebook ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
+                  >
+                    <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${checklist.facebook ? 'border-green-400 bg-green-400' : 'border-white/30'}`}>
+                      {checklist.facebook && <CheckCircle size={14} className="text-slate-900" />}
+                    </div>
+                    <div>
+                      <div className="font-medium">Post on Facebook Community Groups</div>
+                      <div className="text-xs text-slate-300 mt-1">Share your special offer</div>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => toggleChecklist('outreach')}
+                    className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.outreach ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
+                  >
+                    <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${checklist.outreach ? 'border-green-400 bg-green-400' : 'border-white/30'}`}>
+                      {checklist.outreach && <CheckCircle size={14} className="text-slate-900" />}
+                    </div>
+                    <div>
+                      <div className="font-medium">Email/Text 5 past clients</div>
+                      <div className="text-xs text-slate-300 mt-1">Ask for referrals with this link</div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 30-Day Test Plan Tab */}
+            {activeTab === '30day' && (
+              <>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Target size={20} />
+                  30-Day Customer Acquisition Plan
+                </h2>
+                <p className="text-slate-400 text-sm mb-6">Follow this proven plan to land your first 3 paying customers</p>
+                
+                <div className="space-y-6">
+                  {/* Week 1 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-1 bg-blue-600 rounded text-xs font-bold">WEEK 1</span>
+                      <span className="text-sm text-slate-400">Outreach Sprint</span>
+                    </div>
+                    <div className="space-y-2 pl-2 border-l-2 border-blue-600/30">
+                      <div 
+                        onClick={() => toggleChecklist('week1_outreach')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week1_outreach ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week1_outreach ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week1_outreach && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Message 50 local businesses (Google Maps + FB)</span>
+                      </div>
+                      <div 
+                        onClick={() => toggleChecklist('week1_firstclient')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week1_firstclient ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week1_firstclient ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week1_firstclient && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Close 3 clients at $300 each = $900</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Week 2 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-1 bg-purple-600 rounded text-xs font-bold">WEEK 2</span>
+                      <span className="text-sm text-slate-400">Deliver & Document</span>
+                    </div>
+                    <div className="space-y-2 pl-2 border-l-2 border-purple-600/30">
+                      <div 
+                        onClick={() => toggleChecklist('week2_deliver')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week2_deliver ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week2_deliver ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week2_deliver && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Deliver funnels & set up tracking</span>
+                      </div>
+                      <div 
+                        onClick={() => toggleChecklist('week2_proof')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week2_proof ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week2_proof ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week2_proof && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Run $5/day ad for one client to prove leads</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Week 3 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-1 bg-orange-600 rounded text-xs font-bold">WEEK 3</span>
+                      <span className="text-sm text-slate-400">Social Proof</span>
+                    </div>
+                    <div className="space-y-2 pl-2 border-l-2 border-orange-600/30">
+                      <div 
+                        onClick={() => toggleChecklist('week3_casestudy')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week3_casestudy ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week3_casestudy ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week3_casestudy && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Publish case study with conversion metrics</span>
+                      </div>
+                      <div 
+                        onClick={() => toggleChecklist('week3_ads')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week3_ads ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week3_ads ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week3_ads && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Start lightweight ads with demo video</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Week 4 */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-1 bg-green-600 rounded text-xs font-bold">WEEK 4</span>
+                      <span className="text-sm text-slate-400">Scale & Productize</span>
+                    </div>
+                    <div className="space-y-2 pl-2 border-l-2 border-green-600/30">
+                      <div 
+                        onClick={() => toggleChecklist('week4_retainer')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week4_retainer ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week4_retainer ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week4_retainer && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Pitch clients on $99-199/mo retainer</span>
+                      </div>
+                      <div 
+                        onClick={() => toggleChecklist('week4_referral')}
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week4_referral ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
+                      >
+                        <div className={`w-4 h-4 rounded border ${checklist.week4_referral ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                          {checklist.week4_referral && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm">Start referral incentive program</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Lead Playbook Tab */}
+            {activeTab === 'playbook' && (
+              <>
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Phone size={20} />
+                  Lead → Job Playbook
+                </h2>
+                <p className="text-slate-400 text-sm mb-6">What to do when a lead calls or messages</p>
+                
+                <div className="space-y-4">
+                  {/* Step 1 */}
+                  <div className="bg-white/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                      <span className="font-medium">Answer Within 5 Minutes</span>
+                    </div>
+                    <p className="text-sm text-slate-300 ml-8">Speed wins. 78% of customers buy from the first responder.</p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="bg-white/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                      <span className="font-medium">Use This Script</span>
+                    </div>
+                    <div className="ml-8 bg-slate-900/50 rounded p-3 text-sm text-slate-200 font-mono">
+                      "Hi [Name], thanks for reaching out! I saw you downloaded our guide. How can I help you today?"
+                    </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="bg-white/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                      <span className="font-medium">Book the Appointment</span>
+                    </div>
+                    <p className="text-sm text-slate-300 ml-8">"I have availability [tomorrow/this week]. Would [TIME] work for a free inspection?"</p>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="bg-white/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                      <span className="font-medium">Send Confirmation</span>
+                    </div>
+                    <p className="text-sm text-slate-300 ml-8">Text: "Confirmed! I'll see you [DATE] at [TIME]. Reply YES to confirm."</p>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowPlaybookModal(true)}
+                    className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+                  >
+                    View Full Playbook & Templates
+                  </button>
+                </div>
+              </>
+            )}
 
             <div className="mt-8 pt-6 border-t border-white/10">
               <div className="text-sm text-slate-400 mb-2">Your Funnel Link</div>
@@ -506,6 +729,135 @@ export default function LaunchflyDashboard({ session, business }) {
                     Emails are being generated...
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Full Lead Playbook Modal */}
+        {showPlaybookModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-slate-900">📞 Lead → Job Playbook</h3>
+                <button onClick={() => setShowPlaybookModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                <div className="space-y-6">
+                  {/* Call Script */}
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <Phone size={18} className="text-blue-600" />
+                      Phone Call Script
+                    </h4>
+                    <div className="bg-slate-50 p-4 rounded-lg font-mono text-sm space-y-4">
+                      <p><strong>Opening:</strong></p>
+                      <p className="text-slate-700">"Hi [Name], this is [Your Name] from [Business]. I saw you downloaded our guide! How can I help you today?"</p>
+                      
+                      <p><strong>Qualifying Questions:</strong></p>
+                      <ul className="list-disc pl-5 text-slate-700 space-y-1">
+                        <li>"What's the main issue you're dealing with right now?"</li>
+                        <li>"How long has this been going on?"</li>
+                        <li>"Have you had anyone look at it before?"</li>
+                      </ul>
+                      
+                      <p><strong>Booking:</strong></p>
+                      <p className="text-slate-700">"I'd love to take a look at this for you. I have availability [tomorrow/this week]. Would [TIME] work for a free inspection?"</p>
+                      
+                      <p><strong>Handling Objections:</strong></p>
+                      <p className="text-slate-700">"I'm just getting quotes" → "Perfect! Our inspection is completely free and you'll get an honest assessment with no pressure."</p>
+                    </div>
+                  </div>
+
+                  {/* Text/WhatsApp Templates */}
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <MessageCircle size={18} className="text-green-600" />
+                      Text/WhatsApp Templates
+                    </h4>
+                    <div className="space-y-4">
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <p className="text-xs text-green-700 font-medium mb-2">Initial Response (send within 5 mins)</p>
+                        <p className="text-sm text-slate-800">"Hi [Name]! Thanks for downloading our guide 📋 I'm [Your Name] - how can I help you today?"</p>
+                      </div>
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <p className="text-xs text-blue-700 font-medium mb-2">Booking Confirmation</p>
+                        <p className="text-sm text-slate-800">"Great! I've got you down for [DATE] at [TIME]. I'll send a reminder the day before. Reply YES to confirm ✅"</p>
+                      </div>
+                      <div className="bg-amber-50 p-4 rounded-lg">
+                        <p className="text-xs text-amber-700 font-medium mb-2">Day-Before Reminder</p>
+                        <p className="text-sm text-slate-800">"Hi [Name]! Just a reminder about your appointment tomorrow at [TIME]. See you then! 👋"</p>
+                      </div>
+                      <div className="bg-purple-50 p-4 rounded-lg">
+                        <p className="text-xs text-purple-700 font-medium mb-2">Follow-Up (if no response after 24hrs)</p>
+                        <p className="text-sm text-slate-800">"Hi [Name], just checking in! Did you get a chance to look at the guide? Let me know if you have any questions 😊"</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Key Metrics to Track */}
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <TrendingUp size={18} className="text-purple-600" />
+                      Key Metrics to Track
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-4 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-slate-900">{"< 5 min"}</p>
+                        <p className="text-xs text-slate-600">Response Time Goal</p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-slate-900">50%+</p>
+                        <p className="text-xs text-slate-600">Lead to Booking Rate</p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-slate-900">80%+</p>
+                        <p className="text-xs text-slate-600">Show-Up Rate</p>
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-lg text-center">
+                        <p className="text-2xl font-bold text-slate-900">30%+</p>
+                        <p className="text-xs text-slate-600">Booking to Job Rate</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Reference Card */}
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-xl text-white">
+                    <h4 className="font-bold mb-4">⚡ Quick Reference: The 5-Minute Rule</h4>
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-200">1.</span>
+                        <span>Lead comes in → Respond within 5 minutes</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-200">2.</span>
+                        <span>Ask qualifying questions → Understand their need</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-200">3.</span>
+                        <span>Offer specific time slot → "How about tomorrow at 2pm?"</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-200">4.</span>
+                        <span>Send confirmation text → Get them to reply YES</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-200">5.</span>
+                        <span>Reminder day before → Reduce no-shows by 50%</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+                <button 
+                  onClick={() => setShowPlaybookModal(false)}
+                  className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

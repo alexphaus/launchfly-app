@@ -43,6 +43,24 @@ const NICHE_TEMPLATES: NicheTemplate[] = [
     exampleTitle: '"Storm Damage Self-Inspection Guide"'
   },
   {
+    id: 'electrician',
+    name: 'Electrician',
+    icon: '⚡',
+    description: 'For electricians wanting residential upgrade jobs.',
+    leadMagnetType: 'Safety Checklist',
+    targetAudience: 'Homeowners',
+    exampleTitle: '"Home Electrical Safety Checklist"'
+  },
+  {
+    id: 'cleaning',
+    name: 'Cleaning Service',
+    icon: '🧹',
+    description: 'For cleaning companies needing recurring clients.',
+    leadMagnetType: 'Move-In/Out Guide',
+    targetAudience: 'Renters & Homeowners',
+    exampleTitle: '"Move-In Cleaning Checklist & Pricing"'
+  },
+  {
     id: 'landscaping',
     name: 'Landscaping',
     icon: '🌳',
@@ -50,6 +68,15 @@ const NICHE_TEMPLATES: NicheTemplate[] = [
     leadMagnetType: 'Seasonal Calendar',
     targetAudience: 'Homeowners',
     exampleTitle: '"Native Plant & Watering Calendar"'
+  },
+  {
+    id: 'dentist',
+    name: 'Dentist / Dental',
+    icon: '🦷',
+    description: 'For dental practices needing new patient bookings.',
+    leadMagnetType: 'Care Guide',
+    targetAudience: 'Local Families',
+    exampleTitle: '"Complete Dental Care Guide for Families"'
   },
   {
     id: 'real-estate',
@@ -61,6 +88,24 @@ const NICHE_TEMPLATES: NicheTemplate[] = [
     exampleTitle: '"Neighborhood Price Report 2025"'
   },
   {
+    id: 'auto-repair',
+    name: 'Auto Repair',
+    icon: '🚗',
+    description: 'For mechanics wanting loyal repeat customers.',
+    leadMagnetType: 'Maintenance Guide',
+    targetAudience: 'Car Owners',
+    exampleTitle: '"Complete Car Maintenance Schedule"'
+  },
+  {
+    id: 'pest-control',
+    name: 'Pest Control',
+    icon: '🐜',
+    description: 'For pest control needing seasonal treatment contracts.',
+    leadMagnetType: 'Prevention Checklist',
+    targetAudience: 'Homeowners',
+    exampleTitle: '"Pest-Proof Your Home Checklist"'
+  },
+  {
     id: 'gym-fitness',
     name: 'Local Gym / Trainer',
     icon: '💪',
@@ -68,6 +113,15 @@ const NICHE_TEMPLATES: NicheTemplate[] = [
     leadMagnetType: 'Meal Plan / Pass',
     targetAudience: 'Locals wanting to get fit',
     exampleTitle: '"7-Day Meal Prep Plan & Day Pass"'
+  },
+  {
+    id: 'photography',
+    name: 'Photography',
+    icon: '📸',
+    description: 'For photographers needing wedding & event bookings.',
+    leadMagnetType: 'Planning Guide',
+    targetAudience: 'Engaged Couples',
+    exampleTitle: '"Wedding Photo Planning Timeline"'
   }
 ];
 

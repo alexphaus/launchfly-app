@@ -453,6 +453,13 @@ export default async function DynamicWebsite({ params }) {
           ctaText: lm.landing_page?.cta_text || 'Download Now',
           showEmailCapture: true,
           businessId: businessId,
+          // WhatsApp integration
+          whatsappNumber: business?.phone_number || businessData?.phone || businessData?.whatsapp,
+          whatsappMessage: businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`,
+          // Urgency/scarcity
+          urgencyText: lm.landing_page?.urgency_text || businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null,
+          limitedSlots: 5,
+          couponCode: businessData?.lead_magnet_pdf?.coupon_code,
           // Add a subtle pattern overlay for professionalism
           backgroundOverlay: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
         }

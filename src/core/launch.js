@@ -44,31 +44,47 @@ async function generateFunnelContent(opportunity) {
     
     Think of it as: "A friendly guide that whispers: You can fix small things alone… but if it gets serious, call us."
 
-    You must generate FIVE things:
+    CONVERSION FOCUS (2025 Best Practices):
+    - Include a 3-question diagnostic that leads to a recommended action (book inspection, call now)
+    - Add a coupon/voucher with urgency (limited time, limited slots)
+    - Local proof with neighborhood-specific case study
+    - Clear CTA that maps to booking/calling
+
+    You must generate SIX things:
     
-    1. **RICH PDF CONTENT** (8-12 pages worth of content):
-       - Cover tagline (one powerful promise)
+    1. **RICH PDF CONTENT** (8 pages worth of content):
+       - Cover tagline (one powerful promise with outcome focus)
+       - 3 Diagnostic questions (yes/no that lead to action recommendation)
        - Intro paragraph (why this guide exists, who made it)
-       - 5-7 Common Mistakes people make (real problems, 2-3 sentences each)
-       - 5-7 Quick Tips / Solutions (actionable advice anyone can do)
-       - One Case Study (before/after story with specific details)
+       - 5 Common Mistakes people make (real problems, 2-3 sentences each)
+       - 5 Quick Tips / Solutions (actionable advice anyone can do)
+       - One Case Study (before/after story with SPECIFIC neighborhood/location and numbers)
        - 2-Item Action Checklist ("Do these 2 things NOW")
+       - Coupon/Voucher details (code, offer, expiry)
        - Price ranges (general ballpark costs for common services)
-       - FAQ (3-4 common questions answered)
        
-    2. **LANDING PAGE COPY** (High converting, persuasive)
+    2. **LANDING PAGE COPY** (High converting, persuasive with urgency)
     
-    3. **5-DAY EMAIL SEQUENCE** (To build trust and get them to CALL or BOOK)
+    3. **5-DAY EMAIL SEQUENCE** (To build trust and get them to CALL or BOOK, with scarcity in later emails)
     
-    4. **3 CUSTOMER TESTIMONIALS** (Realistic, specific to this niche)
+    4. **3 CUSTOMER TESTIMONIALS** (Realistic, specific to this niche with local details)
     
-    5. **BONUS OFFER** (e.g., "Show this PDF for 10% off your first service")
+    5. **COUPON/VOUCHER** (e.g., "15% off first service - Code GUIDE15 - Expires in 7 days")
+    
+    6. **WHATSAPP MESSAGE** (Prefilled message for click-to-chat)
 
     Return a VALID JSON object with this EXACT structure:
     {
       "lead_magnet_title": "[THE GUIDE TITLE]",
       "lead_magnet_pdf": {
-        "cover_tagline": "One powerful promise line for the cover",
+        "cover_tagline": "One powerful promise line for the cover (outcome-focused)",
+        "diagnostic_questions": [
+          { 
+            "question": "Yes/no question about their situation",
+            "yes_action": "What to do if YES",
+            "no_action": "What to do if NO"
+          }
+        ],
         "intro": "2-3 sentences about why this guide exists and who created it",
         "common_mistakes": [
           { "title": "Mistake name", "description": "2-3 sentences explaining this mistake and its cost" }
@@ -78,22 +94,21 @@ async function generateFunnelContent(opportunity) {
         ],
         "case_study": {
           "customer_name": "First name only",
-          "location": "Neighborhood or city area",
-          "problem": "What happened",
-          "solution": "How it was fixed",
-          "result": "The outcome with specific numbers if possible"
+          "location": "Specific neighborhood or street area (e.g., 'Oak Park', 'Downtown', 'Riverside District')",
+          "problem": "What happened (be specific with details)",
+          "solution": "How it was fixed (mention timeframe)",
+          "result": "The outcome with specific numbers (e.g., 'saved $847', 'completed in 4 hours')"
         },
         "action_checklist": [
           "First thing to do right now",
           "Second thing to do right now"
         ],
+        "coupon_code": "GUIDE15",
+        "coupon_offer": "15% OFF Your First Service",
+        "coupon_expiry": "7 days from download",
         "price_ranges": [
           { "service": "Service name", "range": "$XX - $XXX" }
-        ],
-        "faq": [
-          { "question": "Common question?", "answer": "Clear, helpful answer" }
-        ],
-        "bonus_offer": "Special offer text (e.g., 'Show this PDF and get 10% off your first service')" 
+        ]
       },
       "lead_magnet_content": [
         { "title": "The Offer / Checklist", "body": "..." },
@@ -102,16 +117,18 @@ async function generateFunnelContent(opportunity) {
       ],
       "landing_page": {
         "headline": "Catchy headline focused on the result",
-        "subheadline": "Persuasive subheadline",
+        "subheadline": "Persuasive subheadline with urgency",
         "hero_headline": "Main hero headline",
         "hero_subheadline": "Supporting subheadline",
         "benefits": ["benefit 1", "benefit 2", "benefit 3", "benefit 4"],
         "cta_text": "Get Your Free Guide",
+        "urgency_text": "Limited spots available this week",
         "about_business": "2-3 sentences about the business expertise"
       },
       "testimonials": [
-        { "name": "First Name L.", "role": "Local Resident", "content": "Specific praise...", "rating": 5, "avatar": "emoji" }
+        { "name": "First Name L.", "role": "Local Resident, [Neighborhood]", "content": "Specific praise with local detail...", "rating": 5, "avatar": "emoji" }
       ],
+      "whatsapp_message": "Hi! I just downloaded your [GUIDE NAME] and I'd like to schedule a free inspection. When is your earliest availability?",
       "email_sequence": [
         { 
           "day": 1, 
@@ -126,17 +143,17 @@ async function generateFunnelContent(opportunity) {
         { 
           "day": 3, 
           "subject": "[Case Study] How we helped a local customer save money", 
-          "body": "Write a story-driven email (200-250 words). Create a realistic case study with: Customer first name and situation, The problem they faced, What we did to help, The specific result (use numbers like 'saved $X' or 'completed in X days'). Include a short quote from the customer. End with 'Want results like this? We'd love to help you too. Reply to this email to get started.'"
+          "body": "Write a story-driven email (200-250 words). Create a realistic case study with: Customer first name and neighborhood, The problem they faced, What we did to help, The specific result (use numbers like 'saved $X' or 'completed in X days'). Include a short quote from the customer. End with 'Want results like this? We'd love to help you too. Reply to this email to get started.'"
         },
         { 
           "day": 4, 
           "subject": "Special offer: 15% off (expires in 72 hours)", 
-          "body": "Write an urgency-driven email (200-250 words). Start with 'I wanted to reach out with something special...' Introduce a limited-time offer (15% off first service OR free add-on worth $X). Explain WHY you're offering this deal (e.g., 'We have availability this week' or 'It's our way of saying thanks'). Create urgency: 'This offer expires in 72 hours.' Make the CTA crystal clear: 'Call us and mention code GUIDE15 to claim your discount.' Add P.S. with reminder of the deadline."
+          "body": "Write an urgency-driven email (200-250 words). Start with 'I wanted to reach out with something special...' Introduce the coupon code and offer. Explain WHY you're offering this deal (e.g., 'We have availability this week' or 'It's our way of saying thanks'). Create urgency: 'This offer expires in 72 hours.' Mention limited slots: 'We can only take 5 new clients this week.' Make the CTA crystal clear: 'Call us at [PHONE] and mention code GUIDE15 to claim your discount.' Add P.S. with reminder of the deadline."
         },
         { 
           "day": 5, 
           "subject": "Final notice: Your 15% discount expires tonight", 
-          "body": "Write a final urgency email (150-200 words). Start with 'This is it...' Remind them this is the LAST chance for the discount. Quick recap: what they get (service) + the discount + the deadline. Add social proof: 'Several other guide readers have already claimed this offer.' Make it easy: 'One quick reply is all it takes.' P.S. 'After midnight tonight, this offer is gone. Don't miss out.'"
+          "body": "Write a final urgency email (150-200 words). Start with 'This is it...' Remind them this is the LAST chance for the discount. Quick recap: what they get (service) + the discount + the deadline. Add social proof: 'Several other guide readers have already claimed this offer.' Mention the coupon code again. Make it easy: 'One quick call or reply is all it takes.' P.S. 'After midnight tonight, this offer is gone. Don't miss out.'"
         }
       ]
     }

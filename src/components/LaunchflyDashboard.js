@@ -10,6 +10,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState(business?.phone_number || '');
+  const [bookingUrl, setBookingUrl] = useState(business?.booking_url || business?.business_data?.booking_url || '');
   const [savingSettings, setSavingSettings] = useState(false);
   const [leads, setLeads] = useState([]);
 
@@ -18,7 +19,10 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
     if (business?.phone_number && !phoneNumber) {
       setPhoneNumber(business.phone_number);
     }
-  }, [business?.phone_number]);
+    if ((business?.booking_url || business?.business_data?.booking_url) && !bookingUrl) {
+      setBookingUrl(business.booking_url || business.business_data?.booking_url);
+    }
+  }, [business?.phone_number, business?.booking_url, business?.business_data?.booking_url]);
   const [loadingLeads, setLoadingLeads] = useState(true);
   const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, 30day, playbook
   const [checklist, setChecklist] = useState({
@@ -160,7 +164,10 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     if (onUpdateBusiness) {
-      const result = await onUpdateBusiness({ phone_number: phoneNumber });
+      const result = await onUpdateBusiness({ 
+        phone_number: phoneNumber,
+        booking_url: bookingUrl
+      });
       if (result.success) {
         setShowSettingsModal(false);
       } else {
@@ -1056,6 +1063,22 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     />
                     <p className="text-xs text-slate-500 mt-1">
                       This number will be used for the "Call Now" and "WhatsApp" buttons in your emails and landing page.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Booking / Website URL (for QR Code)
+                    </label>
+                    <input
+                      type="url"
+                      value={bookingUrl}
+                      onChange={(e) => setBookingUrl(e.target.value)}
+                      placeholder="https://calendly.com/yourbusiness or https://yourwebsite.com"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      This URL will be encoded in the QR code on your PDF guide. Customers can scan to book directly.
                     </p>
                   </div>
                 </div>

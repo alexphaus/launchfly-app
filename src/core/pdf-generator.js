@@ -17,7 +17,28 @@
  * Mobile-first design: Large buttons, ≤2MB, readable on phone
  */
 
-export function generatePDF(data, PDFDocument, businessData = {}) {
+import QRCode from 'qrcode';
+
+export async function generatePDF(data, PDFDocument, businessData = {}) {
+  // Generate QR code first (before entering Promise)
+  const qrUrl = businessData.bookingUrl || businessData.landingPageUrl || `https://${businessData.subdomain || 'booking'}.launchfly.app`;
+  let qrBuffer = null;
+  
+  try {
+    const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+      width: 90,
+      margin: 1,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff'
+      }
+    });
+    const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+    qrBuffer = Buffer.from(qrBase64, 'base64');
+  } catch (qrError) {
+    console.error('QR code generation failed:', qrError);
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
@@ -57,33 +78,33 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       doc.rect(0, 0, 612, 350).fill(colors.primary);
       
       doc.fillColor('#ffffff')
-         .fontSize(36)
+         .fontSize(32)
          .font('Helvetica-Bold')
-         .text(data.title || 'Your Expert Guide', 50, 120, { 
+         .text(data.title || 'Your Expert Guide', 50, 80, { 
            width: 512, 
            align: 'center' 
          });
       
-      doc.fontSize(16)
+      doc.fontSize(14)
          .font('Helvetica')
-         .text(pdfContent.cover_tagline || `Everything you need to know about ${niche.toLowerCase()} in ${city}`, 50, 180, { 
+         .text(pdfContent.cover_tagline || `Everything you need to know about ${niche.toLowerCase()} in ${city}`, 50, 160, { 
            width: 512, 
            align: 'center' 
          });
 
       doc.strokeColor('#ffffff').lineWidth(2)
-         .moveTo(200, 220).lineTo(412, 220).stroke();
+         .moveTo(200, 200).lineTo(412, 200).stroke();
 
       doc.fillColor('#ffffff')
          .fontSize(14)
          .font('Helvetica-Oblique')
-         .text(`Free Guide from ${businessName}`, 50, 250, { 
+         .text(`Free Guide from ${businessName}`, 50, 230, { 
            width: 512, 
            align: 'center' 
          });
 
       doc.fontSize(12)
-         .text(`${new Date().getFullYear()} Edition`, 50, 280, { 
+         .text(`${new Date().getFullYear()} Edition`, 50, 260, { 
            width: 512, 
            align: 'center' 
          });
@@ -161,7 +182,7 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.warning)
          .fontSize(14)
          .font('Helvetica-Bold')
-         .text('📋 YOUR RESULT', 70, diagY + 35);
+         .text('[CHECK] YOUR RESULT', 70, diagY + 35);
       doc.fillColor(colors.dark)
          .fontSize(11)
          .font('Helvetica')
@@ -431,15 +452,15 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
          .stroke()
          .restore();
 
-      // Scissors icon placeholder
+      // Dashed cut line
       doc.fillColor(colors.coupon)
-         .fontSize(12)
-         .text('✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ✂', 70, 315, { width: 470, align: 'center' });
+         .fontSize(10)
+         .text('- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -', 70, 315, { width: 470, align: 'center' });
 
       doc.fillColor(colors.coupon)
          .fontSize(20)
          .font('Helvetica-Bold')
-         .text('🎁 EXCLUSIVE OFFER', 70, 350, { width: 470, align: 'center' });
+         .text('*** EXCLUSIVE OFFER ***', 70, 350, { width: 470, align: 'center' });
 
       doc.fillColor(colors.dark)
          .fontSize(18)
@@ -463,7 +484,7 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(12)
          .font('Helvetica-Bold')
-         .text('📞 Ready to claim your discount?', 70, 495);
+         .text('>> Ready to claim your discount?', 70, 495);
       doc.fillColor(colors.dark)
          .fontSize(14)
          .font('Helvetica-Bold')
@@ -472,7 +493,7 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       if (whatsapp) {
         doc.fillColor(colors.success)
            .fontSize(11)
-           .text(`💬 WhatsApp: ${whatsapp}`, 350, 515);
+           .text(`WhatsApp: ${whatsapp}`, 350, 515);
       }
 
       // ============ PAGE 7: PRICING GUIDE ============
@@ -539,14 +560,14 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       if (phone) {
         doc.fontSize(28)
            .font('Helvetica-Bold')
-           .text(`📞 ${phone}`, 50, 140, { width: 512, align: 'center' });
+           .text(`CALL: ${phone}`, 50, 140, { width: 512, align: 'center' });
       }
 
       // WhatsApp CTA if available
       if (whatsapp) {
         doc.fontSize(16)
            .font('Helvetica')
-           .text(`💬 WhatsApp: ${whatsapp}`, 50, 185, { width: 512, align: 'center' });
+           .text(`WhatsApp: ${whatsapp}`, 50, 185, { width: 512, align: 'center' });
       }
 
       // Two-column layout: Contact info + QR Code placeholder
@@ -581,24 +602,24 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(12)
          .font('Helvetica-Bold')
-         .text('📱 SCAN TO BOOK', 385, 285, { width: 160, align: 'center' });
+         .text('SCAN TO BOOK', 385, 285, { width: 160, align: 'center' });
       
-      // QR code visual placeholder (actual QR would need a library)
-      doc.rect(420, 310, 90, 90).fillAndStroke('#ffffff', colors.dark);
-      
-      // Grid pattern to simulate QR code
-      for (let i = 0; i < 9; i++) {
-        for (let j = 0; j < 9; j++) {
-          if ((i + j) % 2 === 0 || (i < 3 && j < 3) || (i > 5 && j < 3) || (i < 3 && j > 5)) {
-            doc.rect(423 + (i * 9), 313 + (j * 9), 7, 7).fill(colors.dark);
-          }
-        }
+      // Use pre-generated QR code buffer
+      if (qrBuffer) {
+        doc.image(qrBuffer, 420, 310, { width: 90, height: 90 });
+      } else {
+        // Fallback: show URL text if QR generation failed
+        doc.rect(420, 310, 90, 90).fillAndStroke('#ffffff', colors.dark);
+        doc.fillColor(colors.gray)
+           .fontSize(8)
+           .text('Visit:', 425, 340, { width: 80, align: 'center' })
+           .text(qrUrl.substring(0, 30), 425, 355, { width: 80, align: 'center' });
       }
       
       doc.fillColor(colors.gray)
          .fontSize(9)
          .font('Helvetica')
-         .text(landingPageUrl || 'Book online at our website', 385, 410, { width: 160, align: 'center' });
+         .text(qrUrl.length > 35 ? qrUrl.substring(0, 35) + '...' : qrUrl, 385, 410, { width: 160, align: 'center' });
       
       doc.fillColor(colors.gray)
          .fontSize(8)
@@ -609,7 +630,7 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.warning)
          .fontSize(11)
          .font('Helvetica-Bold')
-         .text('★★★★★', 70, 475);
+         .text('*****', 70, 475);
       doc.fillColor(colors.dark)
          .fontSize(10)
          .font('Helvetica-Oblique')
@@ -623,7 +644,7 @@ export function generatePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.coupon)
          .fontSize(11)
          .font('Helvetica-Bold')
-         .text('🎁 DON\'T FORGET!', 335, 475);
+         .text('>>> DON\'T FORGET!', 335, 475);
       doc.fillColor(colors.dark)
          .fontSize(10)
          .font('Helvetica')

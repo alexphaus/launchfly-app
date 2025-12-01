@@ -41,7 +41,10 @@ export async function GET(request) {
       email: business.email || flatData.email || '',
       city: flatData.city || flatData.location || 'your area',
       address: flatData.address || '',
-      hours: flatData.hours || ''
+      hours: flatData.hours || '',
+      bookingUrl: business.booking_url || flatData.booking_url || '',
+      subdomain: business.subdomain || '',
+      landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : ''
     };
 
     // Generate PDF

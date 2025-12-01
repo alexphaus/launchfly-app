@@ -15,7 +15,7 @@ export async function POST(request) {
     }
 
     // Sanitize updates to prevent updating protected fields
-    const allowedUpdates = ['owner_name', 'email', 'subdomain', 'name', 'phone_number', 'business_data'];
+    const allowedUpdates = ['owner_name', 'email', 'subdomain', 'name', 'phone_number', 'booking_url', 'business_data'];
     const sanitizedUpdates = {};
     for (const key of Object.keys(updates)) {
       if (allowedUpdates.includes(key)) {

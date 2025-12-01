@@ -39,13 +39,20 @@ async function generateFunnelContent(opportunity) {
     - Main Problem: ${problem}
     - Offer Title: ${title}
 
-    IMPORTANT: The PDF should be a "10-minute treasure chest" - small, sharp, immediately usable.
+    CRITICAL: ALL CONTENT MUST BE 100% SPECIFIC TO ${niche.toUpperCase()}.
+    - Do NOT use generic phrases like "your system" or "the issue"
+    - USE industry-specific terminology (e.g., for Plumbing: "P-trap", "water heater anode rod", "main shutoff valve")
+    - Include REAL ${niche} scenarios, not vague descriptions
+    - Price ranges must reflect ACTUAL ${niche} market rates
+    - Tips must be things a ${niche} professional would actually recommend
+
+    The PDF should be a "10-minute treasure chest" - small, sharp, immediately usable.
     NOT a long report. NOT a boring brochure. A practical assistant that gives quick wins.
     
-    Think of it as: "A friendly guide that whispers: You can fix small things alone… but if it gets serious, call us."
+    Think of it as: "A friendly ${niche} expert guide that says: Here's what you can check yourself... and when you need to call a pro."
 
     CONVERSION FOCUS (2025 Best Practices):
-    - Include a 3-question diagnostic that leads to a recommended action (book inspection, call now)
+    - Include a 3-question diagnostic with ${niche}-specific symptoms
     - Add a coupon/voucher with urgency (limited time, limited slots)
     - Local proof with neighborhood-specific case study
     - Clear CTA that maps to booking/calling
@@ -53,61 +60,61 @@ async function generateFunnelContent(opportunity) {
     You must generate SIX things:
     
     1. **RICH PDF CONTENT** (8 pages worth of content):
-       - Cover tagline (one powerful promise with outcome focus)
-       - 3 Diagnostic questions (yes/no that lead to action recommendation)
-       - Intro paragraph (why this guide exists, who made it)
-       - 5 Common Mistakes people make (real problems, 2-3 sentences each)
-       - 5 Quick Tips / Solutions (actionable advice anyone can do)
-       - One Case Study (before/after story with SPECIFIC neighborhood/location and numbers)
-       - 2-Item Action Checklist ("Do these 2 things NOW")
+       - Cover tagline (one powerful promise specific to ${niche} outcomes)
+       - 3 Diagnostic questions (${niche}-specific symptoms/issues that signal problems)
+       - Intro paragraph (why this ${niche} guide exists, establish credibility)
+       - 5 Common ${niche} Mistakes (REAL mistakes with specific ${niche} examples and costs)
+       - 5 Quick ${niche} Tips (actionable advice with specific tools/methods)
+       - One Case Study (${niche} job with SPECIFIC details - what was wrong, how it was fixed, exact savings)
+       - 2-Item Action Checklist (specific ${niche} checks anyone can do at home)
        - Coupon/Voucher details (code, offer, expiry)
-       - Price ranges (general ballpark costs for common services)
+       - Price ranges (REALISTIC ${niche} costs in the current market)
        
     2. **LANDING PAGE COPY** (High converting, persuasive with urgency)
     
-    3. **5-DAY EMAIL SEQUENCE** (To build trust and get them to CALL or BOOK, with scarcity in later emails)
+    3. **5-DAY EMAIL SEQUENCE** (To build trust and get them to CALL or BOOK, with ${niche}-specific advice)
     
-    4. **3 CUSTOMER TESTIMONIALS** (Realistic, specific to this niche with local details)
+    4. **3 CUSTOMER TESTIMONIALS** (Realistic ${niche} scenarios with local details)
     
-    5. **COUPON/VOUCHER** (e.g., "15% off first service - Code GUIDE15 - Expires in 7 days")
+    5. **COUPON/VOUCHER** (e.g., "15% off first ${niche} service - Code GUIDE15 - Expires in 7 days")
     
-    6. **WHATSAPP MESSAGE** (Prefilled message for click-to-chat)
+    6. **WHATSAPP MESSAGE** (Prefilled message for click-to-chat about ${niche})
 
     Return a VALID JSON object with this EXACT structure:
     {
-      "lead_magnet_title": "[THE GUIDE TITLE]",
+      "lead_magnet_title": "[THE GUIDE TITLE - must include ${niche}]",
       "lead_magnet_pdf": {
-        "cover_tagline": "One powerful promise line for the cover (outcome-focused)",
+        "cover_tagline": "One powerful promise line specific to ${niche} outcomes (e.g., 'Never overpay for plumbing again')",
         "diagnostic_questions": [
           { 
-            "question": "Yes/no question about their situation",
-            "yes_action": "What to do if YES",
-            "no_action": "What to do if NO"
+            "question": "${niche}-specific yes/no question (e.g., 'Do you hear gurgling sounds when you flush?')",
+            "yes_action": "Specific action if YES",
+            "no_action": "Specific action if NO"
           }
         ],
-        "intro": "2-3 sentences about why this guide exists and who created it",
+        "intro": "2-3 sentences about why this ${niche} guide exists and your expertise in ${niche}",
         "common_mistakes": [
-          { "title": "Mistake name", "description": "2-3 sentences explaining this mistake and its cost" }
+          { "title": "${niche}-specific mistake", "description": "2-3 sentences with specific ${niche} examples and typical cost of this mistake" }
         ],
         "quick_tips": [
-          { "title": "Tip name", "description": "Simple, actionable advice anyone can do" }
+          { "title": "${niche}-specific tip", "description": "Actionable advice with specific tools/methods a homeowner can use" }
         ],
         "case_study": {
           "customer_name": "First name only",
-          "location": "Specific neighborhood or street area (e.g., 'Oak Park', 'Downtown', 'Riverside District')",
-          "problem": "What happened (be specific with details)",
-          "solution": "How it was fixed (mention timeframe)",
-          "result": "The outcome with specific numbers (e.g., 'saved $847', 'completed in 4 hours')"
+          "location": "Specific neighborhood (e.g., 'Oak Park', 'Riverside')",
+          "problem": "SPECIFIC ${niche} problem with details (e.g., 'Kitchen sink backed up, water pooling under cabinet for 2 days')",
+          "solution": "Exactly what was done to fix it (e.g., 'Cleared 15-foot clog in main line, replaced corroded P-trap')",
+          "result": "Specific outcome with numbers (e.g., 'Fixed in 2 hours, saved $1,200 vs competitor quote')"
         },
         "action_checklist": [
-          "First thing to do right now",
-          "Second thing to do right now"
+          "Specific ${niche} check #1 (e.g., 'Check under all sinks for moisture or drips')",
+          "Specific ${niche} check #2 (e.g., 'Test water pressure at your outdoor spigot')"
         ],
         "coupon_code": "GUIDE15",
-        "coupon_offer": "15% OFF Your First Service",
+        "coupon_offer": "15% OFF Your First ${niche} Service",
         "coupon_expiry": "7 days from download",
         "price_ranges": [
-          { "service": "Service name", "range": "$XX - $XXX" }
+          { "service": "Common ${niche} service", "range": "Realistic price range for this market" }
         ]
       },
       "lead_magnet_content": [
@@ -116,47 +123,50 @@ async function generateFunnelContent(opportunity) {
         { "title": "How to Redeem / Next Steps", "body": "..." }
       ],
       "landing_page": {
-        "headline": "Catchy headline focused on the result",
+        "headline": "Catchy headline specific to ${niche} results",
         "subheadline": "Persuasive subheadline with urgency",
-        "hero_headline": "Main hero headline",
+        "hero_headline": "Main hero headline mentioning ${niche}",
         "hero_subheadline": "Supporting subheadline",
-        "benefits": ["benefit 1", "benefit 2", "benefit 3", "benefit 4"],
-        "cta_text": "Get Your Free Guide",
+        "benefits": ["${niche}-specific benefit 1", "${niche}-specific benefit 2", "benefit 3", "benefit 4"],
+        "cta_text": "Get Your Free ${niche} Guide",
         "urgency_text": "Limited spots available this week",
-        "about_business": "2-3 sentences about the business expertise"
+        "about_business": "2-3 sentences about your ${niche} expertise"
       },
       "testimonials": [
-        { "name": "First Name L.", "role": "Local Resident, [Neighborhood]", "content": "Specific praise with local detail...", "rating": 5, "avatar": "emoji" }
+        { "name": "First Name L.", "role": "Local Resident, [Neighborhood]", "content": "Specific praise about the ${niche} work with details...", "rating": 5, "avatar": "emoji" }
       ],
-      "whatsapp_message": "Hi! I just downloaded your [GUIDE NAME] and I'd like to schedule a free inspection. When is your earliest availability?",
+      "whatsapp_message": "Hi! I just downloaded your ${title} and I'd like to schedule a free ${niche.toLowerCase()} inspection. When is your earliest availability?",
       "email_sequence": [
         { 
           "day": 1, 
-          "subject": "Your [GUIDE TITLE] is ready - here's what's inside", 
-          "body": "Write a warm, personal welcome email (150-200 words). Start with 'Hey there!' Thank them for downloading. List 3 specific things they'll learn from the guide. Add a personal note like 'I created this guide because I've seen too many people get overcharged...' End with 'Reply to this email if you have any questions - I read every message.' Sign off with a name."
+          "subject": "Your ${title} is ready - here's what's inside", 
+          "body": "Write a warm, personal welcome email (150-200 words). Start with 'Hey there!' Thank them for downloading. List 3 specific ${niche}-related things they'll learn from the guide. Add a personal note about your ${niche} experience. End with 'Reply to this email if you have any questions - I read every message.' Sign off with a name."
         },
         { 
           "day": 2, 
-          "subject": "The 3 questions you MUST ask before hiring a [NICHE] professional", 
-          "body": "Write an educational email (200-250 words). Start with a hook like 'Before you hire anyone for this type of work, read this...' Share 3 specific questions they should ask any provider (with explanations why each matters). Include a brief story about a customer who didn't ask these questions and what happened. End with 'We're happy to answer these questions for you - just give us a call for a free, no-pressure consultation.'"
+          "subject": "The 3 questions you MUST ask before hiring a ${niche} professional", 
+          "body": "Write an educational email (200-250 words). Start with a hook. Share 3 ${niche}-specific questions they should ask any ${niche} provider (with explanations why each matters for ${niche} work). Include a brief story about a ${niche} job gone wrong. End with a CTA for free consultation."
         },
         { 
           "day": 3, 
-          "subject": "[Case Study] How we helped a local customer save money", 
-          "body": "Write a story-driven email (200-250 words). Create a realistic case study with: Customer first name and neighborhood, The problem they faced, What we did to help, The specific result (use numbers like 'saved $X' or 'completed in X days'). Include a short quote from the customer. End with 'Want results like this? We'd love to help you too. Reply to this email to get started.'"
+          "subject": "[Case Study] How we solved a ${niche} emergency in [Neighborhood]", 
+          "body": "Write a story-driven email (200-250 words). Create a realistic ${niche} case study with: Customer first name and neighborhood, The specific ${niche} problem, What you did to fix it (${niche}-specific details), The result with numbers. Include a short quote. End with CTA."
         },
         { 
           "day": 4, 
-          "subject": "Special offer: 15% off (expires in 72 hours)", 
-          "body": "Write an urgency-driven email (200-250 words). Start with 'I wanted to reach out with something special...' Introduce the coupon code and offer. Explain WHY you're offering this deal (e.g., 'We have availability this week' or 'It's our way of saying thanks'). Create urgency: 'This offer expires in 72 hours.' Mention limited slots: 'We can only take 5 new clients this week.' Make the CTA crystal clear: 'Call us at [PHONE] and mention code GUIDE15 to claim your discount.' Add P.S. with reminder of the deadline."
+          "subject": "Special offer: 15% off ${niche} services (expires in 72 hours)", 
+          "body": "Write an urgency-driven email (200-250 words). Introduce the coupon code and ${niche} offer. Create urgency with deadline and limited slots. Make the CTA crystal clear with phone number and code."
         },
         { 
           "day": 5, 
-          "subject": "Final notice: Your 15% discount expires tonight", 
-          "body": "Write a final urgency email (150-200 words). Start with 'This is it...' Remind them this is the LAST chance for the discount. Quick recap: what they get (service) + the discount + the deadline. Add social proof: 'Several other guide readers have already claimed this offer.' Mention the coupon code again. Make it easy: 'One quick call or reply is all it takes.' P.S. 'After midnight tonight, this offer is gone. Don't miss out.'"
+          "subject": "Final notice: Your ${niche} discount expires tonight", 
+          "body": "Write a final urgency email (150-200 words). Last chance for the ${niche} service discount. Quick recap of offer. Social proof about other guide readers. P.S. with final deadline."
         }
       ]
     }
+    
+    REMEMBER: Every single piece of content must be obviously written for a ${niche} business. 
+    If someone reads this PDF, they should immediately know it's about ${niche}, not generic services.
   `;
 
   const completion = await openai.chat.completions.create({

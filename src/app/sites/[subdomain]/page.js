@@ -309,6 +309,134 @@ function generateSmartFeatures(businessData) {
   ];
 }
 
+function getThemeForNiche(niche) {
+  const n = niche?.toLowerCase() || '';
+  
+  // Green: Landscaping, Gardening, Nature, Money/Finance
+  if (n.includes('landscape') || n.includes('garden') || n.includes('lawn') || n.includes('tree') || n.includes('finance') || n.includes('money')) {
+    return {
+      gradient: 'linear-gradient(135deg, #064e3b 0%, #059669 100%)', // Green-900 to Green-600
+      colors: {
+        primary: '#059669', // Green-600
+        secondary: '#064e3b', // Green-900
+        textDark: '#064e3b',
+        borderColor: '#d1fae5'
+      }
+    };
+  }
+  
+  // Cyan/Teal: Cleaning, Pool, Medical, Dental
+  if (n.includes('clean') || n.includes('wash') || n.includes('maid') || n.includes('pool') || n.includes('dental') || n.includes('med')) {
+    return {
+      gradient: 'linear-gradient(135deg, #0e7490 0%, #06b6d4 100%)', // Cyan-700 to Cyan-500
+      colors: {
+        primary: '#0891b2', // Cyan-600
+        secondary: '#155e75', // Cyan-800
+        textDark: '#164e63',
+        borderColor: '#cffafe'
+      }
+    };
+  }
+  
+  // Red/Orange: Fitness, Gym, Emergency, Fire
+  if (n.includes('fitness') || n.includes('gym') || n.includes('train') || n.includes('sport') || n.includes('fire')) {
+    return {
+      gradient: 'linear-gradient(135deg, #991b1b 0%, #dc2626 100%)', // Red-800 to Red-600
+      colors: {
+        primary: '#dc2626', // Red-600
+        secondary: '#991b1b', // Red-800
+        textDark: '#7f1d1d',
+        borderColor: '#fee2e2'
+      }
+    };
+  }
+
+  // Purple/Pink: Beauty, Salon, Spa, Creative
+  if (n.includes('beauty') || n.includes('salon') || n.includes('spa') || n.includes('hair') || n.includes('makeup') || n.includes('design')) {
+    return {
+      gradient: 'linear-gradient(135deg, #701a75 0%, #c026d3 100%)', // Fuchsia-800 to Fuchsia-600
+      colors: {
+        primary: '#c026d3', // Fuchsia-600
+        secondary: '#701a75', // Fuchsia-800
+        textDark: '#701a75',
+        borderColor: '#fae8ff'
+      }
+    };
+  }
+
+  // Warm/Construction: Construction, Wood, Carpenter (Amber/Orange)
+  if (n.includes('construct') || n.includes('build') || n.includes('wood') || n.includes('carpenter') || n.includes('roof')) {
+    return {
+      gradient: 'linear-gradient(135deg, #7c2d12 0%, #ea580c 100%)', // Orange-900 to Orange-600
+      colors: {
+        primary: '#ea580c', // Orange-600
+        secondary: '#7c2d12', // Orange-900
+        textDark: '#7c2d12',
+        borderColor: '#ffedd5'
+      }
+    };
+  }
+
+  // Default Professional Blue (Plumbing, HVAC, Electrician, Legal, etc.)
+  return {
+    gradient: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)', // Slate-900 to Blue-900
+    colors: {
+      primary: '#2563eb', // Blue-600
+      secondary: '#1e40af', // Blue-800
+      textDark: '#1e293b',
+      borderColor: '#e2e8f0'
+    }
+  };
+}
+
+export async function generateMetadata({ params }) {
+  const { subdomain } = await params;
+  
+  // Default metadata
+  let meta = {
+    title: 'Local Business Expert Guide',
+    description: 'Download our free expert guide and solve your problems today.',
+  };
+
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerComponentClient({ cookies: () => cookieStore });
+    
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('business_data')
+      .eq('subdomain', subdomain)
+      .single();
+
+    if (business?.business_data) {
+      const bd = business.business_data;
+      const lm = bd.leadMagnet;
+      
+      meta.title = lm?.landing_page?.hero_headline || `${bd.businessName || 'Expert'} - Free Guide`;
+      meta.description = lm?.landing_page?.hero_subheadline || `Get professional ${bd.niche || 'service'} advice. Download our free guide now.`;
+      
+      // Open Graph images would go here if we had them
+    }
+  } catch (e) {
+    console.error('Metadata error:', e);
+  }
+
+  return {
+    title: meta.title,
+    description: meta.description,
+    openGraph: {
+      title: meta.title,
+      description: meta.description,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: meta.title,
+      description: meta.description,
+    }
+  };
+}
+
 export default async function DynamicWebsite({ params }) {
   // Await params to fix Next.js 15 requirement
   const { subdomain } = await params;
@@ -428,13 +556,13 @@ export default async function DynamicWebsite({ params }) {
         }))
       : generateSmartFeatures(businessData);
 
-    // Professional Service Theme Defaults (Blue/Slate)
+    // Professional Service Theme Defaults (Dynamic based on Niche)
     if (!theme.gradient) {
-      theme.gradient = 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)'; // Slate-900 to Blue-900
+      const nicheTheme = getThemeForNiche(businessData.niche);
+      theme.gradient = nicheTheme.gradient;
       theme.colors = {
         ...theme.colors,
-        primary: '#2563eb', // Blue-600
-        secondary: '#1e40af', // Blue-800
+        ...nicheTheme.colors
       };
     }
 

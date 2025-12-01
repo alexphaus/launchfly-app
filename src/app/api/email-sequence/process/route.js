@@ -116,7 +116,7 @@ function buildEmailHtml({ subject, body, businessName, phone, day, email, busine
               </a>
               
               <div style="margin-top: 15px;">
-                 <a href="https://wa.me/${phone.replace(/[^0-9]/g, '')}" style="color: ${cta.color}; text-decoration: none; font-weight: 600; font-size: 15px;">
+                 <a href="https://api.whatsapp.com/send?phone=${phone.replace(/[^0-9]/g, '')}" style="color: ${cta.color}; text-decoration: none; font-weight: 600; font-size: 15px;">
                    Or chat on WhatsApp 💬
                  </a>
               </div>

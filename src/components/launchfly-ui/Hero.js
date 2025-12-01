@@ -57,7 +57,8 @@ export default function Hero({
     if (!whatsappNumber) return null;
     const cleanNumber = whatsappNumber.replace(/[^0-9]/g, '');
     const encodedMessage = encodeURIComponent(whatsappMessage);
-    return `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+    // Use api.whatsapp.com instead of wa.me to avoid ISP blocking issues
+    return `https://api.whatsapp.com/send?phone=${cleanNumber}&text=${encodedMessage}`;
   };
 
   // Enhanced gradient overlays based on business type

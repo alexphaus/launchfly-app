@@ -4,12 +4,13 @@
 export default function AboutCoach({ 
   title = "About Us",
   bio = "",
-  businessName = ""
+  businessName = "",
+  id = "about"
 }) {
   if (!bio) return null;
 
   return (
-    <section className="py-20 bg-white">
+    <section className="py-20 bg-white" id={id}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: 'var(--text-dark, #1f2937)' }}>

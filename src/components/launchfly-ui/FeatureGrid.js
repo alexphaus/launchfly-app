@@ -4,7 +4,8 @@
 export default function FeatureGrid({ 
   title = "Why Choose Us", 
   subtitle = "Everything you need to succeed",
-  features = []
+  features = [],
+  id = "features"
 }) {
   const defaultFeatures = [
     {
@@ -27,7 +28,7 @@ export default function FeatureGrid({
   const displayFeatures = features.length > 0 ? features : defaultFeatures;
 
   return (
-    <section className="py-20 bg-gray-50" id="features">
+    <section className="py-20 bg-gray-50" id={id}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16">

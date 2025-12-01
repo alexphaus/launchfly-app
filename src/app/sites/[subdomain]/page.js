@@ -288,21 +288,23 @@ function generateSmartTestimonials(businessData) {
 
 function generateSmartFeatures(businessData) {
   const niche = businessData.niche || 'Service';
+  const businessName = businessData.businessName || 'Our Team';
+  
   return [
     {
-      title: `Expert ${niche} Advice`,
-      description: 'Proven strategies from industry professionals.',
+      title: `Expert ${niche} Solutions`,
+      description: `Get professional ${niche.toLowerCase()} advice tailored to your specific situation from ${businessName}.`,
       icon: '🧠'
     },
     {
       title: 'Save Time & Money',
-      description: 'Avoid common pitfalls and costly mistakes.',
+      description: 'Our proven process helps you avoid costly mistakes and get the job done right the first time.',
       icon: '💰'
     },
     {
-      title: 'Actionable Steps',
-      description: 'Clear instructions you can implement today.',
-      icon: '📋'
+      title: 'Guaranteed Results',
+      description: 'We stand behind our work with a satisfaction guarantee. Your peace of mind is our priority.',
+      icon: '🛡️'
     }
   ];
 }
@@ -442,15 +444,16 @@ export default async function DynamicWebsite({ params }) {
         props: {
           businessName: businessData.businessName || businessData.name || 'Local Business',
           links: ['Guide', 'What You Learn', 'About'],
-          ctaText: 'Get Guide'
+          ctaText: 'Get Guide',
+          ctaLink: '#hero'
         }
       },
       {
         component: 'Hero',
         props: {
-          title: lm.landing_page?.hero_headline || 'Get Your Free Guide',
-          subtitle: lm.landing_page?.hero_subheadline || 'Learn how to achieve your goals today',
-          ctaText: lm.landing_page?.cta_text || 'Download Now',
+          title: lm.landing_page?.hero_headline || `Get Your Free ${businessData.niche || 'Expert'} Guide`,
+          subtitle: lm.landing_page?.hero_subheadline || `Learn exactly how to solve your ${businessData.niche ? businessData.niche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`,
+          ctaText: lm.landing_page?.cta_text || 'Download Free Guide',
           showEmailCapture: true,
           businessId: businessId,
           // WhatsApp integration
@@ -469,7 +472,8 @@ export default async function DynamicWebsite({ params }) {
         props: {
           title: 'What You Will Learn',
           subtitle: 'Inside this free expert guide',
-          features: features
+          features: features,
+          id: 'what-you-learn'
         }
       },
       {
@@ -485,7 +489,8 @@ export default async function DynamicWebsite({ params }) {
           title: 'About Us',
           bio: lm.landing_page?.about_business || lm.landing_page?.about_coach || `Expert service provider specializing in ${businessData.niche || 'serving our local community'}.`,
           imageUrl: businessData.avatarUrl,
-          businessName: businessData.businessName || businessData.name || 'Local Business'
+          businessName: businessData.businessName || businessData.name || 'Local Business',
+          id: 'about'
         }
       },
       {

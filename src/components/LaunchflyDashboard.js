@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap, Settings } from 'lucide-react';
+import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap, Settings, Facebook, Linkedin, Twitter } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function LaunchflyDashboard({ session, business, onUpdateBusiness }) {
   const [copied, setCopied] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
@@ -140,6 +141,20 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const shareText = `Check out this free ${business?.business_data?.niche || 'expert'} guide from ${business?.name || business?.business_name || 'our local business'}!`;
+  
+  const shareLinks = {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(landingPageUrl)}&quote=${encodeURIComponent(shareText)}`,
+    twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(landingPageUrl)}&text=${encodeURIComponent(shareText)}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(landingPageUrl)}`,
+    whatsapp: `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + ' ' + landingPageUrl)}`
+  };
+
+  const handleShare = (platform) => {
+    window.open(shareLinks[platform], '_blank', 'width=600,height=400');
+    setShowShareMenu(false);
   };
 
   const handleSaveSettings = async () => {
@@ -316,6 +331,56 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                   >
                     {copied ? <CheckCircle size={20} className="text-green-600" /> : <Copy size={20} />}
                   </button>
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowShareMenu(!showShareMenu)}
+                      className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                      title="Share"
+                    >
+                      <Share2 size={20} />
+                    </button>
+                    {showShareMenu && (
+                      <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 min-w-[180px]">
+                        <button 
+                          onClick={() => handleShare('facebook')}
+                          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Facebook size={18} className="text-blue-600" />
+                          <span className="text-sm font-medium text-slate-700">Facebook</span>
+                        </button>
+                        <button 
+                          onClick={() => handleShare('twitter')}
+                          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                          <Twitter size={18} className="text-slate-800" />
+                          <span className="text-sm font-medium text-slate-700">X / Twitter</span>
+                        </button>
+                        <button 
+                          onClick={() => handleShare('linkedin')}
+                          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Linkedin size={18} className="text-blue-700" />
+                          <span className="text-sm font-medium text-slate-700">LinkedIn</span>
+                        </button>
+                        <button 
+                          onClick={() => handleShare('whatsapp')}
+                          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-green-50 rounded-lg transition-colors"
+                        >
+                          <MessageCircle size={18} className="text-green-600" />
+                          <span className="text-sm font-medium text-slate-700">WhatsApp</span>
+                        </button>
+                        <div className="border-t border-slate-100 mt-2 pt-2">
+                          <button 
+                            onClick={() => { handleCopyLink(); setShowShareMenu(false); }}
+                            className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-slate-100 rounded-lg transition-colors"
+                          >
+                            <Copy size={18} className="text-slate-500" />
+                            <span className="text-sm font-medium text-slate-700">Copy Link</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 text-slate-300 rounded-lg cursor-not-allowed">
@@ -721,6 +786,41 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 >
                   <Copy size={14} />
                 </button>
+              </div>
+              
+              {/* Quick Share Buttons */}
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <div className="text-sm text-slate-400 mb-3">Share Your Funnel</div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleShare('facebook')}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                    title="Share on Facebook"
+                  >
+                    <Facebook size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleShare('twitter')}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                    title="Share on X"
+                  >
+                    <Twitter size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleShare('linkedin')}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors"
+                    title="Share on LinkedIn"
+                  >
+                    <Linkedin size={16} />
+                  </button>
+                  <button 
+                    onClick={() => handleShare('whatsapp')}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                    title="Share on WhatsApp"
+                  >
+                    <MessageCircle size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

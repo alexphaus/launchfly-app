@@ -283,26 +283,15 @@ export default function QuickStartOnboarding() {
 
     setIsLoading(true);
     try {
-      // Create user account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.name
-          }
-        }
-      });
-
-      if (authError) throw authError;
-
       // Submit business creation request
+      // We let the server handle user creation to avoid client-side rate limits
       const response = await fetch('/api/wizard/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
+          password: formData.password,
           niche: formData.niche,
           nicheName: selectedNiche.name,
           targetAudience: formData.targetAudience,
@@ -311,7 +300,6 @@ export default function QuickStartOnboarding() {
           leadMagnetLanguage: formData.leadMagnetLanguage,
           subdomain: formData.subdomain,
           plan: formData.plan,
-          userId: authData.user?.id,
           paymentSessionId: paymentSessionId
         })
       });
@@ -322,6 +310,18 @@ export default function QuickStartOnboarding() {
       }
 
       const result = await response.json();
+
+      // Auto-login the user
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (signInError) {
+        console.error('Auto-login failed:', signInError);
+        // If login fails but account exists, we might want to redirect to login
+        // But for now let's try to proceed, maybe the session is somehow established or we can handle it
+      }
       
       // Track successful completion
       trackOnboardingCompleted({

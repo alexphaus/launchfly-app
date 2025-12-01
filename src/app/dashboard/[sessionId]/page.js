@@ -194,6 +194,36 @@ export default function DashboardPage() {
     }
   };
 
+  const handleUpdateBusiness = async (updates) => {
+    try {
+      console.log('Updating business:', updates);
+      
+      // Use API route to bypass RLS issues and ensure persistence
+      const response = await fetch('/api/business/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: businessData.id,
+          sessionId: params.sessionId,
+          updates
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update');
+      }
+
+      // Update local state
+      setBusinessData(prev => ({ ...prev, ...updates }));
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating business:', error);
+      return { success: false, error };
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
@@ -211,6 +241,7 @@ export default function DashboardPage() {
       business={businessData}
       onPhoneCapture={handlePhoneCapture}
       onStepComplete={handleStepComplete}
+      onUpdateBusiness={handleUpdateBusiness}
     />
   );
 }

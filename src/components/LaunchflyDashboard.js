@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap } from 'lucide-react';
+import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap, Settings } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-export default function LaunchflyDashboard({ session, business }) {
+export default function LaunchflyDashboard({ session, business, onUpdateBusiness }) {
   const [copied, setCopied] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState(business?.phone_number || '');
+  const [savingSettings, setSavingSettings] = useState(false);
   const [leads, setLeads] = useState([]);
+
+  // Sync phone number from business data if it loads after mount or changes
+  useEffect(() => {
+    if (business?.phone_number && !phoneNumber) {
+      setPhoneNumber(business.phone_number);
+    }
+  }, [business?.phone_number]);
   const [loadingLeads, setLoadingLeads] = useState(true);
   const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, 30day, playbook
   const [checklist, setChecklist] = useState({
@@ -132,6 +142,44 @@ export default function LaunchflyDashboard({ session, business }) {
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    if (onUpdateBusiness) {
+      const result = await onUpdateBusiness({ phone_number: phoneNumber });
+      if (result.success) {
+        setShowSettingsModal(false);
+      } else {
+        alert('Failed to save settings');
+      }
+    }
+    setSavingSettings(false);
+  };
+
+  const handleTestEmail = async (email) => {
+    if (!confirm(`Send the next email in the sequence to ${email} immediately?`)) return;
+    
+    try {
+      const res = await fetch('/api/email-sequence/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          testMode: true,
+          targetEmail: email
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.sent > 0) {
+        alert(`✅ Email sent to ${email}! Check your inbox.`);
+        fetchLeads();
+      } else {
+        alert('⚠️ ' + (data.message || data.error || 'No email sent (maybe sequence is complete?)'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error sending test email');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-12">
       <div className="max-w-6xl mx-auto">
@@ -148,15 +196,24 @@ export default function LaunchflyDashboard({ session, business }) {
         )}
 
         {/* Header */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            {business?.name || business?.business_name || 'Your Local Lead System'}
-          </h1>
-          <p className="text-slate-600">
-            {isGenerating 
-              ? "We're building your automated lead generation system. Hang tight!" 
-              : "Your automated quote & lead generation system is live. Share your link to start getting inquiries."}
-          </p>
+        <div className="mb-10 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              {business?.name || business?.business_name || 'Your Local Lead System'}
+            </h1>
+            <p className="text-slate-600">
+              {isGenerating 
+                ? "We're building your automated lead generation system. Hang tight!" 
+                : "Your automated quote & lead generation system is live. Share your link to start getting inquiries."}
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowSettingsModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Settings size={18} />
+            <span className="hidden sm:inline">Settings</span>
+          </button>
         </div>
 
         {/* Asset Status Cards */}
@@ -363,16 +420,27 @@ export default function LaunchflyDashboard({ session, business }) {
                         <td className="p-4 font-medium text-slate-900">{lead.email}</td>
                         <td className="p-4 text-slate-500">{new Date(lead.created_at).toLocaleDateString()}</td>
                         <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-500 rounded-full transition-all"
-                                style={{ width: `${((lead.email_sequence_day || 1) / 5) * 100}%` }}
-                              />
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-blue-500 rounded-full transition-all"
+                                    style={{ width: `${((lead.email_sequence_day || 1) / 5) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-slate-500 whitespace-nowrap">
+                                  {lead.email_sequence_day || 1}/5
+                                </span>
+                              </div>
                             </div>
-                            <span className="text-xs text-slate-500 whitespace-nowrap">
-                              {lead.email_sequence_day || 1}/5 emails
-                            </span>
+                            <button 
+                              onClick={() => handleTestEmail(lead.email)}
+                              className="text-xs bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 px-2 py-1 rounded border border-slate-200 transition-colors"
+                              title="Send next email immediately (Test Mode)"
+                            >
+                              Send Next
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -857,6 +925,55 @@ export default function LaunchflyDashboard({ session, business }) {
                   className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        {showSettingsModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-md overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-slate-900">Business Settings</h3>
+                <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-6 bg-slate-50">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Phone Number (for WhatsApp & Calls)
+                    </label>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="+1 (555) 000-0000"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      This number will be used for the "Call Now" and "WhatsApp" buttons in your emails and landing page.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3">
+                <button 
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSaveSettings}
+                  disabled={savingSettings}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {savingSettings && <Loader2 size={16} className="animate-spin" />}
+                  Save Changes
                 </button>
               </div>
             </div>

@@ -65,15 +65,30 @@ export async function POST(request) {
 
     const currentData = business?.business_data || {};
     
+    // Store content in both old and new format for compatibility
     await supabase
       .from('businesses')
       .update({
+        name: content.lead_magnet_title || 'Lead Magnet Funnel',
+        status: 'active',
         business_data: {
           ...currentData,
-          leadMagnet: content
+          // New format
+          leadMagnet: content,
+          // Dashboard expected format
+          lead_magnet_title: content.lead_magnet_title,
+          lead_magnet_content: content.lead_magnet_content,
+          landing_page: content.landing_page,
+          email_sequence: content.email_sequence
         }
       })
       .eq('id', businessId);
+
+    // Also update the session stage to complete
+    await supabase
+      .from('sessions')
+      .update({ stage: 'complete', progress: 100 })
+      .eq('business_id', businessId);
 
     console.log('Lead magnet generated successfully');
 

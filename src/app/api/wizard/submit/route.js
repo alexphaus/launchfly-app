@@ -154,9 +154,13 @@ export async function POST(request) {
 
     if (bizErr) throw bizErr;
 
+    // Normalize template and topic for Quick Start flow
+    const effectiveTemplate = template || (leadMagnetTitle ? 'lead-magnet' : 'standard');
+    const effectiveTopic = leadMagnetTopic || leadMagnetTitle;
+
     // Create session - set stage based on template type
     // For lead-magnet templates, we'll set to 'generating' so dashboard doesn't trigger Inngest
-    const initialStage = (template === 'lead-magnet' && leadMagnetTopic) ? 'generating' : 'pending';
+    const initialStage = (effectiveTemplate === 'lead-magnet' && effectiveTopic) ? 'generating' : 'pending';
     
     const { error: sessErr } = await supabase
       .from('sessions')
@@ -165,29 +169,33 @@ export async function POST(request) {
 
     // Fire-and-forget: initialize monetization (offers + Stripe Connect)
     // Non-blocking to keep onboarding snappy; failures are logged by the initializer
-    try {
-      fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/money/init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
-      }).catch(() => {});
+    fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/money/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
+    }).catch(() => {});
 
-      // Trigger Lead Magnet Generation if applicable
-      // This is a simpler, faster generation path for lead magnet funnels
-      if (template === 'lead-magnet' && leadMagnetTopic) {
-        fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/lead-magnet/generate`, {
+    // Trigger Lead Magnet Generation - AWAIT this to ensure content is ready
+    // This is the main generation path for lead magnet funnels
+    if (effectiveTemplate === 'lead-magnet' && effectiveTopic) {
+      console.log('Triggering lead magnet generation for:', effectiveTopic);
+      try {
+        const genResponse = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/lead-magnet/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             businessId: business.id, 
-            topic: leadMagnetTopic, 
+            topic: effectiveTopic, 
             audience: targetAudience,
-            language: leadMagnetLanguage 
+            language: leadMagnetLanguage || 'English'
           })
-        }).catch((err) => console.error('Lead magnet trigger failed:', err));
+        });
+        const genResult = await genResponse.json();
+        console.log('Lead magnet generation result:', genResult);
+      } catch (err) {
+        console.error('Lead magnet trigger failed:', err);
       }
-
-    } catch (_) {}
+    }
 
     return Response.json({ success: true, sessionId, businessId: business.id, subdomain: safeSubdomain });
   } catch (error) {

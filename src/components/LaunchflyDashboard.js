@@ -44,18 +44,22 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   
   const supabase = createClientComponentClient();
 
-  // Check if content is ready
-  const isGenerating = business?.status === 'pending' || business?.status === 'failed' || !business?.business_data?.lead_magnet_content;
-  const hasLeadMagnet = !!business?.business_data?.lead_magnet_content;
-  const hasLandingPage = !!business?.business_data?.landing_page;
-  const hasEmailSequence = !!business?.business_data?.email_sequence;
+  // Check if content is ready - support both old and new data formats
+  const leadMagnetData = business?.business_data?.lead_magnet_content || business?.business_data?.leadMagnet?.lead_magnet_content;
+  const landingPageData = business?.business_data?.landing_page || business?.business_data?.leadMagnet?.landing_page;
+  const emailSequenceData = business?.business_data?.email_sequence || business?.business_data?.leadMagnet?.email_sequence;
+  
+  const isGenerating = business?.status === 'pending' || business?.status === 'failed' || !leadMagnetData;
+  const hasLeadMagnet = !!leadMagnetData;
+  const hasLandingPage = !!landingPageData;
+  const hasEmailSequence = !!emailSequenceData;
 
   // Placeholder data if business data isn't fully ready
   const pdfUrl = business?.lead_magnet_url || '#';
   const landingPageUrl = business?.subdomain 
     ? `${window.location.origin}/sites/${business.subdomain}` 
     : (business?.website_url || '#');
-  const emailCount = business?.business_data?.email_sequence?.length || 5;
+  const emailCount = emailSequenceData?.length || 5;
   const leadCount = leads.length || business?.total_leads || business?.leads_count || 0;
   
   useEffect(() => {
@@ -262,7 +266,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
             </div>
             <p className="text-sm text-slate-500 mb-6">
               {hasLeadMagnet 
-                ? `Your hook: "${business?.business_data?.lead_magnet_title || 'Special Offer / Checklist'}"`
+                ? `Your hook: "${business?.business_data?.lead_magnet_title || business?.business_data?.leadMagnet?.lead_magnet_title || 'Special Offer / Checklist'}"`
                 : 'Creating your lead magnet content...'}
             </p>
             <div className="flex gap-2">
@@ -844,9 +848,9 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 </button>
               </div>
               <div className="p-6">
-                {business?.business_data?.lead_magnet_content ? (
+                {leadMagnetData ? (
                   <div className="space-y-6">
-                    {business.business_data.lead_magnet_content.map((section, i) => (
+                    {leadMagnetData.map((section, i) => (
                       <div key={i} className="bg-slate-50 p-4 rounded-lg border border-slate-100">
                         <h4 className="font-bold text-slate-900 mb-2">{section.title}</h4>
                         <div className="text-slate-600 whitespace-pre-wrap">{section.body}</div>
@@ -882,9 +886,9 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
-                {business?.business_data?.email_sequence ? (
+                {emailSequenceData ? (
                   <div className="space-y-4">
-                    {business.business_data.email_sequence.map((email, i) => (
+                    {emailSequenceData.map((email, i) => (
                       <div key={i} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <div className="flex items-center justify-between mb-4">
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded uppercase">

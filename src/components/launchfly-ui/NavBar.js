@@ -43,15 +43,20 @@ export default function NavBar({
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
-              {links.map((link, index) => (
-                <a
-                  key={index}
-                  href={`#${link.toLowerCase().replace(/\s+/g, '-')}`}
-                  className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
-                >
-                  {link}
-                </a>
-              ))}
+              {links.map((link, index) => {
+                const label = typeof link === 'string' ? link : link.label;
+                const href = typeof link === 'string' ? `#${link.toLowerCase().replace(/\s+/g, '-')}` : link.href;
+                
+                return (
+                  <a
+                    key={index}
+                    href={href}
+                    className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
+                  >
+                    {label}
+                  </a>
+                );
+              })}
             </div>
 
             {/* Right Side Actions */}
@@ -114,16 +119,21 @@ export default function NavBar({
           {isMobileMenuOpen && (
             <div className="md:hidden border-t border-gray-200 py-4">
               <div className="space-y-4">
-                {links.map((link, index) => (
-                  <a
-                    key={index}
-                    href={`#${link.toLowerCase().replace(/\s+/g, '-')}`}
-                    className="block text-gray-600 hover:text-gray-900 transition-colors font-medium"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    {link}
-                  </a>
-                ))}
+                {links.map((link, index) => {
+                  const label = typeof link === 'string' ? link : link.label;
+                  const href = typeof link === 'string' ? `#${link.toLowerCase().replace(/\s+/g, '-')}` : link.href;
+                  
+                  return (
+                    <a
+                      key={index}
+                      href={href}
+                      className="block text-gray-600 hover:text-gray-900 transition-colors font-medium"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      {label}
+                    </a>
+                  );
+                })}
                 <a
                   href={ctaLink}
                   className="block w-full text-center px-4 py-2 rounded-lg font-medium text-white transition-all"

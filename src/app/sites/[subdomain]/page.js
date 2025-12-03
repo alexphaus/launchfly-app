@@ -261,11 +261,29 @@ function generateSmartTestimonials(businessData) {
   const name = businessData.businessName || 'Pro Services';
   const type = businessData.leadMagnet?.title?.toLowerCase().includes('checklist') ? 'checklist' : 'guide';
   
+  // Niche-specific problems
+  let problem = "finding a trustworthy service";
+  let benefit = "put my mind at ease";
+  
+  if (niche.includes('landscap') || niche.includes('garden') || niche.includes('lawn')) {
+    problem = "keeping my lawn green";
+    benefit = "gave me the best looking yard on the block";
+  } else if (niche.includes('clean') || niche.includes('maid')) {
+    problem = "finding a reliable cleaner";
+    benefit = "made my house sparkle";
+  } else if (niche.includes('roof')) {
+    problem = "leaks during the storm";
+    benefit = "fixed it immediately";
+  } else if (niche.includes('pool')) {
+    problem = "maintaining the pool chemicals";
+    benefit = "made it crystal clear all summer";
+  }
+
   return [
     {
       name: 'Jennifer M.',
       role: 'Local Resident',
-      content: `I was worried about finding a trustworthy ${niche}, but this free ${type} put my mind at ease. It's clear that ${name} knows exactly what they are doing.`,
+      content: `I was worried about ${problem}, but this free ${type} ${benefit}. It's clear that ${name} knows exactly what they are doing.`,
       avatar: '👩',
       rating: 5
     },
@@ -573,22 +591,25 @@ export default async function DynamicWebsite({ params }) {
       : generateSmartFeatures(businessData);
 
     // Professional Service Theme Defaults (Dynamic based on Niche)
-    if (!theme.gradient) {
-      const nicheTheme = getThemeForNiche(businessData.niche);
-      theme.gradient = nicheTheme.gradient;
-      theme.colors = {
-        ...theme.colors,
-        ...nicheTheme.colors
-      };
-    }
+    // Always recalculate theme for Lead Magnet sites to ensure niche color is applied
+    const nicheTheme = getThemeForNiche(businessData.niche);
+    theme.gradient = nicheTheme.gradient;
+    theme.colors = {
+      ...theme.colors,
+      ...nicheTheme.colors
+    };
 
     // Construct the High-Value Layout
     layout = [
       {
         component: 'NavBar',
         props: {
-          businessName: businessData.businessName || businessData.name || 'Local Business',
-          links: ['Guide', 'Common Mistakes', 'About'],
+          businessName: businessData.businessName || businessData.name || business?.name || 'Local Business',
+          links: [
+            { label: 'Guide', href: '#hero' },
+            { label: 'Common Mistakes', href: '#problems' },
+            { label: 'About', href: '#about' }
+          ],
           ctaText: 'Get Guide',
           ctaLink: '#hero'
         }
@@ -596,8 +617,8 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'Hero',
         props: {
-          title: lm.landing_page?.hero_headline || `Get Your Free ${businessData.niche || 'Expert'} Guide`,
-          subtitle: lm.landing_page?.hero_subheadline || `Learn exactly how to solve your ${businessData.niche ? businessData.niche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`,
+          title: lm.landing_page?.headline || lm.landing_page?.hero_headline || `Get Your Free ${businessData.niche || 'Expert'} Guide`,
+          subtitle: lm.landing_page?.subheadline || lm.landing_page?.hero_subheadline || `Learn exactly how to solve your ${businessData.niche ? businessData.niche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`,
           ctaText: lm.landing_page?.cta_text || 'Download Free Guide',
           showEmailCapture: true,
           businessId: businessId,
@@ -609,7 +630,9 @@ export default async function DynamicWebsite({ params }) {
           limitedSlots: 5,
           couponCode: conversionOffer.offer_code || businessData?.lead_magnet_pdf?.coupon_code,
           // Add a subtle pattern overlay for professionalism
-          backgroundOverlay: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
+          backgroundOverlay: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)',
+          // PDF Title for visual
+          pdfTitle: lm.lead_magnet_title || lm.title || 'Expert Guide'
         }
       }
     ];

@@ -312,6 +312,19 @@ function generateSmartFeatures(businessData) {
 function getThemeForNiche(niche) {
   const n = niche?.toLowerCase() || '';
   
+  // Real Estate / Law / Corporate (Navy & Gold/Slate)
+  if (n.includes('estate') || n.includes('law') || n.includes('attorney') || n.includes('consult') || n.includes('agency')) {
+    return {
+      gradient: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)', // Blue-900 to Blue-800
+      colors: {
+        primary: '#1e40af', // Blue-800
+        secondary: '#172554', // Blue-950
+        textDark: '#172554',
+        borderColor: '#dbeafe'
+      }
+    };
+  }
+
   // Green: Landscaping, Gardening, Nature, Money/Finance
   if (n.includes('landscape') || n.includes('garden') || n.includes('lawn') || n.includes('tree') || n.includes('finance') || n.includes('money')) {
     return {
@@ -326,7 +339,7 @@ function getThemeForNiche(niche) {
   }
   
   // Cyan/Teal: Cleaning, Pool, Medical, Dental
-  if (n.includes('clean') || n.includes('wash') || n.includes('maid') || n.includes('pool') || n.includes('dental') || n.includes('med')) {
+  if (n.includes('clean') || n.includes('wash') || n.includes('maid') || n.includes('pool') || n.includes('dental') || n.includes('med') || n.includes('doctor')) {
     return {
       gradient: 'linear-gradient(135deg, #0e7490 0%, #06b6d4 100%)', // Cyan-700 to Cyan-500
       colors: {
@@ -338,8 +351,8 @@ function getThemeForNiche(niche) {
     };
   }
   
-  // Red/Orange: Fitness, Gym, Emergency, Fire
-  if (n.includes('fitness') || n.includes('gym') || n.includes('train') || n.includes('sport') || n.includes('fire')) {
+  // Red/Orange: Fitness, Gym, Emergency, Fire, Security
+  if (n.includes('fitness') || n.includes('gym') || n.includes('train') || n.includes('sport') || n.includes('fire') || n.includes('security')) {
     return {
       gradient: 'linear-gradient(135deg, #991b1b 0%, #dc2626 100%)', // Red-800 to Red-600
       colors: {
@@ -351,8 +364,8 @@ function getThemeForNiche(niche) {
     };
   }
 
-  // Purple/Pink: Beauty, Salon, Spa, Creative
-  if (n.includes('beauty') || n.includes('salon') || n.includes('spa') || n.includes('hair') || n.includes('makeup') || n.includes('design')) {
+  // Purple/Pink: Beauty, Salon, Spa, Creative, Yoga
+  if (n.includes('beauty') || n.includes('salon') || n.includes('spa') || n.includes('hair') || n.includes('makeup') || n.includes('design') || n.includes('yoga')) {
     return {
       gradient: 'linear-gradient(135deg, #701a75 0%, #c026d3 100%)', // Fuchsia-800 to Fuchsia-600
       colors: {
@@ -364,8 +377,8 @@ function getThemeForNiche(niche) {
     };
   }
 
-  // Warm/Construction: Construction, Wood, Carpenter (Amber/Orange)
-  if (n.includes('construct') || n.includes('build') || n.includes('wood') || n.includes('carpenter') || n.includes('roof')) {
+  // Warm/Construction: Construction, Wood, Carpenter, Handyman, Roofing (Amber/Orange)
+  if (n.includes('construct') || n.includes('build') || n.includes('wood') || n.includes('carpenter') || n.includes('roof') || n.includes('handy') || n.includes('renovat')) {
     return {
       gradient: 'linear-gradient(135deg, #7c2d12 0%, #ea580c 100%)', // Orange-900 to Orange-600
       colors: {
@@ -545,6 +558,9 @@ export default async function DynamicWebsite({ params }) {
   // Special layout for Lead Magnet Funnels
   if (businessData.leadMagnet) {
     const lm = businessData.leadMagnet;
+    const pdfContent = businessData.lead_magnet_pdf || {};
+    const conversionOffer = businessData.conversion_offer || {};
+    
     // Ensure benefits is an array
     const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
     
@@ -566,12 +582,13 @@ export default async function DynamicWebsite({ params }) {
       };
     }
 
+    // Construct the High-Value Layout
     layout = [
       {
         component: 'NavBar',
         props: {
           businessName: businessData.businessName || businessData.name || 'Local Business',
-          links: ['Guide', 'What You Learn', 'About'],
+          links: ['Guide', 'Common Mistakes', 'About'],
           ctaText: 'Get Guide',
           ctaLink: '#hero'
         }
@@ -588,14 +605,50 @@ export default async function DynamicWebsite({ params }) {
           whatsappNumber: business?.phone_number || businessData?.phone || businessData?.whatsapp,
           whatsappMessage: businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`,
           // Urgency/scarcity
-          urgencyText: lm.landing_page?.urgency_text || businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null,
+          urgencyText: conversionOffer.headline || (businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null),
           limitedSlots: 5,
-          couponCode: businessData?.lead_magnet_pdf?.coupon_code,
+          couponCode: conversionOffer.offer_code || businessData?.lead_magnet_pdf?.coupon_code,
           // Add a subtle pattern overlay for professionalism
           backgroundOverlay: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
         }
-      },
-      {
+      }
+    ];
+
+    // 1. Problem Agitation Section (Common Mistakes)
+    if (pdfContent.common_mistakes && pdfContent.common_mistakes.length > 0) {
+      layout.push({
+        component: 'FeatureGrid',
+        props: {
+          title: 'Are You Making These Costly Mistakes?',
+          subtitle: `Most ${businessData.niche || 'homeowners'} ignore these signs until it's too late.`,
+          features: pdfContent.common_mistakes.slice(0, 3).map(m => ({
+            title: m.title,
+            description: m.description,
+            icon: '⚠️'
+          })),
+          id: 'problems'
+        }
+      });
+    }
+
+    // 2. Value/Solution Section (Quick Tips)
+    if (pdfContent.quick_tips && pdfContent.quick_tips.length > 0) {
+      layout.push({
+        component: 'FeatureGrid',
+        props: {
+          title: 'What You Can Do Right Now',
+          subtitle: 'Immediate steps to protect your property and save money.',
+          features: pdfContent.quick_tips.slice(0, 3).map(t => ({
+            title: t.title,
+            description: t.description,
+            icon: '💡'
+          })),
+          id: 'tips'
+        }
+      });
+    } else {
+      // Fallback to benefits if no quick tips
+      layout.push({
         component: 'FeatureGrid',
         props: {
           title: 'What You Will Learn',
@@ -603,42 +656,65 @@ export default async function DynamicWebsite({ params }) {
           features: features,
           id: 'what-you-learn'
         }
-      },
-      {
-        component: 'TestimonialSlider',
-        props: {
-          title: 'What Others Are Saying',
-          testimonials: businessData.testimonials || generateSmartTestimonials(businessData)
-        }
-      },
-      {
-        component: 'AboutCoach',
-        props: {
-          title: 'About Us',
-          bio: lm.landing_page?.about_business || lm.landing_page?.about_coach || `Expert service provider specializing in ${businessData.niche || 'serving our local community'}.`,
-          imageUrl: businessData.avatarUrl,
-          businessName: businessData.businessName || businessData.name || 'Local Business',
-          id: 'about'
-        }
-      },
-      {
-        component: 'CallToAction',
-        props: {
-          title: `Ready to get your ${lm.lead_magnet?.title || 'Free Guide'}?`,
-          subtitle: 'Get instant access to this expert resource and start solving your problem today.',
-          ctaText: 'Download Now',
-          ctaLink: '#hero',
-          secondaryCtaText: (business?.phone_number || businessData?.phone) ? 'Call Us Now' : null,
-          secondaryCtaLink: (business?.phone_number || businessData?.phone) ? `tel:${business?.phone_number || businessData?.phone}` : null
-        }
-      },
-      {
-        component: 'Footer',
-        props: {
-          businessName: businessData.businessName || businessData.name || 'Local Business'
-        }
+      });
+    }
+
+    // 3. Social Proof (Case Study + Testimonials)
+    const testimonials = businessData.testimonials || generateSmartTestimonials(businessData);
+    
+    // Inject Case Study as a "Featured Success Story" if available
+    if (pdfContent.case_study) {
+      const caseStudy = {
+        name: pdfContent.case_study.customer_name || 'Recent Client',
+        role: pdfContent.case_study.location || 'Local Homeowner',
+        content: `Problem: ${pdfContent.case_study.problem}\n\nSolution: ${pdfContent.case_study.solution}\n\nResult: ${pdfContent.case_study.result}`,
+        avatar: '⭐',
+        rating: 5
+      };
+      // Add to beginning of testimonials
+      testimonials.unshift(caseStudy);
+    }
+
+    layout.push({
+      component: 'TestimonialSlider',
+      props: {
+        title: 'Real Results from Local Neighbors',
+        testimonials: testimonials
       }
-    ];
+    });
+
+    // 4. About the Expert
+    layout.push({
+      component: 'AboutCoach',
+      props: {
+        title: 'Meet Your Local Expert',
+        bio: lm.landing_page?.about_business || lm.landing_page?.about_coach || `Expert service provider specializing in ${businessData.niche || 'serving our local community'}.`,
+        imageUrl: businessData.avatarUrl,
+        businessName: businessData.businessName || businessData.name || 'Local Business',
+        id: 'about'
+      }
+    });
+
+    // 5. Final CTA
+    layout.push({
+      component: 'CallToAction',
+      props: {
+        title: conversionOffer.headline || `Ready to get your ${lm.lead_magnet?.title || 'Free Guide'}?`,
+        subtitle: conversionOffer.subheadline || 'Get instant access to this expert resource and start solving your problem today.',
+        ctaText: conversionOffer.cta_text || 'Download Now',
+        ctaLink: '#hero',
+        secondaryCtaText: (business?.phone_number || businessData?.phone) ? 'Call Us Now' : null,
+        secondaryCtaLink: (business?.phone_number || businessData?.phone) ? `tel:${business?.phone_number || businessData?.phone}` : null
+      }
+    });
+
+    // 6. Footer
+    layout.push({
+      component: 'Footer',
+      props: {
+        businessName: businessData.businessName || businessData.name || 'Local Business'
+      }
+    });
   }
   // If no layout exists or layout is empty, create a fallback layout
   else if (!layout || layout.length === 0) {

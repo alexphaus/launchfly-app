@@ -49,6 +49,14 @@ export const generateLeadMagnet = inngest.createFunction(
           Also create a "conversion_offer" specifically for this niche to be used in Day 4 & 5.
           - For High Ticket (Real Estate, Law, Consulting): Offer a "Free Strategy Session", "Audit", or "Valuation". NO DISCOUNTS.
           - For Services (Cleaning, landscaping): Offer a "% Discount" or "Free Add-on".
+
+          CRITICAL: Create rich content for a 8-page Premium PDF Guide.
+          - diagnostic_questions: 3 "Yes/No" questions that help the user realize they have a problem.
+          - common_mistakes: 5 mistakes people in this niche make (e.g. "Ignoring X", "Buying cheap Y").
+          - quick_tips: 5 actionable tips they can do immediately.
+          - case_study: A realistic success story (Problem -> Solution -> Result).
+          - action_checklist: 2 immediate steps to take.
+          - price_ranges: 5 typical service tiers in this niche (e.g. "Basic Inspection: $100-$200").
           
           Return a JSON object with this EXACT structure:
           {
@@ -58,6 +66,33 @@ export const generateLeadMagnet = inngest.createFunction(
               "subheadline": "Supporting text (e.g. Worth $500, yours free)",
               "cta_text": "Button Text (e.g. Book My Audit)",
               "offer_code": "Optional code (e.g. AUDIT25) or null if not needed"
+            },
+            "pdf_content": {
+              "cover_tagline": "A powerful subtitle for the cover page",
+              "intro": "A professional, empathetic introduction explaining why this guide exists and why the reader needs it.",
+              "diagnostic_questions": [
+                { "question": "...", "yes_action": "...", "no_action": "..." }
+              ],
+              "common_mistakes": [
+                { "title": "...", "description": "..." }
+              ],
+              "quick_tips": [
+                { "title": "...", "description": "..." }
+              ],
+              "case_study": {
+                "customer_name": "...",
+                "location": "...",
+                "problem": "...",
+                "solution": "...",
+                "result": "..."
+              },
+              "action_checklist": ["Step 1...", "Step 2..."],
+              "price_ranges": [
+                { "service": "...", "range": "..." }
+              ],
+              "coupon_offer": "Same as conversion_offer.headline",
+              "coupon_code": "Same as conversion_offer.offer_code",
+              "coupon_expiry": "7 days from download"
             },
             "lead_magnet_content": [
               { "title": "Section 1", "body": "..." },
@@ -114,6 +149,7 @@ export const generateLeadMagnet = inngest.createFunction(
               leadMagnet: content,
               lead_magnet_title: content.lead_magnet_title,
               conversion_offer: content.conversion_offer,
+              lead_magnet_pdf: content.pdf_content,
               lead_magnet_content: content.lead_magnet_content,
               landing_page: content.landing_page,
               email_sequence: content.email_sequence

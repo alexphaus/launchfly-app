@@ -60,6 +60,7 @@ export const generateLeadMagnet = inngest.createFunction(
           
           Return a JSON object with this EXACT structure:
           {
+            "business_name": "A professional business name for this ${topic} company (e.g. 'GreenScape Landscaping', 'ProClean Services')",
             "lead_magnet_title": "Catchy Title for the Asset",
             "conversion_offer": {
               "headline": "The main offer headline (e.g. Claim Your Free Home Valuation)",
@@ -100,8 +101,8 @@ export const generateLeadMagnet = inngest.createFunction(
               { "title": "Section 3", "body": "..." }
             ],
             "landing_page": {
-              "headline": "Main Headline for Landing Page",
-              "subheadline": "Supporting subheadline",
+              "hero_headline": "A compelling, niche-specific headline for ${topic} (e.g. 'Transform Your Lawn Into The Envy of The Neighborhood')",
+              "hero_subheadline": "A benefit-focused subheadline specific to ${topic} (e.g. 'Download our free guide and discover the 5 secrets to a lush, maintenance-free lawn')",
               "cta_text": "Get My Free Quote / Guide",
               "benefits": ["Benefit 1", "Benefit 2", "Benefit 3"],
               "about_business": "Short professional bio for a local business in this niche (max 50 words)"
@@ -139,13 +140,18 @@ export const generateLeadMagnet = inngest.createFunction(
 
         const currentData = business?.business_data || {};
         
+        // Use AI-generated business_name or fallback to lead_magnet_title
+        const businessName = content.business_name || content.lead_magnet_title || currentData.businessName || 'Local Business';
+        
         const { error: updateError } = await supabase
           .from('businesses')
           .update({
-            name: content.lead_magnet_title || 'Lead Magnet Funnel',
+            name: businessName,
             status: 'ready',
             business_data: {
               ...currentData,
+              businessName: businessName,
+              niche: currentData.niche || topic,
               leadMagnet: content,
               lead_magnet_title: content.lead_magnet_title,
               conversion_offer: content.conversion_offer,

@@ -258,32 +258,91 @@ function ThemedLayout({ theme, children }) {
 
 function generateSmartTestimonials(businessData) {
   const niche = businessData.niche?.toLowerCase() || 'service';
-  const name = businessData.businessName || 'Pro Services';
-  const type = businessData.leadMagnet?.title?.toLowerCase().includes('checklist') ? 'checklist' : 'guide';
+  const name = businessData.businessName || businessData.lead_magnet_title || 'Pro Services';
+  const type = businessData.leadMagnet?.lead_magnet_title?.toLowerCase().includes('checklist') ? 'checklist' : 'guide';
   
-  return [
-    {
-      name: 'Jennifer M.',
-      role: 'Local Resident',
-      content: `I was worried about finding a trustworthy ${niche}, but this free ${type} put my mind at ease. It's clear that ${name} knows exactly what they are doing.`,
-      avatar: '👩',
-      rating: 5
-    },
-    {
-      name: 'Michael T.',
-      role: 'Homeowner',
-      content: `This is exactly the information I was looking for. Most companies hide their pricing or process, but ${name} was transparent from the start.`,
-      avatar: '👨',
-      rating: 5
-    },
-    {
-      name: 'Sarah L.',
-      role: 'Client',
-      content: `Super helpful resource! I used the ${type} to evaluate my options and it saved me so much time. Highly recommend giving them a call.`,
-      avatar: '👩‍🦰',
-      rating: 5
-    }
-  ];
+  // Generate niche-specific testimonials
+  const nicheTestimonials = {
+    landscape: [
+      {
+        name: 'Jennifer M.',
+        role: 'Homeowner',
+        content: `My lawn was a mess until I found ${name}. Their guide showed me exactly what to look for when hiring a landscaper. Now my yard is the envy of the neighborhood!`,
+        avatar: '👩',
+        rating: 5
+      },
+      {
+        name: 'Michael T.',
+        role: 'Property Owner',
+        content: `The pricing guide saved me from getting overcharged. I used their checklist to compare 3 different landscaping companies and made an informed decision.`,
+        avatar: '👨',
+        rating: 5
+      },
+      {
+        name: 'Sarah L.',
+        role: 'First-time Homeowner',
+        content: `As a new homeowner, I had no idea where to start with my yard. This free ${type} was a lifesaver - clear, practical, and actually useful!`,
+        avatar: '👩‍🦰',
+        rating: 5
+      }
+    ],
+    clean: [
+      {
+        name: 'Amanda R.',
+        role: 'Busy Professional',
+        content: `I was skeptical about hiring a cleaning service until I read their ${type}. Now I know exactly what questions to ask and what to expect!`,
+        avatar: '👩',
+        rating: 5
+      },
+      {
+        name: 'David K.',
+        role: 'Homeowner',
+        content: `The checklist helped me understand the difference between deep cleaning and regular cleaning. ${name} really knows their stuff.`,
+        avatar: '👨',
+        rating: 5
+      },
+      {
+        name: 'Lisa M.',
+        role: 'Rental Property Owner',
+        content: `Managing rentals means I need reliable cleaners. This guide helped me set clear expectations and find the right service for my properties.`,
+        avatar: '👩‍🦰',
+        rating: 5
+      }
+    ],
+    default: [
+      {
+        name: 'Jennifer M.',
+        role: 'Local Resident',
+        content: `I was worried about finding a trustworthy ${niche} provider, but this free ${type} put my mind at ease. It's clear that ${name} knows exactly what they are doing.`,
+        avatar: '👩',
+        rating: 5
+      },
+      {
+        name: 'Michael T.',
+        role: 'Homeowner',
+        content: `This is exactly the information I was looking for. Most companies hide their pricing or process, but ${name} was transparent from the start.`,
+        avatar: '👨',
+        rating: 5
+      },
+      {
+        name: 'Sarah L.',
+        role: 'Client',
+        content: `Super helpful resource! I used the ${type} to evaluate my options and it saved me so much time. Highly recommend giving them a call.`,
+        avatar: '👩‍🦰',
+        rating: 5
+      }
+    ]
+  };
+
+  // Match niche to testimonial set
+  if (niche.includes('landscape') || niche.includes('lawn') || niche.includes('garden')) {
+    return nicheTestimonials.landscape;
+  }
+  if (niche.includes('clean') || niche.includes('maid') || niche.includes('janitorial')) {
+    return nicheTestimonials.clean;
+  }
+  
+  return nicheTestimonials.default;
 }
 
 function generateSmartFeatures(businessData) {
@@ -561,6 +620,9 @@ export default async function DynamicWebsite({ params }) {
     const pdfContent = businessData.lead_magnet_pdf || {};
     const conversionOffer = businessData.conversion_offer || {};
     
+    // Resolve the niche from multiple sources
+    const resolvedNiche = businessData.niche || business?.form_data?.niche || business?.form_data?.leadMagnetTopic || 'service';
+    
     // Ensure benefits is an array
     const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
     
@@ -570,11 +632,12 @@ export default async function DynamicWebsite({ params }) {
           description: 'Practical steps you can implement immediately to see results.',
           icon: '✅'
         }))
-      : generateSmartFeatures(businessData);
+      : generateSmartFeatures({ ...businessData, niche: resolvedNiche });
 
     // Professional Service Theme Defaults (Dynamic based on Niche)
-    if (!theme.gradient) {
-      const nicheTheme = getThemeForNiche(businessData.niche);
+    // Always recalculate theme based on resolved niche
+    const nicheTheme = getThemeForNiche(resolvedNiche);
+    if (!theme.gradient || theme.gradient.includes('#667eea')) {
       theme.gradient = nicheTheme.gradient;
       theme.colors = {
         ...theme.colors,
@@ -582,13 +645,20 @@ export default async function DynamicWebsite({ params }) {
       };
     }
 
+    // Get the business name from multiple sources
+    const resolvedBusinessName = businessData.businessName || business?.name || lm.business_name || businessData.lead_magnet_title || 'Local Business';
+
     // Construct the High-Value Layout
     layout = [
       {
         component: 'NavBar',
         props: {
-          businessName: businessData.businessName || businessData.name || 'Local Business',
-          links: ['Guide', 'Common Mistakes', 'About'],
+          businessName: resolvedBusinessName,
+          links: [
+            { label: 'Guide', href: '#hero' },
+            { label: 'Common Mistakes', href: '#problems' },
+            { label: 'About', href: '#about' }
+          ],
           ctaText: 'Get Guide',
           ctaLink: '#hero'
         }
@@ -596,8 +666,8 @@ export default async function DynamicWebsite({ params }) {
       {
         component: 'Hero',
         props: {
-          title: lm.landing_page?.hero_headline || `Get Your Free ${businessData.niche || 'Expert'} Guide`,
-          subtitle: lm.landing_page?.hero_subheadline || `Learn exactly how to solve your ${businessData.niche ? businessData.niche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`,
+          title: lm.landing_page?.hero_headline || `Get Your Free ${resolvedNiche || 'Expert'} Guide`,
+          subtitle: lm.landing_page?.hero_subheadline || `Learn exactly how to solve your ${resolvedNiche ? resolvedNiche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`,
           ctaText: lm.landing_page?.cta_text || 'Download Free Guide',
           showEmailCapture: true,
           businessId: businessId,
@@ -608,8 +678,8 @@ export default async function DynamicWebsite({ params }) {
           urgencyText: conversionOffer.headline || (businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null),
           limitedSlots: 5,
           couponCode: conversionOffer.offer_code || businessData?.lead_magnet_pdf?.coupon_code,
-          // Add a subtle pattern overlay for professionalism
-          backgroundOverlay: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
+          // Dynamic background overlay based on niche theme
+          backgroundOverlay: theme.gradient || 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
         }
       }
     ];
@@ -620,7 +690,7 @@ export default async function DynamicWebsite({ params }) {
         component: 'FeatureGrid',
         props: {
           title: 'Are You Making These Costly Mistakes?',
-          subtitle: `Most ${businessData.niche || 'homeowners'} ignore these signs until it's too late.`,
+          subtitle: `Most ${resolvedNiche || 'homeowners'} ignore these signs until it's too late.`,
           features: pdfContent.common_mistakes.slice(0, 3).map(m => ({
             title: m.title,
             description: m.description,
@@ -660,7 +730,7 @@ export default async function DynamicWebsite({ params }) {
     }
 
     // 3. Social Proof (Case Study + Testimonials)
-    const testimonials = businessData.testimonials || generateSmartTestimonials(businessData);
+    const testimonials = businessData.testimonials || generateSmartTestimonials({ ...businessData, niche: resolvedNiche, businessName: resolvedBusinessName });
     
     // Inject Case Study as a "Featured Success Story" if available
     if (pdfContent.case_study) {
@@ -688,9 +758,9 @@ export default async function DynamicWebsite({ params }) {
       component: 'AboutCoach',
       props: {
         title: 'Meet Your Local Expert',
-        bio: lm.landing_page?.about_business || lm.landing_page?.about_coach || `Expert service provider specializing in ${businessData.niche || 'serving our local community'}.`,
+        bio: lm.landing_page?.about_business || lm.landing_page?.about_coach || `Expert service provider specializing in ${resolvedNiche || 'serving our local community'}.`,
         imageUrl: businessData.avatarUrl,
-        businessName: businessData.businessName || businessData.name || 'Local Business',
+        businessName: resolvedBusinessName,
         id: 'about'
       }
     });
@@ -712,7 +782,7 @@ export default async function DynamicWebsite({ params }) {
     layout.push({
       component: 'Footer',
       props: {
-        businessName: businessData.businessName || businessData.name || 'Local Business'
+        businessName: resolvedBusinessName
       }
     });
   }

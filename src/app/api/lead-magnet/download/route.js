@@ -28,18 +28,19 @@ export async function GET(request) {
     // Extract lead magnet data
     const flatData = business.business_data;
     const nestedData = business.business_data?.leadMagnet;
+    const formData = business.form_data || {};
     
-    const title = flatData.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
-    const content = flatData.lead_magnet_content || nestedData?.lead_magnet?.content || [];
-    const pdfContent = flatData.lead_magnet_pdf || nestedData?.lead_magnet_pdf || {};
+    const title = flatData.lead_magnet_title || nestedData?.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
+    const content = flatData.lead_magnet_content || nestedData?.lead_magnet_content || nestedData?.lead_magnet?.content || [];
+    const pdfContent = flatData.lead_magnet_pdf || nestedData?.pdf_content || {};
 
     // Prepare business data for PDF
     const businessDataForPdf = {
-      businessName: flatData.businessName || business.name || 'Local Business',
-      niche: flatData.niche || 'Service',
-      phone: business.phone_number || flatData.phone || '',
-      email: business.email || flatData.email || '',
-      city: flatData.city || flatData.location || 'your area',
+      businessName: flatData.businessName || nestedData?.business_name || business.name || 'Local Business',
+      niche: flatData.niche || formData.niche || formData.leadMagnetTopic || 'Service',
+      phone: business.phone_number || flatData.phone || formData.phone || '',
+      email: business.email || flatData.email || formData.email || '',
+      city: flatData.city || flatData.location || formData.city || 'your area',
       address: flatData.address || '',
       hours: flatData.hours || '',
       bookingUrl: business.booking_url || flatData.booking_url || '',

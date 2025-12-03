@@ -5,6 +5,7 @@
  */
 
 export { generateBusiness } from './generate-business';
+export { generateLeadMagnet } from './generate-lead-magnet';
 export { enhancedColdEmailOutreach as coldEmailOutreach } from './cold-outreach';
 export { growthEngine } from './growth-engine';
 export { 
@@ -60,14 +61,16 @@ export const functions = DISABLE_EXPENSIVE_FUNCTIONS ? [
   // Only minimal, event-driven functions
   // Always include core business generation so onboarding can progress
   require('./generate-business').generateBusiness,
+  require('./generate-lead-magnet').generateLeadMagnet,
   ...minimalFunctions,
   // Weekly digest (cheap, data-only)
   ...weeklyDigestFunctions,
   // Keep essential event-driven functions from existing system
-  require('./follow-up-handler').followUpHandler, // Event-driven
 ] : [
   // Full system (legacy - not recommended due to high costs)
   require('./generate-business').generateBusiness,
+  require('./generate-lead-magnet').generateLeadMagnet,
+  require('./cold-outreach').enhancedColdEmailOutreach,
   require('./cold-outreach').enhancedColdEmailOutreach,
   require('./growth-engine').growthEngine,
   require('./customer-acquisition').customerAcquisitionOrchestrator,

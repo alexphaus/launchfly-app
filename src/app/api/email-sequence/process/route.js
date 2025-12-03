@@ -212,6 +212,7 @@ async function processEmailSequence(request, options = {}) {
   // Allow test mode to bypass auth if explicitly requested from dashboard (with session check ideally, but keeping simple for now)
   const isTestMode = options.testMode || false;
   const targetEmail = options.targetEmail;
+  const targetBusinessId = options.businessId;
   
   if (!isTestMode && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     // Allow without auth in development
@@ -253,7 +254,10 @@ async function processEmailSequence(request, options = {}) {
     // If test mode and target email, ignore time check
     if (isTestMode && targetEmail) {
       query = query.eq('email', targetEmail);
-      console.log(`🧪 Test mode: Forcing email for ${targetEmail}`);
+      if (targetBusinessId) {
+        query = query.eq('business_id', targetBusinessId);
+      }
+      console.log(`🧪 Test mode: Forcing email for ${targetEmail} (Business: ${targetBusinessId || 'All'})`);
     } else {
       // Standard mode: check time
       query = query.lte('next_email_at', now.toISOString());

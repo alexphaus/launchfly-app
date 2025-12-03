@@ -190,7 +190,8 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           testMode: true,
-          targetEmail: email
+          targetEmail: email,
+          businessId: business.id
         })
       });
       const data = await res.json();

@@ -1,6 +1,7 @@
 // src/app/api/wizard/submit/route.js
 import { createClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
+import { inngest } from '@/lib/inngest/client';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -175,23 +176,22 @@ export async function POST(request) {
       body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
     }).catch(() => {});
 
-    // Trigger Lead Magnet Generation - AWAIT this to ensure content is ready
+    // Trigger Lead Magnet Generation - Use Inngest for reliable background processing
     // This is the main generation path for lead magnet funnels
     if (effectiveTemplate === 'lead-magnet' && effectiveTopic) {
       console.log('Triggering lead magnet generation for:', effectiveTopic);
       try {
-        const genResponse = await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000'}/api/lead-magnet/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            businessId: business.id, 
-            topic: effectiveTopic, 
+        await inngest.send({
+          name: 'lead-magnet/generation.requested',
+          data: {
+            businessId: business.id,
+            topic: effectiveTopic,
             audience: targetAudience,
-            language: leadMagnetLanguage || 'English'
-          })
+            language: leadMagnetLanguage || 'English',
+            sessionId: sessionId
+          }
         });
-        const genResult = await genResponse.json();
-        console.log('Lead magnet generation result:', genResult);
+        console.log('Lead magnet generation triggered via Inngest');
       } catch (err) {
         console.error('Lead magnet trigger failed:', err);
       }

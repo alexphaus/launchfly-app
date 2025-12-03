@@ -23,15 +23,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Start polling when we have data and generation is in progress
-    // Use faster polling during active generation
-    if (sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error') {
+    // Poll if session is not complete OR if business is still pending/generating
+    const isSessionIncomplete = sessionData && sessionData.stage !== 'complete' && sessionData.stage !== 'error';
+    const isBusinessPending = businessData && (businessData.status === 'pending' || businessData.status === 'generating');
+
+    if (isSessionIncomplete || isBusinessPending) {
       const pollInterval = setInterval(async () => {
         await fetchLatestData();
-      }, sessionData.stage === 'building' ? 1000 : 2000); // Poll every 1s during building, 2s otherwise
+      }, 2000);
 
       return () => clearInterval(pollInterval);
     }
-  }, [sessionData?.stage]);
+  }, [sessionData?.stage, businessData?.status]);
 
   useEffect(() => {
     // Trigger generation if session is pending

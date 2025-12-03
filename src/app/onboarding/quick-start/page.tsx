@@ -78,6 +78,8 @@ export default function QuickStartOnboarding() {
     suggestion: string | null;
   }>({ checking: false, available: null, suggestion: null });
   const [showPlanPreview, setShowPlanPreview] = useState(false);
+  const [isGeneratingAssets, setIsGeneratingAssets] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -193,6 +195,33 @@ export default function QuickStartOnboarding() {
 
     return () => clearTimeout(timeoutId);
   }, [formData.subdomain]);
+
+  const pollForCompletion = async (sessionId: string) => {
+    const pollInterval = setInterval(async () => {
+      const { data: session, error } = await supabase
+        .from('sessions')
+        .select('stage, progress')
+        .eq('id', sessionId)
+        .single();
+
+      if (error) {
+        console.error('Polling error:', error);
+        return;
+      }
+
+      if (session) {
+        setGenerationProgress(session.progress || 0);
+        
+        if (session.stage === 'complete' || session.progress === 100) {
+          clearInterval(pollInterval);
+          // Small delay to show 100%
+          setTimeout(() => {
+            router.push(`/dashboard/${sessionId}`);
+          }, 1000);
+        }
+      }
+    }, 2000);
+  };
 
   const handleProceedToCheckout = async () => {
     setIsLoading(true);
@@ -319,8 +348,6 @@ export default function QuickStartOnboarding() {
 
       if (signInError) {
         console.error('Auto-login failed:', signInError);
-        // If login fails but account exists, we might want to redirect to login
-        // But for now let's try to proceed, maybe the session is somehow established or we can handle it
       }
       
       // Track successful completion
@@ -331,8 +358,9 @@ export default function QuickStartOnboarding() {
         sessionId: result.sessionId
       });
       
-      // Redirect to dashboard with session ID
-      router.push(`/dashboard/${result.sessionId}`);
+      // Start polling instead of redirecting
+      setIsGeneratingAssets(true);
+      pollForCompletion(result.sessionId);
       
     } catch (error) {
       console.error('Onboarding error:', error);
@@ -732,12 +760,56 @@ export default function QuickStartOnboarding() {
       </div>
     </>
   );
+  const renderGenerating = () => (
+    <div className="onboarding-content" style={{ textAlign: 'center', paddingTop: '4rem' }}>
+      <div className="loading-spinner" style={{ width: '64px', height: '64px', margin: '0 auto 2rem', borderTopColor: '#2563eb', borderRightColor: '#2563eb' }}></div>
+      <h1 className="onboarding-title">Building Your Business System</h1>
+      <p className="onboarding-subtitle">
+        AI is generating your assets. This usually takes about 30-60 seconds.
+      </p>
+      
+      <div style={{ maxWidth: '400px', margin: '2rem auto', textAlign: 'left' }}>
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500', color: '#4b5563' }}>
+            <span>Progress</span>
+            <span>{generationProgress}%</span>
+          </div>
+          <div style={{ height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${generationProgress}%`, background: '#2563eb', transition: 'width 0.5s ease' }}></div>
+          </div>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 10 ? '#16a34a' : '#9ca3af' }}>
+            <span>{generationProgress > 10 ? '✓' : '○'}</span>
+            <span>Analyzing Market & Audience</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 40 ? '#16a34a' : '#9ca3af' }}>
+            <span>{generationProgress > 40 ? '✓' : '○'}</span>
+            <span>Writing Lead Magnet Content</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 70 ? '#16a34a' : '#9ca3af' }}>
+            <span>{generationProgress > 70 ? '✓' : '○'}</span>
+            <span>Building Landing Page</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 90 ? '#16a34a' : '#9ca3af' }}>
+            <span>{generationProgress > 90 ? '✓' : '○'}</span>
+            <span>Drafting Email Sequence</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {currentStep === 1 && renderStep1()}
-      {currentStep === 2 && renderStep2()}
-      {currentStep === 3 && renderStep3()}
+      {isGeneratingAssets ? renderGenerating() : (
+        <>
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+        </>
+      )}
       
       <PlanPreviewModal
         isOpen={showPlanPreview}

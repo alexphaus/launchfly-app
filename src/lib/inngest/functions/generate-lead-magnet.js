@@ -30,14 +30,35 @@ export const generateLeadMagnet = inngest.createFunction(
 
     const content = await step.run('generate-content', async () => {
         const prompt = `
-          You are an expert marketing strategist for LOCAL SERVICE BUSINESSES. Create a high-converting Lead Magnet Asset (Checklist, Price Guide, or Coupon) and Landing Page copy for a local business specializing in: "${topic}".
+          You are a world-class direct response copywriter (like Dan Kennedy or Russell Brunson) for LOCAL SERVICE BUSINESSES. 
+          Create a high-converting Lead Magnet Asset (Checklist, Price Guide, or Coupon) and Landing Page copy for a local business specializing in: "${topic}".
           
           Target Audience: ${audience || 'Local Homeowners'}
           Language: ${language}
           
+          CRITICAL INSTRUCTIONS FOR EMAIL SEQUENCE:
+          Write a 5-day "Soap Opera Sequence" that builds trust, agitates the problem, and sells the service.
+          - Tone: Personal, empathetic, slightly informal but professional. Use "I" and "You".
+          - Formatting: Short paragraphs. Punchy sentences.
+          - Day 1 (The Delivery): Subject: Your [Asset Name] is inside! Body: Deliver the asset immediately. Then open a "loop" about a common mistake people make in this niche. Tease that you'll reveal it tomorrow.
+          - Day 2 (The Problem/Drama): Subject: [Curiosity Hook about the mistake]. Body: Tell a quick story about a client who tried to DIY or ignored the problem and it cost them. Agitate the pain.
+          - Day 3 (The Epiphany/Solution): Subject: The easy fix. Body: Explain that the solution isn't hard work, it's [Your Method/Service]. Soft pitch for a free quote/consultation.
+          - Day 4 (Hidden Benefits): Subject: Imagine if... Body: Paint a picture of life AFTER the problem is solved. Focus on emotional benefits (peace of mind, pride, safety).
+          - Day 5 (Urgency/Call to Action): Subject: Last chance? Body: Remind them that procrastination is the enemy. Direct call to action to book now before the schedule fills up.
+
+          Also create a "conversion_offer" specifically for this niche to be used in Day 4 & 5.
+          - For High Ticket (Real Estate, Law, Consulting): Offer a "Free Strategy Session", "Audit", or "Valuation". NO DISCOUNTS.
+          - For Services (Cleaning, landscaping): Offer a "% Discount" or "Free Add-on".
+          
           Return a JSON object with this EXACT structure:
           {
             "lead_magnet_title": "Catchy Title for the Asset",
+            "conversion_offer": {
+              "headline": "The main offer headline (e.g. Claim Your Free Home Valuation)",
+              "subheadline": "Supporting text (e.g. Worth $500, yours free)",
+              "cta_text": "Button Text (e.g. Book My Audit)",
+              "offer_code": "Optional code (e.g. AUDIT25) or null if not needed"
+            },
             "lead_magnet_content": [
               { "title": "Section 1", "body": "..." },
               { "title": "Section 2", "body": "..." },
@@ -92,6 +113,7 @@ export const generateLeadMagnet = inngest.createFunction(
               ...currentData,
               leadMagnet: content,
               lead_magnet_title: content.lead_magnet_title,
+              conversion_offer: content.conversion_offer,
               lead_magnet_content: content.lead_magnet_content,
               landing_page: content.landing_page,
               email_sequence: content.email_sequence

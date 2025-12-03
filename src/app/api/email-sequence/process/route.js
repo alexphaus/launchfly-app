@@ -40,16 +40,24 @@ function personalizeEmail(body, data) {
  * Build HTML email template with day-specific CTAs and offers
  * Designed like top marketing emails (HubSpot, Mailchimp style)
  */
-function buildEmailHtml({ subject, body, businessName, phone, day, email, businessId }) {
+function buildEmailHtml({ subject, body, businessName, phone, day, email, businessId, conversionOffer }) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://launchfly.ai';
   const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email || '')}&businessId=${businessId || ''}`;
   
+  // Default offer if none provided
+  const offer = conversionOffer || {
+    headline: "Claim 15% Off Now",
+    subheadline: "Use code: GUIDE15",
+    cta_text: "Claim Offer",
+    offer_code: "GUIDE15"
+  };
+
   // Different CTAs based on the day in sequence
   const ctaConfig = {
     1: { text: 'Read Your Free Guide', color: '#2563eb', urgent: false, subtext: 'Attached to this email' },
     2: { text: 'Get Your Free Quote', color: '#2563eb', urgent: false, subtext: 'No obligation, no pressure' },
     3: { text: 'Get the Same Results', color: '#2563eb', urgent: false, subtext: 'Free consultation included' },
-    4: { text: 'Claim 15% Off Now', color: '#16a34a', urgent: true, subtext: 'Use code: GUIDE15' },
+    4: { text: offer.cta_text || 'Claim Offer', color: '#16a34a', urgent: true, subtext: offer.subheadline || 'Limited time offer' },
     5: { text: 'Last Chance - Call Now', color: '#dc2626', urgent: true, subtext: 'Expires at midnight!' }
   };
   
@@ -107,7 +115,7 @@ function buildEmailHtml({ subject, body, businessName, phone, day, email, busine
             ` : ''}
             
             <p style="margin: 0 0 20px 0; color: ${isUrgent ? '#b91c1c' : '#1e40af'}; font-weight: 600; font-size: 20px;">
-              ${isUrgent ? "Don't let this slip away!" : 'Ready to take the next step?'}
+              ${isUrgent ? (offer.headline || "Don't let this slip away!") : 'Ready to take the next step?'}
             </p>
             
             ${phone ? `
@@ -136,9 +144,9 @@ function buildEmailHtml({ subject, body, businessName, phone, day, email, busine
                   <strong>Call now:</strong> <a href="tel:${phone}" style="color: ${cta.color}; text-decoration: none; font-weight: 600;">${phone}</a>
                 </p>
               ` : ''}
-              ${isUrgent && day === 4 ? `
+              ${isUrgent && day === 4 && offer.offer_code ? `
               <p style="margin: 10px 0 0 0; background: #fef3c7; color: #92400e; padding: 8px 16px; border-radius: 6px; font-size: 14px; display: inline-block;">
-                🏷️ Mention code <strong>GUIDE15</strong> for your discount
+                🏷️ Mention code <strong>${offer.offer_code}</strong> for your discount
               </p>
               ` : ''}
             </div>
@@ -291,6 +299,7 @@ async function processEmailSequence(request, options = {}) {
 
         const businessData = business.business_data || {};
         const emailSequence = businessData.email_sequence || [];
+        const conversionOffer = businessData.conversion_offer || null;
         const nextDay = (lead.email_sequence_day || 1) + 1;
         
         // Find the email for this day
@@ -326,7 +335,8 @@ async function processEmailSequence(request, options = {}) {
           phone: business.phone_number || businessData.phone,
           day: nextDay,
           email: lead.email,
-          businessId: business.id
+          businessId: business.id,
+          conversionOffer: conversionOffer
         });
 
         // Send email

@@ -13,6 +13,22 @@ const supabase = createClient(
 
 // Niche templates configuration
 const NICHE_TEMPLATES = {
+  // === TOP SEA NICHES ===
+  'aircon': {
+    name: 'Aircon Cleaning & Repair',
+    icon: '🌀',
+    description: 'Maintenance & Servicing',
+    defaultTitle: '2025 Aircon Maintenance Checklist: Save 30% on Electricity',
+    defaultAudience: 'Homeowners & Condo Owners'
+  },
+  'aesthetic-clinic': {
+    name: 'Aesthetic / Derma Clinic',
+    icon: '✨',
+    description: 'Skin & Beauty Treatments',
+    defaultTitle: '2025 Skin Treatment Price Guide',
+    defaultAudience: 'Beauty-conscious customers'
+  },
+  // === CLASSIC SERVICE NICHES ===
   'plumbing': {
     name: 'Plumbing',
     icon: '🔧',
@@ -42,11 +58,11 @@ const NICHE_TEMPLATES = {
     defaultAudience: 'Homeowners'
   },
   'real-estate': {
-    name: 'Real Estate',
+    name: 'Real Estate / Condo Agent',
     icon: '🏡',
-    description: 'Buying & Selling',
-    defaultTitle: 'Neighborhood Price Report 2025',
-    defaultAudience: 'Home Sellers'
+    description: 'Condos & Investments',
+    defaultTitle: 'Top 5 Condo Investments for 2025',
+    defaultAudience: 'Property Investors & First-Time Buyers'
   },
   'gym-fitness': {
     name: 'Local Gym / Trainer',

@@ -15,6 +15,26 @@ interface NicheTemplate {
 }
 
 const NICHE_TEMPLATES: NicheTemplate[] = [
+  // === TOP SEA NICHES (High-value in tropical markets) ===
+  {
+    id: 'aircon',
+    name: 'Aircon Cleaning & Repair',
+    icon: '🌀',
+    description: 'For aircon service providers tired of "PM Sent" inquiries. Capture leads automatically.',
+    leadMagnetType: 'Maintenance & Price Guide',
+    targetAudience: 'Homeowners & Condo Owners',
+    exampleTitle: '"2025 Aircon Maintenance Checklist: Save 30% on Electricity"'
+  },
+  {
+    id: 'aesthetic-clinic',
+    name: 'Aesthetic / Derma Clinic',
+    icon: '✨',
+    description: 'For clinics losing leads who are "just looking." Convert browsers to bookings.',
+    leadMagnetType: 'Treatment Price Guide',
+    targetAudience: 'Beauty-conscious customers',
+    exampleTitle: '"2025 Skin Treatment Price Guide"'
+  },
+  // === CLASSIC SERVICE NICHES ===
   {
     id: 'plumbing',
     name: 'Plumbing',
@@ -80,12 +100,12 @@ const NICHE_TEMPLATES: NicheTemplate[] = [
   },
   {
     id: 'real-estate',
-    name: 'Real Estate',
+    name: 'Real Estate / Condo Agent',
     icon: '🏡',
-    description: 'For agents needing seller leads in specific neighborhoods.',
-    leadMagnetType: 'Market Report',
-    targetAudience: 'Home Sellers',
-    exampleTitle: '"Neighborhood Price Report 2025"'
+    description: 'For agents selling condos & pre-selling properties. Replace flyers with digital lead capture.',
+    leadMagnetType: 'ROI Guide / Investment Report',
+    targetAudience: 'Property Investors & First-Time Buyers',
+    exampleTitle: '"Top 5 Condo Investments in [City] for 2025"'
   },
   {
     id: 'auto-repair',

@@ -85,6 +85,152 @@ export class BusinessMarketplace {
     console.log('🏪 Seeding initial business templates...');
 
     const initialTemplates = [
+      // === SEA HIGH-VALUE NICHES ===
+      {
+        name: 'Aircon Cleaning & Repair Service',
+        category: 'local_service',
+        business_type: 'service',
+        industry: 'home_services',
+        proven_revenue: 4800,
+        success_rate: 0.89,
+        time_to_first_sale: 12, // hours - fast in SEA
+        guarantee_confidence: 0.93,
+        description: 'Lead generation for aircon service providers in tropical markets. Eliminates "PM Sent" chaos.',
+        
+        business_model: {
+          pricing: [
+            { name: 'AC Cleaning (1 unit)', price: 35, deliveryTime: 'Same day' },
+            { name: 'Full Service (2-3 units)', price: 80, deliveryTime: '1-2 days' },
+            { name: 'Annual Maintenance Contract', price: 199, deliveryTime: 'Quarterly visits' }
+          ],
+          targetCustomers: 'Condo owners, homeowners, small offices in tropical climates',
+          valueProposition: 'Automated price guides that capture leads while you work',
+          fulfillmentMethod: 'PDF price guide with auto-reply setup for Facebook/WhatsApp'
+        },
+        
+        marketing_playbook: {
+          primaryChannels: ['facebook_page', 'facebook_marketplace', 'viber_groups', 'whatsapp'],
+          provenCampaigns: [
+            {
+              channel: 'facebook_messenger',
+              message: 'I noticed you have lots of "How much?" inquiries. I made a Price Guide PDF you can auto-send to save time.',
+              conversionRate: 0.25,
+              costPerLead: 0
+            },
+            {
+              channel: 'viber_groups',
+              message: 'Testing a free tool that makes Price Guide PDFs for local service businesses. Any aircon providers want one?',
+              conversionRate: 0.18,
+              costPerLead: 0
+            }
+          ],
+          emailSequence: [
+            'Day 1: Your Aircon Price Guide is ready - start sending it to inquiries!',
+            'Day 3: Pro tip: Set this as your Facebook auto-reply',
+            'Day 7: How many leads did you capture this week?',
+            'Day 14: Upgrade to capture phone numbers automatically'
+          ]
+        },
+        
+        operational_requirements: {
+          setupTime: '30 minutes',
+          dailyTimeCommitment: '15 minutes',
+          requiredSkills: ['Facebook basics'],
+          automationLevel: 0.95,
+          scalabilityScore: 10
+        },
+        
+        success_metrics: {
+          avgMonthlyRevenue: 4800,
+          avgOrderValue: 80,
+          customerLifetimeValue: 400,
+          monthlyCustomers: 60,
+          repeatCustomerRate: 0.65,
+          refundRate: 0.02
+        },
+        
+        risk_factors: {
+          seasonality: 'Low - always hot in SEA',
+          competition: 'High - but most lack digital presence',
+          marketSize: 'Huge - every building needs AC service',
+          barriers: 'Very low - immediate need',
+          sustainability: 'Very high - recurring maintenance'
+        }
+      },
+      
+      {
+        name: 'Aesthetic / Derma Clinic Lead Generation',
+        category: 'local_service',
+        business_type: 'service',
+        industry: 'beauty_health',
+        proven_revenue: 8500,
+        success_rate: 0.82,
+        time_to_first_sale: 24, // hours
+        guarantee_confidence: 0.88,
+        description: 'Convert "just looking" browsers into booked consultations for aesthetic clinics.',
+        
+        business_model: {
+          pricing: [
+            { name: 'Basic Facial', price: 50, deliveryTime: '1 hour' },
+            { name: 'Premium Treatment Package', price: 200, deliveryTime: '2 hours' },
+            { name: 'VIP Membership', price: 500, deliveryTime: 'Monthly visits' }
+          ],
+          targetCustomers: 'Beauty-conscious women 25-45, high-income professionals',
+          valueProposition: 'Treatment price guide that pre-qualifies serious buyers',
+          fulfillmentMethod: 'PDF treatment menu with booking link integration'
+        },
+        
+        marketing_playbook: {
+          primaryChannels: ['instagram', 'facebook_page', 'viber_groups'],
+          provenCampaigns: [
+            {
+              channel: 'instagram_dm',
+              message: 'I see you get lots of price inquiries. I made a Treatment Price Guide you can send instantly.',
+              conversionRate: 0.20,
+              costPerLead: 0
+            },
+            {
+              channel: 'facebook_ads',
+              message: 'Free: 2025 Skin Treatment Price Guide - See all prices before booking',
+              conversionRate: 0.15,
+              costPerLead: 5.00
+            }
+          ],
+          emailSequence: [
+            'Day 1: Your Treatment Price Guide is live!',
+            'Day 3: Tip: Add this to your Instagram bio link',
+            'Day 7: Track which treatments get the most clicks',
+            'Day 14: Ready to add online booking?'
+          ]
+        },
+        
+        operational_requirements: {
+          setupTime: '1 hour',
+          dailyTimeCommitment: '20 minutes',
+          requiredSkills: ['Instagram basics', 'Customer service'],
+          automationLevel: 0.90,
+          scalabilityScore: 9
+        },
+        
+        success_metrics: {
+          avgMonthlyRevenue: 8500,
+          avgOrderValue: 200,
+          customerLifetimeValue: 1200,
+          monthlyCustomers: 42,
+          repeatCustomerRate: 0.55,
+          refundRate: 0.01
+        },
+        
+        risk_factors: {
+          seasonality: 'Low - beauty is year-round',
+          competition: 'Medium - many clinics, few have good funnels',
+          marketSize: 'Large - growing beauty market in SEA',
+          barriers: 'Low - high-intent customers',
+          sustainability: 'High - recurring treatments'
+        }
+      },
+      
+      // === ORIGINAL TEMPLATES ===
       {
         name: 'AI Resume Optimization Service',
         category: 'ai_service',

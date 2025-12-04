@@ -24,22 +24,11 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
     }
   }, [business?.phone_number, business?.booking_url, business?.business_data?.booking_url]);
   const [loadingLeads, setLoadingLeads] = useState(true);
-  const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, 30day, playbook
+  const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, playbook
   const [checklist, setChecklist] = useState({
     google: false,
     facebook: false,
-    outreach: false,
-    // 30-day plan items
-    week1_templates: false,
-    week1_outreach: false,
-    week1_firstclient: false,
-    week2_deliver: false,
-    week2_tracking: false,
-    week2_proof: false,
-    week3_casestudy: false,
-    week3_ads: false,
-    week4_retainer: false,
-    week4_referral: false
+    outreach: false
   });
   
   const supabase = createClientComponentClient();
@@ -539,12 +528,6 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 Quick Start
               </button>
               <button 
-                onClick={() => setActiveTab('30day')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === '30day' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
-              >
-                30-Day Plan
-              </button>
-              <button 
                 onClick={() => setActiveTab('playbook')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'playbook' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
@@ -597,131 +580,6 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     <div>
                       <div className="font-medium">Email/Text 5 past clients</div>
                       <div className="text-xs text-slate-300 mt-1">Ask for referrals with this link</div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* 30-Day Test Plan Tab */}
-            {activeTab === '30day' && (
-              <>
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Target size={20} />
-                  30-Day Customer Acquisition Plan
-                </h2>
-                <p className="text-slate-400 text-sm mb-6">Follow this proven plan to land your first 3 paying customers</p>
-                
-                <div className="space-y-6">
-                  {/* Week 1 */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 bg-blue-600 rounded text-xs font-bold">WEEK 1</span>
-                      <span className="text-sm text-slate-400">Outreach Sprint</span>
-                    </div>
-                    <div className="space-y-2 pl-2 border-l-2 border-blue-600/30">
-                      <div 
-                        onClick={() => toggleChecklist('week1_outreach')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week1_outreach ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week1_outreach ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week1_outreach && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Message 50 local businesses (Google Maps + FB)</span>
-                      </div>
-                      <div 
-                        onClick={() => toggleChecklist('week1_firstclient')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week1_firstclient ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week1_firstclient ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week1_firstclient && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Close 3 clients at $300 each = $900</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Week 2 */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 bg-purple-600 rounded text-xs font-bold">WEEK 2</span>
-                      <span className="text-sm text-slate-400">Deliver & Document</span>
-                    </div>
-                    <div className="space-y-2 pl-2 border-l-2 border-purple-600/30">
-                      <div 
-                        onClick={() => toggleChecklist('week2_deliver')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week2_deliver ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week2_deliver ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week2_deliver && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Deliver funnels & set up tracking</span>
-                      </div>
-                      <div 
-                        onClick={() => toggleChecklist('week2_proof')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week2_proof ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week2_proof ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week2_proof && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Run $5/day ad for one client to prove leads</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Week 3 */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 bg-orange-600 rounded text-xs font-bold">WEEK 3</span>
-                      <span className="text-sm text-slate-400">Social Proof</span>
-                    </div>
-                    <div className="space-y-2 pl-2 border-l-2 border-orange-600/30">
-                      <div 
-                        onClick={() => toggleChecklist('week3_casestudy')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week3_casestudy ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week3_casestudy ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week3_casestudy && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Publish case study with conversion metrics</span>
-                      </div>
-                      <div 
-                        onClick={() => toggleChecklist('week3_ads')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week3_ads ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week3_ads ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week3_ads && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Start lightweight ads with demo video</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Week 4 */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 bg-green-600 rounded text-xs font-bold">WEEK 4</span>
-                      <span className="text-sm text-slate-400">Scale & Productize</span>
-                    </div>
-                    <div className="space-y-2 pl-2 border-l-2 border-green-600/30">
-                      <div 
-                        onClick={() => toggleChecklist('week4_retainer')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week4_retainer ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week4_retainer ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week4_retainer && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Pitch clients on $99-199/mo retainer</span>
-                      </div>
-                      <div 
-                        onClick={() => toggleChecklist('week4_referral')}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer ${checklist.week4_referral ? 'bg-green-500/20' : 'hover:bg-white/5'}`}
-                      >
-                        <div className={`w-4 h-4 rounded border ${checklist.week4_referral ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
-                          {checklist.week4_referral && <CheckCircle size={14} className="text-white" />}
-                        </div>
-                        <span className="text-sm">Start referral incentive program</span>
-                      </div>
                     </div>
                   </div>
                 </div>

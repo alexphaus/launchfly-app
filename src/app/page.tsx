@@ -267,51 +267,90 @@ export default function HomePage() {
         <section className="pricing-section" id="pricing">
           <div className="container">
             <div className="section-header">
-              <div className="section-label">Pricing</div>
-              <h2>Simple, Transparent Pricing</h2>
+              <div className="section-label">🚀 SEA Launch Special</div>
+              <h2>Launch Your Lead System</h2>
+              <p style={{ fontSize: '1.1rem', color: '#10b981', fontWeight: '600', marginTop: '0.5rem' }}>
+                Keep 100% of Your Profits — No Monthly Fees, No Revenue Share
+              </p>
             </div>
 
-            <div className="pricing-grid">
+            <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', maxWidth: '1000px', margin: '0 auto' }}>
+              {/* Tier 1: Asset Download - $19 */}
               <div className="pricing-card">
-                <div className="plan-name">Generator</div>
+                <div className="plan-name">Asset Download</div>
                 <div className="plan-price">
-                  <span className="price-amount">Free</span>
+                  <span className="price-amount">$19</span>
                 </div>
-                <div className="plan-tagline">See the magic happen</div>
+                <div className="plan-tagline">The essential file only</div>
                 
                 <ul className="plan-features">
-                  <li>✓ Generate unlimited funnels</li>
-                  <li>✓ Preview your Asset</li>
-                  <li>✓ Preview your Landing Page</li>
-                  <li>✓ Preview your Email Sequence</li>
+                  <li>✓ Custom PDF Guide</li>
+                  <li>✓ Commercial License</li>
+                  <li>✓ Instant Download</li>
+                  <li style={{ color: '#9ca3af' }}>✗ No hosting</li>
+                  <li style={{ color: '#9ca3af' }}>✗ No landing page</li>
+                  <li style={{ color: '#9ca3af' }}>✗ No email scripts</li>
                 </ul>
 
-                <button className="plan-cta secondary" onClick={() => handleGetStarted('free', 'pricing')}>
-                  Try It Free
+                <button className="plan-cta secondary" onClick={() => handleGetStarted('asset', 'pricing')}>
+                  Download Only — $19
                 </button>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
+                  ₱1,100 • ฿650 • RM85
+                </p>
               </div>
 
+              {/* Tier 2: Launch Pack - $49 (BEST VALUE) */}
               <div className="pricing-card popular">
-                <div className="popular-badge">🔥 MOST POPULAR</div>
-                <div className="plan-name">Pro</div>
+                <div className="popular-badge">🏆 BEST VALUE</div>
+                <div className="plan-name">Launch Pack</div>
                 <div className="plan-price">
-                  <span className="price-amount">$29</span>
-                  <span className="price-period">/month</span>
+                  <span className="price-amount">$49</span>
+                  <span className="price-period" style={{ textDecoration: 'line-through', color: '#9ca3af', marginLeft: '0.5rem' }}>$197</span>
                 </div>
-                <div className="plan-tagline">Launch & Collect Leads</div>
+                <div className="plan-tagline">Full funnel • AI-built • 1 year hosting</div>
                 
                 <ul className="plan-features">
-                  <li>✓ <strong>Everything in Free, plus:</strong></li>
-                  <li>✓ Publish your Landing Page</li>
-                  <li>✓ Collect unlimited leads</li>
-                  <li>✓ Automated email delivery</li>
-                  <li>✓ Export leads to CSV</li>
-                  <li>✓ Remove "Made with Launchfly" badge</li>
+                  <li>✓ <strong>Custom PDF Guide</strong></li>
+                  <li>✓ <strong>Lead Capture Website</strong> (1 year free)</li>
+                  <li>✓ <strong>5-Day Email Sequence</strong></li>
+                  <li>✓ <strong>Lead Dashboard</strong></li>
+                  <li>✓ <strong>Unlimited Leads</strong></li>
+                  <li style={{ color: '#10b981', fontWeight: '600' }}>✓ No Monthly Fees</li>
+                  <li style={{ color: '#10b981', fontWeight: '600' }}>✓ You Keep 100%</li>
                 </ul>
 
                 <button className="plan-cta primary" onClick={() => handleGetStarted('pro', 'pricing')}>
-                  Start Free Trial
+                  Get Launch Pack — $49
                 </button>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
+                  ₱2,800 • ฿1,700 • RM220
+                </p>
+              </div>
+
+              {/* Tier 3: White-Glove Service - $99 */}
+              <div className="pricing-card">
+                <div className="plan-name">White-Glove Service</div>
+                <div className="plan-price">
+                  <span className="price-amount">$99</span>
+                </div>
+                <div className="plan-tagline">Hands-off setup by our team</div>
+                
+                <ul className="plan-features">
+                  <li>✓ <strong>Everything in Launch Pack</strong></li>
+                  <li>✓ <strong>15-min Strategy Call</strong></li>
+                  <li>✓ <strong>We Set Up Your Links</strong> (FB/WhatsApp)</li>
+                  <li>✓ <strong>Custom Copy Review</strong></li>
+                  <li>✓ <strong>Local Slang/Pricing Check</strong></li>
+                  <li style={{ color: '#f59e0b', fontWeight: '600' }}>⭐ Priority Support</li>
+                </ul>
+
+                <button className="plan-cta secondary" onClick={() => handleGetStarted('vip', 'pricing')} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: 'white', borderColor: 'transparent' }}>
+                  Go White-Glove — $99
+                </button>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
+                  ₱5,500 • ฿3,400 • RM440
+                </p>
               </div>
             </div>
           </div>
@@ -322,14 +361,17 @@ export default function HomePage() {
           <div className="container">
             <div className="final-cta-content">
               <h2>Ready to Get More Leads?</h2>
-              <p>Stop overthinking your lead magnet. Let AI build it for you today.</p>
+              <p>One-time payment. No monthly fees. No revenue share. You keep 100%.</p>
               
-              <button className="primary-cta large" onClick={() => handleGetStarted('free', 'final_cta')}>
-                <span>Generate My Funnel Now</span>
+              <button className="primary-cta large" onClick={() => handleGetStarted('pro', 'final_cta')}>
+                <span>Get My Lead System — $49</span>
                 <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
                   <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
                 </svg>
               </button>
+              <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', marginTop: '1rem' }}>
+                Or try the free preview first →
+              </p>
             </div>
           </div>
         </section>

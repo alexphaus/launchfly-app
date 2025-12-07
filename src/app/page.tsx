@@ -126,14 +126,14 @@ export default function HomePage() {
             
             {/* Main Headline */}
             <h1 className="hero-title">
-              <span className="title-main">Get More Local Leads in</span><br />
-              <span className="title-highlight">Under 5 Minutes</span><br />
+              <span className="title-main">The "Done-For-You" Lead System</span><br />
+              <span className="title-highlight">That Fills Your Calendar</span><br />
               <span className="title-sub">Automated Quote Funnels for Local Businesses</span>
             </h1>
             
             {/* Subheadline - The Promise */}
             <p className="hero-subtitle">
-              Stop losing customers to competitors. We build you a <strong>high-converting quote funnel</strong>, set up your email follow-ups, and get you ready to capture leads instantly. No tech skills required.
+              Most websites are just digital business cards. We build you a <strong>complete lead generation machine</strong>: The Guide, The Landing Page, and The Email Follow-up. Ready in 60 seconds.
             </p>
 
             {/* CTA Buttons */}
@@ -196,14 +196,14 @@ export default function HomePage() {
           <div className="container">
             <div className="problem-grid">
               <div className="problem-card">
-                <span className="problem-icon">😫</span>
-                <h3>Websites Don't Get Quotes</h3>
-                <p>Your "brochure" website looks nice but doesn't get the phone to ring. Customers visit, get confused, and leave without contacting you.</p>
+                <span className="problem-icon">📉</span>
+                <h3>Most Websites Fail</h3>
+                <p>They look nice, but they don't ask for the sale. 96% of visitors leave without contacting you because they aren't ready to book <em>right now</em>.</p>
               </div>
               <div className="solution-card">
-                <span className="solution-icon">🚀</span>
-                <h3>Funnels Capture Leads</h3>
-                <p>We build a dedicated page designed for one thing: getting their contact info. Offer a coupon, a checklist, or a free quote, and watch your leads double.</p>
+                <span className="solution-icon">📈</span>
+                <h3>Funnels Print Money</h3>
+                <p>We give visitors a reason to share their info (a free guide or quote). Then we automatically follow up until they book. It's like having a 24/7 sales rep.</p>
               </div>
             </div>
           </div>
@@ -324,54 +324,54 @@ export default function HomePage() {
 
               {/* Tier 2: Launch Pack - $49 (BEST VALUE) */}
               <div className="pricing-card popular">
-                <div className="popular-badge">🏆 BEST VALUE</div>
-                <div className="plan-name">Launch Pack</div>
+                <div className="popular-badge">🔥 MOST POPULAR</div>
+                <div className="plan-name">Business-In-A-Box</div>
                 <div className="plan-price">
                   <span className="price-amount">$49</span>
-                  <span className="price-period" style={{ textDecoration: 'line-through', color: '#9ca3af', marginLeft: '0.5rem' }}>$197</span>
+                  <span className="price-period" style={{ textDecoration: 'line-through', color: '#9ca3af', marginLeft: '0.5rem' }}>$297</span>
                 </div>
-                <div className="plan-tagline">Full funnel • AI-built • 1 year hosting</div>
+                <div className="plan-tagline">Complete System • Ready in 60s</div>
                 
                 <ul className="plan-features">
-                  <li>✓ <strong>Custom PDF Guide</strong></li>
-                  <li>✓ <strong>Lead Capture Website</strong> (1 year free)</li>
-                  <li>✓ <strong>5-Day Email Sequence</strong></li>
-                  <li>✓ <strong>Lead Dashboard</strong></li>
+                  <li>✓ <strong>Custom Lead Magnet PDF</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($197 Value)</span></li>
+                  <li>✓ <strong>High-Converting Landing Page</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($497 Value)</span></li>
+                  <li>✓ <strong>5-Day Email Nurture Sequence</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($297 Value)</span></li>
+                  <li>✓ <strong>1 Year Free Hosting</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($120 Value)</span></li>
                   <li>✓ <strong>Unlimited Leads</strong></li>
                   <li style={{ color: '#10b981', fontWeight: '600' }}>✓ No Monthly Fees</li>
-                  <li style={{ color: '#10b981', fontWeight: '600' }}>✓ You Keep 100%</li>
+                  <li style={{ color: '#10b981', fontWeight: '600' }}>✓ You Keep 100% Profit</li>
                 </ul>
 
                 <button className="plan-cta primary" onClick={() => handleGetStarted('pro', 'pricing')}>
-                  Get Launch Pack — $49
+                  Get My System — $49
                 </button>
                 <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  ₱2,800 • ฿1,700 • RM220
+                  One-time payment. 30-day money-back guarantee.
                 </p>
               </div>
 
               {/* Tier 3: White-Glove Service - $99 */}
               <div className="pricing-card">
-                <div className="plan-name">White-Glove Service</div>
+                <div className="plan-name">Done-For-You VIP</div>
                 <div className="plan-price">
                   <span className="price-amount">$99</span>
                 </div>
-                <div className="plan-tagline">Hands-off setup by our team</div>
+                <div className="plan-tagline">We set it all up for you</div>
                 
                 <ul className="plan-features">
-                  <li>✓ <strong>Everything in Launch Pack</strong></li>
-                  <li>✓ <strong>15-min Strategy Call</strong></li>
-                  <li>✓ <strong>We Set Up Your Links</strong> (FB/WhatsApp)</li>
-                  <li>✓ <strong>Custom Copy Review</strong></li>
-                  <li>✓ <strong>Local Slang/Pricing Check</strong></li>
-                  <li style={{ color: '#f59e0b', fontWeight: '600' }}>⭐ Priority Support</li>
+                  <li>✓ <strong>Everything in Business-In-A-Box</strong></li>
+                  <li>✓ <strong>We Connect Your Domain</strong></li>
+                  <li>✓ <strong>We Set Up Your Email Sender</strong></li>
+                  <li>✓ <strong>Custom Copy Review by Expert</strong></li>
+                  <li>✓ <strong>Priority Support (WhatsApp)</strong></li>
+                  <li style={{ color: '#f59e0b', fontWeight: '600' }}>⭐ 100% Hands-Free Setup</li>
                 </ul>
 
                 <button className="plan-cta secondary" onClick={() => handleGetStarted('vip', 'pricing')} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: 'white', borderColor: 'transparent' }}>
-                  Go White-Glove — $99
+                  Go VIP — $99
                 </button>
                 <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  ₱5,500 • ฿3,400 • RM440
+                  Limited spots available per week.
                 </p>
               </div>
             </div>

@@ -296,7 +296,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', maxWidth: '1000px', margin: '0 auto' }}>
+            <div className="pricing-grid">
               {/* Tier 1: Asset Download - $19 */}
               <div className="pricing-card">
                 <div className="plan-name">Asset Download</div>

@@ -31,7 +31,9 @@ export async function POST(request) {
       // New Funnel Fields
       targetAudience,
       mainProblem,
-      leadMagnetTitle
+      leadMagnetTitle,
+      websiteUrl,
+      businessContext
     } = body || {};
 
     if (!email) {
@@ -132,7 +134,9 @@ export async function POST(request) {
       // New Funnel Fields
       targetAudience,
       mainProblem,
-      leadMagnetTitle
+      leadMagnetTitle,
+      websiteUrl,
+      businessContext
     };
 
     // Create business
@@ -188,7 +192,9 @@ export async function POST(request) {
             topic: effectiveTopic,
             audience: targetAudience,
             language: leadMagnetLanguage || 'English',
-            sessionId: sessionId
+            sessionId: sessionId,
+            websiteUrl,
+            businessContext
           }
         });
         console.log('Lead magnet generation triggered via Inngest');

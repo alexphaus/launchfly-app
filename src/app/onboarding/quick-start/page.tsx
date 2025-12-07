@@ -110,7 +110,11 @@ export default function QuickStartOnboarding() {
     targetAudience: '',
     mainProblem: '',
     leadMagnetTitle: '',
-    leadMagnetLanguage: 'English'
+    leadMagnetLanguage: 'English',
+    
+    // New Context Fields
+    websiteUrl: '',
+    businessContext: ''
   });
 
   const selectedNiche = NICHE_TEMPLATES[formData.niche as keyof typeof NICHE_TEMPLATES] || NICHE_TEMPLATES['custom'];
@@ -343,6 +347,8 @@ export default function QuickStartOnboarding() {
           mainProblem: formData.mainProblem,
           leadMagnetTitle: formData.leadMagnetTitle,
           leadMagnetLanguage: formData.leadMagnetLanguage,
+          websiteUrl: formData.websiteUrl,
+          businessContext: formData.businessContext,
           subdomain: formData.subdomain,
           plan: formData.plan,
           paymentSessionId: paymentSessionId
@@ -555,6 +561,32 @@ export default function QuickStartOnboarding() {
               value={formData.mainProblem}
               onChange={(e) => setFormData(prev => ({ ...prev, mainProblem: e.target.value }))}
               placeholder="e.g. Leaky pipes and emergency repairs"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Existing Website (Optional)</label>
+            <input
+              type="url"
+              className="form-input"
+              value={formData.websiteUrl}
+              onChange={(e) => setFormData(prev => ({ ...prev, websiteUrl: e.target.value }))}
+              placeholder="e.g. https://mybusiness.com"
+            />
+            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>
+              We'll scan this to personalize your assets.
+            </p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Additional Context (Optional)</label>
+            <textarea
+              className="form-input"
+              value={formData.businessContext}
+              onChange={(e) => setFormData(prev => ({ ...prev, businessContext: e.target.value }))}
+              placeholder="Any specific details? e.g. 'We are family owned since 1995' or 'We specialize in storm damage'"
+              rows={3}
+              style={{ resize: 'vertical' }}
             />
           </div>
 

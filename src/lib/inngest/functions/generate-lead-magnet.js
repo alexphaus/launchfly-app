@@ -8,11 +8,104 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+/**
+ * Scrape website content for context
+ * Extracts text, meta tags, and key information from a URL
+ */
+async function scrapeWebsiteContent(url) {
+  if (!url) return null;
+  
+  try {
+    // Normalize URL
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    
+    const response = await fetch(normalizedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; LaunchflyBot/1.0; +https://launchfly.com)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+    
+    if (!response.ok) {
+      console.log(`Website fetch failed: ${response.status}`);
+      return null;
+    }
+    
+    const html = await response.text();
+    
+    // Extract useful content from HTML
+    const extracted = {
+      title: '',
+      description: '',
+      headings: [],
+      bodyText: '',
+      phone: '',
+      email: '',
+      address: '',
+      services: [],
+    };
+    
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (titleMatch) extracted.title = titleMatch[1].trim();
+    
+    // Extract meta description
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+    if (descMatch) extracted.description = descMatch[1].trim();
+    
+    // Extract h1, h2, h3 headings
+    const headingMatches = html.matchAll(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/gi);
+    for (const match of headingMatches) {
+      const heading = match[1].replace(/<[^>]+>/g, '').trim();
+      if (heading && heading.length > 2 && heading.length < 200) {
+        extracted.headings.push(heading);
+      }
+    }
+    extracted.headings = extracted.headings.slice(0, 10); // Limit to 10
+    
+    // Extract phone numbers
+    const phoneMatch = html.match(/(\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/);
+    if (phoneMatch) extracted.phone = phoneMatch[1];
+    
+    // Extract email
+    const emailMatch = html.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    if (emailMatch) extracted.email = emailMatch[1];
+    
+    // Strip HTML tags and get body text (limited)
+    let bodyText = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Limit body text to ~2000 chars for context
+    extracted.bodyText = bodyText.slice(0, 2000);
+    
+    // Look for common service-related keywords
+    const servicePatterns = [
+      /services?\s*(?:include|offered|we offer|our services)/gi,
+      /we (?:specialize|provide|offer)/gi,
+    ];
+    
+    console.log(`Website scraped successfully: ${extracted.title}`);
+    return extracted;
+    
+  } catch (error) {
+    console.error('Website scrape error:', error.message);
+    return null;
+  }
+}
+
 export const generateLeadMagnet = inngest.createFunction(
   { id: 'generate-lead-magnet', name: 'Generate Lead Magnet' },
   { event: 'lead-magnet/generation.requested' },
   async ({ event, step }) => {
-    const { businessId, topic, audience, language = 'English', sessionId } = event.data;
+    const { businessId, topic, audience, language = 'English', sessionId, websiteUrl, businessContext } = event.data;
 
     if (!businessId || !topic) {
       throw new Error('Missing required fields');
@@ -28,13 +121,57 @@ export const generateLeadMagnet = inngest.createFunction(
        }
     });
 
+    // Scrape website content if URL provided
+    const websiteData = await step.run('scrape-website', async () => {
+      if (!websiteUrl) return null;
+      
+      console.log(`Scraping website: ${websiteUrl}`);
+      const scraped = await scrapeWebsiteContent(websiteUrl);
+      
+      if (scraped) {
+        // Update progress
+        if (sessionId) {
+          await supabase
+            .from('sessions')
+            .update({ progress: 35 })
+            .eq('id', sessionId);
+        }
+      }
+      
+      return scraped;
+    });
+
     const content = await step.run('generate-content', async () => {
+        // Build context from scraped website
+        let websiteContextBlock = '';
+        if (websiteData) {
+          websiteContextBlock = `
+          ===== EXISTING BUSINESS WEBSITE DATA (USE THIS TO PERSONALIZE) =====
+          Business Name from Website: ${websiteData.title || 'Not found'}
+          Website Meta Description: ${websiteData.description || 'Not found'}
+          Phone Number: ${websiteData.phone || 'Not found'}
+          Email: ${websiteData.email || 'Not found'}
+          
+          Key Headings from their site:
+          ${websiteData.headings.length > 0 ? websiteData.headings.map(h => `- ${h}`).join('\n') : 'None extracted'}
+          
+          Website Content Summary:
+          ${websiteData.bodyText || 'Could not extract'}
+          
+          IMPORTANT: Use the EXACT business name, phone, and details from above. 
+          Match their tone and positioning. Reference specific services they mention.
+          =====================================================================
+          `;
+        }
+
         const prompt = `
           You are a world-class direct response copywriter (like Dan Kennedy or Russell Brunson) for LOCAL SERVICE BUSINESSES. 
           Create a high-converting Lead Magnet Asset (Checklist, Price Guide, or Coupon) and Landing Page copy for a local business specializing in: "${topic}".
           
           Target Audience: ${audience || 'Local Homeowners'}
           Language: ${language}
+          ${websiteContextBlock}
+          ${businessContext ? `Additional Business Context from Owner: ${businessContext}` : ''}
           
           CRITICAL INSTRUCTIONS FOR EMAIL SEQUENCE:
           Write a 5-day "Soap Opera Sequence" that builds trust, agitates the problem, and sells the service.

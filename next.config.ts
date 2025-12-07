@@ -27,8 +27,14 @@ const nextConfig: NextConfig = {
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['@supabase/supabase-js', 'lucide-react'],
+    // turbo: {}, // Use turbo for Turbopack configuration if needed
   },
   
+  // Silence the Turbopack/Webpack conflict error since we have serverExternalPackages
+  // which works for both.
+  // @ts-ignore - NextConfig type might not have updated for this specific field yet in all versions
+  turbopack: {},
+
   webpack: (config, { isServer }) => {
     // Fix OpenTelemetry module resolution issues
     if (isServer) {

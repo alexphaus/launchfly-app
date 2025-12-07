@@ -7,8 +7,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ businessId: string }> }) {
-  const { businessId } = await params;
+export async function GET(_req: NextRequest, props: any) {
+  const params = await props.params;
+  const { businessId } = params;
   if (!businessId) return NextResponse.json({ error: 'Invalid businessId' }, { status: 400 });
 
   const { data: biz } = await supabase

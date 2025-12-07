@@ -18,8 +18,30 @@ export default function HomePage() {
   );
 
   // Navigation functions
-  const handleGetStarted = (plan = 'growth', location = 'unknown') => {
+  const handleGetStarted = async (plan = 'growth', location = 'unknown') => {
     trackCTAClick('get_started', location, undefined, plan);
+    
+    if ((location === 'pricing' || location === 'final_cta') && plan !== 'free') {
+      try {
+        const response = await fetch('/api/stripe/create-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan,
+            returnUrl: window.location.href
+          })
+        });
+        
+        if (response.ok) {
+          const { url } = await response.json();
+          window.location.href = url;
+          return;
+        }
+      } catch (error) {
+        console.error('Checkout error:', error);
+      }
+    }
+    
     router.push(`/templates`); // Direct to templates/wizard
   };
 

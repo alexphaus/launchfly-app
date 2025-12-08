@@ -1,19 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function SalesPage() {
   const [url, setUrl] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [niche, setNiche] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
+  const [sendSuccess, setSendSuccess] = useState('');
+
+  // Editable fields
+  const [editableSubject, setEditableSubject] = useState('');
+  const [editableBody, setEditableBody] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [replyTo, setReplyTo] = useState('hello@launchfly.ai');
+
+  // Update editable fields when result changes
+  useEffect(() => {
+    if (result) {
+      setEditableSubject(result.email.subject);
+      setEditableBody(result.email.body);
+      setRecipientEmail(result.scrapedData.email || '');
+    }
+  }, [result]);
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setSendSuccess('');
     setResult(null);
 
     try {
@@ -34,6 +52,42 @@ export default function SalesPage() {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!recipientEmail) {
+      alert('Please enter a recipient email address');
+      return;
+    }
+
+    setIsSending(true);
+    setSendSuccess('');
+    setError('');
+
+    try {
+      const response = await fetch('/api/sales/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipientEmail,
+          replyTo: replyTo,
+          subject: editableSubject,
+          body: editableBody
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send email');
+      }
+
+      setSendSuccess('Email sent successfully!');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -104,6 +158,11 @@ export default function SalesPage() {
               {error}
             </div>
           )}
+          {sendSuccess && (
+            <div className="mt-4 p-4 bg-green-50 text-green-700 rounded-lg text-sm">
+              {sendSuccess}
+            </div>
+          )}
         </div>
 
         {result && (
@@ -166,27 +225,58 @@ export default function SalesPage() {
                 <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                   ✉️ Generated Cold Email
                 </h2>
-                <button
-                  onClick={() => copyToClipboard(`Subject: ${result.email.subject}\n\n${result.email.body}`)}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Copy All
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyToClipboard(`Subject: ${editableSubject}\n\n${editableBody}`)}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Copy All
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    Recipient Email
+                  </label>
+                  <input
+                    type="email"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    placeholder="recipient@example.com"
+                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    Reply-To Email
+                  </label>
+                  <input
+                    type="email"
+                    value={replyTo}
+                    onChange={(e) => setReplyTo(e.target.value)}
+                    placeholder="your-email@example.com"
+                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Replies will be sent to this address.
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
                     Subject Line
                   </label>
                   <div className="flex gap-2">
                     <input
-                      readOnly
-                      value={result.email.subject}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded px-3 py-2 text-slate-800 text-sm"
+                      value={editableSubject}
+                      onChange={(e) => setEditableSubject(e.target.value)}
+                      className="flex-1 bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
-                      onClick={() => copyToClipboard(result.email.subject)}
+                      onClick={() => copyToClipboard(editableSubject)}
                       className="p-2 text-slate-400 hover:text-blue-600"
                       title="Copy Subject"
                     >
@@ -201,19 +291,41 @@ export default function SalesPage() {
                   </label>
                   <div className="relative">
                     <textarea
-                      readOnly
-                      value={result.email.body}
+                      value={editableBody}
+                      onChange={(e) => setEditableBody(e.target.value)}
                       rows={12}
-                      className="w-full bg-slate-50 border border-slate-200 rounded px-3 py-2 text-slate-800 text-sm font-mono leading-relaxed resize-none"
+                      className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm font-mono leading-relaxed resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
-                      onClick={() => copyToClipboard(result.email.body)}
+                      onClick={() => copyToClipboard(editableBody)}
                       className="absolute top-2 right-2 p-2 text-slate-400 hover:text-blue-600 bg-white rounded shadow-sm border border-slate-200"
                       title="Copy Body"
                     >
                       📋
                     </button>
                   </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <button
+                    onClick={handleSendEmail}
+                    disabled={isSending || !recipientEmail}
+                    className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                  >
+                    {isSending ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        🚀 Send Email via Resend
+                      </>
+                    )}
+                  </button>
+                  <p className="text-xs text-center text-slate-500 mt-2">
+                    Sent from hello@launchfly.ai
+                  </p>
                 </div>
               </div>
             </div>

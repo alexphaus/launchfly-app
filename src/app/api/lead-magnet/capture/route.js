@@ -62,6 +62,7 @@ export async function POST(request) {
         phone: phone || null,
         status: 'lead',
         source: 'lead_magnet',
+        accepts_marketing: true,
         email_sequence_day: 1,
         email_sequence_started_at: new Date().toISOString(),
         next_email_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()

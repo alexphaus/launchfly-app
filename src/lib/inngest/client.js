@@ -8,7 +8,9 @@ import { Inngest } from 'inngest';
 export const inngest = new Inngest({ 
   id: 'launchfly',
   // This will allow us to track events in the Inngest dashboard
-  name: 'Launchfly AI Platform'
+  name: 'Launchfly AI Platform',
+  // Event key is required for production to authenticate events
+  eventKey: process.env.INNGEST_EVENT_KEY,
 });
 
 // Event types for type safety

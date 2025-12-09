@@ -184,8 +184,9 @@ export async function POST(request) {
     // This is the main generation path for lead magnet funnels
     if (effectiveTemplate === 'lead-magnet' && effectiveTopic) {
       console.log('Triggering lead magnet generation for:', effectiveTopic);
+      console.log('Inngest Event Key configured:', !!process.env.INNGEST_EVENT_KEY);
       try {
-        await inngest.send({
+        const sendResult = await inngest.send({
           name: 'lead-magnet/generation.requested',
           data: {
             businessId: business.id,
@@ -197,9 +198,10 @@ export async function POST(request) {
             businessContext
           }
         });
-        console.log('Lead magnet generation triggered via Inngest');
+        console.log('Lead magnet generation triggered via Inngest:', JSON.stringify(sendResult));
       } catch (err) {
         console.error('Lead magnet trigger failed:', err);
+        console.error('Error details:', err.message, err.stack);
       }
     }
 

@@ -658,40 +658,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 </button>
               </div>
               
-              {/* Quick Share Buttons */}
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <div className="text-sm text-slate-400 mb-3">Share Your Funnel</div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => handleShare('facebook')}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                    title="Share on Facebook"
-                  >
-                    <Facebook size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleShare('twitter')}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-                    title="Share on X"
-                  >
-                    <Twitter size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleShare('linkedin')}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors"
-                    title="Share on LinkedIn"
-                  >
-                    <Linkedin size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleShare('whatsapp')}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
-                    title="Share on WhatsApp"
-                  >
-                    <MessageCircle size={16} />
-                  </button>
-                </div>
-              </div>
+
             </div>
           </div>
         </div>

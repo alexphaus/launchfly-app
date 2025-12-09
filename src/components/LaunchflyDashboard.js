@@ -215,7 +215,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
         <div className="mb-10 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              {business?.name ? `${business.name} Lead Command Center` : 'Lead Command Center'}
+              {business?.name || 'Dashboard'}
             </h1>
             <p className="text-slate-600">
               {isGenerating 

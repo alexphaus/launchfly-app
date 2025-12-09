@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const { data, error } = await resend.emails.send({
       from: 'hello@launchfly.ai',
       to: to,
-      reply_to: replyTo,
+      replyTo: replyTo,
       subject: subject,
       text: body,
     });

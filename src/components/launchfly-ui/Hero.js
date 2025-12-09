@@ -22,6 +22,7 @@ export default function Hero({
   couponCode
 }) {
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
 
   const handleCapture = async (e) => {
@@ -30,11 +31,11 @@ export default function Hero({
     
     setStatus('loading');
     try {
-      console.log('🚀 Submitting lead:', { email, businessId });
+      console.log('🚀 Submitting lead:', { email, phone, businessId });
       const res = await fetch('/api/lead-magnet/capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, businessId })
+        body: JSON.stringify({ email, phone, businessId })
       });
       
       const data = await res.json();
@@ -46,6 +47,7 @@ export default function Hero({
       
       setStatus('success');
       setEmail('');
+      setPhone('');
     } catch (err) {
       console.error('❌ Lead capture error:', err);
       setStatus('error');
@@ -195,7 +197,7 @@ export default function Hero({
                     <p className="text-sm text-slate-500">Enter your email to get instant access.</p>
                   </div>
                   
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <input
                       type="email"
                       required
@@ -203,6 +205,13 @@ export default function Hero({
                       className="w-full px-5 py-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none text-slate-900 placeholder-slate-400 transition-all"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Phone (Optional - for faster service)"
+                      className="w-full px-5 py-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none text-slate-900 placeholder-slate-400 transition-all"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                     />
                   </div>
                   <button

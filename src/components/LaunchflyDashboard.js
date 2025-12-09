@@ -24,7 +24,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
     }
   }, [business?.phone_number, business?.booking_url, business?.business_data?.booking_url]);
   const [loadingLeads, setLoadingLeads] = useState(true);
-  const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, playbook
+  const [activeTab, setActiveTab] = useState('playbook'); // Default to Playbook for "CRM Lite" feel
   const [checklist, setChecklist] = useState({
     google: false,
     facebook: false,
@@ -215,12 +215,12 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
         <div className="mb-10 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              {business?.name || business?.business_name || 'Your Local Lead System'}
+              {business?.name ? `${business.name} Lead Command Center` : 'Lead Command Center'}
             </h1>
             <p className="text-slate-600">
               {isGenerating 
                 ? "We're building your automated lead generation system. Hang tight!" 
-                : "Your automated quote & lead generation system is live. Share your link to start getting inquiries."}
+                : "Your digital sales manager is active. Use the Playbook below to close leads."}
             </p>
           </div>
           <button 

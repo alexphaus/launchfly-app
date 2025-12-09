@@ -13,9 +13,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request) {
   try {
-    const { email, businessId } = await request.json();
+    const { email, phone, businessId } = await request.json();
 
-    console.log('📧 Lead capture request:', { email, businessId });
+    console.log('📧 Lead capture request:', { email, phone, businessId });
 
     if (!email || !businessId) {
       console.error('❌ Missing required fields:', { email, businessId });
@@ -59,6 +59,7 @@ export async function POST(request) {
       const customerData = {
         business_id: businessId,
         email: email,
+        phone: phone || null,
         status: 'lead',
         source: 'lead_magnet',
         email_sequence_day: 1,
@@ -116,6 +117,42 @@ export async function POST(request) {
             customer_id: customerId 
           }
         });
+
+      // --- SPEED-TO-LEAD SMS ALERT (Twilio Integration) ---
+      // Sends an SMS to the business owner immediately when a lead comes in.
+      try {
+        const ownerPhone = business.phone_number; // Ensure this is the owner's mobile, not landline
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const fromPhone = process.env.TWILIO_PHONE_NUMBER;
+
+        // Validate Twilio Config
+        if (accountSid && accountSid.startsWith('AC') && authToken && fromPhone && ownerPhone) {
+          const twilio = require('twilio')(accountSid, authToken);
+          
+          let messageBody = `🚀 New Lead: ${email} just downloaded your guide.`;
+          if (phone) {
+            messageBody += ` Call them now: ${phone}`;
+          } else {
+            messageBody += ` No phone provided. Email them now to close!`;
+          }
+
+          await twilio.messages.create({
+            body: messageBody,
+            from: fromPhone,
+            to: ownerPhone
+          });
+          console.log(`📱 SMS Alert sent to ${ownerPhone}`);
+        } else {
+          console.log(`📱 SMS Alert skipped. Missing valid config or owner phone.`);
+          if (!accountSid || !accountSid.startsWith('AC')) console.log('   - Invalid/Missing TWILIO_ACCOUNT_SID (must start with AC)');
+          if (!authToken) console.log('   - Missing TWILIO_AUTH_TOKEN');
+          if (!fromPhone) console.log('   - Missing TWILIO_PHONE_NUMBER');
+          if (!ownerPhone) console.log('   - Business has no phone_number set');
+        }
+      } catch (smsError) {
+        console.error('❌ Failed to send SMS alert:', smsError.message);
+      }
     }
 
     // 4. Send Email with PDF Attachment

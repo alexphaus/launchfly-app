@@ -297,78 +297,54 @@ export default function HomePage() {
             </div>
 
             <div className="pricing-grid">
-              {/* Tier 1: Asset Download - $19 */}
-              <div className="pricing-card">
-                <div className="plan-name">Asset Download</div>
-                <div className="plan-price">
-                  <span className="price-amount">$19</span>
-                </div>
-                <div className="plan-tagline">The essential file only</div>
-                
-                <ul className="plan-features">
-                  <li>✓ Custom PDF Guide</li>
-                  <li>✓ Commercial License</li>
-                  <li>✓ Instant Download</li>
-                  <li style={{ color: '#9ca3af' }}>✗ No hosting</li>
-                  <li style={{ color: '#9ca3af' }}>✗ No landing page</li>
-                  <li style={{ color: '#9ca3af' }}>✗ No email scripts</li>
-                </ul>
-
-                <button className="plan-cta secondary" onClick={() => handleGetStarted('asset', 'pricing')}>
-                  Download Only — $19
-                </button>
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  ₱1,100 • ฿650 • RM85
-                </p>
-              </div>
-
-              {/* Tier 2: Launch Pack - $49 (BEST VALUE) */}
+              {/* Tier 1: The Foot in the Door - $97 */}
               <div className="pricing-card popular">
-                <div className="popular-badge">🔥 MOST POPULAR</div>
-                <div className="plan-name">Business-In-A-Box</div>
+                <div className="popular-badge">🔥 POPULAR</div>
+                <div className="plan-name">The "Neighborhood Authority" System</div>
                 <div className="plan-price">
-                  <span className="price-amount">$49</span>
-                  <span className="price-period" style={{ textDecoration: 'line-through', color: '#9ca3af', marginLeft: '0.5rem' }}>$297</span>
+                  <span className="price-amount">$97</span>
+                  <span className="price-period" style={{ fontSize: '1rem', color: '#6b7280', fontWeight: 'normal' }}>one-time</span>
                 </div>
-                <div className="plan-tagline">Complete System • Ready in 60s</div>
+                <div className="plan-tagline">Everything you need to capture leads</div>
                 
                 <ul className="plan-features">
-                  <li>✓ <strong>Custom Lead Magnet PDF</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($197 Value)</span></li>
-                  <li>✓ <strong>High-Converting Landing Page</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($497 Value)</span></li>
-                  <li>✓ <strong>5-Day Email Nurture Sequence</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($297 Value)</span></li>
-                  <li>✓ <strong>1 Year Free Hosting</strong> <span style={{fontSize: '0.8em', color: '#10b981'}}>($120 Value)</span></li>
+                  <li>✓ <strong>Custom "City-Specific" PDF Guide</strong></li>
+                  <li>✓ <strong>High-Converting Landing Page</strong></li>
+                  <li>✓ <strong>5-Day Automated Email Sequence</strong></li>
+                  <li>✓ <strong>Lead Command Center Dashboard</strong></li>
                   <li>✓ <strong>Unlimited Leads</strong></li>
                   <li style={{ color: '#10b981', fontWeight: '600' }}>✓ No Monthly Fees</li>
                   <li style={{ color: '#10b981', fontWeight: '600' }}>✓ You Keep 100% Profit</li>
                 </ul>
 
                 <button className="plan-cta primary" onClick={() => handleGetStarted('pro', 'pricing')}>
-                  Get My System — $49
+                  Get My System — $97
                 </button>
                 <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  One-time payment. 30-day money-back guarantee.
+                  30-day money-back guarantee.
                 </p>
               </div>
 
-              {/* Tier 3: White-Glove Service - $99 */}
+              {/* Tier 2: The Goal - $297 + $29/mo */}
               <div className="pricing-card">
-                <div className="plan-name">Done-For-You VIP</div>
+                <div className="plan-name">Done-For-You Growth</div>
                 <div className="plan-price">
-                  <span className="price-amount">$99</span>
+                  <span className="price-amount">$297</span>
+                  <span className="price-period" style={{ fontSize: '1rem', color: '#6b7280', fontWeight: 'normal' }}>setup + $29/mo</span>
                 </div>
-                <div className="plan-tagline">We set it all up for you</div>
+                <div className="plan-tagline">We manage the tech, you close the deals</div>
                 
                 <ul className="plan-features">
-                  <li>✓ <strong>Everything in Business-In-A-Box</strong></li>
-                  <li>✓ <strong>We Connect Your Domain</strong></li>
-                  <li>✓ <strong>We Set Up Your Email Sender</strong></li>
-                  <li>✓ <strong>Custom Copy Review by Expert</strong></li>
-                  <li>✓ <strong>Priority Support (WhatsApp)</strong></li>
-                  <li style={{ color: '#f59e0b', fontWeight: '600' }}>⭐ 100% Hands-Free Setup</li>
+                  <li>✓ <strong>Everything in the $97 Plan</strong></li>
+                  <li>✓ <strong>Google Business Profile Optimization</strong></li>
+                  <li>✓ <strong>Instant SMS Lead Alerts</strong> (Speed-to-Lead)</li>
+                  <li>✓ <strong>Premium Hosting & Domain Connection</strong></li>
+                  <li>✓ <strong>Monthly Content Updates</strong></li>
+                  <li style={{ color: '#f59e0b', fontWeight: '600' }}>⭐ We Handle Everything</li>
                 </ul>
 
                 <button className="plan-cta secondary" onClick={() => handleGetStarted('vip', 'pricing')} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: 'white', borderColor: 'transparent' }}>
-                  Go VIP — $99
+                  Apply for Growth Plan
                 </button>
                 <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
                   Limited spots available per week.

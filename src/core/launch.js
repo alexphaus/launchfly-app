@@ -26,25 +26,28 @@ const supabase = createClient(
  * Generates all funnel content in one go
  */
 async function generateFunnelContent(opportunity) {
-  const { niche, targetAudience, problem, leadMagnet } = opportunity;
-  const title = leadMagnet?.title || "The Ultimate Guide";
+  const { niche, targetAudience, problem, leadMagnet, city } = opportunity;
+  const location = city || "your area";
+  const title = leadMagnet?.title || `The ${location} Homeowner's Guide`;
   
-  console.log(`📝 Generating Funnel Content for: "${title}"...`);
+  console.log(`📝 Generating Funnel Content for: "${title}" in ${location}...`);
   
   const prompt = `
     You are an expert marketing copywriter for LOCAL SERVICE BUSINESSES. 
     Create a complete "Lead Gen Funnel" for a ${niche} business targeting:
     - Niche: ${niche}
     - Audience: ${targetAudience}
+    - Location: ${location}
     - Main Problem: ${problem}
     - Offer Title: ${title}
 
-    CRITICAL: ALL CONTENT MUST BE 100% SPECIFIC TO ${niche.toUpperCase()}.
+    CRITICAL: ALL CONTENT MUST BE 100% SPECIFIC TO ${niche.toUpperCase()} AND LOCALIZED FOR ${location.toUpperCase()}.
     - Do NOT use generic phrases like "your system" or "the issue"
     - USE industry-specific terminology (e.g., for Plumbing: "P-trap", "water heater anode rod", "main shutoff valve")
     - Include REAL ${niche} scenarios, not vague descriptions
     - Price ranges must reflect ACTUAL ${niche} market rates
     - Tips must be things a ${niche} professional would actually recommend
+    - MENTION "${location}" in the copy to build local trust.
 
     The PDF should be a "10-minute treasure chest" - small, sharp, immediately usable.
     NOT a long report. NOT a boring brochure. A practical assistant that gives quick wins.
@@ -54,15 +57,15 @@ async function generateFunnelContent(opportunity) {
     CONVERSION FOCUS (2025 Best Practices):
     - Include a 3-question diagnostic with ${niche}-specific symptoms
     - Add a coupon/voucher with urgency (limited time, limited slots)
-    - Local proof with neighborhood-specific case study
+    - Local proof with neighborhood-specific case study (mention a neighborhood in or near ${location})
     - Clear CTA that maps to booking/calling
 
     You must generate SIX things:
     
     1. **RICH PDF CONTENT** (8 pages worth of content):
-       - Cover tagline (one powerful promise specific to ${niche} outcomes)
+       - Cover tagline (one powerful promise specific to ${niche} outcomes in ${location})
        - 3 Diagnostic questions (${niche}-specific symptoms/issues that signal problems)
-       - Intro paragraph (why this ${niche} guide exists, establish credibility)
+       - Intro paragraph (why this ${niche} guide exists, establish credibility in ${location})
        - 5 Common ${niche} Mistakes (REAL mistakes with specific ${niche} examples and costs)
        - 5 Quick ${niche} Tips (actionable advice with specific tools/methods)
        - One Case Study (${niche} job with SPECIFIC details - what was wrong, how it was fixed, exact savings)
@@ -82,9 +85,9 @@ async function generateFunnelContent(opportunity) {
 
     Return a VALID JSON object with this EXACT structure:
     {
-      "lead_magnet_title": "[THE GUIDE TITLE - must include ${niche}]",
+      "lead_magnet_title": "[THE GUIDE TITLE - must include ${niche} and ${location}]",
       "lead_magnet_pdf": {
-        "cover_tagline": "One powerful promise line specific to ${niche} outcomes (e.g., 'Never overpay for plumbing again')",
+        "cover_tagline": "One powerful promise line specific to ${niche} outcomes (e.g., 'Never overpay for plumbing again in ${location}')",
         "diagnostic_questions": [
           { 
             "question": "${niche}-specific yes/no question (e.g., 'Do you hear gurgling sounds when you flush?')",
@@ -92,7 +95,7 @@ async function generateFunnelContent(opportunity) {
             "no_action": "Specific action if NO"
           }
         ],
-        "intro": "2-3 sentences about why this ${niche} guide exists and your expertise in ${niche}",
+        "intro": "2-3 sentences about why this ${niche} guide exists and your expertise in ${location}",
         "common_mistakes": [
           { "title": "${niche}-specific mistake", "description": "2-3 sentences with specific ${niche} examples and typical cost of this mistake" }
         ],
@@ -101,7 +104,7 @@ async function generateFunnelContent(opportunity) {
         ],
         "case_study": {
           "customer_name": "First name only",
-          "location": "Specific neighborhood (e.g., 'Oak Park', 'Riverside')",
+          "location": "Specific neighborhood in ${location} (e.g., 'North Side', 'Downtown')",
           "problem": "SPECIFIC ${niche} problem with details (e.g., 'Kitchen sink backed up, water pooling under cabinet for 2 days')",
           "solution": "Exactly what was done to fix it (e.g., 'Cleared 15-foot clog in main line, replaced corroded P-trap')",
           "result": "Specific outcome with numbers (e.g., 'Fixed in 2 hours, saved $1,200 vs competitor quote')"
@@ -123,33 +126,33 @@ async function generateFunnelContent(opportunity) {
         { "title": "How to Redeem / Next Steps", "body": "..." }
       ],
       "landing_page": {
-        "headline": "Catchy headline specific to ${niche} results",
+        "headline": "Catchy headline specific to ${niche} results in ${location}",
         "subheadline": "Persuasive subheadline with urgency",
         "hero_headline": "Main hero headline mentioning ${niche}",
         "hero_subheadline": "Supporting subheadline",
         "benefits": ["${niche}-specific benefit 1", "${niche}-specific benefit 2", "benefit 3", "benefit 4"],
         "cta_text": "Get Your Free ${niche} Guide",
         "urgency_text": "Limited spots available this week",
-        "about_business": "2-3 sentences about your ${niche} expertise"
+        "about_business": "2-3 sentences about your ${niche} expertise in ${location}"
       },
       "testimonials": [
-        { "name": "First Name L.", "role": "Local Resident, [Neighborhood]", "content": "Specific praise about the ${niche} work with details...", "rating": 5, "avatar": "emoji" }
+        { "name": "First Name L.", "role": "Local Resident, ${location}", "content": "Specific praise about the ${niche} work with details...", "rating": 5, "avatar": "emoji" }
       ],
-      "whatsapp_message": "Hi! I just downloaded your ${title} and I'd like to schedule a free ${niche.toLowerCase()} inspection. When is your earliest availability?",
+      "whatsapp_message": "Hi! I just downloaded your ${title} and I'd like to schedule a free ${niche.toLowerCase()} inspection in ${location}. When is your earliest availability?",
       "email_sequence": [
         { 
           "day": 1, 
           "subject": "Your ${title} is ready - here's what's inside", 
-          "body": "Write a warm, personal welcome email (150-200 words). Start with 'Hey there!' Thank them for downloading. List 3 specific ${niche}-related things they'll learn from the guide. Add a personal note about your ${niche} experience. End with 'Reply to this email if you have any questions - I read every message.' Sign off with a name."
+          "body": "Write a warm, personal welcome email (150-200 words). Start with 'Hey there!' Thank them for downloading. List 3 specific ${niche}-related things they'll learn from the guide. Add a personal note about your ${niche} experience in ${location}. End with 'Reply to this email if you have any questions - I read every message.' Sign off with a name."
         },
         { 
           "day": 2, 
-          "subject": "The 3 questions you MUST ask before hiring a ${niche} professional", 
+          "subject": "The 3 questions you MUST ask before hiring a ${niche} professional in ${location}", 
           "body": "Write an educational email (200-250 words). Start with a hook. Share 3 ${niche}-specific questions they should ask any ${niche} provider (with explanations why each matters for ${niche} work). Include a brief story about a ${niche} job gone wrong. End with a CTA for free consultation."
         },
         { 
           "day": 3, 
-          "subject": "[Case Study] How we solved a ${niche} emergency in [Neighborhood]", 
+          "subject": "[Case Study] How we solved a ${niche} emergency in ${location}", 
           "body": "Write a story-driven email (200-250 words). Create a realistic ${niche} case study with: Customer first name and neighborhood, The specific ${niche} problem, What you did to fix it (${niche}-specific details), The result with numbers. Include a short quote. End with CTA."
         },
         { 
@@ -165,8 +168,8 @@ async function generateFunnelContent(opportunity) {
       ]
     }
     
-    REMEMBER: Every single piece of content must be obviously written for a ${niche} business. 
-    If someone reads this PDF, they should immediately know it's about ${niche}, not generic services.
+    REMEMBER: Every single piece of content must be obviously written for a ${niche} business in ${location}. 
+    If someone reads this PDF, they should immediately know it's about ${niche} in ${location}, not generic services.
   `;
 
   const completion = await openai.chat.completions.create({

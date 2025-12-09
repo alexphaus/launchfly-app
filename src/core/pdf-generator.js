@@ -74,6 +74,19 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
       const whatsapp = businessData.whatsapp || phone;
       const landingPageUrl = businessData.landingPageUrl || '';
 
+      // Helper to add footer to every page
+      const addFooter = () => {
+        const bottom = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+        doc.fontSize(9)
+           .fillColor(colors.gray)
+           .text(`Presented by ${businessName} • ${phone || city}`, 50, doc.page.height - 40, {
+             width: doc.page.width - 100,
+             align: 'center'
+           });
+        doc.page.margins.bottom = bottom;
+      };
+
       // ============ PAGE 1: COVER PAGE ============
       doc.rect(0, 0, 612, 350).fill(colors.primary);
       
@@ -116,9 +129,12 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
            width: 512, 
            align: 'center' 
          });
+      
+      addFooter();
 
       // ============ PAGE 2: QUICK DIAGNOSTIC (3-Question Self-Assessment) ============
       doc.addPage();
+      addFooter();
       
       doc.fillColor(colors.primary)
          .fontSize(24)

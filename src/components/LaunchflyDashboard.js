@@ -24,7 +24,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
     }
   }, [business?.phone_number, business?.booking_url, business?.business_data?.booking_url]);
   const [loadingLeads, setLoadingLeads] = useState(true);
-  const [activeTab, setActiveTab] = useState('quickstart'); // quickstart, playbook
+  const [activeTab, setActiveTab] = useState('playbook'); // playbook is now default (more valuable to local businesses)
   const [checklist, setChecklist] = useState({
     google: false,
     facebook: false,
@@ -215,8 +215,11 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
         <div className="mb-10 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              {business?.name || business?.business_name || 'Your Local Lead System'}
+              🎯 Lead Command Center
             </h1>
+            <p className="text-lg font-medium text-blue-600 mb-1">
+              {business?.name || business?.business_name || 'Your Local Business'}
+            </p>
             <p className="text-slate-600">
               {isGenerating 
                 ? "We're building your automated lead generation system. Hang tight!" 

@@ -77,17 +77,26 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
       // ============ PAGE 1: COVER PAGE ============
       doc.rect(0, 0, 612, 350).fill(colors.primary);
       
+      // HYPER-LOCALIZED: City name prominently on cover
+      doc.fillColor('#ffffff')
+         .fontSize(14)
+         .font('Helvetica-Bold')
+         .text(`📍 ${city.toUpperCase()} EDITION`, 50, 50, { 
+           width: 512, 
+           align: 'center' 
+         });
+      
       doc.fillColor('#ffffff')
          .fontSize(32)
          .font('Helvetica-Bold')
-         .text(data.title || 'Your Expert Guide', 50, 80, { 
+         .text(data.title || `The ${city} Homeowner's Guide`, 50, 85, { 
            width: 512, 
            align: 'center' 
          });
       
       doc.fontSize(14)
          .font('Helvetica')
-         .text(pdfContent.cover_tagline || `Everything you need to know about ${niche.toLowerCase()} in ${city}`, 50, 160, { 
+         .text(pdfContent.cover_tagline || `Your essential ${niche.toLowerCase()} guide for ${city} homeowners`, 50, 165, { 
            width: 512, 
            align: 'center' 
          });
@@ -116,6 +125,23 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
            width: 512, 
            align: 'center' 
          });
+
+      // Helper function to add professional footer on each page
+      const addPageFooter = (pageNum) => {
+        doc.fillColor(colors.gray)
+           .fontSize(9)
+           .font('Helvetica')
+           .text(`Presented by ${businessName} • ${city}`, 50, 740, { 
+             width: 250, 
+             align: 'left' 
+           })
+           .text(`Page ${pageNum}`, 450, 740, { 
+             width: 100, 
+             align: 'right' 
+           });
+      };
+      
+      addPageFooter(1);
 
       // ============ PAGE 2: QUICK DIAGNOSTIC (3-Question Self-Assessment) ============
       doc.addPage();
@@ -191,6 +217,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica-Bold')
          .text(`Call ${businessName}: ${phone || 'See last page for contact'}`, 70, diagY + 75);
 
+      addPageFooter(2);
+
       // ============ PAGE 3: INTRODUCTION ============
       doc.addPage();
       
@@ -245,6 +273,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
            align: 'center'
          });
 
+      addPageFooter(3);
+
       // ============ PAGE 3: COMMON MISTAKES ============
       doc.addPage();
       
@@ -289,6 +319,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
 
         yPos += 70;
       });
+
+      addPageFooter(4);
 
       // ============ PAGE 4: QUICK TIPS ============
       doc.addPage();
@@ -345,6 +377,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica')
          .text(`When in doubt, call a professional. A quick inspection is much cheaper than fixing DIY mistakes. At ${businessName}, we offer free estimates.`, 70, yPos + 52, { width: 470 });
 
+      addPageFooter(5);
+
       // ============ PAGE 5: CASE STUDY ============
       doc.addPage();
       
@@ -399,6 +433,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.gray)
          .fontSize(11)
          .text(`- ${caseStudy.customer_name}, Verified Customer`, 70, 360);
+
+      addPageFooter(6);
 
       // ============ PAGE 6: ACTION CHECKLIST + COUPON ============
       doc.addPage();
@@ -496,6 +532,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
            .text(`WhatsApp: ${whatsapp}`, 350, 515);
       }
 
+      addPageFooter(7);
+
       // ============ PAGE 7: PRICING GUIDE ============
       doc.addPage();
       
@@ -542,6 +580,8 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
          .fontSize(10)
          .font('Helvetica-Oblique')
          .text('Note: These are general estimates. Always get a written quote before work begins.', 50, yPos + 20, { width: 512 });
+
+      addPageFooter(8);
 
       // ============ PAGE 8: CTA + CONTACT + QR CODE ============
       doc.addPage();

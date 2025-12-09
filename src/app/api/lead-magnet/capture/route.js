@@ -8,8 +8,68 @@ const supabase = createClient(
 );
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Email validation regex
+// Email validation regex - enhanced with common typo detection
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Common email domain typos
+const DOMAIN_CORRECTIONS = {
+  'gmial.com': 'gmail.com',
+  'gmal.com': 'gmail.com',
+  'gamil.com': 'gmail.com',
+  'gnail.com': 'gmail.com',
+  'gmail.co': 'gmail.com',
+  'hotmal.com': 'hotmail.com',
+  'hotmai.com': 'hotmail.com',
+  'yahooo.com': 'yahoo.com',
+  'yaho.com': 'yahoo.com',
+  'outloo.com': 'outlook.com',
+  'outlok.com': 'outlook.com'
+};
+
+// Helper: Suggest email correction
+function suggestEmailCorrection(email) {
+  const [localPart, domain] = email.toLowerCase().split('@');
+  if (domain && DOMAIN_CORRECTIONS[domain]) {
+    return `${localPart}@${DOMAIN_CORRECTIONS[domain]}`;
+  }
+  return null;
+}
+
+// Helper: Send SMS notification to business owner (Speed-to-Lead)
+async function sendLeadSMS(business, leadEmail) {
+  const phoneNumber = business.phone_number || business.business_data?.phone;
+  
+  if (!phoneNumber || !process.env.TWILIO_ACCOUNT_SID) {
+    console.log('📱 SMS skipped: No phone number or Twilio not configured');
+    return null;
+  }
+
+  try {
+    // Dynamic import Twilio only when needed
+    const twilio = await import('twilio');
+    const client = twilio.default(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
+
+    const businessName = business.business_data?.businessName || business.name || 'Your Business';
+    const landingPageUrl = business.subdomain 
+      ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}`
+      : '';
+
+    const message = await client.messages.create({
+      body: `🔥 NEW LEAD: Someone just downloaded your guide!\n\nEmail: ${leadEmail}\n\n⚡ Speed wins! Call back within 5 mins for best results.\n\n${landingPageUrl ? `View: ${landingPageUrl}` : ''}\n\n- ${businessName} Lead System`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: phoneNumber.startsWith('+') ? phoneNumber : `+1${phoneNumber.replace(/\D/g, '')}`
+    });
+
+    console.log('📱 SMS sent to business owner:', message.sid);
+    return message.sid;
+  } catch (smsError) {
+    console.error('📱 SMS send failed (non-blocking):', smsError.message);
+    return null;
+  }
+}
 
 export async function POST(request) {
   try {
@@ -22,10 +82,17 @@ export async function POST(request) {
       return Response.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    // Validate email format
+    // Enhanced email validation
     if (!EMAIL_REGEX.test(email)) {
       console.error('❌ Invalid email format:', email);
       return Response.json({ error: 'Invalid email format' }, { status: 400 });
+    }
+
+    // Check for common typos and suggest correction
+    const suggestedEmail = suggestEmailCorrection(email);
+    if (suggestedEmail) {
+      console.log(`💡 Possible typo detected: ${email} → ${suggestedEmail}`);
+      // Still accept the email but log for monitoring
     }
 
     // 1. Get Business Data
@@ -101,7 +168,7 @@ export async function POST(request) {
       }
     }
 
-    // 3. Log Activity
+    // 3. Log Activity & Send SMS Alert (Speed-to-Lead)
     if (isNewLead) {
       await supabase
         .from('ai_activities')
@@ -116,6 +183,12 @@ export async function POST(request) {
             customer_id: customerId 
           }
         });
+
+      // 🔥 SPEED-TO-LEAD: Send SMS to business owner immediately
+      // This feature alone is worth $97 - helps them respond within 5 minutes
+      sendLeadSMS(business, email).catch(err => {
+        console.error('SMS notification failed (non-blocking):', err);
+      });
     }
 
     // 4. Send Email with PDF Attachment

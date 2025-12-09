@@ -14,3 +14,4 @@ export { default as Footer } from './Footer';
 export { default as ShoppingCart } from './ShoppingCart';
 export { default as LeadCapture } from './LeadCapture';
 export { default as AboutCoach } from './AboutCoach';
+export { default as FloatingCallButton } from './FloatingCallButton';

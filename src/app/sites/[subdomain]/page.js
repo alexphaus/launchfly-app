@@ -974,6 +974,15 @@ export default async function DynamicWebsite({ params }) {
               );
             }
           })}
+          
+          {/* 📞 FLOATING CALL BUTTON - Don't force them to download if they just want to call */}
+          {(business?.phone_number || businessData?.phone || businessData?.whatsapp) && (
+            <LaunchflyUI.FloatingCallButton
+              phone={business?.phone_number || businessData?.phone}
+              whatsapp={businessData?.whatsapp || business?.phone_number || businessData?.phone}
+              businessName={businessData?.businessName || business?.name || 'Us'}
+            />
+          )}
         </div>
       </ThemedLayout>
     </CartProvider>

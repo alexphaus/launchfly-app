@@ -51,7 +51,7 @@ export default function ClaimButton({ businessId, email }) {
           Processing...
         </span>
       ) : (
-        'Activate My Funnel - $49 →'
+        'Activate My Funnel - $97 →'
       )}
     </button>
   );

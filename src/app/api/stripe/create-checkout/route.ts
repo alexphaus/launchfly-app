@@ -10,14 +10,14 @@ const PRICES = {
     description: 'PDF Guide + Commercial License'
   },
   'pro': { // Launch Pack
-    amount: 4900, // $49.00
+    amount: 9700, // $97.00
     name: 'Launchfly Launch Pack',
     description: 'Full Funnel + 1 Year Hosting + Email Sequence'
   },
   'vip': { // White Glove
-    amount: 9900, // $99.00
+    amount: 29700, // $297.00
     name: 'Launchfly White-Glove Service',
-    description: 'Done-For-You Setup + Priority Support'
+    description: 'Done-For-You Setup + Priority Support + Monthly Coaching'
   }
 };
 

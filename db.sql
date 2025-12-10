@@ -298,7 +298,7 @@ CREATE TABLE public.businesses (
   user_id uuid NOT NULL,
   name text NOT NULL,
   subdomain text NOT NULL UNIQUE,
-  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'generating'::text, 'ready'::text, 'failed'::text])),
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'generating'::text, 'ready'::text, 'failed'::text, 'prospect'::text])),
   session_id text UNIQUE,
   phone_number text,
   completed_onboarding boolean DEFAULT false,
@@ -349,6 +349,9 @@ CREATE TABLE public.businesses (
   paid_plan_session_id character varying,
   available_balance numeric DEFAULT 0,
   gross_sales_since_cashout numeric DEFAULT 0,
+  booking_url text,
+  expires_at timestamp with time zone,
+  source text DEFAULT 'wizard'::text,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT businesses_guarantee_id_fkey FOREIGN KEY (guarantee_id) REFERENCES public.revenue_guarantees(id),
@@ -496,6 +499,8 @@ CREATE TABLE public.customers (
   next_email_at timestamp with time zone,
   last_email_sent_at timestamp with time zone,
   email_sequence_completed_at timestamp with time zone,
+  status text DEFAULT 'lead'::text,
+  source text DEFAULT 'unknown'::text,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
   CONSTRAINT customers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );

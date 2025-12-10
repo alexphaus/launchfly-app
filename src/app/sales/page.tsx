@@ -11,6 +11,7 @@ export default function SalesPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [sendSuccess, setSendSuccess] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
 
   // Editable fields
   const [editableSubject, setEditableSubject] = useState('');
@@ -24,6 +25,7 @@ export default function SalesPage() {
       setEditableSubject(result.email.subject);
       setEditableBody(result.email.body);
       setRecipientEmail(result.scrapedData.email || '');
+      setPreviewUrl(result.previewUrl || '');
     }
   }, [result]);
 
@@ -218,6 +220,48 @@ export default function SalesPage() {
                 )}
               </div>
             </div>
+
+            {/* Preview Funnel Card */}
+            {previewUrl && (
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl shadow-sm border border-emerald-200 p-6">
+                <h2 className="text-xl font-bold text-emerald-900 mb-3 flex items-center gap-2">
+                  🎁 Value-First Preview Created
+                </h2>
+                <p className="text-emerald-700 text-sm mb-4">
+                  A personalized funnel has been generated for this prospect. The link is included in the email below.
+                </p>
+                <div className="flex items-center gap-3">
+                  <a 
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 bg-white border border-emerald-300 rounded-lg px-4 py-2 text-emerald-800 font-mono text-sm hover:bg-emerald-50 transition-colors truncate"
+                  >
+                    {previewUrl}
+                  </a>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(previewUrl);
+                      alert('Preview link copied!');
+                    }}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                  >
+                    Copy
+                  </button>
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors font-medium"
+                  >
+                    Preview ↗
+                  </a>
+                </div>
+                <p className="text-xs text-emerald-600 mt-3">
+                  ⏰ This preview expires in 14 days if not claimed.
+                </p>
+              </div>
+            )}
 
             {/* Email Draft Card */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-l-4 border-l-blue-500">

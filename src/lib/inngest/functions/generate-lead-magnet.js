@@ -174,14 +174,15 @@ export const generateLeadMagnet = inngest.createFunction(
           ${businessContext ? `Additional Business Context from Owner: ${businessContext}` : ''}
           
           CRITICAL INSTRUCTIONS FOR EMAIL SEQUENCE:
-          Write a 5-day "Soap Opera Sequence" that builds trust, agitates the problem, and sells the service.
-          - Tone: Personal, empathetic, slightly informal but professional. Use "I" and "You".
-          - Formatting: Short paragraphs. Punchy sentences.
-          - Day 1 (The Delivery): Subject: Your [Asset Name] is inside! Body: Deliver the asset immediately. Then open a "loop" about a common mistake people make in this niche. Tease that you'll reveal it tomorrow.
-          - Day 2 (The Problem/Drama): Subject: [Curiosity Hook about the mistake]. Body: Tell a quick story about a client who tried to DIY or ignored the problem and it cost them. Agitate the pain.
-          - Day 3 (The Epiphany/Solution): Subject: The easy fix. Body: Explain that the solution isn't hard work, it's [Your Method/Service]. Soft pitch for a free quote/consultation.
-          - Day 4 (Hidden Benefits): Subject: Imagine if... Body: Paint a picture of life AFTER the problem is solved. Focus on emotional benefits (peace of mind, pride, safety).
-          - Day 5 (Urgency/Call to Action): Subject: Last chance? Body: Remind them that procrastination is the enemy. Direct call to action to book now before the schedule fills up.
+          Write a 5-day nurture sequence that builds trust and gently guides toward booking.
+          - Tone: Personal, warm, conversational. Like a helpful neighbor, not a salesperson. Use "I" and "You".
+          - Formatting: Short paragraphs. Natural sentences. NO ALL CAPS. Maximum 1 emoji per email.
+          - AVOID spam triggers: No "limited time", "act now", "expires", "last chance", "urgent", "free" in subject lines.
+          - Day 1 (The Welcome): Subject: Here's your [Asset Name]. Body: Deliver the asset warmly. Share a quick tip from the guide. Mention you'll share more helpful tips this week.
+          - Day 2 (The Story): Subject: A quick story about [topic]. Body: Share a brief client story about a common problem and how it was resolved. Keep it educational, not salesy.
+          - Day 3 (The Tip): Subject: Something most people miss. Body: Share a valuable insight or tip. Position yourself as the helpful expert. Soft mention that you're available if they have questions.
+          - Day 4 (The Vision): Subject: What would it feel like if... Body: Paint a picture of life with the problem solved. Focus on peace of mind. Mention you offer free consultations.
+          - Day 5 (The Invitation): Subject: Quick question for you. Body: Ask if they've had a chance to review the guide. Offer to answer any questions. Friendly invitation to schedule a call when they're ready.
 
           Also create a "conversion_offer" specifically for this niche to be used in Day 4 & 5.
           - For High Ticket (Real Estate, Law, Consulting): Offer a "Free Strategy Session", "Audit", or "Valuation". NO DISCOUNTS.

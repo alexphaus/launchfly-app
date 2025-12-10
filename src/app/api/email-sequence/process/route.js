@@ -52,13 +52,13 @@ function buildEmailHtml({ subject, body, businessName, phone, day, email, busine
     offer_code: "GUIDE15"
   };
 
-  // Different CTAs based on the day in sequence
+  // Different CTAs based on the day in sequence - keeping it conversational, not salesy
   const ctaConfig = {
-    1: { text: 'Read Your Free Guide', color: '#2563eb', urgent: false, subtext: 'Attached to this email' },
-    2: { text: 'Get Your Free Quote', color: '#2563eb', urgent: false, subtext: 'No obligation, no pressure' },
-    3: { text: 'Get the Same Results', color: '#2563eb', urgent: false, subtext: 'Free consultation included' },
-    4: { text: offer.cta_text || 'Claim Offer', color: '#16a34a', urgent: true, subtext: offer.subheadline || 'Limited time offer' },
-    5: { text: 'Last Chance - Call Now', color: '#dc2626', urgent: true, subtext: 'Expires at midnight!' }
+    1: { text: 'Read Your Guide', color: '#2563eb', urgent: false, subtext: 'Enjoy your download' },
+    2: { text: 'Have Questions?', color: '#2563eb', urgent: false, subtext: 'We\'re happy to help' },
+    3: { text: 'Schedule a Chat', color: '#2563eb', urgent: false, subtext: 'No pressure, just answers' },
+    4: { text: offer.cta_text || 'Book a Consultation', color: '#16a34a', urgent: false, subtext: offer.subheadline || 'Happy to answer any questions' },
+    5: { text: 'Let\'s Connect', color: '#2563eb', urgent: false, subtext: 'When you\'re ready' }
   };
   
   const cta = ctaConfig[day] || { text: 'Contact Us', color: '#2563eb', urgent: false, subtext: '' };
@@ -82,19 +82,13 @@ function buildEmailHtml({ subject, body, businessName, phone, day, email, busine
         
         <!-- Preheader (hidden preview text) -->
         <div style="display: none; max-height: 0; overflow: hidden;">
-          ${isUrgent ? '⏰ Limited time offer inside - ' : ''}${subject}
+          ${subject}
         </div>
         
         <!-- Header -->
-        <div style="background: linear-gradient(135deg, ${isUrgent ? '#dc2626' : '#1e40af'} 0%, ${isUrgent ? '#f59e0b' : '#3b82f6'} 100%); padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
+        <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 40px 30px; border-radius: 16px 16px 0 0; text-align: center;">
           <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700;">${businessName}</h1>
-          ${isUrgent ? `
-          <div style="background: #ffffff; color: #dc2626; padding: 10px 20px; border-radius: 25px; display: inline-block; margin-top: 20px; font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">
-            ${day === 4 ? '⏰ LIMITED TIME OFFER - 72 HOURS LEFT' : '🔥 FINAL NOTICE - EXPIRES TONIGHT'}
-          </div>
-          ` : `
-          <p style="color: rgba(255,255,255,0.85); margin: 12px 0 0 0; font-size: 15px;">Your ${day === 1 ? 'free guide' : 'Expert Guide Series'} • Email ${day} of 5</p>
-          `}
+          <p style="color: rgba(255,255,255,0.85); margin: 12px 0 0 0; font-size: 15px;">Your ${day === 1 ? 'guide is ready' : 'helpful tips series'}</p>
         </div>
         
         <!-- Main Content -->
@@ -106,16 +100,10 @@ function buildEmailHtml({ subject, body, businessName, phone, day, email, busine
           </div>
           
           <!-- Primary CTA Section -->
-          <div style="text-align: center; margin: 35px 0; padding: 30px; background: ${isUrgent ? 'linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%)' : 'linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%)'}; border-radius: 12px; ${isUrgent ? 'border: 2px dashed #dc2626;' : 'border: 1px solid #e0e7ff;'}">
+          <div style="text-align: center; margin: 35px 0; padding: 30px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; border: 1px solid #e2e8f0;">
             
-            ${isUrgent ? `
-            <div style="background: #dc2626; color: white; padding: 6px 14px; border-radius: 20px; display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 15px;">
-              ${day === 4 ? 'OFFER EXPIRES IN 72 HOURS' : 'LAST CHANCE - EXPIRES TONIGHT'}
-            </div>
-            ` : ''}
-            
-            <p style="margin: 0 0 20px 0; color: ${isUrgent ? '#b91c1c' : '#1e40af'}; font-weight: 600; font-size: 20px;">
-              ${isUrgent ? (offer.headline || "Don't let this slip away!") : 'Ready to take the next step?'}
+            <p style="margin: 0 0 20px 0; color: #1e40af; font-weight: 600; font-size: 18px;">
+              ${day <= 2 ? 'Questions? We\'re here to help.' : (day <= 4 ? 'Ready when you are' : 'We\'d love to hear from you')}
             </p>
             
             ${phone ? `

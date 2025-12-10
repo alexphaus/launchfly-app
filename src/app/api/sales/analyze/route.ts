@@ -161,7 +161,8 @@ export async function POST(request: Request) {
 
         if (!bizErr && business) {
           businessId = business.id;
-          const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'https://launchfly.co';
+          // Use www.launchfly.ai for preview links (not app.launchfly.ai)
+          const baseUrl = process.env.PREVIEW_BASE_URL || 'https://www.launchfly.ai';
           previewUrl = `${baseUrl}/preview/${business.id}`;
           
           console.log(`✅ Created prospect business: ${businessId} (expires: ${expiresAt.toISOString()})`);

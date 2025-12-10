@@ -62,6 +62,32 @@ export async function POST(request) {
     console.log('Session customer_details:', session.customer_details);
     
     try {
+      // Handle funnel claim (prospect activation)
+      if (metadata.product_type === 'funnel_claim' && metadata.businessId) {
+        console.log('Processing funnel claim for business:', metadata.businessId);
+        
+        // Activate the prospect business
+        const { data: business, error: updateError } = await supabase
+          .from('businesses')
+          .update({ 
+            status: 'ready',
+            source: 'claimed-prospect',
+            expires_at: null,
+            paid_plan_session_id: session.id
+          })
+          .eq('id', metadata.businessId)
+          .select()
+          .single();
+        
+        if (updateError) {
+          console.error('Error activating claimed business:', updateError);
+        } else {
+          console.log(`✅ Webhook activated claimed business: ${metadata.businessId}`);
+        }
+        
+        return Response.json({ received: true, processed: true, type: 'funnel_claim' });
+      }
+
       // Check if this is a platform subscription payment (Professional plan)
       if (metadata.product_type === 'platform_subscription' && metadata.plan === 'professional') {
         console.log('Processing Professional plan subscription');

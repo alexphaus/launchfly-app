@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Business ID is required' }, { status: 400 });
     }
 
-    // Launch Pack pricing
+    // Launch Pack pricing (test: $1)
     const priceConfig = {
-      amount: 9700, // $97.00
+      amount: 100, // $1.00 for testing
       name: 'Launchfly Launch Pack',
       description: 'Full Lead Capture Funnel + 1 Year Hosting + Email Delivery'
     };

@@ -3,6 +3,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
+import ClaimButton from './ClaimButton';
 
 export async function generateMetadata({ params }) {
   return {
@@ -138,12 +139,10 @@ export default async function ClaimPage({ params }) {
           </p>
           
           <div className="space-y-4">
-            <a 
-              href={`https://www.launchfly.ai/checkout?plan=starter&businessId=${businessId}&email=${encodeURIComponent(prospectEmail)}`}
-              className="block w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl"
-            >
-              Activate My Funnel - $97 →
-            </a>
+            <ClaimButton 
+              businessId={businessId} 
+              email={prospectEmail}
+            />
             
             <p className="text-sm text-slate-500">
               30-day money-back guarantee • Instant access • No coding required

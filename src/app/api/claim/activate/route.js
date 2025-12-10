@@ -2,6 +2,8 @@
 // API to activate a claimed prospect business and check status
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { nanoid } from 'nanoid';
+import { inngest } from '@/lib/inngest/client';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -55,28 +57,44 @@ export async function POST(request) {
       }, { status: 404 });
     }
 
-    // If already activated, return success
+    // If already activated, return success with session_id
     if (business.status === 'ready') {
       console.log(`✅ Business already activated: ${businessId}`);
+      
+      // Get existing session_id
+      const { data: existingSession } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('business_id', businessId)
+        .single();
+      
       return Response.json({
         success: true,
         status: 'activated',
         business: {
           id: business.id,
           name: business.business_data?.businessName || business.name,
-          subdomain: business.subdomain
+          subdomain: business.subdomain,
+          sessionId: existingSession?.id || business.session_id
         }
       });
     }
 
-    // Activate the prospect business
+    // Generate a new session ID for the dashboard
+    const newSessionId = nanoid(12);
+
+    // Activate the prospect business with full setup
     // Note: Don't use paid_plan_session_id as it has FK to platform_subscriptions
     const { data: updated, error: updateError } = await supabase
       .from('businesses')
       .update({ 
-        status: 'ready',
+        status: 'generating', // Set to generating while we create the full funnel
         source: `claimed-prospect:${sessionId}`,
-        expires_at: null
+        expires_at: null,
+        session_id: newSessionId,
+        plan_tier: 'starter',
+        rev_share_percent: 20,
+        guarantee_start_at: new Date().toISOString()
       })
       .eq('id', businessId)
       .select()
@@ -91,7 +109,62 @@ export async function POST(request) {
       }, { status: 500 });
     }
 
-    console.log(`✅ Successfully activated business: ${businessId}`);
+    // Create a session record for dashboard access
+    const { error: sessError } = await supabase
+      .from('sessions')
+      .insert({ 
+        id: newSessionId, 
+        business_id: businessId, 
+        stage: 'generating', 
+        progress: 30 
+      });
+    
+    if (sessError) {
+      console.error('Failed to create session:', sessError);
+      // Continue anyway - session is nice to have but not critical
+    }
+
+    // Initialize monetization (offers + Stripe Connect)
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'https://www.launchfly.ai'}/api/money/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: businessId, eagerConnectLink: true })
+      });
+    } catch (e) {
+      console.error('Money init failed:', e);
+    }
+
+    // Trigger full lead magnet generation via Inngest
+    // This will create the PDF, email sequences, etc.
+    const businessData = updated.business_data || {};
+    const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title || 
+                           businessData.businessName + ' Guide';
+    
+    try {
+      await inngest.send({
+        name: 'lead-magnet/generation.requested',
+        data: {
+          businessId: businessId,
+          topic: leadMagnetTitle,
+          audience: businessData.niche || 'local customers',
+          language: 'English',
+          sessionId: newSessionId,
+          websiteUrl: businessData.websiteUrl,
+          businessContext: `${businessData.businessName} - ${businessData.niche}`
+        }
+      });
+      console.log('✅ Lead magnet generation triggered via Inngest');
+    } catch (e) {
+      console.error('Failed to trigger Inngest:', e);
+      // Mark as ready anyway since they have a basic funnel
+      await supabase
+        .from('businesses')
+        .update({ status: 'ready' })
+        .eq('id', businessId);
+    }
+
+    console.log(`✅ Successfully activated business: ${businessId} with session: ${newSessionId}`);
 
     return Response.json({
       success: true,
@@ -99,7 +172,8 @@ export async function POST(request) {
       business: {
         id: updated.id,
         name: updated.business_data?.businessName || updated.name,
-        subdomain: updated.subdomain
+        subdomain: updated.subdomain,
+        sessionId: newSessionId
       }
     });
 

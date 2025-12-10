@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 export default function ActivationStatus({ businessId, sessionId, initialBusiness }) {
-  const [status, setStatus] = useState(initialBusiness?.status === 'ready' ? 'activated' : 'processing');
+  // Consider both 'ready' and 'generating' as activated (generating means it's been claimed and is building)
+  const isActivated = initialBusiness?.status === 'ready' || initialBusiness?.status === 'generating';
+  const [status, setStatus] = useState(isActivated ? 'activated' : 'processing');
   const [business, setBusiness] = useState(initialBusiness);
   const [error, setError] = useState(null);
   const [attempts, setAttempts] = useState(0);
@@ -78,6 +80,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
   const businessName = business?.name || 'Your Business';
   const subdomain = business?.subdomain;
   const funnelUrl = subdomain ? `https://${subdomain}.launchfly.ai` : null;
+  const dashboardUrl = business?.sessionId ? `/dashboard/${business.sessionId}` : '/';
 
   // Activated state
   if (status === 'activated') {
@@ -119,7 +122,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
             </a>
           )}
           <Link 
-            href="/"
+            href={dashboardUrl}
             className="block w-full bg-slate-100 text-slate-700 py-3 px-6 rounded-xl font-semibold hover:bg-slate-200 transition-colors"
           >
             Go to Dashboard
@@ -127,7 +130,9 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
         </div>
 
         <p className="text-sm text-slate-500 mt-6">
-          Check your email for next steps and tips to maximize your leads.
+          {business?.sessionId 
+            ? 'Your funnel is being enhanced with a PDF guide and email sequences. Check your dashboard for progress!'
+            : 'Check your email for next steps and tips to maximize your leads.'}
         </p>
       </div>
     );

@@ -67,13 +67,13 @@ export async function POST(request) {
         console.log('Processing funnel claim for business:', metadata.businessId);
         
         // Activate the prospect business
+        // Note: Don't use paid_plan_session_id as it has FK to platform_subscriptions
         const { data: business, error: updateError } = await supabase
           .from('businesses')
           .update({ 
             status: 'ready',
-            source: 'claimed-prospect',
-            expires_at: null,
-            paid_plan_session_id: session.id
+            source: `claimed-prospect:${session.id}`,
+            expires_at: null
           })
           .eq('id', metadata.businessId)
           .select()

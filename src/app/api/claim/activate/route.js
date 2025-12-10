@@ -70,13 +70,13 @@ export async function POST(request) {
     }
 
     // Activate the prospect business
+    // Note: Don't use paid_plan_session_id as it has FK to platform_subscriptions
     const { data: updated, error: updateError } = await supabase
       .from('businesses')
       .update({ 
         status: 'ready',
-        source: 'claimed-prospect',
-        expires_at: null,
-        paid_plan_session_id: sessionId
+        source: `claimed-prospect:${sessionId}`,
+        expires_at: null
       })
       .eq('id', businessId)
       .select()

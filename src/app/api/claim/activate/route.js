@@ -68,6 +68,25 @@ export async function POST(request) {
         .eq('business_id', businessId)
         .single();
       
+      let finalSessionId = existingSession?.id || business.session_id;
+
+      // RECOVERY: If session_id is missing (e.g. from previous bug), generate one now
+      if (!finalSessionId) {
+         console.log('⚠️ Business ready but missing session_id. Regenerating...');
+         const generateId = (len = 12) => {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < len; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+            return result;
+         };
+         finalSessionId = generateId(12);
+         
+         // Update business
+         await supabase.from('businesses').update({ session_id: finalSessionId }).eq('id', businessId);
+         // Create session
+         await supabase.from('sessions').insert({ id: finalSessionId, business_id: businessId, stage: 'complete', progress: 100 });
+      }
+      
       return Response.json({
         success: true,
         status: 'activated',
@@ -75,13 +94,39 @@ export async function POST(request) {
           id: business.id,
           name: business.business_data?.businessName || business.name,
           subdomain: business.subdomain,
-          sessionId: existingSession?.id || business.session_id
+          sessionId: finalSessionId
         }
       });
     }
 
     // Generate a new session ID for the dashboard
-    const newSessionId = nanoid(12);
+    // Use a simple random string to avoid potential nanoid issues
+    const generateId = (len = 12) => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let result = '';
+      for (let i = 0; i < len; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+      return result;
+    };
+    const newSessionId = generateId(12);
+    
+    console.log(`Generated new session ID: ${newSessionId}`);
+
+    // Attempt to link to existing user by email
+    const customerEmail = session.customer_details?.email || session.customer_email;
+    let targetUserId = undefined;
+
+    if (customerEmail) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', customerEmail)
+        .single();
+      
+      if (profile) {
+        targetUserId = profile.id;
+        console.log(`🔗 Linking business to existing user: ${targetUserId}`);
+      }
+    }
 
     // Activate the prospect business with full setup
     // Note: Don't use paid_plan_session_id as it has FK to platform_subscriptions
@@ -94,7 +139,8 @@ export async function POST(request) {
         session_id: newSessionId,
         plan_tier: 'starter',
         rev_share_percent: 20,
-        guarantee_start_at: new Date().toISOString()
+        guarantee_start_at: new Date().toISOString(),
+        ...(targetUserId ? { user_id: targetUserId } : {})
       })
       .eq('id', businessId)
       .select()

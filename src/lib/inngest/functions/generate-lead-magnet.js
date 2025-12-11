@@ -107,12 +107,17 @@ export const generateLeadMagnet = inngest.createFunction(
   async ({ event, step }) => {
     const { businessId, topic, audience, language = 'English', sessionId, websiteUrl, businessContext } = event.data;
 
+    console.log(`🚀 [generate-lead-magnet] Starting for business: ${businessId}, session: ${sessionId}`);
+    console.log(`📝 Topic: ${topic}, Audience: ${audience}`);
+
     if (!businessId || !topic) {
+      console.error('❌ [generate-lead-magnet] Missing required fields');
       throw new Error('Missing required fields');
     }
 
     // Update stage to generating
     await step.run('update-stage-generating', async () => {
+      console.log('📊 [generate-lead-magnet] Step: update-stage-generating');
        if (sessionId) {
          await supabase
           .from('sessions')
@@ -272,12 +277,16 @@ export const generateLeadMagnet = inngest.createFunction(
           }
         `;
 
+        console.log(`🤖 [generate-lead-magnet] Calling OpenAI for business: ${businessId}`);
+        
         const completion = await openai.chat.completions.create({
           messages: [{ role: 'user', content: prompt }],
           model: 'gpt-4-turbo-preview',
           response_format: { type: 'json_object' },
         });
 
+        console.log(`✅ [generate-lead-magnet] OpenAI response received for business: ${businessId}`);
+        
         return JSON.parse(completion.choices[0].message.content);
     });
 
@@ -344,8 +353,10 @@ export const generateLeadMagnet = inngest.createFunction(
              // Don't throw here, as business is already updated
           }
         }
+        
+        console.log(`✅ [generate-lead-magnet] Complete for business: ${businessId}`);
     });
 
-    return { success: true };
+    return { success: true, businessId };
   }
 );

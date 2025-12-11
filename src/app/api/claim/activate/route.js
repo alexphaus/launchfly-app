@@ -225,8 +225,9 @@ export async function POST(request) {
     const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title || 
                            businessData.businessName + ' Guide';
     
+    let inngestTriggered = false;
     try {
-      await inngest.send({
+      const sendResult = await inngest.send({
         name: 'lead-magnet/generation.requested',
         data: {
           businessId: businessId,
@@ -238,14 +239,25 @@ export async function POST(request) {
           businessContext: `${businessData.businessName} - ${businessData.niche}`
         }
       });
-      console.log('✅ Lead magnet generation triggered via Inngest');
+      console.log('✅ Lead magnet generation triggered via Inngest:', JSON.stringify(sendResult));
+      inngestTriggered = true;
     } catch (e) {
-      console.error('Failed to trigger Inngest:', e);
-      // Mark as ready anyway since they have a basic funnel
+      console.error('❌ Failed to trigger Inngest:', e.message, e.stack);
+      
+      // FALLBACK: If Inngest fails, set business as ready with basic content
+      // and update progress so the UI doesn't get stuck
+      console.log('⚠️ Inngest failed - setting business as ready with basic funnel');
+      
       await supabase
         .from('businesses')
         .update({ status: 'ready' })
         .eq('id', businessId);
+      
+      // Update session to complete so polling stops
+      await supabase
+        .from('sessions')
+        .update({ stage: 'complete', progress: 100 })
+        .eq('id', newSessionId);
     }
 
     console.log(`✅ Successfully activated business: ${businessId} with session: ${newSessionId}`);

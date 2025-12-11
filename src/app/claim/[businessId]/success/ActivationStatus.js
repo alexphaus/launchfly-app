@@ -49,7 +49,20 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
   const pollProgress = useCallback((dashSessionId) => {
     if (!dashSessionId) return () => {};
     
+    let pollCount = 0;
+    const MAX_POLLS = 60; // 2 minutes max (60 * 2 seconds)
+    
     const pollInterval = setInterval(async () => {
+      pollCount++;
+      
+      // Timeout fallback - if still stuck after 2 minutes, force ready
+      if (pollCount >= MAX_POLLS) {
+        console.log('⚠️ Polling timeout reached - forcing ready state');
+        clearInterval(pollInterval);
+        setStatus('ready');
+        return;
+      }
+      
       try {
         const { data: session, error: sessErr } = await supabase
           .from('sessions')

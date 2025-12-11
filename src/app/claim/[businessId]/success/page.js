@@ -17,16 +17,24 @@ export default async function ClaimSuccessPage({ params, searchParams }) {
     // Just fetch the business info, let client handle activation
     const { data } = await supabase
       .from('businesses')
-      .select('id, status, name, subdomain, business_data')
+      .select('id, status, name, subdomain, business_data, session_id')
       .eq('id', businessId)
       .single();
     
     if (data) {
+      // Try to get session ID from sessions table as well
+      const { data: sessionData } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('business_id', businessId)
+        .single();
+      
       initialBusiness = {
         id: data.id,
         status: data.status,
         name: data.business_data?.businessName || data.name,
-        subdomain: data.subdomain
+        subdomain: data.subdomain,
+        sessionId: sessionData?.id || data.session_id
       };
     }
   } catch (err) {

@@ -5,7 +5,10 @@ import Link from 'next/link';
 
 export default function ActivationStatus({ businessId, sessionId, initialBusiness }) {
   // Consider both 'ready' and 'generating' as activated (generating means it's been claimed and is building)
-  const isActivated = initialBusiness?.status === 'ready' || initialBusiness?.status === 'generating';
+  // BUT only if we also have a sessionId (dashboard access)
+  const hasSessionId = !!initialBusiness?.sessionId;
+  const isActivated = (initialBusiness?.status === 'ready' || initialBusiness?.status === 'generating') && hasSessionId;
+  
   const [status, setStatus] = useState(isActivated ? 'activated' : 'processing');
   const [business, setBusiness] = useState(initialBusiness);
   const [error, setError] = useState(null);
@@ -43,7 +46,10 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
   }, [businessId, sessionId]);
 
   useEffect(() => {
-    if (status === 'activated' || !sessionId) return;
+    // If we are activated AND have a session ID, we are good.
+    // If we are "activated" but missing session ID, we need to re-run activation to recover it.
+    if (status === 'activated' && business?.sessionId) return;
+    if (!sessionId) return;
 
     // Try to activate immediately
     activateBusiness().then(success => {

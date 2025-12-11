@@ -61,6 +61,8 @@ export default async function ClaimPage({ params }) {
   const businessName = businessData?.businessName || business?.name || 'Your Business';
   const niche = businessData?.niche || business?.form_data?.niche || 'your industry';
   const prospectEmail = business?.form_data?.prospectEmail || '';
+  const previewTips = businessData?.leadMagnet?.lead_magnet?.preview_tips || [];
+  const benefits = businessData?.leadMagnet?.lead_magnet?.benefits || [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
@@ -127,6 +129,48 @@ export default async function ClaimPage({ params }) {
             </div>
           </div>
         </div>
+
+        {/* Preview of Value - Show what's in the guide */}
+        {(previewTips.length > 0 || benefits.length > 0) && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 border border-white/10">
+            <h2 className="text-2xl font-bold text-white mb-2 text-center">
+              Sneak Peek: What Your Customers Will Learn
+            </h2>
+            <p className="text-slate-400 text-center mb-6">
+              This is the quality content we&apos;ve already prepared for {businessName}
+            </p>
+            
+            {previewTips.length > 0 ? (
+              <div className="space-y-4">
+                {previewTips.map((tip, index) => (
+                  <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="text-green-400 font-bold">{index + 1}</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-white mb-1">{tip.title}</h4>
+                        <p className="text-slate-400 text-sm">{tip.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-center text-slate-500 text-sm mt-4">
+                  + 5 more expert tips in the full guide
+                </p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-4">
+                {benefits.map((benefit, index) => (
+                  <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
+                    <span className="text-2xl mb-2">✅</span>
+                    <p className="text-white text-sm">{benefit}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* CTA Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">

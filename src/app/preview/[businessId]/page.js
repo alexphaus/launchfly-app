@@ -704,8 +704,11 @@ export default async function DynamicWebsite({ params }) {
       });
     }
 
-    // 2. Value/Solution Section (Quick Tips)
+    // 2. Value/Solution Section (Quick Tips from full PDF, or Preview Tips from prospect phase)
+    const previewTips = lm.lead_magnet?.preview_tips || [];
+    
     if (pdfContent.quick_tips && pdfContent.quick_tips.length > 0) {
+      // Full PDF content available (post-purchase)
       layout.push({
         component: 'FeatureGrid',
         props: {
@@ -719,8 +722,23 @@ export default async function DynamicWebsite({ params }) {
           id: 'tips'
         }
       });
+    } else if (previewTips.length > 0) {
+      // Preview tips from prospect phase (pre-purchase) - shows real value!
+      layout.push({
+        component: 'FeatureGrid',
+        props: {
+          title: 'Sneak Peek: What\'s Inside Your Guide',
+          subtitle: 'Here are just 3 of the valuable tips you\'ll get:',
+          features: previewTips.map(tip => ({
+            title: tip.title,
+            description: tip.description,
+            icon: '💡'
+          })),
+          id: 'tips'
+        }
+      });
     } else {
-      // Fallback to benefits if no quick tips
+      // Fallback to benefits if nothing else
       layout.push({
         component: 'FeatureGrid',
         props: {

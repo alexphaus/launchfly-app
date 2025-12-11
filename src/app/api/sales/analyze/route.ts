@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       TASK:
       1. Analyze the website for "Lead Leaks" (e.g. only "Call Us" buttons, no email capture, generic contact form).
       2. Write a personalized cold email to the owner.
-      3. Generate a lead_magnet object with details for the funnel.
+      3. Generate a COMPELLING lead_magnet preview that shows real value.
       
       EMAIL REQUIREMENTS:
       - Subject: Short, curiosity-inducing (e.g. "Question about [Business Name]", "Saw your site").
@@ -63,6 +63,12 @@ export async function POST(request: Request) {
       - CTA: Invite them to check the link or reply.
       - Tone: Helpful, casual, not "salesy".
       - Length: Under 180 words (including P.S.).
+      
+      LEAD MAGNET REQUIREMENTS (this is what shows in the preview - make it SPECIFIC to their business):
+      - Title: Must reference their actual business name or specific service (e.g. "${resolvedBusinessName} Customer's Guide to...")
+      - Headline: Speak directly to their ideal customer's #1 problem
+      - Benefits: Be specific to services they actually offer (reference their website headings)
+      - Preview content: Give 3 genuinely useful tips their customers would value - this proves the quality
       
       OUTPUT FORMAT (JSON):
       {
@@ -76,10 +82,16 @@ export async function POST(request: Request) {
           "body": "..."
         },
         "lead_magnet": {
-          "title": "e.g. Home Plumbing Maintenance Checklist",
-          "headline": "Catchy landing page headline",
-          "subheadline": "Supporting subtitle",
-          "benefits": ["benefit 1", "benefit 2", "benefit 3"]
+          "title": "Specific title using their business name (e.g. ${resolvedBusinessName}'s Guide to [Topic])",
+          "headline": "Catchy landing page headline addressing their customer's main problem",
+          "subheadline": "Benefit-focused subtitle specific to their services",
+          "benefits": ["Specific benefit 1", "Specific benefit 2", "Specific benefit 3"],
+          "preview_tips": [
+            {"title": "Tip 1 title", "description": "Actionable tip specific to ${resolvedNiche}"},
+            {"title": "Tip 2 title", "description": "Another valuable insight"},
+            {"title": "Tip 3 title", "description": "Third helpful tip"}
+          ],
+          "cta_text": "Download Your Free Guide"
         },
         "lead_magnet_idea": "Short summary of the lead magnet concept"
       }

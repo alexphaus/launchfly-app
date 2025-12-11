@@ -58,39 +58,15 @@ export async function POST(request) {
     }
 
     // If already activated, return success with session_id
-    if (business.status === 'ready' || business.status === 'generating') {
+    if (business.status === 'ready') {
       console.log(`✅ Business already activated: ${businessId}`);
       
-      // Get existing session_id - try sessions table first, then business.session_id field
+      // Get existing session_id
       const { data: existingSession } = await supabase
         .from('sessions')
         .select('id')
         .eq('business_id', businessId)
         .single();
-      
-      let finalSessionId = existingSession?.id || business.session_id;
-      
-      // If still no session, create one now
-      if (!finalSessionId) {
-        finalSessionId = nanoid(12);
-        console.log(`Creating missing session for already-active business: ${finalSessionId}`);
-        
-        // Update business with session_id
-        await supabase
-          .from('businesses')
-          .update({ session_id: finalSessionId })
-          .eq('id', businessId);
-        
-        // Create session record
-        await supabase
-          .from('sessions')
-          .insert({ 
-            id: finalSessionId, 
-            business_id: businessId, 
-            stage: business.status === 'ready' ? 'complete' : 'generating',
-            progress: business.status === 'ready' ? 100 : 50
-          });
-      }
       
       return Response.json({
         success: true,
@@ -99,7 +75,7 @@ export async function POST(request) {
           id: business.id,
           name: business.business_data?.businessName || business.name,
           subdomain: business.subdomain,
-          sessionId: finalSessionId
+          sessionId: existingSession?.id || business.session_id
         }
       });
     }
@@ -222,7 +198,7 @@ export async function GET(request) {
 
   const { data: business, error } = await supabase
     .from('businesses')
-    .select('id, status, name, subdomain, business_data')
+    .select('id, status, name, subdomain, business_data, session_id')
     .eq('id', businessId)
     .single();
 
@@ -235,7 +211,8 @@ export async function GET(request) {
     business: business.status === 'ready' ? {
       id: business.id,
       name: business.business_data?.businessName || business.name,
-      subdomain: business.subdomain
+      subdomain: business.subdomain,
+      sessionId: business.session_id
     } : null
   });
 }

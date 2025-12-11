@@ -22,19 +22,12 @@ export default async function ClaimSuccessPage({ params, searchParams }) {
       .single();
     
     if (data) {
-      // Try to get session ID from sessions table as well
-      const { data: sessionData } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('business_id', businessId)
-        .single();
-      
       initialBusiness = {
         id: data.id,
         status: data.status,
         name: data.business_data?.businessName || data.name,
         subdomain: data.subdomain,
-        sessionId: sessionData?.id || data.session_id
+        sessionId: data.session_id
       };
     }
   } catch (err) {

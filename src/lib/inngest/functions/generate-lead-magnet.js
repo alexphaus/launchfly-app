@@ -123,22 +123,39 @@ export const generateLeadMagnet = inngest.createFunction(
 
     // Scrape website content if URL provided
     const websiteData = await step.run('scrape-website', async () => {
-      if (!websiteUrl) return null;
-      
-      console.log(`Scraping website: ${websiteUrl}`);
-      const scraped = await scrapeWebsiteContent(websiteUrl);
-      
-      if (scraped) {
-        // Update progress
+      if (!websiteUrl) {
+        // Still update progress even if no website to scrape
         if (sessionId) {
           await supabase
             .from('sessions')
             .update({ progress: 35 })
             .eq('id', sessionId);
         }
+        return null;
+      }
+      
+      console.log(`Scraping website: ${websiteUrl}`);
+      const scraped = await scrapeWebsiteContent(websiteUrl);
+      
+      // Update progress
+      if (sessionId) {
+        await supabase
+          .from('sessions')
+          .update({ progress: 35 })
+          .eq('id', sessionId);
       }
       
       return scraped;
+    });
+
+    // Update progress before content generation
+    await step.run('update-progress-content-gen', async () => {
+      if (sessionId) {
+        await supabase
+          .from('sessions')
+          .update({ progress: 50 })
+          .eq('id', sessionId);
+      }
     });
 
     const content = await step.run('generate-content', async () => {
@@ -264,6 +281,16 @@ export const generateLeadMagnet = inngest.createFunction(
         return JSON.parse(completion.choices[0].message.content);
     });
 
+    // Update progress after content generated
+    await step.run('update-progress-saving', async () => {
+      if (sessionId) {
+        await supabase
+          .from('sessions')
+          .update({ progress: 85 })
+          .eq('id', sessionId);
+      }
+    });
+
     await step.run('save-content', async () => {
         const { data: business, error: fetchError } = await supabase
             .from('businesses')
@@ -310,7 +337,7 @@ export const generateLeadMagnet = inngest.createFunction(
           const { error: sessionError } = await supabase
             .from('sessions')
             .update({ stage: 'complete', progress: 100 })
-            .eq('business_id', businessId);
+            .eq('id', sessionId);
             
           if (sessionError) {
              console.error('Error updating session:', sessionError);

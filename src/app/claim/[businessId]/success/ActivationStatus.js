@@ -2,21 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function ActivationStatus({ businessId, sessionId, initialBusiness }) {
-  // Consider both 'ready' and 'generating' as activated (generating means it's been claimed and is building)
-  // BUT only if we also have a sessionId (dashboard access)
-  const hasSessionId = !!initialBusiness?.sessionId;
-  const isActivated = (initialBusiness?.status === 'ready' || initialBusiness?.status === 'generating') && hasSessionId;
+  const supabase = createClientComponentClient();
   
-  const [status, setStatus] = useState(isActivated ? 'activated' : 'processing');
+  // State management
+  const [status, setStatus] = useState('activating'); // activating | building | ready | error
   const [business, setBusiness] = useState(initialBusiness);
   const [error, setError] = useState(null);
-  const [attempts, setAttempts] = useState(0);
-  const maxAttempts = 10;
+  const [progress, setProgress] = useState(0);
+  const [dashboardSessionId, setDashboardSessionId] = useState(initialBusiness?.sessionId || null);
 
+  // Activate the business (payment verification + setup)
   const activateBusiness = useCallback(async () => {
-    if (!sessionId || !businessId) return;
+    if (!sessionId || !businessId) return null;
     
     try {
       const response = await fetch('/api/claim/activate', {
@@ -28,68 +28,138 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
       const data = await response.json();
 
       if (data.success && data.status === 'activated') {
-        setStatus('activated');
         setBusiness(data.business);
-        return true;
+        setDashboardSessionId(data.business?.sessionId);
+        return data.business?.sessionId;
       } else if (data.status === 'pending_payment') {
-        setStatus('pending_payment');
-        return false;
+        setError('Payment is still processing. Please wait a moment and refresh.');
+        return null;
       } else {
-        setError(data.error);
-        return false;
+        setError(data.error || 'Activation failed');
+        return null;
       }
     } catch (err) {
       console.error('Activation error:', err);
       setError(err.message);
-      return false;
+      return null;
     }
   }, [businessId, sessionId]);
 
-  useEffect(() => {
-    // If we are activated AND have a session ID, we are good.
-    // If we are "activated" but missing session ID, we need to re-run activation to recover it.
-    if (status === 'activated' && business?.sessionId) return;
-    if (!sessionId) return;
+  // Poll for generation progress
+  const pollProgress = useCallback((dashSessionId) => {
+    if (!dashSessionId) return () => {};
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: session, error: sessErr } = await supabase
+          .from('sessions')
+          .select('stage, progress')
+          .eq('id', dashSessionId)
+          .single();
 
-    // Try to activate immediately
-    activateBusiness().then(success => {
-      if (success) return;
-
-      // If not successful, poll every 2 seconds
-      const interval = setInterval(async () => {
-        setAttempts(prev => {
-          if (prev >= maxAttempts) {
-            clearInterval(interval);
-            setStatus('timeout');
-            return prev;
-          }
-          return prev + 1;
-        });
-
-        const success = await activateBusiness();
-        if (success) {
-          clearInterval(interval);
+        if (sessErr) {
+          console.error('Poll error:', sessErr);
+          return;
         }
-      }, 2000);
 
-      return () => clearInterval(interval);
-    });
-  }, [activateBusiness, sessionId, status]);
+        if (session) {
+          setProgress(session.progress || 0);
+          
+          if (session.stage === 'complete' || session.progress >= 100) {
+            clearInterval(pollInterval);
+            setStatus('ready');
+          }
+        }
+      } catch (err) {
+        console.error('Poll exception:', err);
+      }
+    }, 2000);
+
+    // Return cleanup function
+    return () => clearInterval(pollInterval);
+  }, [supabase]);
+
+  // Main effect: activate then poll
+  useEffect(() => {
+    let cleanupFn = () => {};
+    let retryInterval = null;
+    
+    const init = async () => {
+      // If already has sessionId and is ready, skip activation
+      if (initialBusiness?.sessionId && initialBusiness?.status === 'ready') {
+        setDashboardSessionId(initialBusiness.sessionId);
+        setStatus('ready');
+        return;
+      }
+
+      // If already has sessionId and is generating, go straight to building
+      if (initialBusiness?.sessionId && initialBusiness?.status === 'generating') {
+        setDashboardSessionId(initialBusiness.sessionId);
+        setStatus('building');
+        cleanupFn = pollProgress(initialBusiness.sessionId);
+        return;
+      }
+
+      // Otherwise, activate first
+      setStatus('activating');
+      const newSessionId = await activateBusiness();
+      
+      if (newSessionId) {
+        setStatus('building');
+        setProgress(30); // Initial progress after activation
+        cleanupFn = pollProgress(newSessionId);
+      } else {
+        // Retry activation a few times
+        let retries = 0;
+        retryInterval = setInterval(async () => {
+          retries++;
+          if (retries >= 5) {
+            clearInterval(retryInterval);
+            setStatus('error');
+            if (!error) setError('Unable to activate your funnel. Please contact support.');
+            return;
+          }
+          
+          const retrySessionId = await activateBusiness();
+          if (retrySessionId) {
+            clearInterval(retryInterval);
+            setStatus('building');
+            setProgress(30);
+            cleanupFn = pollProgress(retrySessionId);
+          }
+        }, 3000);
+      }
+    };
+
+    init();
+
+    return () => {
+      cleanupFn();
+      if (retryInterval) clearInterval(retryInterval);
+    };
+  }, []);
 
   const handleRetry = async () => {
     setError(null);
-    setStatus('processing');
-    setAttempts(0);
-    await activateBusiness();
+    setStatus('activating');
+    setProgress(0);
+    const newSessionId = await activateBusiness();
+    if (newSessionId) {
+      setStatus('building');
+      setProgress(30);
+      pollProgress(newSessionId);
+    }
   };
 
-  const businessName = business?.name || 'Your Business';
-  const subdomain = business?.subdomain;
+  const businessName = business?.name || initialBusiness?.name || 'Your Business';
+  const subdomain = business?.subdomain || initialBusiness?.subdomain;
   const funnelUrl = subdomain ? `https://${subdomain}.launchfly.ai` : null;
-  const dashboardUrl = business?.sessionId ? `/dashboard/${business.sessionId}` : '/';
+  const dashboardUrl = dashboardSessionId ? `/dashboard/${dashboardSessionId}` : '/';
 
-  // Activated state
-  if (status === 'activated') {
+  // ==================== RENDER STATES ====================
+
+  // READY STATE - Funnel is fully activated and ready
+  if (status === 'ready') {
     return (
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
         <div className="text-6xl mb-4">🎉</div>
@@ -136,16 +206,14 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
         </div>
 
         <p className="text-sm text-slate-500 mt-6">
-          {business?.sessionId 
-            ? 'Your funnel is being enhanced with a PDF guide and email sequences. Check your dashboard for progress!'
-            : 'Check your email for next steps and tips to maximize your leads.'}
+          Your funnel includes a PDF guide and email sequences. Check your dashboard for full details!
         </p>
       </div>
     );
   }
 
-  // Error or timeout state
-  if (status === 'timeout' || error) {
+  // ERROR STATE
+  if (status === 'error' || error) {
     return (
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
         <div className="text-6xl mb-4">⚠️</div>
@@ -153,7 +221,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
           Activation Issue
         </h1>
         <p className="text-slate-600 mb-4">
-          {error || 'We had trouble activating your funnel. Your payment was successful - let\'s try again.'}
+          {error || "We had trouble activating your funnel. Your payment was successful - let's try again."}
         </p>
         
         <button
@@ -174,48 +242,85 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
     );
   }
 
-  // Pending payment state
-  if (status === 'pending_payment') {
+  // BUILDING STATE - Progressive generation screen (same as onboarding)
+  if (status === 'building') {
     return (
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
-        <div className="text-6xl mb-4">💳</div>
+        {/* Spinner */}
+        <div 
+          className="mx-auto mb-6 animate-spin"
+          style={{
+            width: '64px',
+            height: '64px',
+            border: '4px solid #e5e7eb',
+            borderTopColor: '#2563eb',
+            borderRadius: '50%'
+          }}
+        />
+        
         <h1 className="text-2xl font-bold text-slate-800 mb-2">
-          Payment Processing
+          Building Your Business System
         </h1>
         <p className="text-slate-600 mb-6">
-          Your payment is still being processed. This usually takes just a moment.
+          AI is generating your assets. This usually takes about 30-60 seconds.
         </p>
-        <button
-          onClick={handleRetry}
-          className="w-full bg-blue-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
-        >
-          Check Again
-        </button>
+        
+        {/* Progress bar */}
+        <div className="mb-6">
+          <div className="flex justify-between mb-2 text-sm font-medium text-slate-600">
+            <span>Progress</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-blue-600 transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+        
+        {/* Progress steps */}
+        <div className="text-left space-y-3">
+          <div className={`flex items-center gap-3 ${progress > 10 ? 'text-green-600' : 'text-slate-400'}`}>
+            <span>{progress > 10 ? '✓' : '○'}</span>
+            <span>Analyzing Market & Audience</span>
+          </div>
+          <div className={`flex items-center gap-3 ${progress > 40 ? 'text-green-600' : 'text-slate-400'}`}>
+            <span>{progress > 40 ? '✓' : '○'}</span>
+            <span>Writing Lead Magnet Content</span>
+          </div>
+          <div className={`flex items-center gap-3 ${progress > 70 ? 'text-green-600' : 'text-slate-400'}`}>
+            <span>{progress > 70 ? '✓' : '○'}</span>
+            <span>Building Landing Page</span>
+          </div>
+          <div className={`flex items-center gap-3 ${progress > 90 ? 'text-green-600' : 'text-slate-400'}`}>
+            <span>{progress > 90 ? '✓' : '○'}</span>
+            <span>Drafting Email Sequence</span>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Processing state (default)
+  // ACTIVATING STATE - Initial activation (payment verification)
   return (
     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
-      <div className="text-6xl mb-4 animate-pulse">⏳</div>
+      <div 
+        className="mx-auto mb-6 animate-spin"
+        style={{
+          width: '48px',
+          height: '48px',
+          border: '4px solid #e5e7eb',
+          borderTopColor: '#2563eb',
+          borderRadius: '50%'
+        }}
+      />
+      
       <h1 className="text-2xl font-bold text-slate-800 mb-2">
-        Setting Up Your Funnel
+        Activating Your Funnel
       </h1>
-      <p className="text-slate-600 mb-4">
-        We're activating your funnel now. This usually takes just a few seconds...
-      </p>
-      
-      {/* Progress indicator */}
-      <div className="w-full bg-slate-200 rounded-full h-2 mb-4">
-        <div 
-          className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-          style={{ width: `${Math.min((attempts / maxAttempts) * 100, 95)}%` }}
-        />
-      </div>
-      
-      <p className="text-sm text-slate-400">
-        {attempts > 0 ? `Checking status... (${attempts}/${maxAttempts})` : 'Connecting...'}
+      <p className="text-slate-600">
+        Verifying your payment and setting up your account...
       </p>
     </div>
   );

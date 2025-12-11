@@ -61,6 +61,10 @@ export async function POST(request) {
     if (business.status === 'ready') {
       console.log(`✅ Business already activated: ${businessId}`);
       
+      // Check if content is actually ready
+      const hasContent = business.business_data?.leadMagnet?.lead_magnet_content || 
+                        business.business_data?.lead_magnet_content;
+      
       // Get existing session_id
       const { data: existingSession } = await supabase
         .from('sessions')
@@ -70,9 +74,9 @@ export async function POST(request) {
       
       let finalSessionId = existingSession?.id || business.session_id;
 
-      // RECOVERY: If session_id is missing (e.g. from previous bug), generate one now
-      if (!finalSessionId) {
-         console.log('⚠️ Business ready but missing session_id. Regenerating...');
+      // RECOVERY: If session_id is missing OR content is missing, we need to regenerate
+      if (!finalSessionId || !hasContent) {
+         console.log('⚠️ Business ready but missing session_id or content. Regenerating...');
          const generateId = (len = 12) => {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             let result = '';
@@ -81,10 +85,44 @@ export async function POST(request) {
          };
          finalSessionId = generateId(12);
          
-         // Update business
-         await supabase.from('businesses').update({ session_id: finalSessionId }).eq('id', businessId);
+         // Update business to generating state
+         await supabase.from('businesses').update({ 
+           session_id: finalSessionId,
+           status: hasContent ? 'ready' : 'generating' 
+         }).eq('id', businessId);
+         
          // Create session
-         await supabase.from('sessions').insert({ id: finalSessionId, business_id: businessId, stage: 'complete', progress: 100 });
+         await supabase.from('sessions').insert({ 
+           id: finalSessionId, 
+           business_id: businessId, 
+           stage: hasContent ? 'complete' : 'generating', 
+           progress: hasContent ? 100 : 30 
+         });
+
+         // If missing content, trigger generation
+         if (!hasContent) {
+           const businessData = business.business_data || {};
+           const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title || 
+                                  businessData.businessName + ' Guide';
+           
+           try {
+             await inngest.send({
+               name: 'lead-magnet/generation.requested',
+               data: {
+                 businessId: businessId,
+                 topic: leadMagnetTitle,
+                 audience: businessData.niche || 'local customers',
+                 language: 'English',
+                 sessionId: finalSessionId,
+                 websiteUrl: businessData.websiteUrl,
+                 businessContext: `${businessData.businessName} - ${businessData.niche}`
+               }
+             });
+             console.log('✅ Triggered content regeneration via Inngest');
+           } catch (e) {
+             console.error('Failed to trigger Inngest for recovery:', e);
+           }
+         }
       }
       
       return Response.json({

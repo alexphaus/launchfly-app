@@ -1,8 +1,10 @@
 import { inngest } from '../client';
 import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -105,7 +107,7 @@ export const generateLeadMagnet = inngest.createFunction(
   { id: 'generate-lead-magnet', name: 'Generate Lead Magnet' },
   { event: 'lead-magnet/generation.requested' },
   async ({ event, step }) => {
-    const { businessId, topic, audience, language = 'English', sessionId, websiteUrl, businessContext } = event.data;
+    const { businessId, topic, audience, language = 'English', sessionId, websiteUrl, businessContext, ownerEmail } = event.data;
 
     console.log(`🚀 [generate-lead-magnet] Starting for business: ${businessId}, session: ${sessionId}`);
     console.log(`📝 Topic: ${topic}, Audience: ${audience}`);
@@ -356,6 +358,48 @@ export const generateLeadMagnet = inngest.createFunction(
         
         console.log(`✅ [generate-lead-magnet] Complete for business: ${businessId}`);
     });
+
+    // Send welcome email with dashboard link
+    if (ownerEmail && sessionId) {
+      await step.run('send-welcome-email', async () => {
+        const dashboardUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'https://www.launchfly.ai'}/dashboard/${sessionId}`;
+        
+        try {
+          await resend.emails.send({
+            from: 'Launchfly <notifications@launchfly.com>',
+            to: ownerEmail,
+            subject: 'Your AI Business System is Ready! 🚀',
+            html: `
+              <h2>Your Business System is Ready!</h2>
+              <p>Great news! Your AI-powered lead magnet funnel has been generated and is ready for review.</p>
+              <p><strong>Business Name:</strong> ${content.business_name}</p>
+              <p><strong>Lead Magnet:</strong> ${content.lead_magnet_title}</p>
+              
+              <div style="margin: 30px 0;">
+                <a href="${dashboardUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Access Your Dashboard</a>
+              </div>
+              
+              <p>Or copy this link: <a href="${dashboardUrl}">${dashboardUrl}</a></p>
+              
+              <h3>What's Inside?</h3>
+              <ul>
+                <li>8-Page Premium PDF Guide</li>
+                <li>High-Converting Landing Page</li>
+                <li>5-Day Email Nurture Sequence</li>
+                <li>Conversion Offer Setup</li>
+              </ul>
+              
+              <p>We're excited to help you grow your business!</p>
+              <p>Best regards,<br>The Launchfly Team</p>
+            `
+          });
+          console.log(`📧 Welcome email sent to ${ownerEmail}`);
+        } catch (emailError) {
+          console.error('Failed to send welcome email:', emailError);
+          // Don't fail the function if email fails
+        }
+      });
+    }
 
     return { success: true, businessId };
   }

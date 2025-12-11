@@ -178,7 +178,11 @@ export async function POST(request) {
         plan_tier: 'starter',
         rev_share_percent: 20,
         guarantee_start_at: new Date().toISOString(),
-        ...(targetUserId ? { user_id: targetUserId } : {})
+        ...(targetUserId ? { user_id: targetUserId } : {}),
+        business_data: {
+          ...(business.business_data || {}),
+          owner_email: customerEmail
+        }
       })
       .eq('id', businessId)
       .select()
@@ -236,7 +240,8 @@ export async function POST(request) {
           language: 'English',
           sessionId: newSessionId,
           websiteUrl: businessData.websiteUrl,
-          businessContext: `${businessData.businessName} - ${businessData.niche}`
+          businessContext: `${businessData.businessName} - ${businessData.niche}`,
+          ownerEmail: customerEmail
         }
       });
       console.log('✅ Lead magnet generation triggered via Inngest:', JSON.stringify(sendResult));

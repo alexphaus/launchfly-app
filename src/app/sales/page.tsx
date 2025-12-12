@@ -21,19 +21,63 @@ export default function SalesPage() {
   const [recipientPhone, setRecipientPhone] = useState('');
   const [smsMessage, setSmsMessage] = useState('');
   const [replyTo, setReplyTo] = useState('hello@launchfly.ai');
+  const [selectedTemplate, setSelectedTemplate] = useState('ai-audit');
+  const [ownerName, setOwnerName] = useState('');
+
+  const TEMPLATES = {
+    'ai-audit': {
+      label: '🤖 AI Website Audit (Default)',
+      subject: (data: any) => data?.email?.subject || '',
+      body: (data: any) => {
+        let body = data?.email?.body || '';
+        if (ownerName) {
+          // Try to replace "Hi there" or similar with "Hi [Name]"
+          body = body.replace(/^Hi (there|Team|Business Owner),/m, `Hi ${ownerName},`);
+        }
+        return body;
+      },
+      sms: (data: any) => {
+        const name = businessName || data?.scrapedData?.businessName || 'your business';
+        return `Hi ${ownerName ? ownerName + ' ' : ''}! I found ${name} online and have a quick question about helping you get more leads. Mind if I share a 2-min idea? - Alex from Launchfly`;
+      }
+    },
+    'maps-missing-appt': {
+      label: '📍 Maps: Missing Appointment Link',
+      subject: () => 'Quick question about your Google Maps profile',
+      body: (data: any) => `Hi ${ownerName || 'there'},\n\nI found you on Google Maps and noticed your 'Appointments' link is missing.\n\nI built a specific '2025 Price Guide' landing page that fits perfectly there to capture leads who find you on Maps.\n\nWant to see the preview?\n\nBest,\nAlex`,
+      sms: () => `Hi ${ownerName ? ownerName + ', ' : ''}I noticed your Google Maps profile is missing the 'Appointments' link. I built a demo page that fits there perfectly. Want to see it? - Alex`
+    },
+    'maps-bad-review': {
+      label: '⭐ Maps: Bad Review / No Answer',
+      subject: () => 'Saw a review on your Google profile',
+      body: (data: any) => `Hi ${ownerName || 'there'},\n\nI noticed a review on Google where a customer complained about not getting a quote fast enough.\n\nMy system automatically sends a 'Pricing Guide' to those people instantly so they don't leave bad reviews.\n\nWant to see how it works?\n\nBest,\nAlex`,
+      sms: () => `Hi ${ownerName ? ownerName + ', ' : ''}saw a review on your Google profile about slow replies. I have a tool that auto-replies with a price guide instantly. Want a demo? - Alex`
+    },
+    'maps-chat': {
+      label: '💬 Maps: Chat Button Message',
+      subject: () => 'Question from Google Maps',
+      body: () => `(This script is best for the Google Maps Chat feature)\n\nHi ${ownerName ? ownerName + ', ' : ''}I'm a local dev. I noticed your profile gets traffic but doesn't have a link for 'price shoppers' to download a quote guide. I built a demo checklist for you. Mind if I paste the link here?`,
+      sms: () => `Hi ${ownerName ? ownerName + ', ' : ''}I'm a local dev. I noticed your profile gets traffic but doesn't have a link for 'price shoppers' to download a quote guide. I built a demo checklist for you. Mind if I paste the link here?`
+    }
+  };
+
+  const handleTemplateChange = (templateKey: string) => {
+    setSelectedTemplate(templateKey);
+    const template = TEMPLATES[templateKey as keyof typeof TEMPLATES];
+    if (template && result) {
+      setEditableSubject(template.subject(result));
+      setEditableBody(template.body(result));
+      setSmsMessage(template.sms(result));
+    }
+  };
 
   // Update editable fields when result changes
   useEffect(() => {
     if (result) {
-      setEditableSubject(result.email.subject);
-      setEditableBody(result.email.body);
+      handleTemplateChange('ai-audit');
       setRecipientEmail(result.scrapedData.email || '');
       setRecipientPhone(result.scrapedData.phone || '');
       setPreviewUrl(result.previewUrl || '');
-      
-      // Generate SMS message (shorter version of email pitch)
-      const businessNameClean = businessName || result.scrapedData.businessName || 'your business';
-      setSmsMessage(`Hi! I found ${businessNameClean} online and have a quick question about helping you get more leads. Mind if I share a 2-min idea? - Alex from Launchfly`);
     }
   }, [result]);
 
@@ -256,17 +300,27 @@ export default function SalesPage() {
                 </div>
               </div>
               
-              <div className="mt-6 pt-6 border-t border-slate-100 flex gap-4 text-sm text-slate-500">
-                {result.scrapedData.email && (
-                  <span className="flex items-center gap-1">
-                    📧 {result.scrapedData.email}
-                  </span>
-                )}
-                {result.scrapedData.phone && (
-                  <span className="flex items-center gap-1">
-                    📞 {result.scrapedData.phone}
-                  </span>
-                )}
+              <div className="mt-6 pt-6 border-t border-slate-100 flex flex-wrap gap-4 text-sm text-slate-500 items-center justify-between">
+                <div className="flex gap-4">
+                  {result.scrapedData.email && (
+                    <span className="flex items-center gap-1">
+                      📧 {result.scrapedData.email}
+                    </span>
+                  )}
+                  {result.scrapedData.phone && (
+                    <span className="flex items-center gap-1">
+                      📞 {result.scrapedData.phone}
+                    </span>
+                  )}
+                </div>
+                <a 
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((businessName || result.scrapedData.businessName || '') + ' ' + (niche || ''))}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  🗺️ Open in Google Maps
+                </a>
               </div>
             </div>
 
@@ -325,6 +379,43 @@ export default function SalesPage() {
                   >
                     Copy All
                   </button>
+                </div>
+              </div>
+
+              <div className="mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    Owner Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    placeholder="e.g. Mike"
+                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Found in Google Maps Q&A or 'About' section. Select a strategy below to apply.
+                  </p>
+                </div>
+
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">
+                  Outreach Strategy
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {Object.entries(TEMPLATES).map(([key, template]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleTemplateChange(key)}
+                      className={`text-left px-3 py-2 rounded text-sm font-medium transition-colors ${
+                        selectedTemplate === key
+                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {template.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 

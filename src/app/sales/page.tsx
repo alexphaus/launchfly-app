@@ -204,32 +204,18 @@ export default function SalesPage() {
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
           <form onSubmit={handleAnalyze} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Website URL
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://example.com"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Business Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Joe's Plumbing"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Website URL
+              </label>
+              <input
+                type="url"
+                required
+                placeholder="https://example.com"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
             </div>
             
             <button
@@ -269,33 +255,55 @@ export default function SalesPage() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-sm font-semibold text-purple-600 uppercase tracking-wide mb-2">
-                    Primary Service Identified
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Primary Service
                   </h3>
-                  <p className="text-slate-700 font-medium mb-3">
+                  <p className="text-slate-900 font-semibold mb-4 text-lg">
                     {result.analysis.primary_service}
                   </p>
-                  <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wide mb-2 mt-4">
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        Est. Customer Value
+                      </h3>
+                      <p className="text-green-700 font-mono font-medium">
+                        {result.analysis.estimated_value || 'High Ticket'}
+                      </p>
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        Target Audience
+                      </h3>
+                      <p className="text-slate-700 text-sm">
+                        {result.analysis.customer_demographic || 'Local Residents'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                     Customer Pain Point
                   </h3>
-                  <p className="text-slate-600 text-sm">
-                    {result.analysis.pain_point}
+                  <p className="text-slate-600 text-sm italic border-l-2 border-red-200 pl-3">
+                    "{result.analysis.pain_point}"
                   </p>
                 </div>
+
                 <div>
-                  <h3 className="text-sm font-semibold text-green-600 uppercase tracking-wide mb-2">
-                    Opportunity
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    The Opportunity
                   </h3>
-                  <p className="text-slate-600 text-sm">
+                  <p className="text-slate-600 text-sm mb-4">
                     {result.analysis.opportunity}
                   </p>
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                    <span className="text-xs font-bold text-blue-600 uppercase block mb-1">
-                      Recommended Asset
+
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                    <span className="text-xs font-bold text-blue-600 uppercase block mb-2 flex items-center gap-1">
+                      ✨ Recommended Asset Strategy
                     </span>
-                    <span className="text-blue-900 font-medium">
+                    <p className="text-blue-900 font-medium text-sm leading-relaxed">
                       {result.lead_magnet_idea}
-                    </span>
+                    </p>
                   </div>
                 </div>
               </div>

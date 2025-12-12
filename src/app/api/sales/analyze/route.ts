@@ -86,7 +86,10 @@ export async function POST(request: Request) {
         "analysis": {
           "primary_service": "The main high-ticket service identified from their website",
           "pain_point": "The specific worry a customer has about this service",
-          "opportunity": "Why this asset would help them capture more leads"
+          "opportunity": "Why this asset would help them capture more leads",
+          "business_type": "e.g. Residential Service, B2B, Retail, etc.",
+          "estimated_value": "Estimated value of a single customer for this service (e.g. $500 - $2,000)",
+          "customer_demographic": "Who is their ideal customer? (e.g. Homeowners in [City], Small Business Owners)"
         },
         "email": {
           "subject": "...",

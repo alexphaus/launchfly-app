@@ -154,6 +154,56 @@ export async function scrapeWebsiteContent(url: string) {
         extracted.phone = validPhones[0];
       }
     }
+
+    // Extract address
+    // 1. Try Schema.org JSON-LD
+    const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi);
+    for (const match of jsonLdMatches) {
+      try {
+        const json = JSON.parse(match[1]);
+        const findAddress = (obj: any): string | null => {
+          if (!obj) return null;
+          
+          // Direct PostalAddress
+          if (obj['@type'] === 'PostalAddress') {
+            return [obj.streetAddress, obj.addressLocality, obj.addressRegion, obj.postalCode]
+              .filter(Boolean)
+              .join(', ');
+          }
+          
+          // Nested address in LocalBusiness or Organization
+          if (obj.address && (obj.address['@type'] === 'PostalAddress' || typeof obj.address === 'object')) {
+             const addr = obj.address;
+             return [addr.streetAddress, addr.addressLocality, addr.addressRegion, addr.postalCode]
+               .filter(Boolean)
+               .join(', ');
+          }
+          
+          return null;
+        };
+        
+        // Handle array of JSON-LD objects
+        const items = Array.isArray(json) ? json : [json];
+        for (const item of items) {
+            const addr = findAddress(item);
+            if (addr) {
+                extracted.address = addr;
+                break;
+            }
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+      if (extracted.address) break;
+    }
+
+    // 2. Try <address> tag
+    if (!extracted.address) {
+        const addressMatch = html.match(/<address[^>]*>([\s\S]*?)<\/address>/i);
+        if (addressMatch) {
+            extracted.address = addressMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+    }
     
     // Extract email from main page first
     extracted.email = extractEmailFromHtml(html) || '';

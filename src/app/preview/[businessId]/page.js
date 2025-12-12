@@ -803,7 +803,10 @@ export default async function DynamicWebsite({ params }) {
     layout.push({
       component: 'Footer',
       props: {
-        businessName: resolvedBusinessName
+        businessName: resolvedBusinessName,
+        email: business?.form_data?.prospectEmail || businessData.email,
+        phone: business?.form_data?.prospectPhone || businessData.phone,
+        address: business?.form_data?.prospectAddress || businessData.address
       }
     });
   }

@@ -178,7 +178,8 @@ export async function POST(request: Request) {
               niche: resolvedNiche,
               websiteUrl: url,
               prospectEmail: scrapedData.email,
-              prospectPhone: scrapedData.phone
+              prospectPhone: scrapedData.phone,
+              prospectAddress: scrapedData.address
             },
             expires_at: expiresAt.toISOString()
           })

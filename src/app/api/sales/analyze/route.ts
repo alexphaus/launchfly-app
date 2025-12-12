@@ -60,11 +60,17 @@ export async function POST(request: Request) {
       - Formatting: You MUST use double line breaks (\n\n) between sections.
       - Subject: "Question for [Clean Business Name]" or "Your website".
       - Salutation: "Hi Team," or "Hi [Owner Name],"
-      - Opening: "I saw you offer [Specific Service] in [City]." (Prove you looked).
-      - The Problem: "Your site is great for people ready to call *now*, but you're missing the 90% who are just price-shopping and leave without contacting you."
-      - The Solution: "I built a [Short Asset Name] (e.g. 'AC Cost Guide') for [Clean Business Name] to capture these leads automatically."
+      - Opening: State clearly what you saw. VARY PHRASING. e.g. "I saw you offer [Service] in [City]." or "I noticed you're doing [Service] in [City]."
+      - The Problem: Explain they are losing visitors who aren't ready to buy yet. VARY YOUR PHRASING so it doesn't look automated.
+        * Option A: "Your site is great for immediate buyers, but you're missing the 90% who are just price-shopping."
+        * Option B: "I noticed you don't have a way to capture visitors who are just researching and not ready to call yet."
+        * Option C: "You're likely losing a lot of leads who visit your site but leave because they aren't ready to book today."
+      - The Solution: State you built a tool to fix this. VARY PHRASING.
+        * Option A: "I built a [Short Asset Name] for [Clean Business Name] to capture these leads automatically."
+        * Option B: "I created a [Short Asset Name] specifically for [Clean Business Name] to fix this."
+        * Option C: "I went ahead and mocked up a [Short Asset Name] for [Clean Business Name] that grabs these emails."
       - The Link: "You can see the demo I made for you here:\n{{PREVIEW_LINK}}" (Link must be on its own line).
-      - CTA: "Worth a quick chat to see how it works?"
+      - CTA: Low friction question. VARY PHRASING. e.g. "Worth a quick chat?" or "Mind if I send the file over?" or "Worth a look?"
       - Tone: Professional, direct, peer-to-peer. NO SLANG.
       - Length: Under 120 words.
       - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Dick Ray Plumbing AC Cost Guide".

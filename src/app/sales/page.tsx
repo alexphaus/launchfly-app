@@ -8,6 +8,7 @@ export default function SalesPage() {
   const [niche, setNiche] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [sendSuccess, setSendSuccess] = useState('');
@@ -17,6 +18,8 @@ export default function SalesPage() {
   const [editableSubject, setEditableSubject] = useState('');
   const [editableBody, setEditableBody] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [smsMessage, setSmsMessage] = useState('');
   const [replyTo, setReplyTo] = useState('hello@launchfly.ai');
 
   // Update editable fields when result changes
@@ -25,7 +28,12 @@ export default function SalesPage() {
       setEditableSubject(result.email.subject);
       setEditableBody(result.email.body);
       setRecipientEmail(result.scrapedData.email || '');
+      setRecipientPhone(result.scrapedData.phone || '');
       setPreviewUrl(result.previewUrl || '');
+      
+      // Generate SMS message (shorter version of email pitch)
+      const businessNameClean = businessName || result.scrapedData.businessName || 'your business';
+      setSmsMessage(`Hi! I found ${businessNameClean} online and have a quick question about helping you get more leads. Mind if I share a 2-min idea? - Alex from Launchfly`);
     }
   }, [result]);
 
@@ -90,6 +98,46 @@ export default function SalesPage() {
       setError(err.message);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleSendSms = async () => {
+    if (!recipientPhone) {
+      alert('Please enter a phone number');
+      return;
+    }
+
+    if (!smsMessage) {
+      alert('Please enter an SMS message');
+      return;
+    }
+
+    setIsSendingSms(true);
+    setSendSuccess('');
+    setError('');
+
+    try {
+      const response = await fetch('/api/sales/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipientPhone,
+          message: smsMessage,
+          businessName: businessName || result?.scrapedData?.businessName || 'Unknown'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send SMS');
+      }
+
+      setSendSuccess(`SMS sent successfully to ${recipientPhone}!`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSendingSms(false);
     }
   };
 
@@ -372,6 +420,80 @@ export default function SalesPage() {
                     Sent from hello@launchfly.ai
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* SMS Alternative Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-l-4 border-l-purple-500">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  📱 SMS Alternative
+                </h2>
+                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                  {smsMessage.length}/160 chars
+                </span>
+              </div>
+
+              <p className="text-sm text-slate-600 mb-4">
+                No email found? Send a quick SMS instead.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  {result?.scrapedData?.phone && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ Scraped from website: {result.scrapedData.phone}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    SMS Message
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={smsMessage}
+                      onChange={(e) => setSmsMessage(e.target.value)}
+                      rows={3}
+                      maxLength={160}
+                      className={`w-full bg-white border rounded px-3 py-2 text-slate-800 text-sm resize-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
+                        smsMessage.length > 160 ? 'border-red-500' : 'border-slate-300'
+                      }`}
+                      placeholder="Keep it short and friendly..."
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Keep under 160 characters to avoid message splitting.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleSendSms}
+                  disabled={isSendingSms || !recipientPhone || !smsMessage}
+                  className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                >
+                  {isSendingSms ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      📱 Send SMS via Twilio
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

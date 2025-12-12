@@ -177,17 +177,18 @@ export default function SalesPage() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wide mb-2">
-                    Weak Points (Lead Leaks)
+                  <h3 className="text-sm font-semibold text-purple-600 uppercase tracking-wide mb-2">
+                    Primary Service Identified
                   </h3>
-                  <ul className="space-y-2">
-                    {result.analysis.weaknesses.map((point: string, i: number) => (
-                      <li key={i} className="text-slate-600 text-sm flex items-start gap-2">
-                        <span className="text-red-500 mt-0.5">✗</span>
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-slate-700 font-medium mb-3">
+                    {result.analysis.primary_service}
+                  </p>
+                  <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wide mb-2 mt-4">
+                    Customer Pain Point
+                  </h3>
+                  <p className="text-slate-600 text-sm">
+                    {result.analysis.pain_point}
+                  </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-green-600 uppercase tracking-wide mb-2">
@@ -198,7 +199,7 @@ export default function SalesPage() {
                   </p>
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                     <span className="text-xs font-bold text-blue-600 uppercase block mb-1">
-                      Recommended Lead Magnet
+                      Recommended Asset
                     </span>
                     <span className="text-blue-900 font-medium">
                       {result.lead_magnet_idea}

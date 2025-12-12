@@ -32,68 +32,73 @@ export async function POST(request: Request) {
     const resolvedNiche = niche || 'Service Business';
     
     const prompt = `
-      You are an expert sales copywriter specializing in cold outreach for local businesses.
-      
+      You are a business consultant, NOT a marketing agency. You speak plain English, not "marketing jargon."
+
       CONTEXT:
-      We sell a "Done-For-You Lead Magnet Funnel" service ($97 one-time).
-      It helps businesses capture leads who aren't ready to "Call Now" by offering a free PDF Guide/Checklist.
-      
+      We build "Automated Quote/Capture Tools" ($97 one-time).
+      We help local businesses capture the 95% of visitors who are just "price shopping" and aren't ready to call yet.
+
       TARGET BUSINESS:
       Name: ${resolvedBusinessName}
       URL: ${url}
       Niche: ${resolvedNiche}
-      
+
       WEBSITE DATA:
       Title: ${scrapedData.title}
       Description: ${scrapedData.description}
       Headings: ${scrapedData.headings.join(', ')}
       Content Snippet: ${scrapedData.bodyText.slice(0, 500)}...
-      
+
       TASK:
-      1. Analyze the website for "Lead Leaks" (e.g. only "Call Us" buttons, no email capture, generic contact form).
-      2. Write a personalized cold email to the owner.
-      3. Generate a COMPELLING lead_magnet preview that shows real value.
-      
+      1. CLEAN the business name. Remove "LLC", "Inc", "|", location suffixes (e.g. "in Kansas City"), and owner names (e.g. "by Dick Ray"). Keep it short and natural (e.g. "Dick Ray Plumbing").
+      2. Identify a specific service they offer that is expensive or complex.
+      3. Write a direct, short email to the owner using the CLEAN name.
+      4. Generate a High-Value "Asset" preview.
+
       EMAIL REQUIREMENTS:
-      - Subject: Short, curiosity-inducing (e.g. "Question about [Business Name]", "Saw your site").
-      - Opening: Reference something SPECIFIC from their site (a specific service, a review, their history, or location) to prove you looked.
-      - The Problem: Gently point out they are losing leads who visit but aren't ready to call yet.
-      - The Solution: Mention you've already built a specific Lead Magnet for them (VALUE FIRST approach).
-      - P.S.: Include a P.S. at the end with text like "P.S. I already mocked up what this could look like for you: {{PREVIEW_LINK}}"
-      - CTA: Invite them to check the link or reply.
-      - Tone: Helpful, casual, not "salesy".
-      - Length: Under 180 words (including P.S.).
-      
-      LEAD MAGNET REQUIREMENTS (this is what shows in the preview - make it SPECIFIC to their business):
-      - Title: Must reference their actual business name or specific service (e.g. "${resolvedBusinessName} Customer's Guide to...")
-      - Headline: Speak directly to their ideal customer's #1 problem
-      - Benefits: Be specific to services they actually offer (reference their website headings)
-      - Preview content: Give 3 genuinely useful tips their customers would value - this proves the quality
+      - Structure: Use short paragraphs. MAX 2 sentences per paragraph.
+      - Formatting: You MUST use double line breaks (\n\n) between sections.
+      - Subject: "Question for [Clean Business Name]" or "Your website".
+      - Salutation: "Hi Team," or "Hi [Owner Name],"
+      - Opening: "I saw you offer [Specific Service] in [City]." (Prove you looked).
+      - The Problem: "Your site is great for people ready to call *now*, but you're missing the 90% who are just price-shopping and leave without contacting you."
+      - The Solution: "I built a [Short Asset Name] (e.g. 'AC Cost Guide') for [Clean Business Name] to capture these leads automatically."
+      - The Link: "You can see the demo I made for you here:\n{{PREVIEW_LINK}}" (Link must be on its own line).
+      - CTA: "Worth a quick chat to see how it works?"
+      - Tone: Professional, direct, peer-to-peer. NO SLANG.
+      - Length: Under 120 words.
+      - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Dick Ray Plumbing AC Cost Guide".
+
+      LEAD MAGNET (ASSET) REQUIREMENTS:
+      - Concept: It must be a "Self-Diagnostic Checklist" or a "Pricing/Buying Guide." NO GENERIC E-BOOKS.
+      - Title: "${resolvedBusinessName} 2025 [Service] Checklist" or "Homeowner's Guide to [Service] Costs"
+      - Headline: Address a fear or a desire (e.g., "Don't Overpay for [Service]" or "Is Your [System] Failing? 5 Warning Signs")
+      - Preview Content: 3 specific "Red Flags" or "Buying Checks" a homeowner can do themselves. These should be DIAGNOSTIC (symptoms to look for), not generic advice.
       
       OUTPUT FORMAT (JSON):
       {
         "analysis": {
-          "strengths": ["..."],
-          "weaknesses": ["..."],
-          "opportunity": "..."
+          "primary_service": "The main high-ticket service identified from their website",
+          "pain_point": "The specific worry a customer has about this service",
+          "opportunity": "Why this asset would help them capture more leads"
         },
         "email": {
           "subject": "...",
           "body": "..."
         },
         "lead_magnet": {
-          "title": "Specific title using their business name (e.g. ${resolvedBusinessName}'s Guide to [Topic])",
-          "headline": "Catchy landing page headline addressing their customer's main problem",
+          "title": "Specific title using their business name (e.g. ${resolvedBusinessName}'s 2025 [Service] Checklist)",
+          "headline": "Fear or desire headline (e.g. Don't Overpay for Your Next [Service])",
           "subheadline": "Benefit-focused subtitle specific to their services",
           "benefits": ["Specific benefit 1", "Specific benefit 2", "Specific benefit 3"],
           "preview_tips": [
-            {"title": "Tip 1 title", "description": "Actionable tip specific to ${resolvedNiche}"},
-            {"title": "Tip 2 title", "description": "Another valuable insight"},
-            {"title": "Tip 3 title", "description": "Third helpful tip"}
+            {"title": "Warning Sign #1", "description": "Specific symptom to look for (e.g. 'Is your AC making a buzzing sound?')"},
+            {"title": "Warning Sign #2", "description": "Another diagnostic check"},
+            {"title": "Warning Sign #3", "description": "Third red flag to watch for"}
           ],
-          "cta_text": "Download Your Free Guide"
+          "cta_text": "Get The Free Guide"
         },
-        "lead_magnet_idea": "Short summary of the lead magnet concept"
+        "lead_magnet_idea": "Short summary of the asset concept"
       }
     `;
 

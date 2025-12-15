@@ -83,6 +83,29 @@ export async function POST(request) {
           console.error('Error activating claimed business:', updateError);
         } else {
           console.log(`✅ Webhook activated claimed business: ${metadata.businessId}`);
+          
+          // Create an order record for the funnel claim so it shows in analytics
+          const orderData = {
+            business_id: metadata.businessId,
+            customer_email: session.customer_details?.email || metadata.email || 'unknown@example.com',
+            customer_name: session.customer_details?.name || 'Business Owner',
+            status: 'fulfilled',
+            subtotal: session.amount_total / 100,
+            total_amount: session.amount_total / 100,
+            currency: session.currency || 'usd',
+            stripe_session_id: session.id,
+            created_at: new Date().toISOString()
+          };
+
+          const { error: orderError } = await supabase
+            .from('orders')
+            .insert(orderData);
+
+          if (orderError) {
+            console.error('Error creating order for funnel claim:', orderError);
+          } else {
+            console.log('✅ Created order record for funnel claim');
+          }
         }
         
         return Response.json({ received: true, processed: true, type: 'funnel_claim' });
@@ -123,6 +146,29 @@ export async function POST(request) {
         
         console.log('Professional plan subscription recorded:', subscription.id);
         
+        // Create an order record for the platform subscription so it shows in analytics
+        const orderData = {
+          business_id: subscription.id, // Using subscription ID as business ID for platform orders
+          customer_email: metadata.user_email,
+          customer_name: metadata.user_name,
+          status: 'fulfilled',
+          subtotal: session.amount_total / 100,
+          total_amount: session.amount_total / 100,
+          currency: 'usd',
+          stripe_session_id: session.id,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: orderError } = await supabase
+          .from('orders')
+          .insert(orderData);
+
+        if (orderError) {
+          console.error('Error creating order for platform subscription:', orderError);
+        } else {
+          console.log('✅ Created order record for platform subscription');
+        }
+        
         // Send confirmation email
         try {
           await resend.emails.send({
@@ -132,12 +178,12 @@ export async function POST(request) {
             html: `
               <h2>Welcome to Launchfly Professional!</h2>
               <p>Hi ${metadata.user_name},</p>
-              <p>Thank you for upgrading to Launchfly Professional! Your payment of $497 has been successfully processed.</p>
+              <p>Thank you for upgrading to Launchfly Professional! Your payment of $297 has been successfully processed.</p>
               <h3>What's Next?</h3>
               <ul>
                 <li>Complete your business setup in the onboarding flow</li>
                 <li>Access all premium templates</li>
-                <li>Keep 90% of all profits (only 10% revenue share)</li>
+                <li>Keep 100% of all profits (No revenue share)</li>
                 <li>Get priority customer allocation</li>
               </ul>
               <p>You can continue your setup by returning to the onboarding flow.</p>
@@ -150,6 +196,122 @@ export async function POST(request) {
         }
         
         return new Response('Professional plan webhook processed', { status: 200 });
+      }
+
+      // Check if this is a main homepage purchase (Pro or VIP)
+      if (metadata.product_type === 'one_time_purchase') {
+        const plan = metadata.plan;
+        console.log(`Processing one-time purchase for plan: ${plan}`);
+        
+        const customerEmail = session.customer_details?.email || metadata.email;
+        const customerName = session.customer_details?.name || 'Valued Customer';
+        
+        // Record the subscription/purchase
+        const subscriptionData = {
+          user_email: customerEmail,
+          user_name: customerName,
+          plan: plan,
+          amount: session.amount_total / 100,
+          currency: 'usd',
+          stripe_session_id: session.id,
+          payment_status: 'completed',
+          metadata: {
+            source: 'homepage_checkout'
+          }
+        };
+        
+        console.log('Recording plan purchase:', subscriptionData);
+        
+        const { data: subscription, error: subError } = await supabase
+          .from('platform_subscriptions')
+          .insert([subscriptionData])
+          .select()
+          .single();
+        
+        if (subError) {
+          console.error('Error recording plan purchase:', subError);
+          // Don't throw here, try to record order anyway
+        } else {
+          console.log('Plan purchase recorded in platform_subscriptions:', subscription.id);
+        }
+        
+        // Create an order record so it shows in analytics
+        const orderData = {
+          business_id: subscription?.id || 'pending_activation', // Use subscription ID or placeholder
+          customer_email: customerEmail,
+          customer_name: customerName,
+          status: 'fulfilled',
+          subtotal: session.amount_total / 100,
+          total_amount: session.amount_total / 100,
+          currency: 'usd',
+          stripe_session_id: session.id,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: orderError } = await supabase
+          .from('orders')
+          .insert(orderData);
+
+        if (orderError) {
+          console.error('Error creating order for plan purchase:', orderError);
+        } else {
+          console.log('✅ Created order record for plan purchase');
+        }
+        
+        // Send confirmation email based on plan
+        try {
+          let subject = 'Welcome to Launchfly! 🚀';
+          let planName = 'Launchfly System';
+          let featuresHtml = '';
+          
+          if (plan === 'pro') {
+            subject = 'Your "Neighborhood Authority" System is Ready! 🚀';
+            planName = 'The "Neighborhood Authority" System ($97)';
+            featuresHtml = `
+              <ul>
+                <li>Custom "City-Specific" PDF Guide</li>
+                <li>High-Converting Landing Page</li>
+                <li>5-Day Automated Email Sequence</li>
+                <li>Lead Command Center Dashboard</li>
+              </ul>
+            `;
+          } else if (plan === 'vip') {
+            subject = 'Welcome to Done-For-You Growth! 🚀';
+            planName = 'Done-For-You Growth Plan ($297)';
+            featuresHtml = `
+              <ul>
+                <li>Everything in the $97 Plan</li>
+                <li>Google Business Profile Optimization</li>
+                <li>Instant SMS Lead Alerts</li>
+                <li>Premium Hosting & Domain Connection</li>
+              </ul>
+            `;
+          }
+
+          await resend.emails.send({
+            from: 'Launchfly <notifications@launchfly.com>',
+            to: customerEmail,
+            subject: subject,
+            html: `
+              <h2>Welcome to Launchfly!</h2>
+              <p>Hi ${customerName},</p>
+              <p>Thank you for purchasing <strong>${planName}</strong>! Your payment has been successfully processed.</p>
+              <h3>What You Get:</h3>
+              ${featuresHtml}
+              <p><strong>Next Steps:</strong></p>
+              <p>Please click the button below to complete your account setup and start generating leads.</p>
+              <p>
+                <a href="${process.env.NEXT_PUBLIC_BASE_URL}/onboarding/quick-start?session_id=${session.id}&plan=${plan}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Setup</a>
+              </p>
+              <p>If you have any questions, feel free to reply to this email.</p>
+              <p>Best regards,<br>The Launchfly Team</p>
+            `
+          });
+        } catch (emailError) {
+          console.error('Failed to send plan confirmation email:', emailError);
+        }
+        
+        return new Response('Plan purchase webhook processed', { status: 200 });
       }
       
       // Regular business sale processing
@@ -204,6 +366,29 @@ export async function POST(request) {
         saleRecords.push(sale);
         console.log('Multi-item sale recorded:', sale.id);
         
+        // Create an order record for the multi-item sale so it shows in analytics
+        const orderData = {
+          business_id: metadata.business_id,
+          customer_email: session.customer_details?.email || metadata.customer_email,
+          customer_name: session.customer_details?.name || metadata.customer_name || 'Unknown',
+          status: 'fulfilled',
+          subtotal: session.amount_total / 100,
+          total_amount: session.amount_total / 100,
+          currency: 'usd',
+          stripe_session_id: session.id,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: orderError } = await supabase
+          .from('orders')
+          .insert(orderData);
+
+        if (orderError) {
+          console.error('Error creating order for multi-item sale:', orderError);
+        } else {
+          console.log('✅ Created order record for multi-item sale');
+        }
+        
       } else {
         // Handle single product purchase (existing logic)
         const saleData = {
@@ -232,6 +417,29 @@ export async function POST(request) {
 
         saleRecords.push(sale);
         console.log('Single product sale recorded:', sale.id);
+
+        // Create an order record for the single product sale so it shows in analytics
+        const orderData = {
+          business_id: metadata.business_id,
+          customer_email: session.customer_details?.email || metadata.customer_email,
+          customer_name: session.customer_details?.name || metadata.customer_name || 'Unknown',
+          status: 'fulfilled',
+          subtotal: session.amount_total / 100,
+          total_amount: session.amount_total / 100,
+          currency: 'usd',
+          stripe_session_id: session.id,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: orderError } = await supabase
+          .from('orders')
+          .insert(orderData);
+
+        if (orderError) {
+          console.error('Error creating order for single product sale:', orderError);
+        } else {
+          console.log('✅ Created order record for single product sale');
+        }
       }
 
       // Check if this is the first sale

@@ -13,15 +13,46 @@ export default async function FounderAnalyticsPage() {
   const [
     { data: businesses },
     { data: orders },
-    { data: activities }
+    { data: activities },
+    { data: subscriptions }
   ] = await Promise.all([
     supabase.from('businesses').select('id, status, created_at, total_leads'),
-    supabase.from('orders').select('id, total_amount, created_at, status').eq('status', 'fulfilled'),
-    supabase.from('ai_activities').select('*, businesses(name)').order('created_at', { ascending: false }).limit(50)
+    supabase.from('orders').select('id, total_amount, created_at, status, stripe_session_id').eq('status', 'fulfilled'),
+    supabase.from('ai_activities').select('*, businesses(name)').order('created_at', { ascending: false }).limit(50),
+    supabase.from('platform_subscriptions').select('id, amount, stripe_session_id, payment_status, created_at').eq('payment_status', 'completed')
   ]);
 
   // Calculate aggregates
-  const totalRevenue = orders?.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0) || 0;
+  // Use a Set to track processed stripe sessions to avoid double counting between orders and subscriptions
+  const processedSessions = new Set();
+  
+  let totalRevenue = 0;
+  const mergedOrders = [...(orders || [])];
+  
+  // Add revenue from orders
+  orders?.forEach(o => {
+    totalRevenue += (Number(o.total_amount) || 0);
+    if (o.stripe_session_id) {
+      processedSessions.add(o.stripe_session_id);
+    }
+  });
+  
+  // Add revenue from subscriptions (only if not already counted in orders)
+  subscriptions?.forEach(s => {
+    if (s.stripe_session_id && !processedSessions.has(s.stripe_session_id)) {
+      totalRevenue += (Number(s.amount) || 0);
+      processedSessions.add(s.stripe_session_id);
+      
+      // Add to merged orders for the chart
+      mergedOrders.push({
+        id: s.id,
+        total_amount: s.amount,
+        created_at: s.created_at,
+        status: 'fulfilled'
+      });
+    }
+  });
+
   const totalLeads = businesses?.reduce((sum, b) => sum + (b.total_leads || 0), 0) || 0;
   const activeBusinesses = businesses?.filter(b => b.status === 'active' || b.status === 'ready').length || 0;
 
@@ -34,7 +65,7 @@ export default async function FounderAnalyticsPage() {
         </div>
 
         <AnalyticsDashboard 
-          data={{ businesses: businesses || [], orders: orders || [] }}
+          data={{ businesses: businesses || [], orders: mergedOrders }}
           revenue={totalRevenue}
           leads={totalLeads}
           businesses={activeBusinesses}

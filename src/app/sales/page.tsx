@@ -343,7 +343,7 @@ export default function SalesPage() {
                 </p>
                 <div className="flex items-center gap-3">
                   <a 
-                    href={previewUrl}
+                    href={previewUrl ? `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}preview=true` : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 bg-white border border-emerald-300 rounded-lg px-4 py-2 text-emerald-800 font-mono text-sm hover:bg-emerald-50 transition-colors truncate"

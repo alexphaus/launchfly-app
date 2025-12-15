@@ -233,7 +233,7 @@ export default function AnalyticsDashboard({
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">
+                  <td className="px-6 py-4 text-slate-500" suppressHydrationWarning>
                     {new Date(activity.created_at).toLocaleString()}
                   </td>
                   <td className="px-6 py-4">

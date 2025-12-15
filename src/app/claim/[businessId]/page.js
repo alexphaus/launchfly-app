@@ -71,7 +71,7 @@ export default async function ClaimPage({ params }) {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="text-white font-bold text-xl">🚀 Launchfly</div>
           <a 
-            href={`/preview/${businessId}`}
+            href={`/preview/${businessId}?preview=true`}
             className="text-white/80 hover:text-white text-sm"
           >
             ← Back to Preview

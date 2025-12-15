@@ -360,7 +360,7 @@ export default function SalesPage() {
                     Copy
                   </button>
                   <a
-                    href={previewUrl}
+                    href={previewUrl ? `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}preview=true` : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-4 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors font-medium"

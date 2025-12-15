@@ -48,7 +48,8 @@ export default async function FounderAnalyticsPage() {
         id: s.id,
         total_amount: s.amount,
         created_at: s.created_at,
-        status: 'fulfilled'
+        status: 'fulfilled',
+        stripe_session_id: s.stripe_session_id
       });
     }
   });

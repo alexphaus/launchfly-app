@@ -49,7 +49,7 @@ export default function AnalyticsDashboard({
       .slice(-30); // Last 30 days
   }, [data]);
 
-  // AI Insights Generation (Mocked logic based on real data)
+  // AI Insights Generation
   const insights = useMemo(() => {
     const insightsList = [];
     
@@ -224,7 +224,14 @@ export default function AnalyticsDashboard({
                     {formatEventType(activity.type)}
                   </td>
                   <td className="px-6 py-4 text-slate-600">
-                    {activity.message || 'No details'}
+                    <div className="flex flex-col">
+                      <span>{activity.message || 'No details'}</span>
+                      {activity.businesses?.name && (
+                        <span className="text-xs font-medium text-blue-600 mt-1">
+                          Business: {activity.businesses.name}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-slate-500">
                     {new Date(activity.created_at).toLocaleString()}

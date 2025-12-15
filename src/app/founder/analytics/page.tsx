@@ -17,7 +17,7 @@ export default async function FounderAnalyticsPage() {
   ] = await Promise.all([
     supabase.from('businesses').select('id, status, created_at, total_leads'),
     supabase.from('orders').select('id, total_amount, created_at, status').eq('status', 'fulfilled'),
-    supabase.from('ai_activities').select('*').order('created_at', { ascending: false }).limit(50)
+    supabase.from('ai_activities').select('*, businesses(name)').order('created_at', { ascending: false }).limit(50)
   ]);
 
   // Calculate aggregates

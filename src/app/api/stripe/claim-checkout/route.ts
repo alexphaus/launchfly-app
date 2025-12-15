@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Launch Pack pricing (test: $1)
     const priceConfig = {
-      amount: 9700, // $1.00 for testing
+      amount: 100, // $1.00 for testing
       name: 'Launchfly Launch Pack',
       description: 'Full Lead Capture Funnel + 1 Year Hosting + Email Delivery'
     };

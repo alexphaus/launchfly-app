@@ -188,6 +188,36 @@ export const generateLeadMagnet = inngest.createFunction(
           `;
         }
 
+        // Detect currency from business context
+        const detectCurrency = (text) => {
+          if (!text) return { symbol: '$', code: 'USD', name: 'dollars' };
+          const lowerText = text.toLowerCase();
+          if (lowerText.includes('rm') || lowerText.includes('ringgit') || lowerText.includes('malaysia')) {
+            return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
+          }
+          if (lowerText.includes('sgd') || lowerText.includes('singapore')) {
+            return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
+          }
+          if (lowerText.includes('php') || lowerText.includes('peso') || lowerText.includes('philippines')) {
+            return { symbol: '₱', code: 'PHP', name: 'pesos' };
+          }
+          if (lowerText.includes('idr') || lowerText.includes('rupiah') || lowerText.includes('indonesia')) {
+            return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
+          }
+          if (lowerText.includes('thb') || lowerText.includes('baht') || lowerText.includes('thailand')) {
+            return { symbol: '฿', code: 'THB', name: 'baht' };
+          }
+          if (lowerText.includes('£') || lowerText.includes('gbp') || lowerText.includes('pound')) {
+            return { symbol: '£', code: 'GBP', name: 'pounds' };
+          }
+          if (lowerText.includes('€') || lowerText.includes('eur') || lowerText.includes('euro')) {
+            return { symbol: '€', code: 'EUR', name: 'euros' };
+          }
+          return { symbol: '$', code: 'USD', name: 'dollars' };
+        };
+
+        const detectedCurrency = detectCurrency(businessContext || websiteData?.bodyText || '');
+
         const prompt = `
           You are a world-class direct response copywriter (like Dan Kennedy or Russell Brunson) for LOCAL SERVICE BUSINESSES. 
           Create a high-converting Lead Magnet Asset (Checklist, Price Guide, or Coupon) and Landing Page copy for a local business specializing in: "${topic}".
@@ -195,7 +225,26 @@ export const generateLeadMagnet = inngest.createFunction(
           Target Audience: ${audience || 'Local Homeowners'}
           Language: ${language}
           ${websiteContextBlock}
-          ${businessContext ? `Additional Business Context from Owner: ${businessContext}` : ''}
+          ${businessContext ? `
+          ============= CRITICAL: BUSINESS CONTEXT PROVIDED BY OWNER =============
+          ${businessContext}
+          
+          INSTRUCTIONS FOR USING THIS CONTEXT:
+          1. Extract the EXACT business name from this context
+          2. Use the EXACT pricing/rates mentioned (DO NOT convert or change currency!)
+          3. Use the EXACT services they list
+          4. Use the service areas/locations they mention
+          5. Include their contact details (phone, email, WhatsApp) in the guide
+          6. Match their tone (professional, casual, bilingual, etc.)
+          ========================================================================
+          ` : ''}
+          
+          CRITICAL CURRENCY INSTRUCTIONS:
+          - Detected Currency: ${detectedCurrency.symbol} (${detectedCurrency.code})
+          - ALL prices in the PDF must use: ${detectedCurrency.symbol}
+          - If pricing is provided in the context, use THOSE EXACT prices
+          - Do NOT convert prices to USD or any other currency
+          - Example format: "${detectedCurrency.symbol}200" or "${detectedCurrency.symbol}200-${detectedCurrency.symbol}400"
           
           CRITICAL INSTRUCTIONS FOR EMAIL SEQUENCE:
           Write a 5-day nurture sequence that builds trust and gently guides toward booking.
@@ -210,29 +259,30 @@ export const generateLeadMagnet = inngest.createFunction(
 
           Also create a "conversion_offer" specifically for this niche to be used in Day 4 & 5.
           - For High Ticket (Real Estate, Law, Consulting): Offer a "Free Strategy Session", "Audit", or "Valuation". NO DISCOUNTS.
-          - For Services (Cleaning, landscaping): Offer a "% Discount" or "Free Add-on".
+          - For Services (Cleaning, Aircon, landscaping): Offer a "% Discount" or "Free Add-on" related to their actual services.
 
           CRITICAL: Create rich content for a 8-page Premium PDF Guide.
-          - diagnostic_questions: 3 "Yes/No" questions that help the user realize they have a problem.
-          - common_mistakes: 5 mistakes people in this niche make (e.g. "Ignoring X", "Buying cheap Y").
-          - quick_tips: 5 actionable tips they can do immediately.
-          - case_study: A realistic success story (Problem -> Solution -> Result).
+          - diagnostic_questions: 3 "Yes/No" questions that help the user realize they have a problem (specific to ${topic}).
+          - common_mistakes: 5 mistakes people in this niche make (e.g. "Ignoring X", "Buying cheap Y"). Make these SPECIFIC to ${topic}.
+          - quick_tips: 5 actionable tips they can do immediately. Make these SPECIFIC to ${topic}.
+          - case_study: A realistic success story (Problem -> Solution -> Result). Use local context if available.
           - action_checklist: 2 immediate steps to take.
-          - price_ranges: 5 typical service tiers in this niche (e.g. "Basic Inspection: $100-$200").
+          - price_ranges: Extract ACTUAL prices from the business context if provided. If not, use realistic local market prices in ${detectedCurrency.symbol} currency. Format: "${detectedCurrency.symbol}XX - ${detectedCurrency.symbol}YY"
           
           Return a JSON object with this EXACT structure:
           {
-            "business_name": "A professional business name for this ${topic} company (e.g. 'GreenScape Landscaping', 'ProClean Services')",
-            "lead_magnet_title": "Catchy Title for the Asset",
+            "business_name": "Use the EXACT business name from context (e.g., 'Tip Top Aircon', not a made-up name)",
+            "lead_magnet_title": "Catchy Title for the Asset using the actual business name",
+            "currency": "${detectedCurrency.symbol}",
             "conversion_offer": {
-              "headline": "The main offer headline (e.g. Claim Your Free Home Valuation)",
-              "subheadline": "Supporting text (e.g. Worth $500, yours free)",
-              "cta_text": "Button Text (e.g. Book My Audit)",
-              "offer_code": "Optional code (e.g. AUDIT25) or null if not needed"
+              "headline": "The main offer headline (use actual services from context)",
+              "subheadline": "Supporting text with pricing in ${detectedCurrency.symbol}",
+              "cta_text": "Button Text (e.g. Book My Service)",
+              "offer_code": "Optional code (e.g. GUIDE15) or null if not needed"
             },
             "pdf_content": {
               "cover_tagline": "A powerful subtitle for the cover page",
-              "intro": "A professional, empathetic introduction explaining why this guide exists and why the reader needs it.",
+              "intro": "A professional, empathetic introduction explaining why this guide exists. Mention the business name and location.",
               "diagnostic_questions": [
                 { "question": "...", "yes_action": "...", "no_action": "..." }
               ],
@@ -243,15 +293,15 @@ export const generateLeadMagnet = inngest.createFunction(
                 { "title": "...", "description": "..." }
               ],
               "case_study": {
-                "customer_name": "...",
-                "location": "...",
+                "customer_name": "Local name appropriate for the region",
+                "location": "Use actual service area from context if available",
                 "problem": "...",
                 "solution": "...",
                 "result": "..."
               },
               "action_checklist": ["Step 1...", "Step 2..."],
               "price_ranges": [
-                { "service": "...", "range": "..." }
+                { "service": "Actual service from context", "range": "${detectedCurrency.symbol}XX - ${detectedCurrency.symbol}YY" }
               ],
               "coupon_offer": "Same as conversion_offer.headline",
               "coupon_code": "Same as conversion_offer.offer_code",
@@ -263,11 +313,11 @@ export const generateLeadMagnet = inngest.createFunction(
               { "title": "Section 3", "body": "..." }
             ],
             "landing_page": {
-              "hero_headline": "A compelling, niche-specific headline for ${topic} (e.g. 'Transform Your Lawn Into The Envy of The Neighborhood')",
-              "hero_subheadline": "A benefit-focused subheadline specific to ${topic} (e.g. 'Download our free guide and discover the 5 secrets to a lush, maintenance-free lawn')",
-              "cta_text": "Get My Free Quote / Guide",
+              "hero_headline": "A compelling, niche-specific headline for ${topic} (e.g. 'Don't Overpay for Your Next Aircon Installation')",
+              "hero_subheadline": "A benefit-focused subheadline specific to ${topic}",
+              "cta_text": "Get My Free Guide",
               "benefits": ["Benefit 1", "Benefit 2", "Benefit 3"],
-              "about_business": "Short professional bio for a local business in this niche (max 50 words)"
+              "about_business": "Short professional bio using actual business details from context (max 50 words)"
             },
             "email_sequence": [
               { "day": 1, "subject": "...", "body": "..." },
@@ -280,6 +330,7 @@ export const generateLeadMagnet = inngest.createFunction(
         `;
 
         console.log(`🤖 [generate-lead-magnet] Calling OpenAI for business: ${businessId}`);
+        console.log(`💱 Detected currency: ${detectedCurrency.symbol} (${detectedCurrency.code})`);
         
         const completion = await openai.chat.completions.create({
           messages: [{ role: 'user', content: prompt }],

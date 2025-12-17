@@ -179,7 +179,8 @@ export async function POST(request) {
       hours: flatData.hours || '',
       bookingUrl: business.booking_url || flatData.booking_url || '',
       subdomain: business.subdomain || '',
-      landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : ''
+      landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : '',
+      currency: flatData.currency || '$' // Support RM, S$, etc.
     };
     
     if (title) {

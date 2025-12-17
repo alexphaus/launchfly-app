@@ -79,7 +79,37 @@ export async function POST(request: Request) {
     const resolvedPhone = extractedBusinessInfo?.phone || scrapedData.phone || '';
     const resolvedOwnerName = extractedBusinessInfo?.ownerName || '';
     
-    // 4. Analyze and Generate Email with OpenAI
+    // 4. Detect currency from context
+    const detectCurrency = (text: string) => {
+      if (!text) return { symbol: '$', code: 'USD', name: 'dollars' };
+      const lowerText = text.toLowerCase();
+      if (lowerText.includes('rm') || lowerText.includes('ringgit') || lowerText.includes('malaysia')) {
+        return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
+      }
+      if (lowerText.includes('sgd') || lowerText.includes('singapore')) {
+        return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
+      }
+      if (lowerText.includes('php') || lowerText.includes('peso') || lowerText.includes('philippines')) {
+        return { symbol: '₱', code: 'PHP', name: 'pesos' };
+      }
+      if (lowerText.includes('idr') || lowerText.includes('rupiah') || lowerText.includes('indonesia')) {
+        return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
+      }
+      if (lowerText.includes('thb') || lowerText.includes('baht') || lowerText.includes('thailand')) {
+        return { symbol: '฿', code: 'THB', name: 'baht' };
+      }
+      if (lowerText.includes('£') || lowerText.includes('gbp') || lowerText.includes('pound')) {
+        return { symbol: '£', code: 'GBP', name: 'pounds' };
+      }
+      if (lowerText.includes('€') || lowerText.includes('eur') || lowerText.includes('euro')) {
+        return { symbol: '€', code: 'EUR', name: 'euros' };
+      }
+      return { symbol: '$', code: 'USD', name: 'dollars' };
+    };
+
+    const detectedCurrency = detectCurrency(context || scrapedData.bodyText || '');
+    
+    // 5. Analyze and Generate Email with OpenAI
     const extractedServices = extractedBusinessInfo?.services?.join(', ') || '';
     const extractedLocation = extractedBusinessInfo?.location || '';
     
@@ -99,6 +129,7 @@ export async function POST(request: Request) {
       Contact Email: ${resolvedEmail || 'N/A'}
       Contact Phone: ${resolvedPhone || 'N/A'}
       Owner Name: ${resolvedOwnerName || 'N/A'}
+      Currency: ${detectedCurrency.symbol} (${detectedCurrency.code})
       
       PROVIDED CONTEXT (User Input):
       ${context || 'N/A'}
@@ -109,8 +140,12 @@ export async function POST(request: Request) {
       Headings: ${scrapedData.headings.join(', ')}
       Content Snippet: ${scrapedData.bodyText.slice(0, 500)}...
 
+      CRITICAL CURRENCY INSTRUCTION:
+      - Use ${detectedCurrency.symbol} for ALL price mentions (not $ unless that's the detected currency)
+      - Example: "${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}400" for estimated values
+
       TASK:
-      1. CLEAN the business name. Remove "LLC", "Inc", "|", location suffixes (e.g. "in Kansas City"), and owner names (e.g. "by Dick Ray"). Keep it short and natural (e.g. "Dick Ray Plumbing").
+      1. CLEAN the business name. Remove "LLC", "Inc", "|", location suffixes (e.g. "in Kansas City"), and owner names (e.g. "by Dick Ray"). Keep it short and natural (e.g. "Tip Top Aircon").
       2. Identify a specific service they offer that is expensive or complex.
       3. Write a direct, short email to the owner using the CLEAN name.
       4. Generate a High-Value "Asset" preview.
@@ -133,13 +168,23 @@ export async function POST(request: Request) {
       - CTA: Low friction question. VARY PHRASING. e.g. "Worth a quick chat?" or "Mind if I send the file over?" or "Worth a look?"
       - Tone: Professional, direct, peer-to-peer. NO SLANG.
       - Length: Under 120 words.
-      - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Dick Ray Plumbing AC Cost Guide".
+      - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Tip Top Aircon AC Cost Guide".
 
       LEAD MAGNET (ASSET) REQUIREMENTS:
       - Concept: It must be a "Self-Diagnostic Checklist" or a "Pricing/Buying Guide." NO GENERIC E-BOOKS.
       - Title: "${resolvedBusinessName} 2025 [Service] Checklist" or "Homeowner's Guide to [Service] Costs"
       - Headline: Address a fear or a desire (e.g., "Don't Overpay for [Service]" or "Is Your [System] Failing? 5 Warning Signs")
       - Preview Content: 3 specific "Red Flags" or "Buying Checks" a homeowner can do themselves. These should be DIAGNOSTIC (symptoms to look for), not generic advice.
+      
+      PDF CONTENT REQUIREMENTS:
+      - Generate FULL PDF content for immediate download capability
+      - CRITICAL: Generate REAL, SPECIFIC content for this business niche - NOT generic placeholders
+      - common_mistakes: Write 3 SPECIFIC mistakes people make with ${resolvedNiche} (e.g., "Choosing the Cheapest Quote", "Skipping Annual Maintenance")
+      - quick_tips: Write 3 SPECIFIC actionable tips for ${resolvedNiche} (e.g., "Check Your Filter Monthly", "Listen for Unusual Sounds")
+      - price_ranges: Extract ACTUAL prices from the provided context if available. If context has prices like "RM90", "RM200", use THOSE EXACT values. If no prices in context, use realistic local market prices.
+      - ALL prices MUST use ${detectedCurrency.symbol} currency symbol (e.g., "${detectedCurrency.symbol}90", "${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}400")
+      - DO NOT convert to USD. Keep original currency.
+      - DO NOT use generic titles like "Mistake 1" or "Tip 1" - use DESCRIPTIVE titles
       
       OUTPUT FORMAT (JSON):
       {
@@ -148,7 +193,7 @@ export async function POST(request: Request) {
           "pain_point": "The specific worry a customer has about this service",
           "opportunity": "Why this asset would help them capture more leads",
           "business_type": "e.g. Residential Service, B2B, Retail, etc.",
-          "estimated_value": "Estimated value of a single customer for this service (e.g. $500 - $2,000)",
+          "estimated_value": "Estimated value using ${detectedCurrency.symbol} (e.g. ${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}500)",
           "customer_demographic": "Who is their ideal customer? (e.g. Homeowners in [City], Small Business Owners)"
         },
         "email": {
@@ -166,6 +211,41 @@ export async function POST(request: Request) {
             {"title": "Warning Sign #3", "description": "Third red flag to watch for"}
           ],
           "cta_text": "Get The Free Guide"
+        },
+        "pdf_content": {
+          "cover_tagline": "A powerful subtitle for the cover page",
+          "intro": "A professional intro paragraph mentioning the business name.",
+          "diagnostic_questions": [
+            { "question": "Do you notice X symptom?", "yes_action": "What to do if yes", "no_action": "What to do if no" },
+            { "question": "Has it been X months since Y?", "yes_action": "...", "no_action": "..." },
+            { "question": "Are you experiencing Z?", "yes_action": "...", "no_action": "..." }
+          ],
+          "common_mistakes": [
+            { "title": "Choosing the Cheapest Quote", "description": "Low prices often mean shortcuts. Always verify what's included." },
+            { "title": "Skipping Regular Maintenance", "description": "Small issues become expensive repairs when ignored." },
+            { "title": "Ignoring Warning Signs", "description": "Strange noises or smells mean something needs attention." }
+          ],
+          "quick_tips": [
+            { "title": "Check Your Filter Monthly", "description": "A dirty filter reduces efficiency by up to 15%." },
+            { "title": "Listen for Unusual Sounds", "description": "Buzzing or clicking often indicates loose parts." },
+            { "title": "Monitor Your Bills", "description": "Sudden increases may signal inefficiency." }
+          ],
+          "case_study": {
+            "customer_name": "Local customer name",
+            "location": "Area/city",
+            "problem": "What they faced",
+            "solution": "How it was solved",
+            "result": "The outcome"
+          },
+          "action_checklist": ["Step 1 to take", "Step 2 to take"],
+          "price_ranges": [
+            { "service": "Service name from context", "range": "${detectedCurrency.symbol}XX - ${detectedCurrency.symbol}YY" },
+            { "service": "Another service", "range": "${detectedCurrency.symbol}XX - ${detectedCurrency.symbol}YY" },
+            { "service": "Third service", "range": "${detectedCurrency.symbol}XX - ${detectedCurrency.symbol}YY" }
+          ],
+          "coupon_offer": "Special offer text",
+          "coupon_code": "GUIDE15",
+          "coupon_expiry": "7 days from download"
         },
         "lead_magnet_idea": "Short summary of the asset concept",
         "scrapedData": {
@@ -185,7 +265,7 @@ export async function POST(request: Request) {
 
     const result = JSON.parse(completion.choices[0].message.content || '{}');
 
-    // 5. Create a prospect business with the generated funnel (if enabled)
+    // 6. Create a prospect business with the generated funnel (if enabled)
     let previewUrl = null;
     let businessId = null;
     
@@ -209,17 +289,24 @@ export async function POST(request: Request) {
         email: finalEmail,
         phone: finalPhone,
         ownerName: finalOwnerName,
+        currency: detectedCurrency.symbol,
+        currencyCode: detectedCurrency.code,
+        // Store the full PDF content for immediate PDF generation
+        lead_magnet_title: result.lead_magnet.title,
+        lead_magnet_pdf: result.pdf_content || {},
         leadMagnet: {
           lead_magnet: {
             title: result.lead_magnet.title,
-            type: 'checklist'
+            type: 'checklist',
+            preview_tips: result.lead_magnet.preview_tips || []
           },
           landing_page: {
             hero_headline: result.lead_magnet.headline,
             hero_subheadline: result.lead_magnet.subheadline,
             benefits: result.lead_magnet.benefits || [],
             cta_text: 'Get Your Free Guide'
-          }
+          },
+          lead_magnet_pdf: result.pdf_content || {}
         }
       };
 

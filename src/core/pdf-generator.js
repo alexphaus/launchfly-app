@@ -73,6 +73,7 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
       const city = businessData.city || 'your area';
       const whatsapp = businessData.whatsapp || phone;
       const landingPageUrl = businessData.landingPageUrl || '';
+      const currency = businessData.currency || '$'; // Support RM, S$, etc.
 
       // Helper to add footer to every page
       const addFooter = () => {
@@ -529,11 +530,11 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
          .text('So you know what to expect (prices vary by location and complexity)', 50, 100);
 
       const priceRanges = pdfContent.price_ranges || [
-        { service: 'Basic inspection', range: '$50 - $150' },
-        { service: 'Minor repairs', range: '$100 - $300' },
-        { service: 'Medium repairs', range: '$300 - $800' },
-        { service: 'Major repairs', range: '$800 - $2,000+' },
-        { service: 'Full replacement', range: '$2,000 - $10,000+' }
+        { service: 'Basic inspection', range: `${currency}50 - ${currency}150` },
+        { service: 'Minor repairs', range: `${currency}100 - ${currency}300` },
+        { service: 'Medium repairs', range: `${currency}300 - ${currency}800` },
+        { service: 'Major repairs', range: `${currency}800 - ${currency}2,000+` },
+        { service: 'Full replacement', range: `${currency}2,000 - ${currency}10,000+` }
       ];
 
       yPos = 130;

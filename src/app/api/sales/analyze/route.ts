@@ -41,9 +41,47 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Analyze and Generate Email with OpenAI
-    const resolvedBusinessName = businessName || scrapedData.title || 'Local Business';
-    const resolvedNiche = niche || 'Service Business';
+    // 2. If context is provided but no URL/scraped data, first extract business info
+    let extractedBusinessInfo: any = null;
+    if (context && !scrapedData.title) {
+      const extractionPrompt = `
+        Extract the following business information from this text. Return ONLY a JSON object.
+        
+        TEXT:
+        ${context}
+        
+        OUTPUT FORMAT (JSON):
+        {
+          "businessName": "The exact business name (e.g., 'Tip Top Aircon', 'ABC Plumbing')",
+          "niche": "The business category (e.g., 'Aircon Service', 'Plumbing', 'Electrical')",
+          "ownerName": "Owner name if mentioned, otherwise null",
+          "email": "Email address if found, otherwise null",
+          "phone": "Phone number if found, otherwise null",
+          "services": ["List of main services offered"],
+          "location": "Service area or location if mentioned"
+        }
+      `;
+      
+      const extractionResult = await openai.chat.completions.create({
+        messages: [{ role: 'user', content: extractionPrompt }],
+        model: 'gpt-4-turbo-preview',
+        response_format: { type: 'json_object' },
+      });
+      
+      extractedBusinessInfo = JSON.parse(extractionResult.choices[0].message.content || '{}');
+      console.log('📋 Extracted business info from context:', extractedBusinessInfo);
+    }
+
+    // 3. Resolve business name and niche - prioritize user input, then extracted, then scraped
+    const resolvedBusinessName = businessName || extractedBusinessInfo?.businessName || scrapedData.title || 'Local Business';
+    const resolvedNiche = niche || extractedBusinessInfo?.niche || 'Service Business';
+    const resolvedEmail = extractedBusinessInfo?.email || scrapedData.email || '';
+    const resolvedPhone = extractedBusinessInfo?.phone || scrapedData.phone || '';
+    const resolvedOwnerName = extractedBusinessInfo?.ownerName || '';
+    
+    // 4. Analyze and Generate Email with OpenAI
+    const extractedServices = extractedBusinessInfo?.services?.join(', ') || '';
+    const extractedLocation = extractedBusinessInfo?.location || '';
     
     const prompt = `
       You are a business consultant, NOT a marketing agency. You speak plain English, not "marketing jargon."
@@ -56,6 +94,11 @@ export async function POST(request: Request) {
       Name: ${resolvedBusinessName}
       URL: ${url || 'N/A'}
       Niche: ${resolvedNiche}
+      Services Offered: ${extractedServices || 'N/A'}
+      Service Area: ${extractedLocation || 'N/A'}
+      Contact Email: ${resolvedEmail || 'N/A'}
+      Contact Phone: ${resolvedPhone || 'N/A'}
+      Owner Name: ${resolvedOwnerName || 'N/A'}
       
       PROVIDED CONTEXT (User Input):
       ${context || 'N/A'}
@@ -142,20 +185,30 @@ export async function POST(request: Request) {
 
     const result = JSON.parse(completion.choices[0].message.content || '{}');
 
-    // 3. Create a prospect business with the generated funnel (if enabled)
+    // 5. Create a prospect business with the generated funnel (if enabled)
     let previewUrl = null;
     let businessId = null;
+    
+    // Use the best available business name - already resolved above
+    const finalBusinessName = resolvedBusinessName;
+    const finalNiche = resolvedNiche;
+    const finalEmail = resolvedEmail || result.scrapedData?.email || '';
+    const finalPhone = resolvedPhone || result.scrapedData?.phone || '';
+    const finalOwnerName = resolvedOwnerName || result.scrapedData?.ownerName || '';
     
     if (createPreview && result.lead_magnet) {
       const subdomain = `preview-${nanoid(8)}`.toLowerCase();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + PROSPECT_EXPIRY_DAYS);
       
-      // Build business_data for the funnel
+      // Build business_data for the funnel - use finalBusinessName throughout
       const businessData = {
-        businessName: resolvedBusinessName,
-        niche: resolvedNiche,
+        businessName: finalBusinessName,
+        niche: finalNiche,
         websiteUrl: url || '',
+        email: finalEmail,
+        phone: finalPhone,
+        ownerName: finalOwnerName,
         leadMagnet: {
           lead_magnet: {
             title: result.lead_magnet.title,
@@ -192,17 +245,18 @@ export async function POST(request: Request) {
           .from('businesses')
           .insert({
             user_id: systemUserId,
-            name: resolvedBusinessName,
+            name: finalBusinessName,
             subdomain,
             status: 'prospect',
             source: 'sales-prospector',
             business_data: businessData,
             form_data: {
-              niche: resolvedNiche,
+              niche: finalNiche,
               websiteUrl: url || '',
-              prospectEmail: result.scrapedData?.email || scrapedData.email,
-              prospectPhone: result.scrapedData?.phone || scrapedData.phone,
-              prospectAddress: scrapedData.address,
+              prospectEmail: finalEmail,
+              prospectPhone: finalPhone,
+              prospectOwnerName: finalOwnerName,
+              prospectAddress: scrapedData.address || extractedBusinessInfo?.location || '',
               context: context || ''
             },
             expires_at: expiresAt.toISOString()
@@ -223,7 +277,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Replace {{PREVIEW_LINK}} placeholder in email body
+    // 6. Replace {{PREVIEW_LINK}} placeholder in email body
     let finalEmailBody = result.email?.body || '';
     if (previewUrl) {
       finalEmailBody = finalEmailBody.replace(/\{\{PREVIEW_LINK\}\}/g, previewUrl);
@@ -240,11 +294,15 @@ export async function POST(request: Request) {
       },
       previewUrl,
       businessId,
+      // Return the best resolved values for display
       scrapedData: {
-        title: scrapedData.title || result.scrapedData?.businessName,
-        email: scrapedData.email || result.scrapedData?.email,
-        phone: scrapedData.phone || result.scrapedData?.phone,
-        ownerName: result.scrapedData?.ownerName
+        title: finalBusinessName,
+        businessName: finalBusinessName,
+        email: finalEmail,
+        phone: finalPhone,
+        ownerName: finalOwnerName,
+        niche: finalNiche,
+        location: extractedBusinessInfo?.location || scrapedData.address || ''
       }
     });
 

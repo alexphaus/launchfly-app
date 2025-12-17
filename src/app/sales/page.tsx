@@ -208,7 +208,7 @@ export default function SalesPage() {
             🎯 AI Sales Prospector
           </h1>
           <p className="text-slate-600 mt-2">
-            Turn any website URL into a personalized cold email in seconds.
+            Turn any website URL or business context into a personalized cold email in seconds.
           </p>
         </div>
 
@@ -250,7 +250,7 @@ export default function SalesPage() {
               {isLoading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Analyzing Website...
+                  {url ? 'Analyzing Website...' : 'Analyzing Context...'}
                 </>
               ) : (
                 'Analyze & Generate Pitch'
@@ -276,6 +276,29 @@ export default function SalesPage() {
               <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
                 📊 Website Analysis
               </h2>
+              
+              {/* Extracted Business Info Banner */}
+              {result.scrapedData?.businessName && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <span className="text-lg">🏢</span>
+                    <span className="font-semibold">{result.scrapedData.businessName}</span>
+                    {result.scrapedData.niche && (
+                      <span className="text-green-600 text-sm">• {result.scrapedData.niche}</span>
+                    )}
+                  </div>
+                  {result.scrapedData.ownerName && (
+                    <div className="text-sm text-green-700 mt-1">
+                      👤 Owner: {result.scrapedData.ownerName}
+                    </div>
+                  )}
+                  {result.scrapedData.location && (
+                    <div className="text-sm text-green-700">
+                      📍 {result.scrapedData.location}
+                    </div>
+                  )}
+                </div>
+              )}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>

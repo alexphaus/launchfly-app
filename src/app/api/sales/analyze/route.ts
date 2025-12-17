@@ -14,17 +14,31 @@ const PROSPECT_EXPIRY_DAYS = 14;
 
 export async function POST(request: Request) {
   try {
-    const { url, businessName, niche, createPreview = true } = await request.json();
+    const { url, businessName, niche, context, createPreview = true } = await request.json();
 
-    if (!url) {
-      return Response.json({ error: 'URL is required' }, { status: 400 });
+    if (!url && !context) {
+      return Response.json({ error: 'Either URL or Business Context is required' }, { status: 400 });
     }
 
-    // 1. Scrape the website
-    const scrapedData = await scrapeWebsiteContent(url);
-    
-    if (!scrapedData) {
-      return Response.json({ error: 'Failed to scrape website' }, { status: 400 });
+    // 1. Scrape the website (if URL provided)
+    let scrapedData: any = {
+      title: '',
+      description: '',
+      headings: [],
+      bodyText: '',
+      email: '',
+      phone: '',
+      address: ''
+    };
+
+    if (url) {
+      const scrapeResult = await scrapeWebsiteContent(url);
+      if (scrapeResult) {
+        scrapedData = scrapeResult;
+      } else if (!context) {
+         // If URL failed and no context, fail
+         return Response.json({ error: 'Failed to scrape website and no context provided' }, { status: 400 });
+      }
     }
 
     // 2. Analyze and Generate Email with OpenAI
@@ -40,10 +54,13 @@ export async function POST(request: Request) {
 
       TARGET BUSINESS:
       Name: ${resolvedBusinessName}
-      URL: ${url}
+      URL: ${url || 'N/A'}
       Niche: ${resolvedNiche}
+      
+      PROVIDED CONTEXT (User Input):
+      ${context || 'N/A'}
 
-      WEBSITE DATA:
+      WEBSITE DATA (Scraped):
       Title: ${scrapedData.title}
       Description: ${scrapedData.description}
       Headings: ${scrapedData.headings.join(', ')}
@@ -58,8 +75,8 @@ export async function POST(request: Request) {
       EMAIL REQUIREMENTS:
       - Structure: Use short paragraphs. MAX 2 sentences per paragraph.
       - Formatting: You MUST use double line breaks (\n\n) between sections.
-      - Subject: "Question for [Clean Business Name]" or "Your website".
-      - Salutation: "Hi Team," or "Hi [Owner Name],"
+      - Subject: "Question for [Clean Business Name]" or "Your business".
+      - Salutation: "Hi Team," or "Hi [Owner Name]," (Use owner name if found in context or website).
       - Opening: State clearly what you saw. VARY PHRASING. e.g. "I saw you offer [Service] in [City]." or "I noticed you're doing [Service] in [City]."
       - The Problem: Explain they are losing visitors who aren't ready to buy yet. VARY YOUR PHRASING so it doesn't look automated.
         * Option A: "Your site is great for immediate buyers, but you're missing the 90% who are just price-shopping."
@@ -84,7 +101,7 @@ export async function POST(request: Request) {
       OUTPUT FORMAT (JSON):
       {
         "analysis": {
-          "primary_service": "The main high-ticket service identified from their website",
+          "primary_service": "The main high-ticket service identified from their website or context",
           "pain_point": "The specific worry a customer has about this service",
           "opportunity": "Why this asset would help them capture more leads",
           "business_type": "e.g. Residential Service, B2B, Retail, etc.",
@@ -107,7 +124,13 @@ export async function POST(request: Request) {
           ],
           "cta_text": "Get The Free Guide"
         },
-        "lead_magnet_idea": "Short summary of the asset concept"
+        "lead_magnet_idea": "Short summary of the asset concept",
+        "scrapedData": {
+             "businessName": "Extracted Business Name",
+             "email": "Extracted Email",
+             "phone": "Extracted Phone",
+             "ownerName": "Extracted Owner Name"
+        }
       }
     `;
 
@@ -132,7 +155,7 @@ export async function POST(request: Request) {
       const businessData = {
         businessName: resolvedBusinessName,
         niche: resolvedNiche,
-        websiteUrl: url,
+        websiteUrl: url || '',
         leadMagnet: {
           lead_magnet: {
             title: result.lead_magnet.title,
@@ -176,10 +199,11 @@ export async function POST(request: Request) {
             business_data: businessData,
             form_data: {
               niche: resolvedNiche,
-              websiteUrl: url,
-              prospectEmail: scrapedData.email,
-              prospectPhone: scrapedData.phone,
-              prospectAddress: scrapedData.address
+              websiteUrl: url || '',
+              prospectEmail: result.scrapedData?.email || scrapedData.email,
+              prospectPhone: result.scrapedData?.phone || scrapedData.phone,
+              prospectAddress: scrapedData.address,
+              context: context || ''
             },
             expires_at: expiresAt.toISOString()
           })
@@ -217,9 +241,10 @@ export async function POST(request: Request) {
       previewUrl,
       businessId,
       scrapedData: {
-        title: scrapedData.title,
-        email: scrapedData.email,
-        phone: scrapedData.phone
+        title: scrapedData.title || result.scrapedData?.businessName,
+        email: scrapedData.email || result.scrapedData?.email,
+        phone: scrapedData.phone || result.scrapedData?.phone,
+        ownerName: result.scrapedData?.ownerName
       }
     });
 

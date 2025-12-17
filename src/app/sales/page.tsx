@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 
 export default function SalesPage() {
   const [url, setUrl] = useState('');
+  const [context, setContext] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [niche, setNiche] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -78,11 +79,20 @@ export default function SalesPage() {
       setRecipientEmail(result.scrapedData.email || '');
       setRecipientPhone(result.scrapedData.phone || '');
       setPreviewUrl(result.previewUrl || '');
+      if (result.scrapedData.ownerName) {
+        setOwnerName(result.scrapedData.ownerName);
+      }
     }
   }, [result]);
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!url && !context) {
+      setError('Please provide either a Website URL or Business Context.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     setSendSuccess('');
@@ -92,7 +102,7 @@ export default function SalesPage() {
       const response = await fetch('/api/sales/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, businessName, niche }),
+        body: JSON.stringify({ url, businessName, niche, context }),
       });
 
       const data = await response.json();
@@ -206,21 +216,35 @@ export default function SalesPage() {
           <form onSubmit={handleAnalyze} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Website URL
+                Website URL (Optional)
               </label>
               <input
                 type="url"
-                required
                 placeholder="https://example.com"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Business Context (Paste content here if no URL)
+              </label>
+              <textarea
+                placeholder="Paste business details, niche, owner name, phone, or any other context here..."
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-32"
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Provide either a URL or Business Context (or both).
+              </p>
+            </div>
             
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || (!url && !context)}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
             >
               {isLoading ? (

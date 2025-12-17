@@ -21,6 +21,8 @@ export default function SalesPage() {
   const [recipientEmail, setRecipientEmail] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
   const [smsMessage, setSmsMessage] = useState('');
+  const [whatsappMessage, setWhatsappMessage] = useState('');
+  const [whatsappContext, setWhatsappContext] = useState('');
   const [replyTo, setReplyTo] = useState('hello@launchfly.ai');
   const [selectedTemplate, setSelectedTemplate] = useState('ai-audit');
   const [ownerName, setOwnerName] = useState('');
@@ -198,6 +200,46 @@ export default function SalesPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
+  };
+
+  // Generate WhatsApp Social Selling message
+  const generateWhatsappMessage = () => {
+    const name = businessName || result?.scrapedData?.businessName || 'Business';
+    const asset = result?.lead_magnet?.title || 'Price Guide';
+    const link = previewUrl || '[Preview Link]';
+    const contextNote = whatsappContext || 'your listing online';
+    
+    // Build the message using the social selling formula
+    let message = `Hi ${name} Team! 👋\n\n`;
+    message += `I was looking at ${contextNote} and noticed something.\n\n`;
+    message += `🛑 ${result?.analysis?.pain_point || "Looks like visitors can't easily see your prices or book online."}\n\n`;
+    message += `Since I saw that, I quickly built a temporary "${asset}" for you so you don't lose those leads.\n\n`;
+    
+    if (result?.analysis?.estimated_value) {
+      message += `It includes real pricing info for your services (${result.analysis.estimated_value}).\n\n`;
+    }
+    
+    message += `👇 Here's the preview:\n${link}\n\n`;
+    message += `If you want to use this to capture those leads, let me know. It's a one-time setup. 🙂`;
+    
+    return message;
+  };
+
+  // Update WhatsApp message when result changes
+  useEffect(() => {
+    if (result) {
+      setWhatsappMessage(generateWhatsappMessage());
+    }
+  }, [result, previewUrl, whatsappContext]);
+
+  const openWhatsApp = () => {
+    if (!recipientPhone) {
+      alert('Please enter a phone number first');
+      return;
+    }
+    const cleanPhone = recipientPhone.replace(/[^0-9]/g, '');
+    const encodedMessage = encodeURIComponent(whatsappMessage);
+    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMessage}`, '_blank');
   };
 
   return (
@@ -640,6 +682,111 @@ export default function SalesPage() {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+
+            {/* WhatsApp Social Selling Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-l-4 border-l-green-500">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                  💬 WhatsApp Social Selling
+                </h2>
+                <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded font-medium">
+                  Best Response Rate
+                </span>
+              </div>
+
+              <p className="text-sm text-slate-600 mb-4">
+                Conversational outreach script that sounds like a "helpful neighbor," not a salesperson.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    Context / What You Saw (The Hook)
+                  </label>
+                  <input
+                    type="text"
+                    value={whatsappContext}
+                    onChange={(e) => {
+                      setWhatsappContext(e.target.value);
+                      // Regenerate message with new context
+                      setTimeout(() => setWhatsappMessage(generateWhatsappMessage()), 100);
+                    }}
+                    placeholder="e.g., your RM99 promo ad on Facebook, your Google Maps listing, etc."
+                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Be specific! This proves you're human and gets attention.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    WhatsApp Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                    placeholder="60123456789 (with country code)"
+                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Include country code (e.g., 60 for Malaysia, 1 for US).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                    Message Preview
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={whatsappMessage}
+                      onChange={(e) => setWhatsappMessage(e.target.value)}
+                      rows={10}
+                      className="w-full bg-green-50 border border-green-200 rounded px-3 py-2 text-slate-800 text-sm resize-none focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono leading-relaxed"
+                      placeholder="Message will be generated..."
+                    />
+                    <button
+                      onClick={() => copyToClipboard(whatsappMessage)}
+                      className="absolute top-2 right-2 p-2 text-green-600 hover:text-green-800 bg-white rounded shadow-sm border border-green-200"
+                      title="Copy Message"
+                    >
+                      📋
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Edit as needed. The formula: Hook → Problem → Solution → Link → Soft Close.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => copyToClipboard(whatsappMessage)}
+                    className="bg-slate-100 text-slate-700 py-3 px-4 rounded-lg font-semibold hover:bg-slate-200 transition-colors flex justify-center items-center gap-2"
+                  >
+                    📋 Copy Message
+                  </button>
+                  <button
+                    onClick={openWhatsApp}
+                    disabled={!recipientPhone}
+                    className="bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    Open WhatsApp
+                  </button>
+                </div>
+
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-800">
+                    <strong>💡 Pro Tips:</strong> Send from a personal number, not a business account. 
+                    Best times: 10am-12pm or 2pm-4pm local time. Follow up once after 2 days if no response.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

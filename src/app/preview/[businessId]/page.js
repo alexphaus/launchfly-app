@@ -663,7 +663,7 @@ export default async function DynamicWebsite({ params }) {
           title: b,
           description: isEvent
             ? 'Experience this firsthand at the event.'
-            : isCoaching 
+            : isVisual 
               ? 'Proven strategies used by successful clients to achieve breakthrough results.'
               : 'Practical steps you can implement immediately to see results.',
           icon: '✅'

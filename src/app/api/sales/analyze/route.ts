@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           "niche": "The business category (e.g., 'Aircon Service', 'Plumbing', 'Electrical')",
           "ownerName": "Owner name if mentioned, otherwise null",
           "email": "Email address if found, otherwise null",
-          "phone": "Phone number if found, otherwise null",
+          "phone": "Phone number in E.164 format (e.g. +60123456789). If local format found (e.g. 011-1234), infer country from context (e.g. RM/Malaysia = +60, SGD = +65) and format it.",
           "services": ["List of main services offered"],
           "location": "Service area or location if mentioned"
         }
@@ -171,6 +171,16 @@ export async function POST(request: Request) {
       - Length: Under 120 words.
       - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Tip Top Aircon AC Cost Guide".
 
+      WHATSAPP SCRIPT REQUIREMENTS:
+      - Tone: Casual, helpful, "neighborly". NOT salesy.
+      - Structure: Hook -> Problem -> Solution -> Link -> Soft Close.
+      - Formatting: CRITICAL - Use double line breaks (\n\n) between every section. It must look like a chat message, not a paragraph.
+      - If EVENT: Mention specific date/price if found (e.g. "Saw your event on Jan 17 for RM65"). Ask if they are handling registrations manually.
+      - If SERVICE: Mention the specific service and location.
+      - If COACH: Mention their recent content/topic.
+      - Length: Short and punchy.
+      - Placeholder: Use {{PREVIEW_LINK}} for the link.
+
       LEAD MAGNET (ASSET) REQUIREMENTS:
       - Concept: It must be a "Self-Diagnostic Checklist" or a "Pricing/Buying Guide." NO GENERIC E-BOOKS.
       - Title: "${resolvedBusinessName} 2025 [Service] Checklist" or "Homeowner's Guide to [Service] Costs"
@@ -201,6 +211,7 @@ export async function POST(request: Request) {
           "subject": "...",
           "body": "..."
         },
+        "whatsapp_script": "The generated WhatsApp message",
         "lead_magnet": {
           "title": "Specific title using their business name (e.g. ${resolvedBusinessName}'s 2025 [Service] Checklist)",
           "headline": "Fear or desire headline (e.g. Don't Overpay for Your Next [Service])",
@@ -213,6 +224,29 @@ export async function POST(request: Request) {
           ],
           "cta_text": "Get The Free Guide"
         },
+        "testimonials": [
+          {
+            "name": "Realistic Name (e.g. Sarah L.)",
+            "role": "Relevant Role (e.g. Homeowner in [City])",
+            "content": "Specific praise about how the guide/service helped them. Mention specific results or savings. NOT generic.",
+            "avatar": "👩",
+            "rating": 5
+          },
+          {
+            "name": "Realistic Name (e.g. Mike T.)",
+            "role": "Relevant Role",
+            "content": "Another specific testimonial focusing on a different benefit (e.g. speed, quality, transparency).",
+            "avatar": "👨",
+            "rating": 5
+          },
+          {
+            "name": "Realistic Name (e.g. Emily R.)",
+            "role": "Relevant Role",
+            "content": "Third testimonial focusing on trust or expertise.",
+            "avatar": "👩‍🦰",
+            "rating": 5
+          }
+        ],
         "pdf_content": {
           "cover_tagline": "A powerful subtitle for the cover page",
           "intro": "A professional intro paragraph mentioning the business name.",
@@ -292,6 +326,7 @@ export async function POST(request: Request) {
         ownerName: finalOwnerName,
         currency: detectedCurrency.symbol,
         currencyCode: detectedCurrency.code,
+        testimonials: result.testimonials || [],
         // Store the full PDF content for immediate PDF generation
         lead_magnet_title: result.lead_magnet.title,
         lead_magnet_pdf: result.pdf_content || {},
@@ -365,13 +400,17 @@ export async function POST(request: Request) {
       }
     }
 
-    // 6. Replace {{PREVIEW_LINK}} placeholder in email body
+    // 6. Replace {{PREVIEW_LINK}} placeholder in email body and whatsapp script
     let finalEmailBody = result.email?.body || '';
+    let finalWhatsappScript = result.whatsapp_script || '';
+    
     if (previewUrl) {
       finalEmailBody = finalEmailBody.replace(/\{\{PREVIEW_LINK\}\}/g, previewUrl);
+      finalWhatsappScript = finalWhatsappScript.replace(/\{\{PREVIEW_LINK\}\}/g, previewUrl);
     } else {
       // Remove P.S. line if no preview was created
       finalEmailBody = finalEmailBody.replace(/\n*P\.S\..*\{\{PREVIEW_LINK\}\}.*$/gim, '');
+      finalWhatsappScript = finalWhatsappScript.replace(/\{\{PREVIEW_LINK\}\}/g, '[Link]');
     }
 
     return Response.json({ 
@@ -380,6 +419,7 @@ export async function POST(request: Request) {
         ...result.email,
         body: finalEmailBody
       },
+      whatsapp_script: finalWhatsappScript,
       previewUrl,
       businessId,
       // Return the best resolved values for display

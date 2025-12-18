@@ -23,7 +23,6 @@ export default function SalesPage() {
   const [smsMessage, setSmsMessage] = useState('');
   const [whatsappMessage, setWhatsappMessage] = useState('');
   const [whatsappContext, setWhatsappContext] = useState('');
-  const [outreachScenario, setOutreachScenario] = useState('no-website'); // Scenario dropdown
   const [replyTo, setReplyTo] = useState('hello@launchfly.ai');
   const [selectedTemplate, setSelectedTemplate] = useState('ai-audit');
   const [ownerName, setOwnerName] = useState('');
@@ -258,59 +257,30 @@ export default function SalesPage() {
     alert('Copied to clipboard!');
   };
 
-  // Generate WhatsApp Social Selling message based on scenario
+  // Generate WhatsApp Social Selling message based on analysis
   const generateWhatsappMessage = () => {
+    if (result?.whatsapp_script) {
+      return result.whatsapp_script;
+    }
+
+    // Fallback if no script generated
     const name = businessName || result?.scrapedData?.businessName || 'Business Owner';
     const asset = result?.lead_magnet?.title || 'Price List & Booking Page';
     const link = previewUrl || '[Link]';
-    const myName = ownerName || 'Alex';
-
-    let script = '';
-
-    switch (outreachScenario) {
-      case 'broken-link':
-        script = `Hi ${name} Team! 👋\n\n` +
-          `I saw your promo on Facebook but noticed the website link you posted is broken (404 Error). 🛑\n\n` +
-          `You're likely losing leads who try to click it. Since I saw that, I quickly built a temporary "${asset}" for you so you can capture those customers right now.\n\n` +
-          `👇 It works perfectly. Preview here:\n${link}\n\n` +
-          `Want me to swap this in for your broken link? It's a one-time setup.`;
-        break;
-
-      case 'running-ads':
-        script = `Hi ${name}! 👋\n\n` +
-          `I saw your sponsored ad for the promo. It looks great, but I noticed you're asking people to "PM for price."\n\n` +
-          `Responding to every DM manually usually kills conversion. I built an automated "${asset}" that shows your prices and lets them book instantly.\n\n` +
-          `👇 Here is the demo I built for you:\n${link}\n\n` +
-          `If you want to use this to save time answering DMs, let me know!`;
-        break;
-
-      case 'bad-review':
-        script = `Hi ${name} - I'm a local dev. 👋\n\n` +
-          `I noticed a recent review on your Google profile complaining about "slow replies."\n\n` +
-          `I know you're busy on the job, so I built an auto-reply tool for you. It sends a "${asset}" to customers instantly so they don't get frustrated waiting.\n\n` +
-          `👇 You can test it here:\n${link}\n\n` +
-          `Worth trying to prevent bad reviews?`;
-        break;
-
-      case 'no-website':
-      default:
-        script = `Hi ${name}! 👋 Found you on Google Maps.\n\n` +
-          `You have great reviews but I noticed there's no link for customers to book you directly.\n\n` +
-          `I went ahead and built a digital "${asset}" for you. It acts like a mini-website to capture leads from Maps.\n\n` +
-          `👇 Preview it here:\n${link}\n\n` +
-          `If you want to keep this link, let me know. It's a simple one-time setup.`;
-        break;
-    }
-
-    return script;
+    
+    return `Hi ${name}! 👋 Found you on Google Maps.\n\n` +
+      `You have great reviews but I noticed there's no link for customers to book you directly.\n\n` +
+      `I went ahead and built a digital "${asset}" for you. It acts like a mini-website to capture leads from Maps.\n\n` +
+      `👇 Preview it here:\n${link}\n\n` +
+      `If you want to keep this link, let me know. It's a simple one-time setup.`;
   };
 
-  // Update WhatsApp message when result or scenario changes
+  // Update WhatsApp message when result changes
   useEffect(() => {
     if (result) {
       setWhatsappMessage(generateWhatsappMessage());
     }
-  }, [result, previewUrl, outreachScenario]);
+  }, [result, previewUrl]);
 
   const openWhatsApp = () => {
     if (!recipientPhone) {
@@ -703,45 +673,10 @@ export default function SalesPage() {
               </div>
 
               <p className="text-sm text-slate-600 mb-4">
-                Conversational outreach script that sounds like a "helpful neighbor," not a salesperson.
+                Conversational outreach script generated based on the business context.
               </p>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    What Did You See? (Select Scenario)
-                  </label>
-                  <select
-                    value={outreachScenario}
-                    onChange={(e) => setOutreachScenario(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="no-website">📍 No Website on Maps (Default)</option>
-                    <option value="broken-link">🔗 Broken Link (Berjaya Strategy)</option>
-                    <option value="running-ads">💸 Running Ads (Manual DMs)</option>
-                    <option value="bad-review">⭐ Bad Review (Slow Reply)</option>
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    This changes the "Hook" of your message to match the situation.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
-                    WhatsApp Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={recipientPhone}
-                    onChange={(e) => setRecipientPhone(e.target.value)}
-                    placeholder="60123456789 (with country code)"
-                    className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    Include country code (e.g., 60 for Malaysia, 1 for US).
-                  </p>
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
                     Message Preview

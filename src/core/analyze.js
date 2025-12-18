@@ -15,6 +15,31 @@ const openai = new OpenAI({
   maxRetries: 2 // Retry failed requests up to 2 times
 });
 
+/**
+ * Detects if a business is a coaching/consulting type or a local service
+ * @param {string} niche - The business niche
+ * @returns {'coaching' | 'local_service'} The detected business type
+ */
+export function detectBusinessType(niche) {
+  if (!niche) return 'local_service';
+  
+  const coachingKeywords = [
+    'coach', 'coaching', 'consultant', 'consulting', 'mentor', 'mentoring',
+    'trainer', 'training', 'advisor', 'advisory', 'expert', 'strategist',
+    'therapist', 'counselor', 'counseling', 'speaker', 'author', 'creator',
+    'influencer', 'educator', 'teacher', 'tutor', 'course', 'program',
+    'mastermind', 'agency', 'freelancer', 'designer', 'developer', 'writer',
+    'fitness coach', 'life coach', 'business coach', 'health coach',
+    'career coach', 'executive coach', 'relationship coach', 'mindset',
+    'transformation', 'personal development', 'self-help', 'wellness coach'
+  ];
+  
+  const lower = niche.toLowerCase();
+  const isCoaching = coachingKeywords.some(keyword => lower.includes(keyword));
+  
+  return isCoaching ? 'coaching' : 'local_service';
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -120,42 +145,87 @@ export async function analyzeOpportunity(userData, sessionId) {
   try {
     let prompt;
     
+    // Detect business type from niche
+    const businessType = detectBusinessType(niche);
+    console.log(`🎯 Detected business type: ${businessType} for niche: ${niche}`);
+    
     // NEW FUNNEL GENERATOR LOGIC
     if (leadMagnetTitle) {
       console.log(`🧲 Detected Lead Magnet Funnel request: ${leadMagnetTitle}`);
       
-      prompt = `
-        You are a world-class marketing strategist for LOCAL SERVICE BUSINESSES. Analyze this Lead Magnet Funnel request:
-        
-        Niche: ${niche}
-        Target Audience: ${targetAudience}
-        Main Problem: ${mainProblem}
-        Lead Magnet Title: ${leadMagnetTitle}
-        
-        Your goal is to structure a high-converting funnel around this concept to generate LEADS and PHONE CALLS.
-        
-        Return a JSON object with:
-        {
-          "businessName": "A professional, trustworthy name for this local business",
-          "niche": "${niche}",
-          "targetAudience": "${targetAudience}",
-          "problem": "${mainProblem}",
-          "solution": "Expert service and the '${leadMagnetTitle}' asset",
-          "uniqueAdvantage": "Local expertise for ${targetAudience}",
-          "profitPotential": "$10,000-$50,000/month",
-          "businessModel": "local_service",
-          "leadMagnet": {
-            "title": "${leadMagnetTitle}",
-            "topic": "${niche} - ${mainProblem}",
-            "audience": "${targetAudience}"
+      if (businessType === 'coaching') {
+        // COACHING/CONSULTING PROMPT
+        prompt = `
+          You are a world-class marketing strategist for COACHES, CONSULTANTS, and ONLINE EXPERTS. Analyze this Lead Magnet Funnel request:
+          
+          Niche: ${niche}
+          Target Audience: ${targetAudience}
+          Main Problem: ${mainProblem}
+          Lead Magnet Title: ${leadMagnetTitle}
+          
+          Your goal is to structure a high-converting funnel that positions the coach as an AUTHORITY and generates STRATEGY CALL BOOKINGS.
+          
+          Return a JSON object with:
+          {
+            "businessName": "The coach's brand name or personal name",
+            "niche": "${niche}",
+            "targetAudience": "${targetAudience}",
+            "problem": "${mainProblem}",
+            "solution": "Expert coaching/consulting and the '${leadMagnetTitle}' framework",
+            "uniqueAdvantage": "Proven methodology for ${targetAudience}",
+            "profitPotential": "$5,000-$20,000/month",
+            "businessModel": "coaching",
+            "businessType": "coaching",
+            "leadMagnet": {
+              "title": "${leadMagnetTitle}",
+              "topic": "${niche} - ${mainProblem}",
+              "audience": "${targetAudience}",
+              "type": "expert_guide"
+            },
+            "quickWins": [
+              "Share your new guide on LinkedIn",
+              "Post a transformation story on Instagram",
+              "DM 10 ideal clients with a free value offer"
+            ]
           }
-        }
-      `;
+        `;
+      } else {
+        // LOCAL SERVICE PROMPT (Original)
+        prompt = `
+          You are a world-class marketing strategist for LOCAL SERVICE BUSINESSES. Analyze this Lead Magnet Funnel request:
+          
+          Niche: ${niche}
+          Target Audience: ${targetAudience}
+          Main Problem: ${mainProblem}
+          Lead Magnet Title: ${leadMagnetTitle}
+          
+          Your goal is to structure a high-converting funnel around this concept to generate LEADS and PHONE CALLS.
+          
+          Return a JSON object with:
+          {
+            "businessName": "A professional, trustworthy name for this local business",
+            "niche": "${niche}",
+            "targetAudience": "${targetAudience}",
+            "problem": "${mainProblem}",
+            "solution": "Expert service and the '${leadMagnetTitle}' asset",
+            "uniqueAdvantage": "Local expertise for ${targetAudience}",
+            "profitPotential": "$10,000-$50,000/month",
+            "businessModel": "local_service",
+            "businessType": "local_service",
+            "leadMagnet": {
+              "title": "${leadMagnetTitle}",
+              "topic": "${niche} - ${mainProblem}",
+              "audience": "${targetAudience}",
+              "type": "price_guide"
+            }
+          }
+        `;
+      }
     } else {
       // FALLBACK FOR LEGACY REQUESTS (Keep simple)
       prompt = `
         Analyze this business request: ${JSON.stringify(userData)}
-        Return a JSON object with businessName, niche, problem, solution, businessModel='service'.
+        Return a JSON object with businessName, niche, problem, solution, businessModel='service', businessType='${businessType}'.
       `;
     }
 

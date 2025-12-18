@@ -62,6 +62,43 @@ export default function SalesPage() {
       subject: () => 'Question from Google Maps',
       body: () => `(This script is best for the Google Maps Chat feature)\n\nHi ${ownerName ? ownerName + ', ' : ''}I'm a local dev. I noticed your profile gets traffic but doesn't have a link for 'price shoppers' to download a quote guide. I built a demo checklist for you. Mind if I paste the link here?`,
       sms: () => `Hi ${ownerName ? ownerName + ', ' : ''}I'm a local dev. I noticed your profile gets traffic but doesn't have a link for 'price shoppers' to download a quote guide. I built a demo checklist for you. Mind if I paste the link here?`
+    },
+    // ============ COACH OUTREACH TEMPLATES ============
+    'coach-instagram-dm': {
+      label: '📱 Coach: Instagram DM (Free Draft)',
+      subject: () => '', // DMs don't have subjects
+      body: () => `Hey ${ownerName || 'there'}!\n\nLoved your recent post about [TOPIC]. Your content really resonates.\n\nI'm testing an AI workflow that creates lead magnets for coaches - basically a 20-page expert guide your audience can download in exchange for their email.\n\nI'd love to create one for you completely free - just looking for a testimonial if you like it.\n\nWant me to send you a draft?`,
+      sms: () => `Hey ${ownerName || 'there'}! Loved your content. I create lead magnets for coaches and would love to make one for you free (just want a testimonial). Can I send a draft? - Alex`
+    },
+    'coach-no-lead-magnet': {
+      label: '🔗 Coach: No Lead Magnet Detected',
+      subject: () => 'Quick idea for your link in bio',
+      body: () => `Hi ${ownerName || 'there'},\n\nI noticed you're putting out great content but don't have a lead magnet capturing emails on your profile.\n\nWith your audience, you're probably leaving serious money on the table!\n\nI build "24-Hour Lead Magnet Funnels" for coaches - I write the expert guide AND build the landing page. One-time fee, no monthly subscriptions.\n\nWant to see a sample I made for someone in your niche?\n\nBest,\nAlex`,
+      sms: () => `Hey ${ownerName || 'there'}! Noticed you don't have a lead magnet on your profile. I build them for coaches - guide + landing page in 24hrs. Want to see a sample? - Alex`
+    },
+    'coach-free-value-dm': {
+      label: '💎 Coach: Free Value DM',
+      subject: () => '',
+      body: () => `Hey ${ownerName || 'there'}!\n\nI've been following your content and noticed you're doing amazing work in ${niche || 'your space'}.\n\nI just finished building an AI tool that creates high-converting lead magnets for coaches. I'm giving away a few free ones this week to build my portfolio.\n\nI'd love to create a "Blueprint" or "Framework" guide for your audience - something like "The 5-Step [Result] System" that positions you as THE expert.\n\nNo catch, just want permission to use it as a case study.\n\nInterested?`,
+      sms: () => `Hey ${ownerName || 'there'}! I create lead magnets for coaches. Making a few free ones this week - want one for your audience? No strings attached. - Alex`
+    },
+    'coach-linkedin-connection': {
+      label: '💼 Coach: LinkedIn Connection',
+      subject: () => 'Loved your post about [topic]',
+      body: () => `Hi ${ownerName || 'there'},\n\nJust came across your content about [TOPIC] - really insightful stuff.\n\nI help coaches like you build lead magnets that convert followers into email subscribers. Basically, I create the expert guide AND the landing page so you can focus on what you do best.\n\nWould love to connect and share some ideas that might help you grow your list.\n\nBest,\nAlex`,
+      sms: () => `Hi ${ownerName || 'there'}! I help coaches turn followers into email subscribers with lead magnets. Would love to share some ideas. Open to a quick chat? - Alex`
+    },
+    'coach-testimonial-offer': {
+      label: '⭐ Coach: Testimonial Exchange',
+      subject: () => 'Free lead magnet in exchange for feedback',
+      body: () => `Hi ${ownerName || 'there'},\n\nI'm building case studies for my lead magnet service and looking for 3 coaches to work with for free.\n\nHere's the deal:\n• I create a premium 20-page expert guide for your niche\n• I build the landing page to capture emails\n• You give me honest feedback and a testimonial (if you like it)\n\nThis normally costs $297 but I'm doing a few free to build my portfolio.\n\nInterested in being one of the 3?\n\nBest,\nAlex`,
+      sms: () => `Hey ${ownerName || 'there'}! Offering 3 free lead magnets to coaches in exchange for testimonials. Normally $297. Want in? - Alex`
+    },
+    'coach-existing-content': {
+      label: '📚 Coach: Leverage Their Content',
+      subject: () => 'Idea to repurpose your best content',
+      body: () => `Hi ${ownerName || 'there'},\n\nI've been enjoying your content about [TOPIC]. You clearly know your stuff.\n\nQuick idea: what if we turned your best posts into a downloadable "blueprint" that captures emails for you 24/7?\n\nI do this for coaches - take their existing wisdom and package it into a professional lead magnet with a landing page.\n\nWould you be open to a quick call to see if it makes sense?\n\nBest,\nAlex`,
+      sms: () => `Hey ${ownerName || 'there'}! Your content would make an amazing lead magnet. I help coaches package their expertise into downloadable guides. Quick chat? - Alex`
     }
   };
 

@@ -2,9 +2,11 @@
  * PDF Generator for Lead Magnets
  * Following the "treasure chest" philosophy: small, sharp, immediately usable
  * 
- * OPTIMIZED FOR LOCAL BUSINESS CONVERSION (Market Analysis 2025)
+ * SUPPORTS TWO BUSINESS TYPES:
+ * 1. LOCAL SERVICE (Plumbers, HVAC, Cleaners) - Diagnostic PDF with price guide & coupons
+ * 2. COACHING (Coaches, Consultants, Experts) - Authority PDF with frameworks & transformation stories
  * 
- * Generates a premium 8-page PDF:
+ * LOCAL SERVICE PDF (8 pages):
  * 1. Cover page (outcome-first headline)
  * 2. Quick Diagnostic (3-question self-assessment)
  * 3. Introduction + What You'll Learn
@@ -14,12 +16,595 @@
  * 7. Action checklist + Coupon/Voucher
  * 8. CTA + Contact + QR Code
  * 
+ * COACHING PDF (8 pages):
+ * 1. Cover page (transformation promise)
+ * 2. The Big Promise + Who This Is For
+ * 3. About the Expert (Authority bio)
+ * 4. The Framework/Methodology (5 steps)
+ * 5. Quick Wins (actionable tips)
+ * 6. Client Transformation Story
+ * 7. Action Checklist (no coupon)
+ * 8. CTA + Book a Call + QR Code
+ * 
  * Mobile-first design: Large buttons, ≤2MB, readable on phone
  */
 
 import QRCode from 'qrcode';
 
+/**
+ * Main export - routes to appropriate generator based on businessType
+ */
 export async function generatePDF(data, PDFDocument, businessData = {}) {
+  const businessType = businessData.businessType || 'local_service';
+  
+  console.log(`📄 [PDF Generator] Business type: ${businessType}`);
+  
+  if (businessType === 'coaching') {
+    return generateCoachingPDF(data, PDFDocument, businessData);
+  }
+  return generateLocalServicePDF(data, PDFDocument, businessData);
+}
+
+/**
+ * Generate PDF for Coaches, Consultants, and Online Experts
+ * Focus: Authority positioning, transformation stories, NO discounts
+ */
+async function generateCoachingPDF(data, PDFDocument, businessData = {}) {
+  // Generate QR code first (for booking calendar)
+  const qrUrl = businessData.bookingUrl || businessData.calendarUrl || businessData.landingPageUrl || `https://${businessData.subdomain || 'booking'}.launchfly.app`;
+  let qrBuffer = null;
+  
+  try {
+    const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+      width: 90,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' }
+    });
+    const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+    qrBuffer = Buffer.from(qrBase64, 'base64');
+  } catch (qrError) {
+    console.error('QR code generation failed:', qrError);
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ 
+        margin: 50,
+        size: 'letter',
+        bufferPages: true,
+        compress: true
+      });
+      const chunks = [];
+
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Color scheme (Purple/Violet - premium coaching feel)
+      const colors = {
+        primary: '#7c3aed',    // Violet
+        secondary: '#a855f7',  // Purple
+        accent: '#c084fc',     // Light purple
+        dark: '#1e1b4b',       // Dark indigo
+        gray: '#64748b',
+        light: '#f5f3ff',      // Light violet
+        success: '#10b981',
+        gold: '#f59e0b'        // For testimonials
+      };
+
+      const pdfContent = data.pdfContent || {};
+      const coachName = businessData.businessName || businessData.coachName || 'Expert Coach';
+      const niche = businessData.niche || 'Coaching';
+      const phone = businessData.phone || '';
+      const email = businessData.email || '';
+      const calendarUrl = businessData.calendarUrl || businessData.bookingUrl || '';
+
+      // Helper to add footer to every page
+      const addFooter = () => {
+        const bottom = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+        doc.fontSize(9)
+           .fillColor(colors.gray)
+           .text(`© ${new Date().getFullYear()} ${coachName} • All Rights Reserved`, 50, doc.page.height - 40, {
+             width: doc.page.width - 100,
+             align: 'center'
+           });
+        doc.page.margins.bottom = bottom;
+      };
+
+      // ============ PAGE 1: COVER PAGE ============
+      doc.rect(0, 0, 612, 350).fill(colors.primary);
+      
+      doc.fillColor('#ffffff')
+         .fontSize(32)
+         .font('Helvetica-Bold')
+         .text(data.title || 'Your Expert Blueprint', 50, 80, { 
+           width: 512, 
+           align: 'center' 
+         });
+      
+      doc.fontSize(14)
+         .font('Helvetica')
+         .text(pdfContent.cover_tagline || `The proven framework to transform your ${niche.toLowerCase()} results`, 50, 160, { 
+           width: 512, 
+           align: 'center' 
+         });
+
+      doc.strokeColor('#ffffff').lineWidth(2)
+         .moveTo(200, 200).lineTo(412, 200).stroke();
+
+      doc.fillColor('#ffffff')
+         .fontSize(14)
+         .font('Helvetica-Oblique')
+         .text(`By ${coachName}`, 50, 230, { 
+           width: 512, 
+           align: 'center' 
+         });
+
+      doc.fontSize(12)
+         .text(`${new Date().getFullYear()} Edition`, 50, 260, { 
+           width: 512, 
+           align: 'center' 
+         });
+
+      doc.fillColor(colors.dark)
+         .fontSize(11)
+         .font('Helvetica')
+         .text('Your step-by-step guide to achieving breakthrough results', 50, 400, { 
+           width: 512, 
+           align: 'center' 
+         });
+      
+      addFooter();
+
+      // ============ PAGE 2: THE BIG PROMISE + WHO THIS IS FOR ============
+      doc.addPage();
+      addFooter();
+      
+      doc.fillColor(colors.primary)
+         .fontSize(24)
+         .font('Helvetica-Bold')
+         .text('What You Will Discover', 50, 50);
+      
+      doc.strokeColor(colors.accent).lineWidth(3)
+         .moveTo(50, 85).lineTo(280, 85).stroke();
+
+      const introText = pdfContent.intro || 
+        `This guide was created for ambitious individuals who are ready to take their ${niche.toLowerCase()} to the next level. ` +
+        `Inside, you'll discover the exact framework I've used to help hundreds of clients achieve transformational results.`;
+
+      doc.fillColor(colors.dark)
+         .fontSize(13)
+         .font('Helvetica')
+         .text(introText, 50, 110, { 
+           width: 512, 
+           align: 'left',
+           lineGap: 6
+         });
+
+      // "This Guide Is For You If..." box
+      doc.rect(50, 200, 512, 180).fillAndStroke(colors.light, colors.secondary);
+      
+      doc.fillColor(colors.primary)
+         .fontSize(16)
+         .font('Helvetica-Bold')
+         .text('This Guide Is Perfect For You If...', 70, 220);
+
+      const forYouItems = pdfContent.for_you_if || [
+        `You're ready to accelerate your ${niche.toLowerCase()} journey`,
+        'You want a proven framework instead of guessing',
+        'You value transformation over quick fixes',
+        'You're committed to taking action on what you learn'
+      ];
+
+      forYouItems.forEach((item, i) => {
+        doc.fillColor(colors.success).fontSize(14).text('✓', 70, 255 + (i * 25));
+        doc.fillColor(colors.dark)
+           .fontSize(12)
+           .font('Helvetica')
+           .text(item, 90, 255 + (i * 25));
+      });
+
+      doc.fillColor(colors.gray)
+         .fontSize(10)
+         .font('Helvetica-Oblique')
+         .text('Let\'s dive in and start your transformation...', 50, 400, {
+           width: 512,
+           align: 'center'
+         });
+
+      // ============ PAGE 3: ABOUT THE EXPERT ============
+      doc.addPage();
+      addFooter();
+      
+      doc.fillColor(colors.primary)
+         .fontSize(24)
+         .font('Helvetica-Bold')
+         .text('Meet Your Guide', 50, 50);
+      
+      doc.strokeColor(colors.accent).lineWidth(3)
+         .moveTo(50, 85).lineTo(200, 85).stroke();
+
+      const authorityBio = pdfContent.authority_bio || 
+        `${coachName} is a recognized expert in ${niche.toLowerCase()} with years of experience helping clients achieve breakthrough results. ` +
+        `Through a unique combination of proven strategies and personalized guidance, ${coachName.split(' ')[0]} has helped hundreds of clients transform their lives.`;
+
+      doc.fillColor(colors.dark)
+         .fontSize(13)
+         .font('Helvetica')
+         .text(authorityBio, 50, 110, { 
+           width: 512, 
+           align: 'left',
+           lineGap: 6
+         });
+
+      // Credentials/Results box
+      doc.rect(50, 250, 512, 120).fillAndStroke(colors.light, colors.secondary);
+      
+      doc.fillColor(colors.primary)
+         .fontSize(14)
+         .font('Helvetica-Bold')
+         .text('Track Record:', 70, 270);
+
+      const credentials = pdfContent.credentials || [
+        'Helped 500+ clients achieve their goals',
+        'Featured in industry publications',
+        'Certified and experienced professional',
+        'Proven methodology with real results'
+      ];
+
+      credentials.slice(0, 4).forEach((cred, i) => {
+        doc.fillColor(colors.gold).fontSize(12).text('★', 70, 300 + (i * 20));
+        doc.fillColor(colors.dark)
+           .fontSize(11)
+           .font('Helvetica')
+           .text(cred, 90, 300 + (i * 20));
+      });
+
+      // ============ PAGE 4: THE FRAMEWORK ============
+      doc.addPage();
+      addFooter();
+      
+      const frameworkName = pdfContent.framework_name || `The ${niche} Transformation Framework`;
+      
+      doc.fillColor(colors.primary)
+         .fontSize(22)
+         .font('Helvetica-Bold')
+         .text(frameworkName, 50, 50);
+      
+      doc.strokeColor(colors.accent).lineWidth(3)
+         .moveTo(50, 85).lineTo(350, 85).stroke();
+
+      doc.fillColor(colors.gray)
+         .fontSize(11)
+         .font('Helvetica-Oblique')
+         .text('The proven step-by-step process for achieving results', 50, 100);
+
+      const frameworkSteps = pdfContent.framework_steps || [
+        { step: 1, title: 'Assess', description: 'Understand where you are now and clarify your goals' },
+        { step: 2, title: 'Plan', description: 'Create a customized roadmap for your transformation' },
+        { step: 3, title: 'Execute', description: 'Take consistent action with expert guidance' },
+        { step: 4, title: 'Optimize', description: 'Refine your approach based on results' },
+        { step: 5, title: 'Scale', description: 'Amplify your success and maintain momentum' }
+      ];
+
+      let yPos = 130;
+      frameworkSteps.slice(0, 5).forEach((step, i) => {
+        // Step number circle
+        doc.circle(75, yPos + 20, 20).fill(colors.primary);
+        doc.fillColor('#ffffff')
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text(`${step.step || i + 1}`, 68, yPos + 13);
+
+        doc.fillColor(colors.dark)
+           .fontSize(14)
+           .font('Helvetica-Bold')
+           .text(step.title, 110, yPos + 5);
+        
+        doc.fillColor(colors.gray)
+           .fontSize(11)
+           .font('Helvetica')
+           .text(step.description, 110, yPos + 25, { width: 440 });
+
+        yPos += 70;
+      });
+
+      // ============ PAGE 5: QUICK WINS ============
+      doc.addPage();
+      addFooter();
+      
+      doc.fillColor(colors.primary)
+         .fontSize(24)
+         .font('Helvetica-Bold')
+         .text('Quick Wins You Can Implement Today', 50, 50);
+      
+      doc.strokeColor(colors.success).lineWidth(3)
+         .moveTo(50, 85).lineTo(350, 85).stroke();
+
+      doc.fillColor(colors.gray)
+         .fontSize(11)
+         .font('Helvetica-Oblique')
+         .text('Start seeing results immediately with these actionable strategies', 50, 100);
+
+      const quickWins = pdfContent.quick_wins || pdfContent.quick_tips || [
+        { title: 'Set Clear Intentions', description: 'Define exactly what success looks like for you in the next 90 days' },
+        { title: 'Identify Your Blocks', description: 'Recognize the patterns holding you back from your goals' },
+        { title: 'Take Imperfect Action', description: 'Start before you feel ready - progress beats perfection' },
+        { title: 'Build Your Environment', description: 'Surround yourself with people and resources that support your goals' },
+        { title: 'Track Your Progress', description: 'What gets measured gets improved - journal your wins daily' }
+      ];
+
+      yPos = 130;
+      quickWins.slice(0, 5).forEach((tip, i) => {
+        doc.rect(50, yPos - 5, 25, 25).fill(colors.success);
+        doc.fillColor('#ffffff')
+           .fontSize(14)
+           .font('Helvetica-Bold')
+           .text('✓', 57, yPos);
+
+        doc.fillColor(colors.dark)
+           .fontSize(13)
+           .font('Helvetica-Bold')
+           .text(tip.title, 90, yPos);
+        
+        doc.fillColor(colors.gray)
+           .fontSize(11)
+           .font('Helvetica')
+           .text(tip.description, 90, yPos + 18, { width: 460 });
+
+        yPos += 65;
+      });
+
+      // ============ PAGE 6: CLIENT TRANSFORMATION STORY ============
+      doc.addPage();
+      addFooter();
+      
+      doc.fillColor(colors.primary)
+         .fontSize(24)
+         .font('Helvetica-Bold')
+         .text('Client Success Story', 50, 50);
+      
+      doc.strokeColor(colors.gold).lineWidth(3)
+         .moveTo(50, 85).lineTo(230, 85).stroke();
+
+      const caseStudy = pdfContent.case_study || {
+        customer_name: 'Sarah',
+        before: 'Struggling to find direction and felt stuck in her career',
+        breakthrough: 'Discovered her unique strengths and created a clear action plan',
+        after: 'Landed her dream role with a 40% salary increase within 6 months',
+        quote: 'This program completely changed my perspective. I finally have clarity and confidence.'
+      };
+
+      doc.rect(50, 100, 512, 280).fillAndStroke(colors.light, colors.secondary);
+
+      doc.fillColor(colors.dark)
+         .fontSize(16)
+         .font('Helvetica-Bold')
+         .text(`${caseStudy.customer_name}'s Transformation`, 70, 120);
+
+      // Before
+      doc.fillColor(colors.gray)
+         .fontSize(11)
+         .font('Helvetica-Bold')
+         .text('BEFORE:', 70, 155);
+      doc.fillColor(colors.dark)
+         .fontSize(11)
+         .font('Helvetica')
+         .text(caseStudy.before || caseStudy.problem, 70, 170, { width: 470 });
+
+      // Breakthrough/Solution
+      doc.fillColor(colors.primary)
+         .fontSize(11)
+         .font('Helvetica-Bold')
+         .text('THE BREAKTHROUGH:', 70, 210);
+      doc.fillColor(colors.dark)
+         .fontSize(11)
+         .font('Helvetica')
+         .text(caseStudy.breakthrough || caseStudy.solution, 70, 225, { width: 470 });
+
+      // After/Result
+      doc.fillColor(colors.success)
+         .fontSize(11)
+         .font('Helvetica-Bold')
+         .text('THE RESULT:', 70, 270);
+      doc.fillColor(colors.dark)
+         .fontSize(11)
+         .font('Helvetica')
+         .text(caseStudy.after || caseStudy.result, 70, 285, { width: 470 });
+
+      // Quote
+      doc.fillColor(colors.primary)
+         .fontSize(13)
+         .font('Helvetica-Oblique')
+         .text(`"${caseStudy.quote || 'Working with ' + coachName + ' was the best investment I ever made.'}"`, 70, 330, {
+           width: 470
+         });
+      doc.fillColor(colors.gray)
+         .fontSize(11)
+         .text(`- ${caseStudy.customer_name}, Verified Client`, 70, 360);
+
+      // ============ PAGE 7: ACTION CHECKLIST (NO COUPON) ============
+      doc.addPage();
+      addFooter();
+      
+      doc.fillColor(colors.primary)
+         .fontSize(24)
+         .font('Helvetica-Bold')
+         .text('Your Next Steps', 50, 50);
+      
+      doc.strokeColor(colors.success).lineWidth(3)
+         .moveTo(50, 85).lineTo(200, 85).stroke();
+
+      doc.fillColor(colors.gray)
+         .fontSize(11)
+         .font('Helvetica-Oblique')
+         .text('Take action today to start your transformation', 50, 100);
+
+      const checklist = pdfContent.action_checklist || [
+        'Review this guide and highlight the strategies that resonate most with you',
+        'Schedule your free strategy call to create your personalized action plan'
+      ];
+
+      checklist.slice(0, 3).forEach((item, i) => {
+        doc.rect(50, 130 + (i * 90), 512, 75).fillAndStroke(colors.light, colors.secondary);
+        doc.rect(70, 145 + (i * 90), 25, 25).stroke(colors.primary);
+        
+        doc.fillColor(colors.primary)
+           .fontSize(14)
+           .font('Helvetica-Bold')
+           .text(`Action ${i + 1}`, 110, 140 + (i * 90));
+        
+        doc.fillColor(colors.dark)
+           .fontSize(12)
+           .font('Helvetica')
+           .text(item, 110, 162 + (i * 90), { width: 430 });
+      });
+
+      // "Ready to Go Deeper?" box (instead of coupon)
+      doc.rect(50, 350, 512, 120).fillAndStroke(colors.primary, colors.dark);
+      
+      doc.fillColor('#ffffff')
+         .fontSize(18)
+         .font('Helvetica-Bold')
+         .text('Ready to Accelerate Your Results?', 70, 375, { width: 470, align: 'center' });
+
+      doc.fillColor('#ffffff')
+         .fontSize(12)
+         .font('Helvetica')
+         .text('Book a free strategy call to discover how we can work together', 70, 405, { width: 470, align: 'center' });
+
+      doc.fillColor(colors.gold)
+         .fontSize(14)
+         .font('Helvetica-Bold')
+         .text('→ Limited spots available each week', 70, 435, { width: 470, align: 'center' });
+
+      // ============ PAGE 8: CTA + BOOK A CALL + QR CODE ============
+      doc.addPage();
+
+      doc.rect(0, 0, 612, 240).fill(colors.primary);
+      
+      doc.fillColor('#ffffff')
+         .fontSize(28)
+         .font('Helvetica-Bold')
+         .text('Let\'s Work Together', 50, 60, { width: 512, align: 'center' });
+      
+      doc.fontSize(14)
+         .font('Helvetica')
+         .text('Your transformation is just one conversation away', 50, 100, { width: 512, align: 'center' });
+
+      doc.fontSize(20)
+         .font('Helvetica-Bold')
+         .text('Book Your Free Strategy Call', 50, 150, { width: 512, align: 'center' });
+
+      if (calendarUrl) {
+        doc.fontSize(12)
+           .font('Helvetica')
+           .text(calendarUrl, 50, 185, { width: 512, align: 'center' });
+      }
+
+      // Contact info
+      doc.fillColor(colors.dark)
+         .fontSize(16)
+         .font('Helvetica-Bold')
+         .text('Connect With Me', 50, 270);
+
+      doc.strokeColor(colors.accent).lineWidth(2)
+         .moveTo(50, 295).lineTo(200, 295).stroke();
+
+      const contactDetails = [
+        `Coach: ${coachName}`,
+        email ? `Email: ${email}` : null,
+        phone ? `Phone: ${phone}` : null,
+        businessData.website ? `Website: ${businessData.website}` : null,
+        businessData.instagram ? `Instagram: ${businessData.instagram}` : null,
+        businessData.linkedin ? `LinkedIn: ${businessData.linkedin}` : null
+      ].filter(Boolean);
+
+      yPos = 315;
+      contactDetails.forEach(detail => {
+        doc.fillColor(colors.dark)
+           .fontSize(11)
+           .font('Helvetica')
+           .text(detail, 50, yPos);
+        yPos += 22;
+      });
+
+      // QR Code for booking
+      doc.rect(380, 270, 170, 170).fillAndStroke(colors.light, colors.secondary);
+      doc.fillColor(colors.primary)
+         .fontSize(12)
+         .font('Helvetica-Bold')
+         .text('SCAN TO BOOK', 385, 285, { width: 160, align: 'center' });
+      
+      if (qrBuffer) {
+        doc.image(qrBuffer, 420, 310, { width: 90, height: 90 });
+      } else {
+        doc.rect(420, 310, 90, 90).fillAndStroke('#ffffff', colors.dark);
+        doc.fillColor(colors.gray)
+           .fontSize(8)
+           .text('Visit:', 425, 340, { width: 80, align: 'center' })
+           .text(qrUrl.substring(0, 30), 425, 355, { width: 80, align: 'center' });
+      }
+      
+      doc.fillColor(colors.gray)
+         .fontSize(9)
+         .font('Helvetica')
+         .text(qrUrl.length > 35 ? qrUrl.substring(0, 35) + '...' : qrUrl, 385, 410, { width: 160, align: 'center' });
+      
+      doc.fillColor(colors.gray)
+         .fontSize(8)
+         .text('Scan with your phone camera', 385, 425, { width: 160, align: 'center' });
+
+      // Testimonial snippet
+      doc.rect(50, 460, 250, 80).fillAndStroke(colors.light, colors.secondary);
+      doc.fillColor(colors.gold)
+         .fontSize(11)
+         .font('Helvetica-Bold')
+         .text('★★★★★', 70, 475);
+      doc.fillColor(colors.dark)
+         .fontSize(10)
+         .font('Helvetica-Oblique')
+         .text(`"${coachName} helped me achieve results I never thought possible. Highly recommend!"`, 70, 495, { width: 210 });
+      doc.fillColor(colors.gray)
+         .fontSize(9)
+         .text('- Happy Client', 70, 525);
+
+      // Final CTA
+      doc.rect(320, 460, 230, 80).fillAndStroke(colors.primary, colors.dark);
+      doc.fillColor('#ffffff')
+         .fontSize(11)
+         .font('Helvetica-Bold')
+         .text('>>> YOUR NEXT STEP', 335, 475);
+      doc.fillColor('#ffffff')
+         .fontSize(10)
+         .font('Helvetica')
+         .text('Book your free strategy call', 335, 495, { width: 195 });
+      doc.fillColor(colors.gold)
+         .fontSize(12)
+         .font('Helvetica-Bold')
+         .text('Start Your Transformation', 335, 515, { width: 195 });
+
+      doc.fillColor(colors.gray)
+         .fontSize(9)
+         .font('Helvetica')
+         .text(`© ${new Date().getFullYear()} ${coachName}. All rights reserved.`, 50, 560, { width: 512, align: 'center' });
+      
+      doc.fontSize(8)
+         .text('Generated with Launchfly', 50, 575, { width: 512, align: 'center' });
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+/**
+ * Generate PDF for Local Service Businesses (Plumbers, HVAC, Cleaners, etc.)
+ * Focus: Diagnostic checklist, price guides, coupons
+ */
+async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
   // Generate QR code first (before entering Promise)
   const qrUrl = businessData.bookingUrl || businessData.landingPageUrl || `https://${businessData.subdomain || 'booking'}.launchfly.app`;
   let qrBuffer = null;

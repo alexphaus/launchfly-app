@@ -218,7 +218,146 @@ export const generateLeadMagnet = inngest.createFunction(
 
         const detectedCurrency = detectCurrency(businessContext || websiteData?.bodyText || '');
 
-        const prompt = `
+        // Detect business type from topic/niche
+        const detectBusinessType = (topicText) => {
+          if (!topicText) return 'local_service';
+          const coachingKeywords = [
+            'coach', 'coaching', 'consultant', 'consulting', 'mentor', 'mentoring',
+            'trainer', 'training', 'advisor', 'advisory', 'expert', 'strategist',
+            'therapist', 'counselor', 'counseling', 'speaker', 'author', 'creator',
+            'influencer', 'educator', 'teacher', 'tutor', 'course', 'program',
+            'mastermind', 'agency', 'freelancer', 'designer', 'developer', 'writer',
+            'fitness coach', 'life coach', 'business coach', 'health coach',
+            'career coach', 'executive coach', 'relationship coach', 'mindset',
+            'transformation', 'personal development', 'self-help', 'wellness'
+          ];
+          const lower = topicText.toLowerCase();
+          return coachingKeywords.some(k => lower.includes(k)) ? 'coaching' : 'local_service';
+        };
+
+        const businessType = detectBusinessType(topic);
+        console.log(`🎯 [generate-lead-magnet] Detected business type: ${businessType} for topic: ${topic}`);
+
+        // Build the appropriate prompt based on business type
+        let prompt;
+        
+        if (businessType === 'coaching') {
+          // ============ COACHING/CONSULTING PROMPT ============
+          prompt = `
+          You are a world-class direct response copywriter (like Russell Brunson or Amy Porterfield) for COACHES, CONSULTANTS, and ONLINE EXPERTS.
+          Create a high-converting Lead Magnet Asset (Expert Guide, Framework, or Blueprint) and Landing Page copy for: "${topic}".
+          
+          Target Audience: ${audience || 'Aspiring professionals looking to transform their results'}
+          Language: ${language}
+          ${websiteContextBlock}
+          ${businessContext ? `
+          ============= CRITICAL: BUSINESS CONTEXT PROVIDED BY OWNER =============
+          ${businessContext}
+          
+          INSTRUCTIONS FOR USING THIS CONTEXT:
+          1. Extract the EXACT coach/expert name or brand from this context
+          2. Use their EXACT methodology, framework, or approach names
+          3. Reference their specific credentials and experience
+          4. Include their contact details and social links
+          5. Match their tone (professional, casual, inspirational, etc.)
+          ========================================================================
+          ` : ''}
+          
+          CRITICAL COACHING-SPECIFIC INSTRUCTIONS:
+          - NO COUPONS OR DISCOUNTS (high-ticket positioning)
+          - Focus on TRANSFORMATION, not transactions
+          - Position as AUTHORITY, not service provider
+          - CTA should be "Book a Strategy Call" or "Apply Now", NOT "Get a Quote"
+          - Use aspirational language about achieving goals and overcoming struggles
+          
+          CRITICAL INSTRUCTIONS FOR EMAIL SEQUENCE:
+          Write a 5-day nurture sequence that builds authority and guides toward booking a strategy call.
+          - Tone: Expert but approachable. Empathetic to their struggles. Inspiring about their potential.
+          - Formatting: Short paragraphs. Story-driven. Personal stories work well.
+          - Day 1 (The Welcome): Subject: Here's your [Guide Name]. Body: Deliver warmly. Share why you created this. Hint at your transformation story.
+          - Day 2 (The Story): Subject: How I [achieved result]. Body: Your personal transformation story. What you struggled with, what changed, where you are now.
+          - Day 3 (The Framework): Subject: The #1 thing holding [audience] back. Body: Teach a key concept from your methodology. Give real value. Position yourself as the guide.
+          - Day 4 (The Proof): Subject: How [client name] went from X to Y. Body: Client success story with specific results. Show the transformation is possible.
+          - Day 5 (The Invitation): Subject: Is this you? Body: Describe their current struggle. Paint the vision of where they could be. Invite to a strategy call (no pressure, just exploration).
+
+          Create a "conversion_offer" for coaches (NO DISCOUNTS):
+          - Use: "Free Strategy Session", "Clarity Call", "Discovery Call", "Breakthrough Session"
+          - Focus on VALUE of the call, not price
+
+          CRITICAL: Create rich content for a 8-page Premium Expert Guide PDF.
+          - framework_name: Name your signature methodology (e.g., "The 5-Step Transformation Method")
+          - framework_steps: 5 steps in your methodology with descriptions
+          - authority_bio: Compelling expert bio with credentials, results, and story
+          - client_results: 3 specific client transformation stories
+          - common_struggles: 5 struggles your audience faces (not "mistakes", use empathetic language)
+          - quick_wins: 5 actionable tips they can implement today
+          - case_study: A detailed client transformation story (Before -> Breakthrough -> After)
+          - action_checklist: 2 immediate mindset/action steps
+          - NO price_ranges (not relevant for coaching)
+          - NO coupon_code or coupon_offer (high-ticket doesn't discount)
+          
+          Return a JSON object with this EXACT structure:
+          {
+            "business_name": "The coach/expert name or brand",
+            "business_type": "coaching",
+            "lead_magnet_title": "Catchy Title for the Expert Guide (e.g., 'The 5-Step Blueprint to [Result]')",
+            "conversion_offer": {
+              "headline": "Book Your Free Strategy Call",
+              "subheadline": "Discover exactly how to [achieve result] in just [timeframe]",
+              "cta_text": "Book My Free Call",
+              "offer_code": null
+            },
+            "pdf_content": {
+              "cover_tagline": "A powerful promise about transformation",
+              "intro": "An inspiring introduction about why you created this guide and who it's for",
+              "framework_name": "Your Signature Methodology Name",
+              "framework_steps": [
+                { "step": 1, "title": "Step name", "description": "What this step involves and why it matters" }
+              ],
+              "authority_bio": "Your compelling expert bio (credentials, story, results)",
+              "common_struggles": [
+                { "title": "Struggle name", "description": "Empathetic description of this challenge" }
+              ],
+              "quick_wins": [
+                { "title": "Quick win", "description": "Actionable tip they can do today" }
+              ],
+              "client_results": [
+                { "name": "Client name", "before": "Where they started", "after": "Their transformation", "quote": "Testimonial" }
+              ],
+              "case_study": {
+                "customer_name": "Client name",
+                "before": "Their situation before working with you",
+                "breakthrough": "The key moment of change",
+                "after": "Their results and transformation",
+                "quote": "Their testimonial"
+              },
+              "action_checklist": ["Mindset shift or action step 1", "Mindset shift or action step 2"]
+            },
+            "lead_magnet_content": [
+              { "title": "Section 1", "body": "..." },
+              { "title": "Section 2", "body": "..." },
+              { "title": "Section 3", "body": "..." }
+            ],
+            "landing_page": {
+              "hero_headline": "A compelling transformation promise (e.g., 'Finally [Achieve Result] Without [Pain Point]')",
+              "hero_subheadline": "For [audience] who want to [outcome] but struggle with [obstacle]",
+              "cta_text": "Get My Free Blueprint",
+              "benefits": ["Transformation benefit 1", "Transformation benefit 2", "Transformation benefit 3"],
+              "about_coach": "Short inspiring bio positioning you as the trusted guide (max 60 words)",
+              "trust_badges": ["As seen in X", "10,000+ clients helped", "Featured in Y"]
+            },
+            "email_sequence": [
+              { "day": 1, "subject": "...", "body": "..." },
+              { "day": 2, "subject": "...", "body": "..." },
+              { "day": 3, "subject": "...", "body": "..." },
+              { "day": 4, "subject": "...", "body": "..." },
+              { "day": 5, "subject": "...", "body": "..." }
+            ]
+          }
+        `;
+        } else {
+          // ============ LOCAL SERVICE PROMPT (ORIGINAL) ============
+          prompt = `
           You are a world-class direct response copywriter (like Dan Kennedy or Russell Brunson) for LOCAL SERVICE BUSINESSES. 
           Create a high-converting Lead Magnet Asset (Checklist, Price Guide, or Coupon) and Landing Page copy for a local business specializing in: "${topic}".
           
@@ -328,9 +467,11 @@ export const generateLeadMagnet = inngest.createFunction(
             ]
           }
         `;
+        } // End of else block for local_service prompt
 
         console.log(`🤖 [generate-lead-magnet] Calling OpenAI for business: ${businessId}`);
         console.log(`💱 Detected currency: ${detectedCurrency.symbol} (${detectedCurrency.code})`);
+        console.log(`🎯 Using ${businessType} prompt template`);
         
         const completion = await openai.chat.completions.create({
           messages: [{ role: 'user', content: prompt }],
@@ -370,6 +511,13 @@ export const generateLeadMagnet = inngest.createFunction(
         // Use AI-generated business_name or fallback to lead_magnet_title
         const businessName = content.business_name || content.lead_magnet_title || currentData.businessName || 'Local Business';
         
+        // Detect business type for saving
+        const businessType = content.business_type || (topic && (() => {
+          const coachingKeywords = ['coach', 'consultant', 'mentor', 'trainer', 'advisor', 'expert', 'strategist', 'therapist', 'counselor', 'speaker', 'author', 'creator'];
+          const lower = topic.toLowerCase();
+          return coachingKeywords.some(k => lower.includes(k)) ? 'coaching' : 'local_service';
+        })()) || 'local_service';
+        
         const { error: updateError } = await supabase
           .from('businesses')
           .update({
@@ -378,6 +526,7 @@ export const generateLeadMagnet = inngest.createFunction(
             business_data: {
               ...currentData,
               businessName: businessName,
+              businessType: businessType,
               niche: currentData.niche || topic,
               leadMagnet: content,
               lead_magnet_title: content.lead_magnet_title,

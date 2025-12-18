@@ -626,23 +626,9 @@ export default async function DynamicWebsite({ params }) {
     // Resolve the niche from multiple sources
     const resolvedNiche = businessData.niche || business?.form_data?.niche || business?.form_data?.leadMagnetTopic || 'service';
     
-    // Enhanced business type detection (emergency, visual, event, coaching, retail, local_service)
+    // Enhanced business type detection (event, coaching, local_service)
     const businessType = businessData.businessType || (() => {
       const combinedText = `${resolvedNiche || ''} ${JSON.stringify(lm) || ''}`.toLowerCase();
-      
-      // EMERGENCY detection (plumber, electrician, locksmith, towing, etc.)
-      const emergencyKeywords = ['plumber', 'plumbing', 'electrician', 'electrical', 'locksmith', 
-        'towing', 'emergency', '24/7', '24 hour', 'urgent', 'hvac', 'heating', 'cooling', 
-        'ac repair', 'water damage', 'flood', 'leak', 'burst pipe', 'power outage', 'roofing',
-        'roofer', 'storm damage', 'fire damage', 'restoration', 'appliance repair'];
-      if (emergencyKeywords.some(k => combinedText.includes(k))) return 'emergency';
-      
-      // VISUAL detection (salon, spa, design, photography, etc.)
-      const visualKeywords = ['salon', 'spa', 'beauty', 'hair', 'nail', 'makeup', 'tattoo',
-        'photographer', 'photography', 'videographer', 'interior design', 'graphic design',
-        'web design', 'florist', 'wedding', 'event planner', 'decorator', 'aesthetician',
-        'lash', 'brow', 'skincare', 'facial', 'massage', 'wellness'];
-      if (visualKeywords.some(k => combinedText.includes(k))) return 'visual';
       
       // EVENT detection (highest priority)
       const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit',
@@ -656,25 +642,15 @@ export default async function DynamicWebsite({ params }) {
       if (hasEventKeyword && hasEventPattern) return 'event';
       
       // COACHING detection
-      const coachingKeywords = ['coach', 'consultant', 'mentor', 'trainer', 'advisor', 'expert', 
-        'strategist', 'therapist', 'counselor', 'speaker', 'author', 'creator', 'life coach',
-        'business coach', 'executive coach', 'career coach', 'health coach'];
-      if (coachingKeywords.some(k => combinedText.includes(k))) return 'coaching';
-      
-      // RETAIL detection (restaurant, cafe, shop, store, etc.)
-      const retailKeywords = ['restaurant', 'cafe', 'coffee', 'bakery', 'pizzeria', 'bar', 'pub',
-        'shop', 'store', 'retail', 'boutique', 'grocery', 'market', 'food truck', 'catering',
-        'menu', 'dine', 'takeout', 'delivery', 'reservation'];
-      if (retailKeywords.some(k => combinedText.includes(k))) return 'retail';
+      const coachingKeywords = ['coach', 'consultant', 'mentor', 'trainer', 'advisor', 'expert', 'strategist', 'therapist', 'counselor', 'speaker', 'author', 'creator'];
+      const lower = resolvedNiche?.toLowerCase() || '';
+      if (coachingKeywords.some(k => lower.includes(k))) return 'coaching';
       
       return 'local_service';
     })();
     
-    const isEmergency = businessType === 'emergency';
-    const isVisual = businessType === 'visual';
     const isCoaching = businessType === 'coaching';
     const isEvent = businessType === 'event';
-    const isRetail = businessType === 'retail';
     
     // Ensure benefits is an array
     const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
@@ -692,32 +668,17 @@ export default async function DynamicWebsite({ params }) {
       : generateSmartFeatures({ ...businessData, niche: resolvedNiche });
 
     // Professional Service Theme Defaults (Dynamic based on Niche and Type)
-    const nicheTheme = isEmergency
+    const nicheTheme = isEvent
       ? { 
-          gradient: 'linear-gradient(135deg, rgba(185, 28, 28, 0.95) 0%, rgba(220, 38, 38, 0.9) 100%)',
-          colors: { primary: '#dc2626', secondary: '#b91c1c', accent: '#ef4444' }
+          gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95) 0%, rgba(245, 158, 11, 0.9) 100%)',
+          colors: { primary: '#ef4444', secondary: '#f59e0b', accent: '#fbbf24' }
         }
-      : isVisual
+      : isCoaching 
         ? { 
-            gradient: 'linear-gradient(135deg, rgba(124, 58, 237, 0.95) 0%, rgba(219, 39, 119, 0.9) 100%)',
-            colors: { primary: '#8b5cf6', secondary: '#db2777', accent: '#ec4899' }
+            gradient: 'linear-gradient(135deg, rgba(124, 58, 237, 0.95) 0%, rgba(168, 85, 247, 0.9) 100%)',
+            colors: { primary: '#7c3aed', secondary: '#a855f7', accent: '#c084fc' }
           }
-        : isEvent
-          ? { 
-              gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95) 0%, rgba(245, 158, 11, 0.9) 100%)',
-              colors: { primary: '#ef4444', secondary: '#f59e0b', accent: '#fbbf24' }
-            }
-          : isCoaching 
-            ? { 
-                gradient: 'linear-gradient(135deg, rgba(124, 58, 237, 0.95) 0%, rgba(168, 85, 247, 0.9) 100%)',
-                colors: { primary: '#7c3aed', secondary: '#a855f7', accent: '#c084fc' }
-              }
-            : isRetail
-              ? { 
-                  gradient: 'linear-gradient(135deg, rgba(234, 88, 12, 0.95) 0%, rgba(249, 115, 22, 0.9) 100%)',
-                  colors: { primary: '#ea580c', secondary: '#f97316', accent: '#fb923c' }
-                }
-              : getThemeForNiche(resolvedNiche);
+        : getThemeForNiche(resolvedNiche);
     if (!theme.gradient || theme.gradient.includes('#667eea')) {
       theme.gradient = nicheTheme.gradient;
       theme.colors = {
@@ -729,114 +690,72 @@ export default async function DynamicWebsite({ params }) {
     // Get the business name from multiple sources
     const resolvedBusinessName = businessData.businessName || business?.name || lm.business_name || businessData.lead_magnet_title || (isEvent ? 'Event Host' : isCoaching ? 'Expert Coach' : 'Local Business');
 
-    // Construct the High-Value Layout (different for each archetype)
+    // Construct the High-Value Layout (different for event, coaching, local service)
     layout = [
       {
         component: 'NavBar',
         props: {
           businessName: resolvedBusinessName,
-          links: isEmergency
+          links: isEvent
             ? [
-                { label: 'Services', href: '#services' },
-                { label: 'Why Us', href: '#trust' },
-                { label: 'Call Now', href: `tel:${business?.phone_number || businessData?.phone || ''}` }
+                { label: 'Event', href: '#hero' },
+                { label: 'Details', href: '#event-details' },
+                { label: 'Register', href: '#register' }
               ]
-            : isVisual
+            : isCoaching 
               ? [
-                  { label: 'Services', href: '#services' },
-                  { label: 'Gallery', href: '#gallery' },
-                  { label: 'Book Now', href: '#book' }
+                  { label: 'Blueprint', href: '#hero' },
+                  { label: 'Framework', href: '#framework' },
+                  { label: 'About', href: '#about' }
                 ]
-              : isEvent
-                ? [
-                    { label: 'Event', href: '#hero' },
-                    { label: 'Details', href: '#event-details' },
-                    { label: 'Register', href: '#register' }
-                  ]
-                : isCoaching 
-                  ? [
-                      { label: 'Blueprint', href: '#hero' },
-                      { label: 'Framework', href: '#framework' },
-                      { label: 'About', href: '#about' }
-                    ]
-                  : isRetail
-                    ? [
-                        { label: 'Menu', href: '#menu' },
-                        { label: 'About', href: '#about' },
-                        { label: 'Contact', href: '#contact' }
-                      ]
-                    : [
-                        { label: 'Guide', href: '#hero' },
-                        { label: 'Common Mistakes', href: '#problems' },
-                        { label: 'About', href: '#about' }
-                      ],
-          ctaText: isEmergency ? '📞 Call Now' : isVisual ? 'Book Appointment' : isEvent ? 'Register Now' : isCoaching ? 'Get Blueprint' : isRetail ? 'View Menu' : 'Get Guide',
-          ctaLink: isEmergency ? `tel:${business?.phone_number || businessData?.phone || ''}` : '#hero'
+              : [
+                  { label: 'Guide', href: '#hero' },
+                  { label: 'Common Mistakes', href: '#problems' },
+                  { label: 'About', href: '#about' }
+                ],
+          ctaText: isEvent ? 'Register Now' : isCoaching ? 'Get Blueprint' : 'Get Guide',
+          ctaLink: '#hero'
         }
       },
       {
         component: 'Hero',
         props: {
-          title: lm.landing_page?.hero_headline || (isEmergency
-            ? `🚨 ${resolvedNiche || 'Emergency'} Service – Fast Response`
-            : isVisual
-              ? `✨ Transform Your Look with ${resolvedBusinessName}`
-              : isEvent
-                ? `${lm.event_name || resolvedNiche || 'Join Our Event'}`
-                : isCoaching 
-                  ? `Transform Your ${resolvedNiche || 'Results'} Today`
-                  : isRetail
-                    ? `Welcome to ${resolvedBusinessName}`
-                    : `Get Your Free ${resolvedNiche || 'Expert'} Guide`),
-          subtitle: lm.landing_page?.hero_subheadline || (isEmergency
-            ? `Available 24/7 • ${businessData.responseTime || '30 min'} response time • Licensed & Insured`
-            : isVisual
-              ? `Experience premium ${resolvedNiche?.toLowerCase() || 'beauty'} services tailored just for you.`
-              : isEvent
-                ? `📅 ${lm.event_date || lm.landing_page?.event_date || 'Coming Soon'} | ⏰ ${lm.event_time || lm.landing_page?.event_time || ''} | 📍 ${lm.venue || lm.landing_page?.venue || ''}`
-                : isCoaching
-                  ? `Discover the proven framework that has helped hundreds achieve breakthrough ${resolvedNiche ? resolvedNiche.toLowerCase() : 'results'}.`
-                  : isRetail
-                    ? `${businessData.tagline || 'Delicious food, great atmosphere, unforgettable experience.'}`
-                    : `Learn exactly how to solve your ${resolvedNiche ? resolvedNiche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`),
-          ctaText: lm.landing_page?.cta_text || (isEmergency 
-            ? `📞 Call Now – ${business?.phone_number || businessData?.phone || 'Get Help'}`
-            : isVisual
-              ? 'Book Your Appointment'
-              : isEvent 
-                ? `Reserve My Spot – ${lm.landing_page?.pricing?.individual || conversionOffer.headline || 'Register Now'}`
-                : isCoaching ? 'Get My Free Blueprint' : isRetail ? 'See Our Menu' : 'Download Free Guide'),
-          showEmailCapture: !isEmergency && !isRetail,
+          title: lm.landing_page?.hero_headline || (isEvent
+            ? `${lm.event_name || resolvedNiche || 'Join Our Event'}`
+            : isCoaching 
+              ? `Transform Your ${resolvedNiche || 'Results'} Today`
+              : `Get Your Free ${resolvedNiche || 'Expert'} Guide`),
+          subtitle: lm.landing_page?.hero_subheadline || (isEvent
+            ? `📅 ${lm.event_date || lm.landing_page?.event_date || 'Coming Soon'} | ⏰ ${lm.event_time || lm.landing_page?.event_time || ''} | 📍 ${lm.venue || lm.landing_page?.venue || ''}`
+            : isCoaching
+              ? `Discover the proven framework that has helped hundreds achieve breakthrough ${resolvedNiche ? resolvedNiche.toLowerCase() : 'results'}.`
+              : `Learn exactly how to solve your ${resolvedNiche ? resolvedNiche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`),
+          ctaText: lm.landing_page?.cta_text || (isEvent 
+            ? `Reserve My Spot – ${lm.landing_page?.pricing?.individual || conversionOffer.headline || 'Register Now'}`
+            : isCoaching ? 'Get My Free Blueprint' : 'Download Free Guide'),
+          showEmailCapture: true,
           businessId: businessId,
           // WhatsApp integration (for events and local service)
           whatsappNumber: isCoaching ? null : (business?.phone_number || businessData?.phone || businessData?.whatsapp),
-          whatsappMessage: isEmergency
-            ? `Hi! I need urgent ${resolvedNiche || 'help'}. Can you send someone right away?`
-            : isEvent
-              ? `Hi! I'd like to register for ${lm.event_name || 'the event'} on ${lm.event_date || 'the upcoming date'}. Please let me know the next steps!`
-              : isCoaching 
-                ? null
-                : (businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`),
+          whatsappMessage: isEvent
+            ? `Hi! I'd like to register for ${lm.event_name || 'the event'} on ${lm.event_date || 'the upcoming date'}. Please let me know the next steps!`
+            : isCoaching 
+              ? null
+              : (businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`),
           // Urgency/scarcity
-          urgencyText: isEmergency
-            ? '🚨 Available 24/7 – Call Now for Immediate Help'
-            : isEvent
-              ? `🔥 Limited Spots – ${lm.event_date || 'Register Now!'}`
-              : isCoaching 
-                ? (conversionOffer.headline || 'Limited spots available for strategy calls')
-                : (conversionOffer.headline || (businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null)),
-          limitedSlots: isEvent ? 20 : (isCoaching || isEmergency ? null : 5),
-          couponCode: isCoaching || isEvent || isEmergency ? null : (conversionOffer.offer_code || businessData?.lead_magnet_pdf?.coupon_code),
+          urgencyText: isEvent
+            ? `🔥 Limited Spots – ${lm.event_date || 'Register Now!'}`
+            : isCoaching 
+              ? (conversionOffer.headline || 'Limited spots available for strategy calls')
+              : (conversionOffer.headline || (businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null)),
+          limitedSlots: isEvent ? 20 : (isCoaching ? null : 5),
+          couponCode: isCoaching || isEvent ? null : (conversionOffer.offer_code || businessData?.lead_magnet_pdf?.coupon_code),
           // Trust badges
-          trustBadges: isEmergency
-            ? (lm.landing_page?.trust_badges || ['Licensed & Insured', '24/7 Emergency', '30-Min Response', 'Satisfaction Guaranteed'])
-            : isVisual
-              ? (lm.landing_page?.trust_badges || ['5-Star Rated', 'Expert Stylists', 'Premium Products'])
-              : isEvent 
-                ? (lm.landing_page?.trust_badges || ['Professional Instructor', 'Limited Spots', 'All Levels Welcome'])
-                : isCoaching 
-                  ? (lm.landing_page?.trust_badges || ['Trusted by 500+ clients', 'Proven framework', 'Results guaranteed']) 
-                  : null,
+          trustBadges: isEvent 
+            ? (lm.landing_page?.trust_badges || ['Professional Instructor', 'Limited Spots', 'All Levels Welcome'])
+            : isCoaching 
+              ? (lm.landing_page?.trust_badges || ['Trusted by 500+ clients', 'Proven framework', 'Results guaranteed']) 
+              : null,
           // Event-specific pricing display
           eventPricing: isEvent ? lm.landing_page?.pricing : null,
           // Dynamic background overlay based on niche theme
@@ -844,85 +763,6 @@ export default async function DynamicWebsite({ params }) {
         }
       }
     ];
-
-    // EMERGENCY ARCHETYPE: Add Trust Badges and Sticky Call
-    if (isEmergency) {
-      layout.push({
-        component: 'TrustBadges',
-        props: {
-          badges: businessData.trustBadges || [
-            { icon: '🛡️', label: 'Licensed & Insured' },
-            { icon: '⚡', label: '30-Min Response' },
-            { icon: '✅', label: 'Background Checked' },
-            { icon: '💯', label: 'Satisfaction Guaranteed' }
-          ],
-          variant: 'emergency',
-          showRating: true,
-          rating: businessData.rating || 4.9,
-          reviewCount: businessData.reviewCount || 150,
-          id: 'trust'
-        }
-      });
-    }
-
-    // VISUAL ARCHETYPE: Add Image Gallery
-    if (isVisual && (businessData.galleryImages || businessData.portfolioImages)) {
-      layout.push({
-        component: 'ImageGallery',
-        props: {
-          title: 'Our Work',
-          subtitle: 'See the transformations',
-          images: businessData.galleryImages || businessData.portfolioImages || [],
-          variant: 'masonry',
-          columns: 3,
-          id: 'gallery'
-        }
-      });
-    }
-
-    // VISUAL ARCHETYPE: Add Pricing Menu
-    if (isVisual && businessData.services) {
-      layout.push({
-        component: 'PricingMenu',
-        props: {
-          title: 'Our Services',
-          items: businessData.services || [],
-          variant: 'elegant',
-          currency: businessData.currency || 'RM',
-          showBookButton: true,
-          id: 'services'
-        }
-      });
-    }
-
-    // RETAIL ARCHETYPE: Add Menu/Pricing
-    if (isRetail && (businessData.menuItems || businessData.products)) {
-      layout.push({
-        component: 'PricingMenu',
-        props: {
-          title: businessData.menuTitle || 'Our Menu',
-          subtitle: businessData.menuSubtitle || 'Fresh ingredients, amazing flavors',
-          items: businessData.menuItems || businessData.products || [],
-          variant: 'card',
-          currency: businessData.currency || 'RM',
-          showBookButton: false,
-          id: 'menu'
-        }
-      });
-    }
-
-    // EVENT ARCHETYPE: Add Countdown Timer
-    if (isEvent && lm.event_date) {
-      layout.push({
-        component: 'CountdownTimer',
-        props: {
-          targetDate: lm.event_date,
-          title: '⏰ Event Starts In',
-          subtitle: 'Don\'t miss out!',
-          variant: 'urgent'
-        }
-      });
-    }
 
     // For EVENT: Add Event Details Section
     if (isEvent) {
@@ -959,40 +799,6 @@ export default async function DynamicWebsite({ params }) {
       }
     }
 
-    // For EMERGENCY: Add Service Features
-    if (isEmergency) {
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: 'Why Choose Us',
-          subtitle: 'Fast, reliable, and professional service',
-          features: [
-            {
-              title: 'Rapid Response',
-              description: 'Our team arrives within 30 minutes of your call, ready to solve your problem.',
-              icon: '⚡'
-            },
-            {
-              title: 'Licensed Professionals',
-              description: 'All technicians are fully licensed, insured, and background-checked.',
-              icon: '🛡️'
-            },
-            {
-              title: 'Upfront Pricing',
-              description: 'No hidden fees. Get a clear quote before any work begins.',
-              icon: '💰'
-            },
-            {
-              title: 'Guaranteed Work',
-              description: 'Not satisfied? We\'ll make it right or your money back.',
-              icon: '✅'
-            }
-          ],
-          id: 'services'
-        }
-      });
-    }
-
     // For Coaching: Add Framework Section
     else if (isCoaching && pdfContent.framework_steps && pdfContent.framework_steps.length > 0) {
       layout.push({
@@ -1026,8 +832,8 @@ export default async function DynamicWebsite({ params }) {
         }
       });
     }
-    // 1. Problem Agitation Section (Common Mistakes) - For Local Service ONLY (not events, emergency, visual, retail)
-    else if (!isCoaching && !isEvent && !isEmergency && !isVisual && !isRetail && pdfContent.common_mistakes && pdfContent.common_mistakes.length > 0) {
+    // 1. Problem Agitation Section (Common Mistakes) - For Local Service ONLY (not events)
+    else if (!isCoaching && !isEvent && pdfContent.common_mistakes && pdfContent.common_mistakes.length > 0) {
       layout.push({
         component: 'FeatureGrid',
         props: {
@@ -1044,10 +850,10 @@ export default async function DynamicWebsite({ params }) {
     }
 
     // 2. Value/Solution Section (Quick Tips from full PDF, or Preview Tips from prospect phase)
-    // Skip this for Events, Emergency, Visual (they have their own sections above)
+    // Skip this for Events (they have their own sections above)
     const previewTips = lm.lead_magnet?.preview_tips || [];
     
-    if (!isEvent && !isEmergency && !isVisual && !isRetail && pdfContent.quick_tips && pdfContent.quick_tips.length > 0) {
+    if (!isEvent && pdfContent.quick_tips && pdfContent.quick_tips.length > 0) {
       // Full PDF content available (post-purchase)
       layout.push({
         component: 'FeatureGrid',
@@ -1064,7 +870,7 @@ export default async function DynamicWebsite({ params }) {
           id: 'tips'
         }
       });
-    } else if (!isEvent && !isEmergency && !isVisual && !isRetail && previewTips.length > 0) {
+    } else if (!isEvent && previewTips.length > 0) {
       // Preview tips from prospect phase (pre-purchase) - shows real value!
       layout.push({
         component: 'FeatureGrid',
@@ -1079,7 +885,7 @@ export default async function DynamicWebsite({ params }) {
           id: 'tips'
         }
       });
-    } else if (!isEvent && !isEmergency && !isVisual && !isRetail) {
+    } else if (!isEvent) {
       // Fallback to benefits if nothing else (not for events)
       layout.push({
         component: 'FeatureGrid',
@@ -1145,41 +951,31 @@ export default async function DynamicWebsite({ params }) {
     layout.push({
       component: 'TestimonialSlider',
       props: {
-        title: isEmergency
-          ? 'What Our Customers Say'
-          : isVisual
-            ? 'Client Transformations'
-            : isEvent 
-              ? 'What Past Attendees Say' 
-              : isCoaching 
-                ? 'Client Transformation Stories' 
-                : isRetail
-                  ? 'What Our Customers Say'
-                  : 'Real Results from Local Neighbors',
+        title: isEvent 
+          ? 'What Past Attendees Say' 
+          : isCoaching 
+            ? 'Client Transformation Stories' 
+            : 'Real Results from Local Neighbors',
         testimonials: testimonials
       }
     });
 
     // 4. About the Expert/Host (skip for events - already shown instructor above)
-    if (!isEvent && !isEmergency) {
+    if (!isEvent) {
       layout.push({
         component: 'AboutCoach',
         props: {
-          title: isCoaching ? 'Meet Your Guide' : isVisual ? 'About Us' : isRetail ? 'Our Story' : 'Meet Your Local Expert',
+          title: isCoaching ? 'Meet Your Guide' : 'Meet Your Local Expert',
           bio: lm.landing_page?.about_coach || lm.landing_page?.about_business || pdfContent.authority_bio || (isCoaching 
             ? `${resolvedBusinessName} is a trusted ${resolvedNiche || 'expert'} who has helped hundreds of clients achieve transformational results.`
-            : isVisual
-              ? `${resolvedBusinessName} is your premier destination for ${resolvedNiche || 'beauty services'}. Our skilled team delivers exceptional results every time.`
-              : isRetail
-                ? `Welcome to ${resolvedBusinessName}! We take pride in serving our community with quality and passion.`
-                : `Expert service provider specializing in ${resolvedNiche || 'serving our local community'}.`),
+            : `Expert service provider specializing in ${resolvedNiche || 'serving our local community'}.`),
           imageUrl: businessData.avatarUrl,
           businessName: resolvedBusinessName,
           credentials: isCoaching ? (pdfContent.credentials || lm.landing_page?.trust_badges) : null,
           id: 'about'
         }
       });
-    } else if (isEvent) {
+    } else {
       // For events: Add host info section
       layout.push({
         component: 'AboutCoach',
@@ -1193,69 +989,37 @@ export default async function DynamicWebsite({ params }) {
       });
     }
 
-    // 5. Final CTA (different for each archetype)
+    // 5. Final CTA (different for events, coaching, local service)
     layout.push({
       component: 'CallToAction',
       props: {
-        title: isEmergency
-          ? '🚨 Need Help Now? Call Us Immediately!'
-          : isVisual
-            ? 'Ready for Your Transformation?'
-            : isEvent
-              ? `Secure Your Spot – ${lm.event_date || 'Register Now!'}`
-              : isCoaching 
-                ? (conversionOffer.headline || 'Ready to Transform Your Results?')
-                : isRetail
-                  ? 'Visit Us Today!'
-                  : (conversionOffer.headline || `Ready to get your ${lm.lead_magnet?.title || 'Free Guide'}?`),
-        subtitle: isEmergency
-          ? `Our team is standing by 24/7. Fast response, fair pricing, guaranteed work.`
-          : isVisual
-            ? 'Book your appointment today and experience the difference.'
-            : isEvent
-              ? `${lm.landing_page?.pricing?.individual || conversionOffer.headline || 'Limited spots available'} | ${lm.landing_page?.pricing?.group || ''}`
-              : isCoaching
-                ? (conversionOffer.subheadline || 'Book a free strategy call to discover how we can work together to achieve your goals.')
-                : isRetail
-                  ? `${businessData.address || 'Find us at our location'} • ${businessData.hours || 'Open daily'}`
-                  : (conversionOffer.subheadline || 'Get instant access to this expert resource and start solving your problem today.'),
-        ctaText: isEmergency
-          ? `📞 Call Now: ${business?.phone_number || businessData?.phone || 'Get Help'}`
-          : isVisual
-            ? 'Book Your Appointment'
-            : isEvent
-              ? (conversionOffer.cta_text || 'Reserve My Spot Now')
-              : isCoaching 
-                ? (conversionOffer.cta_text || 'Book My Free Strategy Call')
-                : isRetail
-                  ? 'Get Directions'
-                  : (conversionOffer.cta_text || 'Download Now'),
-        ctaLink: isEmergency 
-          ? `tel:${business?.phone_number || businessData?.phone || ''}`
-          : isVisual
-            ? (businessData.bookingUrl || '#hero')
-            : isEvent ? '#hero' : (isCoaching ? (businessData.calendarUrl || businessData.bookingUrl || '#hero') : isRetail ? (businessData.mapUrl || '#contact') : '#hero'),
-        secondaryCtaText: isEmergency
-          ? 'WhatsApp Us'
-          : isVisual
-            ? 'WhatsApp Us'
-            : isEvent
-              ? ((business?.phone_number || businessData?.phone) ? 'WhatsApp Us' : null)
-              : isCoaching 
-                ? 'Get the Blueprint First'
-                : isRetail
-                  ? 'View Menu'
-                  : ((business?.phone_number || businessData?.phone) ? 'Call Us Now' : null),
-        secondaryCtaLink: isEmergency || isVisual
-          ? ((business?.phone_number || businessData?.phone) ? `https://wa.me/${(business?.phone_number || businessData?.phone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! I need ${isEmergency ? 'urgent ' : ''}${resolvedNiche || 'help'}.`)}` : null)
-          : isEvent
-            ? ((business?.phone_number || businessData?.phone) ? `https://wa.me/${(business?.phone_number || businessData?.phone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! I'd like to register for ${lm.event_name || 'the event'}`)}` : null)
-            : isCoaching 
-              ? '#hero'
-              : isRetail
-                ? '#menu'
-                : ((business?.phone_number || businessData?.phone) ? `tel:${business?.phone_number || businessData?.phone}` : null),
-        id: isEmergency ? 'contact' : 'register'
+        title: isEvent
+          ? `Secure Your Spot – ${lm.event_date || 'Register Now!'}`
+          : isCoaching 
+            ? (conversionOffer.headline || 'Ready to Transform Your Results?')
+            : (conversionOffer.headline || `Ready to get your ${lm.lead_magnet?.title || 'Free Guide'}?`),
+        subtitle: isEvent
+          ? `${lm.landing_page?.pricing?.individual || conversionOffer.headline || 'Limited spots available'} | ${lm.landing_page?.pricing?.group || ''}`
+          : isCoaching
+            ? (conversionOffer.subheadline || 'Book a free strategy call to discover how we can work together to achieve your goals.')
+            : (conversionOffer.subheadline || 'Get instant access to this expert resource and start solving your problem today.'),
+        ctaText: isEvent
+          ? (conversionOffer.cta_text || 'Reserve My Spot Now')
+          : isCoaching 
+            ? (conversionOffer.cta_text || 'Book My Free Strategy Call')
+            : (conversionOffer.cta_text || 'Download Now'),
+        ctaLink: isEvent ? '#hero' : (isCoaching ? (businessData.calendarUrl || businessData.bookingUrl || '#hero') : '#hero'),
+        secondaryCtaText: isEvent
+          ? ((business?.phone_number || businessData?.phone) ? 'WhatsApp Us' : null)
+          : isCoaching 
+            ? 'Get the Blueprint First'
+            : ((business?.phone_number || businessData?.phone) ? 'Call Us Now' : null),
+        secondaryCtaLink: isEvent
+          ? ((business?.phone_number || businessData?.phone) ? `https://wa.me/${(business?.phone_number || businessData?.phone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! I'd like to register for ${lm.event_name || 'the event'}`)}` : null)
+          : isCoaching 
+            ? '#hero'
+            : ((business?.phone_number || businessData?.phone) ? `tel:${business?.phone_number || businessData?.phone}` : null),
+        id: 'register'
       }
     });
 
@@ -1478,25 +1242,16 @@ export default async function DynamicWebsite({ params }) {
 
           {/* Sticky Call Button (Mobile Only) - Speed to Lead */}
           {(business?.phone_number || businessData?.phone) && (
-            businessData?.businessType === 'emergency' ? (
-              <LaunchflyUI.StickyCallButton
-                phone={business?.phone_number || businessData?.phone}
-                text="Call Now"
-                subtext="Available 24/7"
-                variant="emergency"
-              />
-            ) : (
-              <a 
-                href={`tel:${business?.phone_number || businessData?.phone}`}
-                className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-xl flex items-center justify-center md:hidden transition-transform hover:scale-110"
-                style={{ width: '64px', height: '64px' }}
-                aria-label="Call Now"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                </svg>
-              </a>
-            )
+            <a 
+              href={`tel:${business?.phone_number || businessData?.phone}`}
+              className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-xl flex items-center justify-center md:hidden transition-transform hover:scale-110"
+              style={{ width: '64px', height: '64px' }}
+              aria-label="Call Now"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+            </a>
           )}
         </div>
       </ThemedLayout>

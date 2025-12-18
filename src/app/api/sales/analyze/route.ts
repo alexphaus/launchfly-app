@@ -204,7 +204,6 @@ export async function POST(request: Request) {
           "pain_point": "The specific worry a customer has about this service",
           "opportunity": "Why this asset would help them capture more leads",
           "business_type": "e.g. Residential Service, B2B, Retail, etc.",
-          "business_archetype": "One of: emergency | visual | event | coaching | retail | local_service",
           "estimated_value": "Estimated value using ${detectedCurrency.symbol} (e.g. ${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}500)",
           "customer_demographic": "Who is their ideal customer? (e.g. Homeowners in [City], Small Business Owners)"
         },
@@ -321,7 +320,6 @@ export async function POST(request: Request) {
       const businessData = {
         businessName: finalBusinessName,
         niche: finalNiche,
-        businessType: result.analysis?.business_archetype || 'local_service',
         websiteUrl: url || '',
         email: finalEmail,
         phone: finalPhone,

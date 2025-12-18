@@ -44,16 +44,27 @@ import QRCode from 'qrcode';
  * Main export - routes to appropriate generator based on businessType
  */
 export async function generatePDF(data, PDFDocument, businessData = {}) {
-  const businessType = businessData.businessType || 'local_service';
+  const designPrefs = businessData.design_preferences || {};
+  let layoutMode = designPrefs.layout_mode;
   
-  console.log(`📄 [PDF Generator] Business type: ${businessType}`);
+  // Fallback logic if layout_mode is missing
+  if (!layoutMode) {
+      const businessType = businessData.businessType || 'local_service';
+      if (businessType === 'event') layoutMode = 'event';
+      else if (businessType === 'coaching') layoutMode = 'visual';
+      else layoutMode = 'emergency';
+  }
   
-  if (businessType === 'event') {
+  console.log(`📄 [PDF Generator] Layout Mode: ${layoutMode}`);
+  
+  if (layoutMode === 'event') {
     return generateEventPDF(data, PDFDocument, businessData);
   }
-  if (businessType === 'coaching') {
+  if (layoutMode === 'visual') {
+    // Use Coaching PDF generator for Visual/Portfolio mode (similar structure)
     return generateCoachingPDF(data, PDFDocument, businessData);
   }
+  // Default to Emergency (Local Service)
   return generateLocalServicePDF(data, PDFDocument, businessData);
 }
 

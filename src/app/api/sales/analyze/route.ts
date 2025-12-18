@@ -196,9 +196,22 @@ export async function POST(request: Request) {
       - ALL prices MUST use ${detectedCurrency.symbol} currency symbol (e.g., "${detectedCurrency.symbol}90", "${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}400")
       - DO NOT convert to USD. Keep original currency.
       - DO NOT use generic titles like "Mistake 1" or "Tip 1" - use DESCRIPTIVE titles
+
+      DESIGN & LAYOUT REQUIREMENTS:
+      - Analyze the business type to determine the best layout mode:
+        * "emergency": For urgent, trust-based services (e.g. Plumbers, Roofers, Locksmiths, Mechanics). Focus on speed, trust badges, and clear call-to-actions.
+        * "visual": For aesthetic, portfolio-based businesses (e.g. Interior Design, Salons, Photography, Landscaping). Focus on high-quality imagery and elegance.
+        * "event": For time-sensitive or class-based offerings (e.g. Yoga Classes, Webinars, Workshops, Concerts). Focus on countdowns, dates, and registration.
+      - Select a "primary_color" that fits the industry (e.g. Blue/Red for emergency, Pastels/Black for visual, Vibrant colors for event).
+      - Select a "font_style" (e.g. "bold" for emergency, "elegant" for visual, "modern" for event).
       
       OUTPUT FORMAT (JSON):
       {
+        "design_preferences": {
+          "layout_mode": "emergency | visual | event",
+          "primary_color": "hex code",
+          "font_style": "bold | elegant | modern"
+        },
         "analysis": {
           "primary_service": "The main high-ticket service identified from their website or context",
           "pain_point": "The specific worry a customer has about this service",

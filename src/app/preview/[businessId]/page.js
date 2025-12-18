@@ -626,31 +626,34 @@ export default async function DynamicWebsite({ params }) {
     // Resolve the niche from multiple sources
     const resolvedNiche = businessData.niche || business?.form_data?.niche || business?.form_data?.leadMagnetTopic || 'service';
     
-    // Enhanced business type detection (event, coaching, local_service)
-    const businessType = businessData.businessType || (() => {
+    // Enhanced business type detection and Layout Mode
+    const designPrefs = businessData.design_preferences || {};
+    let layoutMode = designPrefs.layout_mode;
+
+    // Fallback detection if layout_mode is missing
+    if (!layoutMode) {
       const combinedText = `${resolvedNiche || ''} ${JSON.stringify(lm) || ''}`.toLowerCase();
       
-      // EVENT detection (highest priority)
-      const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit',
-        'master class', 'masterclass', 'bootcamp', 'retreat', 'session', 'ticket', 'registration',
-        'register', 'reserve', 'limited seats', 'pax', 'per person', 'jan ', 'feb ', 'mar ',
-        'apr ', 'may ', 'jun ', 'jul ', 'aug ', 'sep ', 'oct ', 'nov ', 'dec ', '2025', '2026',
-        'zumba', 'yoga class', 'dance class', 'fitness class', 'jam session'];
-      const eventPatterns = [/\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i, /rm\s*\d+/i];
+      // EVENT detection
+      const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit', 'class', 'ticket'];
       const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
-      const hasEventPattern = eventPatterns.some(p => p.test(combinedText));
-      if (hasEventKeyword && hasEventPattern) return 'event';
-      
-      // COACHING detection
-      const coachingKeywords = ['coach', 'consultant', 'mentor', 'trainer', 'advisor', 'expert', 'strategist', 'therapist', 'counselor', 'speaker', 'author', 'creator'];
-      const lower = resolvedNiche?.toLowerCase() || '';
-      if (coachingKeywords.some(k => lower.includes(k))) return 'coaching';
-      
-      return 'local_service';
-    })();
-    
-    const isCoaching = businessType === 'coaching';
-    const isEvent = businessType === 'event';
+      if (hasEventKeyword) {
+        layoutMode = 'event';
+      } else {
+        // VISUAL detection
+        const visualKeywords = ['design', 'decor', 'art', 'photo', 'salon', 'beauty', 'style', 'fashion', 'architect'];
+        if (visualKeywords.some(k => combinedText.includes(k))) {
+          layoutMode = 'visual';
+        } else {
+          // Default to EMERGENCY (Service)
+          layoutMode = 'emergency';
+        }
+      }
+    }
+
+    const isEvent = layoutMode === 'event';
+    const isVisual = layoutMode === 'visual';
+    const isEmergency = layoutMode === 'emergency';
     
     // Ensure benefits is an array
     const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
@@ -667,371 +670,165 @@ export default async function DynamicWebsite({ params }) {
         }))
       : generateSmartFeatures({ ...businessData, niche: resolvedNiche });
 
-    // Professional Service Theme Defaults (Dynamic based on Niche and Type)
-    const nicheTheme = isEvent
-      ? { 
-          gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95) 0%, rgba(245, 158, 11, 0.9) 100%)',
-          colors: { primary: '#ef4444', secondary: '#f59e0b', accent: '#fbbf24' }
-        }
-      : isCoaching 
-        ? { 
-            gradient: 'linear-gradient(135deg, rgba(124, 58, 237, 0.95) 0%, rgba(168, 85, 247, 0.9) 100%)',
-            colors: { primary: '#7c3aed', secondary: '#a855f7', accent: '#c084fc' }
-          }
-        : getThemeForNiche(resolvedNiche);
+    // Theme Defaults based on Layout Mode
+    const modeTheme = {
+      event: { 
+        gradient: 'linear-gradient(135deg, #ef4444 0%, #f59e0b 100%)',
+        colors: { primary: '#ef4444', secondary: '#f59e0b' }
+      },
+      visual: { 
+        gradient: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+        colors: { primary: '#db2777', secondary: '#7c3aed' }
+      },
+      emergency: { 
+        gradient: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+        colors: { primary: '#2563eb', secondary: '#1e3a8a' }
+      }
+    }[layoutMode] || getThemeForNiche(resolvedNiche);
+
     if (!theme.gradient || theme.gradient.includes('#667eea')) {
-      theme.gradient = nicheTheme.gradient;
+      theme.gradient = designPrefs.primary_color ? `linear-gradient(135deg, ${designPrefs.primary_color} 0%, #000000 100%)` : modeTheme.gradient;
       theme.colors = {
         ...theme.colors,
-        ...nicheTheme.colors
+        ...modeTheme.colors,
+        primary: designPrefs.primary_color || modeTheme.colors.primary
       };
     }
 
     // Get the business name from multiple sources
-    const resolvedBusinessName = businessData.businessName || business?.name || lm.business_name || businessData.lead_magnet_title || (isEvent ? 'Event Host' : isCoaching ? 'Expert Coach' : 'Local Business');
+    const resolvedBusinessName = businessData.businessName || business?.name || lm.business_name || businessData.lead_magnet_title || 'Local Business';
 
-    // Construct the High-Value Layout (different for event, coaching, local service)
-    layout = [
-      {
-        component: 'NavBar',
-        props: {
-          businessName: resolvedBusinessName,
-          links: isEvent
-            ? [
-                { label: 'Event', href: '#hero' },
-                { label: 'Details', href: '#event-details' },
-                { label: 'Register', href: '#register' }
-              ]
-            : isCoaching 
-              ? [
-                  { label: 'Blueprint', href: '#hero' },
-                  { label: 'Framework', href: '#framework' },
-                  { label: 'About', href: '#about' }
-                ]
-              : [
-                  { label: 'Guide', href: '#hero' },
-                  { label: 'Common Mistakes', href: '#problems' },
-                  { label: 'About', href: '#about' }
-                ],
-          ctaText: isEvent ? 'Register Now' : isCoaching ? 'Get Blueprint' : 'Get Guide',
-          ctaLink: '#hero'
-        }
-      },
-      {
-        component: 'Hero',
-        props: {
-          title: lm.landing_page?.hero_headline || (isEvent
-            ? `${lm.event_name || resolvedNiche || 'Join Our Event'}`
-            : isCoaching 
-              ? `Transform Your ${resolvedNiche || 'Results'} Today`
-              : `Get Your Free ${resolvedNiche || 'Expert'} Guide`),
-          subtitle: lm.landing_page?.hero_subheadline || (isEvent
-            ? `📅 ${lm.event_date || lm.landing_page?.event_date || 'Coming Soon'} | ⏰ ${lm.event_time || lm.landing_page?.event_time || ''} | 📍 ${lm.venue || lm.landing_page?.venue || ''}`
-            : isCoaching
-              ? `Discover the proven framework that has helped hundreds achieve breakthrough ${resolvedNiche ? resolvedNiche.toLowerCase() : 'results'}.`
-              : `Learn exactly how to solve your ${resolvedNiche ? resolvedNiche.toLowerCase() : 'business'} problems today with our step-by-step blueprint.`),
-          ctaText: lm.landing_page?.cta_text || (isEvent 
-            ? `Reserve My Spot – ${lm.landing_page?.pricing?.individual || conversionOffer.headline || 'Register Now'}`
-            : isCoaching ? 'Get My Free Blueprint' : 'Download Free Guide'),
-          showEmailCapture: true,
-          businessId: businessId,
-          // WhatsApp integration (for events and local service)
-          whatsappNumber: isCoaching ? null : (business?.phone_number || businessData?.phone || businessData?.whatsapp),
-          whatsappMessage: isEvent
-            ? `Hi! I'd like to register for ${lm.event_name || 'the event'} on ${lm.event_date || 'the upcoming date'}. Please let me know the next steps!`
-            : isCoaching 
-              ? null
-              : (businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`),
-          // Urgency/scarcity
-          urgencyText: isEvent
-            ? `🔥 Limited Spots – ${lm.event_date || 'Register Now!'}`
-            : isCoaching 
-              ? (conversionOffer.headline || 'Limited spots available for strategy calls')
-              : (conversionOffer.headline || (businessData?.lead_magnet_pdf?.coupon_expiry ? `Offer expires: ${businessData?.lead_magnet_pdf?.coupon_expiry}` : null)),
-          limitedSlots: isEvent ? 20 : (isCoaching ? null : 5),
-          couponCode: isCoaching || isEvent ? null : (conversionOffer.offer_code || businessData?.lead_magnet_pdf?.coupon_code),
-          // Trust badges
-          trustBadges: isEvent 
-            ? (lm.landing_page?.trust_badges || ['Professional Instructor', 'Limited Spots', 'All Levels Welcome'])
-            : isCoaching 
-              ? (lm.landing_page?.trust_badges || ['Trusted by 500+ clients', 'Proven framework', 'Results guaranteed']) 
-              : null,
-          // Event-specific pricing display
-          eventPricing: isEvent ? lm.landing_page?.pricing : null,
-          // Dynamic background overlay based on niche theme
-          backgroundOverlay: theme.gradient || 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
-        }
-      }
-    ];
+    // --- CONSTRUCT LAYOUT BASED ON MODE ---
+    layout = [];
 
-    // For EVENT: Add Event Details Section
-    if (isEvent) {
-      // What to Expect section
-      const whatToExpect = pdfContent.what_to_expect || lm.landing_page?.benefits?.map(b => ({ title: b, description: '' })) || [];
-      if (whatToExpect.length > 0) {
-        layout.push({
-          component: 'FeatureGrid',
-          props: {
-            title: 'What You Will Experience',
-            subtitle: 'Join us for an unforgettable session',
-            features: whatToExpect.slice(0, 5).map((item, i) => ({
-              title: item.title,
-              description: item.description || '',
-              icon: ['🎉', '💪', '🎯', '✨', '🏆'][i] || '🎯'
-            })),
-            id: 'event-details'
-          }
-        });
-      }
-      
-      // Instructor/Speaker Bio section
-      if (pdfContent.instructor_bio || lm.landing_page?.instructor_bio) {
-        layout.push({
-          component: 'AboutCoach',
-          props: {
-            title: `Meet Your Instructor: ${lm.landing_page?.instructor_name || 'Guest Instructor'}`,
-            bio: pdfContent.instructor_bio || lm.landing_page?.instructor_bio,
-            imageUrl: businessData.instructorImageUrl,
-            businessName: lm.landing_page?.instructor_name || 'Featured Instructor',
-            id: 'instructor'
-          }
-        });
-      }
-    }
-
-    // For Coaching: Add Framework Section
-    else if (isCoaching && pdfContent.framework_steps && pdfContent.framework_steps.length > 0) {
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: pdfContent.framework_name || 'The Transformation Framework',
-          subtitle: 'The proven process that gets results',
-          features: pdfContent.framework_steps.slice(0, 5).map((step, i) => ({
-            title: `Step ${step.step || i + 1}: ${step.title}`,
-            description: step.description,
-            icon: ['🎯', '📋', '🚀', '⚡', '🏆'][i] || '✨'
-          })),
-          id: 'framework'
-        }
-      });
-    }
-    
-    // For Coaching: Show common struggles instead of mistakes
-    if (isCoaching && pdfContent.common_struggles && pdfContent.common_struggles.length > 0) {
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: 'Sound Familiar?',
-          subtitle: 'These are the challenges my clients overcome',
-          features: pdfContent.common_struggles.slice(0, 3).map(s => ({
-            title: s.title,
-            description: s.description,
-            icon: '😔'
-          })),
-          id: 'struggles'
-        }
-      });
-    }
-    // 1. Problem Agitation Section (Common Mistakes) - For Local Service ONLY (not events)
-    else if (!isCoaching && !isEvent && pdfContent.common_mistakes && pdfContent.common_mistakes.length > 0) {
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: 'Are You Making These Costly Mistakes?',
-          subtitle: `Most ${resolvedNiche || 'homeowners'} ignore these signs until it's too late.`,
-          features: pdfContent.common_mistakes.slice(0, 3).map(m => ({
-            title: m.title,
-            description: m.description,
-            icon: '⚠️'
-          })),
-          id: 'problems'
-        }
-      });
-    }
-
-    // 2. Value/Solution Section (Quick Tips from full PDF, or Preview Tips from prospect phase)
-    // Skip this for Events (they have their own sections above)
-    const previewTips = lm.lead_magnet?.preview_tips || [];
-    
-    if (!isEvent && pdfContent.quick_tips && pdfContent.quick_tips.length > 0) {
-      // Full PDF content available (post-purchase)
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: isCoaching ? 'Quick Wins You Can Implement Today' : 'What You Can Do Right Now',
-          subtitle: isCoaching 
-            ? 'Start seeing results immediately with these actionable strategies'
-            : 'Immediate steps to protect your property and save money.',
-          features: pdfContent.quick_tips.slice(0, 3).map(t => ({
-            title: t.title,
-            description: t.description,
-            icon: '💡'
-          })),
-          id: 'tips'
-        }
-      });
-    } else if (!isEvent && previewTips.length > 0) {
-      // Preview tips from prospect phase (pre-purchase) - shows real value!
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: 'Sneak Peek: What\'s Inside Your Guide',
-          subtitle: 'Here are just 3 of the valuable tips you\'ll get:',
-          features: previewTips.map(tip => ({
-            title: tip.title,
-            description: tip.description,
-            icon: '💡'
-          })),
-          id: 'tips'
-        }
-      });
-    } else if (!isEvent) {
-      // Fallback to benefits if nothing else (not for events)
-      layout.push({
-        component: 'FeatureGrid',
-        props: {
-          title: isCoaching ? 'What You Will Discover' : 'What You Will Learn',
-          subtitle: isCoaching ? 'Inside this expert blueprint' : 'Inside this free expert guide',
-          features: features,
-          id: 'what-you-learn'
-        }
-      });
-    }
-
-    // 3. Social Proof (Case Study + Testimonials)
-    const testimonials = businessData.testimonials || generateSmartTestimonials({ ...businessData, niche: resolvedNiche, businessName: resolvedBusinessName });
-    
-    // Inject Case Study as a "Featured Success Story" if available (different format for events)
-    if (pdfContent.case_study && !isEvent) {
-      const caseStudy = isCoaching 
-        ? {
-            name: pdfContent.case_study.customer_name || 'Recent Client',
-            role: 'Transformation Story',
-            content: `Before: ${pdfContent.case_study.before || pdfContent.case_study.problem}\n\nAfter: ${pdfContent.case_study.after || pdfContent.case_study.result}`,
-            avatar: '⭐',
-            rating: 5
-          }
-        : {
-            name: pdfContent.case_study.customer_name || 'Recent Client',
-            role: pdfContent.case_study.location || 'Local Homeowner',
-            content: `Problem: ${pdfContent.case_study.problem}\n\nSolution: ${pdfContent.case_study.solution}\n\nResult: ${pdfContent.case_study.result}`,
-            avatar: '⭐',
-            rating: 5
-          };
-      // Add to beginning of testimonials
-      testimonials.unshift(caseStudy);
-    }
-    
-    // For events: Add past attendee testimonials if available
-    if (isEvent && pdfContent.testimonials && pdfContent.testimonials.length > 0) {
-      pdfContent.testimonials.forEach(t => {
-        testimonials.unshift({
-          name: t.name,
-          role: 'Past Attendee',
-          content: t.quote,
-          avatar: '🎉',
-          rating: 5
-        });
-      });
-    }
-    
-    // For coaching: Add client_results if available
-    if (isCoaching && pdfContent.client_results && pdfContent.client_results.length > 0) {
-      pdfContent.client_results.forEach(result => {
-        testimonials.push({
-          name: result.name,
-          role: 'Client Success',
-          content: `${result.before} → ${result.after}${result.quote ? `\n\n"${result.quote}"` : ''}`,
-          avatar: '🌟',
-          rating: 5
-        });
-      });
-    }
-
+    // 1. NAVBAR
     layout.push({
-      component: 'TestimonialSlider',
-      props: {
-        title: isEvent 
-          ? 'What Past Attendees Say' 
-          : isCoaching 
-            ? 'Client Transformation Stories' 
-            : 'Real Results from Local Neighbors',
-        testimonials: testimonials
-      }
-    });
-
-    // 4. About the Expert/Host (skip for events - already shown instructor above)
-    if (!isEvent) {
-      layout.push({
-        component: 'AboutCoach',
-        props: {
-          title: isCoaching ? 'Meet Your Guide' : 'Meet Your Local Expert',
-          bio: lm.landing_page?.about_coach || lm.landing_page?.about_business || pdfContent.authority_bio || (isCoaching 
-            ? `${resolvedBusinessName} is a trusted ${resolvedNiche || 'expert'} who has helped hundreds of clients achieve transformational results.`
-            : `Expert service provider specializing in ${resolvedNiche || 'serving our local community'}.`),
-          imageUrl: businessData.avatarUrl,
-          businessName: resolvedBusinessName,
-          credentials: isCoaching ? (pdfContent.credentials || lm.landing_page?.trust_badges) : null,
-          id: 'about'
-        }
-      });
-    } else {
-      // For events: Add host info section
-      layout.push({
-        component: 'AboutCoach',
-        props: {
-          title: `Hosted by ${resolvedBusinessName}`,
-          bio: lm.landing_page?.about_host || `${resolvedBusinessName} organizes exciting events and experiences for the community.`,
-          imageUrl: businessData.avatarUrl,
-          businessName: resolvedBusinessName,
-          id: 'host'
-        }
-      });
-    }
-
-    // 5. Final CTA (different for events, coaching, local service)
-    layout.push({
-      component: 'CallToAction',
-      props: {
-        title: isEvent
-          ? `Secure Your Spot – ${lm.event_date || 'Register Now!'}`
-          : isCoaching 
-            ? (conversionOffer.headline || 'Ready to Transform Your Results?')
-            : (conversionOffer.headline || `Ready to get your ${lm.lead_magnet?.title || 'Free Guide'}?`),
-        subtitle: isEvent
-          ? `${lm.landing_page?.pricing?.individual || conversionOffer.headline || 'Limited spots available'} | ${lm.landing_page?.pricing?.group || ''}`
-          : isCoaching
-            ? (conversionOffer.subheadline || 'Book a free strategy call to discover how we can work together to achieve your goals.')
-            : (conversionOffer.subheadline || 'Get instant access to this expert resource and start solving your problem today.'),
-        ctaText: isEvent
-          ? (conversionOffer.cta_text || 'Reserve My Spot Now')
-          : isCoaching 
-            ? (conversionOffer.cta_text || 'Book My Free Strategy Call')
-            : (conversionOffer.cta_text || 'Download Now'),
-        ctaLink: isEvent ? '#hero' : (isCoaching ? (businessData.calendarUrl || businessData.bookingUrl || '#hero') : '#hero'),
-        secondaryCtaText: isEvent
-          ? ((business?.phone_number || businessData?.phone) ? 'WhatsApp Us' : null)
-          : isCoaching 
-            ? 'Get the Blueprint First'
-            : ((business?.phone_number || businessData?.phone) ? 'Call Us Now' : null),
-        secondaryCtaLink: isEvent
-          ? ((business?.phone_number || businessData?.phone) ? `https://wa.me/${(business?.phone_number || businessData?.phone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hi! I'd like to register for ${lm.event_name || 'the event'}`)}` : null)
-          : isCoaching 
-            ? '#hero'
-            : ((business?.phone_number || businessData?.phone) ? `tel:${business?.phone_number || businessData?.phone}` : null),
-        id: 'register'
-      }
-    });
-
-    // 6. Footer
-    layout.push({
-      component: 'Footer',
+      component: 'NavBar',
       props: {
         businessName: resolvedBusinessName,
-        email: business?.form_data?.prospectEmail || businessData.email,
-        phone: business?.form_data?.prospectPhone || businessData.phone,
-        address: business?.form_data?.prospectAddress || businessData.address
+        links: isEvent
+          ? [{ label: 'Event', href: '#hero' }, { label: 'Details', href: '#details' }, { label: 'Register', href: '#register' }]
+          : isVisual
+            ? [{ label: 'Portfolio', href: '#portfolio' }, { label: 'Reviews', href: '#reviews' }, { label: 'Contact', href: '#contact' }]
+            : [{ label: 'Services', href: '#services' }, { label: 'Reviews', href: '#reviews' }, { label: 'Contact', href: '#contact' }],
+        ctaText: isEvent ? 'Register Now' : isVisual ? 'View Portfolio' : 'Get Quote',
+        ctaLink: '#hero'
       }
+    });
+
+    // 2. HERO
+    layout.push({
+      component: 'Hero',
+      props: {
+        title: lm.landing_page?.hero_headline || `Welcome to ${resolvedBusinessName}`,
+        subtitle: lm.landing_page?.hero_subheadline || 'We provide top quality service.',
+        ctaText: lm.landing_page?.cta_text || (isEvent ? 'Register Now' : 'Get Started'),
+        showEmailCapture: true,
+        businessId: businessId,
+        whatsappNumber: business?.phone_number || businessData?.phone,
+        whatsappMessage: `Hi! I'm interested in ${resolvedBusinessName}.`,
+        urgencyText: isEvent ? `🔥 Event Date: ${lm.event_date || 'Coming Soon'}` : (isEmergency ? '⚡ Fast Response Guaranteed' : null),
+        trustBadges: lm.landing_page?.trust_badges || [],
+        backgroundOverlay: theme.gradient
+      }
+    });
+
+    // 3. DYNAMIC SECTIONS
+    if (isEvent) {
+        // Event Details
+        layout.push({
+            component: 'FeatureGrid',
+            props: {
+                title: 'Event Details',
+                subtitle: 'What to expect',
+                features: features,
+                id: 'details'
+            }
+        });
+        
+        // Instructor/Speaker Bio section
+        if (pdfContent.instructor_bio || lm.landing_page?.instructor_bio) {
+            layout.push({
+                component: 'AboutCoach',
+                props: {
+                    title: `Meet Your Instructor: ${lm.landing_page?.instructor_name || 'Guest Instructor'}`,
+                    bio: pdfContent.instructor_bio || lm.landing_page?.instructor_bio,
+                    imageUrl: businessData.instructorImageUrl,
+                    businessName: lm.landing_page?.instructor_name || 'Featured Instructor',
+                    id: 'instructor'
+                }
+            });
+        }
+    } else if (isVisual) {
+        // Portfolio / Visual Features
+        layout.push({
+            component: 'FeatureGrid',
+            props: {
+                title: 'Our Work',
+                subtitle: 'See the difference we make',
+                features: features, // TODO: Replace with images if available
+                id: 'portfolio'
+            }
+        });
+    } else {
+        // Emergency / Service: Problem & Solution
+        if (pdfContent.common_mistakes) {
+            layout.push({
+                component: 'FeatureGrid',
+                props: {
+                    title: 'Common Mistakes',
+                    subtitle: 'Avoid these costly errors',
+                    features: pdfContent.common_mistakes.map(m => ({
+                        title: m.title,
+                        description: m.description,
+                        icon: '⚠️'
+                    })),
+                    id: 'problems'
+                }
+            });
+        }
+        layout.push({
+            component: 'FeatureGrid',
+            props: {
+                title: 'Our Services',
+                subtitle: 'Professional solutions for you',
+                features: features,
+                id: 'services'
+            }
+        });
+    }
+
+    // 4. TESTIMONIALS
+    const testimonials = businessData.testimonials || generateSmartTestimonials({ ...businessData, niche: resolvedNiche });
+    layout.push({
+        component: 'TestimonialSlider',
+        props: {
+            title: 'Client Stories',
+            testimonials: testimonials,
+            id: 'reviews'
+        }
+    });
+
+    // 5. ABOUT
+    layout.push({
+        component: 'AboutCoach',
+        props: {
+            title: 'About Us',
+            bio: lm.landing_page?.about_business || `We are ${resolvedBusinessName}.`,
+            imageUrl: businessData.avatarUrl,
+            businessName: resolvedBusinessName,
+            id: 'about'
+        }
+    });
+
+    // 6. FOOTER
+    layout.push({
+        component: 'Footer',
+        props: {
+            businessName: resolvedBusinessName,
+            email: businessData.email,
+            phone: businessData.phone
+        }
     });
   }
   // If no layout exists or layout is empty, create a fallback layout

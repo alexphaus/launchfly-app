@@ -16,13 +16,43 @@ const openai = new OpenAI({
 });
 
 /**
- * Detects if a business is a coaching/consulting type or a local service
+ * Detects business type from niche AND context (more accurate)
  * @param {string} niche - The business niche
- * @returns {'coaching' | 'local_service'} The detected business type
+ * @param {string} context - Additional business context (e.g., from social media)
+ * @returns {'event' | 'coaching' | 'local_service'} The detected business type
  */
-export function detectBusinessType(niche) {
-  if (!niche) return 'local_service';
+export function detectBusinessType(niche, context = '') {
+  const combinedText = `${niche || ''} ${context || ''}`.toLowerCase();
   
+  // EVENT DETECTION (highest priority - specific dates, tickets, registration)
+  const eventKeywords = [
+    'event', 'workshop', 'webinar', 'seminar', 'conference', 'summit',
+    'master class', 'masterclass', 'bootcamp', 'retreat', 'session',
+    'ticket', 'registration', 'register', 'book your spot', 'reserve',
+    'limited seats', 'seats available', 'pax', 'per person',
+    'jan ', 'feb ', 'mar ', 'apr ', 'may ', 'jun ', 'jul ', 'aug ', 'sep ', 'oct ', 'nov ', 'dec ',
+    '2025', '2026', 'pm to register', 'pm me', 'pm to join',
+    'hosting', 'we are hosting', 'join us', 'open to all',
+    'zumba', 'yoga class', 'dance class', 'fitness class', 'group class'
+  ];
+  
+  const eventPatterns = [
+    /\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i, // "17 Jan"
+    /rm\s*\d+/i, // "RM65" - Malaysian Ringgit pricing
+    /\$\s*\d+\s*(per|\/)\s*(person|pax|ticket)/i, // "$50 per person"
+    /\d{1,2}:\d{2}\s*(am|pm)/i, // "6:00pm"
+    /limited\s*(spots|seats|slots)/i,
+    /group\s*(of\s*)?\d+/i, // "group of 5"
+  ];
+  
+  const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
+  const hasEventPattern = eventPatterns.some(p => p.test(combinedText));
+  
+  if (hasEventKeyword && hasEventPattern) {
+    return 'event';
+  }
+  
+  // COACHING DETECTION
   const coachingKeywords = [
     'coach', 'coaching', 'consultant', 'consulting', 'mentor', 'mentoring',
     'trainer', 'training', 'advisor', 'advisory', 'expert', 'strategist',
@@ -31,13 +61,90 @@ export function detectBusinessType(niche) {
     'mastermind', 'agency', 'freelancer', 'designer', 'developer', 'writer',
     'fitness coach', 'life coach', 'business coach', 'health coach',
     'career coach', 'executive coach', 'relationship coach', 'mindset',
-    'transformation', 'personal development', 'self-help', 'wellness coach'
+    'transformation', 'personal development', 'self-help', 'wellness coach',
+    '1:1', 'one-on-one', 'private coaching', 'group coaching'
   ];
   
-  const lower = niche.toLowerCase();
-  const isCoaching = coachingKeywords.some(keyword => lower.includes(keyword));
+  const isCoaching = coachingKeywords.some(k => combinedText.includes(k));
+  if (isCoaching) {
+    return 'coaching';
+  }
   
-  return isCoaching ? 'coaching' : 'local_service';
+  // Default to local service
+  return 'local_service';
+}
+
+/**
+ * Extracts event-specific details from context
+ * @param {string} context - Business context text
+ * @returns {Object|null} Event details or null if not an event
+ */
+export function extractEventDetails(context) {
+  if (!context) return null;
+  
+  const details = {
+    eventName: null,
+    eventDate: null,
+    eventTime: null,
+    venue: null,
+    price: null,
+    groupPrice: null,
+    groupSize: null,
+    host: null,
+    guestSpeaker: null,
+    registrationMethod: null
+  };
+  
+  // Extract event name (look for patterns like "Master Class", "Workshop", etc.)
+  const eventNameMatch = context.match(/([\w\s]+(?:master\s*class|workshop|seminar|bootcamp|retreat|jam|session))/i);
+  if (eventNameMatch) details.eventName = eventNameMatch[1].trim();
+  
+  // Extract date (e.g., "17 Jan 2026")
+  const dateMatch = context.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})?/i);
+  if (dateMatch) {
+    details.eventDate = `${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3] || '2026'}`;
+  }
+  
+  // Extract time (e.g., "6:00pm", "6pm–7:30pm")
+  const timeMatch = context.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*[–-]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm))?)/i);
+  if (timeMatch) details.eventTime = timeMatch[1];
+  
+  // Extract price (RM, $, etc.)
+  const priceMatch = context.match(/(?:rm|usd|\$|€|£)\s*(\d+(?:\.\d{2})?)/i);
+  if (priceMatch) {
+    const currency = context.match(/(rm|usd|\$|€|£)/i)?.[1]?.toUpperCase() || '$';
+    details.price = `${currency === 'RM' ? 'RM' : currency}${priceMatch[1]}`;
+  }
+  
+  // Extract group price
+  const groupPriceMatch = context.match(/(?:rm|usd|\$|€|£)\s*(\d+)\s*(?:group|per\s*pax|\d+\s*pax)/i);
+  if (groupPriceMatch) {
+    const currency = context.match(/(rm|usd|\$|€|£)/i)?.[1]?.toUpperCase() || '$';
+    details.groupPrice = `${currency === 'RM' ? 'RM' : currency}${groupPriceMatch[1]}`;
+  }
+  
+  // Extract group size
+  const groupSizeMatch = context.match(/(\d+)\s*pax/i);
+  if (groupSizeMatch) details.groupSize = parseInt(groupSizeMatch[1]);
+  
+  // Extract venue/location
+  const venueMatch = context.match(/(?:at|📍|venue:|location:)\s*([^,\n]+)/i);
+  if (venueMatch) details.venue = venueMatch[1].trim();
+  
+  // Extract guest speaker/instructor
+  const speakerMatch = context.match(/(?:with|featuring|by|instructor:)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/);
+  if (speakerMatch) details.guestSpeaker = speakerMatch[1];
+  
+  // Extract registration method
+  if (context.toLowerCase().includes('pm me') || context.toLowerCase().includes('pm to')) {
+    details.registrationMethod = 'direct_message';
+  } else if (context.toLowerCase().includes('register') || context.toLowerCase().includes('book')) {
+    details.registrationMethod = 'online_registration';
+  }
+  
+  // Only return if we found meaningful event details
+  const hasDetails = details.eventDate || details.price || details.eventName;
+  return hasDetails ? details : null;
 }
 
 const supabase = createClient(

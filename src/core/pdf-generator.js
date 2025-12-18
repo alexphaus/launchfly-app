@@ -2,9 +2,10 @@
  * PDF Generator for Lead Magnets
  * Following the "treasure chest" philosophy: small, sharp, immediately usable
  * 
- * SUPPORTS TWO BUSINESS TYPES:
+ * SUPPORTS THREE BUSINESS TYPES:
  * 1. LOCAL SERVICE (Plumbers, HVAC, Cleaners) - Diagnostic PDF with price guide & coupons
  * 2. COACHING (Coaches, Consultants, Experts) - Authority PDF with frameworks & transformation stories
+ * 3. EVENT (Workshops, Classes, Seminars) - Event details PDF with registration info
  * 
  * LOCAL SERVICE PDF (8 pages):
  * 1. Cover page (outcome-first headline)
@@ -26,6 +27,14 @@
  * 7. Action Checklist (no coupon)
  * 8. CTA + Book a Call + QR Code
  * 
+ * EVENT PDF (6 pages):
+ * 1. Cover page (Event name, date, pricing)
+ * 2. Event Details (What, When, Where, Price)
+ * 3. Meet the Instructor/Speaker
+ * 4. What You'll Experience
+ * 5. FAQ + Registration Info
+ * 6. CTA + Contact + QR Code
+ * 
  * Mobile-first design: Large buttons, ≤2MB, readable on phone
  */
 
@@ -39,6 +48,9 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
   
   console.log(`📄 [PDF Generator] Business type: ${businessType}`);
   
+  if (businessType === 'event') {
+    return generateEventPDF(data, PDFDocument, businessData);
+  }
   if (businessType === 'coaching') {
     return generateCoachingPDF(data, PDFDocument, businessData);
   }
@@ -592,6 +604,315 @@ async function generateCoachingPDF(data, PDFDocument, businessData = {}) {
       
       doc.fontSize(8)
          .text('Generated with Launchfly', 50, 575, { width: 512, align: 'center' });
+
+      doc.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+/**
+ * Generate PDF for Events, Workshops, Classes, Seminars
+ * Focus: Event details, pricing, registration info - NO diagnostic questions or "mistakes"
+ */
+async function generateEventPDF(data, PDFDocument, businessData = {}) {
+  // Generate QR code for registration
+  const qrUrl = businessData.registrationUrl || businessData.landingPageUrl || `https://${businessData.subdomain || 'register'}.launchfly.app`;
+  let qrBuffer = null;
+  
+  try {
+    const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+      width: 90,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' }
+    });
+    const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+    qrBuffer = Buffer.from(qrBase64, 'base64');
+  } catch (qrError) {
+    console.error('QR code generation failed:', qrError);
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ 
+        margin: 50,
+        size: 'letter',
+        bufferPages: true,
+        compress: true
+      });
+      const chunks = [];
+
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Color scheme (Red/Orange - energetic event feel)
+      const colors = {
+        primary: '#ef4444',    // Red
+        secondary: '#f97316',  // Orange
+        accent: '#fbbf24',     // Amber
+        dark: '#1f2937',       // Dark gray
+        gray: '#64748b',
+        light: '#fef3c7',      // Light amber
+        success: '#10b981',
+        white: '#ffffff'
+      };
+
+      const pdfContent = data.pdfContent || {};
+      const eventDetails = pdfContent.event_details || {};
+      const hostName = businessData.businessName || businessData.hostName || 'Event Host';
+      const eventName = data.event_name || pdfContent.event_name || businessData.eventName || 'Special Event';
+      const eventDate = data.event_date || eventDetails.date || businessData.eventDate || 'Coming Soon';
+      const eventTime = data.event_time || eventDetails.time || businessData.eventTime || '';
+      const venue = data.venue || eventDetails.venue || businessData.venue || '';
+      const pricing = eventDetails.pricing || {};
+      const phone = businessData.phone || '';
+      const email = businessData.email || '';
+
+      // ============ PAGE 1: COVER PAGE ============
+      doc.rect(0, 0, 612, 792).fill(colors.primary);
+      
+      // White content area
+      doc.rect(30, 30, 552, 732).fill(colors.white);
+      
+      // Event date badge (top)
+      doc.rect(50, 50, 512, 60).fill(colors.secondary);
+      doc.fillColor(colors.white)
+         .fontSize(24)
+         .font('Helvetica-Bold')
+         .text(`📅 ${eventDate}`, 50, 68, { width: 512, align: 'center' });
+      
+      // Event name
+      doc.fillColor(colors.dark)
+         .fontSize(32)
+         .font('Helvetica-Bold')
+         .text(eventName, 50, 140, { width: 512, align: 'center' });
+      
+      // Time and Venue
+      if (eventTime || venue) {
+        doc.fillColor(colors.gray)
+           .fontSize(16)
+           .font('Helvetica')
+           .text(`⏰ ${eventTime}${venue ? `  📍 ${venue}` : ''}`, 50, 200, { width: 512, align: 'center' });
+      }
+      
+      // Pricing box
+      doc.rect(150, 250, 312, 100).fillAndStroke(colors.light, colors.secondary);
+      doc.fillColor(colors.dark)
+         .fontSize(14)
+         .font('Helvetica-Bold')
+         .text('REGISTRATION', 150, 265, { width: 312, align: 'center' });
+      
+      const individualPrice = pricing.individual || data.conversion_offer?.headline || 'Register Now';
+      const groupPrice = pricing.group || data.conversion_offer?.subheadline || '';
+      
+      doc.fillColor(colors.primary)
+         .fontSize(28)
+         .font('Helvetica-Bold')
+         .text(individualPrice, 150, 290, { width: 312, align: 'center' });
+      
+      if (groupPrice) {
+        doc.fillColor(colors.gray)
+           .fontSize(12)
+           .font('Helvetica')
+           .text(groupPrice, 150, 325, { width: 312, align: 'center' });
+      }
+      
+      // Tagline
+      doc.fillColor(colors.gray)
+         .fontSize(14)
+         .font('Helvetica')
+         .text(pdfContent.cover_tagline || `Join us for an unforgettable experience!`, 50, 380, { width: 512, align: 'center' });
+      
+      // Hosted by
+      doc.fillColor(colors.dark)
+         .fontSize(12)
+         .font('Helvetica')
+         .text(`Hosted by ${hostName}`, 50, 420, { width: 512, align: 'center' });
+      
+      // QR Code (bottom right)
+      if (qrBuffer) {
+        doc.image(qrBuffer, 470, 650, { width: 90 });
+        doc.fillColor(colors.gray)
+           .fontSize(8)
+           .text('Scan to Register', 470, 745, { width: 90, align: 'center' });
+      }
+
+      // ============ PAGE 2: WHAT YOU'LL EXPERIENCE ============
+      doc.addPage();
+      doc.rect(0, 0, 612, 80).fill(colors.secondary);
+      doc.fillColor(colors.white)
+         .fontSize(20)
+         .font('Helvetica-Bold')
+         .text('What You\'ll Experience', 50, 35, { width: 512, align: 'center' });
+      
+      const whatToExpect = pdfContent.what_to_expect || [];
+      let yPos = 110;
+      
+      if (whatToExpect.length > 0) {
+        whatToExpect.forEach((item, index) => {
+          doc.rect(50, yPos, 512, 60).fillAndStroke(colors.light, colors.secondary);
+          doc.fillColor(colors.primary)
+             .fontSize(14)
+             .font('Helvetica-Bold')
+             .text(`${index + 1}. ${item.title}`, 65, yPos + 12);
+          doc.fillColor(colors.gray)
+             .fontSize(11)
+             .font('Helvetica')
+             .text(item.description || '', 65, yPos + 32, { width: 480 });
+          yPos += 70;
+        });
+      } else {
+        // Fallback content
+        const defaultExperiences = [
+          { title: 'Expert Instruction', description: 'Learn from professionals with years of experience' },
+          { title: 'Hands-On Practice', description: 'Apply what you learn in a supportive environment' },
+          { title: 'Community Connection', description: 'Meet like-minded people and grow your network' },
+          { title: 'Fun & Engagement', description: 'Enjoy an energetic, memorable experience' }
+        ];
+        defaultExperiences.forEach((item, index) => {
+          doc.rect(50, yPos, 512, 60).fillAndStroke(colors.light, colors.secondary);
+          doc.fillColor(colors.primary)
+             .fontSize(14)
+             .font('Helvetica-Bold')
+             .text(`${index + 1}. ${item.title}`, 65, yPos + 12);
+          doc.fillColor(colors.gray)
+             .fontSize(11)
+             .font('Helvetica')
+             .text(item.description, 65, yPos + 32, { width: 480 });
+          yPos += 70;
+        });
+      }
+      
+      // Who is this for section
+      const whoIsFor = pdfContent.who_is_this_for || [];
+      if (whoIsFor.length > 0) {
+        yPos += 20;
+        doc.fillColor(colors.dark)
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text('This Event Is Perfect For:', 50, yPos);
+        yPos += 25;
+        
+        whoIsFor.forEach(item => {
+          doc.fillColor(colors.success)
+             .fontSize(12)
+             .text(`✓ ${typeof item === 'string' ? item : item.description || item}`, 70, yPos);
+          yPos += 20;
+        });
+      }
+
+      // ============ PAGE 3: MEET THE INSTRUCTOR ============
+      doc.addPage();
+      doc.rect(0, 0, 612, 80).fill(colors.primary);
+      doc.fillColor(colors.white)
+         .fontSize(20)
+         .font('Helvetica-Bold')
+         .text('Meet Your Instructor', 50, 35, { width: 512, align: 'center' });
+      
+      const instructorBio = pdfContent.instructor_bio || `Join us for this special event hosted by ${hostName}. Our instructors bring passion and expertise to every session.`;
+      
+      doc.rect(50, 100, 512, 200).fillAndStroke(colors.light, colors.secondary);
+      doc.fillColor(colors.dark)
+         .fontSize(12)
+         .font('Helvetica')
+         .text(instructorBio, 70, 120, { width: 470 });
+      
+      // Testimonials from past events
+      const testimonials = pdfContent.testimonials || [];
+      if (testimonials.length > 0) {
+        doc.fillColor(colors.dark)
+           .fontSize(16)
+           .font('Helvetica-Bold')
+           .text('What Past Attendees Say', 50, 330);
+        
+        let testY = 360;
+        testimonials.slice(0, 3).forEach(t => {
+          doc.rect(50, testY, 512, 70).fillAndStroke(colors.white, colors.gray);
+          doc.fillColor(colors.dark)
+             .fontSize(11)
+             .font('Helvetica')
+             .text(`"${t.quote}"`, 70, testY + 15, { width: 470 });
+          doc.fillColor(colors.gray)
+             .fontSize(10)
+             .font('Helvetica-Bold')
+             .text(`- ${t.name}`, 70, testY + 50);
+          testY += 80;
+        });
+      }
+
+      // ============ PAGE 4: FAQ & REGISTRATION ============
+      doc.addPage();
+      doc.rect(0, 0, 612, 80).fill(colors.secondary);
+      doc.fillColor(colors.white)
+         .fontSize(20)
+         .font('Helvetica-Bold')
+         .text('Frequently Asked Questions', 50, 35, { width: 512, align: 'center' });
+      
+      const faq = pdfContent.faq || [];
+      yPos = 110;
+      
+      const defaultFaq = [
+        { question: 'What should I bring?', answer: 'Just yourself and a positive attitude! Wear comfortable clothes.' },
+        { question: 'Do I need prior experience?', answer: 'No experience needed. All levels are welcome!' },
+        { question: 'Can I bring a friend?', answer: 'Absolutely! Check our group pricing for discounts.' },
+        { question: 'What if I need to cancel?', answer: 'Contact us at least 24 hours before for a full refund.' }
+      ];
+      
+      (faq.length > 0 ? faq : defaultFaq).slice(0, 5).forEach(item => {
+        doc.fillColor(colors.primary)
+           .fontSize(13)
+           .font('Helvetica-Bold')
+           .text(`Q: ${item.question}`, 50, yPos);
+        yPos += 18;
+        doc.fillColor(colors.gray)
+           .fontSize(11)
+           .font('Helvetica')
+           .text(`A: ${item.answer}`, 70, yPos, { width: 490 });
+        yPos += 35;
+      });
+      
+      // Registration info box
+      const regInfo = pdfContent.registration_info || {};
+      doc.rect(50, 480, 512, 150).fillAndStroke(colors.primary, colors.dark);
+      doc.fillColor(colors.white)
+         .fontSize(18)
+         .font('Helvetica-Bold')
+         .text('🎟️ SECURE YOUR SPOT NOW', 50, 500, { width: 512, align: 'center' });
+      
+      doc.fillColor(colors.white)
+         .fontSize(12)
+         .font('Helvetica')
+         .text(`📅 Date: ${eventDate}`, 100, 540);
+      doc.text(`⏰ Time: ${eventTime}`, 100, 560);
+      doc.text(`📍 Venue: ${venue}`, 100, 580);
+      doc.text(`💰 Price: ${individualPrice}${groupPrice ? ` | ${groupPrice}` : ''}`, 100, 600);
+      
+      // Contact info
+      if (phone || email) {
+        doc.fillColor(colors.accent)
+           .fontSize(11)
+           .font('Helvetica-Bold');
+        if (phone) doc.text(`📞 WhatsApp: ${phone}`, 350, 560);
+        if (email) doc.text(`✉️ Email: ${email}`, 350, 580);
+      }
+      
+      // QR code on last page
+      if (qrBuffer) {
+        doc.image(qrBuffer, 470, 680, { width: 80 });
+        doc.fillColor(colors.gray)
+           .fontSize(8)
+           .text('Scan to Register', 470, 765, { width: 80, align: 'center' });
+      }
+      
+      doc.fillColor(colors.gray)
+         .fontSize(9)
+         .font('Helvetica')
+         .text(`© ${new Date().getFullYear()} ${hostName}. All rights reserved.`, 50, 680, { width: 400, align: 'left' });
+      
+      doc.fontSize(8)
+         .text('Generated with Launchfly', 50, 695);
 
       doc.end();
     } catch (e) {

@@ -218,9 +218,38 @@ export const generateLeadMagnet = inngest.createFunction(
 
         const detectedCurrency = detectCurrency(businessContext || websiteData?.bodyText || '');
 
-        // Detect business type from topic/niche
-        const detectBusinessType = (topicText) => {
-          if (!topicText) return 'local_service';
+        // Enhanced business type detection with EVENT support
+        const detectBusinessType = (topicText, contextText = '') => {
+          const combinedText = `${topicText || ''} ${contextText || ''}`.toLowerCase();
+          
+          // EVENT DETECTION (highest priority - tickets, dates, registration)
+          const eventKeywords = [
+            'event', 'workshop', 'webinar', 'seminar', 'conference', 'summit',
+            'master class', 'masterclass', 'bootcamp', 'retreat', 'session',
+            'ticket', 'registration', 'register', 'book your spot', 'reserve',
+            'limited seats', 'seats available', 'pax', 'per person',
+            'jan ', 'feb ', 'mar ', 'apr ', 'may ', 'jun ', 'jul ', 'aug ', 'sep ', 'oct ', 'nov ', 'dec ',
+            '2025', '2026', 'pm to register', 'pm me', 'pm to join',
+            'hosting', 'we are hosting', 'join us', 'open to all',
+            'zumba', 'yoga class', 'dance class', 'fitness class', 'group class', 'jam session'
+          ];
+          
+          const eventPatterns = [
+            /\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
+            /rm\s*\d+/i,
+            /\$\s*\d+\s*(per|\/)\s*(person|pax|ticket)/i,
+            /\d{1,2}:\d{2}\s*(am|pm)/i,
+            /limited\s*(spots|seats|slots)/i,
+          ];
+          
+          const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
+          const hasEventPattern = eventPatterns.some(p => p.test(combinedText));
+          
+          if (hasEventKeyword && hasEventPattern) {
+            return 'event';
+          }
+          
+          // COACHING DETECTION
           const coachingKeywords = [
             'coach', 'coaching', 'consultant', 'consulting', 'mentor', 'mentoring',
             'trainer', 'training', 'advisor', 'advisory', 'expert', 'strategist',
@@ -229,19 +258,207 @@ export const generateLeadMagnet = inngest.createFunction(
             'mastermind', 'agency', 'freelancer', 'designer', 'developer', 'writer',
             'fitness coach', 'life coach', 'business coach', 'health coach',
             'career coach', 'executive coach', 'relationship coach', 'mindset',
-            'transformation', 'personal development', 'self-help', 'wellness'
+            'transformation', 'personal development', 'self-help', 'wellness',
+            '1:1', 'one-on-one', 'private coaching', 'group coaching'
           ];
-          const lower = topicText.toLowerCase();
-          return coachingKeywords.some(k => lower.includes(k)) ? 'coaching' : 'local_service';
+          
+          const isCoaching = coachingKeywords.some(k => combinedText.includes(k));
+          if (isCoaching) {
+            return 'coaching';
+          }
+          
+          return 'local_service';
         };
 
-        const businessType = detectBusinessType(topic);
+        // Extract event details from context
+        const extractEventDetails = (context) => {
+          if (!context) return null;
+          const details = {};
+          
+          // Extract date
+          const dateMatch = context.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})?/i);
+          if (dateMatch) details.eventDate = `${dateMatch[1]} ${dateMatch[2]} ${dateMatch[3] || '2026'}`;
+          
+          // Extract time
+          const timeMatch = context.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*[–-]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm))?)/i);
+          if (timeMatch) details.eventTime = timeMatch[1];
+          
+          // Extract price
+          const priceMatch = context.match(/(?:rm|usd|\$|€|£)\s*(\d+(?:\.\d{2})?)/i);
+          if (priceMatch) {
+            const currency = context.match(/(rm|usd|\$|€|£)/i)?.[1]?.toUpperCase() || '$';
+            details.price = `${currency === 'RM' ? 'RM' : currency}${priceMatch[1]}`;
+          }
+          
+          // Extract group price
+          const groupMatch = context.match(/(?:rm|usd|\$|€|£)\s*(\d+)(?:\s*(?:for|per)\s*)?(?:\s*group|\d+\s*pax)/i);
+          if (groupMatch) {
+            const currency = context.match(/(rm|usd|\$|€|£)/i)?.[1]?.toUpperCase() || '$';
+            details.groupPrice = `${currency === 'RM' ? 'RM' : currency}${groupMatch[1]}`;
+          }
+          
+          // Extract group size
+          const paxMatch = context.match(/(\d+)\s*pax/i);
+          if (paxMatch) details.groupSize = paxMatch[1];
+          
+          // Extract venue
+          const venueMatch = context.match(/(?:at|📍|venue:|location:)\s*([^,\n]+)/i);
+          if (venueMatch) details.venue = venueMatch[1].trim();
+          
+          // Extract instructor/speaker
+          const speakerMatch = context.match(/(?:with|featuring|by|instructor:)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/);
+          if (speakerMatch) details.instructor = speakerMatch[1];
+          
+          return Object.keys(details).length > 0 ? details : null;
+        };
+
+        const businessType = detectBusinessType(topic, businessContext);
+        const eventDetails = businessType === 'event' ? extractEventDetails(businessContext) : null;
         console.log(`🎯 [generate-lead-magnet] Detected business type: ${businessType} for topic: ${topic}`);
+        if (eventDetails) console.log(`📅 [generate-lead-magnet] Event details:`, eventDetails);
 
         // Build the appropriate prompt based on business type
         let prompt;
         
-        if (businessType === 'coaching') {
+        if (businessType === 'event') {
+          // ============ EVENT/WORKSHOP PROMPT ============
+          prompt = `
+          You are a world-class event marketing copywriter. Create a high-converting EVENT REGISTRATION page and promotional materials for: "${topic}".
+          
+          Target Audience: ${audience || 'People interested in this type of event'}
+          Language: ${language}
+          ${websiteContextBlock}
+          ${businessContext ? `
+          ============= CRITICAL: EVENT DETAILS FROM ORGANIZER =============
+          ${businessContext}
+          
+          EXTRACT AND USE THESE EXACTLY:
+          1. Event name/title (e.g., "Zumba Master Class")
+          2. Exact date (e.g., "17 Jan 2026")
+          3. Exact time (e.g., "6:00pm - 7:30pm")
+          4. Exact pricing (e.g., "RM65 per person", "RM250 for group of 5")
+          5. Venue/location
+          6. Host/organizer name
+          7. Guest instructor/speaker (if any)
+          8. Registration method (PM, WhatsApp, link)
+          
+          DETECTED EVENT DETAILS:
+          ${eventDetails ? JSON.stringify(eventDetails, null, 2) : 'No specific details extracted - infer from context'}
+          ===================================================================
+          ` : ''}
+          
+          CRITICAL EVENT-SPECIFIC INSTRUCTIONS:
+          - This is an EVENT with a specific date, NOT an ongoing service
+          - NO diagnostic questions or checklists (this isn't a service evaluation)
+          - NO "common mistakes" section (irrelevant for events)
+          - NO price comparison or "getting quotes" language
+          - NO repair/maintenance/contractor language
+          - CTA must be: "Reserve My Spot", "Register Now", "Book My Ticket" - NOT "Download Guide"
+          - Focus on: Event excitement, what attendees will experience, FOMO, speaker/instructor credentials
+          - Landing page IS the registration page (lead capture = event registration)
+          
+          CRITICAL CURRENCY INSTRUCTIONS:
+          - Detected Currency: ${detectedCurrency.symbol} (${detectedCurrency.code})
+          - Use EXACT prices from context (e.g., "${eventDetails?.price || 'RM65'}")
+          - If group pricing exists, include it (e.g., "${eventDetails?.groupPrice || 'RM250'} for ${eventDetails?.groupSize || '5'} pax")
+          
+          CREATE FOR EVENT:
+          - event_name: The exact event name/title
+          - event_date: The exact date (e.g., "17 January 2026")
+          - event_time: The exact time (e.g., "6:00pm - 7:30pm")
+          - venue: Location/venue name
+          - pricing_tiers: Individual and group pricing options
+          - host_info: About the organizer/host
+          - instructor_bio: About the guest instructor/speaker (if applicable)
+          - what_to_expect: 4-5 bullet points about the event experience
+          - who_is_this_for: 3-4 bullet points describing ideal attendees
+          - faq: 4-5 common questions about the event
+          - urgency_message: Limited spots/early bird messaging
+          
+          EMAIL SEQUENCE for EVENT (5 emails):
+          - Day 1: Event announcement + registration link (deliver excitement, not a guide)
+          - Day 2: About the instructor/host + why this event is special
+          - Day 3: What to expect + testimonials from past events
+          - Day 4: "Spots filling up" + FAQ answers
+          - Day 5: Final reminder + last chance to register
+          
+          Return a JSON object with this EXACT structure:
+          {
+            "business_name": "The organizer/host name or brand",
+            "business_type": "event",
+            "event_name": "Exact event title (e.g., 'Zumba Master Class with Gerald Tay')",
+            "event_date": "Exact date (e.g., '17 January 2026')",
+            "event_time": "Exact time (e.g., '6:00pm - 7:30pm')",
+            "venue": "Event location",
+            "lead_magnet_title": "EVENT REGISTRATION: [Event Name]",
+            "conversion_offer": {
+              "headline": "${eventDetails?.price || 'RM65'} per person",
+              "subheadline": "Group of ${eventDetails?.groupSize || '5'} pax: ${eventDetails?.groupPrice || 'RM250'}",
+              "cta_text": "Reserve My Spot",
+              "offer_code": null
+            },
+            "pdf_content": {
+              "cover_tagline": "Exciting event tagline",
+              "intro": "Brief description of the event and why it's special",
+              "event_details": {
+                "date": "Exact date",
+                "time": "Exact time",
+                "venue": "Location",
+                "pricing": { "individual": "RM65", "group": "RM250 for 5 pax" }
+              },
+              "instructor_bio": "About the guest instructor/speaker with credentials",
+              "what_to_expect": [
+                { "title": "Experience point 1", "description": "What attendees will do/learn" }
+              ],
+              "who_is_this_for": [
+                "Ideal attendee description 1",
+                "Ideal attendee description 2"
+              ],
+              "testimonials": [
+                { "name": "Past attendee", "quote": "Their experience" }
+              ],
+              "faq": [
+                { "question": "Common question", "answer": "Helpful answer" }
+              ],
+              "registration_info": {
+                "how_to_register": "PM us on WhatsApp / Click link",
+                "payment_methods": "Online transfer, cash",
+                "cancellation_policy": "Refund policy if any"
+              },
+              "action_checklist": ["Register today", "Save the date: ${eventDetails?.eventDate || '[Date]'}"]
+            },
+            "lead_magnet_content": [
+              { "title": "Event Overview", "body": "..." },
+              { "title": "What You'll Experience", "body": "..." },
+              { "title": "Meet Your Instructor", "body": "..." }
+            ],
+            "landing_page": {
+              "hero_headline": "Join Us for [Event Name] – [Date]!",
+              "hero_subheadline": "Experience [benefit] with [instructor] at [venue]",
+              "cta_text": "Reserve My Spot – ${eventDetails?.price || 'RM65'}",
+              "event_date": "Exact date for prominent display",
+              "event_time": "Exact time",
+              "venue": "Location name",
+              "pricing": {
+                "individual": "${eventDetails?.price || 'RM65'} per person",
+                "group": "${eventDetails?.groupPrice || 'RM250'} for group of ${eventDetails?.groupSize || '5'}"
+              },
+              "benefits": ["What you'll experience 1", "What you'll experience 2", "What you'll experience 3", "What you'll experience 4"],
+              "instructor_name": "Guest instructor name",
+              "instructor_bio": "Short compelling bio (max 60 words)",
+              "about_host": "About the organizing business (max 40 words)",
+              "trust_badges": ["X successful events", "Y happy attendees", "Z years experience"]
+            },
+            "email_sequence": [
+              { "day": 1, "subject": "You're In! [Event Name] Registration Confirmed", "body": "Welcome email with event details" },
+              { "day": 2, "subject": "Meet [Instructor Name]", "body": "About the instructor and why this event is special" },
+              { "day": 3, "subject": "What to expect on [Date]", "body": "Preview of the experience + past testimonials" },
+              { "day": 4, "subject": "Only [X] spots left!", "body": "FOMO + FAQ + encourage bringing friends" },
+              { "day": 5, "subject": "See you tomorrow!", "body": "Final reminder with logistics (what to bring, parking, etc.)" }
+            ]
+          }
+        `;
+        } else if (businessType === 'coaching') {
           // ============ COACHING/CONSULTING PROMPT ============
           prompt = `
           You are a world-class direct response copywriter (like Russell Brunson or Amy Porterfield) for COACHES, CONSULTANTS, and ONLINE EXPERTS.
@@ -511,12 +728,25 @@ export const generateLeadMagnet = inngest.createFunction(
         // Use AI-generated business_name or fallback to lead_magnet_title
         const businessName = content.business_name || content.lead_magnet_title || currentData.businessName || 'Local Business';
         
-        // Detect business type for saving
-        const businessType = content.business_type || (topic && (() => {
-          const coachingKeywords = ['coach', 'consultant', 'mentor', 'trainer', 'advisor', 'expert', 'strategist', 'therapist', 'counselor', 'speaker', 'author', 'creator'];
-          const lower = topic.toLowerCase();
-          return coachingKeywords.some(k => lower.includes(k)) ? 'coaching' : 'local_service';
-        })()) || 'local_service';
+        // Detect business type for saving (use AI response first, then detect from context)
+        const savedBusinessType = content.business_type || (() => {
+          const combinedText = `${topic || ''} ${businessContext || ''}`.toLowerCase();
+          
+          // Event detection
+          const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'master class', 'masterclass',
+            'ticket', 'registration', 'zumba', 'yoga class', 'dance class', 'fitness class', 'jam session'];
+          const eventPatterns = [/\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i, /rm\s*\d+/i];
+          const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
+          const hasEventPattern = eventPatterns.some(p => p.test(combinedText));
+          if (hasEventKeyword && hasEventPattern) return 'event';
+          
+          // Coaching detection
+          const coachingKeywords = ['coach', 'consultant', 'mentor', 'trainer', 'advisor', 'expert', 
+            'strategist', 'therapist', 'counselor', 'speaker', 'author', 'creator'];
+          if (coachingKeywords.some(k => combinedText.includes(k))) return 'coaching';
+          
+          return 'local_service';
+        })();
         
         const { error: updateError } = await supabase
           .from('businesses')
@@ -526,7 +756,12 @@ export const generateLeadMagnet = inngest.createFunction(
             business_data: {
               ...currentData,
               businessName: businessName,
-              businessType: businessType,
+              businessType: savedBusinessType,
+              // Save event-specific fields if this is an event
+              eventName: content.event_name || null,
+              eventDate: content.event_date || null,
+              eventTime: content.event_time || null,
+              venue: content.venue || null,
               niche: currentData.niche || topic,
               leadMagnet: content,
               lead_magnet_title: content.lead_magnet_title,

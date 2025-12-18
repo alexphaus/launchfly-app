@@ -457,7 +457,7 @@ export default function SalesPage() {
                     "{result.analysis.pain_point}"
                   </p>
                 </div>
-
+ 
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                     The Opportunity

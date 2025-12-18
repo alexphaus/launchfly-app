@@ -166,6 +166,7 @@ export async function POST(request: Request) {
         * Option C: "I went ahead and mocked up a [Short Asset Name] for [Clean Business Name] that grabs these emails."
       - The Link: "You can see the demo I made for you here:\n{{PREVIEW_LINK}}" (Link must be on its own line).
       - CTA: Low friction question. VARY PHRASING. e.g. "Worth a quick chat?" or "Mind if I send the file over?" or "Worth a look?"
+      - Opt-Out: You MUST end with this exact P.S. line: "P.S. If you don't want me to follow up, just let me know and I'll cross you off the list."
       - Tone: Professional, direct, peer-to-peer. NO SLANG.
       - Length: Under 120 words.
       - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Tip Top Aircon AC Cost Guide".

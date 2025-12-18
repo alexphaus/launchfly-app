@@ -133,6 +133,23 @@ export default function SalesPage() {
     setError('');
 
     try {
+      // Construct minimal HTML for better deliverability (Plain Text feel)
+      let htmlBody = editableBody;
+      
+      // Mask the preview URL if present to avoid "Ugly Link Penalty"
+      if (previewUrl) {
+        const linkText = `demo for ${businessName || result?.scrapedData?.businessName || 'your business'}`;
+        htmlBody = htmlBody.replace(
+          previewUrl, 
+          `<a href="${previewUrl}">${linkText}</a>`
+        );
+      }
+      
+      // Convert newlines to paragraphs for clean HTML structure
+      // Split by double newline to get paragraphs
+      const paragraphs = htmlBody.split(/\n\s*\n/);
+      htmlBody = paragraphs.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+
       const response = await fetch('/api/sales/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,7 +157,8 @@ export default function SalesPage() {
           to: recipientEmail,
           replyTo: replyTo,
           subject: editableSubject,
-          body: editableBody
+          body: editableBody,
+          html: htmlBody
         }),
       });
 

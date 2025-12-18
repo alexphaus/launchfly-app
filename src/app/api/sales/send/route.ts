@@ -4,18 +4,19 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
-    const { to, subject, body, replyTo } = await request.json();
+    const { to, subject, body, html, replyTo } = await request.json();
 
     if (!to || !subject || !body) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const { data, error } = await resend.emails.send({
-      from: 'hello@launchfly.ai',
+      from: 'Alex <alex@launchfly.ai>',
       to: to,
       replyTo: replyTo,
       subject: subject,
       text: body,
+      html: html || undefined,
     });
 
     if (error) {

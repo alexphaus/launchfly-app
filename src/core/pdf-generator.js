@@ -194,7 +194,7 @@ async function generateCoachingPDF(data, PDFDocument, businessData = {}) {
         `You're ready to accelerate your ${niche.toLowerCase()} journey`,
         'You want a proven framework instead of guessing',
         'You value transformation over quick fixes',
-        'You're committed to taking action on what you learn'
+        `You're committed to taking action on what you learn`
       ];
 
       forYouItems.forEach((item, i) => {

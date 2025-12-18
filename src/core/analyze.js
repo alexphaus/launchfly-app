@@ -17,9 +17,10 @@ const openai = new OpenAI({
 
 /**
  * Detects business type from niche AND context (more accurate)
+ * Returns one of 5 archetypes for tailored layouts
  * @param {string} niche - The business niche
  * @param {string} context - Additional business context (e.g., from social media)
- * @returns {'event' | 'coaching' | 'local_service'} The detected business type
+ * @returns {'event' | 'coaching' | 'emergency' | 'visual' | 'retail' | 'local_service'} The detected business type
  */
 export function detectBusinessType(niche, context = '') {
   const combinedText = `${niche || ''} ${context || ''}`.toLowerCase();
@@ -52,7 +53,37 @@ export function detectBusinessType(niche, context = '') {
     return 'event';
   }
   
-  // COACHING DETECTION
+  // EMERGENCY DETECTION (trust/speed focus - plumbers, roofers, etc.)
+  const emergencyKeywords = [
+    'plumber', 'plumbing', 'roofer', 'roofing', 'locksmith', 'lock',
+    'hvac', 'ac repair', 'aircon', 'air conditioning', 'air-con',
+    'electrician', 'electrical', 'wiring', 'emergency', '24/7', '24 hour',
+    'same day', 'water heater', 'leak', 'flood', 'broken', 'repair',
+    'fix', 'burst pipe', 'clogged', 'drain', 'sewage', 'pest control',
+    'exterminator', 'garage door', 'appliance repair', 'towing', 'roadside'
+  ];
+  
+  const hasEmergencyKeyword = emergencyKeywords.some(k => combinedText.includes(k));
+  if (hasEmergencyKeyword) {
+    return 'emergency';
+  }
+  
+  // VISUAL DETECTION (aesthetics/portfolio focus - salons, design, etc.)
+  const visualKeywords = [
+    'salon', 'spa', 'beauty', 'hair', 'haircut', 'nail', 'nails', 'makeup',
+    'interior design', 'interior', 'architect', 'photography', 'photographer',
+    'detailing', 'car detailing', 'auto detailing', 'car wash', 'tattoo',
+    'florist', 'flowers', 'bakery', 'cake', 'wedding', 'event planner',
+    'graphic design', 'branding', 'studio', 'art', 'gallery', 'fashion',
+    'jewelry', 'boutique', 'aesthetic', 'lash', 'brow', 'skincare', 'facial'
+  ];
+  
+  const hasVisualKeyword = visualKeywords.some(k => combinedText.includes(k));
+  if (hasVisualKeyword) {
+    return 'visual';
+  }
+  
+  // COACHING DETECTION (authority/transformation focus)
   const coachingKeywords = [
     'coach', 'coaching', 'consultant', 'consulting', 'mentor', 'mentoring',
     'trainer', 'training', 'advisor', 'advisory', 'expert', 'strategist',
@@ -68,6 +99,19 @@ export function detectBusinessType(niche, context = '') {
   const isCoaching = coachingKeywords.some(k => combinedText.includes(k));
   if (isCoaching) {
     return 'coaching';
+  }
+  
+  // RETAIL DETECTION (menu/location/hours focus)
+  const retailKeywords = [
+    'restaurant', 'cafe', 'coffee', 'food', 'menu', 'dining',
+    'shop', 'store', 'retail', 'boutique', 'grocery', 'market',
+    'bar', 'pub', 'brewery', 'bakery', 'deli', 'pizzeria', 'sushi',
+    'takeout', 'delivery', 'dine-in', 'reservation'
+  ];
+  
+  const hasRetailKeyword = retailKeywords.some(k => combinedText.includes(k));
+  if (hasRetailKeyword) {
+    return 'retail';
   }
   
   // Default to local service

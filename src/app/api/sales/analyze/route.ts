@@ -109,6 +109,49 @@ export async function POST(request: Request) {
 
     const detectedCurrency = detectCurrency(context || scrapedData.bodyText || '');
     
+    // Language Detection (for cultural fit)
+    const detectLanguage = (text: string): { code: string; name: string; greeting: string } => {
+      const lowerText = text.toLowerCase();
+      // Malay indicators
+      if (lowerText.includes('salam') || lowerText.includes('tuan') || lowerText.includes('puan') || 
+          lowerText.includes('kami') || lowerText.includes('anda') || lowerText.includes('perkhidmatan') ||
+          lowerText.includes('hubungi') || lowerText.includes('paip') || lowerText.includes('bocor') ||
+          lowerText.includes('tersumbat') || lowerText.includes('baiki') || lowerText.includes('sedia') ||
+          lowerText.includes('cepat') || lowerText.includes('kemas') || lowerText.includes('dipercayai')) {
+        return { code: 'ms', name: 'Bahasa Malaysia', greeting: 'Salam' };
+      }
+      // Spanish indicators
+      if (lowerText.includes('hola') || lowerText.includes('servicios') || lowerText.includes('página') ||
+          lowerText.includes('precio') || lowerText.includes('contacto')) {
+        return { code: 'es', name: 'Spanish', greeting: 'Hola' };
+      }
+      // Indonesian indicators
+      if (lowerText.includes('layanan') || lowerText.includes('jasa') || lowerText.includes('harga') ||
+          lowerText.includes('kami menyediakan') || lowerText.includes('hubungi kami')) {
+        return { code: 'id', name: 'Bahasa Indonesia', greeting: 'Halo' };
+      }
+      return { code: 'en', name: 'English', greeting: 'Hi' };
+    };
+
+    const detectedLanguage = detectLanguage(context || scrapedData.bodyText || '');
+    
+    // Extract brand slogan/tagline from context
+    const extractSlogan = (text: string): string | null => {
+      // Look for common slogan patterns
+      const patterns = [
+        /cepat\s*[-–]\s*kemas\s*[&dan]*\s*(?:boleh\s*)?dipercayai/i,
+        /fast\s*[-–]\s*reliable/i,
+        /trusted\s*&\s*reliable/i,
+      ];
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) return match[0];
+      }
+      return null;
+    };
+
+    const brandSlogan = extractSlogan(context || scrapedData.bodyText || '');
+
     // 5. Analyze and Generate Email with OpenAI
     const extractedServices = extractedBusinessInfo?.services?.join(', ') || '';
     const extractedLocation = extractedBusinessInfo?.location || '';
@@ -130,6 +173,8 @@ export async function POST(request: Request) {
       Contact Phone: ${resolvedPhone || 'N/A'}
       Owner Name: ${resolvedOwnerName || 'N/A'}
       Currency: ${detectedCurrency.symbol} (${detectedCurrency.code})
+      Detected Language: ${detectedLanguage.name} (${detectedLanguage.code})
+      Brand Slogan: ${brandSlogan || 'Not detected'}
       
       PROVIDED CONTEXT (User Input):
       ${context || 'N/A'}
@@ -143,6 +188,14 @@ export async function POST(request: Request) {
       CRITICAL CURRENCY INSTRUCTION:
       - Use ${detectedCurrency.symbol} for ALL price mentions (not $ unless that's the detected currency)
       - Example: "${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}400" for estimated values
+
+      CRITICAL LANGUAGE INSTRUCTION:
+      - Detected language: ${detectedLanguage.name} (${detectedLanguage.code})
+      - If language is "Bahasa Malaysia" (ms), generate ALL PDF content (title, headlines, tips, mistakes, diagnostic questions) in MALAY
+      - Keep the email/WhatsApp in English (for business owner) but PDF content should match customer language
+      - If brand slogan detected: "${brandSlogan || 'None'}" - include it in the PDF footer
+      - Example Malay PDF title: "Senarai Semak Paip 2025" instead of "2025 Plumbing Checklist"
+      - Example Malay diagnostic: "Adakah air lambat turun?" instead of "Is water draining slowly?"
 
       TASK:
       1. CLEAN the business name. Remove "LLC", "Inc", "|", location suffixes (e.g. "in Kansas City"), and owner names (e.g. "by Dick Ray"). Keep it short and natural (e.g. "Tip Top Aircon").
@@ -205,6 +258,7 @@ export async function POST(request: Request) {
       - ALL prices MUST use ${detectedCurrency.symbol} currency symbol (e.g., "${detectedCurrency.symbol}90", "${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}400")
       - DO NOT convert to USD. Keep original currency.
       - DO NOT use generic titles like "Mistake 1" or "Tip 1" - use DESCRIPTIVE titles
+      - COUPON CODE: ALWAYS use clean, simple codes like "GUIDE15", "SAVE15", "DISKAUN15" (for Malay). NEVER create codes that look like "Ke" + businessName + year - just use standard discount codes.
       - event_details: If this is an EVENT, include date, time, venue, and pricing.
       - instructor_bio: If this is an EVENT or COACHING, include a bio for the instructor/coach.
 
@@ -222,7 +276,9 @@ export async function POST(request: Request) {
         "design_preferences": {
           "layout_mode": "emergency | visual | event",
           "primary_color": "hex code",
-          "font_style": "bold | elegant | modern"
+          "font_style": "bold | elegant | modern",
+          "language": "${detectedLanguage.code}",
+          "brand_slogan": "The business's tagline/slogan if detected (e.g. 'Cepat - Kemas & Dipercayai')"
         },
         "analysis": {
           "primary_service": "The main high-ticket service identified from their website or context",
@@ -238,16 +294,16 @@ export async function POST(request: Request) {
         },
         "whatsapp_script": "The generated WhatsApp message",
         "lead_magnet": {
-          "title": "Specific title using their business name (e.g. ${resolvedBusinessName}'s 2025 [Service] Checklist)",
-          "headline": "Fear or desire headline (e.g. Don't Overpay for Your Next [Service])",
-          "subheadline": "Benefit-focused subtitle specific to their services",
-          "benefits": ["Specific benefit 1", "Specific benefit 2", "Specific benefit 3"],
+          "title": "Title in ${detectedLanguage.name} (e.g. Malay: 'Senarai Semak Paip ${resolvedBusinessName} 2025', English: '${resolvedBusinessName}'s 2025 [Service] Checklist')",
+          "headline": "Fear/desire headline in ${detectedLanguage.name} (e.g. Malay: 'Elak Paip Sumbat & Bau Busuk', English: 'Don't Overpay for Your Next [Service]')",
+          "subheadline": "Benefit subtitle in ${detectedLanguage.name}",
+          "benefits": ["Benefit 1 in ${detectedLanguage.name}", "Benefit 2", "Benefit 3"],
           "preview_tips": [
-            {"title": "Warning Sign #1", "description": "Specific symptom to look for (e.g. 'Is your AC making a buzzing sound?')"},
+            {"title": "Warning Sign #1 in ${detectedLanguage.name}", "description": "Specific symptom to look for"},
             {"title": "Warning Sign #2", "description": "Another diagnostic check"},
-            {"title": "Warning Sign #3", "description": "Third red flag to watch for"}
+            {"title": "Warning Sign #3", "description": "Third red flag"}
           ],
-          "cta_text": "Get The Free Guide"
+          "cta_text": "CTA in ${detectedLanguage.name} (e.g. Malay: 'Muat Turun Percuma', English: 'Get The Free Guide')"
         },
         "testimonials": [
           {
@@ -273,8 +329,9 @@ export async function POST(request: Request) {
           }
         ],
         "pdf_content": {
-          "cover_tagline": "A powerful subtitle for the cover page",
-          "intro": "A professional intro paragraph mentioning the business name.",
+          "language": "${detectedLanguage.code}",
+          "cover_tagline": "A powerful subtitle for the cover page (IN ${detectedLanguage.name.toUpperCase()} if ms/id)",
+          "intro": "A professional intro paragraph mentioning the business name (IN ${detectedLanguage.name.toUpperCase()} if ms/id).",
           
           // FOR EVENT layout_mode ONLY - extract from context:
           "event_name": "Name of the event (e.g. Zumba Master Class)",
@@ -303,21 +360,21 @@ export async function POST(request: Request) {
             { "name": "Past attendee name", "quote": "Their feedback" }
           ],
           
-          // FOR SERVICE/EMERGENCY layout_mode:
+          // FOR SERVICE/EMERGENCY layout_mode (IN ${detectedLanguage.name.toUpperCase()} if ms/id):
           "diagnostic_questions": [
-            { "question": "Do you notice X symptom?", "yes_action": "What to do if yes", "no_action": "What to do if no" },
-            { "question": "Has it been X months since Y?", "yes_action": "...", "no_action": "..." },
-            { "question": "Are you experiencing Z?", "yes_action": "...", "no_action": "..." }
+            { "question": "Specific diagnostic in ${detectedLanguage.name} (e.g. Malay: 'Adakah air lambat turun atau berbau?')", "yes_action": "What to do if yes", "no_action": "What to do if no" },
+            { "question": "Second diagnostic question in ${detectedLanguage.name}", "yes_action": "...", "no_action": "..." },
+            { "question": "Third diagnostic question in ${detectedLanguage.name}", "yes_action": "...", "no_action": "..." }
           ],
           "common_mistakes": [
-            { "title": "Choosing the Cheapest Quote", "description": "Low prices often mean shortcuts. Always verify what's included." },
-            { "title": "Skipping Regular Maintenance", "description": "Small issues become expensive repairs when ignored." },
-            { "title": "Ignoring Warning Signs", "description": "Strange noises or smells mean something needs attention." }
+            { "title": "Mistake title in ${detectedLanguage.name}", "description": "Description in ${detectedLanguage.name}" },
+            { "title": "Second mistake", "description": "..." },
+            { "title": "Third mistake", "description": "..." }
           ],
           "quick_tips": [
-            { "title": "Check Your Filter Monthly", "description": "A dirty filter reduces efficiency by up to 15%." },
-            { "title": "Listen for Unusual Sounds", "description": "Buzzing or clicking often indicates loose parts." },
-            { "title": "Monitor Your Bills", "description": "Sudden increases may signal inefficiency." }
+            { "title": "Tip title in ${detectedLanguage.name}", "description": "Description in ${detectedLanguage.name}" },
+            { "title": "Second tip", "description": "..." },
+            { "title": "Third tip", "description": "..." }
           ],
           "case_study": {
             "customer_name": "Local customer name",

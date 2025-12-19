@@ -40,6 +40,119 @@
 
 import QRCode from 'qrcode';
 
+const TRANSLATIONS = {
+  en: {
+    presentedBy: 'Presented by',
+    freeGuide: 'Free Guide',
+    edition: 'Edition',
+    quickRead: '5-minute read | Actionable tips | Money-saving advice',
+    selfAssessment: 'Quick Self-Assessment',
+    assessmentIntro: 'Answer these 3 questions to know if you need professional help:',
+    yes: 'YES',
+    no: 'NO',
+    checkResult: '[CHECK] YOUR RESULT',
+    resultText: 'If you answered YES to any question, you may benefit from a free inspection.',
+    callUs: 'Call',
+    commonMistakes: 'Common Mistakes',
+    mistakesIntro: 'Avoid these costly errors that we see homeowners make every day',
+    quickTips: 'Quick Tips You Can Use Today',
+    tipsIntro: 'Simple, safe actions that save money and prevent problems',
+    proTip: 'PRO TIP',
+    proTipText: 'When in doubt, call a professional. A quick inspection is much cheaper than fixing DIY mistakes. At {businessName}, we offer free estimates.',
+    readyToStart: 'Ready to Get Started?',
+    contactToday: 'Contact {businessName} today for a free consultation',
+    exclusiveOffer: '*** EXCLUSIVE OFFER ***',
+    offDiscount: 'Off Your Next Service Call',
+    validFor: 'Valid for 7 days from download | Show this page or mention code when calling',
+    couponValidity: 'Valid for 30 days. Show this code when calling.',
+    visit: 'Visit:',
+    scanWithPhone: 'Scan with your phone camera',
+    happyCustomer: '- Happy Customer',
+    dontForget: '>>> DON\'T FORGET!',
+    expires: 'Expires:',
+    copyright: 'All rights reserved.',
+    whatYouWillLearn: 'What You Will Learn',
+    caseStudy: 'CASE STUDY',
+    theProblem: 'THE PROBLEM',
+    ourSolution: 'OUR SOLUTION',
+    theResult: 'THE RESULT',
+    actionChecklist: 'Action Checklist',
+    doTheseThings: 'Do These 2 Things Now',
+    step: 'Step',
+    couponCode: 'CODE',
+    pricingGuide: 'Pricing Guide',
+    typicalRanges: 'Typical Price Ranges',
+    note: 'Note',
+    finalPriceNote: 'Final price depends on inspection. We provide upfront quotes before starting work.',
+    bookOnline: 'Book Online:',
+    callOrWhatsapp: 'Call or WhatsApp:',
+    scanToBook: 'Scan to Book',
+    from: 'from',
+    coverTaglineDefault: 'Everything you need to know about {niche} in {city}',
+    defaultCouponCode: 'GUIDE15',
+    priceDisclaimer: 'Note: These are general estimates. Always get a written quote before work begins.',
+    priceIntro: 'So you know what to expect (prices vary by location and complexity)',
+    whyGuideExists: 'Why This Guide Exists',
+    question: 'Question',
+    seeLastPage: 'See last page for contact'
+  },
+  ms: {
+    presentedBy: 'Disediakan oleh',
+    freeGuide: 'Panduan Percuma',
+    edition: 'Edisi',
+    quickRead: 'Bacaan 5 minit | Tips praktikal | Nasihat jimat wang',
+    selfAssessment: 'Semakan Kendiri Pantas',
+    assessmentIntro: 'Jawab 3 soalan ini untuk tahu jika anda perlukan bantuan profesional:',
+    yes: 'YA',
+    no: 'TIDAK',
+    checkResult: '[SEMAK] KEPUTUSAN ANDA',
+    resultText: 'Jika anda jawab YA untuk mana-mana soalan, anda mungkin perlu pemeriksaan percuma.',
+    callUs: 'Hubungi',
+    commonMistakes: 'Kesilapan Biasa',
+    mistakesIntro: 'Elak kesilapan mahal ini yang kami lihat setiap hari',
+    quickTips: 'Tips Pantas Untuk Anda',
+    tipsIntro: 'Tindakan mudah yang jimat wang dan elak masalah',
+    proTip: 'TIP PRO',
+    proTipText: 'Jika ragu, hubungi profesional. Pemeriksaan pantas lebih murah dari membaiki kesilapan DIY. Di {businessName}, kami tawarkan anggaran percuma.',
+    readyToStart: 'Sedia Untuk Bermula?',
+    contactToday: 'Hubungi {businessName} hari ini untuk konsultasi percuma',
+    exclusiveOffer: '*** TAWARAN EKSKLUSIF ***',
+    offDiscount: 'Diskaun',
+    validFor: 'Sah 7 hari dari muat turun | Tunjuk halaman ini atau sebut kod semasa menelefon',
+    couponValidity: 'Sah 30 hari. Tunjukkan kod ini bila hubungi kami.',
+    visit: 'Lawati:',
+    scanWithPhone: 'Imbas dengan kamera telefon anda',
+    happyCustomer: '- Pelanggan Gembira',
+    dontForget: '>>> JANGAN LUPA!',
+    expires: 'Tamat tempoh:',
+    copyright: 'Hak cipta terpelihara.',
+    whatYouWillLearn: 'Apa Yang Anda Akan Belajar',
+    caseStudy: 'KAJIAN KES',
+    theProblem: 'MASALAH',
+    ourSolution: 'PENYELESAIAN KAMI',
+    theResult: 'HASILNYA',
+    actionChecklist: 'Senarai Semak Tindakan',
+    doTheseThings: 'Buat 2 Perkara Ini Sekarang',
+    step: 'Langkah',
+    couponCode: 'KOD',
+    pricingGuide: 'Panduan Harga',
+    typicalRanges: 'Julat Harga Biasa',
+    note: 'Nota',
+    finalPriceNote: 'Harga akhir bergantung pada pemeriksaan. Kami beri sebut harga sebelum mula kerja.',
+    bookOnline: 'Tempah Online:',
+    callOrWhatsapp: 'Hubungi atau WhatsApp:',
+    scanToBook: 'Imbas untuk Tempah',
+    from: 'dari',
+    coverTaglineDefault: 'Semua yang anda perlu tahu tentang {niche} di {city}',
+    defaultCouponCode: 'DISKAUN15',
+    priceDisclaimer: 'Nota: Ini adalah anggaran umum. Sentiasa dapatkan sebut harga bertulis sebelum kerja bermula.',
+    priceIntro: 'Supaya anda tahu apa yang dijangkakan (harga berbeza mengikut lokasi dan kerumitan)',
+    whyGuideExists: 'Kenapa Panduan Ini Wujud',
+    question: 'Soalan',
+    seeLastPage: 'Lihat halaman terakhir'
+  }
+};
+
 /**
  * Main export - routes to appropriate generator based on businessType
  */
@@ -115,9 +228,14 @@ async function generateCoachingPDF(data, PDFDocument, businessData = {}) {
 
   return new Promise((resolve, reject) => {
     try {
+      // Dynamic Page Size
+      const currency = businessData.currency || '$';
+      const letterCurrencies = ['$', 'USD', '₱', 'PHP', 'CAD', 'MXN'];
+      const pageSize = letterCurrencies.includes(currency) || letterCurrencies.includes(businessData.currencyCode) ? 'letter' : 'A4';
+
       const doc = new PDFDocument({ 
         margin: 50,
-        size: 'letter',
+        size: pageSize,
         bufferPages: true,
         compress: true
       });
@@ -670,9 +788,14 @@ async function generateEventPDF(data, PDFDocument, businessData = {}) {
 
   return new Promise((resolve, reject) => {
     try {
+      // Dynamic Page Size
+      const currency = businessData.currency || '$';
+      const letterCurrencies = ['$', 'USD', '₱', 'PHP', 'CAD', 'MXN'];
+      const pageSize = letterCurrencies.includes(currency) || letterCurrencies.includes(businessData.currencyCode) ? 'letter' : 'A4';
+
       const doc = new PDFDocument({ 
         margin: 50,
-        size: 'letter',
+        size: pageSize,
         bufferPages: true,
         compress: true
       });
@@ -986,9 +1109,15 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
 
   return new Promise((resolve, reject) => {
     try {
+      // Dynamic Page Size
+      const currency = businessData.currency || '$';
+      // US, Philippines, Canada, Mexico use Letter. Most others use A4.
+      const letterCurrencies = ['$', 'USD', '₱', 'PHP', 'CAD', 'MXN'];
+      const pageSize = letterCurrencies.includes(currency) || letterCurrencies.includes(businessData.currencyCode) ? 'letter' : 'A4';
+
       const doc = new PDFDocument({ 
         margin: 50,
-        size: 'letter',
+        size: pageSize,
         bufferPages: true,
         compress: true // Keep file size under 2MB for mobile
       });
@@ -1019,37 +1148,21 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       const city = businessData.city || 'your area';
       const whatsapp = businessData.whatsapp || phone;
       const landingPageUrl = businessData.landingPageUrl || '';
-      const currency = businessData.currency || '$'; // Support RM, S$, etc.
       
       // Language and brand slogan support
       const language = pdfContent.language || designPrefs.language || 'en';
       const brandSlogan = designPrefs.brand_slogan || pdfContent.brand_slogan || '';
       const isMalay = language === 'ms';
       
+      // Select translation dictionary
+      const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
+      
       // Localized strings
       const strings = {
-        presentedBy: isMalay ? 'Disediakan oleh' : 'Presented by',
-        freeGuide: isMalay ? 'Panduan Percuma' : 'Free Guide',
-        edition: isMalay ? 'Edisi' : 'Edition',
-        quickRead: isMalay ? 'Bacaan 5 minit | Tips praktikal | Nasihat jimat wang' : '5-minute read | Actionable tips | Money-saving advice',
-        selfAssessment: isMalay ? 'Semakan Kendiri Pantas' : 'Quick Self-Assessment',
-        assessmentIntro: isMalay ? 'Jawab 3 soalan ini untuk tahu jika anda perlukan bantuan profesional:' : 'Answer these 3 questions to know if you need professional help:',
-        yes: isMalay ? 'YA' : 'YES',
-        no: isMalay ? 'TIDAK' : 'NO',
-        checkResult: isMalay ? '[SEMAK] KEPUTUSAN ANDA' : '[CHECK] YOUR RESULT',
-        resultText: isMalay ? `Jika anda jawab YA untuk mana-mana soalan, anda mungkin perlu pemeriksaan percuma.` : `If you answered YES to any question, you may benefit from a free inspection.`,
-        callUs: isMalay ? `Hubungi ${businessName}:` : `Call ${businessName}:`,
-        commonMistakes: isMalay ? 'Kesilapan Biasa' : 'Common Mistakes',
-        mistakesIntro: isMalay ? 'Elak kesilapan mahal ini yang kami lihat setiap hari' : 'Avoid these costly errors that we see homeowners make every day',
-        quickTips: isMalay ? 'Tips Pantas Untuk Anda' : 'Quick Tips You Can Use Today',
-        tipsIntro: isMalay ? 'Tindakan mudah yang jimat wang dan elak masalah' : 'Simple, safe actions that save money and prevent problems',
-        proTip: isMalay ? 'TIP PRO' : 'PRO TIP',
-        proTipText: isMalay ? `Jika ragu, hubungi profesional. Pemeriksaan pantas lebih murah dari membaiki kesilapan DIY. Di ${businessName}, kami tawarkan anggaran percuma.` : `When in doubt, call a professional. A quick inspection is much cheaper than fixing DIY mistakes. At ${businessName}, we offer free estimates.`,
-        readyToStart: isMalay ? 'Sedia Untuk Bermula?' : 'Ready to Get Started?',
-        contactToday: isMalay ? `Hubungi ${businessName} hari ini untuk konsultasi percuma` : `Contact ${businessName} today for a free consultation`,
-        exclusiveOffer: isMalay ? '*** TAWARAN EKSKLUSIF ***' : '*** EXCLUSIVE OFFER ***',
-        offDiscount: isMalay ? 'Diskaun' : 'Off Your Next Service Call',
-        validFor: isMalay ? 'Sah 7 hari dari muat turun | Tunjuk halaman ini atau sebut kod semasa menelefon' : 'Valid for 7 days from download | Show this page or mention code when calling'
+        ...t,
+        callUs: `${t.callUs} ${businessName}:`,
+        proTipText: t.proTipText.replace('{businessName}', businessName),
+        contactToday: t.contactToday.replace('{businessName}', businessName)
       };
 
       // Helper to add footer to every page (with brand slogan if available)
@@ -1081,7 +1194,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       
       doc.fontSize(14)
          .font('Helvetica')
-         .text(pdfContent.cover_tagline || (isMalay ? `Semua yang anda perlu tahu tentang ${niche.toLowerCase()} di ${city}` : `Everything you need to know about ${niche.toLowerCase()} in ${city}`), 50, 160, { 
+         .text(pdfContent.cover_tagline || strings.coverTaglineDefault.replace('{niche}', niche.toLowerCase()).replace('{city}', city), 50, 160, { 
            width: 512, 
            align: 'center' 
          });
@@ -1092,7 +1205,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor('#ffffff')
          .fontSize(14)
          .font('Helvetica-Oblique')
-         .text(`${strings.freeGuide} ${isMalay ? 'dari' : 'from'} ${businessName}`, 50, 230, { 
+         .text(`${strings.freeGuide} ${strings.from} ${businessName}`, 50, 230, { 
            width: 512, 
            align: 'center' 
          });
@@ -1136,22 +1249,22 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
           question: isMalay 
             ? `Adakah anda perasan sebarang tanda luar biasa dengan sistem ${niche.toLowerCase()} anda dalam bulan lepas?`
             : `Have you noticed any unusual signs with your ${niche.toLowerCase()} system in the last month?`,
-          yes_action: isMalay ? 'Jadualkan pemeriksaan' : 'Schedule an inspection soon',
-          no_action: isMalay ? 'Terus memantau' : 'Keep monitoring regularly'
+          yes_action: isMalay ? 'YA! Pastikan ia sesuai.' : 'Schedule an inspection soon',
+          no_action: isMalay ? 'TIDAK! Kaji semula pilihan anda.' : 'Keep monitoring regularly'
         },
         { 
           question: isMalay
             ? `Adakah sudah lebih 12 bulan sejak pemeriksaan profesional ${niche.toLowerCase()} terakhir anda?`
             : `Has it been more than 12 months since your last professional ${niche.toLowerCase()} check-up?`,
-          yes_action: isMalay ? 'Pertimbangkan lawatan penyelenggaraan' : 'Consider a maintenance visit',
-          no_action: isMalay ? 'Anda di landasan yang betul!' : 'You\'re on track!'
+          yes_action: isMalay ? 'YA! Pastikan ia sesuai.' : 'Consider a maintenance visit',
+          no_action: isMalay ? 'TIDAK! Kaji semula pilihan anda.' : 'You\'re on track!'
         },
         { 
           question: isMalay
             ? `Adakah anda mengalami masalah prestasi atau kos yang lebih tinggi dari biasa?`
             : `Are you experiencing any performance issues or higher-than-normal costs?`,
-          yes_action: isMalay ? 'Hubungi kami untuk konsultasi percuma' : 'Call us for a free consultation',
-          no_action: isMalay ? 'Bagus! Simpan tips ini' : 'Great! Keep these tips handy'
+          yes_action: isMalay ? 'YA! Pastikan ia sesuai.' : 'Call us for a free consultation',
+          no_action: isMalay ? 'TIDAK! Kaji semula pilihan anda.' : 'Great! Keep these tips handy'
         }
       ];
 
@@ -1163,7 +1276,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
         doc.fillColor(colors.primary)
            .fontSize(14)
            .font('Helvetica-Bold')
-           .text(`${isMalay ? 'Soalan' : 'Question'} ${i + 1}:`, 70, diagY + 15);
+           .text(`${strings.question} ${i + 1}:`, 70, diagY + 15);
         
         doc.fillColor(colors.dark)
            .fontSize(12)
@@ -1192,7 +1305,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .text(strings.resultText, 70, diagY + 55, { width: 470 });
       doc.fillColor(colors.primary)
          .font('Helvetica-Bold')
-         .text(`${strings.callUs} ${phone || (isMalay ? 'Lihat halaman terakhir' : 'See last page for contact')}`, 70, diagY + 75);
+         .text(`${strings.callUs} ${phone || strings.seeLastPage}`, 70, diagY + 75);
 
       // ============ PAGE 3: INTRODUCTION ============
       doc.addPage();
@@ -1200,7 +1313,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(24)
          .font('Helvetica-Bold')
-         .text(isMalay ? 'Kenapa Panduan Ini Wujud' : 'Why This Guide Exists', 50, 50);
+         .text(strings.whyGuideExists, 50, 50);
       
       doc.strokeColor(colors.accent).lineWidth(3)
          .moveTo(50, 85).lineTo(250, 85).stroke();
@@ -1223,7 +1336,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(14)
          .font('Helvetica-Bold')
-         .text(isMalay ? 'Apa Yang Anda Akan Pelajari:' : 'What You Will Learn:', 70, 220);
+         .text(strings.whatYouWillLearn + ':', 70, 220);
 
       const learnItems = isMalay ? [
         `Kesilapan ${niche.toLowerCase()} biasa yang merugikan pemilik rumah`,
@@ -1260,7 +1373,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(24)
          .font('Helvetica-Bold')
-         .text(isMalay ? `Kesilapan ${niche} Biasa` : `Common ${niche} Mistakes`, 50, 50);
+         .text(strings.commonMistakes, 50, 50);
       
       doc.strokeColor(colors.warning).lineWidth(3)
          .moveTo(50, 85).lineTo(280, 85).stroke();
@@ -1471,7 +1584,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       });
 
       // ===== COUPON / VOUCHER SECTION =====
-      const couponCode = pdfContent.coupon_code || (isMalay ? 'DISKAUN15' : 'GUIDE15');
+      const couponCode = pdfContent.coupon_code || strings.defaultCouponCode;
       const couponOffer = pdfContent.coupon_offer || (isMalay ? 'Diskaun 15% Servis Pertama Anda' : '15% OFF Your First Service');
       const couponExpiry = pdfContent.coupon_expiry || (isMalay ? '7 hari dari muat turun' : '7 days from download');
       
@@ -1507,14 +1620,12 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(16)
          .font('Helvetica-Bold')
-         .text(`${isMalay ? 'KOD' : 'CODE'}: ${couponCode}`, 206, 413, { width: 200, align: 'center' });
+         .text(`${strings.couponCode}: ${couponCode}`, 206, 413, { width: 200, align: 'center' });
 
       doc.fillColor(colors.gray)
          .fontSize(10)
          .font('Helvetica-Oblique')
-         .text(isMalay 
-           ? `Sah ${couponExpiry} | Tunjuk halaman ini atau sebut kod semasa menelefon`
-           : `Valid for ${couponExpiry} | Show this page or mention code when calling`, 70, 445, { width: 470, align: 'center' });
+         .text(strings.couponValidity, 70, 445, { width: 470, align: 'center' });
 
       // Quick contact box
       doc.rect(50, 480, 512, 60).fillAndStroke(colors.light, colors.secondary);
@@ -1539,7 +1650,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(24)
          .font('Helvetica-Bold')
-         .text(isMalay ? 'Julat Harga Biasa' : 'Typical Price Ranges', 50, 50);
+         .text(strings.typicalRanges, 50, 50);
       
       doc.strokeColor(colors.accent).lineWidth(3)
          .moveTo(50, 85).lineTo(230, 85).stroke();
@@ -1547,9 +1658,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.gray)
          .fontSize(11)
          .font('Helvetica-Oblique')
-         .text(isMalay 
-           ? 'Supaya anda tahu apa yang dijangkakan (harga berbeza mengikut lokasi dan kerumitan)'
-           : 'So you know what to expect (prices vary by location and complexity)', 50, 100);
+         .text(strings.priceIntro, 50, 100);
 
       const priceRanges = pdfContent.price_ranges || [
         { service: isMalay ? 'Pemeriksaan asas' : 'Basic inspection', range: `${currency}50 - ${currency}150` },
@@ -1580,9 +1689,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.warning)
          .fontSize(10)
          .font('Helvetica-Oblique')
-         .text(isMalay 
-           ? 'Nota: Ini adalah anggaran umum. Sentiasa dapatkan sebut harga bertulis sebelum kerja bermula.'
-           : 'Note: These are general estimates. Always get a written quote before work begins.', 50, yPos + 20, { width: 512 });
+         .text(strings.priceDisclaimer, 50, yPos + 20, { width: 512 });
 
       // ============ PAGE 8: CTA + CONTACT + QR CODE ============
       doc.addPage();
@@ -1601,7 +1708,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       if (phone) {
         doc.fontSize(28)
            .font('Helvetica-Bold')
-           .text(`${isMalay ? 'HUBUNGI' : 'CALL'}: ${phone}`, 50, 140, { width: 512, align: 'center' });
+           .text(`${t.callUs.toUpperCase()}: ${phone}`, 50, 140, { width: 512, align: 'center' });
       }
 
       // WhatsApp CTA if available

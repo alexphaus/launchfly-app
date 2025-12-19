@@ -33,6 +33,10 @@ export async function GET(request) {
     const title = flatData.lead_magnet_title || nestedData?.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
     const content = flatData.lead_magnet_content || nestedData?.lead_magnet_content || nestedData?.lead_magnet?.content || [];
     const pdfContent = flatData.lead_magnet_pdf || nestedData?.pdf_content || {};
+    
+    // Log the pdfContent to debug event data
+    console.log(`📥 [Download] PDF Content event_name: ${pdfContent.event_name || 'NOT SET'}`);
+    console.log(`📥 [Download] PDF Content event_details: ${JSON.stringify(pdfContent.event_details || {})}`);
 
     // Prepare business data for PDF
     const businessDataForPdf = {
@@ -45,7 +49,14 @@ export async function GET(request) {
       hours: flatData.hours || '',
       bookingUrl: business.booking_url || flatData.booking_url || '',
       subdomain: business.subdomain || '',
-      landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : ''
+      landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : '',
+      design_preferences: flatData.design_preferences || {},
+      businessType: flatData.businessType || nestedData?.businessType,
+      // Pass event-specific data explicitly
+      eventName: pdfContent.event_name || flatData.event_name,
+      eventDate: pdfContent.event_details?.date || flatData.event_date,
+      eventTime: pdfContent.event_details?.time || flatData.event_time,
+      venue: pdfContent.event_details?.venue || flatData.venue
     };
 
     // Generate PDF

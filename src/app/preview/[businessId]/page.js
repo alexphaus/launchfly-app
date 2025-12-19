@@ -634,19 +634,29 @@ export default async function DynamicWebsite({ params }) {
     if (!layoutMode) {
       const combinedText = `${resolvedNiche || ''} ${JSON.stringify(lm) || ''}`.toLowerCase();
       
-      // EVENT detection
-      const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit', 'class', 'ticket'];
-      const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
-      if (hasEventKeyword) {
-        layoutMode = 'event';
+      // SERVICE/EMERGENCY detection FIRST (highest priority for service businesses)
+      const serviceKeywords = ['plumb', 'plumber', 'plumbing', 'electrician', 'electric', 'hvac', 'repair', 'contractor', 'handyman', 'homefix', 'locksmith', 'roofing', 'cleaning', 'pest', 'moving', 'towing', 'emergency'];
+      const hasServiceKeyword = serviceKeywords.some(k => combinedText.includes(k));
+      
+      if (hasServiceKeyword) {
+        layoutMode = 'emergency';
       } else {
-        // VISUAL detection
-        const visualKeywords = ['design', 'decor', 'art', 'photo', 'salon', 'beauty', 'style', 'fashion', 'architect'];
-        if (visualKeywords.some(k => combinedText.includes(k))) {
-          layoutMode = 'visual';
+        // EVENT detection (only if NOT a service business)
+        // Use word boundaries to avoid matching "class" in "classification"
+        const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit', 'ticket', 'zumba', 'yoga class', 'fitness class', 'master class', 'masterclass', 'bootcamp', 'retreat'];
+        const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
+        
+        if (hasEventKeyword) {
+          layoutMode = 'event';
         } else {
-          // Default to EMERGENCY (Service)
-          layoutMode = 'emergency';
+          // VISUAL detection
+          const visualKeywords = ['design', 'decor', 'art', 'photo', 'salon', 'beauty', 'style', 'fashion', 'architect'];
+          if (visualKeywords.some(k => combinedText.includes(k))) {
+            layoutMode = 'visual';
+          } else {
+            // Default to EMERGENCY (Service)
+            layoutMode = 'emergency';
+          }
         }
       }
     }

@@ -47,12 +47,36 @@ export async function generatePDF(data, PDFDocument, businessData = {}) {
   const designPrefs = businessData.design_preferences || {};
   let layoutMode = designPrefs.layout_mode;
   
-  // Fallback logic if layout_mode is missing
+  // Fallback logic if layout_mode is missing (Robust Keyword Detection)
   if (!layoutMode) {
-      const businessType = businessData.businessType || 'local_service';
+      // 1. Check explicit businessType
+      const businessType = businessData.businessType;
       if (businessType === 'event') layoutMode = 'event';
       else if (businessType === 'coaching') layoutMode = 'visual';
-      else layoutMode = 'emergency';
+      
+      // 2. If still unknown, check keywords in Niche and Title
+      if (!layoutMode) {
+          const combinedText = `${businessData.niche || ''} ${data.title || ''} ${JSON.stringify(data.pdfContent || {})}`.toLowerCase();
+          
+          // SERVICE keywords get highest priority (check FIRST)
+          const serviceKeywords = ['plumb', 'plumber', 'plumbing', 'electrician', 'electric', 'hvac', 'repair', 'contractor', 'handyman', 'homefix', 'locksmith', 'roofing', 'cleaning', 'pest', 'moving', 'towing', 'emergency', 'paip', 'bocor'];
+          
+          if (serviceKeywords.some(k => combinedText.includes(k))) {
+              layoutMode = 'emergency'; // Service businesses get blue layout
+          } else {
+              // EVENT keywords (only if NOT a service business)
+              const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit', 'ticket', 'zumba', 'yoga class', 'fitness class', 'master class', 'masterclass', 'bootcamp', 'retreat'];
+              const visualKeywords = ['design', 'decor', 'art', 'photo', 'salon', 'beauty', 'style', 'fashion', 'architect', 'coach', 'consult'];
+              
+              if (eventKeywords.some(k => combinedText.includes(k))) {
+                  layoutMode = 'event';
+              } else if (visualKeywords.some(k => combinedText.includes(k))) {
+                  layoutMode = 'visual';
+              } else {
+                  layoutMode = 'emergency'; // Default to Service/Emergency
+              }
+          }
+      }
   }
   
   console.log(`📄 [PDF Generator] Layout Mode: ${layoutMode}`);
@@ -671,15 +695,19 @@ async function generateEventPDF(data, PDFDocument, businessData = {}) {
       };
 
       const pdfContent = data.pdfContent || {};
+      
+      // Extract event details from multiple possible paths
       const eventDetails = pdfContent.event_details || {};
       const hostName = businessData.businessName || businessData.hostName || 'Event Host';
-      const eventName = data.event_name || pdfContent.event_name || businessData.eventName || 'Special Event';
-      const eventDate = data.event_date || eventDetails.date || businessData.eventDate || 'Coming Soon';
-      const eventTime = data.event_time || eventDetails.time || businessData.eventTime || '';
-      const venue = data.venue || eventDetails.venue || businessData.venue || '';
-      const pricing = eventDetails.pricing || {};
+      const eventName = pdfContent.event_name || data.event_name || data.title || businessData.eventName || 'Special Event';
+      const eventDate = eventDetails.date || pdfContent.event_date || data.event_date || businessData.eventDate || 'Coming Soon';
+      const eventTime = eventDetails.time || pdfContent.event_time || data.event_time || businessData.eventTime || '';
+      const venue = eventDetails.venue || pdfContent.venue || data.venue || businessData.venue || '';
+      const pricing = eventDetails.pricing || pdfContent.pricing || {};
       const phone = businessData.phone || '';
       const email = businessData.email || '';
+      
+      console.log(`📄 [Event PDF] Event: ${eventName}, Date: ${eventDate}, Venue: ${venue}`);
 
       // ============ PAGE 1: COVER PAGE ============
       doc.rect(0, 0, 612, 792).fill(colors.primary);

@@ -180,7 +180,9 @@ export async function POST(request) {
       bookingUrl: business.booking_url || flatData.booking_url || '',
       subdomain: business.subdomain || '',
       landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : '',
-      currency: flatData.currency || '$' // Support RM, S$, etc.
+      currency: flatData.currency || '$', // Support RM, S$, etc.
+      design_preferences: flatData.design_preferences || {},
+      businessType: flatData.businessType || nestedData?.businessType
     };
     
     if (title) {

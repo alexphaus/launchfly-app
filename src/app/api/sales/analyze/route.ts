@@ -182,10 +182,19 @@ export async function POST(request: Request) {
       - Placeholder: Use {{PREVIEW_LINK}} for the link.
 
       LEAD MAGNET (ASSET) REQUIREMENTS:
-      - Concept: It must be a "Self-Diagnostic Checklist" or a "Pricing/Buying Guide." NO GENERIC E-BOOKS.
-      - Title: "${resolvedBusinessName} 2025 [Service] Checklist" or "Homeowner's Guide to [Service] Costs"
-      - Headline: Address a fear or a desire (e.g., "Don't Overpay for [Service]" or "Is Your [System] Failing? 5 Warning Signs")
-      - Preview Content: 3 specific "Red Flags" or "Buying Checks" a homeowner can do themselves. These should be DIAGNOSTIC (symptoms to look for), not generic advice.
+      - Concept: 
+        * If EVENT: "Event Ticket" or "Registration Pass"
+        * If VISUAL/COACHING: "Expert Blueprint" or "Style Guide"
+        * If SERVICE: "Self-Diagnostic Checklist" or "Pricing/Buying Guide"
+      - Title: 
+        * Event: "${resolvedBusinessName} [Event Name] Ticket"
+        * Visual: "${resolvedBusinessName} 2025 Style Guide"
+        * Service: "${resolvedBusinessName} 2025 [Service] Checklist"
+      - Headline: Address a fear or a desire (e.g., "Don't Overpay for [Service]" or "Secure Your Spot Before It Sells Out")
+      - Preview Content: 
+        * Event: 3 reasons to attend (What you'll learn/experience)
+        * Visual: 3 style tips or portfolio highlights
+        * Service: 3 specific "Red Flags" or "Buying Checks"
       
       PDF CONTENT REQUIREMENTS:
       - Generate FULL PDF content for immediate download capability
@@ -196,12 +205,15 @@ export async function POST(request: Request) {
       - ALL prices MUST use ${detectedCurrency.symbol} currency symbol (e.g., "${detectedCurrency.symbol}90", "${detectedCurrency.symbol}200 - ${detectedCurrency.symbol}400")
       - DO NOT convert to USD. Keep original currency.
       - DO NOT use generic titles like "Mistake 1" or "Tip 1" - use DESCRIPTIVE titles
+      - event_details: If this is an EVENT, include date, time, venue, and pricing.
+      - instructor_bio: If this is an EVENT or COACHING, include a bio for the instructor/coach.
 
       DESIGN & LAYOUT REQUIREMENTS:
       - Analyze the business type to determine the best layout mode:
-        * "emergency": For urgent, trust-based services (e.g. Plumbers, Roofers, Locksmiths, Mechanics). Focus on speed, trust badges, and clear call-to-actions.
+        * "emergency": For urgent, trust-based services (e.g. Plumbers, Plumbing, HVAC, AC Repair, Electricians, Roofers, Locksmiths, Mechanics, Handyman, Cleaning, Pest Control). KEYWORDS: plumb, paip, bocor, repair, fix, service, contractor. Focus on speed, trust badges, and clear call-to-actions.
         * "visual": For aesthetic, portfolio-based businesses (e.g. Interior Design, Salons, Photography, Landscaping). Focus on high-quality imagery and elegance.
-        * "event": For time-sensitive or class-based offerings (e.g. Yoga Classes, Webinars, Workshops, Concerts). Focus on countdowns, dates, and registration.
+        * "event": For time-sensitive or class-based offerings (e.g. Yoga Classes, Zumba, Webinars, Workshops, Concerts). MUST have a specific DATE. Focus on countdowns, dates, and registration.
+      - IMPORTANT: A plumbing service is ALWAYS "emergency", NOT "event". Only use "event" for businesses selling tickets to a specific date.
       - Select a "primary_color" that fits the industry (e.g. Blue/Red for emergency, Pastels/Black for visual, Vibrant colors for event).
       - Select a "font_style" (e.g. "bold" for emergency, "elegant" for visual, "modern" for event).
       
@@ -263,6 +275,35 @@ export async function POST(request: Request) {
         "pdf_content": {
           "cover_tagline": "A powerful subtitle for the cover page",
           "intro": "A professional intro paragraph mentioning the business name.",
+          
+          // FOR EVENT layout_mode ONLY - extract from context:
+          "event_name": "Name of the event (e.g. Zumba Master Class)",
+          "event_details": {
+            "date": "Extract exact date from context (e.g. 17 Jan 2025)",
+            "time": "Extract time from context (e.g. 10:00 AM - 12:00 PM)",
+            "venue": "Extract venue/location from context",
+            "pricing": {
+              "individual": "Extract individual price (e.g. RM65/pax)",
+              "group": "Extract group price if available (e.g. RM55/pax for 3+)"
+            }
+          },
+          "what_to_expect": [
+            { "title": "Activity 1", "description": "What attendees will do/learn" },
+            { "title": "Activity 2", "description": "Another activity" },
+            { "title": "Activity 3", "description": "Third activity" }
+          ],
+          "instructor_bio": "Bio of the instructor/host. Extract from context if available.",
+          "who_is_this_for": ["Target audience 1", "Target audience 2", "Target audience 3"],
+          "faq": [
+            { "question": "What should I bring?", "answer": "Relevant answer" },
+            { "question": "Do I need experience?", "answer": "Relevant answer" },
+            { "question": "Can I get a refund?", "answer": "Relevant answer" }
+          ],
+          "testimonials": [
+            { "name": "Past attendee name", "quote": "Their feedback" }
+          ],
+          
+          // FOR SERVICE/EMERGENCY layout_mode:
           "diagnostic_questions": [
             { "question": "Do you notice X symptom?", "yes_action": "What to do if yes", "no_action": "What to do if no" },
             { "question": "Has it been X months since Y?", "yes_action": "...", "no_action": "..." },

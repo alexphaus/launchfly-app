@@ -30,7 +30,11 @@ export default function AnalyticsDashboard({
     
     // Add businesses
     data.businesses.forEach((b: any) => {
-      const date = new Date(b.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const date = new Date(b.created_at).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        timeZone: 'Asia/Manila'
+      });
       if (!grouped.has(date)) grouped.set(date, { date, businesses: 0, leads: 0, revenue: 0 });
       grouped.get(date).businesses += 1;
       grouped.get(date).leads += (b.total_leads || 0);
@@ -38,7 +42,11 @@ export default function AnalyticsDashboard({
 
     // Add orders (revenue)
     data.orders.forEach((o: any) => {
-      const date = new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const date = new Date(o.created_at).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        timeZone: 'Asia/Manila'
+      });
       if (!grouped.has(date)) grouped.set(date, { date, businesses: 0, leads: 0, revenue: 0 });
       grouped.get(date).revenue += (o.total_amount || 0);
     });
@@ -234,7 +242,16 @@ export default function AnalyticsDashboard({
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-500" suppressHydrationWarning>
-                    {new Date(activity.created_at).toLocaleString()}
+                    {new Date(activity.created_at).toLocaleString('en-US', { 
+                      timeZone: 'Asia/Manila',
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: 'numeric',
+                      second: 'numeric',
+                      hour12: true
+                    })}
                   </td>
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

@@ -40,6 +40,41 @@
 
 import QRCode from 'qrcode';
 
+/**
+ * Text sanitization helper for Malay content
+ * Replaces common English words that AI sometimes leaves untranslated
+ */
+const ENGLISH_TO_MALAY_REPLACEMENTS = {
+  'seasonally': 'secara berkala',
+  'quarterly': 'setiap 3 bulan',
+  'monthly': 'setiap bulan',
+  'weekly': 'setiap minggu',
+  'annually': 'setiap tahun',
+  'immediately': 'segera',
+  'professional': 'profesional',
+  'before rainy season': 'sebelum musim hujan'
+};
+
+/**
+ * Sanitize text by replacing common English words in Malay content
+ */
+function sanitizeMalayText(text, isMalay) {
+  if (!isMalay || !text) return text;
+  let sanitized = text;
+  for (const [english, malay] of Object.entries(ENGLISH_TO_MALAY_REPLACEMENTS)) {
+    sanitized = sanitized.replace(new RegExp(english, 'gi'), malay);
+  }
+  return sanitized;
+}
+
+/**
+ * Truncate text to max length with ellipsis
+ */
+function truncateText(text, maxLength = 40) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
+}
+
 const TRANSLATIONS = {
   en: {
     presentedBy: 'Presented by',
@@ -1184,10 +1219,21 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       // ============ PAGE 1: COVER PAGE ============
       doc.rect(0, 0, 612, 350).fill(colors.primary);
       
+      // Sanitize title - prevent business name from being inserted mid-sentence
+      let displayTitle = data.title || (isMalay ? 'Panduan Pakar Anda' : 'Your Expert Guide');
+      
+      // If title is too long or contains business name awkwardly, simplify it
+      if (displayTitle.length > 60 || (displayTitle.includes(businessName) && displayTitle.split(businessName).length > 2)) {
+        // Create a clean title based on niche
+        displayTitle = isMalay 
+          ? `Panduan ${niche} ${new Date().getFullYear()}`
+          : `${niche} Guide ${new Date().getFullYear()}`;
+      }
+      
       doc.fillColor('#ffffff')
          .fontSize(32)
          .font('Helvetica-Bold')
-         .text(data.title || 'Your Expert Guide', 50, 80, { 
+         .text(displayTitle, 50, 80, { 
            width: 512, 
            align: 'center' 
          });
@@ -1243,33 +1289,46 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica-Oblique')
          .text(strings.assessmentIntro, 50, 100);
 
-      // Diagnostic questions with checkboxes - use AI-generated ones if available
-      const diagnosticQuestions = pdfContent.diagnostic_questions || [
+      // Diagnostic questions with checkboxes
+      // HARDCODED short answers to prevent text overlap/corruption
+      const diagnosticQuestions = (pdfContent.diagnostic_questions || []).map((dq, idx) => ({
+        question: sanitizeMalayText(dq.question, isMalay),
+        // Force short, clean YES/NO actions regardless of AI output
+        yes_action: isMalay 
+          ? ['Jadualkan pemeriksaan.', 'Perlu penyelenggaraan.', 'Hubungi kami.'][idx] || 'Hubungi kami.'
+          : ['Schedule inspection.', 'Time for maintenance.', 'Call us today.'][idx] || 'Call us.',
+        no_action: isMalay 
+          ? ['Bagus! Teruskan.', 'Hebat! Kekalkan.', 'Simpan tips ini.'][idx] || 'Kekalkan.'
+          : ['Good! Keep it up.', 'Great! Stay on track.', 'Keep these tips.'][idx] || 'Keep monitoring.'
+      }));
+
+      // Fallback questions if none provided
+      const finalQuestions = diagnosticQuestions.length > 0 ? diagnosticQuestions : [
         { 
           question: isMalay 
-            ? `Adakah anda perasan sebarang tanda luar biasa dengan sistem ${niche.toLowerCase()} anda dalam bulan lepas?`
-            : `Have you noticed any unusual signs with your ${niche.toLowerCase()} system in the last month?`,
-          yes_action: isMalay ? 'YA! Pastikan ia sesuai.' : 'Schedule an inspection soon',
-          no_action: isMalay ? 'TIDAK! Kaji semula pilihan anda.' : 'Keep monitoring regularly'
+            ? `Adakah anda perasan tanda luar biasa dengan ${niche.toLowerCase()} anda dalam bulan lepas?`
+            : `Have you noticed any unusual signs with your ${niche.toLowerCase()} in the last month?`,
+          yes_action: isMalay ? 'Jadualkan pemeriksaan.' : 'Schedule inspection.',
+          no_action: isMalay ? 'Bagus! Teruskan.' : 'Good! Keep it up.'
         },
         { 
           question: isMalay
-            ? `Adakah sudah lebih 12 bulan sejak pemeriksaan profesional ${niche.toLowerCase()} terakhir anda?`
-            : `Has it been more than 12 months since your last professional ${niche.toLowerCase()} check-up?`,
-          yes_action: isMalay ? 'YA! Pastikan ia sesuai.' : 'Consider a maintenance visit',
-          no_action: isMalay ? 'TIDAK! Kaji semula pilihan anda.' : 'You\'re on track!'
+            ? `Adakah sudah lebih 12 bulan sejak pemeriksaan profesional terakhir anda?`
+            : `Has it been more than 12 months since your last professional check-up?`,
+          yes_action: isMalay ? 'Perlu penyelenggaraan.' : 'Time for maintenance.',
+          no_action: isMalay ? 'Hebat! Kekalkan.' : 'Great! Stay on track.'
         },
         { 
           question: isMalay
-            ? `Adakah anda mengalami masalah prestasi atau kos yang lebih tinggi dari biasa?`
-            : `Are you experiencing any performance issues or higher-than-normal costs?`,
-          yes_action: isMalay ? 'YA! Pastikan ia sesuai.' : 'Call us for a free consultation',
-          no_action: isMalay ? 'TIDAK! Kaji semula pilihan anda.' : 'Great! Keep these tips handy'
+            ? `Adakah anda mengalami masalah atau kos lebih tinggi dari biasa?`
+            : `Are you experiencing any issues or higher-than-normal costs?`,
+          yes_action: isMalay ? 'Hubungi kami.' : 'Call us today.',
+          no_action: isMalay ? 'Simpan tips ini.' : 'Keep these tips.'
         }
       ];
 
       let diagY = 140;
-      diagnosticQuestions.forEach((dq, i) => {
+      finalQuestions.forEach((dq, i) => {
         // Question box
         doc.rect(50, diagY, 512, 85).fillAndStroke(i % 2 === 0 ? colors.light : '#ffffff', colors.secondary);
         
@@ -1283,12 +1342,14 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
            .font('Helvetica')
            .text(dq.question, 70, diagY + 35, { width: 470 });
         
-        // Yes/No checkboxes
+        // Yes/No checkboxes - with width constraints to prevent overlap
         doc.rect(70, diagY + 60, 12, 12).stroke(colors.gray);
-        doc.fillColor(colors.success).fontSize(10).text(`${strings.yes} → ` + dq.yes_action, 90, diagY + 62);
+        doc.fillColor(colors.success).fontSize(9).font('Helvetica-Bold')
+           .text(`${strings.yes} → ${dq.yes_action}`, 90, diagY + 62, { width: 195, lineBreak: false });
         
         doc.rect(300, diagY + 60, 12, 12).stroke(colors.gray);
-        doc.fillColor(colors.gray).fontSize(10).text(`${strings.no} → ` + dq.no_action, 320, diagY + 62);
+        doc.fillColor(colors.gray).fontSize(9).font('Helvetica-Bold')
+           .text(`${strings.no} → ${dq.no_action}`, 320, diagY + 62, { width: 195, lineBreak: false });
         
         diagY += 95;
       });
@@ -1383,7 +1444,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica-Oblique')
          .text(strings.mistakesIntro, 50, 100);
 
-      const mistakes = pdfContent.common_mistakes || [
+      const mistakes = (pdfContent.common_mistakes || [
         { 
           title: isMalay ? 'Pilih Sebutharga Paling Murah' : 'Choosing the Cheapest Quote', 
           description: isMalay ? 'Harga murah sering bermakna jalan pintas. Sentiasa sahkan apa yang termasuk.' : 'Low prices often mean shortcuts. Always verify what\'s included.' 
@@ -1396,7 +1457,10 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
           title: isMalay ? 'Abaikan Tanda Amaran' : 'Ignoring Warning Signs', 
           description: isMalay ? 'Bunyi atau bau pelik bermakna sesuatu perlu perhatian.' : 'Strange noises or smells mean something needs attention.' 
         }
-      ];
+      ]).map(mistake => ({
+        title: sanitizeMalayText(mistake.title, isMalay),
+        description: sanitizeMalayText(mistake.description, isMalay)
+      }));
 
       let yPos = 130;
       mistakes.slice(0, 5).forEach((mistake, i) => {
@@ -1435,7 +1499,7 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica-Oblique')
          .text(strings.tipsIntro, 50, 100);
 
-      const tips = pdfContent.quick_tips || [
+      const tips = (pdfContent.quick_tips || [
         { 
           title: isMalay ? 'Periksa Penapis Anda Setiap Bulan' : 'Check Your Filter Monthly', 
           description: isMalay ? 'Penapis kotor mengurangkan kecekapan sehingga 15%.' : 'A dirty filter reduces efficiency by up to 15%.' 
@@ -1448,7 +1512,10 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
           title: isMalay ? 'Pantau Bil Anda' : 'Monitor Your Bills', 
           description: isMalay ? 'Kenaikan mendadak mungkin menandakan ketidakcekapan.' : 'Sudden increases may signal inefficiency.' 
         }
-      ];
+      ]).map(tip => ({
+        title: sanitizeMalayText(tip.title, isMalay),
+        description: sanitizeMalayText(tip.description, isMalay)
+      }));
 
       yPos = 130;
       tips.slice(0, 5).forEach((tip, i) => {
@@ -1560,14 +1627,14 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica-Oblique')
          .text(isMalay ? 'Langkah pantas yang boleh anda selesaikan dalam 10 minit' : 'Quick wins you can accomplish in the next 10 minutes', 50, 100);
 
-      const checklist = pdfContent.action_checklist || [
+      const checklist = (pdfContent.action_checklist || [
         isMalay 
           ? `Buat pemeriksaan visual pantas sistem ${niche.toLowerCase()} anda`
           : `Do a quick visual inspection of your ${niche.toLowerCase()} system`,
         isMalay
           ? `Simpan nombor kami untuk bila anda perlu bantuan profesional: ${phone || 'Hubungi kami!'}`
           : `Save our number for when you need professional help: ${phone || 'Call us!'}`
-      ];
+      ]).map(item => sanitizeMalayText(item, isMalay));
 
       checklist.slice(0, 2).forEach((item, i) => {
         doc.rect(50, 130 + (i * 80), 35, 35).stroke(colors.primary);

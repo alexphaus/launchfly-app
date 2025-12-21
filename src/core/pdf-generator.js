@@ -330,34 +330,43 @@ async function generateCoachingPDF(data, PDFDocument, businessData = {}) {
       // ============ PAGE 1: COVER PAGE ============
       doc.rect(0, 0, 612, 350).fill(colors.primary);
       
+      // Calculate title height to prevent overlap
+      const coachingTitle = data.title || 'Your Expert Blueprint';
+      doc.font('Helvetica-Bold').fontSize(32);
+      const coachingTitleHeight = doc.heightOfString(coachingTitle, { width: 512, align: 'center' });
+      const coachingTitleStartY = 80;
+      
       doc.fillColor('#ffffff')
-         .fontSize(32)
-         .font('Helvetica-Bold')
-         .text(data.title || 'Your Expert Blueprint', 50, 80, { 
+         .text(coachingTitle, 50, coachingTitleStartY, { 
            width: 512, 
            align: 'center' 
          });
       
+      // Position tagline dynamically after title
+      const coachingTaglineY = coachingTitleStartY + coachingTitleHeight + 20;
+      
       doc.fontSize(14)
          .font('Helvetica')
-         .text(pdfContent.cover_tagline || `The proven framework to transform your ${niche.toLowerCase()} results`, 50, 160, { 
+         .text(pdfContent.cover_tagline || `The proven framework to transform your ${niche.toLowerCase()} results`, 50, coachingTaglineY, { 
            width: 512, 
            align: 'center' 
          });
 
+      // Position line and other elements dynamically
+      const coachingLineY = coachingTaglineY + 40;
       doc.strokeColor('#ffffff').lineWidth(2)
-         .moveTo(200, 200).lineTo(412, 200).stroke();
+         .moveTo(200, coachingLineY).lineTo(412, coachingLineY).stroke();
 
       doc.fillColor('#ffffff')
          .fontSize(14)
          .font('Helvetica-Oblique')
-         .text(`By ${coachName}`, 50, 230, { 
+         .text(`By ${coachName}`, 50, coachingLineY + 30, { 
            width: 512, 
            align: 'center' 
          });
 
       doc.fontSize(12)
-         .text(`${new Date().getFullYear()} Edition`, 50, 260, { 
+         .text(`${new Date().getFullYear()} Edition`, 50, coachingLineY + 60, { 
            width: 512, 
            align: 'center' 
          });
@@ -895,26 +904,34 @@ async function generateEventPDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica-Bold')
          .text(`📅 ${eventDate}`, 50, 68, { width: 512, align: 'center' });
       
-      // Event name
+      // Event name - calculate height to prevent overlap
+      doc.font('Helvetica-Bold').fontSize(32);
+      const eventNameHeight = doc.heightOfString(eventName, { width: 512, align: 'center' });
+      const eventNameStartY = 140;
+      
       doc.fillColor(colors.dark)
-         .fontSize(32)
-         .font('Helvetica-Bold')
-         .text(eventName, 50, 140, { width: 512, align: 'center' });
+         .text(eventName, 50, eventNameStartY, { width: 512, align: 'center' });
+      
+      // Position time/venue dynamically after event name
+      const timeVenueY = eventNameStartY + eventNameHeight + 15;
       
       // Time and Venue
       if (eventTime || venue) {
         doc.fillColor(colors.gray)
            .fontSize(16)
            .font('Helvetica')
-           .text(`⏰ ${eventTime}${venue ? `  📍 ${venue}` : ''}`, 50, 200, { width: 512, align: 'center' });
+           .text(`⏰ ${eventTime}${venue ? `  📍 ${venue}` : ''}`, 50, timeVenueY, { width: 512, align: 'center' });
       }
       
+      // Position pricing box dynamically
+      const pricingBoxY = timeVenueY + 40;
+      
       // Pricing box
-      doc.rect(150, 250, 312, 100).fillAndStroke(colors.light, colors.secondary);
+      doc.rect(150, pricingBoxY, 312, 100).fillAndStroke(colors.light, colors.secondary);
       doc.fillColor(colors.dark)
          .fontSize(14)
          .font('Helvetica-Bold')
-         .text('REGISTRATION', 150, 265, { width: 312, align: 'center' });
+         .text('REGISTRATION', 150, pricingBoxY + 15, { width: 312, align: 'center' });
       
       const individualPrice = pricing.individual || data.conversion_offer?.headline || 'Register Now';
       const groupPrice = pricing.group || data.conversion_offer?.subheadline || '';
@@ -922,26 +939,27 @@ async function generateEventPDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.primary)
          .fontSize(28)
          .font('Helvetica-Bold')
-         .text(individualPrice, 150, 290, { width: 312, align: 'center' });
+         .text(individualPrice, 150, pricingBoxY + 40, { width: 312, align: 'center' });
       
       if (groupPrice) {
         doc.fillColor(colors.gray)
            .fontSize(12)
            .font('Helvetica')
-           .text(groupPrice, 150, 325, { width: 312, align: 'center' });
+           .text(groupPrice, 150, pricingBoxY + 75, { width: 312, align: 'center' });
       }
       
-      // Tagline
+      // Tagline - position after pricing box
+      const eventTaglineY = pricingBoxY + 115;
       doc.fillColor(colors.gray)
          .fontSize(14)
          .font('Helvetica')
-         .text(pdfContent.cover_tagline || `Join us for an unforgettable experience!`, 50, 380, { width: 512, align: 'center' });
+         .text(pdfContent.cover_tagline || `Join us for an unforgettable experience!`, 50, eventTaglineY, { width: 512, align: 'center' });
       
       // Hosted by
       doc.fillColor(colors.dark)
          .fontSize(12)
          .font('Helvetica')
-         .text(`Hosted by ${hostName}`, 50, 420, { width: 512, align: 'center' });
+         .text(`Hosted by ${hostName}`, 50, eventTaglineY + 40, { width: 512, align: 'center' });
       
       // QR Code (bottom right)
       if (qrBuffer) {
@@ -1258,34 +1276,42 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
           : `${niche} Guide ${new Date().getFullYear()}`;
       }
       
+      // Calculate title height to prevent overlap with subsequent text
+      doc.font('Helvetica-Bold').fontSize(32);
+      const titleHeight = doc.heightOfString(displayTitle, { width: 512, align: 'center' });
+      const titleStartY = 80;
+      
       doc.fillColor('#ffffff')
-         .fontSize(32)
-         .font('Helvetica-Bold')
-         .text(displayTitle, 50, 80, { 
+         .text(displayTitle, 50, titleStartY, { 
            width: 512, 
            align: 'center' 
          });
       
+      // Position tagline dynamically after title (with padding)
+      const taglineY = titleStartY + titleHeight + 20;
+      
       doc.fontSize(14)
          .font('Helvetica')
-         .text(pdfContent.cover_tagline || strings.coverTaglineDefault.replace('{niche}', niche.toLowerCase()).replace('{city}', city), 50, 160, { 
+         .text(pdfContent.cover_tagline || strings.coverTaglineDefault.replace('{niche}', niche.toLowerCase()).replace('{city}', city), 50, taglineY, { 
            width: 512, 
            align: 'center' 
          });
 
+      // Position line and other elements dynamically
+      const lineY = taglineY + 40;
       doc.strokeColor('#ffffff').lineWidth(2)
-         .moveTo(200, 200).lineTo(412, 200).stroke();
+         .moveTo(200, lineY).lineTo(412, lineY).stroke();
 
       doc.fillColor('#ffffff')
          .fontSize(14)
          .font('Helvetica-Oblique')
-         .text(`${strings.freeGuide} ${strings.from} ${businessName}`, 50, 230, { 
+         .text(`${strings.freeGuide} ${strings.from} ${businessName}`, 50, lineY + 30, { 
            width: 512, 
            align: 'center' 
          });
 
       doc.fontSize(12)
-         .text(`${strings.edition} ${new Date().getFullYear()}`, 50, 260, { 
+         .text(`${strings.edition} ${new Date().getFullYear()}`, 50, lineY + 60, { 
            width: 512, 
            align: 'center' 
          });

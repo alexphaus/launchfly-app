@@ -716,6 +716,87 @@ export default function SalesPage() {
                     Best times: 10am-12pm or 2pm-4pm local time. Follow up once after 2 days if no response.
                   </p>
                 </div>
+
+                {/* Follow-up Scripts Section */}
+                {result?.whatsapp_followups && (
+                  <div className="mt-4 border-t border-slate-200 pt-4">
+                    <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                      🔥 Follow-Up Scripts
+                      <span className="text-xs font-normal text-slate-500">(Increases close rate 3x)</span>
+                    </h3>
+                    
+                    <div className="space-y-3">
+                      {/* When they ask how it works */}
+                      {result.whatsapp_followups.reply_interested && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-semibold text-blue-700">💬 If they ask "How does it work?"</span>
+                            <button
+                              onClick={() => copyToClipboard(result.whatsapp_followups.reply_interested)}
+                              className="text-blue-600 hover:text-blue-800 text-xs"
+                            >
+                              📋 Copy
+                            </button>
+                          </div>
+                          <p className="text-xs text-blue-800 whitespace-pre-wrap">{result.whatsapp_followups.reply_interested}</p>
+                        </div>
+                      )}
+                      
+                      {/* Follow-up 1 */}
+                      {result.whatsapp_followups.followup_1 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-semibold text-amber-700">⏰ Follow-up #1 (4-6 hours later)</span>
+                            <button
+                              onClick={() => copyToClipboard(result.whatsapp_followups.followup_1)}
+                              className="text-amber-600 hover:text-amber-800 text-xs"
+                            >
+                              📋 Copy
+                            </button>
+                          </div>
+                          <p className="text-xs text-amber-800 whitespace-pre-wrap">{result.whatsapp_followups.followup_1}</p>
+                        </div>
+                      )}
+                      
+                      {/* Follow-up 2 */}
+                      {result.whatsapp_followups.followup_2 && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-semibold text-orange-700">📅 Follow-up #2 (Next day)</span>
+                            <button
+                              onClick={() => copyToClipboard(result.whatsapp_followups.followup_2)}
+                              className="text-orange-600 hover:text-orange-800 text-xs"
+                            >
+                              📋 Copy
+                            </button>
+                          </div>
+                          <p className="text-xs text-orange-800 whitespace-pre-wrap">{result.whatsapp_followups.followup_2}</p>
+                        </div>
+                      )}
+                      
+                      {/* Follow-up 3 */}
+                      {result.whatsapp_followups.followup_3 && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-semibold text-red-700">🦈 Final Follow-up (Low-risk offer)</span>
+                            <button
+                              onClick={() => copyToClipboard(result.whatsapp_followups.followup_3)}
+                              className="text-red-600 hover:text-red-800 text-xs"
+                            >
+                              📋 Copy
+                            </button>
+                          </div>
+                          <p className="text-xs text-red-800 whitespace-pre-wrap">{result.whatsapp_followups.followup_3}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="mt-3 p-2 bg-slate-100 rounded text-xs text-slate-600">
+                      <strong>🎙️ Voice Note Tip:</strong> A 10-12 second voice note increases close rate 3× in SEA markets. 
+                      Example: <em>"Boss, two extra jobs/day can settle your rent already. Let's start small first."</em>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -225,7 +225,7 @@ export async function POST(request: Request) {
       - CRITICAL: Do NOT repeat the full business name inside the asset name. Say "AC Cost Guide", NOT "Tip Top Aircon AC Cost Guide".
 
       WHATSAPP SCRIPT REQUIREMENTS:
-      - Tone: Casual, helpful, "neighborly". NOT salesy.
+      - Tone: Casual, helpful, "neighborly". NOT salesy. Like texting a friend.
       - Structure: Hook -> Problem -> Solution -> Link -> Soft Close.
       - Formatting: CRITICAL - Use double line breaks (\n\n) between every section. It must look like a chat message, not a paragraph.
       - If EVENT: Mention specific date/price if found (e.g. "Saw your event on Jan 17 for RM65"). Ask if they are handling registrations manually.
@@ -233,6 +233,32 @@ export async function POST(request: Request) {
       - If COACH: Mention their recent content/topic.
       - Length: Short and punchy.
       - Placeholder: Use {{PREVIEW_LINK}} for the link.
+      
+      CULTURAL LANGUAGE FLAVOR (CRITICAL for SEA markets):
+      - Detected Language: ${detectedLanguage.name} (${detectedLanguage.code})
+      - Owner Name: ${resolvedOwnerName || 'Not found'}
+      - PERSONALIZATION: If owner name is available, USE IT in the greeting!
+        * With name: "Salam ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'boss'} 👋" or "Hi ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'there'} 👋"
+        * Without name: Fall back to "boss" or generic greeting
+      - If Malay (ms) detected: Use English as main language but sprinkle 2-3 Malay "flavor words" to feel approachable:
+        * Opening: "Salam [Name/boss] 👋" or "Hi [Name/boss] 👋"
+        * Soft words: "boleh" (can?), "tengok" (see/look?), "ok la?", "try?"
+        * Example: "Want to tengok? 😄" or "Boleh try dulu?" (Can try first?)
+      - If Indonesian (id) detected: Use "Halo [Name/boss] 👋", "bisa" (can), "lihat" (see?)
+      - If English: Keep it casual with "Hey [Name]!" or "Hi there 👋"
+      - AVOID corporate language. Sound like a helpful neighbor, not a salesperson.
+      
+      WHATSAPP SCRIPT EXAMPLE FORMAT:
+      "Salam ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'boss'} 👋
+      
+      Saw you doing [Service] in [Area] — nice!
+      
+      I made a booking tool for [Business Name] that auto-replies to customers so you tak payah chase them.
+      
+      Want to tengok? 😄
+      {{PREVIEW_LINK}}
+      
+      No monthly fees, you own it. Boleh try?"
 
       LEAD MAGNET (ASSET) REQUIREMENTS:
       - Concept: 
@@ -301,7 +327,13 @@ export async function POST(request: Request) {
           "subject": "...",
           "body": "..."
         },
-        "whatsapp_script": "The generated WhatsApp message",
+        "whatsapp_script": "The generated WhatsApp opening message with cultural flavor",
+        "whatsapp_followups": {
+          "reply_interested": "Response when prospect asks 'How does it work?' - Explain value prop simply, mention one-time fee vs agency prices, end with soft close",
+          "followup_1": "Send after 4-6 hours if seen but no reply. Re-open conversation with commitment question about their business.",
+          "followup_2": "Send next day. Ask about their ideal number of leads/week (5? 10? 20?)",
+          "followup_3": "Final follow-up. Low-risk offer: 'We test small first — if you get customers, good for you. If not, no pay.'"
+        },
         "lead_magnet": {
           "title": "Title in ${detectedLanguage.name} (e.g. Malay: 'Senarai Semak Paip ${resolvedBusinessName} 2025', English: '${resolvedBusinessName}'s 2025 [Service] Checklist')",
           "headline": "Fear/desire headline in ${detectedLanguage.name} (e.g. Malay: 'Elak Paip Sumbat & Bau Busuk', English: 'Don't Overpay for Your Next [Service]')",

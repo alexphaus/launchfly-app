@@ -182,7 +182,9 @@ export async function POST(request) {
       landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : '',
       currency: flatData.currency || '$', // Support RM, S$, etc.
       design_preferences: flatData.design_preferences || {},
-      businessType: flatData.businessType || nestedData?.businessType
+      businessType: flatData.businessType || nestedData?.businessType,
+      // Include prospect images for PDF gallery
+      prospectImages: flatData.prospectImages || nestedData?.images || []
     };
     
     if (title) {
@@ -190,6 +192,7 @@ export async function POST(request) {
       
       // Generate PDF using shared pdf-generator (same as dashboard)
       try {
+        console.log('📄 Generating PDF with images:', businessDataForPdf.prospectImages?.length || 0);
         const PDFDocument = (await import('pdfkit')).default;
         const pdfBuffer = await generatePDF({ title, content, pdfContent }, PDFDocument, businessDataForPdf);
         const fileName = title 

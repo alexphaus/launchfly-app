@@ -249,6 +249,15 @@ export async function POST(request: Request) {
         * Visual: 3 style tips or portfolio highlights
         * Service: 3 specific "Red Flags" or "Buying Checks"
       
+      TESTIMONIAL GENERATION INSTRUCTIONS:
+      - CRITICAL: Scan the PROVIDED CONTEXT for actual reviews/feedback. If found, use them.
+      - If generating testimonials:
+        * MUST mention the specific service (e.g. "termites", "leaky pipe", "wedding photos").
+        * MUST mention the business name explicitly in at least one testimonial.
+        * MUST sound like a real local customer, not a marketing bot.
+        * BAD: "The service was excellent and professional."
+        * GOOD: "${resolvedBusinessName} came out same-day to fix my AC. Saved me from the heat!"
+      
       PDF CONTENT REQUIREMENTS:
       - Generate FULL PDF content for immediate download capability
       - CRITICAL: Generate REAL, SPECIFIC content for this business niche - NOT generic placeholders
@@ -307,23 +316,23 @@ export async function POST(request: Request) {
         },
         "testimonials": [
           {
-            "name": "Realistic Name (e.g. Sarah L.)",
+            "name": "Real Name if found, else Realistic Name (e.g. Sarah L.)",
             "role": "Relevant Role (e.g. Homeowner in [City])",
-            "content": "Specific praise about how the guide/service helped them. Mention specific results or savings. NOT generic.",
+            "content": "Specific praise mentioning the SERVICE (e.g. 'termites', 'cleaning') and RESULT. If context has reviews, use them.",
             "avatar": "👩",
             "rating": 5
           },
           {
             "name": "Realistic Name (e.g. Mike T.)",
             "role": "Relevant Role",
-            "content": "Another specific testimonial focusing on a different benefit (e.g. speed, quality, transparency).",
+            "content": "Another specific testimonial. Mention the BUSINESS NAME and a specific benefit (speed, price, honesty).",
             "avatar": "👨",
             "rating": 5
           },
           {
             "name": "Realistic Name (e.g. Emily R.)",
             "role": "Relevant Role",
-            "content": "Third testimonial focusing on trust or expertise.",
+            "content": "Third testimonial focusing on trust or expertise. Avoid generic phrases like 'highly recommended' without context.",
             "avatar": "👩‍🦰",
             "rating": 5
           }

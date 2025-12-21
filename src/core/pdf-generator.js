@@ -1157,6 +1157,19 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
     console.error('QR code generation failed:', qrError);
   }
 
+  // Pre-fetch prospect images (before entering Promise)
+  const prospectImages = businessData.prospectImages || [];
+  let imageBuffers = [];
+  if (prospectImages.length > 0) {
+    try {
+      imageBuffers = await Promise.all(
+        prospectImages.slice(0, 4).map(img => fetchImageBuffer(img.url))
+      );
+    } catch (imgError) {
+      console.error('Failed to fetch prospect images:', imgError);
+    }
+  }
+
   return new Promise((resolve, reject) => {
     try {
       // Dynamic Page Size
@@ -1627,8 +1640,8 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .text(`- ${caseStudy.customer_name}, ${isMalay ? 'Pelanggan Sah' : 'Verified Customer'}`, 70, 360);
 
       // ============ PAGE 5.5: IMAGE GALLERY (Optional - only if images provided) ============
-      const prospectImages = businessData.prospectImages || [];
-      if (prospectImages.length > 0) {
+      // Note: imageBuffers was pre-fetched before the Promise
+      if (imageBuffers.length > 0) {
         doc.addPage();
         addFooter();
         
@@ -1652,11 +1665,6 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
         const imageHeight = 180;
         const startY = 130;
         const colGap = 30;
-        
-        // Fetch all image buffers in parallel
-        const imageBuffers = await Promise.all(
-          prospectImages.slice(0, 4).map(img => fetchImageBuffer(img.url))
-        );
         
         let imgX = 50;
         let imgY = startY;

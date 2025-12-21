@@ -14,7 +14,7 @@ const PROSPECT_EXPIRY_DAYS = 14;
 
 export async function POST(request: Request) {
   try {
-    const { url, businessName, niche, context, createPreview = true } = await request.json();
+    const { url, businessName, niche, context, createPreview = true, images = [] } = await request.json();
 
     if (!url && !context) {
       return Response.json({ error: 'Either URL or Business Context is required' }, { status: 400 });
@@ -438,6 +438,8 @@ export async function POST(request: Request) {
         currency: detectedCurrency.symbol,
         currencyCode: detectedCurrency.code,
         testimonials: result.testimonials || [],
+        // Store uploaded images for PDF and landing page
+        prospectImages: images || [],
         // Store the full PDF content for immediate PDF generation
         lead_magnet_title: result.lead_magnet.title,
         lead_magnet_pdf: result.pdf_content || {},
@@ -453,7 +455,9 @@ export async function POST(request: Request) {
             benefits: result.lead_magnet.benefits || [],
             cta_text: 'Get Your Free Guide'
           },
-          lead_magnet_pdf: result.pdf_content || {}
+          lead_magnet_pdf: result.pdf_content || {},
+          // Pass images to landing page config
+          images: images || []
         }
       };
 

@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+// Image type for uploaded prospect images
+interface ProspectImage {
+  url: string;
+  type: 'before' | 'after' | 'team' | 'work' | 'general';
+  name: string;
+}
 
 export default function SalesPage() {
   const [url, setUrl] = useState('');
@@ -14,6 +21,11 @@ export default function SalesPage() {
   const [error, setError] = useState('');
   const [sendSuccess, setSendSuccess] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
+  
+  // Image upload state
+  const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Editable fields
   const [editableSubject, setEditableSubject] = useState('');
@@ -124,6 +136,54 @@ export default function SalesPage() {
     }
   }, [result]);
 
+  // Handle image upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch('/api/sales/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setUploadedImages(prev => [...prev, ...data.images]);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Remove uploaded image
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Update image type
+  const updateImageType = (index: number, type: ProspectImage['type']) => {
+    setUploadedImages(prev => prev.map((img, i) => 
+      i === index ? { ...img, type } : img
+    ));
+  };
+
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -141,7 +201,13 @@ export default function SalesPage() {
       const response = await fetch('/api/sales/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, businessName, niche, context }),
+        body: JSON.stringify({ 
+          url, 
+          businessName, 
+          niche, 
+          context,
+          images: uploadedImages // Pass uploaded images to API
+        }),
       });
 
       const data = await response.json();
@@ -332,6 +398,73 @@ export default function SalesPage() {
               <p className="text-xs text-slate-500 mt-1">
                 Provide either a URL or Business Context (or both).
               </p>
+            </div>
+
+            {/* Image Upload Section */}
+            <div className="border-t border-slate-200 pt-4">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                📸 Business Images (Optional)
+              </label>
+              <p className="text-xs text-slate-500 mb-3">
+                Upload images from Facebook/Google Maps showing: technicians at work, before/after results, team photos, or service examples. These will appear in the PDF and landing page.
+              </p>
+              
+              <div className="flex flex-wrap gap-3 mb-3">
+                {uploadedImages.map((img, index) => (
+                  <div key={index} className="relative group">
+                    <img 
+                      src={img.url} 
+                      alt={img.name}
+                      className="w-24 h-24 object-cover rounded-lg border border-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                    <select
+                      value={img.type}
+                      onChange={(e) => updateImageType(index, e.target.value as ProspectImage['type'])}
+                      className="absolute bottom-0 left-0 right-0 text-xs bg-black/70 text-white px-1 py-0.5 rounded-b-lg"
+                    >
+                      <option value="general">General</option>
+                      <option value="before">Before/Problem</option>
+                      <option value="after">After/Solution</option>
+                      <option value="team">Team/Technician</option>
+                      <option value="work">Work in Progress</option>
+                    </select>
+                  </div>
+                ))}
+                
+                {/* Upload Button */}
+                <label className={`w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isUploading ? (
+                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <span className="text-2xl text-slate-400">+</span>
+                      <span className="text-xs text-slate-500">Add Image</span>
+                    </>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    disabled={isUploading}
+                  />
+                </label>
+              </div>
+              
+              {uploadedImages.length > 0 && (
+                <p className="text-xs text-green-600">
+                  ✓ {uploadedImages.length} image{uploadedImages.length > 1 ? 's' : ''} ready for PDF & landing page
+                </p>
+              )}
             </div>
             
             <button

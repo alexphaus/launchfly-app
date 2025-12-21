@@ -189,6 +189,21 @@ const TRANSLATIONS = {
 };
 
 /**
+ * Helper function to fetch image and convert to buffer for PDF embedding
+ */
+async function fetchImageBuffer(imageUrl) {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('Failed to fetch image:', imageUrl, error.message);
+    return null;
+  }
+}
+
+/**
  * Main export - routes to appropriate generator based on businessType
  */
 export async function generatePDF(data, PDFDocument, businessData = {}) {
@@ -1610,6 +1625,103 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
       doc.fillColor(colors.gray)
          .fontSize(11)
          .text(`- ${caseStudy.customer_name}, ${isMalay ? 'Pelanggan Sah' : 'Verified Customer'}`, 70, 360);
+
+      // ============ PAGE 5.5: IMAGE GALLERY (Optional - only if images provided) ============
+      const prospectImages = businessData.prospectImages || [];
+      if (prospectImages.length > 0) {
+        doc.addPage();
+        addFooter();
+        
+        doc.fillColor(colors.primary)
+           .fontSize(24)
+           .font('Helvetica-Bold')
+           .text(isMalay ? 'Kerja Kami' : 'Our Work in Action', 50, 50);
+        
+        doc.strokeColor(colors.accent).lineWidth(3)
+           .moveTo(50, 85).lineTo(280, 85).stroke();
+
+        doc.fillColor(colors.gray)
+           .fontSize(11)
+           .font('Helvetica-Oblique')
+           .text(isMalay 
+             ? 'Lihat sendiri kualiti kerja kami' 
+             : 'See the quality of our work for yourself', 50, 100);
+
+        // Layout images in a grid (2 columns)
+        const imageWidth = 240;
+        const imageHeight = 180;
+        const startY = 130;
+        const colGap = 30;
+        
+        // Fetch all image buffers in parallel
+        const imageBuffers = await Promise.all(
+          prospectImages.slice(0, 4).map(img => fetchImageBuffer(img.url))
+        );
+        
+        let imgX = 50;
+        let imgY = startY;
+        
+        for (let i = 0; i < imageBuffers.length; i++) {
+          const buffer = imageBuffers[i];
+          const imgData = prospectImages[i];
+          
+          if (buffer) {
+            try {
+              // Draw image border
+              doc.rect(imgX - 2, imgY - 2, imageWidth + 4, imageHeight + 4)
+                 .fillAndStroke(colors.light, colors.secondary);
+              
+              // Embed image
+              doc.image(buffer, imgX, imgY, { 
+                width: imageWidth, 
+                height: imageHeight,
+                fit: [imageWidth, imageHeight],
+                align: 'center',
+                valign: 'center'
+              });
+              
+              // Add label based on image type
+              const labelMap = {
+                'before': isMalay ? 'Sebelum' : 'Before',
+                'after': isMalay ? 'Selepas' : 'After',
+                'team': isMalay ? 'Pasukan Kami' : 'Our Team',
+                'work': isMalay ? 'Kerja Sedang' : 'Work in Progress',
+                'general': ''
+              };
+              
+              const label = labelMap[imgData.type] || '';
+              if (label) {
+                doc.rect(imgX, imgY + imageHeight - 25, imageWidth, 25)
+                   .fillOpacity(0.8)
+                   .fill(colors.primary);
+                doc.fillOpacity(1)
+                   .fillColor('#ffffff')
+                   .fontSize(10)
+                   .font('Helvetica-Bold')
+                   .text(label, imgX + 10, imgY + imageHeight - 18, { width: imageWidth - 20 });
+              }
+            } catch (imgError) {
+              console.error('Failed to embed image in PDF:', imgError.message);
+            }
+          }
+          
+          // Move to next position
+          if (i % 2 === 0) {
+            imgX = 50 + imageWidth + colGap;
+          } else {
+            imgX = 50;
+            imgY += imageHeight + 30;
+          }
+        }
+        
+        // Add caption
+        doc.fillColor(colors.gray)
+           .fontSize(10)
+           .font('Helvetica-Oblique')
+           .text(isMalay 
+             ? `Kerja sebenar oleh ${businessName}. Tiada stok foto.`
+             : `Real work by ${businessName}. No stock photos.`, 50, 530, { width: 512, align: 'center' });
+      }
 
       // ============ PAGE 6: ACTION CHECKLIST + COUPON ============
       doc.addPage();

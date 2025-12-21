@@ -808,6 +808,20 @@ export default async function DynamicWebsite({ params }) {
         });
     }
 
+    // 3.5. IMAGE GALLERY (if prospect images are available)
+    const prospectImages = businessData.prospectImages || lm.images || [];
+    if (prospectImages.length > 0) {
+        layout.push({
+            component: 'ImageGallery',
+            props: {
+                title: 'Our Work',
+                subtitle: 'See the quality of our work',
+                images: prospectImages,
+                id: 'gallery'
+            }
+        });
+    }
+
     // 4. TESTIMONIALS
     const testimonials = businessData.testimonials || generateSmartTestimonials({ ...businessData, niche: resolvedNiche });
     layout.push({

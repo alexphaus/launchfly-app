@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           "niche": "The business category (e.g., 'Aircon Service', 'Plumbing', 'Electrical')",
           "ownerName": "Owner name if mentioned, otherwise null",
           "email": "Email address if found, otherwise null",
-          "phone": "Phone number in E.164 format (e.g. +60123456789). If local format found (e.g. 011-1234), infer country from context (e.g. RM/Malaysia = +60, SGD = +65) and format it.",
+          "phone": "ONLY THE FIRST/PRIMARY phone number found, in E.164 format (e.g. +60123456789). If multiple numbers exist, pick the FIRST one only. Do NOT concatenate multiple numbers.",
           "services": ["List of main services offered"],
           "location": "Service area or location if mentioned"
         }
@@ -76,7 +76,11 @@ export async function POST(request: Request) {
     const resolvedBusinessName = businessName || extractedBusinessInfo?.businessName || scrapedData.title || 'Local Business';
     const resolvedNiche = niche || extractedBusinessInfo?.niche || 'Service Business';
     const resolvedEmail = extractedBusinessInfo?.email || scrapedData.email || '';
-    const resolvedPhone = extractedBusinessInfo?.phone || scrapedData.phone || '';
+    // Safety: If multiple phone numbers were concatenated, take only the first one
+    let rawPhone = extractedBusinessInfo?.phone || scrapedData.phone || '';
+    // Match first valid phone number pattern (starts with + and digits, or just digits)
+    const phoneMatch = String(rawPhone).match(/^\+?\d{10,15}/);
+    const resolvedPhone = phoneMatch ? phoneMatch[0] : '';
     const resolvedOwnerName = extractedBusinessInfo?.ownerName || '';
     
     // 4. Detect currency from context

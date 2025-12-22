@@ -353,7 +353,7 @@ export default function SalesPage() {
       alert('Please enter a phone number first');
       return;
     }
-    const cleanPhone = recipientPhone.replace(/[^0-9]/g, '');
+    const cleanPhone = String(recipientPhone).replace(/[^0-9]/g, '');
     const encodedMessage = encodeURIComponent(whatsappMessage);
     window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMessage}`, '_blank');
   };

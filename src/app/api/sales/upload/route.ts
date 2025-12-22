@@ -90,9 +90,6 @@ export async function POST(request: Request) {
   }
 }
 
-// Increase body size limit for file uploads
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// App Router route segment config (replaces deprecated Pages Router config)
+// Body size limit is handled automatically by Next.js App Router for multipart/form-data
+export const maxDuration = 60; // Max execution time in seconds

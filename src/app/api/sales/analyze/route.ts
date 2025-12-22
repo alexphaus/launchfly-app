@@ -226,13 +226,26 @@ export async function POST(request: Request) {
 
       WHATSAPP SCRIPT REQUIREMENTS:
       - Tone: Casual, helpful, "neighborly". NOT salesy. Like texting a friend.
-      - Structure: Hook -> Problem -> Solution -> Link -> Soft Close.
+      - Structure: Hook -> Pain -> Solution -> Link -> Soft Close.
       - Formatting: CRITICAL - Use double line breaks (\n\n) between every section. It must look like a chat message, not a paragraph.
       - If EVENT: Mention specific date/price if found (e.g. "Saw your event on Jan 17 for RM65"). Ask if they are handling registrations manually.
-      - If SERVICE: Mention the specific service and location.
+      - If SERVICE: Mention the specific service and location. Keep service name SHORT (e.g. "termite treatment" not "Prevention Subterranean / Soil Treatment (Termites)").
       - If COACH: Mention their recent content/topic.
-      - Length: Short and punchy.
+      - Length: Short and punchy. MAX 6 lines of content.
       - Placeholder: Use {{PREVIEW_LINK}} for the link.
+      
+      THREE PSYCHOLOGICAL TRIGGERS (MUST HAVE ALL 3):
+      1. RELEVANCE: Mention their specific service + location (short form)
+      2. PAIN POINT: Add ONE line about their pain BEFORE the solution. Examples:
+         * "Busy on job, miss WhatsApp leads?"
+         * "Hard to reply fast when you're working on site?"
+         * "Competitors reply faster and steal customers?"
+         * "Ads bring inquiries but no time to follow up?"
+      3. CURIOSITY: End with a soft binary question that forces opinion
+      
+      CALL-TO-ACTION (Use soft binary questions):
+      - GOOD: "Want to test?", "Want a quick look?", "Mau tengok?", "Worth a try?"
+      - BAD: "Boleh try?" (too passive), "Let me know" (no urgency)
       
       CULTURAL LANGUAGE FLAVOR (CRITICAL for SEA markets):
       - Detected Language: ${detectedLanguage.name} (${detectedLanguage.code})
@@ -243,22 +256,32 @@ export async function POST(request: Request) {
       - If Malay (ms) detected: Use English as main language but sprinkle 2-3 Malay "flavor words" to feel approachable:
         * Opening: "Salam [Name/boss] 👋" or "Hi [Name/boss] 👋"
         * Soft words: "boleh" (can?), "tengok" (see/look?), "ok la?", "try?"
-        * Example: "Want to tengok? 😄" or "Boleh try dulu?" (Can try first?)
+        * Example: "Want to tengok? 😄" or "Mau test?" 
       - If Indonesian (id) detected: Use "Halo [Name/boss] 👋", "bisa" (can), "lihat" (see?)
       - If English: Keep it casual with "Hey [Name]!" or "Hi there 👋"
       - AVOID corporate language. Sound like a helpful neighbor, not a salesperson.
       
-      WHATSAPP SCRIPT EXAMPLE FORMAT:
+      WHATSAPP SCRIPT EXAMPLE FORMAT (SERVICE - BEST VERSION):
       "Salam ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'boss'} 👋
       
-      Saw you doing [Service] in [Area] — nice!
+      You still handling [short service name] jobs in [Area]?
       
-      I made a booking tool for [Business Name] that auto-replies to customers so you tak payah chase them.
+      I made a WhatsApp booking page for [Business Name] that auto-replies & collects customer details while you're on the job — so tak miss leads.
       
-      Want to tengok? 😄
+      Want to see? 😄
       {{PREVIEW_LINK}}
       
-      No monthly fees, you own it. Boleh try?"
+      No monthly fees. You keep the tool. Mau test?"
+      
+      ALTERNATIVE OPENER (Yes/No operational question):
+      "Salam [Name] 👋
+      
+      Still doing [service] around [Area]? Hard to reply fast when busy on job right?
+      
+      I built a simple tool for [Business] — auto-replies to WhatsApp leads so you don't miss customers.
+      
+      Want a quick look?
+      {{PREVIEW_LINK}}"
 
       LEAD MAGNET (ASSET) REQUIREMENTS:
       - Concept: 

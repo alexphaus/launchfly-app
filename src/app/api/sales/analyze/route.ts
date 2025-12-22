@@ -110,26 +110,82 @@ export async function POST(request: Request) {
     const detectedCurrency = detectCurrency(context || scrapedData.bodyText || '');
     
     // Language Detection (for cultural fit)
+    // NOTE: Some tokens overlap across SEA languages (e.g. "kami" appears in both Malay and Filipino/Tagalog).
+    // We bias toward ENGLISH for Philippines signals because many PH businesses operate in English.
     const detectLanguage = (text: string): { code: string; name: string; greeting: string } => {
-      const lowerText = text.toLowerCase();
+      const lowerText = (text || '').toLowerCase();
+
+      // Philippines / Luzon / PHP indicators (English-first)
+      // Avoid misclassifying Filipino/Tagalog content as Malay due to shared words like "kami".
+      const philippinesSignals = [
+        'philippines',
+        'luzon',
+        'metro manila',
+        'manila',
+        'quezon',
+        'cavite',
+        'laguna',
+        'bulacan',
+        'pampanga',
+        'batangas',
+        '₱',
+        'php',
+        // common Tagalog/Filipino markers
+        'salamat',
+        'kumusta',
+        'kamusta',
+        'po',
+        'opo',
+        'pwede',
+        'pwedeng',
+        'tingin'
+      ];
+      if (philippinesSignals.some((s) => lowerText.includes(s))) {
+        return { code: 'en', name: 'English', greeting: 'Hi' };
+      }
+
       // Malay indicators
-      if (lowerText.includes('salam') || lowerText.includes('tuan') || lowerText.includes('puan') || 
-          lowerText.includes('kami') || lowerText.includes('anda') || lowerText.includes('perkhidmatan') ||
-          lowerText.includes('hubungi') || lowerText.includes('paip') || lowerText.includes('bocor') ||
-          lowerText.includes('tersumbat') || lowerText.includes('baiki') || lowerText.includes('sedia') ||
-          lowerText.includes('cepat') || lowerText.includes('kemas') || lowerText.includes('dipercayai')) {
+      if (
+        lowerText.includes('salam') ||
+        lowerText.includes('tuan') ||
+        lowerText.includes('puan') ||
+        lowerText.includes('anda') ||
+        lowerText.includes('perkhidmatan') ||
+        lowerText.includes('hubungi') ||
+        lowerText.includes('paip') ||
+        lowerText.includes('bocor') ||
+        lowerText.includes('tersumbat') ||
+        lowerText.includes('baiki') ||
+        lowerText.includes('sedia') ||
+        lowerText.includes('cepat') ||
+        lowerText.includes('kemas') ||
+        lowerText.includes('dipercayai')
+      ) {
         return { code: 'ms', name: 'Bahasa Malaysia', greeting: 'Salam' };
       }
+
       // Spanish indicators
-      if (lowerText.includes('hola') || lowerText.includes('servicios') || lowerText.includes('página') ||
-          lowerText.includes('precio') || lowerText.includes('contacto')) {
+      if (
+        lowerText.includes('hola') ||
+        lowerText.includes('servicios') ||
+        lowerText.includes('página') ||
+        lowerText.includes('precio') ||
+        lowerText.includes('contacto')
+      ) {
         return { code: 'es', name: 'Spanish', greeting: 'Hola' };
       }
+
       // Indonesian indicators
-      if (lowerText.includes('layanan') || lowerText.includes('jasa') || lowerText.includes('harga') ||
-          lowerText.includes('kami menyediakan') || lowerText.includes('hubungi kami')) {
+      if (
+        lowerText.includes('layanan') ||
+        lowerText.includes('jasa') ||
+        lowerText.includes('harga') ||
+        lowerText.includes('kami menyediakan') ||
+        lowerText.includes('hubungi kami')
+      ) {
         return { code: 'id', name: 'Bahasa Indonesia', greeting: 'Halo' };
       }
+
       return { code: 'en', name: 'English', greeting: 'Hi' };
     };
 
@@ -249,16 +305,20 @@ export async function POST(request: Request) {
       
       CULTURAL LANGUAGE FLAVOR (CRITICAL for SEA markets):
       - Detected Language: ${detectedLanguage.name} (${detectedLanguage.code})
+      - Detected Currency: ${detectedCurrency.code}
       - Owner Name: ${resolvedOwnerName || 'Not found'}
       - PERSONALIZATION: If owner name is available, USE IT in the greeting!
-        * With name: "Salam ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'boss'} 👋" or "Hi ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'there'} 👋"
-        * Without name: Fall back to "boss" or generic greeting
-      - If Malay (ms) detected: Use English as main language but sprinkle 2-3 Malay "flavor words" to feel approachable:
-        * Opening: "Salam [Name/boss] 👋" or "Hi [Name/boss] 👋"
+        * With name: "Hi ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'boss'} 👋" (preferred)
+        * Without name: Fall back to "Hi boss 👋" (SEA-friendly)
+      - IMPORTANT REGION OVERRIDE:
+        * If Philippines/Luzon/PHP signals are present (currency PHP or mentions of Luzon/Philippines): keep the message ENGLISH-first.
+        * Do NOT use Malay greetings like "Salam" in this case.
+        * Optional Filipino/Tagalog flavor words (1-2 max): "boss", "pwede" (can), "tingin" (quick look), "salamat" (thanks).
+      - If Malay (ms) detected (and NOT Philippines): Use English as main language but sprinkle 2-3 Malay "flavor words":
         * Soft words: "boleh" (can?), "tengok" (see/look?), "ok la?", "try?"
-        * Example: "Want to tengok? 😄" or "Mau test?" 
+        * Example: "Want to tengok? 😄" or "Mau test?"
       - If Indonesian (id) detected: Use "Halo [Name/boss] 👋", "bisa" (can), "lihat" (see?)
-      - If English: Keep it casual with "Hey [Name]!" or "Hi there 👋"
+      - If English: Keep it casual with "Hi boss 👋" or "Hey [Name]!"
       - AVOID corporate language. Sound like a helpful neighbor, not a salesperson.
       
       ROI/OUTCOME HOOK (CRITICAL - Contractors respond to numbers):

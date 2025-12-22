@@ -261,12 +261,21 @@ export async function POST(request: Request) {
       - If English: Keep it casual with "Hey [Name]!" or "Hi there 👋"
       - AVOID corporate language. Sound like a helpful neighbor, not a salesperson.
       
+      ROI/OUTCOME HOOK (CRITICAL - Contractors respond to numbers):
+      - ALWAYS include a specific outcome number like "5-10 leads/week" or "2-3 extra jobs"
+      - Place it after the solution line to show ROI
+      - Examples:
+        * "…so tak miss leads & senang dapat 5–10 inquiries weekly."
+        * "…so you can capture 5-10 extra leads per week without lifting a finger."
+        * "…2-3 extra jobs a week can cover your rent already."
+      - This makes them SEE the value in numbers.
+      
       WHATSAPP SCRIPT EXAMPLE FORMAT (SERVICE - BEST VERSION):
       "Salam ${resolvedOwnerName ? resolvedOwnerName.split(' ')[0] : 'boss'} 👋
       
       You still handling [short service name] jobs in [Area]?
       
-      I made a WhatsApp booking page for [Business Name] that auto-replies & collects customer details while you're on the job — so tak miss leads.
+      I made a WhatsApp booking page for [Business Name] that auto-replies & collects customer details while you're on the job — so tak miss leads & senang dapat 5-10 inquiries weekly.
       
       Want to see? 😄
       {{PREVIEW_LINK}}
@@ -278,7 +287,7 @@ export async function POST(request: Request) {
       
       Still doing [service] around [Area]? Hard to reply fast when busy on job right?
       
-      I built a simple tool for [Business] — auto-replies to WhatsApp leads so you don't miss customers.
+      I built a simple tool for [Business] — auto-replies to WhatsApp leads so you don't miss customers. Most users get 5-10 extra inquiries weekly.
       
       Want a quick look?
       {{PREVIEW_LINK}}"

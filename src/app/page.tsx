@@ -320,8 +320,8 @@ export default function HomePage() {
                 <button className="plan-cta primary" onClick={() => handleGetStarted('pro', 'pricing')}>
                   Get My System — $97
                 </button>
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  30-day money-back guarantee.
+                <p style={{ fontSize: '0.85rem', color: '#10b981', marginTop: '0.75rem', textAlign: 'center', fontWeight: '600' }}>
+                  🛡️ First 10 Leads in 30 Days or Full Refund
                 </p>
               </div>
 

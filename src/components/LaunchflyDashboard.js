@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap, Settings, Facebook, Linkedin, Twitter } from 'lucide-react';
+import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, CheckCircle, Clock, X, ChevronRight, Loader2, Phone, MessageCircle, Target, TrendingUp, Zap, Settings, Facebook, Linkedin, Twitter, Edit3, Printer } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import ContentEditor from './ContentEditor';
+import PhysicalAssetPack from './PhysicalAssetPack';
 
 export default function LaunchflyDashboard({ session, business, onUpdateBusiness }) {
   const [copied, setCopied] = useState(false);
@@ -9,6 +11,8 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showContentEditor, setShowContentEditor] = useState(false);
+  const [showAssetPack, setShowAssetPack] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState(business?.phone_number || '');
   const [bookingUrl, setBookingUrl] = useState(business?.booking_url || business?.business_data?.booking_url || '');
   const [savingSettings, setSavingSettings] = useState(false);
@@ -326,6 +330,13 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     View Live
                   </a>
                   <button 
+                    onClick={() => setShowContentEditor(true)}
+                    className="p-2.5 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
+                    title="Edit Content"
+                  >
+                    <Edit3 size={20} />
+                  </button>
+                  <button 
                     onClick={handleCopyLink}
                     className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
                     title="Copy Link"
@@ -582,6 +593,23 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                       <div className="text-xs text-slate-300 mt-1">Ask for referrals with this link</div>
                     </div>
                   </div>
+                </div>
+
+                {/* Physical Asset Pack CTA */}
+                <div className="mt-6 pt-4 border-t border-white/10">
+                  <button
+                    onClick={() => setShowAssetPack(true)}
+                    className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl hover:from-emerald-500 hover:to-teal-500 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Printer size={24} />
+                      <div className="text-left">
+                        <div className="font-semibold">Physical Asset Pack</div>
+                        <div className="text-xs text-emerald-100">Flyers, Stickers, WhatsApp Templates</div>
+                      </div>
+                    </div>
+                    <ChevronRight size={20} />
+                  </button>
                 </div>
               </>
             )}
@@ -931,6 +959,26 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
               </div>
             </div>
           </div>
+        )}
+
+        {/* Content Editor Modal */}
+        {showContentEditor && (
+          <ContentEditor 
+            business={business}
+            onSave={(updates) => {
+              // Refresh the page to show updated content
+              window.location.reload();
+            }}
+            onClose={() => setShowContentEditor(false)}
+          />
+        )}
+
+        {/* Physical Asset Pack Modal */}
+        {showAssetPack && (
+          <PhysicalAssetPack 
+            business={business}
+            onClose={() => setShowAssetPack(false)}
+          />
         )}
 
       </div>

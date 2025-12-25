@@ -130,11 +130,54 @@ export default async function ClaimPage({ params }) {
           </div>
         </div>
 
+        {/* LIVE PREVIEW SECTION - Show actual landing page */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 border border-white/10">
+          <h2 className="text-2xl font-bold text-white mb-2 text-center">
+            👀 Live Preview: Your Landing Page
+          </h2>
+          <p className="text-slate-400 text-center mb-6">
+            This is exactly what your customers will see. Click to interact!
+          </p>
+          
+          <div className="bg-slate-900 rounded-xl p-2 border border-white/20">
+            {/* Browser Chrome */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 mb-2">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+              </div>
+              <div className="flex-1 bg-white/10 rounded px-3 py-1 text-xs text-slate-400 truncate">
+                launchfly.app/sites/{business?.subdomain || businessId.slice(0,8)}
+              </div>
+            </div>
+            {/* Live iframe preview */}
+            <div className="relative overflow-hidden rounded-lg" style={{ height: '400px' }}>
+              <iframe 
+                src={`/preview/${businessId}?embed=true`}
+                className="w-full h-full border-0 pointer-events-none"
+                style={{ transform: 'scale(0.75)', transformOrigin: 'top left', width: '133.33%', height: '133.33%' }}
+                title="Landing Page Preview"
+              />
+              <a 
+                href={`/preview/${businessId}?preview=true`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors group"
+              >
+                <span className="bg-white text-slate-900 px-4 py-2 rounded-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                  Open Full Preview ↗
+                </span>
+              </a>
+            </div>
+          </div>
+        </div>
+
         {/* Preview of Value - Show what's in the guide */}
         {(previewTips.length > 0 || benefits.length > 0) && (
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 border border-white/10">
             <h2 className="text-2xl font-bold text-white mb-2 text-center">
-              Sneak Peek: What Your Customers Will Learn
+              📄 Sneak Peek: Your PDF Guide
             </h2>
             <p className="text-slate-400 text-center mb-6">
               This is the quality content we&apos;ve already prepared for {businessName}
@@ -188,8 +231,8 @@ export default async function ClaimPage({ params }) {
               email={prospectEmail}
             />
             
-            <p className="text-sm text-slate-500">
-              30-day money-back guarantee • Instant access • No coding required
+            <p className="text-sm text-emerald-600 font-semibold">
+              🛡️ First 10 Leads in 30 Days or Full Refund • Instant Access
             </p>
           </div>
 

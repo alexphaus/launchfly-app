@@ -1092,7 +1092,8 @@ export default async function DynamicWebsite({ params }) {
         props: {
           businessName: businessData.businessName || businessData.name || 'Your Business',
           logo: businessData.logo || '🚀',
-          description: businessData.tagline || 'Professional solutions for your success'
+          description: businessData.tagline || 'Professional solutions for your success',
+          showBranding: !businessData.isWhiteLabel
         }
       }
     ];

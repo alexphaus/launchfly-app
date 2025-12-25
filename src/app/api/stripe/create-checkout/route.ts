@@ -18,6 +18,11 @@ const PRICES = {
     amount: 29700, // $297.00
     name: 'Launchfly White-Glove Service',
     description: 'Done-For-You Setup + Priority Support + Monthly Coaching'
+  },
+  'agency': { // Agency License
+    amount: 99700, // $997.00
+    name: 'Launchfly Agency License',
+    description: '10 Client Licenses + White-Label + Sales Kit'
   }
 };
 

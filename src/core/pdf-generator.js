@@ -814,8 +814,10 @@ async function generateCoachingPDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica')
          .text(`© ${new Date().getFullYear()} ${coachName}. All rights reserved.`, 50, 560, { width: 512, align: 'center' });
       
-      doc.fontSize(8)
-         .text('Generated with Launchfly', 50, 575, { width: 512, align: 'center' });
+      if (!businessData.isWhiteLabel) {
+        doc.fontSize(8)
+           .text('Generated with Launchfly', 50, 575, { width: 512, align: 'center' });
+      }
 
       doc.end();
     } catch (e) {
@@ -1141,8 +1143,10 @@ async function generateEventPDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica')
          .text(`© ${new Date().getFullYear()} ${hostName}. All rights reserved.`, 50, 680, { width: 400, align: 'left' });
       
-      doc.fontSize(8)
-         .text('Generated with Launchfly', 50, 695);
+      if (!businessData.isWhiteLabel) {
+        doc.fontSize(8)
+           .text('Generated with Launchfly', 50, 695);
+      }
 
       doc.end();
     } catch (e) {
@@ -2027,8 +2031,10 @@ async function generateLocalServicePDF(data, PDFDocument, businessData = {}) {
          .font('Helvetica')
          .text(`© ${new Date().getFullYear()} ${businessName}. ${isMalay ? 'Hak cipta terpelihara.' : 'All rights reserved.'}`, 50, 560, { width: 512, align: 'center' });
       
-      doc.fontSize(8)
-         .text(isMalay ? 'Dijana dengan teliti oleh Launchfly' : 'Generated with care by Launchfly', 50, 575, { width: 512, align: 'center' });
+      if (!businessData.isWhiteLabel) {
+        doc.fontSize(8)
+           .text(isMalay ? 'Dijana dengan teliti oleh Launchfly' : 'Generated with care by Launchfly', 50, 575, { width: 512, align: 'center' });
+      }
       doc.end();
     } catch (e) {
       reject(e);

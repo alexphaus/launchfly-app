@@ -333,7 +333,10 @@ export default function FulfillmentContentPage() {
           {/* Footer */}
           <div className="bg-gray-100 p-4 text-center">
             <p className="text-xs text-gray-500">
-              Content delivered by {business.name} • Powered by Launchfly AI
+              Content delivered by {business.name}
+              {!business.business_data?.isWhiteLabel && (
+                <> • Powered by Launchfly AI</>
+              )}
               <br />
               Created on {new Date(content.created_at).toLocaleDateString()}
             </p>

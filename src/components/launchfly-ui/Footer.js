@@ -9,7 +9,8 @@ export default function Footer({
   phone = "(555) 123-4567",
   address = "123 Business St, City, State 12345",
   socials = {},
-  links = []
+  links = [],
+  showBranding = true
 }) {
   const currentYear = new Date().getFullYear();
   
@@ -135,6 +136,11 @@ export default function Footer({
         {/* Bottom Bar */}
         <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
           <p>&copy; {currentYear} {businessName}. All rights reserved.</p>
+          {showBranding && (
+            <p className="text-xs text-gray-600 mt-2">
+              Powered by <a href="https://launchfly.ai" target="_blank" rel="noopener noreferrer" className="hover:text-gray-500">Launchfly</a>
+            </p>
+          )}
         </div>
       </div>
     </footer>

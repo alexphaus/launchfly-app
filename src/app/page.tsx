@@ -350,6 +350,32 @@ export default function HomePage() {
                   Limited spots available per week.
                 </p>
               </div>
+
+              {/* Tier 3: Agency License - $997/year */}
+              <div className="pricing-card">
+                <div className="plan-name">Agency License</div>
+                <div className="plan-price">
+                  <span className="price-amount">$997</span>
+                  <span className="price-period" style={{ fontSize: '1rem', color: '#6b7280', fontWeight: 'normal' }}>/year</span>
+                </div>
+                <div className="plan-tagline">Your "Business in a Box" Opportunity</div>
+                
+                <ul className="plan-features">
+                  <li>✓ <strong>10 Client Licenses</strong> (Sell for $300+ each)</li>
+                  <li>✓ <strong>White-Label Removal</strong> (Your Brand, Not Ours)</li>
+                  <li>✓ <strong>Complete Sales Kit</strong> (Scripts & Contracts)</li>
+                  <li>✓ <strong>Priority Agency Support</strong></li>
+                  <li>✓ <strong>You Keep 100% Profit</strong></li>
+                  <li style={{ color: '#7c3aed', fontWeight: '600' }}>⭐ Digital Arbitrage Model</li>
+                </ul>
+
+                <button className="plan-cta secondary" onClick={() => handleGetStarted('agency', 'pricing')} style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', color: 'white', borderColor: 'transparent' }}>
+                  Start Your Agency
+                </button>
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
+                  Limited to 3 partners per city.
+                </p>
+              </div>
             </div>
           </div>
         </section>

@@ -35,7 +35,7 @@ export default function SalesPage() {
   const [smsMessage, setSmsMessage] = useState('');
   const [whatsappMessage, setWhatsappMessage] = useState('');
   const [whatsappContext, setWhatsappContext] = useState('');
-  const [replyTo, setReplyTo] = useState('hello@launchfly.ai');
+  const [replyTo, setReplyTo] = useState('alex@launchfly.ai');
   const [selectedTemplate, setSelectedTemplate] = useState('ai-audit');
   const [ownerName, setOwnerName] = useState('');
 
@@ -942,7 +942,7 @@ export default function SalesPage() {
                     )}
                   </button>
                   <p className="text-xs text-center text-slate-500 mt-2">
-                    Sent from hello@launchfly.ai
+                    Sent from alex@launchfly.ai
                   </p>
                 </div>
               </div>

@@ -219,9 +219,44 @@ export async function POST(request) {
       console.error('Money init failed:', e);
     }
 
-    // Trigger full lead magnet generation via Inngest
-    // This will create the PDF, email sequences, etc.
+    // Check if prospect already has complete content from /sales/analyze
+    // If so, we can skip regeneration and just activate
     const businessData = updated.business_data || {};
+    const hasCompleteContent = (
+      businessData.leadMagnet?.lead_magnet?.title &&
+      businessData.lead_magnet_pdf?.diagnostic_questions?.length > 0 &&
+      businessData.testimonials?.length > 0
+    );
+
+    if (hasCompleteContent) {
+      // FAST PATH: Prospect already has full content from /sales/analyze
+      // Just set to ready - no need to regenerate
+      console.log('✅ Prospect has complete content - activating immediately');
+      
+      await supabase
+        .from('businesses')
+        .update({ status: 'ready' })
+        .eq('id', businessId);
+      
+      await supabase
+        .from('sessions')
+        .update({ stage: 'complete', progress: 100 })
+        .eq('id', newSessionId);
+
+      return Response.json({
+        success: true,
+        status: 'activated',
+        business: {
+          id: updated.id,
+          name: updated.business_data?.businessName || updated.name,
+          subdomain: updated.subdomain,
+          sessionId: newSessionId
+        }
+      });
+    }
+
+    // SLOW PATH: Need to generate content via Inngest
+    // This happens if prospect was created with minimal data
     const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title || 
                            businessData.businessName + ' Guide';
     
@@ -236,7 +271,9 @@ export async function POST(request) {
           language: 'English',
           sessionId: newSessionId,
           websiteUrl: businessData.websiteUrl,
-          businessContext: `${businessData.businessName} - ${businessData.niche}`
+          businessContext: `${businessData.businessName} - ${businessData.niche}`,
+          // Pass existing data so Inngest can enhance rather than replace
+          existingContent: businessData
         }
       });
       console.log('✅ Lead magnet generation triggered via Inngest:', JSON.stringify(sendResult));

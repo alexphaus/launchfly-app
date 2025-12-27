@@ -2,6 +2,12 @@ import { inngest } from '../client';
 import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import {
+  detectCurrency,
+  detectLanguage,
+  detectBusinessType,
+  isContentComplete
+} from '@/lib/shared/lead-magnet-content-generator';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const supabase = createClient(
@@ -107,7 +113,7 @@ export const generateLeadMagnet = inngest.createFunction(
   { id: 'generate-lead-magnet', name: 'Generate Lead Magnet' },
   { event: 'lead-magnet/generation.requested' },
   async ({ event, step }) => {
-    const { businessId, topic, audience, language = 'English', sessionId, websiteUrl, businessContext } = event.data;
+    const { businessId, topic, audience, language = 'English', sessionId, websiteUrl, businessContext, existingContent } = event.data;
 
     console.log(`🚀 [generate-lead-magnet] Starting for business: ${businessId}, session: ${sessionId}`);
     console.log(`📝 Topic: ${topic}, Audience: ${audience}`);
@@ -116,6 +122,31 @@ export const generateLeadMagnet = inngest.createFunction(
       console.error('❌ [generate-lead-magnet] Missing required fields');
       throw new Error('Missing required fields');
     }
+
+    // FAST PATH: Check if existing content is already complete (from /sales/analyze)
+    if (existingContent && isContentComplete(existingContent)) {
+      console.log(`✅ [generate-lead-magnet] FAST PATH: Content already complete, skipping generation`);
+      
+      // Just set business to ready and session to complete
+      await step.run('fast-path-activate', async () => {
+        await supabase
+          .from('businesses')
+          .update({ status: 'ready' })
+          .eq('id', businessId);
+        
+        if (sessionId) {
+          await supabase
+            .from('sessions')
+            .update({ stage: 'complete', progress: 100 })
+            .eq('id', sessionId);
+        }
+      });
+      
+      return { success: true, businessId, fastPath: true };
+    }
+
+    // SLOW PATH: Need to generate content
+    console.log(`📝 [generate-lead-magnet] SLOW PATH: Generating new content`);
 
     // Update stage to generating
     await step.run('update-stage-generating', async () => {
@@ -188,89 +219,12 @@ export const generateLeadMagnet = inngest.createFunction(
           `;
         }
 
-        // Detect currency from business context
-        const detectCurrency = (text) => {
-          if (!text) return { symbol: '$', code: 'USD', name: 'dollars' };
-          const lowerText = text.toLowerCase();
-          if (lowerText.includes('rm') || lowerText.includes('ringgit') || lowerText.includes('malaysia')) {
-            return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
-          }
-          if (lowerText.includes('sgd') || lowerText.includes('singapore')) {
-            return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
-          }
-          if (lowerText.includes('php') || lowerText.includes('peso') || lowerText.includes('philippines')) {
-            return { symbol: '₱', code: 'PHP', name: 'pesos' };
-          }
-          if (lowerText.includes('idr') || lowerText.includes('rupiah') || lowerText.includes('indonesia')) {
-            return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
-          }
-          if (lowerText.includes('thb') || lowerText.includes('baht') || lowerText.includes('thailand')) {
-            return { symbol: '฿', code: 'THB', name: 'baht' };
-          }
-          if (lowerText.includes('£') || lowerText.includes('gbp') || lowerText.includes('pound')) {
-            return { symbol: '£', code: 'GBP', name: 'pounds' };
-          }
-          if (lowerText.includes('€') || lowerText.includes('eur') || lowerText.includes('euro')) {
-            return { symbol: '€', code: 'EUR', name: 'euros' };
-          }
-          return { symbol: '$', code: 'USD', name: 'dollars' };
-        };
-
+        // Use shared utility functions for currency and business type detection
         const detectedCurrency = detectCurrency(businessContext || websiteData?.bodyText || '');
+        const businessType = detectBusinessType(topic, businessContext);
+        const detectedLanguage = detectLanguage(businessContext || websiteData?.bodyText || '');
 
-        // Enhanced business type detection with EVENT support
-        const detectBusinessType = (topicText, contextText = '') => {
-          const combinedText = `${topicText || ''} ${contextText || ''}`.toLowerCase();
-          
-          // EVENT DETECTION (highest priority - tickets, dates, registration)
-          const eventKeywords = [
-            'event', 'workshop', 'webinar', 'seminar', 'conference', 'summit',
-            'master class', 'masterclass', 'bootcamp', 'retreat', 'session',
-            'ticket', 'registration', 'register', 'book your spot', 'reserve',
-            'limited seats', 'seats available', 'pax', 'per person',
-            'jan ', 'feb ', 'mar ', 'apr ', 'may ', 'jun ', 'jul ', 'aug ', 'sep ', 'oct ', 'nov ', 'dec ',
-            '2025', '2026', 'pm to register', 'pm me', 'pm to join',
-            'hosting', 'we are hosting', 'join us', 'open to all',
-            'zumba', 'yoga class', 'dance class', 'fitness class', 'group class', 'jam session'
-          ];
-          
-          const eventPatterns = [
-            /\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
-            /rm\s*\d+/i,
-            /\$\s*\d+\s*(per|\/)\s*(person|pax|ticket)/i,
-            /\d{1,2}:\d{2}\s*(am|pm)/i,
-            /limited\s*(spots|seats|slots)/i,
-          ];
-          
-          const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
-          const hasEventPattern = eventPatterns.some(p => p.test(combinedText));
-          
-          if (hasEventKeyword && hasEventPattern) {
-            return 'event';
-          }
-          
-          // COACHING DETECTION
-          const coachingKeywords = [
-            'coach', 'coaching', 'consultant', 'consulting', 'mentor', 'mentoring',
-            'trainer', 'training', 'advisor', 'advisory', 'expert', 'strategist',
-            'therapist', 'counselor', 'counseling', 'speaker', 'author', 'creator',
-            'influencer', 'educator', 'teacher', 'tutor', 'course', 'program',
-            'mastermind', 'agency', 'freelancer', 'designer', 'developer', 'writer',
-            'fitness coach', 'life coach', 'business coach', 'health coach',
-            'career coach', 'executive coach', 'relationship coach', 'mindset',
-            'transformation', 'personal development', 'self-help', 'wellness',
-            '1:1', 'one-on-one', 'private coaching', 'group coaching'
-          ];
-          
-          const isCoaching = coachingKeywords.some(k => combinedText.includes(k));
-          if (isCoaching) {
-            return 'coaching';
-          }
-          
-          return 'local_service';
-        };
-
-        // Extract event details from context
+        // Extract event details from context (keep this inline since it's specific)
         const extractEventDetails = (context) => {
           if (!context) return null;
           const details = {};
@@ -312,7 +266,6 @@ export const generateLeadMagnet = inngest.createFunction(
           return Object.keys(details).length > 0 ? details : null;
         };
 
-        const businessType = detectBusinessType(topic, businessContext);
         const eventDetails = businessType === 'event' ? extractEventDetails(businessContext) : null;
         console.log(`🎯 [generate-lead-magnet] Detected business type: ${businessType} for topic: ${topic}`);
         if (eventDetails) console.log(`📅 [generate-lead-magnet] Event details:`, eventDetails);

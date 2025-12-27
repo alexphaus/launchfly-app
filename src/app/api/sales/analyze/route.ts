@@ -2,6 +2,12 @@ import { OpenAI } from 'openai';
 import { scrapeWebsiteContent } from '@/lib/scraper';
 import { createClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
+import {
+  detectCurrency,
+  detectLanguage,
+  detectBusinessType,
+  extractSlogan
+} from '@/lib/shared/lead-magnet-content-generator';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const supabase = createClient(
@@ -83,133 +89,9 @@ export async function POST(request: Request) {
     const resolvedPhone = phoneMatch ? phoneMatch[0] : '';
     const resolvedOwnerName = extractedBusinessInfo?.ownerName || '';
     
-    // 4. Detect currency from context
-    const detectCurrency = (text: string) => {
-      if (!text) return { symbol: '$', code: 'USD', name: 'dollars' };
-      const lowerText = text.toLowerCase();
-      if (lowerText.includes('rm') || lowerText.includes('ringgit') || lowerText.includes('malaysia')) {
-        return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
-      }
-      if (lowerText.includes('sgd') || lowerText.includes('singapore')) {
-        return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
-      }
-      if (lowerText.includes('php') || lowerText.includes('peso') || lowerText.includes('philippines')) {
-        return { symbol: '₱', code: 'PHP', name: 'pesos' };
-      }
-      if (lowerText.includes('idr') || lowerText.includes('rupiah') || lowerText.includes('indonesia')) {
-        return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
-      }
-      if (lowerText.includes('thb') || lowerText.includes('baht') || lowerText.includes('thailand')) {
-        return { symbol: '฿', code: 'THB', name: 'baht' };
-      }
-      if (lowerText.includes('£') || lowerText.includes('gbp') || lowerText.includes('pound')) {
-        return { symbol: '£', code: 'GBP', name: 'pounds' };
-      }
-      if (lowerText.includes('€') || lowerText.includes('eur') || lowerText.includes('euro')) {
-        return { symbol: '€', code: 'EUR', name: 'euros' };
-      }
-      return { symbol: '$', code: 'USD', name: 'dollars' };
-    };
-
+    // 4. Use shared utility functions for detection
     const detectedCurrency = detectCurrency(context || scrapedData.bodyText || '');
-    
-    // Language Detection (for cultural fit)
-    // NOTE: Some tokens overlap across SEA languages (e.g. "kami" appears in both Malay and Filipino/Tagalog).
-    // We bias toward ENGLISH for Philippines signals because many PH businesses operate in English.
-    const detectLanguage = (text: string): { code: string; name: string; greeting: string } => {
-      const lowerText = (text || '').toLowerCase();
-
-      // Philippines / Luzon / PHP indicators (English-first)
-      // Avoid misclassifying Filipino/Tagalog content as Malay due to shared words like "kami".
-      const philippinesSignals = [
-        'philippines',
-        'luzon',
-        'metro manila',
-        'manila',
-        'quezon',
-        'cavite',
-        'laguna',
-        'bulacan',
-        'pampanga',
-        'batangas',
-        '₱',
-        'php',
-        // common Tagalog/Filipino markers
-        'salamat',
-        'kumusta',
-        'kamusta',
-        'po',
-        'opo',
-        'pwede',
-        'pwedeng',
-        'tingin'
-      ];
-      if (philippinesSignals.some((s) => lowerText.includes(s))) {
-        return { code: 'en', name: 'English', greeting: 'Hi' };
-      }
-
-      // Malay indicators
-      if (
-        lowerText.includes('salam') ||
-        lowerText.includes('tuan') ||
-        lowerText.includes('puan') ||
-        lowerText.includes('anda') ||
-        lowerText.includes('perkhidmatan') ||
-        lowerText.includes('hubungi') ||
-        lowerText.includes('paip') ||
-        lowerText.includes('bocor') ||
-        lowerText.includes('tersumbat') ||
-        lowerText.includes('baiki') ||
-        lowerText.includes('sedia') ||
-        lowerText.includes('cepat') ||
-        lowerText.includes('kemas') ||
-        lowerText.includes('dipercayai')
-      ) {
-        return { code: 'ms', name: 'Bahasa Malaysia', greeting: 'Salam' };
-      }
-
-      // Spanish indicators
-      if (
-        lowerText.includes('hola') ||
-        lowerText.includes('servicios') ||
-        lowerText.includes('página') ||
-        lowerText.includes('precio') ||
-        lowerText.includes('contacto')
-      ) {
-        return { code: 'es', name: 'Spanish', greeting: 'Hola' };
-      }
-
-      // Indonesian indicators
-      if (
-        lowerText.includes('layanan') ||
-        lowerText.includes('jasa') ||
-        lowerText.includes('harga') ||
-        lowerText.includes('kami menyediakan') ||
-        lowerText.includes('hubungi kami')
-      ) {
-        return { code: 'id', name: 'Bahasa Indonesia', greeting: 'Halo' };
-      }
-
-      return { code: 'en', name: 'English', greeting: 'Hi' };
-    };
-
     const detectedLanguage = detectLanguage(context || scrapedData.bodyText || '');
-    
-    // Extract brand slogan/tagline from context
-    const extractSlogan = (text: string): string | null => {
-      // Look for common slogan patterns
-      const patterns = [
-        /cepat\s*[-–]\s*kemas\s*[&dan]*\s*(?:boleh\s*)?dipercayai/i,
-        /fast\s*[-–]\s*reliable/i,
-        /trusted\s*&\s*reliable/i,
-      ];
-      for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match) return match[0];
-      }
-      return null;
-    };
-
     const brandSlogan = extractSlogan(context || scrapedData.bodyText || '');
 
     // 5. Analyze and Generate Email with OpenAI

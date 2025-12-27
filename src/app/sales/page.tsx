@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 // Image type for uploaded prospect images
 interface ProspectImage {
@@ -10,6 +11,12 @@ interface ProspectImage {
 }
 
 export default function SalesPage() {
+  const searchParams = useSearchParams();
+  
+  // Hunter prospect tracking
+  const [hunterProspectId, setHunterProspectId] = useState<string | null>(null);
+  const [fromHunter, setFromHunter] = useState(false);
+  
   const [url, setUrl] = useState('');
   const [context, setContext] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -123,18 +130,61 @@ export default function SalesPage() {
     }
   };
 
+  // Load from Hunter query params on mount
+  useEffect(() => {
+    const prospectId = searchParams.get('prospect_id');
+    const business = searchParams.get('business');
+    const nicheParam = searchParams.get('niche');
+    const phone = searchParams.get('phone');
+    const area = searchParams.get('area');
+    
+    if (prospectId) {
+      setHunterProspectId(prospectId);
+      setFromHunter(true);
+    }
+    if (business) setBusinessName(business);
+    if (nicheParam) setNiche(nicheParam);
+    if (phone) setRecipientPhone(phone);
+    if (area) {
+      // Pre-fill context with area for better generation
+      setContext(`Service area: ${area}`);
+    }
+  }, [searchParams]);
+
   // Update editable fields when result changes
   useEffect(() => {
     if (result) {
       handleTemplateChange('ai-audit');
       setRecipientEmail(result.scrapedData.email || '');
-      setRecipientPhone(result.scrapedData.phone || '');
+      setRecipientPhone(result.scrapedData.phone || recipientPhone);
       setPreviewUrl(result.previewUrl || '');
       if (result.scrapedData.ownerName) {
         setOwnerName(result.scrapedData.ownerName);
       }
+      
+      // Update hunter prospect with preview URL if from hunter
+      if (hunterProspectId && result.previewUrl) {
+        updateHunterProspect(hunterProspectId, result.previewUrl, result.businessId);
+      }
     }
   }, [result]);
+  
+  // Update hunter prospect status when preview is generated
+  const updateHunterProspect = async (prospectId: string, previewUrl: string, businessId?: string) => {
+    try {
+      await fetch(`/api/hunter/prospects/${prospectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'preview_sent',
+          preview_url: previewUrl,
+          preview_business_id: businessId || null,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to update hunter prospect:', err);
+    }
+  };
 
   // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -361,6 +411,25 @@ export default function SalesPage() {
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
+        {/* Hunter Mode Banner */}
+        {fromHunter && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎯</span>
+              <div>
+                <p className="font-medium text-green-800">Coming from Hunter Mode</p>
+                <p className="text-sm text-green-600">Generate preview for: <strong>{businessName}</strong></p>
+              </div>
+            </div>
+            <a
+              href="/hunter"
+              className="px-3 py-1.5 text-sm text-green-700 hover:bg-green-100 rounded-lg"
+            >
+              ← Back to Hunter
+            </a>
+          </div>
+        )}
+        
         <div className="text-center mb-12">
           <h1 className="text-3xl font-bold text-slate-900">
             🎯 AI Sales Prospector

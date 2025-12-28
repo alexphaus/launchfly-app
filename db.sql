@@ -693,6 +693,34 @@ CREATE TABLE public.guarantee_payouts (
   CONSTRAINT guarantee_payouts_pkey PRIMARY KEY (id),
   CONSTRAINT guarantee_payouts_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.hunter_prospects (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_name text NOT NULL,
+  service_type text NOT NULL,
+  area text NOT NULL,
+  whatsapp_number text NOT NULL,
+  owner_name text,
+  website_url text,
+  facebook_url text,
+  google_maps_url text,
+  instagram_url text,
+  notes text,
+  source text DEFAULT 'manual'::text CHECK (source = ANY (ARRAY['facebook'::text, 'google_maps'::text, 'instagram'::text, 'referral'::text, 'manual'::text, 'other'::text])),
+  pain_signals ARRAY DEFAULT '{}'::text[],
+  status text DEFAULT 'new'::text CHECK (status = ANY (ARRAY['new'::text, 'opener_sent'::text, 'replied'::text, 'preview_sent'::text, 'follow_up_1'::text, 'follow_up_2'::text, 'follow_up_3'::text, 'closed_won'::text, 'closed_lost'::text, 'archived'::text])),
+  preview_business_id uuid,
+  preview_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  opener_sent_at timestamp with time zone,
+  replied_at timestamp with time zone,
+  preview_sent_at timestamp with time zone,
+  last_follow_up_at timestamp with time zone,
+  closed_at timestamp with time zone,
+  created_by uuid,
+  CONSTRAINT hunter_prospects_pkey PRIMARY KEY (id),
+  CONSTRAINT hunter_prospects_preview_business_id_fkey FOREIGN KEY (preview_business_id) REFERENCES public.businesses(id),
+  CONSTRAINT hunter_prospects_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.idempotency (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   key text NOT NULL UNIQUE,
@@ -829,7 +857,7 @@ CREATE TABLE public.platform_subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_email character varying NOT NULL,
   user_name character varying,
-  plan character varying NOT NULL CHECK (plan::text = ANY (ARRAY['professional'::character varying, 'scale'::character varying]::text[])),
+  plan character varying NOT NULL CHECK (plan::text = ANY (ARRAY['professional'::character varying, 'scale'::character varying, 'pro'::character varying, 'vip'::character varying, 'starter'::character varying]::text[])),
   amount numeric NOT NULL,
   currency character varying DEFAULT 'usd'::character varying,
   stripe_session_id character varying NOT NULL UNIQUE,

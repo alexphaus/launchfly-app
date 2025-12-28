@@ -72,7 +72,15 @@ Extract the following fields from the provided context:
   - manual_quotes: If they ask for details to "quote manually" or "check price"
   - messy_schedule: If they mention double booking, forgetting appointments, or "full schedule"
   - broken_links: If users complain about links not working
-- notes: Any additional useful context (services offered, years in business, etc.)
+- notes: Generate a RICH context summary for the AI preview generator. Include:
+  * Services offered (with specific names, e.g., "termite treatment", "aircon servicing")
+  * Years in business if mentioned
+  * Pricing info if found (e.g., "RM90 for basic service")
+  * Positive reviews or testimonials (quote them!)
+  * Any unique selling points ("same day service", "24/7 available")
+  * Operating hours if mentioned
+  * Any complaints or negative feedback (helps identify pain points)
+  Format this as structured bullet points for easy parsing.
 
 Be thorough but only include information that's clearly present in the context.
 For serviceType, use 'other' if you can't confidently match to the list.

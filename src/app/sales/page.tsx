@@ -370,6 +370,21 @@ Want to see the draft I made?`;
     setIsGeneratingPreview(true);
     
     try {
+      // Build rich context from all prospect data
+      const painSignalLabels = prospect.pain_signals
+        ?.map(s => PAIN_SIGNALS.find(p => p.value === s)?.label || s)
+        .join(', ') || '';
+      
+      const richContext = [
+        `Business Name: ${prospect.business_name}`,
+        `Service Type: ${SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type}`,
+        `Area/Location: ${prospect.area}`,
+        prospect.owner_name ? `Owner Name: ${prospect.owner_name}` : '',
+        prospect.whatsapp_number ? `Phone/WhatsApp: ${prospect.whatsapp_number}` : '',
+        painSignalLabels ? `Pain Signals: ${painSignalLabels}` : '',
+        prospect.notes ? `Additional Notes: ${prospect.notes}` : '',
+      ].filter(Boolean).join('\n');
+
       const res = await fetch('/api/sales/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -377,7 +392,7 @@ Want to see the draft I made?`;
           url: prospect.website_url || '',
           businessName: prospect.business_name,
           niche: prospect.service_type,
-          context: `Business: ${prospect.business_name}, Service: ${prospect.service_type}, Area: ${prospect.area}`,
+          context: richContext,
           prospectId: prospect.id,
         }),
       });
@@ -737,6 +752,26 @@ Want to see the draft I made?`;
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Notes / Context */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Notes / Context
+                      <span className="text-xs font-normal text-slate-500 ml-2">
+                        (AI uses this for preview generation)
+                      </span>
+                    </label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="• Services: termite treatment, general pest control\n• Pricing: RM90 basic, RM200 full house\n• Reviews: 'Fast response, came same day'\n• USP: 24/7 available, 10 years experience"
+                      rows={4}
+                      className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Include services, prices, reviews, and unique selling points for better previews.
+                    </p>
                   </div>
 
                   <button

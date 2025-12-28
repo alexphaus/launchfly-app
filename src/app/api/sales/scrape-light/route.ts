@@ -129,6 +129,26 @@ For area, look for "cover area", "service area", location mentions.`
       if (!painSignals.includes('no_booking')) painSignals.push('no_booking');
     }
 
+    // 6. Generate rich notes for preview generation
+    const notesLines = [];
+    if (extracted.services?.length > 0) {
+      notesLines.push(`• Services: ${extracted.services.join(', ')}`);
+    }
+    if (extracted.area) {
+      notesLines.push(`• Area: ${extracted.area}`);
+    }
+    // Look for pricing in content
+    const priceMatches = pageContent.match(/RM\s?\d+(?:[\.,]\d{2})?|MYR\s?\d+|\$\d+/gi);
+    if (priceMatches?.length) {
+      notesLines.push(`• Pricing found: ${[...new Set(priceMatches)].slice(0, 5).join(', ')}`);
+    }
+    // Look for years in business
+    const yearsMatch = pageContent.match(/(\d+)\s*(?:years?|tahun)\s*(?:experience|pengalaman|in business)/i);
+    if (yearsMatch) {
+      notesLines.push(`• Experience: ${yearsMatch[1]} years`);
+    }
+    notesLines.push(`• Source: ${url}`);
+
     return NextResponse.json({
       businessName: extracted.businessName || pageTitle || 'Unknown Business',
       ownerName: extracted.ownerName || null,
@@ -138,7 +158,7 @@ For area, look for "cover area", "service area", location mentions.`
       services: extracted.services || [],
       painSignals,
       sourceUrl: url,
-      notes: `Scraped from ${url}`,
+      notes: notesLines.join('\n'),
     });
 
   } catch (err: any) {

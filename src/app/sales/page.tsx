@@ -1,502 +1,1050 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Users, 
-  BookOpen, 
-  Plus, 
-  Copy, 
-  Check, 
-  MessageSquare, 
-  ExternalLink, 
-  Loader2,
-  MapPin,
-  Phone,
-  Briefcase,
-  Save,
-  Trash2
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 
-// --- Types ---
-
-interface SalesLead {
+// Types
+interface Prospect {
   id: string;
   business_name: string;
-  service: string;
+  service_type: string;
   area: string;
-  phone: string;
-  url?: string;
-  context?: string;
-  status: 'new' | 'contacted' | 'replied' | 'converted' | 'rejected';
+  whatsapp_number: string;
+  owner_name?: string;
+  website_url?: string;
+  source: string;
+  pain_signals: string[];
+  status: string;
   notes?: string;
   created_at: string;
+  opener_sent_at?: string;
+  replied_at?: string;
+  preview_sent_at?: string;
+  preview_url?: string;
+  preview_business_id?: string;
 }
 
-// --- Components ---
+// Service types for blue collar businesses
+const SERVICE_TYPES = [
+  { value: 'pest_control', label: '🐜 Pest Control', service: 'pest control' },
+  { value: 'aircon', label: '❄️ Aircon Service', service: 'aircon' },
+  { value: 'plumbing', label: '🔧 Plumbing', service: 'plumbing' },
+  { value: 'renovation', label: '🏠 Renovation', service: 'renovation' },
+  { value: 'cleaning', label: '🧹 Cleaning', service: 'cleaning' },
+  { value: 'electrical', label: '⚡ Electrical', service: 'electrical' },
+  { value: 'roofing', label: '🏗️ Roofing', service: 'roofing' },
+  { value: 'landscaping', label: '🌳 Landscaping', service: 'landscaping' },
+  { value: 'moving', label: '📦 Moving', service: 'moving' },
+  { value: 'auto_repair', label: '🚗 Auto Repair', service: 'auto repair' },
+  { value: 'locksmith', label: '🔐 Locksmith', service: 'locksmith' },
+  { value: 'other', label: '🔨 Other', service: 'service' },
+];
+
+const PAIN_SIGNALS = [
+  { value: 'pm_comments', label: '"PM us" comments' },
+  { value: 'slow_replies', label: 'Slow replies' },
+  { value: 'no_booking', label: 'No booking system' },
+  { value: 'whatsapp_only', label: 'WhatsApp only' },
+  { value: 'bad_reviews', label: 'Bad reviews' },
+];
+
+const SOURCES = [
+  { value: 'facebook', label: '📘 Facebook' },
+  { value: 'google_maps', label: '📍 Google Maps' },
+  { value: 'instagram', label: '📸 Instagram' },
+  { value: 'referral', label: '🤝 Referral' },
+  { value: 'manual', label: '✏️ Manual' },
+  { value: 'other', label: '🌐 Other/Website' },
+];
+
+const STATUS_CONFIG: Record<string, { color: string; label: string; emoji: string }> = {
+  new: { color: 'bg-gray-100 text-gray-800', label: 'New', emoji: '🆕' },
+  opener_sent: { color: 'bg-blue-100 text-blue-800', label: 'Opener Sent', emoji: '📤' },
+  replied: { color: 'bg-green-100 text-green-800', label: 'Replied!', emoji: '💬' },
+  interested: { color: 'bg-emerald-100 text-emerald-800', label: 'Interested', emoji: '🔥' },
+  preview_sent: { color: 'bg-purple-100 text-purple-800', label: 'Preview Sent', emoji: '🔗' },
+  follow_up_1: { color: 'bg-yellow-100 text-yellow-800', label: 'Follow-up 1', emoji: '1️⃣' },
+  follow_up_2: { color: 'bg-orange-100 text-orange-800', label: 'Follow-up 2', emoji: '2️⃣' },
+  follow_up_3: { color: 'bg-red-100 text-red-800', label: 'Follow-up 3', emoji: '3️⃣' },
+  closed_won: { color: 'bg-emerald-500 text-white', label: 'WON!', emoji: '🎉' },
+  closed_lost: { color: 'bg-gray-200 text-gray-500', label: 'Lost', emoji: '❌' },
+};
 
 export default function SalesPage() {
-  const [activeTab, setActiveTab] = useState<'hunter' | 'closer' | 'guide'>('hunter');
-  const [leads, setLeads] = useState<SalesLead[]>([]);
-  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
-
-  // Fetch leads on mount
-  useEffect(() => {
-    fetchLeads();
-  }, []);
-
-  const fetchLeads = async () => {
-    setIsLoadingLeads(true);
-    try {
-      const res = await fetch('/api/sales/leads');
-      if (res.ok) {
-        const data = await res.json();
-        setLeads(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch leads', error);
-    } finally {
-      setIsLoadingLeads(false);
-    }
-  };
-
-  const handleLeadAdded = (newLead: SalesLead) => {
-    setLeads([newLead, ...leads]);
-    setActiveTab('closer'); // Switch to list view after adding
-  };
-
-  const handleLeadUpdated = (updatedLead: SalesLead) => {
-    setLeads(leads.map(l => l.id === updatedLead.id ? updatedLead : l));
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-900">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Founder Operating System (v1.0)</h1>
-          <p className="text-gray-600">Wear only ONE hat at a time. Never mix selling with building.</p>
-        </header>
-
-        {/* Tabs */}
-        <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-gray-200 mb-8 w-fit">
-          <TabButton 
-            active={activeTab === 'hunter'} 
-            onClick={() => setActiveTab('hunter')} 
-            icon={<Search className="w-4 h-4" />}
-            label="1. Hunter (Find)"
-          />
-          <TabButton 
-            active={activeTab === 'closer'} 
-            onClick={() => setActiveTab('closer')} 
-            icon={<Users className="w-4 h-4" />}
-            label="2. Closer (Sell)"
-          />
-          <TabButton 
-            active={activeTab === 'guide'} 
-            onClick={() => setActiveTab('guide')} 
-            icon={<BookOpen className="w-4 h-4" />}
-            label="SOP Guide"
-          />
-        </div>
-
-        {/* Content */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 min-h-[600px]">
-          {activeTab === 'hunter' && <HunterView onLeadAdded={handleLeadAdded} />}
-          {activeTab === 'closer' && <CloserView leads={leads} isLoading={isLoadingLeads} onUpdate={handleLeadUpdated} />}
-          {activeTab === 'guide' && <GuideView />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-        active 
-          ? 'bg-blue-600 text-white shadow-sm' 
-          : 'text-gray-600 hover:bg-gray-100'
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-// --- Hunter View ---
-
-function HunterView({ onLeadAdded }: { onLeadAdded: (lead: SalesLead) => void }) {
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'add' | 'scrape'>('pipeline');
+  
+  // Prospects
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Add form
   const [formData, setFormData] = useState({
-    businessName: '',
-    service: '',
+    business_name: '',
+    service_type: 'pest_control',
     area: '',
-    phone: '',
-    url: '',
-    context: ''
+    whatsapp_number: '',
+    owner_name: '',
+    website_url: '',
+    source: 'facebook',
+    pain_signals: [] as string[],
+    notes: '',
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Scrape form
+  const [scrapeUrl, setScrapeUrl] = useState('');
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapeResult, setScrapeResult] = useState<any>(null);
+  
+  // Modals
+  const [showOpenerModal, setShowOpenerModal] = useState(false);
+  const [showPitchModal, setShowPitchModal] = useState(false);
+  const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  
+  // Toast
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
+  const showToast = (type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Load prospects from API
+  const loadProspects = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/sales/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.set('status', statusFilter);
       
-      if (res.ok) {
-        const newLead = await res.json();
-        onLeadAdded(newLead);
-        // Reset form
-        setFormData({ businessName: '', service: '', area: '', phone: '', url: '', context: '' });
-      }
-    } catch (error) {
-      console.error('Error adding lead:', error);
+      const res = await fetch(`/api/hunter/prospects?${params}`);
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error);
+      setProspects(data.prospects || []);
+    } catch (err: any) {
+      showToast('error', err.message);
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
-  };
+  }, [statusFilter]);
 
-  return (
-    <div className="p-8 max-w-2xl mx-auto">
-      <div className="mb-8 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 text-blue-600 rounded-full mb-4">
-          <Search className="w-6 h-6" />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-900">Hunter Phase</h2>
-        <p className="text-gray-500 mt-2">Find high-quality raw material. Do NOT send messages yet.</p>
-      </div>
+  useEffect(() => {
+    loadProspects();
+  }, [loadProspects]);
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Business Name</label>
-            <input 
-              required
-              type="text" 
-              placeholder="e.g. Tip Top Aircon"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              value={formData.businessName}
-              onChange={e => setFormData({...formData, businessName: e.target.value})}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Service Type (Niche)</label>
-            <input 
-              required
-              type="text" 
-              placeholder="e.g. Aircon Service"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              value={formData.service}
-              onChange={e => setFormData({...formData, service: e.target.value})}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Area / Location</label>
-            <input 
-              required
-              type="text" 
-              placeholder="e.g. Ampang"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              value={formData.area}
-              onChange={e => setFormData({...formData, area: e.target.value})}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">WhatsApp Number</label>
-            <input 
-              required
-              type="text" 
-              placeholder="e.g. +60123456789"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              value={formData.phone}
-              onChange={e => setFormData({...formData, phone: e.target.value})}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Website / Social URL (Optional)</label>
-          <input 
-            type="url" 
-            placeholder="https://facebook.com/..."
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            value={formData.url}
-            onChange={e => setFormData({...formData, url: e.target.value})}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Notes / Context (Optional)</label>
-          <textarea 
-            placeholder="Any extra details..."
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none h-24 resize-none"
-            value={formData.context}
-            onChange={e => setFormData({...formData, context: e.target.value})}
-          />
-        </div>
-
-        <button 
-          type="submit" 
-          disabled={isSubmitting}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
-        >
-          {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-          <span>Save to List</span>
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// --- Closer View ---
-
-function CloserView({ leads, isLoading, onUpdate }: { leads: SalesLead[], isLoading: boolean, onUpdate: (lead: SalesLead) => void }) {
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-96"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
-  }
-
-  if (leads.length === 0) {
+  // Filter prospects by search
+  const filteredProspects = prospects.filter(p => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
     return (
-      <div className="flex flex-col items-center justify-center h-96 text-gray-500">
-        <Users className="w-12 h-12 mb-4 opacity-20" />
-        <p>No leads found. Go to Hunter tab to add some.</p>
-      </div>
+      p.business_name.toLowerCase().includes(query) ||
+      p.area.toLowerCase().includes(query) ||
+      p.whatsapp_number.includes(query) ||
+      (p.owner_name && p.owner_name.toLowerCase().includes(query))
     );
-  }
+  });
 
-  return (
-    <div className="p-6">
-      <div className="grid grid-cols-1 gap-4">
-        {leads.map(lead => (
-          <LeadCard key={lead.id} lead={lead} onUpdate={onUpdate} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LeadCard({ lead, onUpdate }: { lead: SalesLead, onUpdate: (lead: SalesLead) => void }) {
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [copiedOpener, setCopiedOpener] = useState(false);
-
-  const openerText = `Salam boss 👋 You still handling ${lead.service} jobs around ${lead.area}?`;
-
-  const copyOpener = () => {
-    navigator.clipboard.writeText(openerText);
-    setCopiedOpener(true);
-    setTimeout(() => setCopiedOpener(false), 2000);
+  // Stats
+  const stats = {
+    total: prospects.length,
+    pipeline: prospects.filter(p => !['closed_won', 'closed_lost'].includes(p.status)).length,
+    replied: prospects.filter(p => ['replied', 'interested', 'preview_sent'].includes(p.status)).length,
+    won: prospects.filter(p => p.status === 'closed_won').length,
+    todaySent: prospects.filter(p => {
+      if (!p.opener_sent_at) return false;
+      return new Date(p.opener_sent_at).toDateString() === new Date().toDateString();
+    }).length,
   };
 
-  const updateStatus = async (status: SalesLead['status']) => {
+  // Generate opener message
+  const generateOpener = (prospect: Prospect): string => {
+    const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
+    return `Hi boss 👋 You still handling ${service} jobs around ${prospect.area}?`;
+  };
+
+  // Generate pitch message (after they say yes)
+  const generatePitch = (prospect: Prospect): string => {
+    return `Cun. 👍 (Sorry boss, I'm not a customer 😅)
+
+I actually built a simple WhatsApp booking page for ${prospect.business_name} that helps catch enquiries when you're busy.
+
+Want to see the draft I made?`;
+  };
+
+  // Open WhatsApp
+  const openWhatsApp = (prospect: Prospect, message: string) => {
+    const phone = prospect.whatsapp_number.replace(/[^0-9]/g, '');
+    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  // Update prospect status
+  const updateStatus = async (id: string, newStatus: string, extraData?: Record<string, any>) => {
     try {
-      const res = await fetch('/api/sales/leads', {
+      const res = await fetch(`/api/hunter/prospects/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: lead.id, status })
+        body: JSON.stringify({ status: newStatus, ...extraData }),
       });
-      if (res.ok) {
-        const updated = await res.json();
-        onUpdate(updated);
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
       }
-    } catch (error) {
-      console.error('Failed to update status', error);
+
+      loadProspects();
+      showToast('success', `Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
+    } catch (err: any) {
+      showToast('error', err.message);
     }
   };
 
-  const generatePreview = async () => {
-    setIsGenerating(true);
+  // Add prospect (manual)
+  const handleAddProspect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    try {
+      const res = await fetch('/api/hunter/prospects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', '✅ Prospect added!');
+      setFormData({
+        business_name: '',
+        service_type: 'pest_control',
+        area: '',
+        whatsapp_number: '',
+        owner_name: '',
+        website_url: '',
+        source: 'facebook',
+        pain_signals: [],
+        notes: '',
+      });
+      setActiveTab('pipeline');
+      loadProspects();
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Scrape website (lightweight, no preview generation)
+  const handleScrape = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scrapeUrl) return;
+
+    setIsScraping(true);
+    setScrapeResult(null);
+
+    try {
+      const res = await fetch('/api/sales/scrape-light', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: scrapeUrl }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setScrapeResult(data);
+      showToast('success', '✅ Business info extracted!');
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsScraping(false);
+    }
+  };
+
+  // Save scraped data as prospect
+  const saveScrapedProspect = async () => {
+    if (!scrapeResult) return;
+    
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/hunter/prospects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          business_name: scrapeResult.businessName,
+          service_type: scrapeResult.serviceType || 'other',
+          area: scrapeResult.area || '',
+          whatsapp_number: scrapeResult.phone || '',
+          owner_name: scrapeResult.ownerName || '',
+          website_url: scrapeUrl,
+          source: 'other',
+          pain_signals: scrapeResult.painSignals || [],
+          notes: scrapeResult.notes || '',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', '✅ Prospect saved!');
+      setScrapeResult(null);
+      setScrapeUrl('');
+      setActiveTab('pipeline');
+      loadProspects();
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Generate preview for replied prospect
+  const generatePreview = async (prospect: Prospect) => {
+    setIsGeneratingPreview(true);
+    
     try {
       const res = await fetch('/api/sales/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          businessName: lead.business_name,
-          niche: lead.service,
-          context: lead.context || `Business located in ${lead.area}. Service: ${lead.service}.`,
-          url: lead.url,
-          createPreview: true
-        })
+          url: prospect.website_url || '',
+          businessName: prospect.business_name,
+          niche: prospect.service_type,
+          context: `Business: ${prospect.business_name}, Service: ${prospect.service_type}, Area: ${prospect.area}`,
+          prospectId: prospect.id,
+        }),
       });
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data.previewUrl) {
-          setPreviewUrl(data.previewUrl);
-          updateStatus('converted');
-        }
-      }
-    } catch (error) {
-      console.error('Failed to generate preview', error);
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Update prospect with preview URL
+      await updateStatus(prospect.id, 'preview_sent', {
+        preview_url: data.previewUrl,
+        preview_business_id: data.businessId,
+      });
+
+      showToast('success', '🚀 Preview generated!');
+      setShowPitchModal(false);
+      loadProspects();
+    } catch (err: any) {
+      showToast('error', err.message);
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingPreview(false);
     }
   };
 
-  const statusColors = {
-    new: 'bg-gray-100 text-gray-700',
-    contacted: 'bg-yellow-100 text-yellow-700',
-    replied: 'bg-blue-100 text-blue-700',
-    converted: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700'
+  // Toggle pain signal
+  const togglePainSignal = (signal: string) => {
+    setFormData(prev => ({
+      ...prev,
+      pain_signals: prev.pain_signals.includes(signal)
+        ? prev.pain_signals.filter(s => s !== signal)
+        : [...prev.pain_signals, signal],
+    }));
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
-      <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
-        {/* Info */}
-        <div className="flex-1">
-          <div className="flex items-center space-x-3 mb-2">
-            <h3 className="text-lg font-bold text-gray-900">{lead.business_name}</h3>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium uppercase ${statusColors[lead.status]}`}>
-              {lead.status}
-            </span>
-          </div>
-          
-          <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
-            <div className="flex items-center space-x-1">
-              <Briefcase className="w-4 h-4" />
-              <span>{lead.service}</span>
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">🎯 Sales Pipeline</h1>
+              <p className="text-sm text-slate-500">Hunter → Closer → Builder</p>
             </div>
-            <div className="flex items-center space-x-1">
-              <MapPin className="w-4 h-4" />
-              <span>{lead.area}</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Phone className="w-4 h-4" />
-              <span>{lead.phone}</span>
+            
+            {/* Quick Stats */}
+            <div className="flex gap-6 text-sm">
+              <div className="text-center">
+                <div className="text-xl font-bold text-slate-900">{stats.todaySent}</div>
+                <div className="text-slate-500">Sent Today</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-green-600">{stats.replied}</div>
+                <div className="text-slate-500">Hot Leads</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-emerald-600">{stats.won}</div>
+                <div className="text-slate-500">Won</div>
+              </div>
             </div>
           </div>
 
-          {/* Opener Box */}
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-center justify-between group">
-            <code className="text-sm text-gray-800 font-mono">{openerText}</code>
-            <button 
-              onClick={copyOpener}
-              className="ml-4 p-2 hover:bg-white rounded-md transition-colors text-gray-500 hover:text-blue-600"
-              title="Copy Opener"
+          {/* Tabs */}
+          <div className="flex gap-1 mt-4">
+            <button
+              onClick={() => setActiveTab('pipeline')}
+              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
+                activeTab === 'pipeline'
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              {copiedOpener ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+              📋 Pipeline ({stats.pipeline})
+            </button>
+            <button
+              onClick={() => setActiveTab('add')}
+              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
+                activeTab === 'add'
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              ➕ Quick Add
+            </button>
+            <button
+              onClick={() => setActiveTab('scrape')}
+              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
+                activeTab === 'scrape'
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🔍 Scrape Website
             </button>
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col space-y-2 min-w-[160px]">
-          {lead.status === 'new' && (
-            <button 
-              onClick={() => updateStatus('contacted')}
-              className="w-full px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              Mark Contacted
-            </button>
-          )}
-          
-          {lead.status === 'contacted' && (
-            <button 
-              onClick={() => updateStatus('replied')}
-              className="w-full px-4 py-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              Mark Replied
-            </button>
-          )}
-
-          {(lead.status === 'replied' || lead.status === 'converted') && !previewUrl && (
-            <button 
-              onClick={generatePreview}
-              disabled={isGenerating}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
-            >
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-              <span>Generate Preview</span>
-            </button>
-          )}
-
-          {previewUrl && (
-            <a 
-              href={previewUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Open Preview</span>
-            </a>
-          )}
         </div>
       </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* PIPELINE TAB */}
+        {activeTab === 'pipeline' && (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 items-center">
+              <input
+                type="text"
+                placeholder="🔍 Search by name, area, or phone..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="flex-1 min-w-[200px] px-4 py-2 border rounded-lg text-sm"
+              />
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="px-4 py-2 border rounded-lg text-sm"
+              >
+                <option value="all">All Status</option>
+                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>{config.emoji} {config.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={loadProspects}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                🔄 Refresh
+              </button>
+            </div>
+
+            {/* Prospect Cards */}
+            <div className="grid gap-3">
+              {isLoading ? (
+                <div className="text-center py-12 text-slate-500">Loading...</div>
+              ) : filteredProspects.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-4xl mb-2">🎯</p>
+                  <p className="text-slate-500">No prospects yet. Start hunting!</p>
+                  <button
+                    onClick={() => setActiveTab('add')}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                  >
+                    ➕ Add First Prospect
+                  </button>
+                </div>
+              ) : (
+                filteredProspects.map(prospect => (
+                  <ProspectCard
+                    key={prospect.id}
+                    prospect={prospect}
+                    onSendOpener={() => {
+                      setSelectedProspect(prospect);
+                      setShowOpenerModal(true);
+                    }}
+                    onShowPitch={() => {
+                      setSelectedProspect(prospect);
+                      setShowPitchModal(true);
+                    }}
+                    onUpdateStatus={updateStatus}
+                    onOpenWhatsApp={(msg) => openWhatsApp(prospect, msg)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ADD TAB */}
+        {activeTab === 'add' && (
+          <div className="max-w-xl">
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h2 className="text-lg font-semibold mb-4">➕ Add Prospect Manually</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Quick add a prospect you found on Facebook, Google Maps, etc.
+              </p>
+
+              <form onSubmit={handleAddProspect} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Business Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.business_name}
+                      onChange={e => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
+                      placeholder="e.g., Ahmad Pest Control"
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Service Type *
+                    </label>
+                    <select
+                      required
+                      value={formData.service_type}
+                      onChange={e => setFormData(prev => ({ ...prev, service_type: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    >
+                      {SERVICE_TYPES.map(type => (
+                        <option key={type.value} value={type.value}>{type.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Area *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.area}
+                      onChange={e => setFormData(prev => ({ ...prev, area: e.target.value }))}
+                      placeholder="e.g., Ampang"
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      WhatsApp *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={formData.whatsapp_number}
+                      onChange={e => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
+                      placeholder="+60123456789"
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Owner Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.owner_name}
+                      onChange={e => setFormData(prev => ({ ...prev, owner_name: e.target.value }))}
+                      placeholder="Boss Ahmad"
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Source
+                    </label>
+                    <select
+                      value={formData.source}
+                      onChange={e => setFormData(prev => ({ ...prev, source: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    >
+                      {SOURCES.map(source => (
+                        <option key={source.value} value={source.value}>{source.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Website URL
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.website_url}
+                      onChange={e => setFormData(prev => ({ ...prev, website_url: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                {/* Pain Signals */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Pain Signals
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {PAIN_SIGNALS.map(signal => (
+                      <button
+                        key={signal.value}
+                        type="button"
+                        onClick={() => togglePainSignal(signal.value)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                          formData.pain_signals.includes(signal.value)
+                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
+                            : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'
+                        }`}
+                      >
+                        {signal.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  {isSaving ? 'Saving...' : '➕ Add to Pipeline'}
+                </button>
+              </form>
+            </div>
+
+            {/* Tips */}
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <h3 className="font-semibold text-amber-800 mb-2">🎯 Hunter Rules</h3>
+              <ul className="text-sm text-amber-700 space-y-1">
+                <li>• Only collect info, don't sell yet</li>
+                <li>• Look for pain signals ("PM us", slow replies)</li>
+                <li>• Target: 20 prospects per session</li>
+                <li>• Best sources: Facebook groups, Google Maps</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* SCRAPE TAB */}
+        {activeTab === 'scrape' && (
+          <div className="max-w-xl">
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h2 className="text-lg font-semibold mb-4">🔍 Scrape Business Website</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Extract business info using AI (gpt-4o-mini). Fast & cheap.
+                <br />
+                <strong>No preview generated</strong> — just collects data for outreach.
+              </p>
+
+              <form onSubmit={handleScrape} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={scrapeUrl}
+                    onChange={e => setScrapeUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isScraping}
+                  className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+                >
+                  {isScraping ? '🔍 Extracting...' : '🔍 Extract Business Info'}
+                </button>
+              </form>
+
+              {/* Scrape Result */}
+              {scrapeResult && (
+                <div className="mt-6 p-4 bg-slate-50 rounded-lg border">
+                  <h3 className="font-semibold mb-3">📋 Extracted Info</h3>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Business:</span>
+                      <span className="font-medium">{scrapeResult.businessName || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Service:</span>
+                      <span className="font-medium">
+                        {SERVICE_TYPES.find(t => t.value === scrapeResult.serviceType)?.label || scrapeResult.serviceType || '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Area:</span>
+                      <span className="font-medium">{scrapeResult.area || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Phone:</span>
+                      <span className="font-medium">{scrapeResult.phone || '-'}</span>
+                    </div>
+                    {scrapeResult.ownerName && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Owner:</span>
+                        <span className="font-medium">{scrapeResult.ownerName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={saveScrapedProspect}
+                      disabled={isSaving || !scrapeResult.phone}
+                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                    >
+                      {isSaving ? 'Saving...' : '✅ Save to Pipeline'}
+                    </button>
+                    <button
+                      onClick={() => setScrapeResult(null)}
+                      className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {!scrapeResult.phone && (
+                    <p className="text-xs text-orange-600 mt-2">
+                      ⚠️ No phone found. Add manually or try a different page.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Cost Info */}
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4">
+              <h3 className="font-semibold text-green-800 mb-2">💰 Cost Savings</h3>
+              <ul className="text-sm text-green-700 space-y-1">
+                <li>• Scrape only: ~$0.001 per website</li>
+                <li>• Full preview: ~$0.05 per website</li>
+                <li>• <strong>Only generate preview when they say YES!</strong></li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* OPENER MODAL */}
+      {showOpenerModal && selectedProspect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
+            <h3 className="text-lg font-semibold mb-4">📤 Send Opener</h3>
+            
+            <div className="bg-slate-100 rounded-lg p-4 mb-4">
+              <p className="text-slate-800 whitespace-pre-wrap font-medium">
+                {generateOpener(selectedProspect)}
+              </p>
+            </div>
+
+            <div className="text-sm text-slate-500 mb-4">
+              <p><strong>To:</strong> {selectedProspect.business_name}</p>
+              <p><strong>WhatsApp:</strong> {selectedProspect.whatsapp_number}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(generateOpener(selectedProspect));
+                  showToast('success', '📋 Copied!');
+                }}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50"
+              >
+                📋 Copy
+              </button>
+              <button
+                onClick={() => {
+                  openWhatsApp(selectedProspect, generateOpener(selectedProspect));
+                  updateStatus(selectedProspect.id, 'opener_sent');
+                  setShowOpenerModal(false);
+                }}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                💬 WhatsApp
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                updateStatus(selectedProspect.id, 'opener_sent');
+                setShowOpenerModal(false);
+              }}
+              className="w-full mt-3 px-4 py-2 text-sm text-slate-500 hover:text-slate-700"
+            >
+              Mark as sent & close
+            </button>
+
+            <button
+              onClick={() => setShowOpenerModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PITCH MODAL (After they reply) */}
+      {showPitchModal && selectedProspect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
+            <h3 className="text-lg font-semibold mb-2">🔥 They Replied!</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Now reveal what you do and offer the preview.
+            </p>
+            
+            {/* Pitch Message */}
+            <div className="bg-slate-100 rounded-lg p-4 mb-4">
+              <p className="text-slate-800 whitespace-pre-wrap text-sm">
+                {generatePitch(selectedProspect)}
+              </p>
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(generatePitch(selectedProspect));
+                  showToast('success', '📋 Copied!');
+                }}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50 text-sm"
+              >
+                📋 Copy Pitch
+              </button>
+              <button
+                onClick={() => openWhatsApp(selectedProspect, generatePitch(selectedProspect))}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+              >
+                💬 Send via WA
+              </button>
+            </div>
+
+            <hr className="my-4" />
+
+            {/* Generate Preview */}
+            {selectedProspect.preview_url ? (
+              <div className="text-center">
+                <p className="text-sm text-slate-500 mb-3">Preview already generated!</p>
+                <a
+                  href={selectedProspect.preview_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                >
+                  🔗 View Preview
+                </a>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(selectedProspect.preview_url!);
+                    showToast('success', '🔗 Link copied!');
+                  }}
+                  className="ml-2 px-4 py-2 border rounded-lg hover:bg-slate-50 text-sm"
+                >
+                  Copy Link
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-slate-600 mb-3">
+                  <strong>If they want to see</strong>, generate the preview:
+                </p>
+                <button
+                  onClick={() => generatePreview(selectedProspect)}
+                  disabled={isGeneratingPreview}
+                  className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
+                >
+                  {isGeneratingPreview ? '🔄 Generating Preview...' : '🚀 Generate Preview (~$0.05)'}
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowPitchModal(false)}
+              className="w-full mt-3 px-4 py-2 text-sm text-slate-500 hover:text-slate-700"
+            >
+              Close
+            </button>
+
+            <button
+              onClick={() => setShowPitchModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${
+            toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
 
-// --- Guide View ---
+// Prospect Card Component
+function ProspectCard({
+  prospect,
+  onSendOpener,
+  onShowPitch,
+  onUpdateStatus,
+}: {
+  prospect: Prospect;
+  onSendOpener: () => void;
+  onShowPitch: () => void;
+  onUpdateStatus: (id: string, status: string, extra?: Record<string, any>) => void;
+  onOpenWhatsApp: (message: string) => void;
+}) {
+  const statusConfig = STATUS_CONFIG[prospect.status] || STATUS_CONFIG.new;
+  const service = SERVICE_TYPES.find(t => t.value === prospect.service_type);
 
-function GuideView() {
+  // Calculate days since last activity
+  const lastActivity = prospect.replied_at || prospect.opener_sent_at || prospect.created_at;
+  const daysSince = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
+
   return (
-    <div className="p-8 prose prose-blue max-w-none">
-      <h2>🚀 LAUNCHFLY – FOUNDER OPERATING SYSTEM (FOS v1.0)</h2>
-      
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 my-4">
-        <p className="font-bold text-blue-900 m-0">Core Principle:</p>
-        <p className="text-blue-800 m-0">👉 Wear only ONE hat at a time.<br/>👉 Never mix selling with building.</p>
-      </div>
+    <div className="bg-white rounded-lg border p-4 hover:shadow-sm transition">
+      <div className="flex items-start justify-between gap-4">
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">{service?.label.split(' ')[0] || '🔨'}</span>
+            <h3 className="font-semibold text-slate-900 truncate">
+              {prospect.business_name}
+            </h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
+              {statusConfig.emoji} {statusConfig.label}
+            </span>
+            {daysSince > 2 && prospect.status !== 'new' && !['closed_won', 'closed_lost'].includes(prospect.status) && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">
+                ⏰ {daysSince}d ago
+              </span>
+            )}
+          </div>
+          <div className="text-sm text-slate-500">
+            <span>📍 {prospect.area}</span>
+            <span className="mx-2">•</span>
+            <span>📱 {prospect.whatsapp_number}</span>
+            {prospect.owner_name && (
+              <>
+                <span className="mx-2">•</span>
+                <span>👤 {prospect.owner_name}</span>
+              </>
+            )}
+          </div>
+          {prospect.pain_signals && prospect.pain_signals.length > 0 && (
+            <div className="flex gap-1 mt-2">
+              {prospect.pain_signals.slice(0, 3).map(signal => (
+                <span key={signal} className="px-2 py-0.5 bg-orange-50 text-orange-600 text-xs rounded-full">
+                  {PAIN_SIGNALS.find(p => p.value === signal)?.label || signal}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <h3>1️⃣ DEPARTMENT: LEAD GENERATION (The Hunter)</h3>
-      <ul>
-        <li><strong>Goal:</strong> Find high-quality raw material → WhatsApp numbers of service businesses with pain.</li>
-        <li><strong>Tasks:</strong> Scroll FB/Maps, Collect Name, Service, Area, Phone.</li>
-        <li><strong>Rule:</strong> ❌ Never send messages in this phase. ✅ Only collect numbers.</li>
-      </ul>
+        {/* Actions */}
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          {prospect.status === 'new' && (
+            <button
+              onClick={onSendOpener}
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+            >
+              📤 Send Opener
+            </button>
+          )}
 
-      <h3>2️⃣ DEPARTMENT: SALES (The Closer)</h3>
-      <ul>
-        <li><strong>Goal:</strong> Turn conversations into cash.</li>
-        <li><strong>Opener:</strong> "Salam boss 👋 You still handling [Service] jobs around [Area]?"</li>
-        <li><strong>Flow:</strong>
-          <ol>
-            <li>Send opener</li>
-            <li>If "Yes" → Send preview link</li>
-            <li>Say: "This captures customer details and creates a ready-to-send WhatsApp message. No monthly fees — you own it."</li>
-            <li>Stop talking.</li>
-          </ol>
-        </li>
-      </ul>
+          {prospect.status === 'opener_sent' && (
+            <>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'replied')}
+                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+              >
+                ✅ They Replied
+              </button>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'follow_up_1')}
+                className="px-3 py-1.5 border text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+              >
+                ⏰ Follow Up
+              </button>
+            </>
+          )}
 
-      <h3>3️⃣ DEPARTMENT: FULFILLMENT (The Builder)</h3>
-      <ul>
-        <li><strong>Goal:</strong> Deliver exactly what was sold.</li>
-        <li><strong>Rule:</strong> ✅ Batch this work (evenings only). ❌ Don't interrupt selling to fix typos.</li>
-      </ul>
+          {(prospect.status === 'replied' || prospect.status === 'interested') && (
+            <button
+              onClick={onShowPitch}
+              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+            >
+              🚀 Send Pitch
+            </button>
+          )}
 
-      <h3>📅 DAILY FOUNDER SCHEDULE</h3>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2 text-left">Time</th>
-              <th className="p-2 text-left">Role</th>
-              <th className="p-2 text-left">Task</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td className="p-2 border-b">09:00–10:00</td><td className="p-2 border-b">Hunter</td><td className="p-2 border-b">Find 20 businesses, log only</td></tr>
-            <tr><td className="p-2 border-b">10:00–12:00</td><td className="p-2 border-b">Closer</td><td className="p-2 border-b">Send openers + reply to leads</td></tr>
-            <tr><td className="p-2 border-b">12:00–14:00</td><td className="p-2 border-b">Break</td><td className="p-2 border-b">Don't message owners</td></tr>
-            <tr><td className="p-2 border-b">14:00–16:00</td><td className="p-2 border-b">Closer</td><td className="p-2 border-b">Follow-ups & closes</td></tr>
-            <tr><td className="p-2 border-b">20:00–22:00</td><td className="p-2 border-b">Builder</td><td className="p-2 border-b">Fulfillment & fixes</td></tr>
-          </tbody>
-        </table>
+          {prospect.status === 'preview_sent' && (
+            <>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'closed_won')}
+                className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700"
+              >
+                🎉 They Paid!
+              </button>
+              {prospect.preview_url && (
+                <button
+                  onClick={() => navigator.clipboard.writeText(prospect.preview_url!)}
+                  className="px-3 py-1.5 border text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+                >
+                  🔗 Copy Link
+                </button>
+              )}
+            </>
+          )}
+
+          {['follow_up_1', 'follow_up_2', 'follow_up_3'].includes(prospect.status) && (
+            <>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'replied')}
+                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+              >
+                ✅ They Replied
+              </button>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
+                className="px-3 py-1.5 text-slate-400 text-sm rounded-lg hover:bg-slate-50"
+              >
+                ❌ No Response
+              </button>
+            </>
+          )}
+
+          {prospect.status === 'closed_won' && (
+            <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-sm rounded-lg text-center">
+              🎉 Won!
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

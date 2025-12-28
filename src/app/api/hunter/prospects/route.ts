@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+let supabaseInstance: SupabaseClient | null = null;
+
+function getSupabase() {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabaseInstance;
+}
 
 // GET: List prospects with optional filters
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const serviceType = searchParams.get('service_type');
@@ -53,6 +61,7 @@ export async function GET(request: NextRequest) {
 // POST: Create new prospect
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
     const body = await request.json();
 
     const {

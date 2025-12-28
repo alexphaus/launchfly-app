@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+let supabaseInstance: SupabaseClient | null = null;
+
+function getSupabase() {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
+  return supabaseInstance;
+}
 
 // PATCH: Update prospect (status, preview_url, etc.)
 export async function PATCH(
@@ -12,6 +19,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const { id } = await params;
     const body = await request.json();
 
@@ -87,6 +95,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const { id } = await params;
 
     const { data, error } = await supabase
@@ -117,6 +126,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getSupabase();
     const { id } = await params;
 
     const { error } = await supabase

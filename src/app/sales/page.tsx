@@ -73,7 +73,9 @@ export default function SalesPage() {
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
+  const [selectedArea, setSelectedArea] = useState<string>('');
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   
   // Toast
@@ -135,9 +137,10 @@ export default function SalesPage() {
   };
 
   // Generate opener message
-  const generateOpener = (prospect: Prospect): string => {
+  const generateOpener = (prospect: Prospect, areaOverride?: string): string => {
     const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
-    return `Hi boss 👋 You still handling ${service} jobs around ${prospect.area}?`;
+    const area = areaOverride || prospect.area;
+    return `Hi boss 👋 You still handling ${service} jobs around ${area}?`;
   };
 
   // Generate pitch message (after they say yes)
@@ -332,6 +335,9 @@ Want to see the draft I made?`;
                   prospect={prospect}
                   onSendOpener={() => {
                     setSelectedProspect(prospect);
+                    // Initialize selected area (first one if multiple, or just the area string)
+                    const areas = prospect.area.split(',').map(a => a.trim()).filter(Boolean);
+                    setSelectedArea(areas[0] || prospect.area);
                     setShowOpenerModal(true);
                   }}
                   onShowPitch={() => {
@@ -339,6 +345,10 @@ Want to see the draft I made?`;
                     setShowPitchModal(true);
                   }}
                   onUpdateStatus={updateStatus}
+                  onClickName={() => {
+                    setSelectedProspect(prospect);
+                    setShowDetailModal(true);
+                  }}
                 />
               ))
             )}
@@ -346,15 +356,169 @@ Want to see the draft I made?`;
         </div>
       </div>
 
+      {/* DETAIL MODAL */}
+      {showDetailModal && selectedProspect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">{selectedProspect.business_name}</h3>
+                <p className="text-sm text-slate-500">Added on {new Date(selectedProspect.created_at).toLocaleDateString()}</p>
+              </div>
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Status</label>
+                  <div className="mt-1">
+                    <span className={`px-2 py-1 rounded-full text-sm font-medium ${STATUS_CONFIG[selectedProspect.status]?.color}`}>
+                      {STATUS_CONFIG[selectedProspect.status]?.emoji} {STATUS_CONFIG[selectedProspect.status]?.label}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Service Type</label>
+                  <p className="text-slate-900 mt-1">
+                    {SERVICE_TYPES.find(t => t.value === selectedProspect.service_type)?.label || selectedProspect.service_type}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Area</label>
+                  <p className="text-slate-900 mt-1">{selectedProspect.area}</p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Contact</label>
+                  <div className="mt-1 space-y-1">
+                    <p className="text-slate-900">📱 {selectedProspect.whatsapp_number}</p>
+                    {selectedProspect.owner_name && <p className="text-slate-900">👤 {selectedProspect.owner_name}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Source</label>
+                  <p className="text-slate-900 mt-1 capitalize">{selectedProspect.source.replace('_', ' ')}</p>
+                </div>
+
+                {selectedProspect.website_url && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Website</label>
+                    <a 
+                      href={selectedProspect.website_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block text-blue-600 hover:underline mt-1 truncate"
+                    >
+                      {selectedProspect.website_url}
+                    </a>
+                  </div>
+                )}
+
+                {selectedProspect.pain_signals && selectedProspect.pain_signals.length > 0 && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Pain Signals</label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedProspect.pain_signals.map(signal => (
+                        <span key={signal} className="px-2 py-1 bg-orange-50 text-orange-700 text-xs rounded-lg border border-orange-100">
+                          {PAIN_SIGNALS.find(p => p.value === signal)?.label || signal}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {selectedProspect.notes && (
+              <div className="mt-6 pt-6 border-t">
+                <label className="text-xs font-semibold text-slate-500 uppercase">Notes</label>
+                <div className="mt-2 bg-slate-50 rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap">
+                  {selectedProspect.notes}
+                </div>
+              </div>
+            )}
+
+            {selectedProspect.preview_url && (
+              <div className="mt-6 pt-6 border-t">
+                <label className="text-xs font-semibold text-slate-500 uppercase">Generated Preview</label>
+                <div className="mt-2 flex items-center gap-3">
+                  <a 
+                    href={selectedProspect.preview_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-purple-600 hover:underline font-medium"
+                  >
+                    {selectedProspect.preview_url}
+                  </a>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedProspect.preview_url!);
+                      showToast('success', 'Link copied!');
+                    }}
+                    className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-8 flex justify-end">
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* OPENER MODAL */}
       {showOpenerModal && selectedProspect && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
             <h3 className="text-lg font-semibold mb-4">📤 Send Opener</h3>
             
+            {/* Area Selection */}
+            {selectedProspect.area.includes(',') && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Select Area for Message
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProspect.area.split(',').map(area => area.trim()).filter(Boolean).map(area => (
+                    <button
+                      key={area}
+                      onClick={() => setSelectedArea(area)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                        selectedArea === area
+                          ? 'bg-blue-100 text-blue-700 border-blue-300'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-100 rounded-lg p-4 mb-4">
               <p className="text-slate-800 whitespace-pre-wrap font-medium">
-                {generateOpener(selectedProspect)}
+                {generateOpener(selectedProspect, selectedArea)}
               </p>
             </div>
 
@@ -366,7 +530,7 @@ Want to see the draft I made?`;
             <div className="flex gap-3">
               <button
                 onClick={async () => {
-                  await navigator.clipboard.writeText(generateOpener(selectedProspect));
+                  await navigator.clipboard.writeText(generateOpener(selectedProspect, selectedArea));
                   showToast('success', '📋 Copied!');
                 }}
                 className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50"
@@ -375,7 +539,7 @@ Want to see the draft I made?`;
               </button>
               <button
                 onClick={() => {
-                  openWhatsApp(selectedProspect, generateOpener(selectedProspect));
+                  openWhatsApp(selectedProspect, generateOpener(selectedProspect, selectedArea));
                   updateStatus(selectedProspect.id, 'opener_sent');
                   setShowOpenerModal(false);
                 }}
@@ -516,11 +680,13 @@ function ProspectCard({
   onSendOpener,
   onShowPitch,
   onUpdateStatus,
+  onClickName,
 }: {
   prospect: Prospect;
   onSendOpener: () => void;
   onShowPitch: () => void;
   onUpdateStatus: (id: string, status: string, extra?: Record<string, any>) => void;
+  onClickName: () => void;
 }) {
   const statusConfig = STATUS_CONFIG[prospect.status] || STATUS_CONFIG.new;
   const service = SERVICE_TYPES.find(t => t.value === prospect.service_type);
@@ -536,9 +702,12 @@ function ProspectCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">{service?.label.split(' ')[0] || '🔨'}</span>
-            <h3 className="font-semibold text-slate-900 truncate">
+            <button 
+              onClick={onClickName}
+              className="font-semibold text-slate-900 truncate hover:text-blue-600 hover:underline text-left"
+            >
               {prospect.business_name}
-            </h3>
+            </button>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
               {statusConfig.emoji} {statusConfig.label}
             </span>

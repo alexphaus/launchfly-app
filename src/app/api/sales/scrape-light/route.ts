@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   "phone": "string or null - phone/WhatsApp number with country code",
   "area": "string or null - service area/location",
   "services": ["array of services offered"],
-  "painSignals": ["array of pain signals: 'no_booking', 'whatsapp_only', 'slow_replies' etc"]
+  "painSignals": ["array of pain signals: 'no_booking', 'whatsapp_only', 'slow_replies', 'missed_calls', 'no_website', 'manual_quotes', 'messy_schedule', 'broken_links'"]
 }
 
 Focus on finding the phone number - look for WhatsApp links, tel: links, or phone patterns.

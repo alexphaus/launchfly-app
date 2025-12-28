@@ -45,6 +45,8 @@ const PAIN_SIGNALS = [
   { value: 'no_booking', label: 'No booking system' },
   { value: 'whatsapp_only', label: 'WhatsApp only' },
   { value: 'bad_reviews', label: 'Bad reviews' },
+  { value: 'broken_links', label: 'Broken links' },
+  { value: 'no_website', label: 'No website' },
 ];
 
 const SOURCES = [
@@ -71,7 +73,7 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; emoji: strin
 
 export default function SalesPage() {
   // Tabs
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'add' | 'scrape' | 'facebook'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'add'>('pipeline');
   
   // Prospects
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -96,12 +98,10 @@ export default function SalesPage() {
   // Scrape form
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState<any>(null);
   
   // Facebook context form
   const [fbContext, setFbContext] = useState('');
   const [isFbExtracting, setIsFbExtracting] = useState(false);
-  const [fbResult, setFbResult] = useState<any>(null);
   
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
@@ -182,12 +182,28 @@ Want to see the draft I made?`;
   // Open WhatsApp
   const openWhatsApp = (prospect: Prospect, message: string) => {
     const phone = prospect.whatsapp_number.replace(/[^0-9]/g, '');
-    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    // Use api.whatsapp.com instead of wa.me to avoid ISP blocks (e.g. in Philippines)
+    const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
   };
 
   // Update prospect status
   const updateStatus = async (id: string, newStatus: string, extraData?: Record<string, any>) => {
+    // Optimistic update - update UI immediately
+    setProspects(prev => prev.map(p => 
+      p.id === id 
+        ? { 
+            ...p, 
+            status: newStatus,
+            ...extraData,
+            ...(newStatus === 'opener_sent' ? { opener_sent_at: new Date().toISOString() } : {}),
+            ...(newStatus === 'replied' ? { replied_at: new Date().toISOString() } : {}),
+            ...(newStatus === 'preview_sent' ? { preview_sent_at: new Date().toISOString() } : {}),
+          } 
+        : p
+    ));
+    showToast('success', `Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
+
     try {
       const res = await fetch(`/api/hunter/prospects/${id}`, {
         method: 'PATCH',
@@ -199,11 +215,11 @@ Want to see the draft I made?`;
         const data = await res.json();
         throw new Error(data.error);
       }
-
-      loadProspects();
-      showToast('success', `Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
+      // No need to reload - we already updated optimistically
     } catch (err: any) {
+      // Revert on error - reload prospects
       showToast('error', err.message);
+      loadProspects();
     }
   };
 
@@ -223,6 +239,24 @@ Want to see the draft I made?`;
       if (!res.ok) throw new Error(data.error);
 
       showToast('success', '✅ Prospect added!');
+      
+      // Optimistic add - add to local state immediately
+      const newProspect: Prospect = {
+        id: data.prospect?.id || Date.now().toString(),
+        business_name: formData.business_name,
+        service_type: formData.service_type,
+        area: formData.area,
+        whatsapp_number: formData.whatsapp_number,
+        owner_name: formData.owner_name,
+        website_url: formData.website_url,
+        source: formData.source,
+        pain_signals: formData.pain_signals,
+        status: 'new',
+        notes: formData.notes,
+        created_at: new Date().toISOString(),
+      };
+      setProspects(prev => [newProspect, ...prev]);
+      
       setFormData({
         business_name: '',
         service_type: 'pest_control',
@@ -234,8 +268,9 @@ Want to see the draft I made?`;
         pain_signals: [],
         notes: '',
       });
+      setFbContext('');
+      setScrapeUrl('');
       setActiveTab('pipeline');
-      loadProspects();
     } catch (err: any) {
       showToast('error', err.message);
     } finally {
@@ -249,7 +284,7 @@ Want to see the draft I made?`;
     if (!scrapeUrl) return;
 
     setIsScraping(true);
-    setScrapeResult(null);
+    // setScrapeResult(null); // No longer needed
 
     try {
       const res = await fetch('/api/sales/scrape-light', {
@@ -261,49 +296,27 @@ Want to see the draft I made?`;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setScrapeResult(data);
-      showToast('success', '✅ Business info extracted!');
+      // setScrapeResult(data); // No longer needed
+      
+      // Fill form data
+      setFormData(prev => ({
+        ...prev,
+        business_name: data.businessName || prev.business_name,
+        service_type: data.serviceType || prev.service_type,
+        area: data.area || prev.area,
+        whatsapp_number: data.phone || prev.whatsapp_number,
+        owner_name: data.ownerName || prev.owner_name,
+        website_url: scrapeUrl,
+        source: 'other',
+        pain_signals: data.painSignals || prev.pain_signals,
+        notes: data.notes || prev.notes,
+      }));
+
+      showToast('success', '✅ Business info extracted to form!');
     } catch (err: any) {
       showToast('error', err.message);
     } finally {
       setIsScraping(false);
-    }
-  };
-
-  // Save scraped data as prospect
-  const saveScrapedProspect = async () => {
-    if (!scrapeResult) return;
-    
-    setIsSaving(true);
-    try {
-      const res = await fetch('/api/hunter/prospects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          business_name: scrapeResult.businessName,
-          service_type: scrapeResult.serviceType || 'other',
-          area: scrapeResult.area || '',
-          whatsapp_number: scrapeResult.phone || '',
-          owner_name: scrapeResult.ownerName || '',
-          website_url: scrapeUrl,
-          source: 'other',
-          pain_signals: scrapeResult.painSignals || [],
-          notes: scrapeResult.notes || '',
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      showToast('success', '✅ Prospect saved!');
-      setScrapeResult(null);
-      setScrapeUrl('');
-      setActiveTab('pipeline');
-      loadProspects();
-    } catch (err: any) {
-      showToast('error', err.message);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -313,7 +326,7 @@ Want to see the draft I made?`;
     if (!fbContext.trim()) return;
 
     setIsFbExtracting(true);
-    setFbResult(null);
+    // setFbResult(null); // No longer needed
 
     try {
       const res = await fetch('/api/sales/extract-facebook', {
@@ -325,49 +338,27 @@ Want to see the draft I made?`;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setFbResult(data);
-      showToast('success', '✅ Business info extracted from Facebook!');
+      // setFbResult(data); // No longer needed
+
+      // Fill form data
+      setFormData(prev => ({
+        ...prev,
+        business_name: data.businessName || prev.business_name,
+        service_type: data.serviceType || prev.service_type,
+        area: data.area || prev.area,
+        whatsapp_number: data.phone || prev.whatsapp_number,
+        owner_name: data.ownerName || prev.owner_name,
+        website_url: data.website || prev.website_url,
+        source: 'facebook',
+        pain_signals: data.painSignals || prev.pain_signals,
+        notes: data.notes || prev.notes,
+      }));
+
+      showToast('success', '✅ Business info extracted from Facebook to form!');
     } catch (err: any) {
       showToast('error', err.message);
     } finally {
       setIsFbExtracting(false);
-    }
-  };
-
-  // Save Facebook-extracted data as prospect
-  const saveFbProspect = async () => {
-    if (!fbResult) return;
-    
-    setIsSaving(true);
-    try {
-      const res = await fetch('/api/hunter/prospects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          business_name: fbResult.businessName,
-          service_type: fbResult.serviceType || 'other',
-          area: fbResult.area || '',
-          whatsapp_number: fbResult.phone || '',
-          owner_name: fbResult.ownerName || '',
-          website_url: fbResult.website || '',
-          source: 'facebook',
-          pain_signals: fbResult.painSignals || [],
-          notes: fbResult.notes || '',
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      showToast('success', '✅ Prospect saved from Facebook!');
-      setFbResult(null);
-      setFbContext('');
-      setActiveTab('pipeline');
-      loadProspects();
-    } catch (err: any) {
-      showToast('error', err.message);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -467,26 +458,6 @@ Want to see the draft I made?`;
             >
               ➕ Quick Add
             </button>
-            <button
-              onClick={() => setActiveTab('scrape')}
-              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
-                activeTab === 'scrape'
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              🔍 Scrape Website
-            </button>
-            <button
-              onClick={() => setActiveTab('facebook')}
-              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
-                activeTab === 'facebook'
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              📘 Facebook
-            </button>
           </div>
         </div>
       </div>
@@ -560,414 +531,231 @@ Want to see the draft I made?`;
 
         {/* ADD TAB */}
         {activeTab === 'add' && (
-          <div className="max-w-xl">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold mb-4">➕ Add Prospect Manually</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Quick add a prospect you found on Facebook, Google Maps, etc.
-              </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column: Extractors */}
+            <div className="space-y-6">
+              {/* Facebook Extractor */}
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h2 className="text-lg font-semibold mb-4">📘 Extract from Facebook</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  Copy-paste content from Facebook pages, posts, or comments.
+                  <br />
+                  AI will extract business info automatically.
+                </p>
 
-              <form onSubmit={handleAddProspect} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
+                <form onSubmit={handleFbExtract} className="space-y-4">
+                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Business Name *
+                      Facebook Context
                     </label>
-                    <input
-                      type="text"
+                    <textarea
                       required
-                      value={formData.business_name}
-                      onChange={e => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
-                      placeholder="e.g., Ahmad Pest Control"
-                      className="w-full px-3 py-2 border rounded-lg"
+                      value={fbContext}
+                      onChange={e => setFbContext(e.target.value)}
+                      placeholder={`Paste here:\n• About section from Facebook page\n• Posts with "PM us for price"\n• Comments from service groups\n• Business page info\n\nExample:\n"Ahmad Pest Control - Professional pest control services in Ampang area. Call/WhatsApp 012-3456789 for free quotation. Operating since 2015."`}
+                      className="w-full px-3 py-2 border rounded-lg h-48 text-sm font-mono"
                     />
+                    <p className="text-xs text-slate-500 mt-1">
+                      The more context you paste, the better the extraction.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Service Type *
-                    </label>
-                    <select
-                      required
-                      value={formData.service_type}
-                      onChange={e => setFormData(prev => ({ ...prev, service_type: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    >
-                      {SERVICE_TYPES.map(type => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={isFbExtracting || !fbContext.trim()}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    {isFbExtracting ? '🔍 Extracting...' : '🔍 Extract to Form'}
+                  </button>
+                </form>
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Area *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.area}
-                      onChange={e => setFormData(prev => ({ ...prev, area: e.target.value }))}
-                      placeholder="e.g., Ampang"
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
+              {/* Scrape Extractor */}
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h2 className="text-lg font-semibold mb-4">🔍 Scrape Business Website</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  Extract business info using AI (gpt-4o-mini). Fast & cheap.
+                </p>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      WhatsApp *
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.whatsapp_number}
-                      onChange={e => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
-                      placeholder="+60123456789"
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Owner Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.owner_name}
-                      onChange={e => setFormData(prev => ({ ...prev, owner_name: e.target.value }))}
-                      placeholder="Boss Ahmad"
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Source
-                    </label>
-                    <select
-                      value={formData.source}
-                      onChange={e => setFormData(prev => ({ ...prev, source: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    >
-                      {SOURCES.map(source => (
-                        <option key={source.value} value={source.value}>{source.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
+                <form onSubmit={handleScrape} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Website URL
                     </label>
                     <input
                       type="url"
-                      value={formData.website_url}
-                      onChange={e => setFormData(prev => ({ ...prev, website_url: e.target.value }))}
-                      placeholder="https://..."
+                      required
+                      value={scrapeUrl}
+                      onChange={e => setScrapeUrl(e.target.value)}
+                      placeholder="https://example.com"
                       className="w-full px-3 py-2 border rounded-lg"
                     />
                   </div>
-                </div>
 
-                {/* Pain Signals */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Pain Signals
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {PAIN_SIGNALS.map(signal => (
-                      <button
-                        key={signal.value}
-                        type="button"
-                        onClick={() => togglePainSignal(signal.value)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                          formData.pain_signals.includes(signal.value)
-                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
-                            : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'
-                        }`}
+                  <button
+                    type="submit"
+                    disabled={isScraping}
+                    className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+                  >
+                    {isScraping ? '🔍 Extracting...' : '🔍 Extract to Form'}
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Right Column: Form */}
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h2 className="text-lg font-semibold mb-4">➕ Add Prospect Manually</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  Review extracted data and save to pipeline.
+                </p>
+
+                <form onSubmit={handleAddProspect} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Business Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.business_name}
+                        onChange={e => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
+                        placeholder="e.g., Ahmad Pest Control"
+                        className="w-full px-3 py-2 border rounded-lg"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Service Type *
+                      </label>
+                      <select
+                        required
+                        value={formData.service_type}
+                        onChange={e => setFormData(prev => ({ ...prev, service_type: e.target.value }))}
+                        className="w-full px-3 py-2 border rounded-lg"
                       >
-                        {signal.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-                >
-                  {isSaving ? 'Saving...' : '➕ Add to Pipeline'}
-                </button>
-              </form>
-            </div>
-
-            {/* Tips */}
-            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <h3 className="font-semibold text-amber-800 mb-2">🎯 Hunter Rules</h3>
-              <ul className="text-sm text-amber-700 space-y-1">
-                <li>• Only collect info, don't sell yet</li>
-                <li>• Look for pain signals ("PM us", slow replies)</li>
-                <li>• Target: 20 prospects per session</li>
-                <li>• Best sources: Facebook groups, Google Maps</li>
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {/* SCRAPE TAB */}
-        {activeTab === 'scrape' && (
-          <div className="max-w-xl">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold mb-4">🔍 Scrape Business Website</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Extract business info using AI (gpt-4o-mini). Fast & cheap.
-                <br />
-                <strong>No preview generated</strong> — just collects data for outreach.
-              </p>
-
-              <form onSubmit={handleScrape} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Website URL
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    value={scrapeUrl}
-                    onChange={e => setScrapeUrl(e.target.value)}
-                    placeholder="https://example.com"
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isScraping}
-                  className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
-                >
-                  {isScraping ? '🔍 Extracting...' : '🔍 Extract Business Info'}
-                </button>
-              </form>
-
-              {/* Scrape Result */}
-              {scrapeResult && (
-                <div className="mt-6 p-4 bg-slate-50 rounded-lg border">
-                  <h3 className="font-semibold mb-3">📋 Extracted Info</h3>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Business:</span>
-                      <span className="font-medium">{scrapeResult.businessName || '-'}</span>
+                        {SERVICE_TYPES.map(type => (
+                          <option key={type.value} value={type.value}>{type.label}</option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Service:</span>
-                      <span className="font-medium">
-                        {SERVICE_TYPES.find(t => t.value === scrapeResult.serviceType)?.label || scrapeResult.serviceType || '-'}
-                      </span>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Area *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.area}
+                        onChange={e => setFormData(prev => ({ ...prev, area: e.target.value }))}
+                        placeholder="e.g., Ampang"
+                        className="w-full px-3 py-2 border rounded-lg"
+                      />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Area:</span>
-                      <span className="font-medium">{scrapeResult.area || '-'}</span>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        WhatsApp *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.whatsapp_number}
+                        onChange={e => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
+                        placeholder="+60123456789"
+                        className="w-full px-3 py-2 border rounded-lg"
+                      />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Phone:</span>
-                      <span className="font-medium">{scrapeResult.phone || '-'}</span>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Owner Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.owner_name}
+                        onChange={e => setFormData(prev => ({ ...prev, owner_name: e.target.value }))}
+                        placeholder="Boss Ahmad"
+                        className="w-full px-3 py-2 border rounded-lg"
+                      />
                     </div>
-                    {scrapeResult.ownerName && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Owner:</span>
-                        <span className="font-medium">{scrapeResult.ownerName}</span>
-                      </div>
-                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Source
+                      </label>
+                      <select
+                        value={formData.source}
+                        onChange={e => setFormData(prev => ({ ...prev, source: e.target.value }))}
+                        className="w-full px-3 py-2 border rounded-lg"
+                      >
+                        {SOURCES.map(source => (
+                          <option key={source.value} value={source.value}>{source.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Website URL
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.website_url}
+                        onChange={e => setFormData(prev => ({ ...prev, website_url: e.target.value }))}
+                        placeholder="https://..."
+                        className="w-full px-3 py-2 border rounded-lg"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={saveScrapedProspect}
-                      disabled={isSaving || !scrapeResult.phone}
-                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-                    >
-                      {isSaving ? 'Saving...' : '✅ Save to Pipeline'}
-                    </button>
-                    <button
-                      onClick={() => setScrapeResult(null)}
-                      className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-                    >
-                      Clear
-                    </button>
+                  {/* Pain Signals */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Pain Signals
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {PAIN_SIGNALS.map(signal => (
+                        <button
+                          key={signal.value}
+                          type="button"
+                          onClick={() => togglePainSignal(signal.value)}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                            formData.pain_signals.includes(signal.value)
+                              ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
+                              : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'
+                          }`}
+                        >
+                          {signal.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {!scrapeResult.phone && (
-                    <p className="text-xs text-orange-600 mt-2">
-                      ⚠️ No phone found. Add manually or try a different page.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    {isSaving ? 'Saving...' : '➕ Add to Pipeline'}
+                  </button>
+                </form>
+              </div>
 
-            {/* Cost Info */}
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4">
-              <h3 className="font-semibold text-green-800 mb-2">💰 Cost Savings</h3>
-              <ul className="text-sm text-green-700 space-y-1">
-                <li>• Scrape only: ~$0.001 per website</li>
-                <li>• Full preview: ~$0.05 per website</li>
-                <li>• <strong>Only generate preview when they say YES!</strong></li>
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {/* FACEBOOK TAB */}
-        {activeTab === 'facebook' && (
-          <div className="max-w-xl">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold mb-4">📘 Extract from Facebook</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Copy-paste content from Facebook pages, posts, or comments.
-                <br />
-                AI will extract business info automatically.
-              </p>
-
-              <form onSubmit={handleFbExtract} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Facebook Context
-                  </label>
-                  <textarea
-                    required
-                    value={fbContext}
-                    onChange={e => setFbContext(e.target.value)}
-                    placeholder={`Paste here:\n• About section from Facebook page\n• Posts with "PM us for price"\n• Comments from service groups\n• Business page info\n\nExample:\n"Ahmad Pest Control - Professional pest control services in Ampang area. Call/WhatsApp 012-3456789 for free quotation. Operating since 2015."`}
-                    className="w-full px-3 py-2 border rounded-lg h-48 text-sm font-mono"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    The more context you paste, the better the extraction.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isFbExtracting || !fbContext.trim()}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-                >
-                  {isFbExtracting ? '🔍 Extracting...' : '🔍 Extract Business Info'}
-                </button>
-              </form>
-
-              {/* Facebook Result */}
-              {fbResult && (
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h3 className="font-semibold mb-3 text-blue-900">📋 Extracted Info</h3>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Business:</span>
-                      <span className="font-medium">{fbResult.businessName || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Service:</span>
-                      <span className="font-medium">
-                        {SERVICE_TYPES.find(t => t.value === fbResult.serviceType)?.label || fbResult.serviceType || '-'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Area:</span>
-                      <span className="font-medium">{fbResult.area || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Phone/WhatsApp:</span>
-                      <span className="font-medium">{fbResult.phone || '-'}</span>
-                    </div>
-                    {fbResult.ownerName && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Owner:</span>
-                        <span className="font-medium">{fbResult.ownerName}</span>
-                      </div>
-                    )}
-                    {fbResult.website && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Website:</span>
-                        <span className="font-medium text-blue-600 truncate max-w-[200px]">{fbResult.website}</span>
-                      </div>
-                    )}
-                    {fbResult.painSignals && fbResult.painSignals.length > 0 && (
-                      <div className="pt-2 border-t">
-                        <span className="text-slate-500 text-xs">Pain Signals:</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {fbResult.painSignals.map((signal: string) => (
-                            <span key={signal} className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
-                              {PAIN_SIGNALS.find(p => p.value === signal)?.label || signal}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={saveFbProspect}
-                      disabled={isSaving || !fbResult.phone}
-                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-                    >
-                      {isSaving ? 'Saving...' : '✅ Save to Pipeline'}
-                    </button>
-                    <button
-                      onClick={() => setFbResult(null)}
-                      className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-                    >
-                      Clear
-                    </button>
-                  </div>
-
-                  {!fbResult.phone && (
-                    <p className="text-xs text-orange-600 mt-2">
-                      ⚠️ No phone found. Add more context or edit manually after saving.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* What to Copy Tips */}
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <h3 className="font-semibold text-blue-800 mb-2">📝 What to Copy</h3>
-              <ul className="text-sm text-blue-700 space-y-2">
-                <li>
-                  <strong>Facebook Page "About"</strong>
-                  <br />
-                  <span className="text-xs text-blue-600">Business name, address, phone, hours</span>
-                </li>
-                <li>
-                  <strong>Group Posts</strong>
-                  <br />
-                  <span className="text-xs text-blue-600">"PM us for price" posts - shows they need a booking system</span>
-                </li>
-                <li>
-                  <strong>Review Comments</strong>
-                  <br />
-                  <span className="text-xs text-blue-600">Complaints about slow response = pain signal</span>
-                </li>
-                <li>
-                  <strong>Business Page Description</strong>
-                  <br />
-                  <span className="text-xs text-blue-600">Services offered, areas served</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Pain Signal Guide */}
-            <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <h3 className="font-semibold text-orange-800 mb-2">🎯 Pain Signals to Look For</h3>
-              <ul className="text-sm text-orange-700 space-y-1">
-                <li>• <strong>"PM for price"</strong> - No price list, manual quoting</li>
-                <li>• <strong>"WhatsApp only"</strong> - No booking system</li>
-                <li>• <strong>Late replies in comments</strong> - Overwhelmed</li>
-                <li>• <strong>No website mentioned</strong> - Digital opportunity</li>
-                <li>• <strong>Bad reviews about response time</strong> - Needs automation</li>
-              </ul>
+              {/* Tips */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <h3 className="font-semibold text-amber-800 mb-2">🎯 Hunter Rules</h3>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  <li>• Only collect info, don't sell yet</li>
+                  <li>• Look for pain signals ("PM us", slow replies)</li>
+                  <li>• Target: 20 prospects per session</li>
+                  <li>• Best sources: Facebook groups, Google Maps</li>
+                </ul>
+              </div>
             </div>
           </div>
         )}

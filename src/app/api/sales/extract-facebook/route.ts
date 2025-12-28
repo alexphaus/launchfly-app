@@ -28,6 +28,11 @@ const PAIN_SIGNALS = [
   'no_booking',     // No booking system
   'whatsapp_only',  // WhatsApp only
   'bad_reviews',    // Bad reviews
+  'missed_calls',   // Missed calls
+  'no_website',     // No website
+  'manual_quotes',  // Manual quoting
+  'messy_schedule', // Messy schedule
+  'broken_links',   // Broken links
 ];
 
 export async function POST(req: NextRequest) {
@@ -62,6 +67,11 @@ Extract the following fields from the provided context:
   - no_booking: If there's no mention of online booking/scheduling
   - whatsapp_only: If they only use WhatsApp for inquiries
   - bad_reviews: If there are negative reviews or complaints
+  - missed_calls: If they mention being busy, missing calls, or "call back later"
+  - no_website: If they don't have a website or only use Facebook/Instagram
+  - manual_quotes: If they ask for details to "quote manually" or "check price"
+  - messy_schedule: If they mention double booking, forgetting appointments, or "full schedule"
+  - broken_links: If users complain about links not working
 - notes: Any additional useful context (services offered, years in business, etc.)
 
 Be thorough but only include information that's clearly present in the context.

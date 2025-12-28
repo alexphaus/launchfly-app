@@ -472,7 +472,6 @@ Want to see the draft I made?`;
                       setShowPitchModal(true);
                     }}
                     onUpdateStatus={updateStatus}
-                    onOpenWhatsApp={(msg) => openWhatsApp(prospect, msg)}
                   />
                 ))
               )}
@@ -883,7 +882,8 @@ Want to see the draft I made?`;
 
             <button
               onClick={() => setShowPitchModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl"
+              aria-label="Close modal"
             >
               ✕
             </button>
@@ -916,7 +916,6 @@ function ProspectCard({
   onSendOpener: () => void;
   onShowPitch: () => void;
   onUpdateStatus: (id: string, status: string, extra?: Record<string, any>) => void;
-  onOpenWhatsApp: (message: string) => void;
 }) {
   const statusConfig = STATUS_CONFIG[prospect.status] || STATUS_CONFIG.new;
   const service = SERVICE_TYPES.find(t => t.value === prospect.service_type);
@@ -1019,6 +1018,12 @@ function ProspectCard({
                   🔗 Copy Link
                 </button>
               )}
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
+                className="px-3 py-1.5 text-slate-400 text-sm rounded-lg hover:bg-slate-50"
+              >
+                ❌ Not Interested
+              </button>
             </>
           )}
 
@@ -1030,6 +1035,14 @@ function ProspectCard({
               >
                 ✅ They Replied
               </button>
+              {prospect.status !== 'follow_up_3' && (
+                <button
+                  onClick={() => onUpdateStatus(prospect.id, prospect.status === 'follow_up_1' ? 'follow_up_2' : 'follow_up_3')}
+                  className="px-3 py-1.5 border text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+                >
+                  📤 Next Follow Up
+                </button>
+              )}
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
                 className="px-3 py-1.5 text-slate-400 text-sm rounded-lg hover:bg-slate-50"

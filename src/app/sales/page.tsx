@@ -124,7 +124,10 @@ export default function SalesPage() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       
-      const res = await fetch(`/api/hunter/prospects?${params}`);
+      const res = await fetch(`/api/hunter/prospects?${params}`, {
+        // Use cache for better performance
+        next: { revalidate: 10 }
+      });
       const data = await res.json();
       
       if (!res.ok) throw new Error(data.error);

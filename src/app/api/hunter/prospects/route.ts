@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const serviceType = searchParams.get('service_type');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const limit = parseInt(searchParams.get('limit') || '50'); // Reduced default for faster initial load
 
     let query = supabase
       .from('hunter_prospects')
@@ -35,7 +35,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ prospects: data });
+    // Add cache headers for better performance
+    return NextResponse.json(
+      { prospects: data },
+      { 
+        headers: { 
+          'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' 
+        } 
+      }
+    );
   } catch (err: any) {
     console.error('Error in GET /api/hunter/prospects:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

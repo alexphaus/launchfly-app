@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 
 // Types
 interface Prospect {
@@ -49,15 +50,6 @@ const PAIN_SIGNALS = [
   { value: 'no_website', label: 'No website' },
 ];
 
-const SOURCES = [
-  { value: 'facebook', label: '📘 Facebook' },
-  { value: 'google_maps', label: '📍 Google Maps' },
-  { value: 'instagram', label: '📸 Instagram' },
-  { value: 'referral', label: '🤝 Referral' },
-  { value: 'manual', label: '✏️ Manual' },
-  { value: 'other', label: '🌐 Other/Website' },
-];
-
 const STATUS_CONFIG: Record<string, { color: string; label: string; emoji: string }> = {
   new: { color: 'bg-gray-100 text-gray-800', label: 'New', emoji: '🆕' },
   opener_sent: { color: 'bg-blue-100 text-blue-800', label: 'Opener Sent', emoji: '📤' },
@@ -72,36 +64,11 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; emoji: strin
 };
 
 export default function SalesPage() {
-  // Tabs
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'add'>('pipeline');
-  
   // Prospects
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Add form
-  const [formData, setFormData] = useState({
-    business_name: '',
-    service_type: 'pest_control',
-    area: '',
-    whatsapp_number: '',
-    owner_name: '',
-    website_url: '',
-    source: 'facebook',
-    pain_signals: [] as string[],
-    notes: '',
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Scrape form
-  const [scrapeUrl, setScrapeUrl] = useState('');
-  const [isScraping, setIsScraping] = useState(false);
-  
-  // Facebook context form
-  const [fbContext, setFbContext] = useState('');
-  const [isFbExtracting, setIsFbExtracting] = useState(false);
   
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
@@ -226,145 +193,6 @@ Want to see the draft I made?`;
     }
   };
 
-  // Add prospect (manual)
-  const handleAddProspect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-
-    try {
-      const res = await fetch('/api/hunter/prospects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      showToast('success', '✅ Prospect added!');
-      
-      // Optimistic add - add to local state immediately
-      const newProspect: Prospect = {
-        id: data.prospect?.id || Date.now().toString(),
-        business_name: formData.business_name,
-        service_type: formData.service_type,
-        area: formData.area,
-        whatsapp_number: formData.whatsapp_number,
-        owner_name: formData.owner_name,
-        website_url: formData.website_url,
-        source: formData.source,
-        pain_signals: formData.pain_signals,
-        status: 'new',
-        notes: formData.notes,
-        created_at: new Date().toISOString(),
-      };
-      setProspects(prev => [newProspect, ...prev]);
-      
-      setFormData({
-        business_name: '',
-        service_type: 'pest_control',
-        area: '',
-        whatsapp_number: '',
-        owner_name: '',
-        website_url: '',
-        source: 'facebook',
-        pain_signals: [],
-        notes: '',
-      });
-      setFbContext('');
-      setScrapeUrl('');
-      setActiveTab('pipeline');
-    } catch (err: any) {
-      showToast('error', err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Scrape website (lightweight, no preview generation)
-  const handleScrape = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!scrapeUrl) return;
-
-    setIsScraping(true);
-    // setScrapeResult(null); // No longer needed
-
-    try {
-      const res = await fetch('/api/sales/scrape-light', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: scrapeUrl }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      // setScrapeResult(data); // No longer needed
-      
-      // Fill form data
-      setFormData(prev => ({
-        ...prev,
-        business_name: data.businessName || prev.business_name,
-        service_type: data.serviceType || prev.service_type,
-        area: data.area || prev.area,
-        whatsapp_number: data.phone || prev.whatsapp_number,
-        owner_name: data.ownerName || prev.owner_name,
-        website_url: scrapeUrl,
-        source: 'other',
-        pain_signals: data.painSignals || prev.pain_signals,
-        notes: data.notes || prev.notes,
-      }));
-
-      showToast('success', '✅ Business info extracted to form!');
-    } catch (err: any) {
-      showToast('error', err.message);
-    } finally {
-      setIsScraping(false);
-    }
-  };
-
-  // Extract from Facebook context (copy-paste)
-  const handleFbExtract = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fbContext.trim()) return;
-
-    setIsFbExtracting(true);
-    // setFbResult(null); // No longer needed
-
-    try {
-      const res = await fetch('/api/sales/extract-facebook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context: fbContext }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      // setFbResult(data); // No longer needed
-
-      // Fill form data
-      setFormData(prev => ({
-        ...prev,
-        business_name: data.businessName || prev.business_name,
-        service_type: data.serviceType || prev.service_type,
-        area: data.area || prev.area,
-        whatsapp_number: data.phone || prev.whatsapp_number,
-        owner_name: data.ownerName || prev.owner_name,
-        website_url: data.website || prev.website_url,
-        source: 'facebook',
-        pain_signals: data.painSignals || prev.pain_signals,
-        notes: data.notes || prev.notes,
-      }));
-
-      showToast('success', '✅ Business info extracted from Facebook to form!');
-    } catch (err: any) {
-      showToast('error', err.message);
-    } finally {
-      setIsFbExtracting(false);
-    }
-  };
-
   // Generate preview for replied prospect
   const generatePreview = async (prospect: Prospect) => {
     setIsGeneratingPreview(true);
@@ -416,16 +244,6 @@ Want to see the draft I made?`;
     }
   };
 
-  // Toggle pain signal
-  const togglePainSignal = (signal: string) => {
-    setFormData(prev => ({
-      ...prev,
-      pain_signals: prev.pain_signals.includes(signal)
-        ? prev.pain_signals.filter(s => s !== signal)
-        : [...prev.pain_signals, signal],
-    }));
-  };
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -452,351 +270,80 @@ Want to see the draft I made?`;
                 <div className="text-slate-500">Won</div>
               </div>
             </div>
-          </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 mt-4">
-            <button
-              onClick={() => setActiveTab('pipeline')}
-              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
-                activeTab === 'pipeline'
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              📋 Pipeline ({stats.pipeline})
-            </button>
-            <button
-              onClick={() => setActiveTab('add')}
-              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
-                activeTab === 'add'
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+            <Link 
+              href="/hunter"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
             >
               ➕ Quick Add
-            </button>
+            </Link>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* PIPELINE TAB */}
-        {activeTab === 'pipeline' && (
-          <div className="space-y-4">
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3 items-center">
-              <input
-                type="text"
-                placeholder="🔍 Search by name, area, or phone..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="flex-1 min-w-[200px] px-4 py-2 border rounded-lg text-sm"
-              />
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="px-4 py-2 border rounded-lg text-sm"
-              >
-                <option value="all">All Status</option>
-                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                  <option key={key} value={key}>{config.emoji} {config.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={loadProspects}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-              >
-                🔄 Refresh
-              </button>
-            </div>
-
-            {/* Prospect Cards */}
-            <div className="grid gap-3">
-              {isLoading ? (
-                <div className="text-center py-12 text-slate-500">Loading...</div>
-              ) : filteredProspects.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-4xl mb-2">🎯</p>
-                  <p className="text-slate-500">No prospects yet. Start hunting!</p>
-                  <button
-                    onClick={() => setActiveTab('add')}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
-                  >
-                    ➕ Add First Prospect
-                  </button>
-                </div>
-              ) : (
-                filteredProspects.map(prospect => (
-                  <ProspectCard
-                    key={prospect.id}
-                    prospect={prospect}
-                    onSendOpener={() => {
-                      setSelectedProspect(prospect);
-                      setShowOpenerModal(true);
-                    }}
-                    onShowPitch={() => {
-                      setSelectedProspect(prospect);
-                      setShowPitchModal(true);
-                    }}
-                    onUpdateStatus={updateStatus}
-                  />
-                ))
-              )}
-            </div>
+        <div className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <input
+              type="text"
+              placeholder="🔍 Search by name, area, or phone..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="flex-1 min-w-[200px] px-4 py-2 border rounded-lg text-sm"
+            />
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="px-4 py-2 border rounded-lg text-sm"
+            >
+              <option value="all">All Status</option>
+              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                <option key={key} value={key}>{config.emoji} {config.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={loadProspects}
+              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+            >
+              🔄 Refresh
+            </button>
           </div>
-        )}
 
-        {/* ADD TAB */}
-        {activeTab === 'add' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Extractors */}
-            <div className="space-y-6">
-              {/* Facebook Extractor */}
-              <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h2 className="text-lg font-semibold mb-4">📘 Extract from Facebook</h2>
-                <p className="text-sm text-slate-500 mb-4">
-                  Copy-paste content from Facebook pages, posts, or comments.
-                  <br />
-                  AI will extract business info automatically.
-                </p>
-
-                <form onSubmit={handleFbExtract} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Facebook Context
-                    </label>
-                    <textarea
-                      required
-                      value={fbContext}
-                      onChange={e => setFbContext(e.target.value)}
-                      placeholder={`Paste here:\n• About section from Facebook page\n• Posts with "PM us for price"\n• Comments from service groups\n• Business page info\n\nExample:\n"Ahmad Pest Control - Professional pest control services in Ampang area. Call/WhatsApp 012-3456789 for free quotation. Operating since 2015."`}
-                      className="w-full px-3 py-2 border rounded-lg h-48 text-sm font-mono"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      The more context you paste, the better the extraction.
-                    </p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isFbExtracting || !fbContext.trim()}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-                  >
-                    {isFbExtracting ? '🔍 Extracting...' : '🔍 Extract to Form'}
-                  </button>
-                </form>
+          {/* Prospect Cards */}
+          <div className="grid gap-3">
+            {isLoading ? (
+              <div className="text-center py-12 text-slate-500">Loading...</div>
+            ) : filteredProspects.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-4xl mb-2">🎯</p>
+                <p className="text-slate-500">No prospects yet. Start hunting!</p>
+                <Link
+                  href="/hunter"
+                  className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                >
+                  ➕ Add First Prospect
+                </Link>
               </div>
-
-              {/* Scrape Extractor */}
-              <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h2 className="text-lg font-semibold mb-4">🔍 Scrape Business Website</h2>
-                <p className="text-sm text-slate-500 mb-4">
-                  Extract business info using AI (gpt-4o-mini). Fast & cheap.
-                </p>
-
-                <form onSubmit={handleScrape} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Website URL
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      value={scrapeUrl}
-                      onChange={e => setScrapeUrl(e.target.value)}
-                      placeholder="https://example.com"
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isScraping}
-                    className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
-                  >
-                    {isScraping ? '🔍 Extracting...' : '🔍 Extract to Form'}
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            {/* Right Column: Form */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h2 className="text-lg font-semibold mb-4">➕ Add Prospect Manually</h2>
-                <p className="text-sm text-slate-500 mb-4">
-                  Review extracted data and save to pipeline.
-                </p>
-
-                <form onSubmit={handleAddProspect} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Business Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.business_name}
-                        onChange={e => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
-                        placeholder="e.g., Ahmad Pest Control"
-                        className="w-full px-3 py-2 border rounded-lg"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Service Type *
-                      </label>
-                      <select
-                        required
-                        value={formData.service_type}
-                        onChange={e => setFormData(prev => ({ ...prev, service_type: e.target.value }))}
-                        className="w-full px-3 py-2 border rounded-lg"
-                      >
-                        {SERVICE_TYPES.map(type => (
-                          <option key={type.value} value={type.value}>{type.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Area *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.area}
-                        onChange={e => setFormData(prev => ({ ...prev, area: e.target.value }))}
-                        placeholder="e.g., Ampang"
-                        className="w-full px-3 py-2 border rounded-lg"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        WhatsApp *
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        value={formData.whatsapp_number}
-                        onChange={e => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
-                        placeholder="+60123456789"
-                        className="w-full px-3 py-2 border rounded-lg"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Owner Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.owner_name}
-                        onChange={e => setFormData(prev => ({ ...prev, owner_name: e.target.value }))}
-                        placeholder="Boss Ahmad"
-                        className="w-full px-3 py-2 border rounded-lg"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Source
-                      </label>
-                      <select
-                        value={formData.source}
-                        onChange={e => setFormData(prev => ({ ...prev, source: e.target.value }))}
-                        className="w-full px-3 py-2 border rounded-lg"
-                      >
-                        {SOURCES.map(source => (
-                          <option key={source.value} value={source.value}>{source.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Website URL
-                      </label>
-                      <input
-                        type="url"
-                        value={formData.website_url}
-                        onChange={e => setFormData(prev => ({ ...prev, website_url: e.target.value }))}
-                        placeholder="https://..."
-                        className="w-full px-3 py-2 border rounded-lg"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Pain Signals */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Pain Signals
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {PAIN_SIGNALS.map(signal => (
-                        <button
-                          key={signal.value}
-                          type="button"
-                          onClick={() => togglePainSignal(signal.value)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                            formData.pain_signals.includes(signal.value)
-                              ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
-                              : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'
-                          }`}
-                        >
-                          {signal.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Notes / Context */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Notes / Context
-                      <span className="text-xs font-normal text-slate-500 ml-2">
-                        (AI uses this for preview generation)
-                      </span>
-                    </label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="• Services: termite treatment, general pest control\n• Pricing: RM90 basic, RM200 full house\n• Reviews: 'Fast response, came same day'\n• USP: 24/7 available, 10 years experience"
-                      rows={4}
-                      className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      Include services, prices, reviews, and unique selling points for better previews.
-                    </p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-                  >
-                    {isSaving ? 'Saving...' : '➕ Add to Pipeline'}
-                  </button>
-                </form>
-              </div>
-
-              {/* Tips */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <h3 className="font-semibold text-amber-800 mb-2">🎯 Hunter Rules</h3>
-                <ul className="text-sm text-amber-700 space-y-1">
-                  <li>• Only collect info, don't sell yet</li>
-                  <li>• Look for pain signals ("PM us", slow replies)</li>
-                  <li>• Target: 20 prospects per session</li>
-                  <li>• Best sources: Facebook groups, Google Maps</li>
-                </ul>
-              </div>
-            </div>
+            ) : (
+              filteredProspects.map(prospect => (
+                <ProspectCard
+                  key={prospect.id}
+                  prospect={prospect}
+                  onSendOpener={() => {
+                    setSelectedProspect(prospect);
+                    setShowOpenerModal(true);
+                  }}
+                  onShowPitch={() => {
+                    setSelectedProspect(prospect);
+                    setShowPitchModal(true);
+                  }}
+                  onUpdateStatus={updateStatus}
+                />
+              ))
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* OPENER MODAL */}

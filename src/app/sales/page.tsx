@@ -71,7 +71,7 @@ const STATUS_CONFIG: Record<string, { color: string; label: string; emoji: strin
 
 export default function SalesPage() {
   // Tabs
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'add' | 'scrape'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'add' | 'scrape' | 'facebook'>('pipeline');
   
   // Prospects
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -97,6 +97,11 @@ export default function SalesPage() {
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<any>(null);
+  
+  // Facebook context form
+  const [fbContext, setFbContext] = useState('');
+  const [isFbExtracting, setIsFbExtracting] = useState(false);
+  const [fbResult, setFbResult] = useState<any>(null);
   
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
@@ -302,6 +307,70 @@ Want to see the draft I made?`;
     }
   };
 
+  // Extract from Facebook context (copy-paste)
+  const handleFbExtract = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fbContext.trim()) return;
+
+    setIsFbExtracting(true);
+    setFbResult(null);
+
+    try {
+      const res = await fetch('/api/sales/extract-facebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: fbContext }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setFbResult(data);
+      showToast('success', '✅ Business info extracted from Facebook!');
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsFbExtracting(false);
+    }
+  };
+
+  // Save Facebook-extracted data as prospect
+  const saveFbProspect = async () => {
+    if (!fbResult) return;
+    
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/hunter/prospects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          business_name: fbResult.businessName,
+          service_type: fbResult.serviceType || 'other',
+          area: fbResult.area || '',
+          whatsapp_number: fbResult.phone || '',
+          owner_name: fbResult.ownerName || '',
+          website_url: fbResult.website || '',
+          source: 'facebook',
+          pain_signals: fbResult.painSignals || [],
+          notes: fbResult.notes || '',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', '✅ Prospect saved from Facebook!');
+      setFbResult(null);
+      setFbContext('');
+      setActiveTab('pipeline');
+      loadProspects();
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Generate preview for replied prospect
   const generatePreview = async (prospect: Prospect) => {
     setIsGeneratingPreview(true);
@@ -407,6 +476,16 @@ Want to see the draft I made?`;
               }`}
             >
               🔍 Scrape Website
+            </button>
+            <button
+              onClick={() => setActiveTab('facebook')}
+              className={`px-4 py-2 rounded-t-lg text-sm font-medium transition ${
+                activeTab === 'facebook'
+                  ? 'bg-slate-100 text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              📘 Facebook
             </button>
           </div>
         </div>
@@ -735,6 +814,159 @@ Want to see the draft I made?`;
                 <li>• Scrape only: ~$0.001 per website</li>
                 <li>• Full preview: ~$0.05 per website</li>
                 <li>• <strong>Only generate preview when they say YES!</strong></li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* FACEBOOK TAB */}
+        {activeTab === 'facebook' && (
+          <div className="max-w-xl">
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h2 className="text-lg font-semibold mb-4">📘 Extract from Facebook</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Copy-paste content from Facebook pages, posts, or comments.
+                <br />
+                AI will extract business info automatically.
+              </p>
+
+              <form onSubmit={handleFbExtract} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Facebook Context
+                  </label>
+                  <textarea
+                    required
+                    value={fbContext}
+                    onChange={e => setFbContext(e.target.value)}
+                    placeholder={`Paste here:\n• About section from Facebook page\n• Posts with "PM us for price"\n• Comments from service groups\n• Business page info\n\nExample:\n"Ahmad Pest Control - Professional pest control services in Ampang area. Call/WhatsApp 012-3456789 for free quotation. Operating since 2015."`}
+                    className="w-full px-3 py-2 border rounded-lg h-48 text-sm font-mono"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    The more context you paste, the better the extraction.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isFbExtracting || !fbContext.trim()}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  {isFbExtracting ? '🔍 Extracting...' : '🔍 Extract Business Info'}
+                </button>
+              </form>
+
+              {/* Facebook Result */}
+              {fbResult && (
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h3 className="font-semibold mb-3 text-blue-900">📋 Extracted Info</h3>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Business:</span>
+                      <span className="font-medium">{fbResult.businessName || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Service:</span>
+                      <span className="font-medium">
+                        {SERVICE_TYPES.find(t => t.value === fbResult.serviceType)?.label || fbResult.serviceType || '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Area:</span>
+                      <span className="font-medium">{fbResult.area || '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Phone/WhatsApp:</span>
+                      <span className="font-medium">{fbResult.phone || '-'}</span>
+                    </div>
+                    {fbResult.ownerName && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Owner:</span>
+                        <span className="font-medium">{fbResult.ownerName}</span>
+                      </div>
+                    )}
+                    {fbResult.website && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Website:</span>
+                        <span className="font-medium text-blue-600 truncate max-w-[200px]">{fbResult.website}</span>
+                      </div>
+                    )}
+                    {fbResult.painSignals && fbResult.painSignals.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <span className="text-slate-500 text-xs">Pain Signals:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {fbResult.painSignals.map((signal: string) => (
+                            <span key={signal} className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
+                              {PAIN_SIGNALS.find(p => p.value === signal)?.label || signal}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={saveFbProspect}
+                      disabled={isSaving || !fbResult.phone}
+                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                    >
+                      {isSaving ? 'Saving...' : '✅ Save to Pipeline'}
+                    </button>
+                    <button
+                      onClick={() => setFbResult(null)}
+                      className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {!fbResult.phone && (
+                    <p className="text-xs text-orange-600 mt-2">
+                      ⚠️ No phone found. Add more context or edit manually after saving.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* What to Copy Tips */}
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <h3 className="font-semibold text-blue-800 mb-2">📝 What to Copy</h3>
+              <ul className="text-sm text-blue-700 space-y-2">
+                <li>
+                  <strong>Facebook Page "About"</strong>
+                  <br />
+                  <span className="text-xs text-blue-600">Business name, address, phone, hours</span>
+                </li>
+                <li>
+                  <strong>Group Posts</strong>
+                  <br />
+                  <span className="text-xs text-blue-600">"PM us for price" posts - shows they need a booking system</span>
+                </li>
+                <li>
+                  <strong>Review Comments</strong>
+                  <br />
+                  <span className="text-xs text-blue-600">Complaints about slow response = pain signal</span>
+                </li>
+                <li>
+                  <strong>Business Page Description</strong>
+                  <br />
+                  <span className="text-xs text-blue-600">Services offered, areas served</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Pain Signal Guide */}
+            <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-4">
+              <h3 className="font-semibold text-orange-800 mb-2">🎯 Pain Signals to Look For</h3>
+              <ul className="text-sm text-orange-700 space-y-1">
+                <li>• <strong>"PM for price"</strong> - No price list, manual quoting</li>
+                <li>• <strong>"WhatsApp only"</strong> - No booking system</li>
+                <li>• <strong>Late replies in comments</strong> - Overwhelmed</li>
+                <li>• <strong>No website mentioned</strong> - Digital opportunity</li>
+                <li>• <strong>Bad reviews about response time</strong> - Needs automation</li>
               </ul>
             </div>
           </div>

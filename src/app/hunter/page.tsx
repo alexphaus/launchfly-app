@@ -58,6 +58,7 @@ const STATUS_COLORS: Record<string, string> = {
   new: 'bg-gray-100 text-gray-800',
   opener_sent: 'bg-blue-100 text-blue-800',
   replied: 'bg-green-100 text-green-800',
+  interested: 'bg-emerald-100 text-emerald-800',
   preview_sent: 'bg-purple-100 text-purple-800',
   follow_up_1: 'bg-yellow-100 text-yellow-800',
   follow_up_2: 'bg-orange-100 text-orange-800',
@@ -71,6 +72,7 @@ const STATUS_LABELS: Record<string, string> = {
   new: '🆕 New',
   opener_sent: '📤 Opener Sent',
   replied: '💬 Replied!',
+  interested: '🔥 Interested',
   preview_sent: '🔗 Preview Sent',
   follow_up_1: '1️⃣ Follow-up 1',
   follow_up_2: '2️⃣ Follow-up 2',
@@ -152,6 +154,7 @@ export default function HunterPage() {
       if (!res.ok) throw new Error(data.error);
 
       setSuccess('✅ Prospect added! Ready to send opener.');
+      setTimeout(() => setSuccess(''), 5000); // Auto-clear after 5s
       setFormData({
         business_name: '',
         service_type: 'pest_control',
@@ -166,6 +169,7 @@ export default function HunterPage() {
       loadProspects();
     } catch (err: any) {
       setError(err.message);
+      setTimeout(() => setError(''), 5000); // Auto-clear after 5s
     } finally {
       setIsSaving(false);
     }
@@ -566,7 +570,7 @@ export default function HunterPage() {
                               🚀 Generate Preview
                             </a>
                           )}
-                          {(prospect.status === 'follow_up_1' || prospect.status === 'follow_up_2') && (
+                          {['follow_up_1', 'follow_up_2', 'follow_up_3'].includes(prospect.status) && (
                             <>
                               <button
                                 onClick={() => updateStatus(prospect.id, 'replied')}
@@ -574,11 +578,19 @@ export default function HunterPage() {
                               >
                                 ✅ They Replied!
                               </button>
+                              {prospect.status !== 'follow_up_3' && (
+                                <button
+                                  onClick={() => updateStatus(prospect.id, prospect.status === 'follow_up_1' ? 'follow_up_2' : 'follow_up_3')}
+                                  className="px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600"
+                                >
+                                  📤 Next Follow Up
+                                </button>
+                              )}
                               <button
-                                onClick={() => updateStatus(prospect.id, prospect.status === 'follow_up_1' ? 'follow_up_2' : 'follow_up_3')}
-                                className="px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600"
+                                onClick={() => updateStatus(prospect.id, 'closed_lost')}
+                                className="px-3 py-1.5 bg-gray-400 text-white text-sm rounded-lg hover:bg-gray-500"
                               >
-                                📤 Next Follow Up
+                                ❌ No Response
                               </button>
                             </>
                           )}
@@ -612,7 +624,13 @@ export default function HunterPage() {
       {/* Opener Modal */}
       {showOpenerModal && selectedProspect && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
+            <button
+              onClick={() => setShowOpenerModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl"
+            >
+              ✕
+            </button>
             <h3 className="text-lg font-semibold mb-4">📤 Send Opener Message</h3>
             
             <div className="bg-gray-100 rounded-lg p-4 mb-4">

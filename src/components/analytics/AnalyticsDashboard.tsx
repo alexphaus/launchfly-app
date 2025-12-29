@@ -28,16 +28,29 @@ export default function AnalyticsDashboard({
     // Group by date
     const grouped = new Map();
     
-    // Add businesses
-    data.businesses.forEach((b: any) => {
-      const date = new Date(b.created_at).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        timeZone: 'Asia/Manila'
-      });
-      if (!grouped.has(date)) grouped.set(date, { date, businesses: 0, leads: 0, revenue: 0 });
-      grouped.get(date).businesses += 1;
-      grouped.get(date).leads += (b.total_leads || 0);
+    // Add openers and replies
+    data.prospects?.forEach((p: any) => {
+      // Opener Sent
+      if (p.opener_sent_at) {
+        const openerDate = new Date(p.opener_sent_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          timeZone: 'Asia/Manila'
+        });
+        if (!grouped.has(openerDate)) grouped.set(openerDate, { date: openerDate, openers: 0, revenue: 0, replies: 0 });
+        grouped.get(openerDate).openers += 1;
+      }
+
+      // Reply Received
+      if (p.replied_at) {
+        const replyDate = new Date(p.replied_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          timeZone: 'Asia/Manila'
+        });
+        if (!grouped.has(replyDate)) grouped.set(replyDate, { date: replyDate, openers: 0, revenue: 0, replies: 0 });
+        grouped.get(replyDate).replies += 1;
+      }
     });
 
     // Add orders (revenue)
@@ -47,7 +60,7 @@ export default function AnalyticsDashboard({
         day: 'numeric',
         timeZone: 'Asia/Manila'
       });
-      if (!grouped.has(date)) grouped.set(date, { date, businesses: 0, leads: 0, revenue: 0 });
+      if (!grouped.has(date)) grouped.set(date, { date, openers: 0, revenue: 0, replies: 0 });
       grouped.get(date).revenue += (o.total_amount || 0);
     });
 
@@ -139,7 +152,7 @@ export default function AnalyticsDashboard({
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="text-lg font-bold text-slate-900">Growth Trajectory</h3>
-              <p className="text-sm text-slate-500">Revenue and Business Growth (Last 30 Days)</p>
+              <p className="text-sm text-slate-500">Revenue and Outreach Growth (Last 30 Days)</p>
             </div>
             <select className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1 text-sm">
               <option>Last 30 Days</option>
@@ -155,9 +168,13 @@ export default function AnalyticsDashboard({
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                   </linearGradient>
-                  <linearGradient id="colorBiz" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorOpeners" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorReplies" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -167,7 +184,8 @@ export default function AnalyticsDashboard({
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue ($)" />
-                <Area type="monotone" dataKey="businesses" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorBiz)" name="Businesses" />
+                <Area type="monotone" dataKey="openers" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorOpeners)" name="Outreach" />
+                <Area type="monotone" dataKey="replies" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorReplies)" name="Replies" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

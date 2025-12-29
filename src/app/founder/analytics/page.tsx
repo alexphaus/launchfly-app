@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import AnalyticsDashboard from '@/components/analytics/AnalyticsDashboard';
-import FOSMetrics from '@/components/analytics/FOSMetrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +22,7 @@ export default async function FounderAnalyticsPage() {
     supabase.from('orders').select('id, total_amount, created_at, status, stripe_session_id').eq('status', 'fulfilled'),
     supabase.from('ai_activities').select('*, businesses(name)').order('created_at', { ascending: false }).limit(50),
     supabase.from('platform_subscriptions').select('id, amount, stripe_session_id, payment_status, created_at').eq('payment_status', 'completed'),
-    supabase.from('sales_prospects').select('*').order('created_at', { ascending: false }),
+    supabase.from('hunter_prospects').select('*').order('created_at', { ascending: false }),
     supabase.from('outreach_messages').select('*').order('sent_at', { ascending: false }).limit(100)
   ]);
 
@@ -62,43 +61,16 @@ export default async function FounderAnalyticsPage() {
   const totalLeads = businesses?.reduce((sum, b) => sum + (b.total_leads || 0), 0) || 0;
   const activeBusinesses = businesses?.filter(b => b.status === 'active' || b.status === 'ready').length || 0;
 
-  // FOS Metrics calculations
-  const today = new Date().toDateString();
-  const todayProspects = prospects?.filter(p => new Date(p.created_at).toDateString() === today) || [];
-  const todayOpeners = prospects?.filter(p => p.opener_sent_at && new Date(p.opener_sent_at).toDateString() === today) || [];
-  
-  const fosMetrics = {
-    totalProspects: prospects?.length || 0,
-    todayProspects: todayProspects.length,
-    todayOpeners: todayOpeners.length,
-    replied: prospects?.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length || 0,
-    interested: prospects?.filter(p => ['interested', 'converted'].includes(p.status)).length || 0,
-    converted: prospects?.filter(p => p.status === 'converted').length || 0,
-    previewsGenerated: prospects?.filter(p => p.preview_business_id).length || 0,
-    noResponse: prospects?.filter(p => p.status === 'no_response').length || 0,
-    // Cost savings: prospects without preview * $0.05 estimated AI cost
-    costSaved: ((prospects?.length || 0) - (prospects?.filter(p => p.preview_business_id).length || 0)) * 0.05,
-    // Response rate
-    responseRate: prospects?.length ? 
-      Math.round((prospects.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length / prospects.length) * 100) : 0,
-    // Conversion rate from replied
-    conversionRate: prospects?.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length ?
-      Math.round((prospects.filter(p => p.status === 'converted').length / prospects.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length) * 100) : 0,
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Founder Analytics</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Launchfly Analytics</h1>
           <p className="text-slate-600 mt-2">Real-time platform performance metrics.</p>
         </div>
 
-        {/* FOS Metrics Section */}
-        <FOSMetrics metrics={fosMetrics} />
-
         <AnalyticsDashboard 
-          data={{ businesses: businesses || [], orders: mergedOrders }}
+          data={{ businesses: businesses || [], orders: mergedOrders, prospects: prospects || [] }}
           revenue={totalRevenue}
           leads={totalLeads}
           businesses={activeBusinesses}

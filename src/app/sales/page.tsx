@@ -77,6 +77,7 @@ export default function SalesPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // Opener Selection State
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
@@ -256,6 +257,38 @@ Want to see the draft I made?`;
     }
   };
 
+  // Send email via API
+  const handleSendEmail = async (prospect: Prospect, message: string) => {
+    if (!prospect.email) {
+      showToast('error', 'No email address found for this prospect');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const res = await fetch('/api/sales/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: prospect.email,
+          subject: `Question regarding ${prospect.business_name}`,
+          text: message,
+          html: message.replace(/\n/g, '<br/>'),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showToast('success', '📧 Email sent successfully!');
+      // Optionally mark as sent here, or let user click the button
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -387,8 +420,8 @@ Want to see the draft I made?`;
                       key={i}
                       onClick={() => setSelectedOpenerArea(area)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerArea === area
-                          ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
                       {area}
@@ -397,8 +430,8 @@ Want to see the draft I made?`;
                   <button
                     onClick={() => setSelectedOpenerArea(selectedProspect.area)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerArea === selectedProspect.area
-                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                   >
                     All Areas
@@ -417,8 +450,8 @@ Want to see the draft I made?`;
                       key={i}
                       onClick={() => setSelectedOpenerPhone(phone)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerPhone === phone
-                          ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                     >
                       {phone}
@@ -441,21 +474,18 @@ Want to see the draft I made?`;
 
             <div className="flex gap-3">
               <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(generateOpener(selectedProspect, selectedOpenerArea));
-                  showToast('success', '📋 Copied!');
-                }}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50"
+                disabled={!selectedProspect.email || isSendingEmail}
+                onClick={() => handleSendEmail(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea))}
+                className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
               >
-                📋 Copy
+                {isSendingEmail ? '⏳ Sending...' : '📧 Send Email'}
               </button>
               <button
                 onClick={() => {
                   openWhatsApp(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea), selectedOpenerPhone || undefined);
-                  updateStatus(selectedProspect.id, 'opener_sent');
-                  setShowOpenerModal(false);
+                  // Don't close or update status automatically
                 }}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-600 hover:to-green-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
               >
                 💬 WhatsApp
               </button>
@@ -466,9 +496,9 @@ Want to see the draft I made?`;
                 updateStatus(selectedProspect.id, 'opener_sent');
                 setShowOpenerModal(false);
               }}
-              className="w-full mt-3 px-4 py-2 text-sm text-slate-500 hover:text-slate-700"
+              className="w-full mt-4 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
-              Mark as sent & close
+              ✅ Mark as sent & close
             </button>
 
             <button

@@ -1,8 +1,21 @@
 'use client';
 
+import { 
+  Users, 
+  Send, 
+  MessageSquare, 
+  ThumbsUp, 
+  CheckCircle, 
+  TrendingUp, 
+  Zap,
+  DollarSign,
+  Link as LinkIcon
+} from 'lucide-react';
+
 interface FOSMetricsProps {
   metrics: {
     totalProspects: number;
+    totalSent: number;
     todayProspects: number;
     todayOpeners: number;
     replied: number;
@@ -18,186 +31,177 @@ interface FOSMetricsProps {
 
 export default function FOSMetrics({ metrics }: FOSMetricsProps) {
   return (
-    <div className="mb-8">
-      <h2 className="text-xl font-semibold text-slate-900 mb-4">
-        🎯 Founder Operating System Metrics
-      </h2>
-      
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
-        <StatCard
-          label="Total Prospects"
-          value={metrics.totalProspects}
-          emoji="📋"
-          color="slate"
-        />
-        <StatCard
-          label="Today Added"
-          value={metrics.todayProspects}
-          emoji="🆕"
-          color="blue"
-        />
-        <StatCard
-          label="Openers Sent Today"
-          value={metrics.todayOpeners}
-          emoji="📤"
-          color="indigo"
-        />
-        <StatCard
-          label="Replied"
-          value={metrics.replied}
-          emoji="💬"
-          color="green"
-        />
-        <StatCard
-          label="Interested"
-          value={metrics.interested}
-          emoji="🔥"
-          color="orange"
-        />
-        <StatCard
-          label="Converted"
-          value={metrics.converted}
-          emoji="🎉"
-          color="emerald"
-        />
-      </div>
-
-      {/* Secondary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-500">Response Rate</span>
-            <span className="text-lg">📊</span>
+    <div className="mb-8 space-y-6">
+      {/* Header & High-Level KPIs */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-yellow-500" />
+              Founder Operating System
+            </h2>
+            <p className="text-sm text-slate-500">Live performance tracking</p>
           </div>
-          <div className="text-2xl font-bold text-slate-900">
-            {metrics.responseRate}%
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            {metrics.replied} / {metrics.totalProspects} replied
+          
+          {/* Efficiency Badges */}
+          <div className="flex gap-3">
+            <div className="px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-sm font-medium flex items-center gap-2 border border-green-100">
+              <DollarSign className="w-3.5 h-3.5" />
+              ${metrics.costSaved.toFixed(2)} Saved
+            </div>
+            <div className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-full text-sm font-medium flex items-center gap-2 border border-purple-100">
+              <LinkIcon className="w-3.5 h-3.5" />
+              {metrics.previewsGenerated} Previews
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-500">Close Rate</span>
-            <span className="text-lg">🎯</span>
-          </div>
-          <div className="text-2xl font-bold text-slate-900">
-            {metrics.conversionRate}%
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            {metrics.converted} / {metrics.replied} converted
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-500">Previews Generated</span>
-            <span className="text-lg">🔗</span>
-          </div>
-          <div className="text-2xl font-bold text-purple-600">
-            {metrics.previewsGenerated}
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            Only for interested leads
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-500">AI Cost Saved</span>
-            <span className="text-lg">💰</span>
-          </div>
-          <div className="text-2xl font-bold text-green-600">
-            ${metrics.costSaved.toFixed(2)}
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            By not auto-generating previews
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6 border-t border-slate-100">
+          <KPICard 
+            label="Response Rate" 
+            value={`${metrics.responseRate}%`} 
+            subtext={`${metrics.replied} replies received`}
+            trend="neutral"
+          />
+          <KPICard 
+            label="Conversion Rate" 
+            value={`${metrics.conversionRate}%`} 
+            subtext={`${metrics.converted} deals won`}
+            trend="positive"
+          />
+          <KPICard 
+            label="Active Pipeline" 
+            value={metrics.totalProspects - metrics.converted - metrics.noResponse} 
+            subtext="Prospects in progress"
+            trend="neutral"
+          />
         </div>
       </div>
 
-      {/* Pipeline Summary */}
-      <div className="mt-6 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border p-4">
-        <h3 className="font-medium text-slate-700 mb-3">📈 Pipeline Summary</h3>
-        <div className="flex items-center gap-2 text-sm overflow-x-auto pb-2">
-          <PipelineStage label="New" count={metrics.totalProspects - metrics.replied - metrics.noResponse} color="gray" />
-          <Arrow />
-          <PipelineStage label="Sent" count={metrics.todayOpeners} color="blue" />
-          <Arrow />
-          <PipelineStage label="Replied" count={metrics.replied} color="green" />
-          <Arrow />
-          <PipelineStage label="Preview" count={metrics.previewsGenerated} color="purple" />
-          <Arrow />
-          <PipelineStage label="Won" count={metrics.converted} color="emerald" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Funnel View */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <h3 className="text-sm font-semibold text-slate-900 mb-6 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-slate-500" />
+            Conversion Funnel
+          </h3>
+          
+          <div className="space-y-4">
+            <FunnelRow 
+              label="Total Prospects" 
+              count={metrics.totalProspects} 
+              total={metrics.totalProspects}
+              color="bg-slate-100"
+              textColor="text-slate-700"
+              icon={<Users className="w-4 h-4" />}
+            />
+            <FunnelRow 
+              label="Outreach Sent" 
+              count={metrics.totalSent} 
+              total={metrics.totalProspects}
+              color="bg-blue-50"
+              textColor="text-blue-700"
+              icon={<Send className="w-4 h-4" />}
+            />
+            <FunnelRow 
+              label="Replied" 
+              count={metrics.replied} 
+              total={metrics.totalProspects}
+              color="bg-indigo-50"
+              textColor="text-indigo-700"
+              icon={<MessageSquare className="w-4 h-4" />}
+            />
+            <FunnelRow 
+              label="Interested" 
+              count={metrics.interested} 
+              total={metrics.totalProspects}
+              color="bg-orange-50"
+              textColor="text-orange-700"
+              icon={<ThumbsUp className="w-4 h-4" />}
+            />
+            <FunnelRow 
+              label="Converted" 
+              count={metrics.converted} 
+              total={metrics.totalProspects}
+              color="bg-emerald-50"
+              textColor="text-emerald-700"
+              icon={<CheckCircle className="w-4 h-4" />}
+            />
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function StatCard({ 
-  label, 
-  value, 
-  emoji, 
-  color 
-}: { 
-  label: string; 
-  value: number; 
-  emoji: string; 
-  color: string;
-}) {
-  const colorMap: Record<string, string> = {
-    slate: 'text-slate-900',
-    blue: 'text-blue-600',
-    indigo: 'text-indigo-600',
-    green: 'text-green-600',
-    orange: 'text-orange-600',
-    emerald: 'text-emerald-600',
-    purple: 'text-purple-600',
-  };
+        {/* Daily Activity */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <h3 className="text-sm font-semibold text-slate-900 mb-6 flex items-center gap-2">
+            <CalendarIcon />
+            Today's Activity
+          </h3>
+          
+          <div className="space-y-6">
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="text-sm text-slate-500 mb-1">New Prospects Added</div>
+              <div className="text-3xl font-bold text-slate-900">{metrics.todayProspects}</div>
+            </div>
+            
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+              <div className="text-sm text-blue-600 mb-1">Openers Sent</div>
+              <div className="text-3xl font-bold text-blue-900">{metrics.todayOpeners}</div>
+            </div>
 
-  return (
-    <div className="bg-white rounded-xl border p-4">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-slate-500">{label}</span>
-        <span className="text-lg">{emoji}</span>
-      </div>
-      <div className={`text-2xl font-bold ${colorMap[color] || 'text-slate-900'}`}>
-        {value}
+            <div className="pt-4 border-t border-slate-100">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500">Pending Replies</span>
+                <span className="font-medium text-slate-900">
+                  {metrics.totalSent - metrics.replied - metrics.noResponse}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function PipelineStage({ 
-  label, 
-  count, 
-  color 
-}: { 
-  label: string; 
-  count: number; 
-  color: string;
-}) {
-  const bgMap: Record<string, string> = {
-    gray: 'bg-gray-100 text-gray-700',
-    blue: 'bg-blue-100 text-blue-700',
-    green: 'bg-green-100 text-green-700',
-    purple: 'bg-purple-100 text-purple-700',
-    emerald: 'bg-emerald-100 text-emerald-700',
-  };
-
+function KPICard({ label, value, subtext, trend }: { label: string, value: string | number, subtext: string, trend: 'positive' | 'negative' | 'neutral' }) {
   return (
-    <div className={`px-3 py-2 rounded-lg ${bgMap[color] || 'bg-gray-100'} whitespace-nowrap`}>
-      <span className="font-medium">{count}</span>
-      <span className="ml-1 text-xs opacity-75">{label}</span>
+    <div>
+      <div className="text-sm font-medium text-slate-500 mb-1">{label}</div>
+      <div className="text-3xl font-bold text-slate-900 mb-1">{value}</div>
+      <div className="text-xs text-slate-400">{subtext}</div>
     </div>
   );
 }
 
-function Arrow() {
+function FunnelRow({ label, count, total, color, textColor, icon }: { label: string, count: number, total: number, color: string, textColor: string, icon: React.ReactNode }) {
+  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+  
   return (
-    <span className="text-slate-300 flex-shrink-0">→</span>
+    <div className="relative">
+      <div className="flex items-center justify-between mb-1 text-sm">
+        <div className={`flex items-center gap-2 font-medium ${textColor}`}>
+          {icon}
+          {label}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-slate-400 text-xs">{percentage}%</span>
+          <span className="font-bold text-slate-900">{count}</span>
+        </div>
+      </div>
+      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+        <div 
+          className={`h-full rounded-full ${color.replace('bg-', 'bg-opacity-100 bg-').replace('50', '500')}`} 
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
   );
 }

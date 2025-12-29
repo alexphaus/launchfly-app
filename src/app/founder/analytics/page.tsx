@@ -67,23 +67,26 @@ export default async function FounderAnalyticsPage() {
   const todayProspects = prospects?.filter(p => new Date(p.created_at).toDateString() === today) || [];
   const todayOpeners = prospects?.filter(p => p.opener_sent_at && new Date(p.opener_sent_at).toDateString() === today) || [];
   
+  const totalSent = prospects?.filter(p => p.opener_sent_at).length || 0;
+  const repliedCount = prospects?.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length || 0;
+  const convertedCount = prospects?.filter(p => p.status === 'converted').length || 0;
+
   const fosMetrics = {
     totalProspects: prospects?.length || 0,
+    totalSent,
     todayProspects: todayProspects.length,
     todayOpeners: todayOpeners.length,
-    replied: prospects?.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length || 0,
+    replied: repliedCount,
     interested: prospects?.filter(p => ['interested', 'converted'].includes(p.status)).length || 0,
-    converted: prospects?.filter(p => p.status === 'converted').length || 0,
+    converted: convertedCount,
     previewsGenerated: prospects?.filter(p => p.preview_business_id).length || 0,
     noResponse: prospects?.filter(p => p.status === 'no_response').length || 0,
     // Cost savings: prospects without preview * $0.05 estimated AI cost
     costSaved: ((prospects?.length || 0) - (prospects?.filter(p => p.preview_business_id).length || 0)) * 0.05,
-    // Response rate
-    responseRate: prospects?.length ? 
-      Math.round((prospects.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length / prospects.length) * 100) : 0,
+    // Response rate (based on sent)
+    responseRate: totalSent ? Math.round((repliedCount / totalSent) * 100) : 0,
     // Conversion rate from replied
-    conversionRate: prospects?.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length ?
-      Math.round((prospects.filter(p => p.status === 'converted').length / prospects.filter(p => ['replied', 'interested', 'converted'].includes(p.status)).length) * 100) : 0,
+    conversionRate: repliedCount ? Math.round((convertedCount / repliedCount) * 100) : 0,
   };
 
   return (

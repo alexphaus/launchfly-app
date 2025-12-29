@@ -1058,6 +1058,46 @@ function ProspectCard({
   const lastActivity = prospect.replied_at || prospect.opener_sent_at || prospect.created_at;
   const daysSince = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
 
+  // Calculate if follow-up is available based on timing rules
+  const getFollowUpAvailability = (): { canFollowUp: boolean; hoursRemaining: number; label: string } => {
+    const now = Date.now();
+    const HOUR = 60 * 60 * 1000;
+    const DAY = 24 * HOUR;
+
+    if (prospect.status === 'opener_sent' && prospect.opener_sent_at) {
+      const hoursSince = (now - new Date(prospect.opener_sent_at).getTime()) / HOUR;
+      if (hoursSince < 24) {
+        return { canFollowUp: false, hoursRemaining: Math.ceil(24 - hoursSince), label: 'Wait 24h' };
+      }
+    }
+
+    if (prospect.status === 'follow_up_1' && prospect.last_follow_up_at) {
+      const hoursSince = (now - new Date(prospect.last_follow_up_at).getTime()) / HOUR;
+      if (hoursSince < 48) {
+        return { canFollowUp: false, hoursRemaining: Math.ceil(48 - hoursSince), label: 'Wait 48h' };
+      }
+    }
+
+    if (prospect.status === 'follow_up_2' && prospect.last_follow_up_at) {
+      const daysSinceFollow = (now - new Date(prospect.last_follow_up_at).getTime()) / DAY;
+      if (daysSinceFollow < 5) {
+        const hoursRemaining = Math.ceil((5 - daysSinceFollow) * 24);
+        return { canFollowUp: false, hoursRemaining, label: 'Wait 5d' };
+      }
+    }
+
+    if (prospect.status === 'preview_sent' && prospect.preview_sent_at) {
+      const hoursSince = (now - new Date(prospect.preview_sent_at).getTime()) / HOUR;
+      if (hoursSince < 24) {
+        return { canFollowUp: false, hoursRemaining: Math.ceil(24 - hoursSince), label: 'Wait 24h' };
+      }
+    }
+
+    return { canFollowUp: true, hoursRemaining: 0, label: '' };
+  };
+
+  const followUpStatus = getFollowUpAvailability();
+
   return (
     <div className="p-6 hover:bg-slate-50 transition">
       <div className="flex items-start justify-between gap-4">
@@ -1122,10 +1162,14 @@ function ProspectCard({
                 ✅ They Replied
               </button>
               <button
-                onClick={onFollowUp}
-                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+                onClick={followUpStatus.canFollowUp ? onFollowUp : undefined}
+                disabled={!followUpStatus.canFollowUp}
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${followUpStatus.canFollowUp
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
               >
-                📞 Send Follow-Up
+                {followUpStatus.canFollowUp ? '📞 Send Follow-Up' : `⏰ ${followUpStatus.hoursRemaining}h`}
               </button>
             </>
           )}
@@ -1148,10 +1192,14 @@ function ProspectCard({
                 🎉 They Paid!
               </button>
               <button
-                onClick={onFollowUp}
-                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+                onClick={followUpStatus.canFollowUp ? onFollowUp : undefined}
+                disabled={!followUpStatus.canFollowUp}
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${followUpStatus.canFollowUp
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
               >
-                📞 Follow Up
+                {followUpStatus.canFollowUp ? '📞 Follow Up' : `⏰ ${followUpStatus.hoursRemaining}h`}
               </button>
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
@@ -1172,10 +1220,14 @@ function ProspectCard({
               </button>
               {prospect.status !== 'follow_up_3' && (
                 <button
-                  onClick={onFollowUp}
-                  className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+                  onClick={followUpStatus.canFollowUp ? onFollowUp : undefined}
+                  disabled={!followUpStatus.canFollowUp}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${followUpStatus.canFollowUp
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
                 >
-                  📞 Next Follow-Up
+                  {followUpStatus.canFollowUp ? '📞 Next Follow-Up' : `⏰ ${followUpStatus.hoursRemaining}h`}
                 </button>
               )}
               <button

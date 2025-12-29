@@ -21,9 +21,9 @@ interface Prospect {
   opener_sent_at?: string;
   replied_at?: string;
   preview_sent_at?: string;
+  last_follow_up_at?: string;
   preview_url?: string;
   preview_business_id?: string;
-  last_follow_up_at?: string;
 }
 
 // Service types for blue collar businesses
@@ -71,15 +71,16 @@ export default function SalesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isMorningActionView, setIsMorningActionView] = useState(false);
+  const [morningActionFilter, setMorningActionFilter] = useState(false);
 
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
-  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [prospectViewed, setProspectViewed] = useState(false);
 
   // Opener Selection State
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
@@ -99,7 +100,7 @@ export default function SalesPage() {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'all' && !isMorningActionView) params.set('status', statusFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
 
       const res = await fetch(`/api/hunter/prospects?${params}`, {
         // Ensure fresh data
@@ -114,52 +115,63 @@ export default function SalesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter, isMorningActionView]);
+  }, [statusFilter]);
 
   useEffect(() => {
     loadProspects();
   }, [loadProspects]);
 
-  // Filter prospects
-  const getFilteredProspects = () => {
-    let filtered = prospects;
+  // Check if prospect needs follow-up based on time (for Morning Action filter)
+  const needsFollowUp = (prospect: Prospect): boolean => {
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
 
-    // Morning Action Filter Logic
-    if (isMorningActionView) {
-      const now = Date.now();
-      filtered = filtered.filter(p => {
-        // Rule 1: Opener Sent > 24 hours ago
-        if (p.status === 'opener_sent' && p.opener_sent_at) {
-          const diffHours = (now - new Date(p.opener_sent_at).getTime()) / (1000 * 60 * 60);
-          return diffHours > 24;
-        }
-        // Rule 2: Follow-up 1 > 48 hours ago (Day 3 check)
-        if (p.status === 'follow_up_1' && p.last_follow_up_at) {
-          const diffHours = (now - new Date(p.last_follow_up_at).getTime()) / (1000 * 60 * 60);
-          return diffHours > 48;
-        }
-        // Rule 3: Follow-up 2 > 48 hours ago (Day 5 check)
-        if (p.status === 'follow_up_2' && p.last_follow_up_at) {
-          const diffHours = (now - new Date(p.last_follow_up_at).getTime()) / (1000 * 60 * 60);
-          return diffHours > 48; // Using 48h gap between 3 and 5
-        }
-        return false;
-      });
+    if (prospect.status === 'opener_sent' && prospect.opener_sent_at) {
+      const hoursSince = (now - new Date(prospect.opener_sent_at).getTime()) / (60 * 60 * 1000);
+      return hoursSince >= 24;
     }
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p =>
-        p.business_name.toLowerCase().includes(query) ||
-        p.area.toLowerCase().includes(query) ||
-        p.whatsapp_number.includes(query) ||
-        (p.owner_name && p.owner_name.toLowerCase().includes(query))
-      );
+    if (prospect.status === 'follow_up_1' && prospect.last_follow_up_at) {
+      const hoursSince = (now - new Date(prospect.last_follow_up_at).getTime()) / (60 * 60 * 1000);
+      return hoursSince >= 48;
     }
-    return filtered;
+
+    if (prospect.status === 'follow_up_2' && prospect.last_follow_up_at) {
+      const daysSince = (now - new Date(prospect.last_follow_up_at).getTime()) / DAY;
+      return daysSince >= 5;
+    }
+
+    // Mid-chat ghosting: Replied status > 2 days ago
+    if (prospect.status === 'replied' && prospect.replied_at) {
+      const daysSince = (now - new Date(prospect.replied_at).getTime()) / DAY;
+      return daysSince >= 2;
+    }
+
+    // Preview sent but no response after 24 hours
+    if (prospect.status === 'preview_sent' && prospect.preview_sent_at) {
+      const hoursSince = (now - new Date(prospect.preview_sent_at).getTime()) / (60 * 60 * 1000);
+      return hoursSince >= 24;
+    }
+
+    return false;
   };
 
-  const filteredProspects = getFilteredProspects();
+  // Filter prospects by search and morning action
+  const filteredProspects = prospects.filter(p => {
+    // Morning action filter - show only prospects needing follow-up
+    if (morningActionFilter) {
+      if (!needsFollowUp(p)) return false;
+    }
+
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      p.business_name.toLowerCase().includes(query) ||
+      p.area.toLowerCase().includes(query) ||
+      p.whatsapp_number.includes(query) ||
+      (p.owner_name && p.owner_name.toLowerCase().includes(query))
+    );
+  });
 
   // Stats
   const stats = {
@@ -171,13 +183,7 @@ export default function SalesPage() {
       if (!p.opener_sent_at) return false;
       return new Date(p.opener_sent_at).toDateString() === new Date().toDateString();
     }).length,
-    morningActionCount: prospects.filter(p => {
-      const now = Date.now();
-      if (p.status === 'opener_sent' && p.opener_sent_at) return (now - new Date(p.opener_sent_at).getTime()) > 24 * 60 * 60 * 1000;
-      if (p.status === 'follow_up_1' && p.last_follow_up_at) return (now - new Date(p.last_follow_up_at).getTime()) > 48 * 60 * 60 * 1000;
-      if (p.status === 'follow_up_2' && p.last_follow_up_at) return (now - new Date(p.last_follow_up_at).getTime()) > 48 * 60 * 60 * 1000;
-      return false;
-    }).length,
+    morningAction: prospects.filter(p => needsFollowUp(p)).length,
   };
 
   // Generate opener message
@@ -214,62 +220,73 @@ Alex`
 
   // Generate pitch message (after they say yes)
   const generatePitch = (prospect: Prospect): string => {
-    return `Cun. 👍 (Sorry boss, I'm not a customer 😅)
+    return `Nice 👍  Here is the preview I made for you.
 
-I actually built a simple WhatsApp booking page for ${prospect.business_name} that helps catch enquiries when you're busy.
+👉 ${prospect.preview_url || '[PREVIEW LINK]'}
 
-Want to see the draft I made?`;
+Just scroll & imagine customers clicking this while you’re busy on-site.`;
   };
 
-  // Generate Follow-up Message based on status
-  const generateFollowUp = (prospect: Prospect): { message: string, nextStatus: string } => {
-    // Day 1: Soft nudge (Status: opener_sent -> follow_up_1)
-    if (prospect.status === 'opener_sent') {
-      return {
-        message: `Hi boss 👋
-Just checking — did you see my message yesterday?
-
-No rush, just want to know if this is relevant for you 👍`,
-        nextStatus: 'follow_up_1'
-      };
+  // Generate follow-up message based on status (Day 1/3/5 strategy + Behavior)
+  const generateFollowUp = (prospect: Prospect, viewed: boolean = false): { message: string; nextStatus: string; label: string } => {
+    switch (prospect.status) {
+      case 'opener_sent':
+        return {
+          message: `Hi boss 👋 Just checking — did you see my message yesterday?\n\nNo rush, just want to know if this is relevant for you 👍`,
+          nextStatus: 'follow_up_1',
+          label: 'Day 1 - Soft Nudge'
+        };
+      case 'follow_up_1':
+        return {
+          message: `Quick one boss 🙂\n\nMost service owners I spoke to miss enquiries when they're on site / busy.\nThat's why I built this — auto-reply + capture details so leads don't disappear.\n\nIf this isn't for you, just tell me "not now" 👍`,
+          nextStatus: 'follow_up_2',
+          label: 'Day 3 - Value Reminder'
+        };
+      case 'follow_up_2':
+        return {
+          message: `Last message from me boss 👍\n\nShould I send you the quick preview, or is this something you want to skip for now?`,
+          nextStatus: 'follow_up_3',
+          label: 'Day 5 - Breakup'
+        };
+      case 'preview_sent':
+        if (viewed) {
+          return {
+            message: `Hey boss 👋\nSaw you checked the preview — any thoughts?\n\nHappy to adjust it to your business if you want 👍`,
+            nextStatus: 'follow_up_1', // Re-enter funnel or specific loop
+            label: 'Viewed Preview Follow-up'
+          };
+        } else {
+          return {
+            message: `Hi boss 👋\n\nJust checking if you managed to open the preview link I sent?\n\nLet me know if it didn't work 👍`,
+            nextStatus: 'follow_up_1',
+            label: 'Preview Follow-up'
+          };
+        }
+      case 'replied':
+        // Mid-chat ghosting
+        return {
+          message: `All good boss 👍\nJust let me know if you want to continue later.`,
+          nextStatus: 'closed_lost', // Or keep as replied/follow_up
+          label: 'Ghosting / Soft Close'
+        };
+      default:
+        // Generic or if they are in follow_up_3 etc
+        if (viewed && prospect.status !== 'closed_won') {
+          return {
+            message: `Hey boss 👋\nSaw you checked the preview — any thoughts?\n\nHappy to adjust it to your business if you want 👍`,
+            nextStatus: 'follow_up_1',
+            label: 'Viewed Preview Follow-up'
+          };
+        }
+        return {
+          message: `Hi boss 👋 Just checking in — any updates?`,
+          nextStatus: 'follow_up_1',
+          label: 'Follow-up'
+        };
     }
-
-    // Day 3: Value reminder (Status: follow_up_1 -> follow_up_2)
-    if (prospect.status === 'follow_up_1') {
-      return {
-        message: `Quick one boss 🙂
-
-Most service owners I spoke to miss enquiries when they're on site / busy.
-That’s why I built this — auto-reply + capture details so leads don’t disappear.
-
-If this isn’t for you, just tell me “not now” 👍`,
-        nextStatus: 'follow_up_2'
-      };
-    }
-
-    // Day 5: Permission-based close (Status: follow_up_2 -> follow_up_3)
-    if (prospect.status === 'follow_up_2') {
-      return {
-        message: `Last message from me boss 👍
-
-Should I send you the quick preview, or is this something you want to skip for now?`,
-        nextStatus: 'follow_up_3'
-      };
-    }
-
-    // Saw Preview but didn't reply
-    if (prospect.status === 'preview_sent') {
-      return {
-        message: `Hey boss 👋
-Saw you checked the preview — any thoughts?
-
-Happy to adjust it to your business if you want 👍`,
-        nextStatus: 'follow_up_1' // Or generic follow up
-      };
-    }
-
-    return { message: '', nextStatus: prospect.status };
   };
+
+
 
   // Open WhatsApp
   const openWhatsApp = (prospect: Prospect, message: string, customPhone?: string) => {
@@ -292,7 +309,6 @@ Happy to adjust it to your business if you want 👍`,
           ...(newStatus === 'opener_sent' ? { opener_sent_at: new Date().toISOString() } : {}),
           ...(newStatus === 'replied' ? { replied_at: new Date().toISOString() } : {}),
           ...(newStatus === 'preview_sent' ? { preview_sent_at: new Date().toISOString() } : {}),
-          ...(newStatus.startsWith('follow_up') ? { last_follow_up_at: new Date().toISOString() } : {}),
         }
         : p
     ));
@@ -358,8 +374,18 @@ Happy to adjust it to your business if you want 👍`,
         preview_business_id: data.businessId,
       });
 
+      // Update selected prospect so modal reflects changes immediately
+      if (selectedProspect && selectedProspect.id === prospect.id) {
+        setSelectedProspect(prev => prev ? ({
+          ...prev,
+          status: 'preview_sent',
+          preview_url: data.previewUrl,
+          preview_business_id: data.businessId
+        }) : null);
+      }
+
       showToast('success', '🚀 Preview generated!');
-      setShowPitchModal(false);
+      // Keep modal open so user can copy the updated pitch
       loadProspects();
     } catch (err: any) {
       showToast('error', err.message);
@@ -395,29 +421,12 @@ Happy to adjust it to your business if you want 👍`,
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setIsMorningActionView(!isMorningActionView);
-                setStatusFilter('all'); // Reset status filter when entering morning mode
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer ${isMorningActionView
-                ? 'bg-amber-100 text-amber-900 ring-2 ring-amber-400'
-                : 'bg-white text-slate-600 hover:text-amber-600'
-                }`}
-            >
-              <span>☀️</span> Morning Action
-              {stats.morningActionCount > 0 && (
-                <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{stats.morningActionCount}</span>
-              )}
-            </button>
-            <Link
-              href="/hunter"
-              className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer"
-            >
-              <span>➕</span> Quick Add
-            </Link>
-          </div>
+          <Link
+            href="/hunter"
+            className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer"
+          >
+            <span>➕</span> Quick Add
+          </Link>
         </div>
 
         {/* Main Content Card */}
@@ -425,42 +434,41 @@ Happy to adjust it to your business if you want 👍`,
           {/* Filters Header */}
           <div className="p-6 border-b border-slate-100 bg-slate-50/50">
             <div className="flex flex-wrap gap-3 items-center">
-              {isMorningActionView ? (
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                    ☀️ Morning Action
-                    <span className="text-xs font-normal text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                      {filteredProspects.length} to annoy today
-                    </span>
-                  </h3>
-                  <p className="text-sm text-amber-700/80">
-                    These prospects are ready for their next follow-up. Clear them out in 2 mins!
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="relative flex-1 min-w-[200px]">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                    <input
-                      type="text"
-                      placeholder="Search by name, area, or phone..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <select
-                    value={statusFilter}
-                    onChange={e => setStatusFilter(e.target.value)}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">All Status</option>
-                    {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>{config.emoji} {config.label}</option>
-                    ))}
-                  </select>
-                </>
-              )}
+              <div className="relative flex-1 min-w-[200px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search by name, area, or phone..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>{config.emoji} {config.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setMorningActionFilter(!morningActionFilter)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2 ${morningActionFilter
+                  ? 'bg-amber-500 text-white shadow hover:bg-amber-600'
+                  : 'border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'
+                  }`}
+              >
+                ☀️ Morning Action
+                {stats.morningAction > 0 && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${morningActionFilter ? 'bg-white/20' : 'bg-amber-200'
+                    }`}>
+                    {stats.morningAction}
+                  </span>
+                )}
+              </button>
               <button
                 onClick={loadProspects}
                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 rounded-lg transition-all cursor-pointer"
@@ -476,30 +484,14 @@ Happy to adjust it to your business if you want 👍`,
               <div className="text-center py-12 text-slate-500">Loading...</div>
             ) : filteredProspects.length === 0 ? (
               <div className="text-center py-12">
-                {isMorningActionView ? (
-                  <>
-                    <p className="text-4xl mb-2">🎉</p>
-                    <p className="text-slate-500 font-medium">All caught up!</p>
-                    <p className="text-sm text-slate-400">No follow-ups needed right now.</p>
-                    <button
-                      onClick={() => setIsMorningActionView(false)}
-                      className="mt-4 text-blue-600 hover:underline text-sm"
-                    >
-                      Return to full list
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-4xl mb-2">🎯</p>
-                    <p className="text-slate-500">No prospects yet. Start hunting!</p>
-                    <Link
-                      href="/hunter"
-                      className="mt-4 inline-block px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg text-sm font-medium shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
-                    >
-                      ➕ Add First Prospect
-                    </Link>
-                  </>
-                )}
+                <p className="text-4xl mb-2">🎯</p>
+                <p className="text-slate-500">No prospects yet. Start hunting!</p>
+                <Link
+                  href="/hunter"
+                  className="mt-4 inline-block px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg text-sm font-medium shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+                >
+                  ➕ Add First Prospect
+                </Link>
               </div>
             ) : (
               filteredProspects.map(prospect => (
@@ -524,12 +516,34 @@ Happy to adjust it to your business if you want 👍`,
                     setSelectedProspect(prospect);
                     setShowDetailsModal(true);
                   }}
-                  onShowFollowUp={() => {
+                  onFollowUp={() => {
                     setSelectedProspect(prospect);
+                    const phones = prospect.whatsapp_number.match(/\+?\d{8,}/g) || [prospect.whatsapp_number];
+                    setSelectedOpenerPhone(phones[0]);
+
+                    // Reset view status first
+                    setProspectViewed(false);
+
+                    // If preview sent, check if they viewed
+                    if (prospect.status === 'preview_sent' || prospect.preview_business_id) {
+                      // We can optimistically check or just load
+                      // For now, let's fetch
+                      const checkView = async () => {
+                        try {
+                          if (!prospect.preview_business_id) return;
+                          const res = await fetch(`/api/sales/check-view?business_id=${prospect.preview_business_id}`);
+                          const data = await res.json();
+                          if (data.viewed) setProspectViewed(true);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      };
+                      checkView();
+                    }
+
                     setShowFollowUpModal(true);
                   }}
                   onUpdateStatus={updateStatus}
-                  isMorningAction={isMorningActionView}
                 />
               ))
             )}
@@ -755,10 +769,15 @@ Happy to adjust it to your business if you want 👍`,
             )}
 
             <button
-              onClick={() => setShowPitchModal(false)}
-              className="w-full mt-3 px-4 py-2 text-sm text-slate-500 hover:text-slate-700"
+              onClick={() => {
+                // Set to 'preview_sent' so it queues up for later follow-up in Morning Action
+                updateStatus(selectedProspect.id, 'preview_sent');
+                setShowPitchModal(false);
+              }}
+              className="w-full mt-3 px-4 py-3 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
             >
-              Close
+              ⏰ Follow-Up for Later
+              <span className="text-xs font-normal text-slate-500">(Adds to Morning Action)</span>
             </button>
 
             <button
@@ -772,53 +791,94 @@ Happy to adjust it to your business if you want 👍`,
         </div>
       )}
 
-      {/* FOLLOW UP MODAL */}
-      {showFollowUpModal && selectedProspect && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
-            <h3 className="text-lg font-semibold mb-2">
-              {STATUS_CONFIG[selectedProspect.status]?.emoji} Follow Up Time
-            </h3>
-            <div className="bg-slate-100 rounded-lg p-4 mb-4">
-              <p className="text-slate-800 whitespace-pre-wrap text-sm font-medium">
-                {generateFollowUp(selectedProspect).message}
-              </p>
-            </div>
+      {/* FOLLOW-UP MODAL */}
+      {showFollowUpModal && selectedProspect && (() => {
+        const followUp = generateFollowUp(selectedProspect, prospectViewed);
 
-            <div className="flex gap-3">
-              <button
-                onClick={async () => {
-                  await navigator.clipboard.writeText(generateFollowUp(selectedProspect).message);
-                  showToast('success', '📋 Copied!');
-                }}
-                className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
-              >
-                📋 Copy
-              </button>
+        const phones = selectedProspect.whatsapp_number.match(/\+?\d{8,}/g) || [selectedProspect.whatsapp_number];
+
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
+              <h3 className="text-lg font-semibold mb-2">📞 {followUp.label}</h3>
+              <p className="text-sm text-slate-500 mb-4">
+                Send this follow-up to keep the conversation going.
+              </p>
+
+              {/* Phone Selection (if multiple) */}
+              {phones.length > 1 && (
+                <div className="mb-4">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Select Phone</label>
+                  <div className="flex flex-wrap gap-2">
+                    {phones.map((phone, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedOpenerPhone(phone)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerPhone === phone
+                          ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                      >
+                        {phone}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-slate-100 rounded-lg p-4 mb-4">
+                <p className="text-slate-800 whitespace-pre-wrap text-sm">
+                  {followUp.message}
+                </p>
+              </div>
+
+              <div className="text-sm text-slate-500 mb-4">
+                <p><strong>To:</strong> {selectedProspect.business_name}</p>
+                <p><strong>WhatsApp:</strong> {selectedOpenerPhone || phones[0]}</p>
+                <p><strong>Next status:</strong> {STATUS_CONFIG[followUp.nextStatus]?.label || followUp.nextStatus}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(followUp.message);
+                    showToast('success', '📋 Copied!');
+                  }}
+                  className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  📋 Copy Text
+                </button>
+                <button
+                  onClick={() => {
+                    const phone = selectedOpenerPhone || phones[0];
+                    openWhatsApp(selectedProspect, followUp.message, phone);
+                  }}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-600 hover:to-green-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  💬 WhatsApp
+                </button>
+              </div>
 
               <button
                 onClick={() => {
-                  const { message, nextStatus } = generateFollowUp(selectedProspect);
-                  openWhatsApp(selectedProspect, message);
-                  // Auto update status after sending
-                  updateStatus(selectedProspect.id, nextStatus);
+                  updateStatus(selectedProspect.id, followUp.nextStatus);
                   setShowFollowUpModal(false);
                 }}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-600 hover:to-green-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                className="w-full mt-4 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
               >
-                💬 Send & Update
+                ✅ Mark as sent & close
+              </button>
+
+              <button
+                onClick={() => setShowFollowUpModal(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+              >
+                ✕
               </button>
             </div>
-
-            <button
-              onClick={() => setShowFollowUpModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-            >
-              ✕
-            </button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* DETAILS MODAL */}
       {showDetailsModal && selectedProspect && (
@@ -924,6 +984,32 @@ Happy to adjust it to your business if you want 👍`,
               </div>
             )}
 
+            {selectedProspect.preview_url && (
+              <div className="mb-6">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Preview Link</label>
+                <div className="flex items-center gap-3 bg-purple-50 p-4 rounded-lg border border-purple-100">
+                  <span className="text-purple-500 text-lg">🔗</span>
+                  <a
+                    href={selectedProspect.preview_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-purple-600 hover:underline flex-1 truncate"
+                  >
+                    {selectedProspect.preview_url}
+                  </a>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedProspect.preview_url!);
+                      showToast('success', '🔗 Link copied!');
+                    }}
+                    className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <button
                 onClick={() => setShowDetailsModal(false)}
@@ -955,23 +1041,21 @@ function ProspectCard({
   onSendOpener,
   onShowPitch,
   onShowDetails,
-  onShowFollowUp,
+  onFollowUp,
   onUpdateStatus,
-  isMorningAction = false
 }: {
   prospect: Prospect;
   onSendOpener: () => void;
   onShowPitch: () => void;
   onShowDetails: () => void;
-  onShowFollowUp: () => void;
+  onFollowUp: () => void;
   onUpdateStatus: (id: string, status: string, extra?: Record<string, any>) => void;
-  isMorningAction?: boolean;
 }) {
   const statusConfig = STATUS_CONFIG[prospect.status] || STATUS_CONFIG.new;
   const service = SERVICE_TYPES.find(t => t.value === prospect.service_type);
 
   // Calculate days since last activity
-  const lastActivity = prospect.last_follow_up_at || prospect.replied_at || prospect.opener_sent_at || prospect.created_at;
+  const lastActivity = prospect.replied_at || prospect.opener_sent_at || prospect.created_at;
   const daysSince = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
 
   return (
@@ -990,15 +1074,9 @@ function ProspectCard({
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
               {statusConfig.emoji} {statusConfig.label}
             </span>
-            {daysSince >= 1 && prospect.status !== 'new' && !['closed_won', 'closed_lost'].includes(prospect.status) && (
-              <span className={`px-2 py-0.5 rounded-full text-xs ${daysSince >= 3 ? 'bg-red-100 text-red-700 font-bold' : 'bg-slate-100 text-slate-600'
-                }`}>
+            {daysSince > 2 && prospect.status !== 'new' && !['closed_won', 'closed_lost'].includes(prospect.status) && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">
                 ⏰ {daysSince}d ago
-              </span>
-            )}
-            {isMorningAction && (
-              <span className="animate-pulse bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">
-                ⚠️ Needs Action
               </span>
             )}
           </div>
@@ -1025,116 +1103,94 @@ function ProspectCard({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
-          {/* Action buttons based on status */}
-
-          {/* New -> Open */}
+        <div className="flex flex-col gap-2 flex-shrink-0">
           {prospect.status === 'new' && (
             <button
               onClick={onSendOpener}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-all"
+              className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
               📤 Send Opener
             </button>
           )}
 
-          {/* Opener Sent -> Waiting or Follow-up */}
           {prospect.status === 'opener_sent' && (
-            isMorningAction ? (
-              <button
-                onClick={onShowFollowUp}
-                className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 shadow-sm transition-all flex items-center gap-1"
-              >
-                <span>👋</span> Follow Up 1
-              </button>
-            ) : (
+            <>
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'replied')}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:text-green-600 hover:border-green-200 hover:bg-green-50 transition-all"
+                className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
               >
-                Mark Replied
+                ✅ They Replied
               </button>
-            )
+              <button
+                onClick={onFollowUp}
+                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              >
+                📞 Send Follow-Up
+              </button>
+            </>
           )}
 
-          {/* Follow ups - Show Morning Action Button if critical */}
-          {(prospect.status === 'follow_up_1' || prospect.status === 'follow_up_2') && (
-            isMorningAction ? (
-              <button
-                onClick={onShowFollowUp}
-                className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 shadow-sm transition-all flex items-center gap-1"
-              >
-                <span>👀</span> {prospect.status === 'follow_up_1' ? 'Follow Up 2' : 'Final Close'}
-              </button>
-            ) : (
-              <button
-                onClick={() => onUpdateStatus(prospect.id, 'replied')}
-                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:text-green-600 hover:border-green-200 hover:bg-green-50 transition-all"
-              >
-                Mark Replied
-              </button>
-            )
-          )}
-
-          {/* Replied -> Pitch */}
           {(prospect.status === 'replied' || prospect.status === 'interested') && (
             <button
               onClick={onShowPitch}
-              className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm transition-all"
+              className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
-              🔥 Send Pitch
+              🚀 Send Pitch
             </button>
           )}
 
-          {/* Preview Sent -> Close */}
           {prospect.status === 'preview_sent' && (
-            <button
-              onClick={onShowFollowUp}
-              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:text-blue-600 hover:bg-blue-50 transition-all"
-            >
-              Ask Thoughts
-            </button>
+            <>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'closed_won')}
+                className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              >
+                🎉 They Paid!
+              </button>
+              <button
+                onClick={onFollowUp}
+                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              >
+                📞 Follow Up
+              </button>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
+                className="px-3 py-1.5 text-slate-400 text-sm font-medium rounded-lg hover:text-slate-600 hover:bg-slate-50 transition-all duration-200 cursor-pointer"
+              >
+                ❌ Not Interested
+              </button>
+            </>
           )}
 
-          {/* Won/Lost */}
-          {['closed_won', 'closed_lost'].includes(prospect.status) ? (
-            <button
-              onClick={() => onUpdateStatus(prospect.id, 'new')}
-              className="p-1.5 text-slate-400 hover:text-slate-600"
-              title="Re-open"
-            >
-              🔄
-            </button>
-          ) : (
-            !isMorningAction && (
-              <div className="relative group">
-                <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded">
-                  ⋮
+          {['follow_up_1', 'follow_up_2', 'follow_up_3'].includes(prospect.status) && (
+            <>
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'replied')}
+                className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              >
+                ✅ They Replied
+              </button>
+              {prospect.status !== 'follow_up_3' && (
+                <button
+                  onClick={onFollowUp}
+                  className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+                >
+                  📞 Next Follow-Up
                 </button>
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 hidden group-hover:block z-10">
-                  <button
-                    onClick={() => onUpdateStatus(prospect.id, 'closed_won')}
-                    className="w-full text-left px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50"
-                  >
-                    🎉 Mark Won
-                  </button>
-                  <button
-                    onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
-                    className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                  >
-                    ❌ Mark Lost
-                  </button>
-                  {/* Manual Status Overrides */}
-                  <div className="border-t border-slate-100 my-1"></div>
-                  <button
-                    onClick={onShowFollowUp}
-                    className="w-full text-left px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
-                  >
-                    📤 Force Follow Up
-                  </button>
-                </div>
-              </div>
-            )
+              )}
+              <button
+                onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
+                className="px-3 py-1.5 text-slate-400 text-sm font-medium rounded-lg hover:text-slate-600 hover:bg-slate-50 transition-all duration-200 cursor-pointer"
+              >
+                ❌ No Response
+              </button>
+            </>
+          )}
+
+          {prospect.status === 'closed_won' && (
+            <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 text-sm rounded-lg text-center">
+              🎉 Won!
+            </span>
           )}
         </div>
       </div>

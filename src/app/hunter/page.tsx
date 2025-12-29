@@ -211,38 +211,36 @@ export default function HunterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">🏹 Hunter Mode</h1>
-              <p className="text-sm text-slate-500">Quickly add prospects to the pipeline</p>
-            </div>
-            
-            <Link 
-              href="/sales"
-              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition"
-            >
-              📋 View Pipeline
-            </Link>
+    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Hunter Mode</h1>
+            <p className="text-slate-600 mt-2">Quickly add prospects to the pipeline</p>
           </div>
+          <Link 
+            href="/sales"
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-sm"
+          >
+            📋 View Pipeline
+          </Link>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column: Extractors */}
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Facebook Extractor */}
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold mb-4">📘 Extract from Facebook</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Copy-paste content from Facebook pages, posts, or comments.
-                <br />
-                AI will extract business info automatically.
-              </p>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  <span className="text-xl">📘</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Extract from Facebook</h2>
+                  <p className="text-sm text-slate-500">Copy-paste content from pages or posts</p>
+                </div>
+              </div>
 
               <form onSubmit={handleFbExtract} className="space-y-4">
                 <div>
@@ -254,7 +252,7 @@ export default function HunterPage() {
                     value={fbContext}
                     onChange={e => setFbContext(e.target.value)}
                     placeholder={`Paste here:\n• About section from Facebook page\n• Posts with "PM us for price"\n• Comments from service groups\n• Business page info\n\nExample:\n"Ahmad Pest Control - Professional pest control services in Ampang area. Call/WhatsApp 012-3456789 for free quotation. Operating since 2015."`}
-                    className="w-full px-3 py-2 border rounded-lg h-48 text-sm font-mono"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg h-48 text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                   />
                   <p className="text-xs text-slate-500 mt-1">
                     The more context you paste, the better the extraction.
@@ -264,7 +262,7 @@ export default function HunterPage() {
                 <button
                   type="submit"
                   disabled={isFbExtracting || !fbContext.trim()}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition shadow-sm"
                 >
                   {isFbExtracting ? '🔍 Extracting...' : '🔍 Extract to Form'}
                 </button>
@@ -272,11 +270,16 @@ export default function HunterPage() {
             </div>
 
             {/* Scrape Extractor */}
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold mb-4">🔍 Scrape Business Website</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Extract business info using AI (gpt-4o-mini). Fast & cheap.
-              </p>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-slate-100 rounded-lg">
+                  <span className="text-xl">🔍</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Scrape Website</h2>
+                  <p className="text-sm text-slate-500">Extract info from business URL</p>
+                </div>
+              </div>
 
               <form onSubmit={handleScrape} className="space-y-4">
                 <div>
@@ -289,14 +292,14 @@ export default function HunterPage() {
                     value={scrapeUrl}
                     onChange={e => setScrapeUrl(e.target.value)}
                     placeholder="https://example.com"
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-transparent outline-none transition"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isScraping}
-                  className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition"
+                  className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition shadow-sm"
                 >
                   {isScraping ? '🔍 Extracting...' : '🔍 Extract to Form'}
                 </button>
@@ -306,11 +309,16 @@ export default function HunterPage() {
 
           {/* Right Column: Form */}
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h2 className="text-lg font-semibold mb-4">➕ Add Prospect Manually</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Review extracted data and save to pipeline.
-              </p>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 sticky top-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <span className="text-xl">➕</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Add Prospect</h2>
+                  <p className="text-sm text-slate-500">Review and save to pipeline</p>
+                </div>
+              </div>
 
               <form onSubmit={handleAddProspect} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -324,7 +332,7 @@ export default function HunterPage() {
                       value={formData.business_name}
                       onChange={e => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
                       placeholder="e.g., Ahmad Pest Control"
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>
 
@@ -336,7 +344,7 @@ export default function HunterPage() {
                       required
                       value={formData.service_type}
                       onChange={e => setFormData(prev => ({ ...prev, service_type: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     >
                       {SERVICE_TYPES.map(type => (
                         <option key={type.value} value={type.value}>{type.label}</option>
@@ -354,7 +362,7 @@ export default function HunterPage() {
                       value={formData.area}
                       onChange={e => setFormData(prev => ({ ...prev, area: e.target.value }))}
                       placeholder="e.g., Ampang"
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>
 
@@ -368,7 +376,7 @@ export default function HunterPage() {
                       value={formData.whatsapp_number}
                       onChange={e => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
                       placeholder="+60123456789"
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>
 
@@ -381,7 +389,7 @@ export default function HunterPage() {
                       value={formData.owner_name}
                       onChange={e => setFormData(prev => ({ ...prev, owner_name: e.target.value }))}
                       placeholder="Boss Ahmad"
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>
 
@@ -392,7 +400,7 @@ export default function HunterPage() {
                     <select
                       value={formData.source}
                       onChange={e => setFormData(prev => ({ ...prev, source: e.target.value }))}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     >
                       {SOURCES.map(source => (
                         <option key={source.value} value={source.value}>{source.label}</option>
@@ -409,7 +417,7 @@ export default function HunterPage() {
                       value={formData.website_url}
                       onChange={e => setFormData(prev => ({ ...prev, website_url: e.target.value }))}
                       placeholder="https://..."
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>
                 </div>
@@ -450,7 +458,7 @@ export default function HunterPage() {
                     onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                     placeholder="• Services: termite treatment, general pest control\n• Pricing: RM90 basic, RM200 full house\n• Reviews: 'Fast response, came same day'\n• USP: 24/7 available, 10 years experience"
                     rows={4}
-                    className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                   />
                   <p className="text-xs text-slate-500 mt-1">
                     Include services, prices, reviews, and unique selling points for better previews.
@@ -460,7 +468,7 @@ export default function HunterPage() {
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition shadow-sm"
                 >
                   {isSaving ? 'Saving...' : '➕ Add to Pipeline'}
                 </button>

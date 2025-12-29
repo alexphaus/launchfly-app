@@ -245,73 +245,74 @@ Want to see the draft I made?`;
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">🎯 Sales Pipeline</h1>
-              <p className="text-sm text-slate-500">Hunter → Closer → Builder</p>
-            </div>
-            
-            {/* Quick Stats */}
-            <div className="flex gap-6 text-sm">
-              <div className="text-center">
-                <div className="text-xl font-bold text-slate-900">{stats.todaySent}</div>
-                <div className="text-slate-500">Sent Today</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-green-600">{stats.replied}</div>
-                <div className="text-slate-500">Hot Leads</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-emerald-600">{stats.won}</div>
-                <div className="text-slate-500">Won</div>
-              </div>
-            </div>
+    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Sales Pipeline</h1>
+            <p className="text-slate-600 mt-2">Hunter → Closer → Builder</p>
+          </div>
+          <Link 
+            href="/hunter"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+          >
+            ➕ Quick Add
+          </Link>
+        </div>
 
-            <Link 
-              href="/hunter"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-            >
-              ➕ Quick Add
-            </Link>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="text-sm font-medium text-slate-500 mb-1">Sent Today</div>
+            <div className="text-2xl font-bold text-slate-900">{stats.todaySent}</div>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="text-sm font-medium text-slate-500 mb-1">Hot Leads</div>
+            <div className="text-2xl font-bold text-green-600">{stats.replied}</div>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="text-sm font-medium text-slate-500 mb-1">Won</div>
+            <div className="text-2xl font-bold text-emerald-600">{stats.won}</div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <input
-              type="text"
-              placeholder="🔍 Search by name, area, or phone..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="flex-1 min-w-[200px] px-4 py-2 border rounded-lg text-sm"
-            />
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border rounded-lg text-sm"
-            >
-              <option value="all">All Status</option>
-              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                <option key={key} value={key}>{config.emoji} {config.label}</option>
-              ))}
-            </select>
-            <button
-              onClick={loadProspects}
-              className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-            >
-              🔄 Refresh
-            </button>
+        {/* Main Content Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          {/* Filters Header */}
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[200px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search by name, area, or phone..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>{config.emoji} {config.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={loadProspects}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 rounded-lg transition-all"
+              >
+                🔄 Refresh
+              </button>
+            </div>
           </div>
 
-          {/* Prospect Cards */}
-          <div className="grid gap-3">
+          {/* Prospect List */}
+          <div className="divide-y divide-slate-100">
             {isLoading ? (
               <div className="text-center py-12 text-slate-500">Loading...</div>
             ) : filteredProspects.length === 0 ? (
@@ -530,7 +531,7 @@ function ProspectCard({
   const daysSince = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
 
   return (
-    <div className="bg-white rounded-lg border p-4 hover:shadow-sm transition">
+    <div className="p-6 hover:bg-slate-50 transition">
       <div className="flex items-start justify-between gap-4">
         {/* Info */}
         <div className="flex-1 min-w-0">

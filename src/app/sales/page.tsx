@@ -77,11 +77,11 @@ export default function SalesPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // Opener Selection State
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
   const [selectedOpenerPhone, setSelectedOpenerPhone] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -150,6 +150,27 @@ export default function SalesPage() {
 I made a simple WhatsApp booking page for ${prospect.business_name} that auto-collects customer details while you’re on the job — so you don’t miss enquiries.
 
 Want to see? 😄`;
+  };
+
+  // Generate Email Opener
+  const generateEmailOpener = (prospect: Prospect, customArea?: string) => {
+    const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
+    const area = customArea || prospect.area;
+    const name = prospect.owner_name ? prospect.owner_name.split(' ')[0] : 'there';
+
+    return {
+      subject: `Question about ${prospect.business_name}`,
+      body: `Hi ${name},
+
+I’m a local developer here in ${area.split(',')[0].trim()}. I saw your ${service} listing online.
+
+Quick question — are you currently taking new jobs in ${area} this week?
+
+I ask because I built a small tool to help manage inquiries for local pros, and I wanted to see if it might be useful for you.
+
+Best,
+Alex`
+    };
   };
 
   // Generate pitch message (after they say yes)
@@ -254,38 +275,6 @@ Want to see the draft I made?`;
       showToast('error', err.message);
     } finally {
       setIsGeneratingPreview(false);
-    }
-  };
-
-  // Send email via API
-  const handleSendEmail = async (prospect: Prospect, message: string) => {
-    if (!prospect.email) {
-      showToast('error', 'No email address found for this prospect');
-      return;
-    }
-
-    setIsSendingEmail(true);
-    try {
-      const res = await fetch('/api/sales/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: prospect.email,
-          subject: `Question regarding ${prospect.business_name}`,
-          text: message,
-          html: message.replace(/\n/g, '<br/>'),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      showToast('success', '📧 Email sent successfully!');
-      // Optionally mark as sent here, or let user click the button
-    } catch (err: any) {
-      showToast('error', err.message);
-    } finally {
-      setIsSendingEmail(false);
     }
   };
 
@@ -473,13 +462,50 @@ Want to see the draft I made?`;
             </div>
 
             <div className="flex gap-3">
-              <button
-                disabled={!selectedProspect.email || isSendingEmail}
-                onClick={() => handleSendEmail(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea))}
-                className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isSendingEmail ? '⏳ Sending...' : '📧 Send Email'}
-              </button>
+              {selectedProspect.email ? (
+                <button
+                  onClick={async () => {
+                    setIsSendingEmail(true);
+                    try {
+                      const emailContent = generateEmailOpener(selectedProspect, selectedOpenerArea);
+                      const res = await fetch('/api/sales/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          to: selectedProspect.email,
+                          subject: emailContent.subject,
+                          body: emailContent.body,
+                        }),
+                      });
+
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+
+                      showToast('success', '📧 Email sent!');
+                      updateStatus(selectedProspect.id, 'opener_sent');
+                      setShowOpenerModal(false);
+                    } catch (err: any) {
+                      showToast('error', err.message);
+                    } finally {
+                      setIsSendingEmail(false);
+                    }
+                  }}
+                  disabled={isSendingEmail}
+                  className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSendingEmail ? '📧 Sending...' : '📧 Send Email'}
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(generateOpener(selectedProspect, selectedOpenerArea));
+                    showToast('success', '📋 Copied!');
+                  }}
+                  className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  📋 Copy Text
+                </button>
+              )}
               <button
                 onClick={() => {
                   openWhatsApp(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea), selectedOpenerPhone || undefined);

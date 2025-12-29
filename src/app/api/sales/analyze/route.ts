@@ -42,8 +42,8 @@ export async function POST(request: Request) {
       if (scrapeResult) {
         scrapedData = scrapeResult;
       } else if (!context) {
-         // If URL failed and no context, fail
-         return Response.json({ error: 'Failed to scrape website and no context provided' }, { status: 400 });
+        // If URL failed and no context, fail
+        return Response.json({ error: 'Failed to scrape website and no context provided' }, { status: 400 });
       }
     }
 
@@ -67,13 +67,13 @@ export async function POST(request: Request) {
           "location": "Service area or location if mentioned"
         }
       `;
-      
+
       const extractionResult = await openai.chat.completions.create({
         messages: [{ role: 'user', content: extractionPrompt }],
         model: 'gpt-4-turbo-preview',
         response_format: { type: 'json_object' },
       });
-      
+
       extractedBusinessInfo = JSON.parse(extractionResult.choices[0].message.content || '{}');
       console.log('📋 Extracted business info from context:', extractedBusinessInfo);
     }
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     const phoneMatch = String(rawPhone).match(/^\+?\d{10,15}/);
     const resolvedPhone = phoneMatch ? phoneMatch[0] : '';
     const resolvedOwnerName = extractedBusinessInfo?.ownerName || '';
-    
+
     // 4. Use shared utility functions for detection
     const detectedCurrency = detectCurrency(context || scrapedData.bodyText || '');
     const detectedLanguage = detectLanguage(context || scrapedData.bodyText || '');
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     // 5. Analyze and Generate Email with OpenAI
     const extractedServices = extractedBusinessInfo?.services?.join(', ') || '';
     const extractedLocation = extractedBusinessInfo?.location || '';
-    
+
     const prompt = `
       You are a business consultant, NOT a marketing agency. You speak plain English, not "marketing jargon."
 
@@ -433,19 +433,19 @@ export async function POST(request: Request) {
     // 6. Create a prospect business with the generated funnel (if enabled)
     let previewUrl = null;
     let businessId = null;
-    
+
     // Use the best available business name - already resolved above
     const finalBusinessName = resolvedBusinessName;
     const finalNiche = resolvedNiche;
     const finalEmail = resolvedEmail || result.scrapedData?.email || '';
     const finalPhone = resolvedPhone || result.scrapedData?.phone || '';
     const finalOwnerName = resolvedOwnerName || result.scrapedData?.ownerName || '';
-    
+
     if (createPreview && result.lead_magnet) {
       const subdomain = `preview-${nanoid(8)}`.toLowerCase();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + PROSPECT_EXPIRY_DAYS);
-      
+
       // Build business_data for the funnel - use finalBusinessName throughout
       const businessData = {
         businessName: finalBusinessName,
@@ -483,7 +483,7 @@ export async function POST(request: Request) {
       // Use a system user ID for prospect businesses (or create one)
       // First, try to get or create a system user for prospects
       let systemUserId = process.env.SYSTEM_USER_ID;
-      
+
       if (!systemUserId) {
         // Fallback: get any existing user to own prospect businesses
         const { data: anyUser } = await supabase
@@ -491,12 +491,16 @@ export async function POST(request: Request) {
           .select('id')
           .limit(1)
           .single();
-        
+
         systemUserId = anyUser?.id;
       }
 
       if (!systemUserId) {
-        console.error('No system user available for prospect businesses');
+        console.error('No system user available for prospect businesses. Set SYSTEM_USER_ID in .env.local');
+        return Response.json({
+          error: 'No system user configured. Please set SYSTEM_USER_ID in .env.local. Run "SELECT id FROM auth.users LIMIT 1" in Supabase SQL Editor to find a user ID.',
+          ...result
+        }, { status: 500 });
       } else {
         const { data: business, error: bizErr } = await supabase
           .from('businesses')
@@ -526,7 +530,7 @@ export async function POST(request: Request) {
           // Use www.launchfly.ai for preview links (not app.launchfly.ai)
           const baseUrl = process.env.PREVIEW_BASE_URL || 'https://www.launchfly.ai';
           previewUrl = `${baseUrl}/preview/${business.id}`;
-          
+
           console.log(`✅ Created prospect business: ${businessId} (expires: ${expiresAt.toISOString()})`);
         } else {
           console.error('Failed to create prospect business:', bizErr);
@@ -537,7 +541,7 @@ export async function POST(request: Request) {
     // 6. Replace {{PREVIEW_LINK}} placeholder in email body and whatsapp script
     let finalEmailBody = result.email?.body || '';
     let finalWhatsappScript = result.whatsapp_script || '';
-    
+
     if (previewUrl) {
       finalEmailBody = finalEmailBody.replace(/\{\{PREVIEW_LINK\}\}/g, previewUrl);
       finalWhatsappScript = finalWhatsappScript.replace(/\{\{PREVIEW_LINK\}\}/g, previewUrl);
@@ -547,7 +551,7 @@ export async function POST(request: Request) {
       finalWhatsappScript = finalWhatsappScript.replace(/\{\{PREVIEW_LINK\}\}/g, '[Link]');
     }
 
-    return Response.json({ 
+    return Response.json({
       ...result,
       email: {
         ...result.email,

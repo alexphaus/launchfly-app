@@ -78,6 +78,10 @@ export default function SalesPage() {
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
 
+  // Opener Selection State
+  const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
+  const [selectedOpenerPhone, setSelectedOpenerPhone] = useState('');
+
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -137,9 +141,14 @@ export default function SalesPage() {
   };
 
   // Generate opener message
-  const generateOpener = (prospect: Prospect): string => {
+  const generateOpener = (prospect: Prospect, customArea?: string): string => {
     const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
-    return `Hi boss 👋 You still handling ${service} jobs around ${prospect.area}?`;
+    const area = customArea || prospect.area;
+    return `Hi boss 👋 You still handling ${service} jobs around ${area}?
+    
+I made a simple WhatsApp booking page for ${prospect.business_name} that auto-collects customer details while you’re on the job — so you don’t miss enquiries.
+
+Want to see? 😄`;
   };
 
   // Generate pitch message (after they say yes)
@@ -152,8 +161,9 @@ Want to see the draft I made?`;
   };
 
   // Open WhatsApp
-  const openWhatsApp = (prospect: Prospect, message: string) => {
-    const phone = prospect.whatsapp_number.replace(/[^0-9]/g, '');
+  const openWhatsApp = (prospect: Prospect, message: string, customPhone?: string) => {
+    const targetPhone = customPhone || prospect.whatsapp_number;
+    const phone = targetPhone.replace(/[^0-9]/g, '');
     // Use api.whatsapp.com instead of wa.me to avoid ISP blocks (e.g. in Philippines)
     const waUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
@@ -337,6 +347,12 @@ Want to see the draft I made?`;
                   prospect={prospect}
                   onSendOpener={() => {
                     setSelectedProspect(prospect);
+                    // Initialize selection state
+                    setSelectedOpenerArea(prospect.area.split(/[,/]+/).map(s => s.trim())[0]); // Default to first area if split
+
+                    const phones = prospect.whatsapp_number.match(/\+?\d{8,}/g) || [prospect.whatsapp_number];
+                    setSelectedOpenerPhone(phones[0]);
+
                     setShowOpenerModal(true);
                   }}
                   onShowPitch={() => {
@@ -361,21 +377,72 @@ Want to see the draft I made?`;
           <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
             <h3 className="text-lg font-semibold mb-4">📤 Send Opener</h3>
 
+            {/* Area Selection Chips */}
+            {selectedProspect.area.match(/[,/]+/) && (
+              <div className="mb-4">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Select Area</label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProspect.area.split(/[,/]+/).map(s => s.trim()).filter(Boolean).map((area, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedOpenerArea(area)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerArea === area
+                          ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setSelectedOpenerArea(selectedProspect.area)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerArea === selectedProspect.area
+                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                  >
+                    All Areas
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Phone Selection Chips */}
+            {(selectedProspect.whatsapp_number.match(/\+?\d{8,}/g)?.length || 0) > 1 && (
+              <div className="mb-4">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Select Phone</label>
+                <div className="flex flex-wrap gap-2">
+                  {(selectedProspect.whatsapp_number.match(/\+?\d{8,}/g) || []).map((phone, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedOpenerPhone(phone)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerPhone === phone
+                          ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      {phone}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-100 rounded-lg p-4 mb-4">
               <p className="text-slate-800 whitespace-pre-wrap font-medium">
-                {generateOpener(selectedProspect)}
+                {generateOpener(selectedProspect, selectedOpenerArea)}
               </p>
             </div>
 
             <div className="text-sm text-slate-500 mb-4">
               <p><strong>To:</strong> {selectedProspect.business_name}</p>
-              <p><strong>WhatsApp:</strong> {selectedProspect.whatsapp_number}</p>
+              <p><strong>WhatsApp:</strong> {selectedOpenerPhone || selectedProspect.whatsapp_number}</p>
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={async () => {
-                  await navigator.clipboard.writeText(generateOpener(selectedProspect));
+                  await navigator.clipboard.writeText(generateOpener(selectedProspect, selectedOpenerArea));
                   showToast('success', '📋 Copied!');
                 }}
                 className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50"
@@ -384,7 +451,7 @@ Want to see the draft I made?`;
               </button>
               <button
                 onClick={() => {
-                  openWhatsApp(selectedProspect, generateOpener(selectedProspect));
+                  openWhatsApp(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea), selectedOpenerPhone || undefined);
                   updateStatus(selectedProspect.id, 'opener_sent');
                   setShowOpenerModal(false);
                 }}

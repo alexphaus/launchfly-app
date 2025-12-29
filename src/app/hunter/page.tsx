@@ -68,15 +68,15 @@ export default function HunterPage() {
     notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Scrape form
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
-  
+
   // Facebook context form
   const [fbContext, setFbContext] = useState('');
   const [isFbExtracting, setIsFbExtracting] = useState(false);
-  
+
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -101,7 +101,7 @@ export default function HunterPage() {
       if (!res.ok) throw new Error(data.error);
 
       showToast('success', '✅ Prospect added!');
-      
+
       setFormData({
         business_name: '',
         service_type: 'pest_control',
@@ -138,7 +138,7 @@ export default function HunterPage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
+
       // Fill form data
       setFormData(prev => ({
         ...prev,
@@ -219,9 +219,9 @@ export default function HunterPage() {
             <h1 className="text-3xl font-bold text-slate-900">Hunter Mode</h1>
             <p className="text-slate-600 mt-2">Quickly add prospects to the pipeline</p>
           </div>
-          <Link 
+          <Link
             href="/sales"
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-sm"
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
           >
             📋 View Pipeline
           </Link>
@@ -262,7 +262,7 @@ export default function HunterPage() {
                 <button
                   type="submit"
                   disabled={isFbExtracting || !fbContext.trim()}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition shadow-sm"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium shadow hover:shadow-lg hover:from-blue-700 hover:to-blue-800 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
                 >
                   {isFbExtracting ? '🔍 Extracting...' : '🔍 Extract to Form'}
                 </button>
@@ -299,7 +299,7 @@ export default function HunterPage() {
                 <button
                   type="submit"
                   disabled={isScraping}
-                  className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium hover:bg-slate-800 disabled:opacity-50 transition shadow-sm"
+                  className="w-full bg-slate-900 text-white py-3 rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
                 >
                   {isScraping ? '🔍 Extracting...' : '🔍 Extract to Form'}
                 </button>
@@ -433,11 +433,10 @@ export default function HunterPage() {
                         key={signal.value}
                         type="button"
                         onClick={() => togglePainSignal(signal.value)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                          formData.pain_signals.includes(signal.value)
-                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-400'
-                            : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200'
-                        }`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer hover:-translate-y-0.5 active:translate-y-0 ${formData.pain_signals.includes(signal.value)
+                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-400 shadow-sm'
+                            : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200 hover:shadow-sm'
+                          }`}
                       >
                         {signal.label}
                       </button>
@@ -468,7 +467,7 @@ export default function HunterPage() {
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition shadow-sm"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium shadow hover:shadow-lg hover:from-blue-700 hover:to-blue-800 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
                 >
                   {isSaving ? 'Saving...' : '➕ Add to Pipeline'}
                 </button>
@@ -481,9 +480,8 @@ export default function HunterPage() {
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${
-            toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-          }`}
+          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            }`}
         >
           {toast.message}
         </div>

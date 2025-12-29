@@ -69,13 +69,14 @@ export default function SalesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
   const [showPitchModal, setShowPitchModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
-  
+
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -90,13 +91,13 @@ export default function SalesPage() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      
+
       const res = await fetch(`/api/hunter/prospects?${params}`, {
         // Use cache for better performance
         next: { revalidate: 10 }
       });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error(data.error);
       setProspects(data.prospects || []);
     } catch (err: any) {
@@ -160,16 +161,16 @@ Want to see the draft I made?`;
   // Update prospect status
   const updateStatus = async (id: string, newStatus: string, extraData?: Record<string, any>) => {
     // Optimistic update - update UI immediately
-    setProspects(prev => prev.map(p => 
-      p.id === id 
-        ? { 
-            ...p, 
-            status: newStatus,
-            ...extraData,
-            ...(newStatus === 'opener_sent' ? { opener_sent_at: new Date().toISOString() } : {}),
-            ...(newStatus === 'replied' ? { replied_at: new Date().toISOString() } : {}),
-            ...(newStatus === 'preview_sent' ? { preview_sent_at: new Date().toISOString() } : {}),
-          } 
+    setProspects(prev => prev.map(p =>
+      p.id === id
+        ? {
+          ...p,
+          status: newStatus,
+          ...extraData,
+          ...(newStatus === 'opener_sent' ? { opener_sent_at: new Date().toISOString() } : {}),
+          ...(newStatus === 'replied' ? { replied_at: new Date().toISOString() } : {}),
+          ...(newStatus === 'preview_sent' ? { preview_sent_at: new Date().toISOString() } : {}),
+        }
         : p
     ));
     showToast('success', `Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`);
@@ -196,13 +197,13 @@ Want to see the draft I made?`;
   // Generate preview for replied prospect
   const generatePreview = async (prospect: Prospect) => {
     setIsGeneratingPreview(true);
-    
+
     try {
       // Build rich context from all prospect data
       const painSignalLabels = prospect.pain_signals
         ?.map(s => PAIN_SIGNALS.find(p => p.value === s)?.label || s)
         .join(', ') || '';
-      
+
       const richContext = [
         `Business Name: ${prospect.business_name}`,
         `Service Type: ${SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type}`,
@@ -248,33 +249,39 @@ Want to see the draft I made?`;
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex justify-between items-start">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Sales Pipeline</h1>
-            <p className="text-slate-600 mt-2">Hunter → Closer → Builder</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+              Sales Pipeline
+              <span className="text-sm font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                {stats.total}
+              </span>
+            </h1>
+            <div className="flex items-center gap-4 mt-1.5 text-sm">
+              <span className="text-slate-500 font-medium">Hunter → Closer → Builder</span>
+              <span className="h-4 w-px bg-slate-200 hidden sm:block"></span>
+              <div className="flex gap-4 overflow-x-auto pb-1 sm:pb-0">
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="text-slate-500">Sent Today:</span>
+                  <strong className="text-slate-900 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{stats.todaySent}</strong>
+                </div>
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="text-slate-500">Hot Leads:</span>
+                  <strong className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">{stats.replied}</strong>
+                </div>
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="text-slate-500">Won:</span>
+                  <strong className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{stats.won}</strong>
+                </div>
+              </div>
+            </div>
           </div>
-          <Link 
+          <Link
             href="/hunter"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+            className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer"
           >
-            ➕ Quick Add
+            <span>➕</span> Quick Add
           </Link>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="text-sm font-medium text-slate-500 mb-1">Sent Today</div>
-            <div className="text-2xl font-bold text-slate-900">{stats.todaySent}</div>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="text-sm font-medium text-slate-500 mb-1">Hot Leads</div>
-            <div className="text-2xl font-bold text-green-600">{stats.replied}</div>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="text-sm font-medium text-slate-500 mb-1">Won</div>
-            <div className="text-2xl font-bold text-emerald-600">{stats.won}</div>
-          </div>
         </div>
 
         {/* Main Content Card */}
@@ -304,7 +311,7 @@ Want to see the draft I made?`;
               </select>
               <button
                 onClick={loadProspects}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 rounded-lg transition-all"
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 rounded-lg transition-all cursor-pointer"
               >
                 🔄 Refresh
               </button>
@@ -321,7 +328,7 @@ Want to see the draft I made?`;
                 <p className="text-slate-500">No prospects yet. Start hunting!</p>
                 <Link
                   href="/hunter"
-                  className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                  className="mt-4 inline-block px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg text-sm font-medium shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
                 >
                   ➕ Add First Prospect
                 </Link>
@@ -339,6 +346,10 @@ Want to see the draft I made?`;
                     setSelectedProspect(prospect);
                     setShowPitchModal(true);
                   }}
+                  onShowDetails={() => {
+                    setSelectedProspect(prospect);
+                    setShowDetailsModal(true);
+                  }}
                   onUpdateStatus={updateStatus}
                 />
               ))
@@ -352,7 +363,7 @@ Want to see the draft I made?`;
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
             <h3 className="text-lg font-semibold mb-4">📤 Send Opener</h3>
-            
+
             <div className="bg-slate-100 rounded-lg p-4 mb-4">
               <p className="text-slate-800 whitespace-pre-wrap font-medium">
                 {generateOpener(selectedProspect)}
@@ -414,7 +425,7 @@ Want to see the draft I made?`;
             <p className="text-sm text-slate-500 mb-4">
               Now reveal what you do and offer the preview.
             </p>
-            
+
             {/* Pitch Message */}
             <div className="bg-slate-100 rounded-lg p-4 mb-4">
               <p className="text-slate-800 whitespace-pre-wrap text-sm">
@@ -497,12 +508,119 @@ Want to see the draft I made?`;
         </div>
       )}
 
+      {/* DETAILS MODAL */}
+      {showDetailsModal && selectedProspect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDetailsModal(false)}>
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedProspect.business_name}</h2>
+                <div className="flex gap-2 items-center">
+                  <span className={`px-2.5 py-0.5 rounded-full text-sm font-medium ${STATUS_CONFIG[selectedProspect.status]?.color}`}>
+                    {STATUS_CONFIG[selectedProspect.status]?.emoji} {STATUS_CONFIG[selectedProspect.status]?.label}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-sm font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                    {SERVICE_TYPES.find(t => t.value === selectedProspect.service_type)?.label || selectedProspect.service_type}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setShowDetailsModal(false)} className="text-slate-400 hover:text-slate-600 text-2xl">✕</button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</label>
+                  <div className="mt-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">📱</span>
+                      <a href={`https://wa.me/${selectedProspect.whatsapp_number.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        {selectedProspect.whatsapp_number}
+                      </a>
+                    </div>
+                    {selectedProspect.owner_name && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">👤</span>
+                        <span className="text-slate-900">{selectedProspect.owner_name}</span>
+                      </div>
+                    )}
+                    {selectedProspect.website_url ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">🌐</span>
+                        <a href={selectedProspect.website_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
+                          {selectedProspect.website_url}
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <span>🌐</span>
+                        <span>No website</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Location & Info</label>
+                  <div className="mt-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">📍</span>
+                      <span className="text-slate-900">{selectedProspect.area}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">🔍</span>
+                      <span className="text-slate-900 capitalize">{selectedProspect.source}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">📅</span>
+                      <span className="text-slate-900">Added {new Date(selectedProspect.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {selectedProspect.pain_signals && selectedProspect.pain_signals.length > 0 && (
+              <div className="mb-6">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Pain Signals</label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProspect.pain_signals.map(signal => (
+                    <span key={signal} className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-sm border border-red-100">
+                      {PAIN_SIGNALS.find(p => p.value === signal)?.label || signal}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedProspect.notes && (
+              <div className="mb-6">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Notes</label>
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-slate-700 whitespace-pre-wrap">
+                  {selectedProspect.notes}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${
-            toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-          }`}
+          className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            }`}
         >
           {toast.message}
         </div>
@@ -516,11 +634,13 @@ function ProspectCard({
   prospect,
   onSendOpener,
   onShowPitch,
+  onShowDetails,
   onUpdateStatus,
 }: {
   prospect: Prospect;
   onSendOpener: () => void;
   onShowPitch: () => void;
+  onShowDetails: () => void;
   onUpdateStatus: (id: string, status: string, extra?: Record<string, any>) => void;
 }) {
   const statusConfig = STATUS_CONFIG[prospect.status] || STATUS_CONFIG.new;
@@ -537,7 +657,10 @@ function ProspectCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">{service?.label.split(' ')[0] || '🔨'}</span>
-            <h3 className="font-semibold text-slate-900 truncate">
+            <h3
+              onClick={onShowDetails}
+              className="font-semibold text-slate-900 truncate cursor-pointer hover:text-blue-600 transition-colors"
+            >
               {prospect.business_name}
             </h3>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>
@@ -576,7 +699,7 @@ function ProspectCard({
           {prospect.status === 'new' && (
             <button
               onClick={onSendOpener}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+              className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
               📤 Send Opener
             </button>
@@ -586,13 +709,13 @@ function ProspectCard({
             <>
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'replied')}
-                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
               >
                 ✅ They Replied
               </button>
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'follow_up_1')}
-                className="px-3 py-1.5 border text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+                className="px-3 py-1.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
               >
                 ⏰ Follow Up
               </button>
@@ -602,7 +725,7 @@ function ProspectCard({
           {(prospect.status === 'replied' || prospect.status === 'interested') && (
             <button
               onClick={onShowPitch}
-              className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+              className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
             >
               🚀 Send Pitch
             </button>
@@ -612,21 +735,21 @@ function ProspectCard({
             <>
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'closed_won')}
-                className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700"
+                className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
               >
                 🎉 They Paid!
               </button>
               {prospect.preview_url && (
                 <button
                   onClick={() => navigator.clipboard.writeText(prospect.preview_url!)}
-                  className="px-3 py-1.5 border text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+                  className="px-3 py-1.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
                 >
                   🔗 Copy Link
                 </button>
               )}
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
-                className="px-3 py-1.5 text-slate-400 text-sm rounded-lg hover:bg-slate-50"
+                className="px-3 py-1.5 text-slate-400 text-sm font-medium rounded-lg hover:text-slate-600 hover:bg-slate-50 transition-all duration-200 cursor-pointer"
               >
                 ❌ Not Interested
               </button>
@@ -637,21 +760,21 @@ function ProspectCard({
             <>
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'replied')}
-                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                className="px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
               >
                 ✅ They Replied
               </button>
               {prospect.status !== 'follow_up_3' && (
                 <button
                   onClick={() => onUpdateStatus(prospect.id, prospect.status === 'follow_up_1' ? 'follow_up_2' : 'follow_up_3')}
-                  className="px-3 py-1.5 border text-slate-600 text-sm rounded-lg hover:bg-slate-50"
+                  className="px-3 py-1.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
                 >
                   📤 Next Follow Up
                 </button>
               )}
               <button
                 onClick={() => onUpdateStatus(prospect.id, 'closed_lost')}
-                className="px-3 py-1.5 text-slate-400 text-sm rounded-lg hover:bg-slate-50"
+                className="px-3 py-1.5 text-slate-400 text-sm font-medium rounded-lg hover:text-slate-600 hover:bg-slate-50 transition-all duration-200 cursor-pointer"
               >
                 ❌ No Response
               </button>

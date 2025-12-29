@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // 1. Scrape the website (simple fetch)
     let pageContent = '';
     let pageTitle = '';
-    
+
     try {
       const response = await fetch(url, {
         headers: {
@@ -44,13 +44,13 @@ export async function POST(req: NextRequest) {
         },
         signal: AbortSignal.timeout(10000), // 10 second timeout
       });
-      
+
       const html = await response.text();
-      
+
       // Extract title
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       pageTitle = titleMatch ? titleMatch[1].trim() : '';
-      
+
       // Extract text content (strip HTML tags)
       pageContent = html
         .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -59,10 +59,10 @@ export async function POST(req: NextRequest) {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 8000); // Limit to ~8k chars to keep costs down
-        
+
     } catch (fetchErr: any) {
-      return NextResponse.json({ 
-        error: `Failed to fetch website: ${fetchErr.message}` 
+      return NextResponse.json({
+        error: `Failed to fetch website: ${fetchErr.message}`
       }, { status: 400 });
     }
 
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
   "businessName": "string - the business name",
   "ownerName": "string or null - owner/contact name if found",
   "phone": "string or null - phone/WhatsApp number with country code",
+  "email": "string or null - email address if found",
   "area": "string or null - service area/location",
   "services": ["array of services offered"],
   "painSignals": ["array of pain signals: 'no_booking', 'whatsapp_only', 'slow_replies', 'missed_calls', 'no_website', 'manual_quotes', 'messy_schedule', 'broken_links'"]
@@ -97,11 +98,11 @@ For area, look for "cover area", "service area", location mentions.`
     });
 
     const extracted = JSON.parse(extraction.choices[0].message.content || '{}');
-    
+
     // 3. Detect service type from content
     const combinedText = `${pageTitle} ${pageContent} ${extracted.services?.join(' ') || ''}`.toLowerCase();
     let detectedServiceType = 'other';
-    
+
     for (const [serviceType, keywords] of Object.entries(SERVICE_KEYWORDS)) {
       if (keywords.some(kw => combinedText.includes(kw))) {
         detectedServiceType = serviceType;
@@ -153,6 +154,7 @@ For area, look for "cover area", "service area", location mentions.`
       businessName: extracted.businessName || pageTitle || 'Unknown Business',
       ownerName: extracted.ownerName || null,
       phone: phone || null,
+      email: extracted.email || null,
       area: extracted.area || null,
       serviceType: detectedServiceType,
       services: extracted.services || [],
@@ -163,8 +165,8 @@ For area, look for "cover area", "service area", location mentions.`
 
   } catch (err: any) {
     console.error('[scrape-light] Error:', err);
-    return NextResponse.json({ 
-      error: err.message || 'Failed to scrape website' 
+    return NextResponse.json({
+      error: err.message || 'Failed to scrape website'
     }, { status: 500 });
   }
 }

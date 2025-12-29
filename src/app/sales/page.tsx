@@ -10,6 +10,7 @@ interface Prospect {
   service_type: string;
   area: string;
   whatsapp_number: string;
+  email?: string;
   owner_name?: string;
   website_url?: string;
   source: string;
@@ -534,6 +535,14 @@ Want to see the draft I made?`;
                         {selectedProspect.whatsapp_number}
                       </a>
                     </div>
+                    {selectedProspect.email && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400">📧</span>
+                        <a href={`mailto:${selectedProspect.email}`} className="text-blue-600 hover:underline">
+                          {selectedProspect.email}
+                        </a>
+                      </div>
+                    )}
                     {selectedProspect.owner_name && (
                       <div className="flex items-center gap-2">
                         <span className="text-slate-400">👤</span>

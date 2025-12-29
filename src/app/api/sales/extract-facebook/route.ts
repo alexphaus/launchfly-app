@@ -58,6 +58,7 @@ Extract the following fields from the provided context:
 - businessName: The official business name
 - ownerName: Owner/operator name if mentioned (look for "owner", "founder", or personal names responding to comments)
 - phone: WhatsApp or phone number (format with country code if possible, e.g., +60123456789)
+- email: Email address if found
 - area: Service area/location (city, district, or region)
 - website: Any website URL mentioned
 - serviceType: Match to one of: ${SERVICE_TYPES.join(', ')}
@@ -110,10 +111,11 @@ Respond with valid JSON only.`,
       businessName: extracted.businessName || '',
       ownerName: extracted.ownerName || '',
       phone: cleanPhoneNumber(extracted.phone || ''),
+      email: extracted.email || '',
       area: extracted.area || '',
       website: extracted.website || '',
       serviceType: SERVICE_TYPES.includes(extracted.serviceType) ? extracted.serviceType : 'other',
-      painSignals: Array.isArray(extracted.painSignals) 
+      painSignals: Array.isArray(extracted.painSignals)
         ? extracted.painSignals.filter((s: string) => PAIN_SIGNALS.includes(s))
         : [],
       notes: extracted.notes || '',
@@ -132,10 +134,10 @@ Respond with valid JSON only.`,
 // Clean phone number to standardized format
 function cleanPhoneNumber(phone: string): string {
   if (!phone) return '';
-  
+
   // Remove all non-numeric characters except +
   let cleaned = phone.replace(/[^\d+]/g, '');
-  
+
   // Handle Malaysian numbers
   if (cleaned.startsWith('60')) {
     cleaned = '+' + cleaned;
@@ -146,6 +148,6 @@ function cleanPhoneNumber(phone: string): string {
     // Assume Malaysian if no country code
     cleaned = '+60' + cleaned;
   }
-  
+
   return cleaned;
 }

@@ -61,6 +61,7 @@ export default function HunterPage() {
     service_type: 'pest_control',
     area: '',
     whatsapp_number: '',
+    email: '',
     owner_name: '',
     website_url: '',
     source: 'facebook',
@@ -130,6 +131,7 @@ export default function HunterPage() {
         service_type: 'pest_control',
         area: '',
         whatsapp_number: '',
+        email: '',
         owner_name: '',
         website_url: '',
         source: 'facebook',
@@ -169,6 +171,7 @@ export default function HunterPage() {
         service_type: data.serviceType || prev.service_type,
         area: data.area || prev.area,
         whatsapp_number: data.phone || prev.whatsapp_number,
+        email: data.email || prev.email,
         owner_name: data.ownerName || prev.owner_name,
         website_url: scrapeUrl,
         source: 'other',
@@ -208,6 +211,7 @@ export default function HunterPage() {
         service_type: data.serviceType || prev.service_type,
         area: data.area || prev.area,
         whatsapp_number: data.phone || prev.whatsapp_number,
+        email: data.email || prev.email,
         owner_name: data.ownerName || prev.owner_name,
         website_url: data.website || prev.website_url,
         source: 'facebook',
@@ -404,6 +408,19 @@ export default function HunterPage() {
                       value={formData.whatsapp_number}
                       onChange={e => setFormData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
                       placeholder="+60123456789"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="hello@example.com"
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>

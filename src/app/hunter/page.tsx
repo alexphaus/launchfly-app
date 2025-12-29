@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 // Types
@@ -85,6 +85,28 @@ export default function HunterPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Counter for today's finds
+  const [addedCount, setAddedCount] = useState(0);
+
+  useEffect(() => {
+    const fetchTodayCount = async () => {
+      try {
+        const res = await fetch('/api/hunter/prospects', { cache: 'no-store' });
+        const data = await res.json();
+        if (data.prospects) {
+          const today = new Date().toDateString();
+          const count = data.prospects.filter((p: Prospect) =>
+            new Date(p.created_at).toDateString() === today
+          ).length;
+          setAddedCount(count);
+        }
+      } catch (err) {
+        console.error('Failed to load prospects count', err);
+      }
+    };
+    fetchTodayCount();
+  }, []);
+
   // Add prospect (manual)
   const handleAddProspect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +123,7 @@ export default function HunterPage() {
       if (!res.ok) throw new Error(data.error);
 
       showToast('success', '✅ Prospect added!');
+      setAddedCount(prev => prev + 1);
 
       setFormData({
         business_name: '',
@@ -214,14 +237,19 @@ export default function HunterPage() {
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex justify-between items-start">
+        <div className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Hunter Mode</h1>
-            <p className="text-slate-600 mt-2">Quickly add prospects to the pipeline</p>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+              Hunter Mode
+              <span className="text-sm font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                {addedCount}
+              </span>
+            </h1>
+            <p className="text-slate-600 mt-2 text-sm">Quickly add prospects to the pipeline</p>
           </div>
           <Link
             href="/sales"
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
           >
             📋 View Pipeline
           </Link>
@@ -434,8 +462,8 @@ export default function HunterPage() {
                         type="button"
                         onClick={() => togglePainSignal(signal.value)}
                         className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer hover:-translate-y-0.5 active:translate-y-0 ${formData.pain_signals.includes(signal.value)
-                            ? 'bg-orange-100 text-orange-700 border-2 border-orange-400 shadow-sm'
-                            : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200 hover:shadow-sm'
+                          ? 'bg-orange-100 text-orange-700 border-2 border-orange-400 shadow-sm'
+                          : 'bg-slate-100 text-slate-600 border-2 border-transparent hover:bg-slate-200 hover:shadow-sm'
                           }`}
                       >
                         {signal.label}

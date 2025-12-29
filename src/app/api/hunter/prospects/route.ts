@@ -43,13 +43,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Add cache headers for better performance
+    // No cache for fresh pipeline data
     return NextResponse.json(
       { prospects: data },
-      { 
-        headers: { 
-          'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' 
-        } 
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
       }
     );
   } catch (err: any) {

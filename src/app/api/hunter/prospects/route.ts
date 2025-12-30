@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
       source,
       pain_signals,
       notes,
+      raw_context, // Original Facebook/context data for richer preview generation later
     } = body;
 
     // Validate required fields
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
         source: source || 'manual',
         pain_signals: pain_signals || [],
         notes: notes || null,
+        raw_context: raw_context || null, // Preserve original Facebook context
         status: 'new',
       })
       .select()

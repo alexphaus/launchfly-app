@@ -17,6 +17,7 @@ interface Prospect {
   pain_signals: string[];
   status: string;
   notes?: string;
+  raw_context?: string; // Original Facebook/context data for richer preview generation
   created_at: string;
   opener_sent_at?: string;
   replied_at?: string;
@@ -339,6 +340,7 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
 
     try {
       // Build rich context from all prospect data
+      // Prioritize raw_context (original Facebook data) over summarized notes
       const painSignalLabels = prospect.pain_signals
         ?.map(s => PAIN_SIGNALS.find(p => p.value === s)?.label || s)
         .join(', ') || '';
@@ -349,8 +351,13 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
         `Area/Location: ${prospect.area}`,
         prospect.owner_name ? `Owner Name: ${prospect.owner_name}` : '',
         prospect.whatsapp_number ? `Phone/WhatsApp: ${prospect.whatsapp_number}` : '',
+        prospect.email ? `Email: ${prospect.email}` : '',
         painSignalLabels ? `Pain Signals: ${painSignalLabels}` : '',
-        prospect.notes ? `Additional Notes: ${prospect.notes}` : '',
+        // Use raw_context if available (preserves original Facebook post details)
+        // Otherwise fall back to AI-summarized notes
+        prospect.raw_context
+          ? `\n--- ORIGINAL FACEBOOK/CONTEXT DATA ---\n${prospect.raw_context}\n--- END ---`
+          : (prospect.notes ? `Additional Notes: ${prospect.notes}` : ''),
       ].filter(Boolean).join('\n');
 
       const res = await fetch('/api/sales/analyze', {
@@ -1165,8 +1172,8 @@ function ProspectCard({
                 onClick={followUpStatus.canFollowUp ? onFollowUp : undefined}
                 disabled={!followUpStatus.canFollowUp}
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${followUpStatus.canFollowUp
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
-                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   }`}
               >
                 {followUpStatus.canFollowUp ? '📞 Send Follow-Up' : `⏰ ${followUpStatus.hoursRemaining}h`}
@@ -1195,8 +1202,8 @@ function ProspectCard({
                 onClick={followUpStatus.canFollowUp ? onFollowUp : undefined}
                 disabled={!followUpStatus.canFollowUp}
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${followUpStatus.canFollowUp
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
-                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   }`}
               >
                 {followUpStatus.canFollowUp ? '📞 Follow Up' : `⏰ ${followUpStatus.hoursRemaining}h`}
@@ -1223,8 +1230,8 @@ function ProspectCard({
                   onClick={followUpStatus.canFollowUp ? onFollowUp : undefined}
                   disabled={!followUpStatus.canFollowUp}
                   className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${followUpStatus.canFollowUp
-                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                 >
                   {followUpStatus.canFollowUp ? '📞 Next Follow-Up' : `⏰ ${followUpStatus.hoursRemaining}h`}

@@ -67,6 +67,7 @@ export default function HunterPage() {
     source: 'facebook',
     pain_signals: [] as string[],
     notes: '',
+    raw_context: '', // Original Facebook/context data for richer preview generation
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -137,6 +138,7 @@ export default function HunterPage() {
         source: 'facebook',
         pain_signals: [],
         notes: '',
+        raw_context: '',
       });
       setFbContext('');
       setScrapeUrl('');
@@ -204,7 +206,7 @@ export default function HunterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Fill form data
+      // Fill form data - also preserve raw_context
       setFormData(prev => ({
         ...prev,
         business_name: data.businessName || prev.business_name,
@@ -217,6 +219,7 @@ export default function HunterPage() {
         source: 'facebook',
         pain_signals: data.painSignals || prev.pain_signals,
         notes: data.notes || prev.notes,
+        raw_context: fbContext, // Preserve original Facebook context for preview generation
       }));
 
       showToast('success', '✅ Business info extracted from Facebook to form!');

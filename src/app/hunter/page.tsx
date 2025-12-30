@@ -419,11 +419,13 @@ export default function HunterPage() {
                         type="button"
                         disabled={!formData.whatsapp_number}
                         onClick={() => {
-                          const num = formData.whatsapp_number.replace(/[^0-9]/g, '');
+                          // Handle multiple numbers (take the first one)
+                          const firstNum = formData.whatsapp_number.split(',')[0];
+                          const num = firstNum.replace(/[^0-9]/g, '');
                           window.open(`https://api.whatsapp.com/send?phone=${num}`, '_blank');
                         }}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                        title="Test number on WhatsApp"
+                        title="Test number on WhatsApp (uses first number if multiple)"
                       >
                         🔍
                       </button>

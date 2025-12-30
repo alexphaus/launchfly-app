@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 Extract the following fields from the provided context:
 - businessName: The official business name
 - ownerName: Owner/operator name if mentioned (look for "owner", "founder", or personal names responding to comments)
-- phone: WhatsApp or phone number (format with country code if possible, e.g., +60123456789)
+- phone: All found WhatsApp or phone numbers, comma separated (e.g. +60123456789, +60198765432). Format with country code if possible.
 - email: Email address if found
 - area: Service area/location (city, district, or region)
 - website: Any website URL mentioned
@@ -85,7 +85,7 @@ Extract the following fields from the provided context:
 
 Be thorough but only include information that's clearly present in the context.
 For serviceType, use 'other' if you can't confidently match to the list.
-For phone, try to extract the full number with country code.
+For phone, try to extract all numbers, separated by commas.
 
 Respond with valid JSON only.`,
         },
@@ -135,19 +135,26 @@ Respond with valid JSON only.`,
 function cleanPhoneNumber(phone: string): string {
   if (!phone) return '';
 
-  // Remove all non-numeric characters except +
-  let cleaned = phone.replace(/[^\d+]/g, '');
+  // Split by comma if multiple numbers
+  const numbers = phone.split(',').map(p => p.trim()).filter(Boolean);
 
-  // Handle Malaysian numbers
-  if (cleaned.startsWith('60')) {
-    cleaned = '+' + cleaned;
-  } else if (cleaned.startsWith('0')) {
-    // Convert local format to international
-    cleaned = '+60' + cleaned.substring(1);
-  } else if (!cleaned.startsWith('+') && cleaned.length >= 9) {
-    // Assume Malaysian if no country code
-    cleaned = '+60' + cleaned;
-  }
+  const cleanedNumbers = numbers.map(num => {
+    // Remove all non-numeric characters except +
+    let cleaned = num.replace(/[^\d+]/g, '');
 
-  return cleaned;
+    // Handle Malaysian numbers
+    if (cleaned.startsWith('60')) {
+      cleaned = '+' + cleaned;
+    } else if (cleaned.startsWith('0')) {
+      // Convert local format to international
+      cleaned = '+60' + cleaned.substring(1);
+    } else if (!cleaned.startsWith('+') && cleaned.length >= 9) {
+      // Assume Malaysian if no country code
+      cleaned = '+60' + cleaned;
+    }
+
+    return cleaned;
+  });
+
+  return cleanedNumbers.join(', ');
 }

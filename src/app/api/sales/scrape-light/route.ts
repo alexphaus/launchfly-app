@@ -161,6 +161,8 @@ For area, look for "cover area", "service area", location mentions.`
       painSignals,
       sourceUrl: url,
       notes: notesLines.join('\n'),
+      // Include raw scraped content for richer preview generation later
+      rawContent: `URL: ${url}\nTitle: ${pageTitle}\n\n${pageContent}`,
     });
 
   } catch (err: any) {

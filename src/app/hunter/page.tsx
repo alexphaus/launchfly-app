@@ -166,7 +166,7 @@ export default function HunterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Fill form data
+      // Fill form data - also preserve raw scraped content
       setFormData(prev => ({
         ...prev,
         business_name: data.businessName || prev.business_name,
@@ -179,6 +179,7 @@ export default function HunterPage() {
         source: 'other',
         pain_signals: data.painSignals || prev.pain_signals,
         notes: data.notes || prev.notes,
+        raw_context: data.rawContent || prev.raw_context, // Preserve scraped content for preview generation
       }));
 
       showToast('success', '✅ Business info extracted to form!');

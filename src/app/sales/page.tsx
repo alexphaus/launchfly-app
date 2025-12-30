@@ -87,6 +87,8 @@ export default function SalesPage() {
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
   const [selectedOpenerPhone, setSelectedOpenerPhone] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isEmailPreviewMode, setIsEmailPreviewMode] = useState(false);
+  const [emailPreviewData, setEmailPreviewData] = useState({ subject: '', body: '' });
 
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -615,11 +617,34 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
               </div>
             )}
 
-            <div className="bg-slate-100 rounded-lg p-4 mb-4">
-              <p className="text-slate-800 whitespace-pre-wrap font-medium">
-                {generateOpener(selectedProspect, selectedOpenerArea)}
-              </p>
-            </div>
+            {isEmailPreviewMode ? (
+              <div className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-200">
+                <div className="mb-3">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Subject</label>
+                  <input
+                    type="text"
+                    value={emailPreviewData.subject}
+                    onChange={(e) => setEmailPreviewData(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Body</label>
+                  <textarea
+                    value={emailPreviewData.body}
+                    onChange={(e) => setEmailPreviewData(prev => ({ ...prev, body: e.target.value }))}
+                    rows={8}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white whitespace-pre-wrap"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-100 rounded-lg p-4 mb-4">
+                <p className="text-slate-800 whitespace-pre-wrap font-medium">
+                  {generateOpener(selectedProspect, selectedOpenerArea)}
+                </p>
+              </div>
+            )}
 
             <div className="text-sm text-slate-500 mb-4">
               <p><strong>To:</strong> {selectedProspect.business_name}</p>
@@ -627,67 +652,70 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
             </div>
 
             <div className="flex gap-3">
-              {selectedProspect.email ? (
-                <button
-                  onClick={async () => {
-                    setIsSendingEmail(true);
-                    try {
-                      const emailContent = generateEmailOpener(selectedProspect, selectedOpenerArea);
-                      const res = await fetch('/api/sales/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          to: selectedProspect.email,
-                          subject: emailContent.subject,
-                          body: emailContent.body,
-                        }),
-                      });
-
-                      const data = await res.json();
-                      if (!res.ok) throw new Error(data.error);
-
-                      showToast('success', '📧 Email sent!');
-                      updateStatus(selectedProspect.id, 'opener_sent');
-                      setShowOpenerModal(false);
-                    } catch (err: any) {
-                      showToast('error', err.message);
-                    } finally {
-                      setIsSendingEmail(false);
-                    }
-                  }}
-                  disabled={isSendingEmail}
-                  className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isSendingEmail ? '📧 Sending...' : '📧 Send Email'}
-                </button>
+              {isEmailPreviewMode ? (
+                <>
+                  <button
+                    onClick={() => setIsEmailPreviewMode(false)}
+                    className="px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    🔙 Back
+                  </button>
+                  <a
+                    href={`mailto:${selectedProspect.email}?subject=${encodeURIComponent(emailPreviewData.subject)}&body=${encodeURIComponent(emailPreviewData.body)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      showToast('success', '📧 Mail app opened!');
+                      // We don't auto-close here, allow user to click "Mark as sent" manually
+                    }}
+                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-blue-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    🚀 Open Mail App
+                  </a>
+                </>
               ) : (
-                <button
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(generateOpener(selectedProspect, selectedOpenerArea));
-                    showToast('success', '📋 Copied!');
-                  }}
-                  className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  📋 Copy Text
-                </button>
+                <>
+                  {selectedProspect.email ? (
+                    <button
+                      onClick={() => {
+                        const emailContent = generateEmailOpener(selectedProspect, selectedOpenerArea);
+                        setEmailPreviewData(emailContent);
+                        setIsEmailPreviewMode(true);
+                      }}
+                      className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      📧 Send Email
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(generateOpener(selectedProspect, selectedOpenerArea));
+                        showToast('success', '📋 Copied!');
+                      }}
+                      className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      📋 Copy Text
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      openWhatsApp(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea), selectedOpenerPhone || undefined);
+                    }}
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-600 hover:to-green-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    💬 WhatsApp
+                  </button>
+                </>
               )}
-              <button
-                onClick={() => {
-                  openWhatsApp(selectedProspect, generateOpener(selectedProspect, selectedOpenerArea), selectedOpenerPhone || undefined);
-                  // Don't close or update status automatically
-                }}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-600 hover:to-green-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
-              >
-                💬 WhatsApp
-              </button>
             </div>
 
             <button
               onClick={() => {
                 updateStatus(selectedProspect.id, 'opener_sent');
                 setShowOpenerModal(false);
+                setIsEmailPreviewMode(false);
               }}
-              className="w-full mt-4 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer"
+              className="w-full mt-4 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
             >
               ✅ Mark as sent & close
             </button>

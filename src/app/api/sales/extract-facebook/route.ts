@@ -113,7 +113,7 @@ Respond with valid JSON only.`,
       phone: cleanPhoneNumber(extracted.phone || ''),
       email: extracted.email || '',
       area: extracted.area || '',
-      website: extracted.website || '',
+      website: cleanWebsiteUrl(extracted.website || ''),
       serviceType: SERVICE_TYPES.includes(extracted.serviceType) ? extracted.serviceType : 'other',
       painSignals: Array.isArray(extracted.painSignals)
         ? extracted.painSignals.filter((s: string) => PAIN_SIGNALS.includes(s))
@@ -157,4 +157,14 @@ function cleanPhoneNumber(phone: string): string {
   });
 
   return cleanedNumbers.join(', ');
+}
+
+// Ensure website URL starts with https://
+function cleanWebsiteUrl(url: string): string {
+  if (!url) return '';
+  let cleaned = url.trim();
+  if (!cleaned.match(/^https?:\/\//i)) {
+    cleaned = 'https://' + cleaned;
+  }
+  return cleaned;
 }

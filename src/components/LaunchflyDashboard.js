@@ -34,32 +34,33 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
     facebook: false,
     outreach: false
   });
-  
+
   const supabase = createClientComponentClient();
 
   // Check if content is ready - support both old and new data formats
   const leadMagnetData = business?.business_data?.lead_magnet_content || business?.business_data?.leadMagnet?.lead_magnet_content;
   const landingPageData = business?.business_data?.landing_page || business?.business_data?.leadMagnet?.landing_page;
   const emailSequenceData = business?.business_data?.email_sequence || business?.business_data?.leadMagnet?.email_sequence;
-  
+
   const isGenerating = business?.status === 'pending' || business?.status === 'failed' || !leadMagnetData;
   const hasLeadMagnet = !!leadMagnetData;
-  const hasLandingPage = !!landingPageData;
+  // Landing page is ready if: explicit landing_page data exists, OR business has lead magnet content + subdomain (template-based)
+  const hasLandingPage = !!landingPageData || (hasLeadMagnet && !!business?.subdomain);
   const hasEmailSequence = !!emailSequenceData;
 
   // Placeholder data if business data isn't fully ready
   const pdfUrl = business?.lead_magnet_url || '#';
-  const landingPageUrl = business?.subdomain 
-    ? `${window.location.origin}/sites/${business.subdomain}` 
+  const landingPageUrl = business?.subdomain
+    ? `${window.location.origin}/sites/${business.subdomain}`
     : (business?.website_url || '#');
   const emailCount = emailSequenceData?.length || 5;
   const leadCount = leads.length || business?.total_leads || business?.leads_count || 0;
-  
+
   useEffect(() => {
     if (business?.id) {
       fetchLeads();
       loadChecklist();
-      
+
       // Set up real-time subscription for new leads
       const channel = supabase
         .channel('leads-changes')
@@ -77,7 +78,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
           }
         )
         .subscribe();
-        
+
       return () => {
         supabase.removeChannel(channel);
       };
@@ -90,7 +91,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
       const refreshInterval = setInterval(() => {
         window.location.reload();
       }, 10000); // Refresh every 10 seconds while generating
-      
+
       return () => clearInterval(refreshInterval);
     }
   }, [isGenerating]);
@@ -105,7 +106,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
         // .eq('source', 'lead_magnet')
         .order('created_at', { ascending: false })
         .limit(10);
-        
+
       if (error) {
         console.error('❌ Error fetching leads:', error);
         setLeads([]);
@@ -135,7 +136,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
     setChecklist(newChecklist);
     localStorage.setItem(`checklist_${business.id}`, JSON.stringify(newChecklist));
   };
-  
+
   const handleCopyLink = () => {
     if (landingPageUrl && landingPageUrl !== '#') {
       navigator.clipboard.writeText(landingPageUrl);
@@ -145,7 +146,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   };
 
   const shareText = `Check out this free ${business?.business_data?.niche || 'expert'} guide from ${business?.name || business?.business_name || 'our local business'}!`;
-  
+
   const shareLinks = {
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(landingPageUrl)}&quote=${encodeURIComponent(shareText)}`,
     twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(landingPageUrl)}&text=${encodeURIComponent(shareText)}`,
@@ -161,7 +162,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     if (onUpdateBusiness) {
-      const result = await onUpdateBusiness({ 
+      const result = await onUpdateBusiness({
         phone_number: phoneNumber,
         booking_url: bookingUrl
       });
@@ -176,12 +177,12 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
 
   const handleTestEmail = async (email) => {
     if (!confirm(`Send the next email in the sequence to ${email} immediately?`)) return;
-    
+
     try {
       const res = await fetch('/api/email-sequence/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           testMode: true,
           targetEmail: email,
           businessId: business.id
@@ -203,7 +204,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-12">
       <div className="max-w-6xl mx-auto">
-        
+
         {/* Generating Banner */}
         {isGenerating && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3">
@@ -222,12 +223,12 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
               {business?.name || 'Dashboard'}
             </h1>
             <p className="text-slate-600">
-              {isGenerating 
-                ? "We're building your automated lead generation system. Hang tight!" 
+              {isGenerating
+                ? "We're building your automated lead generation system. Hang tight!"
                 : "Your digital sales manager is active. Use the Playbook below to close leads."}
             </p>
           </div>
-          <button 
+          <button
             onClick={() => setShowSettingsModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
           >
@@ -238,7 +239,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
 
         {/* Asset Status Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          
+
           {/* Offer Card */}
           <div className={`bg-white rounded-xl p-6 shadow-sm border ${hasLeadMagnet ? 'border-slate-100' : 'border-blue-200'}`}>
             <div className="flex items-center gap-3 mb-4">
@@ -259,19 +260,18 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              {hasLeadMagnet 
+              {hasLeadMagnet
                 ? `Your hook: "${business?.business_data?.lead_magnet_title || business?.business_data?.leadMagnet?.lead_magnet_title || 'Special Offer / Checklist'}"`
                 : 'Creating your lead magnet content...'}
             </p>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => hasLeadMagnet && setShowOfferModal(true)}
                 disabled={!hasLeadMagnet}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium transition-colors ${
-                  hasLeadMagnet 
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer' 
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium transition-colors ${hasLeadMagnet
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer'
                     : 'bg-slate-50 text-slate-300 cursor-not-allowed'
-                }`}
+                  }`}
               >
                 <FileText size={16} />
                 View Offer Content
@@ -313,14 +313,14 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              {hasLandingPage 
+              {hasLandingPage
                 ? 'Optimized conversion page to capture leads & calls.'
                 : 'Building your landing page...'}
             </p>
             <div className="flex gap-2">
               {hasLandingPage ? (
                 <>
-                  <a 
+                  <a
                     href={landingPageUrl}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -329,14 +329,14 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     <ExternalLink size={16} />
                     View Live
                   </a>
-                  <button 
+                  <button
                     onClick={() => setShowContentEditor(true)}
                     className="p-2.5 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
                     title="Edit Content"
                   >
                     <Edit3 size={20} />
                   </button>
-                  <button 
+                  <button
                     onClick={handleCopyLink}
                     className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
                     title="Copy Link"
@@ -344,7 +344,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     {copied ? <CheckCircle size={20} className="text-green-600" /> : <Copy size={20} />}
                   </button>
                   <div className="relative">
-                    <button 
+                    <button
                       onClick={() => setShowShareMenu(!showShareMenu)}
                       className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
                       title="Share"
@@ -353,28 +353,28 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     </button>
                     {showShareMenu && (
                       <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 min-w-[180px]">
-                        <button 
+                        <button
                           onClick={() => handleShare('facebook')}
                           className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Facebook size={18} className="text-blue-600" />
                           <span className="text-sm font-medium text-slate-700">Facebook</span>
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleShare('twitter')}
                           className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-slate-100 rounded-lg transition-colors"
                         >
                           <Twitter size={18} className="text-slate-800" />
                           <span className="text-sm font-medium text-slate-700">X / Twitter</span>
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleShare('linkedin')}
                           className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <Linkedin size={18} className="text-blue-700" />
                           <span className="text-sm font-medium text-slate-700">LinkedIn</span>
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleShare('whatsapp')}
                           className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-green-50 rounded-lg transition-colors"
                         >
@@ -382,7 +382,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                           <span className="text-sm font-medium text-slate-700">WhatsApp</span>
                         </button>
                         <div className="border-t border-slate-100 mt-2 pt-2">
-                          <button 
+                          <button
                             onClick={() => { handleCopyLink(); setShowShareMenu(false); }}
                             className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-slate-100 rounded-lg transition-colors"
                           >
@@ -423,18 +423,17 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
               </div>
             </div>
             <p className="text-sm text-slate-500 mb-6">
-              {hasEmailSequence 
+              {hasEmailSequence
                 ? `${emailCount}-day automated nurture sequence to get them to call.`
                 : 'Writing your email sequence...'}
             </p>
-            <button 
+            <button
               onClick={() => hasEmailSequence && setShowEmailModal(true)}
               disabled={!hasEmailSequence}
-              className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg font-medium transition-colors ${
-                hasEmailSequence 
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer' 
+              className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg font-medium transition-colors ${hasEmailSequence
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer'
                   : 'bg-slate-50 text-slate-300 cursor-not-allowed'
-              }`}
+                }`}
             >
               {hasEmailSequence ? <Users size={16} /> : <Loader2 size={16} className="animate-spin" />}
               {hasEmailSequence ? 'View Emails' : 'Generating...'}
@@ -444,7 +443,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
 
         {/* Leads & Analytics Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* Main Leads Counter */}
           <div className="lg:col-span-2 bg-white rounded-2xl p-8 shadow-sm border border-slate-100">
             <div className="flex items-center justify-between mb-6">
@@ -455,7 +454,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 <option>All Time</option>
               </select>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="p-4 bg-slate-50 rounded-xl">
                 <div className="text-sm text-slate-500 mb-1">Total Leads</div>
@@ -501,7 +500,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                  <div 
+                                  <div
                                     className="h-full bg-blue-500 rounded-full transition-all"
                                     style={{ width: `${((lead.email_sequence_day || 1) / 5) * 100}%` }}
                                   />
@@ -511,7 +510,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                                 </span>
                               </div>
                             </div>
-                            <button 
+                            <button
                               onClick={() => handleTestEmail(lead.email)}
                               className="text-xs bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 px-2 py-1 rounded border border-slate-200 transition-colors"
                               title="Send next email immediately (Test Mode)"
@@ -532,13 +531,13 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-lg">
             {/* Tab Navigation */}
             <div className="flex gap-2 mb-6 border-b border-white/10 pb-4">
-              <button 
+              <button
                 onClick={() => setActiveTab('quickstart')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'quickstart' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
                 Quick Start
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab('playbook')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'playbook' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
@@ -553,9 +552,9 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                   <Zap size={20} />
                   Get Your First Leads
                 </h2>
-                
+
                 <div className="space-y-4">
-                  <div 
+                  <div
                     onClick={() => toggleChecklist('google')}
                     className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.google ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
                   >
@@ -568,7 +567,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     </div>
                   </div>
 
-                  <div 
+                  <div
                     onClick={() => toggleChecklist('facebook')}
                     className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.facebook ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
                   >
@@ -581,7 +580,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     </div>
                   </div>
 
-                  <div 
+                  <div
                     onClick={() => toggleChecklist('outreach')}
                     className={`flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer ${checklist.outreach ? 'bg-green-500/20 border border-green-500/30' : 'bg-white/10 hover:bg-white/20'}`}
                   >
@@ -622,7 +621,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                   Lead → Job Playbook
                 </h2>
                 <p className="text-slate-400 text-sm mb-6">What to do when a lead calls or messages</p>
-                
+
                 <div className="space-y-4">
                   {/* Step 1 */}
                   <div className="bg-white/10 rounded-lg p-4">
@@ -662,7 +661,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     <p className="text-sm text-slate-300 ml-8">Text: "Confirmed! I'll see you [DATE] at [TIME]. Reply YES to confirm."</p>
                   </div>
 
-                  <button 
+                  <button
                     onClick={() => setShowPlaybookModal(true)}
                     className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
                   >
@@ -678,14 +677,14 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 <code className="text-xs text-blue-300 truncate flex-1">
                   {landingPageUrl}
                 </code>
-                <button 
+                <button
                   onClick={handleCopyLink}
                   className="text-slate-400 hover:text-white"
                 >
                   <Copy size={14} />
                 </button>
               </div>
-              
+
 
             </div>
           </div>
@@ -718,7 +717,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 )}
               </div>
               <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-                <button 
+                <button
                   onClick={() => setShowOfferModal(false)}
                   className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
                 >
@@ -788,17 +787,17 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                     <div className="bg-slate-50 p-4 rounded-lg font-mono text-sm space-y-4">
                       <p><strong>Opening:</strong></p>
                       <p className="text-slate-700">"Hi [Name], this is [Your Name] from [Business]. I saw you downloaded our guide! How can I help you today?"</p>
-                      
+
                       <p><strong>Qualifying Questions:</strong></p>
                       <ul className="list-disc pl-5 text-slate-700 space-y-1">
                         <li>"What's the main issue you're dealing with right now?"</li>
                         <li>"How long has this been going on?"</li>
                         <li>"Have you had anyone look at it before?"</li>
                       </ul>
-                      
+
                       <p><strong>Booking:</strong></p>
                       <p className="text-slate-700">"I'd love to take a look at this for you. I have availability [tomorrow/this week]. Would [TIME] work for a free inspection?"</p>
-                      
+
                       <p><strong>Handling Objections:</strong></p>
                       <p className="text-slate-700">"I'm just getting quotes" → "Perfect! Our inspection is completely free and you'll get an honest assessment with no pressure."</p>
                     </div>
@@ -885,7 +884,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 </div>
               </div>
               <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-                <button 
+                <button
                   onClick={() => setShowPlaybookModal(false)}
                   className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
                 >
@@ -923,7 +922,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                       This number will be used for the "Call Now" and "WhatsApp" buttons in your emails and landing page.
                     </p>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Booking / Website URL (for QR Code)
@@ -942,13 +941,13 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 </div>
               </div>
               <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3">
-                <button 
+                <button
                   onClick={() => setShowSettingsModal(false)}
                   className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleSaveSettings}
                   disabled={savingSettings}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
@@ -963,7 +962,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
 
         {/* Content Editor Modal */}
         {showContentEditor && (
-          <ContentEditor 
+          <ContentEditor
             business={business}
             onSave={(updates) => {
               // Refresh the page to show updated content
@@ -975,7 +974,7 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
 
         {/* Physical Asset Pack Modal */}
         {showAssetPack && (
-          <PhysicalAssetPack 
+          <PhysicalAssetPack
             business={business}
             onClose={() => setShowAssetPack(false)}
           />

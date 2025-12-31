@@ -42,7 +42,7 @@ export async function POST(request) {
     // 2. Add to Customers (or get existing)
     let customerId = null;
     let isNewLead = false;
-    
+
     // Check if customer already exists
     const { data: existingCustomer } = await supabase
       .from('customers')
@@ -67,13 +67,13 @@ export async function POST(request) {
         email_sequence_started_at: new Date().toISOString(),
         next_email_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       };
-      
+
       const { data: newCustomer, error: custError } = await supabase
         .from('customers')
         .insert(customerData)
         .select()
         .single();
-      
+
       if (custError) {
         // Handle duplicate key error gracefully
         if (custError.code === '23505') {
@@ -113,92 +113,156 @@ export async function POST(request) {
           icon: 'M',
           message: 'New Lead Magnet Signup',
           details: `${email} signed up to download the guide.`,
-          metadata: { 
+          metadata: {
             email,
-            customer_id: customerId 
+            customer_id: customerId
           }
         });
 
-      // --- SPEED-TO-LEAD SMS ALERT (Twilio Integration) ---
-      // Sends an SMS to the business owner immediately when a lead comes in.
-      try {
-        const ownerPhone = business.phone_number; // Ensure this is the owner's mobile, not landline
-        const accountSid = process.env.TWILIO_ACCOUNT_SID;
-        const authToken = process.env.TWILIO_AUTH_TOKEN;
-        const fromPhone = process.env.TWILIO_PHONE_NUMBER;
+      // --- SPEED-TO-LEAD ALERTS ---
+      // Send notification to business owner immediately when a lead comes in
+      // Priority: WhatsApp > SMS (WhatsApp has 90%+ open rate)
 
-        // Validate Twilio Config
-        if (accountSid && accountSid.startsWith('AC') && authToken && fromPhone && ownerPhone) {
-          const twilio = require('twilio')(accountSid, authToken);
-          
-          let messageBody = `🚀 New Lead: ${email} just downloaded your guide.`;
-          if (phone) {
-            messageBody += ` Call them now: ${phone}`;
-          } else {
-            messageBody += ` No phone provided. Email them now to close!`;
-          }
+      const ownerPhone = business.phone_number;
+      const ownerWhatsApp = business.whatsapp_notify_number || ownerPhone;
+      let notificationSent = false;
 
-          await twilio.messages.create({
-            body: messageBody,
-            from: fromPhone,
-            to: ownerPhone
+      // Try WhatsApp first (preferred)
+      if (ownerWhatsApp) {
+        try {
+          const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000';
+          const waResponse = await fetch(`${baseUrl}/api/whatsapp-notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              businessId,
+              toPhone: ownerWhatsApp,
+              type: 'new_lead',
+              data: {
+                leadName: email.split('@')[0], // Use email prefix as name
+                leadPhone: phone || null,
+                leadEmail: email,
+                serviceName: business.business_data?.niche || null
+              }
+            })
           });
-          console.log(`📱 SMS Alert sent to ${ownerPhone}`);
-        } else {
-          console.log(`📱 SMS Alert skipped. Missing valid config or owner phone.`);
-          if (!accountSid || !accountSid.startsWith('AC')) console.log('   - Invalid/Missing TWILIO_ACCOUNT_SID (must start with AC)');
-          if (!authToken) console.log('   - Missing TWILIO_AUTH_TOKEN');
-          if (!fromPhone) console.log('   - Missing TWILIO_PHONE_NUMBER');
-          if (!ownerPhone) console.log('   - Business has no phone_number set');
+
+          const waResult = await waResponse.json();
+          if (waResult.success) {
+            console.log(`📱 WhatsApp Alert sent to ${ownerWhatsApp}`);
+            notificationSent = true;
+          }
+        } catch (waError) {
+          console.error('❌ WhatsApp alert failed:', waError.message);
         }
-      } catch (smsError) {
-        console.error('❌ Failed to send SMS alert:', smsError.message);
+      }
+
+      // Fallback to SMS if WhatsApp failed or not configured
+      if (!notificationSent) {
+        try {
+          const accountSid = process.env.TWILIO_ACCOUNT_SID;
+          const authToken = process.env.TWILIO_AUTH_TOKEN;
+          const fromPhone = process.env.TWILIO_PHONE_NUMBER;
+
+          if (accountSid && accountSid.startsWith('AC') && authToken && fromPhone && ownerPhone) {
+            const twilio = require('twilio')(accountSid, authToken);
+
+            let messageBody = `🚀 New Lead: ${email} just downloaded your guide.`;
+            if (phone) {
+              messageBody += ` Call them now: ${phone}`;
+            } else {
+              messageBody += ` No phone provided. Email them now to close!`;
+            }
+
+            await twilio.messages.create({
+              body: messageBody,
+              from: fromPhone,
+              to: ownerPhone
+            });
+            console.log(`📱 SMS Alert sent to ${ownerPhone}`);
+          } else {
+            console.log(`📱 SMS Alert skipped. Missing valid config or owner phone.`);
+          }
+        } catch (smsError) {
+          console.error('❌ Failed to send SMS alert:', smsError.message);
+        }
       }
     }
 
-    // 4. Send Email with PDF Attachment
-    // Handle both nested 'leadMagnet' structure and flat structure from launch.js
+    // 4. Deliver Lead Magnet
+    // Priority: WhatsApp (if phone provided) > Email
+    // WhatsApp has 90%+ open rate vs 20% for email
+
     const flatData = business.business_data;
     const nestedData = business.business_data?.leadMagnet;
-    
-    // Normalize data
-    const title = flatData.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
-    const content = flatData.lead_magnet_content || nestedData?.lead_magnet?.content || [];
-    const pdfContent = flatData.lead_magnet_pdf || nestedData?.lead_magnet_pdf || {};
-    const emailSequence = flatData.email_sequence || nestedData?.email_sequence || [];
+    const title = flatData?.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
+
+    let deliveryMethod = 'email';
+    let whatsappSent = false;
+
+    // Try WhatsApp first if phone provided
+    if (phone) {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || 'http://localhost:3000';
+        const waResponse = await fetch(`${baseUrl}/api/whatsapp-deliver`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessId,
+            toPhone: phone,
+            leadName: email.split('@')[0],
+            leadEmail: email
+          })
+        });
+
+        const waResult = await waResponse.json();
+        if (waResult.success) {
+          console.log(`📱 Lead magnet delivered via WhatsApp to ${phone}`);
+          whatsappSent = true;
+          deliveryMethod = 'whatsapp';
+        }
+      } catch (waError) {
+        console.error('❌ WhatsApp delivery failed, falling back to email:', waError.message);
+      }
+    }
+
+    // 5. Send Email (as backup or primary if no phone)
+    // Handle both nested 'leadMagnet' structure and flat structure from launch.js
+    const content = flatData?.lead_magnet_content || nestedData?.lead_magnet?.content || [];
+    const pdfContent = flatData?.lead_magnet_pdf || nestedData?.lead_magnet_pdf || {};
+    const emailSequence = flatData?.email_sequence || nestedData?.email_sequence || [];
     const firstEmail = emailSequence.find(e => e.day === 1) || { subject: 'Your Guide', body: 'Here is your guide.' };
-    
+
     // Prepare business data for PDF (using shared pdf-generator from dashboard)
     const businessDataForPdf = {
-      businessName: flatData.businessName || business.name || 'Local Business',
-      niche: flatData.niche || 'Service',
-      phone: business.phone_number || flatData.phone || '',
-      email: business.email || flatData.email || '',
-      city: flatData.city || flatData.location || 'your area',
-      address: flatData.address || '',
-      hours: flatData.hours || '',
-      bookingUrl: business.booking_url || flatData.booking_url || '',
+      businessName: flatData?.businessName || business.name || 'Local Business',
+      niche: flatData?.niche || 'Service',
+      phone: business.phone_number || flatData?.phone || '',
+      email: business.email || flatData?.email || '',
+      city: flatData?.city || flatData?.location || 'your area',
+      address: flatData?.address || '',
+      hours: flatData?.hours || '',
+      bookingUrl: business.booking_url || flatData?.booking_url || '',
       subdomain: business.subdomain || '',
       landingPageUrl: business.subdomain ? `${process.env.NEXT_PUBLIC_APP_URL || 'https://launchfly.app'}/sites/${business.subdomain}` : '',
-      currency: flatData.currency || '$', // Support RM, S$, etc.
-      design_preferences: flatData.design_preferences || {},
-      businessType: flatData.businessType || nestedData?.businessType,
-      // Include prospect images for PDF gallery
-      prospectImages: flatData.prospectImages || nestedData?.images || []
+      currency: flatData?.currency || '$',
+      design_preferences: flatData?.design_preferences || {},
+      businessType: flatData?.businessType || nestedData?.businessType,
+      prospectImages: flatData?.prospectImages || nestedData?.images || []
     };
-    
+
     if (title) {
       let attachments = [];
-      
+
       // Generate PDF using shared pdf-generator (same as dashboard)
       try {
         console.log('📄 Generating PDF with images:', businessDataForPdf.prospectImages?.length || 0);
         const PDFDocument = (await import('pdfkit')).default;
         const pdfBuffer = await generatePDF({ title, content, pdfContent }, PDFDocument, businessDataForPdf);
-        const fileName = title 
+        const fileName = title
           ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
           : 'expert-guide.pdf';
-          
+
         attachments.push({
           content: pdfBuffer,
           filename: fileName,
@@ -249,14 +313,14 @@ export async function POST(request) {
       `;
 
       await resend.emails.send({
-        from: 'Launchfly <hello@launchfly.ai>', 
+        from: 'Launchfly <hello@launchfly.ai>',
         to: email,
         subject: firstEmail.subject,
         html: html,
         attachments: attachments
       });
     }
-    
+
     // 5. Increment Lead Count (only for new leads)
     if (isNewLead) {
       const { data: currentBiz, error: bizReadError } = await supabase
@@ -264,14 +328,14 @@ export async function POST(request) {
         .select('total_leads')
         .eq('id', businessId)
         .single();
-      
+
       if (!bizReadError) {
         const newCount = (currentBiz?.total_leads || 0) + 1;
         const { error: updateError } = await supabase
           .from('businesses')
           .update({ total_leads: newCount })
           .eq('id', businessId);
-        
+
         if (updateError) {
           console.error('Failed to update lead count:', updateError);
         } else {
@@ -280,10 +344,11 @@ export async function POST(request) {
       }
     }
 
-    return Response.json({ 
-      success: true, 
+    return Response.json({
+      success: true,
       customerId,
       isNewLead,
+      deliveryMethod, // 'whatsapp' or 'email'
       message: isNewLead ? 'Lead captured successfully!' : 'Welcome back!'
     });
   } catch (error) {

@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
 import { inngest } from '@/lib/inngest/client';
+import { detectIndustry, generateFromTemplate, getTemplateById } from '@/lib/industry-templates';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -33,7 +34,9 @@ export async function POST(request) {
       mainProblem,
       leadMagnetTitle,
       websiteUrl,
-      businessContext
+      businessContext,
+      whatsappNumber,
+      socialProofUrl
     } = body || {};
 
     if (!email) {
@@ -43,7 +46,7 @@ export async function POST(request) {
     // Check if professional plan requires payment verification
     const normalizedPlan = String(plan || 'starter').toLowerCase();
     const isProfessionalPlan = ['professional', 'pro', 'professional_lifetime', 'lifetime'].includes(normalizedPlan);
-    
+
     if (isProfessionalPlan && paymentSessionId) {
       // Verify payment session
       const { data: subscription, error: subError } = await supabase
@@ -52,18 +55,18 @@ export async function POST(request) {
         .eq('stripe_session_id', paymentSessionId)
         .eq('user_email', email)
         .single();
-      
+
       if (subError || !subscription) {
         console.error('Payment verification failed:', subError);
-        return Response.json({ 
-          error: 'Professional plan requires valid payment. Please complete the checkout process.' 
+        return Response.json({
+          error: 'Professional plan requires valid payment. Please complete the checkout process.'
         }, { status: 400 });
       }
-      
+
       console.log('Professional plan payment verified:', subscription.id);
     } else if (isProfessionalPlan && !paymentSessionId) {
-      return Response.json({ 
-        error: 'Professional plan requires payment. Please complete the checkout process.' 
+      return Response.json({
+        error: 'Professional plan requires payment. Please complete the checkout process.'
       }, { status: 400 });
     }
 
@@ -139,20 +142,59 @@ export async function POST(request) {
       businessContext
     };
 
+    // === DONE-FOR-YOU TEMPLATE INTEGRATION ===
+    // Check if niche matches a pre-built industry template
+    // If yes, auto-populate business_data with complete lead magnet content
+    let templateBusinessData = null;
+    const detectedIndustry = niche ? detectIndustry(niche) : null;
+    const industryTemplate = detectedIndustry ? getTemplateById(detectedIndustry) : null;
+
+    if (industryTemplate && detectedIndustry !== 'other') {
+      console.log(`🎯 Matched industry template: ${detectedIndustry}`);
+      // Generate complete business data from template
+      templateBusinessData = generateFromTemplate(detectedIndustry, {
+        name: name || 'My Business',
+        phone: whatsappNumber || '', // Use provided WhatsApp as business phone
+        area: targetAudience || 'your area',
+        email: email
+      });
+
+      // Inject Social Proof URL into business data
+      if (socialProofUrl) {
+        templateBusinessData.socialProofUrl = socialProofUrl;
+      }
+
+      // Override with any custom values from form
+      if (leadMagnetTitle) {
+        templateBusinessData.lead_magnet_title = leadMagnetTitle;
+      }
+      if (targetAudience) {
+        templateBusinessData.targetAudience = targetAudience;
+      }
+
+      console.log(`✅ Pre-built content loaded for: ${industryTemplate.name}`);
+    }
+
     // Create business
     const { data: business, error: bizErr } = await supabase
       .from('businesses')
       .insert({
         user_id: userId,
-        name: 'Pending Generation',
+        name: templateBusinessData?.businessName || 'Pending Generation',
         subdomain: safeSubdomain,
-        status: 'pending',
+        status: templateBusinessData ? 'ready' : 'pending', // Template businesses are ready immediately
         form_data: formData,
         session_id: sessionId,
         guarantee_start_at: new Date().toISOString(),
         plan_tier: planTier,
         rev_share_percent: revSharePercent,
-        paid_plan_session_id: isProfessionalPlan ? paymentSessionId : null
+        paid_plan_session_id: isProfessionalPlan ? paymentSessionId : null,
+
+        // New Fields
+        whatsapp_notify_number: whatsappNumber || null,
+        notify_preference: 'whatsapp',
+        // Pre-populate business_data if template matched
+        business_data: templateBusinessData || null
       })
       .select()
       .single();
@@ -164,12 +206,25 @@ export async function POST(request) {
     const effectiveTopic = leadMagnetTopic || leadMagnetTitle;
 
     // Create session - set stage based on template type
-    // For lead-magnet templates, we'll set to 'generating' so dashboard doesn't trigger Inngest
-    const initialStage = (effectiveTemplate === 'lead-magnet' && effectiveTopic) ? 'generating' : 'pending';
-    
+    // Template-matched businesses are COMPLETE immediately (no AI generation needed)
+    // Other lead-magnet templates need generation
+    let initialStage = 'pending';
+    let initialProgress = 0;
+
+    if (templateBusinessData) {
+      // Pre-built template - skip generation, mark as complete
+      initialStage = 'complete';
+      initialProgress = 100;
+      console.log('⚡ Template business - skipping AI generation (content pre-built)');
+    } else if (effectiveTemplate === 'lead-magnet' && effectiveTopic) {
+      // Custom lead magnet - needs AI generation
+      initialStage = 'generating';
+      initialProgress = 30;
+    }
+
     const { error: sessErr } = await supabase
       .from('sessions')
-      .insert({ id: sessionId, business_id: business.id, stage: initialStage, progress: initialStage === 'generating' ? 30 : 0 });
+      .insert({ id: sessionId, business_id: business.id, stage: initialStage, progress: initialProgress });
     if (sessErr) throw sessErr;
 
     // Fire-and-forget: initialize monetization (offers + Stripe Connect)
@@ -178,11 +233,11 @@ export async function POST(request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
-    }).catch(() => {});
+    }).catch(() => { });
 
-    // Trigger Lead Magnet Generation - Use Inngest for reliable background processing
-    // This is the main generation path for lead magnet funnels
-    if (effectiveTemplate === 'lead-magnet' && effectiveTopic) {
+    // Trigger Lead Magnet Generation - ONLY if no template match
+    // Template-matched businesses already have content, skip AI generation
+    if (!templateBusinessData && effectiveTemplate === 'lead-magnet' && effectiveTopic) {
       console.log('Triggering lead magnet generation for:', effectiveTopic);
       try {
         await inngest.send({

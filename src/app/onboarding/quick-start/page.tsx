@@ -4,86 +4,26 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { trackOnboardingStart, trackStepCompleted, trackValidationError, trackOnboardingCompleted } from '../../../lib/onboarding-analytics';
-import PlanPreviewModal from '../../../components/PlanPreviewModal';
+import { INDUSTRY_TEMPLATES } from '../../../lib/industry-templates';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// Niche templates configuration
-const NICHE_TEMPLATES = {
-  // === TOP SEA NICHES ===
-  'aircon': {
-    name: 'Aircon Cleaning & Repair',
-    icon: '🌀',
-    description: 'Maintenance & Servicing',
-    defaultTitle: '2025 Aircon Maintenance Checklist: Save 30% on Electricity',
-    defaultAudience: 'Homeowners & Condo Owners'
-  },
-  'aesthetic-clinic': {
-    name: 'Aesthetic / Derma Clinic',
-    icon: '✨',
-    description: 'Skin & Beauty Treatments',
-    defaultTitle: '2025 Skin Treatment Price Guide',
-    defaultAudience: 'Beauty-conscious customers'
-  },
-  // === CLASSIC SERVICE NICHES ===
-  'plumbing': {
-    name: 'Plumbing',
-    icon: '🔧',
-    description: 'Emergency & Maintenance',
-    defaultTitle: '2025 Plumbing Price Guide',
-    defaultAudience: 'Homeowners'
-  },
-  'hvac': {
-    name: 'HVAC & AC',
-    icon: '❄️',
-    description: 'Heating & Cooling',
-    defaultTitle: 'AC Efficiency Self-Audit Checklist',
-    defaultAudience: 'Homeowners'
-  },
-  'roofing': {
-    name: 'Roofing',
-    icon: '🏠',
-    description: 'Storm Damage & Repair',
-    defaultTitle: 'Storm Damage Self-Inspection Guide',
-    defaultAudience: 'Homeowners'
-  },
-  'landscaping': {
-    name: 'Landscaping',
-    icon: '🌳',
-    description: 'Lawn & Garden',
-    defaultTitle: 'Native Plant & Watering Calendar',
-    defaultAudience: 'Homeowners'
-  },
-  'real-estate': {
-    name: 'Real Estate / Condo Agent',
-    icon: '🏡',
-    description: 'Condos & Investments',
-    defaultTitle: 'Top 5 Condo Investments for 2025',
-    defaultAudience: 'Property Investors & First-Time Buyers'
-  },
-  'gym-fitness': {
-    name: 'Local Gym / Trainer',
-    icon: '💪',
-    description: 'Fitness & Health',
-    defaultTitle: '7-Day Meal Prep Plan & Day Pass',
-    defaultAudience: 'Locals wanting to get fit'
-  },
-  'custom': {
-    name: 'Custom Business',
-    icon: '✨',
-    description: 'Your Unique Service',
-    defaultTitle: 'The Ultimate Checklist for [Topic]',
-    defaultAudience: 'Your Ideal Customers'
-  }
-};
+// Map library templates to UI display options
+const NICHES = Object.values(INDUSTRY_TEMPLATES).map(t => ({
+  id: t.id,
+  name: t.name,
+  icon: t.emoji,
+  description: t.leadMagnet.headline,
+  exampleTitle: t.leadMagnet.title
+}));
 
 export default function QuickStartOnboarding() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -93,71 +33,48 @@ export default function QuickStartOnboarding() {
     available: boolean | null;
     suggestion: string | null;
   }>({ checking: false, available: null, suggestion: null });
-  const [showPlanPreview, setShowPlanPreview] = useState(false);
   const [isGeneratingAssets, setIsGeneratingAssets] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
-  
-  // Form data
+
+  // Data State
   const [formData, setFormData] = useState({
+    niche: '', // aircon, plumbing, etc.
     email: '',
     password: '',
-    name: '',
-    niche: searchParams.get('niche') || 'custom',
-    plan: searchParams.get('plan') || 'starter',
+    name: '', // Full Name
+    businessName: '',
+    whatsappNumber: '',
+    socialProofUrl: '', // Facebook Page or Google Maps
     subdomain: '',
-    
-    // Funnel Specifics
-    targetAudience: '',
-    mainProblem: '',
-    leadMagnetTitle: '',
-    leadMagnetLanguage: 'English',
-    
-    // New Context Fields
-    websiteUrl: '',
-    businessContext: ''
+    plan: searchParams.get('plan') || 'starter',
   });
 
-  const selectedNiche = NICHE_TEMPLATES[formData.niche as keyof typeof NICHE_TEMPLATES] || NICHE_TEMPLATES['custom'];
+  // Derived state
+  const selectedNiche = INDUSTRY_TEMPLATES[formData.niche] || null;
 
-  // Pre-fill defaults when niche changes
+  // Track Start
   useEffect(() => {
-    if (selectedNiche && !formData.targetAudience && formData.niche !== 'custom') {
-      setFormData(prev => ({
-        ...prev,
-        targetAudience: selectedNiche.defaultAudience,
-        leadMagnetTitle: selectedNiche.defaultTitle
-      }));
-    }
-  }, [selectedNiche, formData.niche]);
+    trackOnboardingStart('quick-start-v2', formData.niche, formData.plan);
 
-  // Track onboarding start and check for payment success
-  useEffect(() => {
-    trackOnboardingStart('quick-start', formData.niche, formData.plan);
-    
-    // Check if returning from successful payment
+    // Check payment return
     const sessionId = searchParams.get('session_id');
     if (sessionId && searchParams.get('payment') === 'success') {
       setPaymentSessionId(sessionId);
-      // Restore form data from URL params
       const subdomain = searchParams.get('subdomain');
-      if (subdomain) {
-        setFormData(prev => ({ ...prev, subdomain: decodeURIComponent(subdomain) }));
-      }
-      setCurrentStep(3); // Skip to final step after payment
+      if (subdomain) setFormData(prev => ({ ...prev, subdomain: decodeURIComponent(subdomain) }));
+      setCurrentStep(3);
     }
-  }, [formData.niche, formData.plan, searchParams]);
+  }, [searchParams]);
 
-  // Auto-generate subdomain based on niche/title
+  // Auto-generate subdomain from Business Name
   useEffect(() => {
-    if (selectedNiche && !formData.subdomain && formData.leadMagnetTitle) {
-      // Try to make a subdomain from the title or niche
-      const base = formData.leadMagnetTitle.split(' ').slice(0, 3).join('-');
+    if (formData.businessName && !formData.subdomain) {
       setFormData(prev => ({
         ...prev,
-        subdomain: generateSubdomain(base)
+        subdomain: generateSubdomain(formData.businessName)
       }));
     }
-  }, [selectedNiche, formData.leadMagnetTitle]);
+  }, [formData.businessName]);
 
   const generateSubdomain = (text: string) => {
     return text
@@ -165,162 +82,82 @@ export default function QuickStartOnboarding() {
       .replace(/[^a-z0-9]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
-      .slice(0, 20) + '-' + Math.random().toString(36).substr(2, 4);
+      .slice(0, 25);
   };
 
   const checkSubdomainAvailability = async (subdomain: string) => {
-    if (!subdomain || subdomain.length < 3) {
-      setSubdomainStatus({ checking: false, available: null, suggestion: null });
-      return;
-    }
-
+    if (!subdomain || subdomain.length < 3) return;
     setSubdomainStatus({ checking: true, available: null, suggestion: null });
 
     try {
       const response = await fetch(`/api/check-subdomain?subdomain=${encodeURIComponent(subdomain)}`);
       const result = await response.json();
-
-      if (response.ok) {
-        setSubdomainStatus({
-          checking: false,
-          available: result.available,
-          suggestion: result.suggestion
-        });
-
-        if (!result.available && result.error) {
-          setErrors(prev => ({ ...prev, subdomain: result.error }));
-        } else if (result.available) {
-          setErrors(prev => {
-            const newErrors = { ...prev };
-            delete newErrors.subdomain;
-            return newErrors;
-          });
-        }
+      setSubdomainStatus({
+        checking: false,
+        available: result.available,
+        suggestion: result.suggestion
+      });
+      if (!result.available) {
+        setErrors(prev => ({ ...prev, subdomain: 'Unavailable' }));
       } else {
-        setSubdomainStatus({ checking: false, available: null, suggestion: null });
+        setErrors(prev => { const n = { ...prev }; delete n.subdomain; return n; });
       }
-    } catch (error) {
-      console.error('Error checking subdomain:', error);
+    } catch (e) {
+      console.error(e);
       setSubdomainStatus({ checking: false, available: null, suggestion: null });
     }
   };
 
-  // Debounced subdomain checking
+  // Debounce check
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (formData.subdomain) {
-        checkSubdomainAvailability(formData.subdomain);
-      }
+    const t = setTimeout(() => {
+      if (formData.subdomain) checkSubdomainAvailability(formData.subdomain);
     }, 500);
-
-    return () => clearTimeout(timeoutId);
+    return () => clearTimeout(t);
   }, [formData.subdomain]);
 
   const pollForCompletion = async (sessionId: string) => {
     const pollInterval = setInterval(async () => {
-      const { data: session, error } = await supabase
+      const { data: session } = await supabase
         .from('sessions')
         .select('stage, progress')
         .eq('id', sessionId)
         .single();
 
-      if (error) {
-        console.error('Polling error:', error);
-        return;
-      }
-
       if (session) {
         setGenerationProgress(session.progress || 0);
-        
         if (session.stage === 'complete' || session.progress === 100) {
           clearInterval(pollInterval);
-          // Small delay to show 100%
-          setTimeout(() => {
-            router.push(`/dashboard/${sessionId}`);
-          }, 1000);
+          setTimeout(() => router.push(`/dashboard/${sessionId}`), 1000);
         }
       }
     }, 2000);
-  };
-
-  const handleProceedToCheckout = async () => {
-    setIsLoading(true);
-    try {
-      // Create checkout session
-      const response = await fetch('/api/stripe/professional-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          name: formData.name,
-          niche: formData.niche,
-          subdomain: formData.subdomain,
-          returnUrl: window.location.href
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create checkout session');
-      }
-
-      const { url } = await response.json();
-      
-      // Save form data to localStorage before redirecting
-      localStorage.setItem('launchfly_onboarding_data', JSON.stringify(formData));
-      
-      // Redirect to Stripe Checkout
-      window.location.href = url;
-    } catch (error) {
-      console.error('Checkout error:', error);
-      setErrors({ submit: 'Failed to start checkout. Please try again.' });
-      setIsLoading(false);
-      setShowPlanPreview(false);
-    }
   };
 
   const validateStep = (step: number) => {
     const newErrors: Record<string, string> = {};
 
     if (step === 1) {
-      if (!formData.email) newErrors.email = 'Email is required';
-      else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Please enter a valid email';
-      
-      if (!formData.password) newErrors.password = 'Password is required';
-      else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
-      
-      if (!formData.name) newErrors.name = 'Name is required';
+      if (!formData.niche) newErrors.niche = 'Please select a service type';
     }
 
     if (step === 2) {
-      if (!formData.targetAudience) newErrors.targetAudience = 'Target audience is required';
-      if (!formData.leadMagnetTitle) newErrors.leadMagnetTitle = 'Lead magnet title is required';
-      if (!formData.subdomain) newErrors.subdomain = 'Subdomain is required';
+      if (!formData.businessName) newErrors.businessName = 'Business Name is required';
+      if (!formData.whatsappNumber) newErrors.whatsappNumber = 'WhatsApp Number is required';
+      if (!formData.email) newErrors.email = 'Email is required';
+      if (!formData.password) newErrors.password = 'Password is required';
     }
 
-    // Track validation errors
-    Object.entries(newErrors).forEach(([field, error]) => {
-      trackValidationError(step, field, error);
-    });
+    if (step === 3) {
+      if (!formData.subdomain) newErrors.subdomain = 'Subdomain is required';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = async () => {
-    if (!validateStep(currentStep)) return;
-    
-    // If moving from step 2 to step 3 with professional plan, show plan preview
-    if (currentStep === 2 && formData.plan === 'professional' && !paymentSessionId) {
-      setShowPlanPreview(true);
-      return;
-    }
-    
-    const stepNames = ['account_creation', 'funnel_details', 'review'];
-    trackStepCompleted(currentStep, stepNames[currentStep - 1], {
-      niche: formData.niche,
-      plan: formData.plan
-    });
-    setCurrentStep(prev => prev + 1);
+  const handleNext = () => {
+    if (validateStep(currentStep)) setCurrentStep(prev => prev + 1);
   };
 
   const handleBack = () => {
@@ -329,544 +166,274 @@ export default function QuickStartOnboarding() {
 
   const handleSubmit = async () => {
     if (!validateStep(currentStep)) return;
-
     setIsLoading(true);
+
     try {
-      // Submit business creation request
-      // We let the server handle user creation to avoid client-side rate limits
       const response = await fetch('/api/wizard/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: formData.name,
+          // Identity
+          name: formData.businessName, // Using business name as user name for simplicity or split? Let's use business name
           email: formData.email,
           password: formData.password,
+
+          // Business Data
           niche: formData.niche,
-          nicheName: selectedNiche.name,
-          targetAudience: formData.targetAudience,
-          mainProblem: formData.mainProblem,
-          leadMagnetTitle: formData.leadMagnetTitle,
-          leadMagnetLanguage: formData.leadMagnetLanguage,
-          websiteUrl: formData.websiteUrl,
-          businessContext: formData.businessContext,
+          whatsappNumber: formData.whatsappNumber, // IMPORTANT: New Field
+          socialProofUrl: formData.socialProofUrl, // IMPORTANT: New Field
           subdomain: formData.subdomain,
+
+          // Context
           plan: formData.plan,
-          paymentSessionId: paymentSessionId
+          paymentSessionId
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create business');
-      }
-
+      if (!response.ok) throw new Error('Failed to create account');
       const result = await response.json();
 
-      // Auto-login the user
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      // Auto-login
+      await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
-      if (signInError) {
-        console.error('Auto-login failed:', signInError);
-      }
-      
-      // Track successful completion
       trackOnboardingCompleted({
         niche: formData.niche,
-        plan: formData.plan,
         subdomain: formData.subdomain,
         sessionId: result.sessionId
       });
-      
-      // Start polling instead of redirecting
+
       setIsGeneratingAssets(true);
+      // Immediate 100% via polling because template is instant
       pollForCompletion(result.sessionId);
-      
-    } catch (error) {
-      console.error('Onboarding error:', error);
-      setErrors({ submit: (error as Error).message });
-    } finally {
+
+    } catch (error: any) {
+      console.error(error);
+      setErrors({ submit: error.message });
       setIsLoading(false);
     }
   };
 
-  const handleSocialLogin = async (provider: 'google') => {
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/onboarding/quick-start?step=2&niche=${formData.niche}&plan=${formData.plan}`
-        }
-      });
-      if (error) throw error;
-    } catch (error) {
-      console.error('Social login error:', error);
-      setErrors({ social: (error as Error).message });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // --- RENDERS ---
 
   const renderStep1 = () => (
-    <>
-      <div className="onboarding-header">
-        <div className="onboarding-logo">
-          <span className="onboarding-logo-icon">⚡</span>
-          <span className="onboarding-logo-text">Launchfly</span>
-        </div>
-        <div className="onboarding-progress">
-          <div className="progress-step active"></div>
-          <div className="progress-step"></div>
-          <div className="progress-step"></div>
-        </div>
+    <div className="max-w-4xl mx-auto px-4">
+      <div className="text-center mb-10">
+        <h1 className="text-3xl font-bold text-slate-900 mb-3">What service do you provide?</h1>
+        <p className="text-slate-600">We'll build your entire sales funnel based on this.</p>
       </div>
 
-      <div className="onboarding-content">
-        <h1 className="onboarding-title">Create Your Account</h1>
-        <p className="onboarding-subtitle">
-          Start building your {selectedNiche.name} funnel in minutes.
-        </p>
-
-        <div style={{ 
-          background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-          padding: '1rem',
-          borderRadius: '12px',
-          marginBottom: '1.5rem',
-          border: '1px solid rgba(59, 130, 246, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '1.5rem' }}>{selectedNiche.icon}</span>
-            <h3 style={{ margin: 0, color: '#1e40af' }}>{selectedNiche.name}</h3>
-          </div>
-          <p style={{ margin: 0, color: '#1e40af', fontSize: '0.9rem' }}>
-            {selectedNiche.description}
-          </p>
-        </div>
-
-        <div className="social-login">
-          <button 
-            className="social-btn" 
-            onClick={() => handleSocialLogin('google')}
-            disabled={isLoading}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {NICHES.map(niche => (
+          <button
+            key={niche.id}
+            onClick={() => setFormData(prev => ({ ...prev, niche: niche.id }))}
+            className={`p-6 rounded-xl border-2 text-left transition-all hover:shadow-md ${formData.niche === niche.id
+                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                : 'border-slate-200 hover:border-slate-300 bg-white'
+              }`}
           >
-            {isLoading ? (
-              <div className="loading-spinner"></div>
-            ) : (
-              <>
-                <svg width="20" height="20" viewBox="0 0 24 24">
-                  <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Continue with Google
-              </>
-            )}
+            <div className="text-4xl mb-4">{niche.icon}</div>
+            <h3 className="font-bold text-lg text-slate-900 mb-1">{niche.name}</h3>
+            <p className="text-sm text-slate-500 mb-3">{niche.description}</p>
+            <div className="text-xs font-medium text-blue-600 bg-blue-100 py-1 px-2 rounded inline-block">
+              🎁 Free Gift: {niche.exampleTitle}
+            </div>
           </button>
-        </div>
-
-        <div className="divider">
-          <span>or sign up with email</span>
-        </div>
-
-        <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input
-              type="text"
-              className={`form-input ${errors.name ? 'error' : ''}`}
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Enter your full name"
-            />
-            {errors.name && <div className="form-error">{errors.name}</div>}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              type="email"
-              className={`form-input ${errors.email ? 'error' : ''}`}
-              value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              placeholder="Enter your email"
-            />
-            {errors.email && <div className="form-error">{errors.email}</div>}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className={`form-input ${errors.password ? 'error' : ''}`}
-              value={formData.password}
-              onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-              placeholder="Create a password (6+ characters)"
-            />
-            {errors.password && <div className="form-error">{errors.password}</div>}
-          </div>
-
-          {errors.social && <div className="form-error">{errors.social}</div>}
-
-          <button type="submit" className="btn btn-primary btn-full" disabled={isLoading}>
-            {isLoading ? <div className="loading-spinner"></div> : 'Continue'}
-          </button>
-        </form>
+        ))}
       </div>
-    </>
+
+      {/* Continue Button fixed at bottom mobile or inline desktop */}
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={handleNext}
+          disabled={!formData.niche}
+          className="px-8 py-3 bg-blue-600 text-white rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl w-full md:w-auto"
+        >
+          Next Step →
+        </button>
+      </div>
+
+      {errors.niche && <p className="text-red-500 text-center mt-2">{errors.niche}</p>}
+    </div>
   );
 
   const renderStep2 = () => (
-    <>
-      <div className="onboarding-header">
-        <div className="onboarding-logo">
-          <span className="onboarding-logo-icon">⚡</span>
-          <span className="onboarding-logo-text">Launchfly</span>
-        </div>
-        <div className="onboarding-progress">
-          <div className="progress-step completed"></div>
-          <div className="progress-step active"></div>
-          <div className="progress-step"></div>
-        </div>
+    <div className="max-w-md mx-auto px-4">
+      <div className="text-center mb-8">
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Create Your Account</h1>
+        <p className="text-slate-600">We'll send your new leads here.</p>
       </div>
 
-      <div className="onboarding-content">
-        <h1 className="onboarding-title">Define Your Funnel</h1>
-        <p className="onboarding-subtitle">
-          Tell us about your ideal customer so we can generate the perfect lead magnet.
-        </p>
-
-        <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
-          
-          <div className="form-group">
-            <label className="form-label">Who is your ideal customer?</label>
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Business Name</label>
             <input
               type="text"
-              className={`form-input ${errors.targetAudience ? 'error' : ''}`}
-              value={formData.targetAudience}
-              onChange={(e) => setFormData(prev => ({ ...prev, targetAudience: e.target.value }))}
-              placeholder="e.g. Homeowners in Dallas"
+              value={formData.businessName}
+              onChange={e => setFormData(p => ({ ...p, businessName: e.target.value }))}
+              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g. Joe's Aircon Services"
             />
-            {errors.targetAudience && <div className="form-error">{errors.targetAudience}</div>}
+            {errors.businessName && <span className="text-red-500 text-xs">{errors.businessName}</span>}
           </div>
 
-          <div className="form-group">
-            <label className="form-label">What is the main problem you solve for them?</label>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">WhatsApp Number</label>
             <input
-              type="text"
-              className={`form-input ${errors.mainProblem ? 'error' : ''}`}
-              value={formData.mainProblem}
-              onChange={(e) => setFormData(prev => ({ ...prev, mainProblem: e.target.value }))}
-              placeholder="e.g. Leaky pipes and emergency repairs"
+              type="tel"
+              value={formData.whatsappNumber}
+              onChange={e => setFormData(p => ({ ...p, whatsappNumber: e.target.value }))}
+              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="+60 12 345 6789"
             />
+            <p className="text-xs text-slate-500 mt-1">We'll send lead alerts here instantly. No app required.</p>
+            {errors.whatsappNumber && <span className="text-red-500 text-xs">{errors.whatsappNumber}</span>}
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Existing Website (Optional)</label>
+          <div className="pt-4 border-t border-slate-100">
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Email (Login ID)</label>
             <input
-              type="url"
-              className="form-input"
-              value={formData.websiteUrl}
-              onChange={(e) => setFormData(prev => ({ ...prev, websiteUrl: e.target.value }))}
-              placeholder="e.g. https://mybusiness.com"
+              type="email"
+              value={formData.email}
+              onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="joe@gmail.com"
             />
-            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>
-              We'll scan this to personalize your assets.
-            </p>
+            {errors.email && <span className="text-red-500 text-xs">{errors.email}</span>}
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Additional Context (Optional)</label>
-            <textarea
-              className="form-input"
-              value={formData.businessContext}
-              onChange={(e) => setFormData(prev => ({ ...prev, businessContext: e.target.value }))}
-              placeholder="Any specific details? e.g. 'We are family owned since 1995' or 'We specialize in storm damage'"
-              rows={3}
-              style={{ resize: 'vertical' }}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Lead Magnet Title (Free Asset)</label>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
             <input
-              type="text"
-              className={`form-input ${errors.leadMagnetTitle ? 'error' : ''}`}
-              value={formData.leadMagnetTitle}
-              onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetTitle: e.target.value }))}
-              placeholder="e.g. 2025 Plumbing Price Guide"
+              type="password"
+              value={formData.password}
+              onChange={e => setFormData(p => ({ ...p, password: e.target.value }))}
+              className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="******"
             />
-            {errors.leadMagnetTitle && <div className="form-error">{errors.leadMagnetTitle}</div>}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Content Language</label>
-            <select 
-              className="form-input"
-              value={formData.leadMagnetLanguage}
-              onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetLanguage: e.target.value }))}
-            >
-              <option value="English">English</option>
-              <option value="Spanish">Spanish</option>
-              <option value="French">French</option>
-              <option value="German">German</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Your Funnel URL</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <input
-                  type="text"
-                  className={`form-input ${errors.subdomain ? 'error' : subdomainStatus.available === false ? 'error' : subdomainStatus.available === true ? 'success' : ''}`}
-                  value={formData.subdomain}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-                  }))}
-                  placeholder="your-funnel-name"
-                  style={{ 
-                    paddingRight: subdomainStatus.checking || subdomainStatus.available !== null ? '2.5rem' : '1rem'
-                  }}
-                />
-                {subdomainStatus.checking && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    right: '0.75rem', 
-                    top: '50%', 
-                    transform: 'translateY(-50%)'
-                  }}>
-                    <div className="loading-spinner" style={{ width: '16px', height: '16px' }}></div>
-                  </div>
-                )}
-                {!subdomainStatus.checking && subdomainStatus.available === true && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    right: '0.75rem', 
-                    top: '50%', 
-                    transform: 'translateY(-50%)',
-                    color: '#10b981',
-                    fontWeight: 'bold'
-                  }}>
-                    ✓
-                  </div>
-                )}
-                {!subdomainStatus.checking && subdomainStatus.available === false && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    right: '0.75rem', 
-                    top: '50%', 
-                    transform: 'translateY(-50%)',
-                    color: '#ef4444',
-                    fontWeight: 'bold'
-                  }}>
-                    ✗
-                  </div>
-                )}
-              </div>
-              <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>.launchfly.com</span>
-            </div>
-            {errors.subdomain && <div className="form-error">{errors.subdomain}</div>}
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-            <button 
-              type="button" 
-              className="btn btn-secondary" 
-              onClick={handleBack}
-              style={{ flex: 1 }}
-            >
-              Back
-            </button>
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ flex: 2 }}
-              disabled={isLoading}
-            >
-              {isLoading ? <div className="loading-spinner"></div> : 'Continue'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </>
-  );
-
-  const renderStep3 = () => (
-    <>
-      <div className="onboarding-header">
-        <div className="onboarding-logo">
-          <span className="onboarding-logo-icon">⚡</span>
-          <span className="onboarding-logo-text">Launchfly</span>
-        </div>
-        <div className="onboarding-progress">
-          <div className="progress-step completed"></div>
-          <div className="progress-step completed"></div>
-          <div className="progress-step active"></div>
-        </div>
-      </div>
-
-      <div className="onboarding-content">
-        <h1 className="onboarding-title">Ready to Launch!</h1>
-        <p className="onboarding-subtitle">
-          Review your details before we generate your funnel.
-        </p>
-
-        <div style={{ 
-          background: '#f8fafc', 
-          padding: '1.5rem', 
-          borderRadius: '12px', 
-          marginBottom: '2rem',
-          border: '1px solid #e2e8f0'
-        }}>
-          <h3 style={{ margin: '0 0 1rem 0', color: '#1a1a1a' }}>Funnel Summary</h3>
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Niche:</span>
-              <span style={{ fontWeight: '600' }}>{selectedNiche.name}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Target Audience:</span>
-              <span style={{ fontWeight: '600' }}>{formData.targetAudience}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Lead Magnet:</span>
-              <span style={{ fontWeight: '600' }}>{formData.leadMagnetTitle}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>URL:</span>
-              <span style={{ fontWeight: '600' }}>{formData.subdomain}.launchfly.com</span>
-            </div>
+            {errors.password && <span className="text-red-500 text-xs">{errors.password}</span>}
           </div>
         </div>
 
-        <div style={{ 
-          background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)', 
-          padding: '1.5rem', 
-          borderRadius: '12px', 
-          marginBottom: '2rem',
-          border: '1px solid rgba(34, 197, 94, 0.2)'
-        }}>
-          <h4 style={{ margin: '0 0 0.5rem 0', color: '#15803d', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>✨</span> What happens next?
-          </h4>
-          <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#15803d' }}>
-            <li>AI writes your Asset ({formData.leadMagnetLanguage})</li>
-            <li>AI builds your Landing Page</li>
-            <li>AI writes your Email Follow-up Sequence</li>
-            <li>Your funnel goes live instantly</li>
-          </ul>
-        </div>
-
-        {formData.plan === 'professional' && !paymentSessionId && (
-          <div style={{ 
-            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
-            padding: '1rem', 
-            borderRadius: '8px', 
-            marginBottom: '1rem',
-            border: '1px solid rgba(251, 191, 36, 0.3)'
-          }}>
-            <p style={{ margin: 0, color: '#92400e', fontSize: '0.9rem' }}>
-              <strong>⚠️ Payment Required:</strong> Professional plan requires a one-time payment of $497 to proceed.
-            </p>
-          </div>
-        )}
-        
-        {errors.submit && <div className="form-error" style={{ marginBottom: '1rem' }}>{errors.submit}</div>}
-
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button 
-            type="button" 
-            className="btn btn-secondary" 
-            onClick={handleBack}
-            style={{ flex: 1 }}
-          >
-            Back
-          </button>
-          <button 
-            className="btn btn-primary" 
-            onClick={handleSubmit}
-            style={{ flex: 2 }}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <div className="loading-spinner"></div>
-                Generating Funnel...
-              </>
-            ) : (
-              <>
-                🚀 Generate My Funnel
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-  const renderGenerating = () => (
-    <div className="onboarding-content" style={{ textAlign: 'center', paddingTop: '4rem' }}>
-      <div className="loading-spinner" style={{ width: '64px', height: '64px', margin: '0 auto 2rem', borderTopColor: '#2563eb', borderRightColor: '#2563eb' }}></div>
-      <h1 className="onboarding-title">Building Your Business System</h1>
-      <p className="onboarding-subtitle">
-        AI is generating your assets. This usually takes about 30-60 seconds.
-      </p>
-      
-      <div style={{ maxWidth: '400px', margin: '2rem auto', textAlign: 'left' }}>
-        <div style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500', color: '#4b5563' }}>
-            <span>Progress</span>
-            <span>{generationProgress}%</span>
-          </div>
-          <div style={{ height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${generationProgress}%`, background: '#2563eb', transition: 'width 0.5s ease' }}></div>
-          </div>
-        </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 10 ? '#16a34a' : '#9ca3af' }}>
-            <span>{generationProgress > 10 ? '✓' : '○'}</span>
-            <span>Analyzing Market & Audience</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 40 ? '#16a34a' : '#9ca3af' }}>
-            <span>{generationProgress > 40 ? '✓' : '○'}</span>
-            <span>Writing Lead Magnet Content</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 70 ? '#16a34a' : '#9ca3af' }}>
-            <span>{generationProgress > 70 ? '✓' : '○'}</span>
-            <span>Building Landing Page</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 90 ? '#16a34a' : '#9ca3af' }}>
-            <span>{generationProgress > 90 ? '✓' : '○'}</span>
-            <span>Drafting Email Sequence</span>
-          </div>
+        <div className="mt-8 flex gap-3">
+          <button onClick={handleBack} className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-lg">Back</button>
+          <button onClick={handleNext} className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg">Next →</button>
         </div>
       </div>
     </div>
   );
 
+  const renderStep3 = () => (
+    <div className="max-w-md mx-auto px-4">
+      <div className="text-center mb-8">
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Final Touch: Add Trust</h1>
+        <p className="text-slate-600">Increase sales by showing you are verified.</p>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+
+        {/* Social Proof Input */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Facebook Page or Google Maps Link <span className="text-slate-400 font-normal">(Optional)</span></label>
+          <input
+            type="url"
+            value={formData.socialProofUrl}
+            onChange={e => setFormData(p => ({ ...p, socialProofUrl: e.target.value }))}
+            className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="https://facebook.com/joesaircon"
+          />
+          <p className="text-xs text-slate-500 mt-1">We'll automatically display your 5-star rating on your page.</p>
+        </div>
+
+        {/* Subdomain Input */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Your Website Link</label>
+          <div className="flex">
+            <input
+              type="text"
+              value={formData.subdomain}
+              onChange={e => setFormData(p => ({ ...p, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
+              className={`flex-1 p-3 border rounded-l-lg outline-none ${subdomainStatus.available === false ? 'border-red-500 bg-red-50' :
+                  subdomainStatus.available === true ? 'border-green-500 bg-green-50' : 'border-slate-300'
+                }`}
+            />
+            <div className="bg-slate-100 border border-l-0 border-slate-300 p-3 rounded-r-lg text-slate-500 font-medium">
+              .launchfly.com
+            </div>
+          </div>
+          {subdomainStatus.available === true && <p className="text-green-600 text-xs mt-1">✓ Available</p>}
+          {subdomainStatus.available === false && <p className="text-red-600 text-xs mt-1">✗ Taken</p>}
+        </div>
+
+        {errors.submit && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg mb-4">{errors.submit}</div>}
+
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className="w-full py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 shadow-xl transition-all transform hover:scale-[1.02]"
+        >
+          {isLoading ? 'Launching...' : '🚀 Launch My Page Now'}
+        </button>
+        <button onClick={handleBack} className="w-full mt-4 text-slate-500 text-sm">Back</button>
+      </div>
+    </div>
+  );
+
+  const renderGenerating = () => (
+    <div className="max-w-md mx-auto px-4 text-center pt-20">
+      <div className="mb-8 relative w-24 h-24 mx-auto">
+        <svg className="animate-spin w-full h-full text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+      <h2 className="text-2xl font-bold text-slate-900 mb-2">Building your funnel...</h2>
+      <p className="text-slate-600 mb-6">Writing content, designing layout, and connecting WhatsApp.</p>
+
+      <div className="w-full bg-slate-200 rounded-full h-3 mb-2 overflow-hidden">
+        <div
+          className="bg-blue-600 h-3 rounded-full transition-all duration-500"
+          style={{ width: `${Math.max(10, generationProgress)}%` }}
+        ></div>
+      </div>
+      <p className="text-sm text-slate-500">{generationProgress}% Complete</p>
+    </div>
+  );
+
   return (
-    <>
-      {isGeneratingAssets ? renderGenerating() : (
-        <>
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
-        </>
-      )}
-      
-      <PlanPreviewModal
-        isOpen={showPlanPreview}
-        onClose={() => setShowPlanPreview(false)}
-        onConfirm={handleProceedToCheckout}
-        selectedPlan="professional"
-        businessName={formData.leadMagnetTitle}
-        subdomain={formData.subdomain}
-      />
-    </>
+    <div className="min-h-screen bg-slate-50 py-8 lg:py-12">
+      {/* Header */}
+      <div className="fixed top-0 left-0 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 z-50 px-4 py-3">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">⚡</span>
+            <span className="font-bold text-slate-900">Launchfly</span>
+          </div>
+          {!isGeneratingAssets && (
+            <div className="flex gap-2 text-sm font-medium text-slate-400">
+              <span className={currentStep >= 1 ? "text-blue-600" : ""}>1. Niche</span>
+              <span>→</span>
+              <span className={currentStep >= 2 ? "text-blue-600" : ""}>2. Account</span>
+              <span>→</span>
+              <span className={currentStep >= 3 ? "text-blue-600" : ""}>3. Launch</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-16">
+        {isGeneratingAssets ? renderGenerating() : (
+          <>
+            {currentStep === 1 && renderStep1()}
+            {currentStep === 2 && renderStep2()}
+            {currentStep === 3 && renderStep3()}
+          </>
+        )}
+      </div>
+    </div>
   );
 }

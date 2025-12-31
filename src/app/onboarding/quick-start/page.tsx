@@ -83,7 +83,7 @@ const NICHE_TEMPLATES = {
 export default function QuickStartOnboarding() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -96,7 +96,7 @@ export default function QuickStartOnboarding() {
   const [showPlanPreview, setShowPlanPreview] = useState(false);
   const [isGeneratingAssets, setIsGeneratingAssets] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
-  
+
   // Form data
   const [formData, setFormData] = useState({
     email: '',
@@ -105,16 +105,18 @@ export default function QuickStartOnboarding() {
     niche: searchParams.get('niche') || 'custom',
     plan: searchParams.get('plan') || 'starter',
     subdomain: '',
-    
+
     // Funnel Specifics
     targetAudience: '',
     mainProblem: '',
     leadMagnetTitle: '',
     leadMagnetLanguage: 'English',
-    
+
     // New Context Fields
     websiteUrl: '',
-    businessContext: ''
+    businessContext: '',
+    phoneNumber: '',
+    facebookPageUrl: ''
   });
 
   const selectedNiche = NICHE_TEMPLATES[formData.niche as keyof typeof NICHE_TEMPLATES] || NICHE_TEMPLATES['custom'];
@@ -133,7 +135,7 @@ export default function QuickStartOnboarding() {
   // Track onboarding start and check for payment success
   useEffect(() => {
     trackOnboardingStart('quick-start', formData.niche, formData.plan);
-    
+
     // Check if returning from successful payment
     const sessionId = searchParams.get('session_id');
     if (sessionId && searchParams.get('payment') === 'success') {
@@ -231,7 +233,7 @@ export default function QuickStartOnboarding() {
 
       if (session) {
         setGenerationProgress(session.progress || 0);
-        
+
         if (session.stage === 'complete' || session.progress === 100) {
           clearInterval(pollInterval);
           // Small delay to show 100%
@@ -264,10 +266,10 @@ export default function QuickStartOnboarding() {
       }
 
       const { url } = await response.json();
-      
+
       // Save form data to localStorage before redirecting
       localStorage.setItem('launchfly_onboarding_data', JSON.stringify(formData));
-      
+
       // Redirect to Stripe Checkout
       window.location.href = url;
     } catch (error) {
@@ -284,11 +286,13 @@ export default function QuickStartOnboarding() {
     if (step === 1) {
       if (!formData.email) newErrors.email = 'Email is required';
       else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Please enter a valid email';
-      
+
       if (!formData.password) newErrors.password = 'Password is required';
       else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
-      
+
       if (!formData.name) newErrors.name = 'Name is required';
+
+      if (!formData.phoneNumber) newErrors.phoneNumber = 'WhatsApp number is required';
     }
 
     if (step === 2) {
@@ -308,13 +312,13 @@ export default function QuickStartOnboarding() {
 
   const handleNext = async () => {
     if (!validateStep(currentStep)) return;
-    
+
     // If moving from step 2 to step 3 with professional plan, show plan preview
     if (currentStep === 2 && formData.plan === 'professional' && !paymentSessionId) {
       setShowPlanPreview(true);
       return;
     }
-    
+
     const stepNames = ['account_creation', 'funnel_details', 'review'];
     trackStepCompleted(currentStep, stepNames[currentStep - 1], {
       niche: formData.niche,
@@ -351,7 +355,9 @@ export default function QuickStartOnboarding() {
           businessContext: formData.businessContext,
           subdomain: formData.subdomain,
           plan: formData.plan,
-          paymentSessionId: paymentSessionId
+          paymentSessionId: paymentSessionId,
+          phoneNumber: formData.phoneNumber,
+          facebookPageUrl: formData.facebookPageUrl
         })
       });
 
@@ -371,7 +377,7 @@ export default function QuickStartOnboarding() {
       if (signInError) {
         console.error('Auto-login failed:', signInError);
       }
-      
+
       // Track successful completion
       trackOnboardingCompleted({
         niche: formData.niche,
@@ -379,11 +385,11 @@ export default function QuickStartOnboarding() {
         subdomain: formData.subdomain,
         sessionId: result.sessionId
       });
-      
+
       // Start polling instead of redirecting
       setIsGeneratingAssets(true);
       pollForCompletion(result.sessionId);
-      
+
     } catch (error) {
       console.error('Onboarding error:', error);
       setErrors({ submit: (error as Error).message });
@@ -430,7 +436,7 @@ export default function QuickStartOnboarding() {
           Start building your {selectedNiche.name} funnel in minutes.
         </p>
 
-        <div style={{ 
+        <div style={{
           background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
           padding: '1rem',
           borderRadius: '12px',
@@ -447,8 +453,8 @@ export default function QuickStartOnboarding() {
         </div>
 
         <div className="social-login">
-          <button 
-            className="social-btn" 
+          <button
+            className="social-btn"
             onClick={() => handleSocialLogin('google')}
             disabled={isLoading}
           >
@@ -457,10 +463,10 @@ export default function QuickStartOnboarding() {
             ) : (
               <>
                 <svg width="20" height="20" viewBox="0 0 24 24">
-                  <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                  <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
                 Continue with Google
               </>
@@ -509,6 +515,21 @@ export default function QuickStartOnboarding() {
             {errors.password && <div className="form-error">{errors.password}</div>}
           </div>
 
+          <div className="form-group">
+            <label className="form-label">WhatsApp Number (for Lead Alerts)</label>
+            <input
+              type="tel"
+              className={`form-input ${errors.phoneNumber ? 'error' : ''}`}
+              value={formData.phoneNumber}
+              onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+              placeholder="e.g. +65 9123 4567"
+            />
+            {errors.phoneNumber && <div className="form-error">{errors.phoneNumber}</div>}
+            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>
+              We'll send new leads directly to this WhatsApp number.
+            </p>
+          </div>
+
           {errors.social && <div className="form-error">{errors.social}</div>}
 
           <button type="submit" className="btn btn-primary btn-full" disabled={isLoading}>
@@ -540,7 +561,7 @@ export default function QuickStartOnboarding() {
         </p>
 
         <form onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
-          
+
           <div className="form-group">
             <label className="form-label">Who is your ideal customer?</label>
             <input
@@ -579,6 +600,20 @@ export default function QuickStartOnboarding() {
           </div>
 
           <div className="form-group">
+            <label className="form-label">Facebook Page URL (Optional)</label>
+            <input
+              type="url"
+              className="form-input"
+              value={formData.facebookPageUrl}
+              onChange={(e) => setFormData(prev => ({ ...prev, facebookPageUrl: e.target.value }))}
+              placeholder="e.g. https://facebook.com/mybusiness"
+            />
+            <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>
+              We can automatically verify your business to build trust.
+            </p>
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Additional Context (Optional)</label>
             <textarea
               className="form-input"
@@ -604,7 +639,7 @@ export default function QuickStartOnboarding() {
 
           <div className="form-group">
             <label className="form-label">Content Language</label>
-            <select 
+            <select
               className="form-input"
               value={formData.leadMagnetLanguage}
               onChange={(e) => setFormData(prev => ({ ...prev, leadMagnetLanguage: e.target.value }))}
@@ -624,30 +659,30 @@ export default function QuickStartOnboarding() {
                   type="text"
                   className={`form-input ${errors.subdomain ? 'error' : subdomainStatus.available === false ? 'error' : subdomainStatus.available === true ? 'success' : ''}`}
                   value={formData.subdomain}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
                     subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
                   }))}
                   placeholder="your-funnel-name"
-                  style={{ 
+                  style={{
                     paddingRight: subdomainStatus.checking || subdomainStatus.available !== null ? '2.5rem' : '1rem'
                   }}
                 />
                 {subdomainStatus.checking && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    right: '0.75rem', 
-                    top: '50%', 
+                  <div style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
                     transform: 'translateY(-50%)'
                   }}>
                     <div className="loading-spinner" style={{ width: '16px', height: '16px' }}></div>
                   </div>
                 )}
                 {!subdomainStatus.checking && subdomainStatus.available === true && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    right: '0.75rem', 
-                    top: '50%', 
+                  <div style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
                     transform: 'translateY(-50%)',
                     color: '#10b981',
                     fontWeight: 'bold'
@@ -656,10 +691,10 @@ export default function QuickStartOnboarding() {
                   </div>
                 )}
                 {!subdomainStatus.checking && subdomainStatus.available === false && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    right: '0.75rem', 
-                    top: '50%', 
+                  <div style={{
+                    position: 'absolute',
+                    right: '0.75rem',
+                    top: '50%',
                     transform: 'translateY(-50%)',
                     color: '#ef4444',
                     fontWeight: 'bold'
@@ -674,17 +709,17 @@ export default function QuickStartOnboarding() {
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-            <button 
-              type="button" 
-              className="btn btn-secondary" 
+            <button
+              type="button"
+              className="btn btn-secondary"
               onClick={handleBack}
               style={{ flex: 1 }}
             >
               Back
             </button>
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
+            <button
+              type="submit"
+              className="btn btn-primary"
               style={{ flex: 2 }}
               disabled={isLoading}
             >
@@ -716,10 +751,10 @@ export default function QuickStartOnboarding() {
           Review your details before we generate your funnel.
         </p>
 
-        <div style={{ 
-          background: '#f8fafc', 
-          padding: '1.5rem', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#f8fafc',
+          padding: '1.5rem',
+          borderRadius: '12px',
           marginBottom: '2rem',
           border: '1px solid #e2e8f0'
         }}>
@@ -744,10 +779,10 @@ export default function QuickStartOnboarding() {
           </div>
         </div>
 
-        <div style={{ 
-          background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)', 
-          padding: '1.5rem', 
-          borderRadius: '12px', 
+        <div style={{
+          background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+          padding: '1.5rem',
+          borderRadius: '12px',
           marginBottom: '2rem',
           border: '1px solid rgba(34, 197, 94, 0.2)'
         }}>
@@ -763,10 +798,10 @@ export default function QuickStartOnboarding() {
         </div>
 
         {formData.plan === 'professional' && !paymentSessionId && (
-          <div style={{ 
-            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', 
-            padding: '1rem', 
-            borderRadius: '8px', 
+          <div style={{
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            padding: '1rem',
+            borderRadius: '8px',
             marginBottom: '1rem',
             border: '1px solid rgba(251, 191, 36, 0.3)'
           }}>
@@ -775,20 +810,20 @@ export default function QuickStartOnboarding() {
             </p>
           </div>
         )}
-        
+
         {errors.submit && <div className="form-error" style={{ marginBottom: '1rem' }}>{errors.submit}</div>}
 
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <button 
-            type="button" 
-            className="btn btn-secondary" 
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={handleBack}
             style={{ flex: 1 }}
           >
             Back
           </button>
-          <button 
-            className="btn btn-primary" 
+          <button
+            className="btn btn-primary"
             onClick={handleSubmit}
             style={{ flex: 2 }}
             disabled={isLoading}
@@ -815,7 +850,7 @@ export default function QuickStartOnboarding() {
       <p className="onboarding-subtitle">
         AI is generating your assets. This usually takes about 30-60 seconds.
       </p>
-      
+
       <div style={{ maxWidth: '400px', margin: '2rem auto', textAlign: 'left' }}>
         <div style={{ marginBottom: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500', color: '#4b5563' }}>
@@ -826,7 +861,7 @@ export default function QuickStartOnboarding() {
             <div style={{ height: '100%', width: `${generationProgress}%`, background: '#2563eb', transition: 'width 0.5s ease' }}></div>
           </div>
         </div>
-        
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: generationProgress > 10 ? '#16a34a' : '#9ca3af' }}>
             <span>{generationProgress > 10 ? '✓' : '○'}</span>
@@ -858,7 +893,7 @@ export default function QuickStartOnboarding() {
           {currentStep === 3 && renderStep3()}
         </>
       )}
-      
+
       <PlanPreviewModal
         isOpen={showPlanPreview}
         onClose={() => setShowPlanPreview(false)}

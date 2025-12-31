@@ -33,7 +33,9 @@ export async function POST(request) {
       mainProblem,
       leadMagnetTitle,
       websiteUrl,
-      businessContext
+      businessContext,
+      phoneNumber,
+      facebookPageUrl
     } = body || {};
 
     if (!email) {
@@ -43,7 +45,7 @@ export async function POST(request) {
     // Check if professional plan requires payment verification
     const normalizedPlan = String(plan || 'starter').toLowerCase();
     const isProfessionalPlan = ['professional', 'pro', 'professional_lifetime', 'lifetime'].includes(normalizedPlan);
-    
+
     if (isProfessionalPlan && paymentSessionId) {
       // Verify payment session
       const { data: subscription, error: subError } = await supabase
@@ -52,18 +54,18 @@ export async function POST(request) {
         .eq('stripe_session_id', paymentSessionId)
         .eq('user_email', email)
         .single();
-      
+
       if (subError || !subscription) {
         console.error('Payment verification failed:', subError);
-        return Response.json({ 
-          error: 'Professional plan requires valid payment. Please complete the checkout process.' 
+        return Response.json({
+          error: 'Professional plan requires valid payment. Please complete the checkout process.'
         }, { status: 400 });
       }
-      
+
       console.log('Professional plan payment verified:', subscription.id);
     } else if (isProfessionalPlan && !paymentSessionId) {
-      return Response.json({ 
-        error: 'Professional plan requires payment. Please complete the checkout process.' 
+      return Response.json({
+        error: 'Professional plan requires payment. Please complete the checkout process.'
       }, { status: 400 });
     }
 
@@ -136,7 +138,12 @@ export async function POST(request) {
       mainProblem,
       leadMagnetTitle,
       websiteUrl,
-      businessContext
+      websiteUrl,
+      businessContext,
+      phoneNumber,
+      social_proof: {
+        facebook_url: facebookPageUrl
+      }
     };
 
     // Create business
@@ -152,7 +159,9 @@ export async function POST(request) {
         guarantee_start_at: new Date().toISOString(),
         plan_tier: planTier,
         rev_share_percent: revSharePercent,
-        paid_plan_session_id: isProfessionalPlan ? paymentSessionId : null
+        rev_share_percent: revSharePercent,
+        paid_plan_session_id: isProfessionalPlan ? paymentSessionId : null,
+        phone_number: phoneNumber // Save new WhatsApp number
       })
       .select()
       .single();
@@ -166,7 +175,7 @@ export async function POST(request) {
     // Create session - set stage based on template type
     // For lead-magnet templates, we'll set to 'generating' so dashboard doesn't trigger Inngest
     const initialStage = (effectiveTemplate === 'lead-magnet' && effectiveTopic) ? 'generating' : 'pending';
-    
+
     const { error: sessErr } = await supabase
       .from('sessions')
       .insert({ id: sessionId, business_id: business.id, stage: initialStage, progress: initialStage === 'generating' ? 30 : 0 });
@@ -178,7 +187,7 @@ export async function POST(request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ businessId: business.id, eagerConnectLink: true })
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Trigger Lead Magnet Generation - Use Inngest for reliable background processing
     // This is the main generation path for lead magnet funnels
@@ -194,7 +203,9 @@ export async function POST(request) {
             language: leadMagnetLanguage || 'English',
             sessionId: sessionId,
             websiteUrl,
-            businessContext
+            businessContext,
+            phoneNumber,
+            facebookPageUrl
           }
         });
         console.log('Lead magnet generation triggered via Inngest');

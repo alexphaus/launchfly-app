@@ -436,6 +436,12 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
           >
             <span>➕</span> Quick Add
           </Link>
+          <Link
+            href="/sales/blast"
+            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer"
+          >
+            <span>📢</span> Blast
+          </Link>
         </div>
 
         {/* Main Content Card */}

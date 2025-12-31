@@ -42,7 +42,7 @@ export async function POST(request) {
     // 2. Add to Customers (or get existing)
     let customerId = null;
     let isNewLead = false;
-    
+
     // Check if customer already exists
     const { data: existingCustomer } = await supabase
       .from('customers')
@@ -67,13 +67,13 @@ export async function POST(request) {
         email_sequence_started_at: new Date().toISOString(),
         next_email_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       };
-      
+
       const { data: newCustomer, error: custError } = await supabase
         .from('customers')
         .insert(customerData)
         .select()
         .single();
-      
+
       if (custError) {
         // Handle duplicate key error gracefully
         if (custError.code === '23505') {
@@ -113,9 +113,9 @@ export async function POST(request) {
           icon: 'M',
           message: 'New Lead Magnet Signup',
           details: `${email} signed up to download the guide.`,
-          metadata: { 
+          metadata: {
             email,
-            customer_id: customerId 
+            customer_id: customerId
           }
         });
 
@@ -130,7 +130,7 @@ export async function POST(request) {
         // Validate Twilio Config
         if (accountSid && accountSid.startsWith('AC') && authToken && fromPhone && ownerPhone) {
           const twilio = require('twilio')(accountSid, authToken);
-          
+
           let messageBody = `🚀 New Lead: ${email} just downloaded your guide.`;
           if (phone) {
             messageBody += ` Call them now: ${phone}`;
@@ -154,20 +154,62 @@ export async function POST(request) {
       } catch (smsError) {
         console.error('❌ Failed to send SMS alert:', smsError.message);
       }
+
+      // --- WHATSAPP NOTIFICATION (SEA Market Focus) ---
+      // Creates a WhatsApp deep link notification for the business owner
+      // This is more effective in SEA markets where WhatsApp is dominant
+      try {
+        const ownerWhatsApp = business.whatsapp_number || business.phone_number;
+
+        if (ownerWhatsApp && phone) {
+          // Generate WhatsApp link for owner to quickly contact the lead
+          const cleanLeadPhone = phone.replace(/[^0-9]/g, '');
+          const leadWhatsAppLink = `https://wa.me/${cleanLeadPhone}`;
+
+          // Log WhatsApp notification data for future webhook integration
+          console.log(`📱 WhatsApp Lead Alert:`, {
+            ownerPhone: ownerWhatsApp,
+            leadEmail: email,
+            leadPhone: phone,
+            leadWhatsAppLink,
+            message: `🔔 New Lead! ${email} (${phone}) downloaded your guide. Click to chat: ${leadWhatsAppLink}`
+          });
+
+          // Store notification for dashboard display (push-first approach)
+          await supabase
+            .from('ai_activities')
+            .insert({
+              business_id: businessId,
+              type: 'whatsapp_lead_alert',
+              icon: 'W',
+              message: 'New Lead - Reply via WhatsApp!',
+              details: `📱 ${phone} | 📧 ${email}`,
+              metadata: {
+                email,
+                phone,
+                customer_id: customerId,
+                whatsapp_link: leadWhatsAppLink,
+                owner_notified: true
+              }
+            });
+        }
+      } catch (waError) {
+        console.error('❌ Failed to log WhatsApp notification:', waError.message);
+      }
     }
 
     // 4. Send Email with PDF Attachment
     // Handle both nested 'leadMagnet' structure and flat structure from launch.js
     const flatData = business.business_data;
     const nestedData = business.business_data?.leadMagnet;
-    
+
     // Normalize data
     const title = flatData.lead_magnet_title || nestedData?.lead_magnet?.title || 'Expert Guide';
     const content = flatData.lead_magnet_content || nestedData?.lead_magnet?.content || [];
     const pdfContent = flatData.lead_magnet_pdf || nestedData?.lead_magnet_pdf || {};
     const emailSequence = flatData.email_sequence || nestedData?.email_sequence || [];
     const firstEmail = emailSequence.find(e => e.day === 1) || { subject: 'Your Guide', body: 'Here is your guide.' };
-    
+
     // Prepare business data for PDF (using shared pdf-generator from dashboard)
     const businessDataForPdf = {
       businessName: flatData.businessName || business.name || 'Local Business',
@@ -186,19 +228,19 @@ export async function POST(request) {
       // Include prospect images for PDF gallery
       prospectImages: flatData.prospectImages || nestedData?.images || []
     };
-    
+
     if (title) {
       let attachments = [];
-      
+
       // Generate PDF using shared pdf-generator (same as dashboard)
       try {
         console.log('📄 Generating PDF with images:', businessDataForPdf.prospectImages?.length || 0);
         const PDFDocument = (await import('pdfkit')).default;
         const pdfBuffer = await generatePDF({ title, content, pdfContent }, PDFDocument, businessDataForPdf);
-        const fileName = title 
+        const fileName = title
           ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
           : 'expert-guide.pdf';
-          
+
         attachments.push({
           content: pdfBuffer,
           filename: fileName,
@@ -249,14 +291,14 @@ export async function POST(request) {
       `;
 
       await resend.emails.send({
-        from: 'Launchfly <hello@launchfly.ai>', 
+        from: 'Launchfly <hello@launchfly.ai>',
         to: email,
         subject: firstEmail.subject,
         html: html,
         attachments: attachments
       });
     }
-    
+
     // 5. Increment Lead Count (only for new leads)
     if (isNewLead) {
       const { data: currentBiz, error: bizReadError } = await supabase
@@ -264,14 +306,14 @@ export async function POST(request) {
         .select('total_leads')
         .eq('id', businessId)
         .single();
-      
+
       if (!bizReadError) {
         const newCount = (currentBiz?.total_leads || 0) + 1;
         const { error: updateError } = await supabase
           .from('businesses')
           .update({ total_leads: newCount })
           .eq('id', businessId);
-        
+
         if (updateError) {
           console.error('Failed to update lead count:', updateError);
         } else {
@@ -280,8 +322,8 @@ export async function POST(request) {
       }
     }
 
-    return Response.json({ 
-      success: true, 
+    return Response.json({
+      success: true,
       customerId,
       isNewLead,
       message: isNewLead ? 'Lead captured successfully!' : 'Welcome back!'

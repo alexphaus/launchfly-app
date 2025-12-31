@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { trackOnboardingStart, trackStepCompleted, trackValidationError, trackOnboardingCompleted } from '../../../lib/onboarding-analytics';
 import PlanPreviewModal from '../../../components/PlanPreviewModal';
+import { getServiceTemplate } from '../../../lib/content-library';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,77 +20,88 @@ const NICHE_TEMPLATES = {
     icon: '❄️',
     description: 'Cleaning, Repair & Installation',
     defaultTitle: '5 Signs Your Aircon Needs Servicing',
-    defaultAudience: 'Homeowners & Condo Owners'
+    defaultAudience: 'Homeowners & Condo Owners',
+    contentLibraryId: 'aircon' // Maps to content-library.ts
   },
-  'pest-control': {
+  'pest_control': {
     name: 'Pest Control',
     icon: '🐜',
     description: 'Termites, Cockroaches, Rats & More',
     defaultTitle: '7 Signs You Have a Pest Problem',
-    defaultAudience: 'Homeowners & Business Owners'
+    defaultAudience: 'Homeowners & Business Owners',
+    contentLibraryId: 'pest_control'
   },
   'plumbing': {
     name: 'Plumbing',
     icon: '🔧',
     description: 'Emergency & Maintenance',
     defaultTitle: '6 Plumbing Problems You Shouldn\'t Ignore',
-    defaultAudience: 'Homeowners'
+    defaultAudience: 'Homeowners',
+    contentLibraryId: 'plumbing'
   },
   'cleaning': {
     name: 'Cleaning Service',
     icon: '🧹',
     description: 'Home & Office Cleaning',
     defaultTitle: 'Home Cleaning Checklist by Pros',
-    defaultAudience: 'Busy Homeowners & Families'
+    defaultAudience: 'Busy Homeowners & Families',
+    contentLibraryId: 'cleaning'
   },
   'electrical': {
     name: 'Electrical Service',
     icon: '⚡',
     description: 'Wiring, Repairs & Installation',
     defaultTitle: '8 Electrical Warning Signs',
-    defaultAudience: 'Homeowners'
+    defaultAudience: 'Homeowners',
+    contentLibraryId: 'electrical'
   },
   'renovation': {
     name: 'Renovation',
     icon: '🏠',
     description: 'Home & Office Renovation',
     defaultTitle: 'Home Renovation Planning Checklist',
-    defaultAudience: 'Homeowners & Property Investors'
+    defaultAudience: 'Homeowners & Property Investors',
+    contentLibraryId: 'renovation'
   },
   'roofing': {
     name: 'Roofing',
     icon: '🏗️',
     description: 'Repairs & Waterproofing',
     defaultTitle: 'Roof Inspection Checklist',
-    defaultAudience: 'Homeowners'
+    defaultAudience: 'Homeowners',
+    contentLibraryId: 'roofing'
   },
   'landscaping': {
     name: 'Landscaping',
     icon: '🌳',
     description: 'Garden & Lawn Care',
     defaultTitle: 'Garden Maintenance Checklist',
-    defaultAudience: 'Homeowners'
+    defaultAudience: 'Homeowners',
+    contentLibraryId: 'landscaping'
   },
   'moving': {
     name: 'Moving Service',
     icon: '📦',
     description: 'Home & Office Moving',
     defaultTitle: 'Moving Day Checklist',
-    defaultAudience: 'People Relocating'
+    defaultAudience: 'People Relocating',
+    contentLibraryId: 'moving'
   },
-  'auto-repair': {
+  'auto_repair': {
     name: 'Auto Repair',
     icon: '🚗',
     description: 'Car Service & Repair',
     defaultTitle: 'Car Maintenance Checklist',
-    defaultAudience: 'Car Owners'
+    defaultAudience: 'Car Owners',
+    contentLibraryId: 'auto_repair'
   },
   'locksmith': {
     name: 'Locksmith',
     icon: '🔐',
     description: 'Emergency & Lock Services',
     defaultTitle: 'Home Security Checklist',
-    defaultAudience: 'Homeowners'
+    defaultAudience: 'Homeowners',
+    contentLibraryId: 'locksmith'
   },
   // === OTHER NICHES ===
   'aesthetic-clinic': {
@@ -397,7 +409,10 @@ export default function QuickStartOnboarding() {
           businessContext: formData.businessContext,
           subdomain: formData.subdomain,
           plan: formData.plan,
-          paymentSessionId: paymentSessionId
+          paymentSessionId: paymentSessionId,
+          // SEA-specific fields for push notifications
+          whatsappNumber: formData.whatsappNumber,
+          businessName: formData.businessName
         })
       });
 

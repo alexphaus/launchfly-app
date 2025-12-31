@@ -5,7 +5,7 @@ import { Inngest } from 'inngest';
  * Inngest client for AI orchestration
  * Handles business generation and growth automation
  */
-export const inngest = new Inngest({ 
+export const inngest = new Inngest({
   id: 'launchfly',
   name: 'Launchfly AI Platform',
   // CRITICAL: eventKey is required for sending events in production
@@ -19,7 +19,7 @@ export const EVENTS = {
   BUSINESS_STAGE_UPDATED: 'business/stage.updated',
   BUSINESS_GENERATION_COMPLETED: 'business/generation.completed',
   BUSINESS_GENERATION_FAILED: 'business/generation.failed',
-  
+
   // Growth automation events
   GROWTH_CAMPAIGN_STARTED: 'growth/campaign.started',
   COLD_OUTREACH_REQUESTED: 'growth/outreach.requested',
@@ -27,18 +27,18 @@ export const EVENTS = {
   EMAIL_BATCH_SENT: 'growth/email.batch.sent',
   CONTENT_GENERATED: 'growth/content.generated',
   CONTENT_GENERATION_REQUESTED: 'growth/content.generation.requested',
-  
+
   // Customer acquisition events
   CUSTOMER_ACQUISITION_STARTED: 'customer/acquisition.started',
   DAILY_OUTREACH_SCHEDULED: 'customer/outreach.daily',
   EMAIL_RESPONSE_RECEIVED: 'customer/email.response',
   OPTIMIZATION_STARTED: 'customer/optimization.started',
   WEEKLY_REPORT_SCHEDULED: 'customer/report.weekly',
-  
+
   // Analytics events
   VISITOR_TRACKED: 'analytics/visitor.tracked',
   SALE_RECORDED: 'analytics/sale.recorded',
-  
+
   // Enhanced AI Cofounder events
   AI_COFOUNDER_STARTED: 'ai-cofounder/started',
   AI_COFOUNDER_THINKING: 'ai-cofounder/thinking',

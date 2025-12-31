@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { sendLeadNotification } from '@/lib/whatsapp-push';
+import { sendLeadNotification, sendJobCard } from '@/lib/whatsapp-push';
 
 export async function POST(req: Request) {
     try {
@@ -28,6 +28,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Business not found' }, { status: 404 });
         }
 
+        // Prepare notes based on type
+        let notes = formData.message;
+        if (formData.type === 'quote_request' && formData.quoteDetails) {
+            // Save quote details as readable string for now (until we have a better column)
+            notes = `JOB QUOTE REQUEST:\n` +
+                `Estimate: ${formData.quoteDetails.estimate?.currency} ${formData.quoteDetails.estimate?.min}-${formData.quoteDetails.estimate?.max}\n` +
+                `Details: ${JSON.stringify(formData.quoteDetails.answers)}`;
+        }
+
         // 2. Save Lead to 'customers' table
         const { data: customer, error: customerError } = await supabase
             .from('customers')
@@ -35,10 +44,10 @@ export async function POST(req: Request) {
                 business_id: businessId,
                 email: formData.email,
                 phone: formData.phone,
-                name: formData.name || formData.email.split('@')[0], // Fallback name
+                name: formData.name || formData.email.split('@')[0],
                 status: 'new',
-                tags: ['web_lead'],
-                // Store extra form data in a standardized way if possible, or just ignore for now
+                tags: formData.type === 'quote_request' ? ['quote_request', 'web_lead'] : ['web_lead'],
+                notes: notes
             })
             .select()
             .single();
@@ -57,15 +66,26 @@ export async function POST(req: Request) {
             business.business_data?.phone;
 
         if (ownerPhone) {
-            // Async fire-and-forget to not block response? 
-            // Better to await it for now to ensure log visibility during dev
-            await sendLeadNotification(ownerPhone, {
-                businessName: business.name,
-                name: formData.name,
-                email: formData.email,
-                phone: formData.phone,
-                message: formData.message
-            });
+            if (formData.type === 'quote_request') {
+                await sendJobCard(ownerPhone, {
+                    id: customer.id.substring(0, 8).toUpperCase(), // Short ID
+                    serviceName: business.business_data?.niche || 'Service',
+                    serviceEmoji: business.business_data?.emoji, // Assuming emoji might exist in business_data (it's in serviceTemplate)
+                    customerName: formData.name || 'Customer',
+                    customerPhone: formData.phone,
+                    estimate: formData.quoteDetails.estimate,
+                    answers: formData.quoteDetails.answers,
+                    businessName: business.name
+                });
+            } else {
+                await sendLeadNotification(ownerPhone, {
+                    businessName: business.name,
+                    name: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    message: formData.message
+                });
+            }
         } else {
             console.warn('⚠️ No owner phone found for business:', business.name);
         }

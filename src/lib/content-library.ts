@@ -40,6 +40,18 @@ export interface ServiceTemplate {
     };
     // Common pain signals for this service type
     painSignals: string[];
+    // Quote Calculator Configuration
+    quoteCalculator: {
+        questions: {
+            id: string;
+            text: string;
+            type: 'number' | 'select';
+            options?: string[]; // For 'select' type
+            multiplier?: number; // Price multiplier
+        }[];
+        basePrice: number;
+        currency: string;
+    };
 }
 
 export const SERVICE_TEMPLATES: Record<string, ServiceTemplate> = {
@@ -97,7 +109,25 @@ Need servicing? Just reply to this email or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 80,
+            currency: 'RM',
+            questions: [
+                {
+                    id: 'units',
+                    text: 'How many aircon units need servicing?',
+                    type: 'number',
+                    multiplier: 60
+                },
+                {
+                    id: 'type',
+                    text: 'What type of service?',
+                    type: 'select',
+                    options: ['General Service', 'Chemical Wash', 'Troubleshooting']
+                }
+            ]
+        }
     },
 
     pest_control: {
@@ -153,7 +183,25 @@ WhatsApp us or reply to this email to schedule!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 150,
+            currency: 'RM',
+            questions: [
+                {
+                    id: 'pest_type',
+                    text: 'What type of pest?',
+                    type: 'select',
+                    options: ['Ants/Cockroaches', 'Termites', 'Rodents', 'General Prevention']
+                },
+                {
+                    id: 'property_size',
+                    text: 'Property Size (approx sqft)?',
+                    type: 'select',
+                    options: ['< 1000 sqft', '1000-2000 sqft', '> 2000 sqft']
+                }
+            ]
+        }
     },
 
     plumbing: {
@@ -207,7 +255,25 @@ Need a plumber? Reply to this email or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 100,
+            currency: 'RM',
+            questions: [
+                {
+                    id: 'issue_type',
+                    text: 'What is the issue?',
+                    type: 'select',
+                    options: ['Leak', 'Clog', 'Installation', 'Other']
+                },
+                {
+                    id: 'urgency',
+                    text: 'How urgent is it?',
+                    type: 'select',
+                    options: ['Emergency (Now)', 'This Week', 'Plan Ahead']
+                }
+            ]
+        }
     },
 
     cleaning: {
@@ -266,7 +332,25 @@ Reply to this email or WhatsApp us to book!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 50,
+            currency: 'RM',
+            questions: [
+                {
+                    id: 'hours',
+                    text: 'How many hours of cleaning?',
+                    type: 'number',
+                    multiplier: 30
+                },
+                {
+                    id: 'supplies',
+                    text: 'Do we need supplies?',
+                    type: 'select',
+                    options: ['Yes (+RM20)', 'No, I have my own']
+                }
+            ]
+        }
     },
 
     electrical: {
@@ -320,7 +404,14 @@ We offer free safety inspections. Reply to this email or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 100,
+            currency: 'RM',
+            questions: [
+                { id: 'issue', text: 'Describe issue', type: 'select', options: ['Repair', 'Installation', 'Inspection'] }
+            ]
+        }
     },
 
     renovation: {
@@ -376,7 +467,14 @@ Reply to this email or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 5000,
+            currency: 'RM',
+            questions: [
+                { id: 'room', text: 'Room to renovate', type: 'select', options: ['Kitchen', 'Bathroom', 'Full House'] }
+            ]
+        }
     },
 
     roofing: {
@@ -430,7 +528,14 @@ We offer free inspections - no obligation. Reply or WhatsApp us to schedule!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 200,
+            currency: 'RM',
+            questions: [
+                { id: 'type', text: 'Roof Type', type: 'select', options: ['Tile', 'Metal', 'Flat'] }
+            ]
+        }
     },
 
     landscaping: {
@@ -486,7 +591,14 @@ Reply or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 150,
+            currency: 'RM',
+            questions: [
+                { id: 'size', text: 'Garden Size', type: 'select', options: ['Small', 'Medium', 'Large/Estate'] }
+            ]
+        }
     },
 
     moving: {
@@ -540,7 +652,14 @@ Need movers? Reply with your moving date and addresses for a free quote!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 300,
+            currency: 'RM',
+            questions: [
+                { id: 'truck', text: 'Truck Size', type: 'select', options: ['1 Tonne', '3 Tonne', '5 Tonne'] }
+            ]
+        }
     },
 
     auto_repair: {
@@ -594,7 +713,14 @@ Having issues? Bring your car in for a free diagnostic check!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 80,
+            currency: 'RM',
+            questions: [
+                { id: 'service', text: 'Service Needed', type: 'select', options: ['Oil Change', 'Repair', 'Inspection'] }
+            ]
+        }
     },
 
     locksmith: {
@@ -648,7 +774,14 @@ Need a locksmith? We're available 24/7. Reply or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 120,
+            currency: 'RM',
+            questions: [
+                { id: 'service', text: 'Service', type: 'select', options: ['Unlock', 'Change Lock', 'Install'] }
+            ]
+        }
     },
 
     other: {
@@ -702,7 +835,14 @@ Ready to proceed? Reply to this email or WhatsApp us!
 Best regards,
 {{business_name}}`
         },
-        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website']
+        painSignals: ['no_booking', 'whatsapp_only', 'slow_replies', 'no_website'],
+        quoteCalculator: {
+            basePrice: 100,
+            currency: 'RM',
+            questions: [
+                { id: 'info', text: 'Tell us more', type: 'select', options: ['I need a quote', 'Just asking'] }
+            ]
+        }
     }
 };
 

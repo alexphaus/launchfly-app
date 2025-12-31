@@ -8,24 +8,24 @@ export { generateBusiness } from './generate-business';
 export { generateLeadMagnet } from './generate-lead-magnet';
 export { enhancedColdEmailOutreach as coldEmailOutreach } from './cold-outreach';
 export { growthEngine } from './growth-engine';
-export { 
-  customerAcquisitionOrchestrator, 
-  dailyOutreachFunction, 
-  emailResponseHandler, 
-  campaignOptimizer, 
-  weeklyPerformanceReport 
+export {
+  customerAcquisitionOrchestrator,
+  dailyOutreachFunction,
+  emailResponseHandler,
+  campaignOptimizer,
+  weeklyPerformanceReport
 } from './customer-acquisition';
 
-export { 
-  followUpHandler, 
-  followUpScheduler 
+export {
+  followUpHandler,
+  followUpScheduler
 } from './follow-up-handler';
 
-export { 
+export {
   growthStrategyOrchestrator,
   customerAcquisitionCampaign,
   coldEmailCampaignOrchestrator,
-  handleColdEmailBatchSent 
+  handleColdEmailBatchSent
 } from './growth-strategies';
 
 export {

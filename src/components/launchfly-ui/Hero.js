@@ -1,6 +1,6 @@
 // src/components/launchfly-ui/Hero.js
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 export default function Hero({
   title = "Transform Your Vision Into Reality",
@@ -19,25 +19,69 @@ export default function Hero({
   // NEW: Urgency/scarcity props
   urgencyText,
   limitedSlots,
-  couponCode
+  couponCode,
+  quoteCalculator // NEW: Quote Calculator Config
 }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
+
+  // Quote Wizard State
+  const [step, setStep] = useState(0); // 0: Start, 1: Questions, 2: Result/Capture
+  const [answers, setAnswers] = useState({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  // Calculate Estimate
+  const estimate = useMemo(() => {
+    if (!quoteCalculator) return null;
+    let total = quoteCalculator.basePrice;
+
+    // Add multipliers from answers
+    Object.entries(answers).forEach(([key, value]) => {
+      const question = quoteCalculator.questions.find(q => q.id === key);
+      if (question && question.type === 'number') {
+        total += (question.multiplier || 0) * Number(value);
+      }
+      // logic for select options could be added here if they had specific multipliers
+    });
+
+    return {
+      min: total,
+      max: Math.round(total * 1.2) // Simple range logic
+    };
+  }, [answers, quoteCalculator]);
+
+  const handleNextQuestion = (answer) => {
+    const question = quoteCalculator?.questions[currentQuestionIndex];
+    setAnswers(prev => ({ ...prev, [question.id]: answer }));
+
+    if (currentQuestionIndex < (quoteCalculator?.questions.length || 0) - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      setStep(2); // Go to Result/Capture
+    }
+  };
 
   const handleCapture = async (e) => {
     e.preventDefault();
-    if (!email) return;
+    if (!phone) return; // Phone is mandatory for WhatsApp OS
 
     setStatus('loading');
     try {
-      console.log('🚀 Submitting lead:', { email, phone, businessId });
+      console.log('🚀 Submitting Quote Lead:', { email, phone, businessId, answers, estimate });
       const res = await fetch('/api/leads/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId,
-          formData: { email, phone }
+          formData: {
+            name,
+            email,
+            phone,
+            type: 'quote_request',
+            quoteDetails: { answers, estimate }
+          }
         })
       });
 
@@ -45,12 +89,10 @@ export default function Hero({
       console.log('📩 Capture response:', data);
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to subscribe');
+        throw new Error(data.error || 'Failed to submit');
       }
 
       setStatus('success');
-      setEmail('');
-      setPhone('');
     } catch (err) {
       console.error('❌ Lead capture error:', err);
       setStatus('error');
@@ -191,10 +233,105 @@ export default function Hero({
               {status === 'success' ? (
                 <div className="text-center py-8 bg-green-50 rounded-xl border border-green-100">
                   <div className="text-4xl mb-3">✨</div>
-                  <h3 className="text-xl font-bold text-green-900 mb-2">Check Your Inbox!</h3>
-                  <p className="text-green-700 text-sm">We've sent the guide to {email}.</p>
+                  <h3 className="text-xl font-bold text-green-900 mb-2">Quote Sent!</h3>
+                  <p className="text-green-700 text-sm mb-4">You'll receive a WhatsApp message shortly.</p>
+                  <p className="text-xs text-slate-400">Please check your phone.</p>
+                </div>
+              ) : quoteCalculator ? (
+                // --- QUOTE WIZARD UI ---
+                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                  {step === 0 && (
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-slate-900 mb-2">Get an Instant Quote</h3>
+                      <p className="text-sm text-slate-500 mb-6">Answer a few questions to get a price estimate instantly.</p>
+                      <button
+                        onClick={() => setStep(1)}
+                        className="w-full px-8 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg hover:scale-[1.02]"
+                      >
+                        Start Quote
+                      </button>
+                    </div>
+                  )}
+
+                  {step === 1 && quoteCalculator.questions[currentQuestionIndex] && (
+                    <div className="animate-fadeIn">
+                      <div className="flex justify-between text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
+                        <span>Question {currentQuestionIndex + 1} of {quoteCalculator.questions.length}</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-900 mb-6">
+                        {quoteCalculator.questions[currentQuestionIndex].text}
+                      </h3>
+
+                      <div className="space-y-3">
+                        {quoteCalculator.questions[currentQuestionIndex].type === 'select' ? (
+                          quoteCalculator.questions[currentQuestionIndex].options?.map(opt => (
+                            <button
+                              key={opt}
+                              onClick={() => handleNextQuestion(opt)}
+                              className="w-full text-left px-5 py-4 bg-white border-2 border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all font-medium text-slate-700"
+                            >
+                              {opt}
+                            </button>
+                          ))
+                        ) : (
+                          <form onSubmit={(e) => {
+                            e.preventDefault();
+                            handleNextQuestion(e.target.elements.val.value);
+                          }}>
+                            <input
+                              name="val"
+                              type="number"
+                              autoFocus
+                              className="w-full px-5 py-4 text-lg border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none mb-4"
+                              placeholder="0"
+                            />
+                            <button type="submit" className="w-full px-8 py-4 bg-blue-600 text-white font-bold rounded-xl">Next</button>
+                          </form>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {step === 2 && (
+                    <div className="animate-fadeIn">
+                      <div className="text-center mb-6 bg-blue-600 rounded-xl p-4 text-white shadow-lg">
+                        <p className="text-blue-100 text-sm font-medium uppercase tracking-wider mb-1">Estimated Cost</p>
+                        <div className="text-3xl font-extrabold">
+                          {quoteCalculator.currency} {estimate?.min} - {estimate?.max}
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleCapture} className="space-y-4">
+                        <p className="text-sm text-center text-slate-500 mb-2">Enter your number to receive this quote.</p>
+                        <input
+                          type="text"
+                          placeholder="Your Name"
+                          required
+                          className="w-full px-5 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                        />
+                        <input
+                          type="tel"
+                          placeholder="WhatsApp Number (Required)"
+                          required
+                          className="w-full px-5 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                        />
+                        <button
+                          type="submit"
+                          disabled={status === 'loading'}
+                          className="w-full px-8 py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-lg flex justify-center items-center"
+                        >
+                          {status === 'loading' ? 'Sending...' : 'Send Quote to WhatsApp'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </div>
               ) : (
+                // --- LEGACY EMAIL CAPTURE ---
                 <form onSubmit={handleCapture} className="space-y-4">
                   <div className="text-center mb-6">
                     <h3 className="text-xl font-bold text-slate-900">Where should we send it?</h3>

@@ -63,3 +63,56 @@ export async function sendLeadNotification(ownerPhone: string, lead: LeadData) {
         return false;
     }
 }
+export async function sendJobCard(ownerPhone: string, job: {
+    id: string;
+    serviceName: string;
+    serviceEmoji?: string;
+    customerName: string;
+    customerPhone: string;
+    estimate: { min: number; max: number; currency: string };
+    answers: Record<string, string | number>;
+    businessName: string;
+}) {
+    if (!ownerPhone) {
+        console.warn('⚠️ No owner phone provided for job card');
+        return false;
+    }
+
+    const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
+    const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+
+    // Format Q&A pairs
+    const details = Object.entries(job.answers)
+        .map(([q, a]) => `• ${q}: ${a}`)
+        .join('\n');
+
+    const messageBody = `🆕 *JOB Request #${job.id}*\n\n` +
+        `${job.serviceEmoji || '🔧'} *${job.serviceName}*\n` +
+        `👤 ${job.customerName}\n` +
+        `📞 ${job.customerPhone}\n` +
+        `💰 *Est:* ${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}\n\n` +
+        `📋 *Details:*\n${details}\n\n` +
+        `👉 *Reply to accept this job.*`;
+
+    try {
+        if (client && fromNumber) {
+            const message = await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                body: messageBody
+            });
+            console.log(`✅ Job Card sent to ${recipient}: ${message.sid}`);
+            return true;
+        } else {
+            console.log('---------------------------------------------------');
+            console.log('⚠️ Twilio credentials missing. MOCKING JOB CARD:');
+            console.log(`To: ${recipient}`);
+            console.log(`Body:\n${messageBody}`);
+            console.log('---------------------------------------------------');
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ Error sending WhatsApp Job Card:', error);
+        return false;
+    }
+}

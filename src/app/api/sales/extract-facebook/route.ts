@@ -73,6 +73,7 @@ Extract the following fields from the provided context:
   - manual_quotes: If they ask for details to "quote manually" or "check price"
   - messy_schedule: If they mention double booking, forgetting appointments, or "full schedule"
   - broken_links: If users complain about links not working
+- reviews: Array of objects [{ author: string, rating: number, text: string, date: string }] trying to find positive feedback/testimonials in the text. Infer rating 5 if positive but not explicit.
 - notes: Generate a RICH context summary for the AI preview generator. Include:
   * Services offered (with specific names, e.g., "termite treatment", "aircon servicing")
   * Years in business if mentioned
@@ -96,7 +97,7 @@ Respond with valid JSON only.`,
       ],
       response_format: { type: 'json_object' },
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 800,
     });
 
     const content = response.choices[0].message.content;
@@ -118,6 +119,7 @@ Respond with valid JSON only.`,
       painSignals: Array.isArray(extracted.painSignals)
         ? extracted.painSignals.filter((s: string) => PAIN_SIGNALS.includes(s))
         : [],
+      reviews: Array.isArray(extracted.reviews) ? extracted.reviews : [],
       notes: extracted.notes || '',
     };
 

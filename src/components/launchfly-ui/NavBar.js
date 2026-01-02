@@ -5,17 +5,19 @@ import { useState } from 'react';
 import { useCart } from '@/hooks/useCart';
 import ShoppingCart from './ShoppingCart';
 
-export default function NavBar({ 
+export default function NavBar({
   businessName = "Your Business",
   logo = "🚀",
-  links = ['Home', 'About', 'Products', 'Contact'],
-  ctaText = "Get Started",
+  links = ['About', 'Services', 'Contact'],
+  ctaText = "Chat with Us",
   ctaLink = "#contact",
+  phoneNumber,
+  whatsappNumber,
   isEcommerce = false
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  
+
   // Safe cart access for e-commerce functionality
   let getCartCount = () => 0;
   try {
@@ -61,6 +63,31 @@ export default function NavBar({
 
             {/* Right Side Actions */}
             <div className="flex items-center space-x-4">
+              {/* Phone Number Display */}
+              {phoneNumber && (
+                <a href={`tel:${phoneNumber}`} className="hidden lg:flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  <span className="font-medium">{phoneNumber}</span>
+                </a>
+              )}
+
+              {/* WhatsApp Chat Button */}
+              {whatsappNumber && (
+                <a
+                  href={`https://api.whatsapp.com/send?phone=${String(whatsappNumber).replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12.031 1C5.493 1 .161 6.335.161 11.893c0 2.095.547 4.14 1.588 5.944L.058 24l6.305-1.654a11.87 11.87 0 005.683 1.447h.005c6.553 0 11.89-5.335 11.89-11.893C23.942 6.335 18.57 1 12.032 1z" />
+                  </svg>
+                  Chat with Us
+                </a>
+              )}
+
               {/* Search (for e-commerce) */}
               {isEcommerce && (
                 <button className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer">
@@ -87,17 +114,19 @@ export default function NavBar({
                 </button>
               )}
 
-              {/* CTA Button */}
-              <a
-                href={ctaLink}
-                className="hidden md:inline-flex items-center px-4 py-2 rounded-lg font-medium text-white transition-all hover:scale-105"
-                style={{ 
-                  background: 'var(--primary, #3b82f6)',
-                  boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.35)'
-                }}
-              >
-                {ctaText}
-              </a>
+              {/* CTA Button (fallback if no WhatsApp) */}
+              {!whatsappNumber && (
+                <a
+                  href={ctaLink}
+                  className="hidden md:inline-flex items-center px-4 py-2 rounded-lg font-medium text-white transition-all hover:scale-105"
+                  style={{
+                    background: 'var(--primary, #3b82f6)',
+                    boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.35)'
+                  }}
+                >
+                  {ctaText}
+                </a>
+              )}
 
               {/* Mobile menu button */}
               <button

@@ -15,3 +15,5 @@ export { default as ShoppingCart } from './ShoppingCart';
 export { default as LeadCapture } from './LeadCapture';
 export { default as AboutCoach } from './AboutCoach';
 export { default as ImageGallery } from './ImageGallery';
+export { default as ServicesGrid } from './ServicesGrid';
+export { default as AboutSection } from './AboutSection';

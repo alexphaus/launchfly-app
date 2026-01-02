@@ -116,3 +116,90 @@ export async function sendJobCard(ownerPhone: string, job: {
         return false;
     }
 }
+
+// Follow-up message templates
+const FOLLOWUP_TEMPLATES: Record<string, string> = {
+    '2h_slot_check': `Hi! 👋 Just following up. You ready to book a slot for today or tomorrow?`,
+    '24h_nudge': `Hi! Still thinking about it? Just reply "YES" if you'd like me to send someone over for a free inspection.`,
+    '3d_promo': `Last chance for our priority slot! 🔥 We have an opening available — reply if you want in.`
+};
+
+export async function sendFollowUpMessage(customerPhone: string, options: { type: string; businessName: string }) {
+    if (!customerPhone) {
+        console.warn('⚠️ No customer phone provided for follow-up');
+        return false;
+    }
+
+    const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
+    const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+
+    const templateKey = options.type || '2h_slot_check';
+    const messageBody = FOLLOWUP_TEMPLATES[templateKey] || FOLLOWUP_TEMPLATES['2h_slot_check'];
+
+    try {
+        if (client && fromNumber) {
+            const message = await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                body: messageBody
+            });
+            console.log(`✅ Follow-up (${options.type}) sent to ${recipient}: ${message.sid}`);
+            return true;
+        } else {
+            console.log('---------------------------------------------------');
+            console.log(`⚠️ Twilio credentials missing. MOCKING FOLLOW-UP (${options.type}):`);
+            console.log(`To: ${recipient}`);
+            console.log(`Body:\n${messageBody}`);
+            console.log('---------------------------------------------------');
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ Error sending WhatsApp Follow-up:', error);
+        return false;
+    }
+}
+
+/**
+ * Send a confirmation message to the customer after they submit a quote request
+ */
+export async function sendQuoteConfirmation(customerPhone: string, options: {
+    businessName: string;
+    estimateMin: number;
+    estimateMax: number;
+    currency: string;
+}) {
+    if (!customerPhone) {
+        console.warn('⚠️ No customer phone provided for quote confirmation');
+        return false;
+    }
+
+    const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
+    const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+
+    const messageBody = `✅ *Quote Received!*\n\n` +
+        `Hi! Thanks for requesting a quote from *${options.businessName}*.\n\n` +
+        `💰 *Your Estimate:* ${options.currency} ${options.estimateMin} - ${options.estimateMax}\n\n` +
+        `We'll get back to you shortly to confirm your booking! 📞`;
+
+    try {
+        if (client && fromNumber) {
+            const message = await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                body: messageBody
+            });
+            console.log(`✅ Quote confirmation sent to customer ${recipient}: ${message.sid}`);
+            return true;
+        } else {
+            console.log('---------------------------------------------------');
+            console.log(`⚠️ Twilio credentials missing. MOCKING QUOTE CONFIRMATION:`);
+            console.log(`To: ${recipient}`);
+            console.log(`Body:\n${messageBody}`);
+            console.log('---------------------------------------------------');
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ Error sending quote confirmation:', error);
+        return false;
+    }
+}

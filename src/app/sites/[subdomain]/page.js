@@ -19,6 +19,7 @@ import {
   createDefaultExperiments
 } from '@/lib/conversion-optimizer';
 import SocialProofWidget from '@/components/SocialProofWidget';
+import { SERVICE_TEMPLATES } from '@/lib/content-library';
 
 // Mock business data for fallback
 const mockBusinessData = {
@@ -467,8 +468,8 @@ export async function generateMetadata({ params }) {
 
   // Default metadata
   let meta = {
-    title: 'Local Business Expert Guide',
-    description: 'Download our free expert guide and solve your problems today.',
+    title: 'Instant Quote Booking Portal',
+    description: 'Get an instant price estimate and book your service in seconds.',
   };
 
   try {
@@ -755,7 +756,16 @@ export default async function DynamicWebsite({ params }) {
               : null,
           eventPricing: isEvent ? lm.landing_page?.pricing : null,
           // Dynamic background overlay based on niche theme
-          backgroundOverlay: theme.gradient || 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)'
+          backgroundOverlay: theme.gradient || 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 100%)',
+          // Quote Calculator for local services (enables Quote Wizard)
+          quoteCalculator: !isCoaching && !isEvent ? (() => {
+            // Match niche to SERVICE_TEMPLATES key (e.g., 'Aircon Repair' -> 'aircon')
+            const nicheKey = Object.keys(SERVICE_TEMPLATES).find(key =>
+              resolvedNiche?.toLowerCase().includes(key.toLowerCase().replace('_', ' ')) ||
+              SERVICE_TEMPLATES[key].name.toLowerCase().includes(resolvedNiche?.toLowerCase() || '')
+            );
+            return nicheKey ? SERVICE_TEMPLATES[nicheKey].quoteCalculator : null;
+          })() : null
         }
       }
     ];

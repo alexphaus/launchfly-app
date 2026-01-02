@@ -299,10 +299,14 @@ export default function Hero({
                         <div className="text-3xl font-extrabold">
                           {quoteCalculator.currency} {estimate?.min} - {estimate?.max}
                         </div>
+                        {/* Social Proof */}
+                        <p className="text-blue-200 text-xs mt-2 opacity-90">
+                          🔥 27 people requested this service this week
+                        </p>
                       </div>
 
                       <form onSubmit={handleCapture} className="space-y-4">
-                        <p className="text-sm text-center text-slate-500 mb-2">Enter your number to receive this quote.</p>
+                        <p className="text-sm text-center text-slate-500 mb-2">Enter your number to check availability.</p>
                         <input
                           type="text"
                           placeholder="Your Name"
@@ -324,8 +328,12 @@ export default function Hero({
                           disabled={status === 'loading'}
                           className="w-full px-8 py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-lg flex justify-center items-center"
                         >
-                          {status === 'loading' ? 'Sending...' : 'Send Quote to WhatsApp'}
+                          {status === 'loading' ? 'Checking...' : '✓ Check Availability for this Price'}
                         </button>
+                        {/* Safety Clause */}
+                        <p className="text-xs text-slate-400 text-center mt-2">
+                          Final price subject to onsite inspection. You won't be charged until the job is done.
+                        </p>
                       </form>
                     </div>
                   )}

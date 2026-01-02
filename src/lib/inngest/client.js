@@ -50,4 +50,8 @@ export const EVENTS = {
   AI_COFOUNDER_MEMORY_STORED: 'ai-cofounder/memory.stored',
   AI_COFOUNDER_CONVERSATION_STARTED: 'ai-cofounder/conversation.started',
   AI_COFOUNDER_REVENUE_FORECAST: 'ai-cofounder/revenue.forecast',
+
+  // WhatsApp OS Follow-up Events
+  WHATSAPP_FOLLOWUP_SCHEDULED: 'whatsapp/followup.scheduled',
+  WHATSAPP_FOLLOWUP_SENT: 'whatsapp/followup.sent',
 };

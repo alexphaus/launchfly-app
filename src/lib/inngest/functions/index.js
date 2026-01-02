@@ -21,6 +21,8 @@ export {
   followUpScheduler
 } from './follow-up-handler';
 
+export { whatsappFollowUpHandler } from './whatsapp-followup';
+
 export {
   growthStrategyOrchestrator,
   customerAcquisitionCampaign,
@@ -62,6 +64,8 @@ export const functions = DISABLE_EXPENSIVE_FUNCTIONS ? [
   // Always include core business generation so onboarding can progress
   require('./generate-business').generateBusiness,
   require('./generate-lead-magnet').generateLeadMagnet,
+  // WhatsApp OS Follow-up Engine (cheap, essential)
+  require('./whatsapp-followup').whatsappFollowUpHandler,
   ...minimalFunctions,
   // Weekly digest (cheap, data-only)
   ...weeklyDigestFunctions,

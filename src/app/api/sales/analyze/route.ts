@@ -8,6 +8,7 @@ import {
   detectBusinessType,
   extractSlogan
 } from '@/lib/shared/lead-magnet-content-generator';
+import { SERVICE_TEMPLATES } from '@/lib/content-library';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const supabase = createClient(
@@ -447,6 +448,13 @@ export async function POST(request: Request) {
       expiresAt.setDate(expiresAt.getDate() + PROSPECT_EXPIRY_DAYS);
 
       // Build business_data for the funnel - use finalBusinessName throughout
+      // Match niche to SERVICE_TEMPLATES to get quoteCalculator config
+      const nicheKey = Object.keys(SERVICE_TEMPLATES).find(key =>
+        finalNiche?.toLowerCase().includes(key.toLowerCase().replace('_', ' ')) ||
+        SERVICE_TEMPLATES[key].name.toLowerCase().includes(finalNiche?.toLowerCase() || '')
+      );
+      const matchedTemplate = nicheKey ? SERVICE_TEMPLATES[nicheKey] : null;
+
       const businessData = {
         businessName: finalBusinessName,
         niche: finalNiche,
@@ -462,6 +470,8 @@ export async function POST(request: Request) {
         // Store the full PDF content for immediate PDF generation
         lead_magnet_title: result.lead_magnet.title,
         lead_magnet_pdf: result.pdf_content || {},
+        // Inject quoteCalculator from SERVICE_TEMPLATES for Quote Wizard
+        quoteCalculator: matchedTemplate?.quoteCalculator || null,
         leadMagnet: {
           lead_magnet: {
             title: result.lead_magnet.title,
@@ -472,7 +482,9 @@ export async function POST(request: Request) {
             hero_headline: result.lead_magnet.headline,
             hero_subheadline: result.lead_magnet.subheadline,
             benefits: result.lead_magnet.benefits || [],
-            cta_text: 'Get Your Free Guide'
+            cta_text: 'Get Your Free Guide',
+            // Also add quoteCalculator to landing_page for redundancy
+            quoteCalculator: matchedTemplate?.quoteCalculator || null
           },
           lead_magnet_pdf: result.pdf_content || {},
           // Pass images to landing page config

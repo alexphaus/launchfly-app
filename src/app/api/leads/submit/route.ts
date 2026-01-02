@@ -1,7 +1,8 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { sendLeadNotification, sendJobCard } from '@/lib/whatsapp-push';
+import { sendLeadNotification, sendJobCard, sendQuoteConfirmation } from '@/lib/whatsapp-push';
+import { inngest, EVENTS } from '@/lib/inngest/client';
 
 export async function POST(req: Request) {
     try {
@@ -38,16 +39,23 @@ export async function POST(req: Request) {
         }
 
         // 2. Save Lead to 'customers' table
+        // For WhatsApp OS, phone is primary. Email may be empty.
+        // Use upsert to handle returning customers.
+        const customerEmail = formData.email || `lead-${Date.now()}@noemail.local`; // Fallback for unique constraint
+
         const { data: customer, error: customerError } = await supabase
             .from('customers')
-            .insert({
+            .upsert({
                 business_id: businessId,
-                email: formData.email,
+                email: customerEmail,
                 phone: formData.phone,
-                name: formData.name || formData.email.split('@')[0],
+                name: formData.name || (formData.email ? formData.email.split('@')[0] : 'Customer'),
                 status: 'new',
                 tags: formData.type === 'quote_request' ? ['quote_request', 'web_lead'] : ['web_lead'],
                 notes: notes
+            }, {
+                onConflict: 'business_id,email',
+                ignoreDuplicates: false // Update existing record
             })
             .select()
             .single();
@@ -67,16 +75,57 @@ export async function POST(req: Request) {
 
         if (ownerPhone) {
             if (formData.type === 'quote_request') {
+                // Get currency with fallback
+                const currency = formData.quoteDetails.estimate?.currency || 'RM';
+                const estimateWithCurrency = {
+                    ...formData.quoteDetails.estimate,
+                    currency: currency
+                };
+
+                // Send Job Card to business owner
                 await sendJobCard(ownerPhone, {
                     id: customer.id.substring(0, 8).toUpperCase(), // Short ID
                     serviceName: business.business_data?.niche || 'Service',
-                    serviceEmoji: business.business_data?.emoji, // Assuming emoji might exist in business_data (it's in serviceTemplate)
+                    serviceEmoji: business.business_data?.emoji,
                     customerName: formData.name || 'Customer',
                     customerPhone: formData.phone,
-                    estimate: formData.quoteDetails.estimate,
+                    estimate: estimateWithCurrency,
                     answers: formData.quoteDetails.answers,
                     businessName: business.name
                 });
+
+                // Send confirmation to customer (the lead)
+                await sendQuoteConfirmation(formData.phone, {
+                    businessName: business.name,
+                    estimateMin: estimateWithCurrency.min,
+                    estimateMax: estimateWithCurrency.max,
+                    currency: currency
+                });
+
+                // 4. Schedule Follow-up Messages via Inngest
+                // +2h: "Ready to book a slot?"
+                await inngest.send({
+                    name: EVENTS.WHATSAPP_FOLLOWUP_SCHEDULED,
+                    data: {
+                        customerId: customer.id,
+                        customerPhone: formData.phone,
+                        businessName: business.name,
+                        followUpType: '2h_slot_check',
+                        delayMinutes: 120 // 2 hours
+                    }
+                });
+                // +24h: "Still thinking?"
+                await inngest.send({
+                    name: EVENTS.WHATSAPP_FOLLOWUP_SCHEDULED,
+                    data: {
+                        customerId: customer.id,
+                        customerPhone: formData.phone,
+                        businessName: business.name,
+                        followUpType: '24h_nudge',
+                        delayMinutes: 1440 // 24 hours
+                    }
+                });
+                console.log(`📅 Scheduled 2h and 24h follow-ups for customer ${customer.id}`);
             } else {
                 await sendLeadNotification(ownerPhone, {
                     businessName: business.name,

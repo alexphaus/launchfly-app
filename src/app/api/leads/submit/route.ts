@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { sendLeadNotification, sendJobCard, sendQuoteConfirmation } from '@/lib/whatsapp-push';
+import { sendLeadNotification, sendJobCard, sendQuoteConfirmation, sendSlotSuggester } from '@/lib/whatsapp-push';
 import { inngest, EVENTS } from '@/lib/inngest/client';
 
 export async function POST(req: Request) {
@@ -100,6 +100,15 @@ export async function POST(req: Request) {
                     estimateMin: estimateWithCurrency.min,
                     estimateMax: estimateWithCurrency.max,
                     currency: currency
+                });
+
+                // Send slot suggestions for one-tap booking (Innovation 1: Slot Suggester)
+                await sendSlotSuggester(formData.phone, {
+                    businessName: business.name,
+                    customerName: formData.name || 'there',
+                    currency: currency,
+                    estimateMin: estimateWithCurrency.min,
+                    estimateMax: estimateWithCurrency.max
                 });
 
                 // 4. Schedule Follow-up Messages via Inngest

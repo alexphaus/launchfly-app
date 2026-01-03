@@ -17,3 +17,4 @@ export { default as AboutCoach } from './AboutCoach';
 export { default as ImageGallery } from './ImageGallery';
 export { default as ServicesGrid } from './ServicesGrid';
 export { default as AboutSection } from './AboutSection';
+export { default as BookingToast } from './BookingToast';

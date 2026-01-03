@@ -81,11 +81,15 @@ export async function sendJobCard(ownerPhone: string, job: {
     const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
     const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
 
-    // Format Q&A pairs
+    // Format Q&A pairs for template variable
     const details = Object.entries(job.answers)
         .map(([q, a]) => `• ${q}: ${a}`)
         .join('\n');
 
+    // Content Template SID for Job Card with interactive buttons
+    const JOB_CARD_TEMPLATE_SID = 'HXe196b188dd2e25f883a883a6ced68517';
+
+    // Fallback plain text body (for mock mode or if template fails)
     const messageBody = `🆕 *JOB Request #${job.id}*\n\n` +
         `${job.serviceEmoji || '🔧'} *${job.serviceName}*\n` +
         `👤 ${job.customerName}\n` +
@@ -96,12 +100,21 @@ export async function sendJobCard(ownerPhone: string, job: {
 
     try {
         if (client && fromNumber) {
+            // Use Content Template with interactive buttons
             const message = await client.messages.create({
                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                 to: recipient,
-                body: messageBody
+                contentSid: JOB_CARD_TEMPLATE_SID,
+                contentVariables: JSON.stringify({
+                    '1': job.id,
+                    '2': job.serviceName,
+                    '3': job.customerName,
+                    '4': job.customerPhone,
+                    '5': `${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}`,
+                    '6': details
+                })
             });
-            console.log(`✅ Job Card sent to ${recipient}: ${message.sid}`);
+            console.log(`✅ Job Card (with buttons) sent to ${recipient}: ${message.sid}`);
             return true;
         } else {
             console.log('---------------------------------------------------');
@@ -117,11 +130,22 @@ export async function sendJobCard(ownerPhone: string, job: {
     }
 }
 
-// Follow-up message templates
+// Follow-up message templates with Urgency Cascade
 const FOLLOWUP_TEMPLATES: Record<string, string> = {
-    '2h_slot_check': `Hi! 👋 Just following up. You ready to book a slot for today or tomorrow?`,
-    '24h_nudge': `Hi! Still thinking about it? Just reply "YES" if you'd like me to send someone over for a free inspection.`,
-    '3d_promo': `Last chance for our priority slot! 🔥 We have an opening available — reply if you want in.`
+    // Stage 1: Helpful (+2 hours)
+    '2h_slot_check': `Hi! 👋 Quick check — we have a slot at 4pm today. Want to grab it before it's gone?`,
+
+    // Stage 2: Urgency (+6 hours)
+    '6h_last_chance': `⚠️ Last chance for today's slot! Reply "YES" to confirm or we'll give it to someone else.`,
+
+    // Stage 3: Re-engage (+24 hours)  
+    '24h_nudge': `Hi! 👋 Still need help? We kept a slot reserved for you. Just reply if you're still interested — no pressure!`,
+
+    // Stage 4: Discount (+72 hours)
+    '72h_discount': `🔥 Special offer: 10% off if you book today! Use code SAVE10. Reply "BOOK" to claim.`,
+
+    // Legacy compatibility
+    '3d_promo': `🔥 Final reminder: Priority slot available! Reply to claim before it's gone.`
 };
 
 export async function sendFollowUpMessage(customerPhone: string, options: { type: string; businessName: string }) {
@@ -200,6 +224,132 @@ export async function sendQuoteConfirmation(customerPhone: string, options: {
         }
     } catch (error) {
         console.error('❌ Error sending quote confirmation:', error);
+        return false;
+    }
+}
+
+/**
+ * Generate smart time slots based on current day/time
+ */
+function generateSlotOptions(): { label: string; value: string }[] {
+    const now = new Date();
+    const hour = now.getHours();
+    const slots: { label: string; value: string }[] = [];
+
+    // Helper to format date
+    const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    // Today slots (if before 3pm)
+    if (hour < 15) {
+        slots.push({ label: `Today ${hour < 12 ? '2pm - 4pm' : '4pm - 6pm'}`, value: 'today_afternoon' });
+    }
+
+    // Tomorrow slots
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    slots.push({ label: `${formatDate(tomorrow)} 9am - 11am`, value: 'tomorrow_morning' });
+    slots.push({ label: `${formatDate(tomorrow)} 2pm - 4pm`, value: 'tomorrow_afternoon' });
+
+    // Day after tomorrow
+    if (slots.length < 3) {
+        const dayAfter = new Date(now);
+        dayAfter.setDate(dayAfter.getDate() + 2);
+        slots.push({ label: `${formatDate(dayAfter)} 10am - 12pm`, value: 'day_after' });
+    }
+
+    return slots.slice(0, 3);
+}
+
+/**
+ * Send slot suggestions to customer for one-tap booking
+ */
+export async function sendSlotSuggester(customerPhone: string, options: {
+    businessName: string;
+    customerName: string;
+    currency: string;
+    estimateMin: number;
+    estimateMax: number;
+}) {
+    if (!customerPhone) {
+        console.warn('⚠️ No customer phone provided for slot suggester');
+        return false;
+    }
+
+    const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
+    const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+
+    const slots = generateSlotOptions();
+    const slotList = slots.map((s, i) => `${['1️⃣', '2️⃣', '3️⃣'][i]} ${s.label}`).join('\n');
+
+    const messageBody = `📅 *Book Your Service*\n\n` +
+        `Hi ${options.customerName}! Here are available slots:\n\n` +
+        `${slotList}\n\n` +
+        `💰 *${options.currency} ${options.estimateMin} - ${options.estimateMax}*\n\n` +
+        `Reply *1*, *2*, or *3* to confirm your booking! 🎯\n\n` +
+        `_Slots fill fast - first come, first served!_`;
+
+    try {
+        if (client && fromNumber) {
+            const message = await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                body: messageBody
+            });
+            console.log(`📅 Slot suggestions sent to customer ${recipient}: ${message.sid}`);
+            return { success: true, slots };
+        } else {
+            console.log('---------------------------------------------------');
+            console.log(`⚠️ Twilio credentials missing. MOCKING SLOT SUGGESTER:`);
+            console.log(`To: ${recipient}`);
+            console.log(`Body:\n${messageBody}`);
+            console.log('---------------------------------------------------');
+            return { success: true, slots };
+        }
+    } catch (error) {
+        console.error('❌ Error sending slot suggestions:', error);
+        return { success: false, slots: [] };
+    }
+}
+
+/**
+ * Send a review request after service completion
+ */
+export async function sendReviewRequest(customerPhone: string, options: {
+    businessName: string;
+    customerName: string;
+    googleReviewUrl?: string;
+}) {
+    if (!customerPhone) return false;
+
+    const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
+    const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+
+    const messageBody = `⭐ *How was your service?*\n\n` +
+        `Hi ${options.customerName}! Thanks for choosing *${options.businessName}*.\n\n` +
+        `If you loved our service, we'd really appreciate a quick review:\n` +
+        `${options.googleReviewUrl || '👉 Reply with your feedback!'}\n\n` +
+        `📸 Got photos of the completed work? Send them here!\n\n` +
+        `Thanks for your support! 🙏`;
+
+    try {
+        if (client && fromNumber) {
+            await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                body: messageBody
+            });
+            console.log(`⭐ Review request sent to ${recipient}`);
+            return true;
+        } else {
+            console.log('---------------------------------------------------');
+            console.log(`⚠️ MOCKING REVIEW REQUEST:`);
+            console.log(`To: ${recipient}`);
+            console.log(`Body:\n${messageBody}`);
+            console.log('---------------------------------------------------');
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ Error sending review request:', error);
         return false;
     }
 }

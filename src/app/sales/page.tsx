@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 
 // Types
+interface ProspectImage {
+  url: string;
+  type: 'before' | 'after' | 'team' | 'work' | 'general';
+  name: string;
+}
+
 interface Prospect {
   id: string;
   business_name: string;
@@ -93,9 +99,83 @@ export default function SalesPage() {
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Image upload for previews
+  const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Stock image library
+  const [showStockPicker, setShowStockPicker] = useState(false);
+  const [stockImages, setStockImages] = useState<(ProspectImage & { category: string })[]>([]);
+  const [stockCategory, setStockCategory] = useState('aircon');
+  const [isLoadingStock, setIsLoadingStock] = useState(false);
+
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  // Image upload handlers
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch('/api/sales/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Upload failed');
+
+      setUploadedImages(prev => [...prev, ...data.images]);
+      showToast('success', `📸 ${data.images.length} image(s) uploaded!`);
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateImageType = (index: number, type: ProspectImage['type']) => {
+    setUploadedImages(prev => prev.map((img, i) =>
+      i === index ? { ...img, type } : img
+    ));
+  };
+
+  // Fetch stock images from library
+  const fetchStockImages = async (category?: string) => {
+    setIsLoadingStock(true);
+    try {
+      const params = category ? `?category=${category}` : '';
+      const res = await fetch(`/api/sales/stock-images${params}`);
+      const data = await res.json();
+      if (data.success) {
+        setStockImages(data.images);
+      }
+    } catch (err) {
+      console.error('Failed to load stock images:', err);
+    } finally {
+      setIsLoadingStock(false);
+    }
+  };
+
+  // Add stock image to selection
+  const selectFromStock = (img: ProspectImage & { category: string }) => {
+    setUploadedImages(prev => [...prev, { url: img.url, type: img.type, name: img.name }]);
+    showToast('success', `📸 Added stock image: ${img.name}`);
   };
 
   // Load prospects from API
@@ -371,6 +451,7 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
           niche: prospect.service_type,
           context: richContext,
           prospectId: prospect.id,
+          images: uploadedImages, // Pass uploaded images for landing page
         }),
       });
 
@@ -1051,13 +1132,174 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
               </div>
             )}
 
-            <div className="flex justify-end pt-4 border-t border-slate-100">
+            {/* Image Upload Section */}
+            <div className="mb-6">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">📸 Business Images</label>
+              <p className="text-xs text-slate-500 mb-3">
+                Upload new photos or pick from your stock library.
+              </p>
+              <div className="flex flex-wrap gap-3 mb-3">
+                {uploadedImages.map((img, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={img.url}
+                      alt={img.name}
+                      className="w-20 h-20 object-cover rounded-lg border border-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                    <select
+                      value={img.type}
+                      onChange={(e) => updateImageType(index, e.target.value as ProspectImage['type'])}
+                      className="absolute bottom-0 left-0 right-0 text-xs bg-black/70 text-white px-1 py-0.5 rounded-b-lg"
+                    >
+                      <option value="general">General</option>
+                      <option value="before">Before</option>
+                      <option value="after">After</option>
+                      <option value="team">Team</option>
+                      <option value="work">Work</option>
+                    </select>
+                  </div>
+                ))}
+
+                {/* Upload Button */}
+                <label className={`w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isUploading ? (
+                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <span className="text-xl text-slate-400">+</span>
+                      <span className="text-xs text-slate-500">Upload</span>
+                    </>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    disabled={isUploading}
+                  />
+                </label>
+
+                {/* Stock Library Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStockPicker(true);
+                    if (stockImages.length === 0) fetchStockImages();
+                  }}
+                  className="w-20 h-20 border-2 border-dashed border-orange-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-colors"
+                >
+                  <span className="text-xl">📁</span>
+                  <span className="text-xs text-orange-600">Stock</span>
+                </button>
+              </div>
+              {uploadedImages.length > 0 && (
+                <p className="text-xs text-green-600">
+                  ✓ {uploadedImages.length} image{uploadedImages.length > 1 ? 's' : ''} ready for landing page
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              {!selectedProspect.preview_url && (
+                <button
+                  onClick={() => generatePreview(selectedProspect)}
+                  disabled={isGeneratingPreview}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isGeneratingPreview ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    <>🚀 Generate Preview</>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => setShowDetailsModal(false)}
                 className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stock Image Picker Modal */}
+      {showStockPicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowStockPicker(false)}>
+          <div className="bg-white rounded-xl max-w-3xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">📁 Stock Image Library</h3>
+                <p className="text-xs text-slate-500">Click an image to add it</p>
+              </div>
+              <button onClick={() => setShowStockPicker(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+            </div>
+
+            {/* Category Tabs */}
+            <div className="p-3 border-b border-slate-100 flex gap-2 overflow-x-auto">
+              {['aircon', 'pest', 'cleaning', 'plumbing', 'general'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setStockCategory(cat);
+                    fetchStockImages(cat);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize whitespace-nowrap transition-colors ${stockCategory === cat
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                >
+                  {cat === 'aircon' ? '❄️' : cat === 'pest' ? '🐜' : cat === 'cleaning' ? '🧹' : cat === 'plumbing' ? '🔧' : '📷'} {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Image Grid */}
+            <div className="p-4 overflow-y-auto max-h-[50vh]">
+              {isLoadingStock ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : stockImages.filter(img => img.category === stockCategory || stockCategory === 'all').length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <p className="text-2xl mb-2">📁</p>
+                  <p>No stock images in this category yet.</p>
+                  <p className="text-xs mt-1">Upload images to: <code className="bg-slate-100 px-1 rounded">product-images/stock-{stockCategory}/</code></p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                  {stockImages
+                    .filter(img => img.category === stockCategory)
+                    .map((img, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          selectFromStock(img);
+                          setShowStockPicker(false);
+                        }}
+                        className="aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-orange-400 transition-colors group relative"
+                      >
+                        <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <span className="opacity-0 group-hover:opacity-100 text-white text-xl">+</span>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

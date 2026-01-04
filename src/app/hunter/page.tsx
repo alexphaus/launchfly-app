@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 // Types
+interface ProspectImage {
+  url: string;
+  type: 'before' | 'after' | 'team' | 'work' | 'general';
+  name: string;
+}
+
 interface Prospect {
   id: string;
   business_name: string;
@@ -82,9 +88,54 @@ export default function HunterPage() {
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Image upload for prospects
+  const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  // Image upload handlers
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch('/api/sales/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Upload failed');
+
+      setUploadedImages(prev => [...prev, ...data.images]);
+      showToast('success', `📸 ${data.images.length} image(s) uploaded!`);
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateImageType = (index: number, type: ProspectImage['type']) => {
+    setUploadedImages(prev => prev.map((img, i) =>
+      i === index ? { ...img, type } : img
+    ));
   };
 
   // Counter for today's finds
@@ -118,7 +169,7 @@ export default function HunterPage() {
       const res = await fetch('/api/hunter/prospects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, images: uploadedImages }),
       });
 
       const data = await res.json();
@@ -142,6 +193,7 @@ export default function HunterPage() {
       });
       setFbContext('');
       setScrapeUrl('');
+      setUploadedImages([]); // Clear uploaded images
     } catch (err: any) {
       showToast('error', err.message);
     } finally {
@@ -527,6 +579,73 @@ export default function HunterPage() {
                   <p className="text-xs text-slate-500 mt-1">
                     Include services, prices, reviews, and unique selling points for better previews.
                   </p>
+                </div>
+
+                {/* Image Upload Section */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    📸 Business Images
+                    <span className="text-xs font-normal text-slate-500 ml-2">
+                      (For landing page preview)
+                    </span>
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">
+                    Upload Facebook/Google photos - technicians, before/after shots, team photos.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {uploadedImages.map((img, index) => (
+                      <div key={index} className="relative group">
+                        <img
+                          src={img.url}
+                          alt={img.name}
+                          className="w-16 h-16 object-cover rounded-lg border border-slate-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ✕
+                        </button>
+                        <select
+                          value={img.type}
+                          onChange={(e) => updateImageType(index, e.target.value as ProspectImage['type'])}
+                          className="absolute bottom-0 left-0 right-0 text-xs bg-black/70 text-white px-1 rounded-b-lg"
+                        >
+                          <option value="general">General</option>
+                          <option value="before">Before</option>
+                          <option value="after">After</option>
+                          <option value="team">Team</option>
+                          <option value="work">Work</option>
+                        </select>
+                      </div>
+                    ))}
+
+                    <label className={`w-16 h-16 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {isUploading ? (
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <>
+                          <span className="text-lg text-slate-400">+</span>
+                          <span className="text-xs text-slate-500">Add</span>
+                        </>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        disabled={isUploading}
+                      />
+                    </label>
+                  </div>
+                  {uploadedImages.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ {uploadedImages.length} image{uploadedImages.length > 1 ? 's' : ''} ready
+                    </p>
+                  )}
                 </div>
 
                 <button

@@ -449,10 +449,24 @@ export async function POST(request: Request) {
 
       // Build business_data for the funnel - use finalBusinessName throughout
       // Match niche to SERVICE_TEMPLATES to get quoteCalculator config
-      const nicheKey = Object.keys(SERVICE_TEMPLATES).find(key =>
-        finalNiche?.toLowerCase().includes(key.toLowerCase().replace('_', ' ')) ||
-        SERVICE_TEMPLATES[key].name.toLowerCase().includes(finalNiche?.toLowerCase() || '')
-      );
+      // Improved matching with aliases for common variations
+      const NICHE_ALIASES: Record<string, string[]> = {
+        aircon: ['aircon', 'air conditioning', 'ac', 'hvac', 'air-con', 'aircond', 'refrigeration', 'cooling'],
+        pest_control: ['pest', 'pest control', 'exterminator', 'termite', 'rodent', 'fumigation', 'insect'],
+        plumbing: ['plumbing', 'plumber', 'pipe', 'drain', 'leak', 'water heater', 'sanitary'],
+        cleaning: ['cleaning', 'cleaner', 'housekeeping', 'maid', 'janitor', 'home cleaning', 'office cleaning'],
+        electrical: ['electrical', 'electrician', 'wiring', 'power', 'lighting'],
+        handyman: ['handyman', 'repair', 'maintenance', 'general contractor', 'home repair']
+      };
+
+      const nicheKey = Object.keys(SERVICE_TEMPLATES).find(key => {
+        const aliases = NICHE_ALIASES[key] || [key];
+        const nicheLower = finalNiche?.toLowerCase() || '';
+        // Check if any alias matches the niche
+        return aliases.some(alias =>
+          nicheLower.includes(alias) || alias.includes(nicheLower.split(' ')[0])
+        ) || SERVICE_TEMPLATES[key].name.toLowerCase().includes(nicheLower);
+      });
       const matchedTemplate = nicheKey ? SERVICE_TEMPLATES[nicheKey] : null;
 
       const businessData = {

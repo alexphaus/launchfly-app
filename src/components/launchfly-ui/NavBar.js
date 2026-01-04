@@ -8,6 +8,7 @@ import ShoppingCart from './ShoppingCart';
 export default function NavBar({
   businessName = "Your Business",
   logo = "🚀",
+  logoUrl = null, // URL to logo image (from uploaded images)
   links = ['About', 'Services', 'Contact'],
   ctaText = "Chat with Us",
   ctaLink = "#contact",
@@ -37,7 +38,11 @@ export default function NavBar({
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <span className="text-2xl mr-3">{logo}</span>
+              {logoUrl ? (
+                <img src={logoUrl} alt={businessName} className="w-10 h-10 object-contain mr-3 rounded" />
+              ) : (
+                <span className="text-2xl mr-3">{logo}</span>
+              )}
               <span className="text-xl font-bold" style={{ color: 'var(--text-dark, #1f2937)' }}>
                 {businessName}
               </span>

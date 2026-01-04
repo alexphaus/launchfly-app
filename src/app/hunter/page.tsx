@@ -561,91 +561,32 @@ export default function HunterPage() {
                   </div>
                 </div>
 
-                {/* Notes / Context */}
+                {/* Raw Context (FB Copy-Paste) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Notes / Context
+                    📋 Raw Context
                     <span className="text-xs font-normal text-slate-500 ml-2">
-                      (AI uses this for preview generation)
+                      (Copy-paste from Facebook post)
                     </span>
                   </label>
                   <textarea
-                    value={formData.notes}
-                    onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="• Services: termite treatment, general pest control\n• Pricing: RM90 basic, RM200 full house\n• Reviews: 'Fast response, came same day'\n• USP: 24/7 available, 10 years experience"
-                    rows={4}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    value={formData.raw_context}
+                    onChange={e => setFormData(prev => ({ ...prev, raw_context: e.target.value }))}
+                    placeholder="Paste the Facebook post content here...
+
+Example:
+JF HighCool Air Conditioning Services
+📍 Lagonoy, Camarines Sur
+📞 0934-673-2126
+Services: Aircon cleaning, repair, installation
+Promo: RM80 per unit this week only!
+Reviews: 'Very fast service, same day!'"
+                    rows={5}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Include services, prices, reviews, and unique selling points for better previews.
+                    The more detail you paste, the better the preview will be.
                   </p>
-                </div>
-
-                {/* Image Upload Section */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    📸 Business Images
-                    <span className="text-xs font-normal text-slate-500 ml-2">
-                      (For landing page preview)
-                    </span>
-                  </label>
-                  <p className="text-xs text-slate-500 mb-2">
-                    Upload Facebook/Google photos - technicians, before/after shots, team photos.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {uploadedImages.map((img, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={img.url}
-                          alt={img.name}
-                          className="w-16 h-16 object-cover rounded-lg border border-slate-200"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          ✕
-                        </button>
-                        <select
-                          value={img.type}
-                          onChange={(e) => updateImageType(index, e.target.value as ProspectImage['type'])}
-                          className="absolute bottom-0 left-0 right-0 text-xs bg-black/70 text-white px-1 rounded-b-lg"
-                        >
-                          <option value="general">General</option>
-                          <option value="before">Before</option>
-                          <option value="after">After</option>
-                          <option value="team">Team</option>
-                          <option value="work">Work</option>
-                        </select>
-                      </div>
-                    ))}
-
-                    <label className={`w-16 h-16 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {isUploading ? (
-                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <>
-                          <span className="text-lg text-slate-400">+</span>
-                          <span className="text-xs text-slate-500">Add</span>
-                        </>
-                      )}
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleImageUpload}
-                        className="hidden"
-                        disabled={isUploading}
-                      />
-                    </label>
-                  </div>
-                  {uploadedImages.length > 0 && (
-                    <p className="text-xs text-green-600 mt-1">
-                      ✓ {uploadedImages.length} image{uploadedImages.length > 1 ? 's' : ''} ready
-                    </p>
-                  )}
                 </div>
 
                 <button

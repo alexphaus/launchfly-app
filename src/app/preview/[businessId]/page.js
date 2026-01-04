@@ -9,10 +9,10 @@ import PerformanceMonitor from '@/components/PerformanceMonitor';
 import { TrackingScript, getTrackingConfig } from '@/lib/analytics-tracker';
 import { CartProvider } from '@/hooks/useCart';
 import VisitorTracker from '@/components/VisitorTracker';
-import { 
-  getVisitorId, 
-  getVisitorSegment, 
-  assignVariant, 
+import {
+  getVisitorId,
+  getVisitorSegment,
+  assignVariant,
   getActiveExperiments,
   recordImpression,
   personalizeContent,
@@ -118,7 +118,7 @@ const mockBusinessData = {
               icon: '🚀',
               features: [
                 'AI-powered automation setup',
-                'Basic workflow optimization',  
+                'Basic workflow optimization',
                 'Email support',
                 '30-day money-back guarantee'
               ],
@@ -242,7 +242,7 @@ const mockBusinessData = {
 // A wrapper to inject theme variables
 function ThemedLayout({ theme, children }) {
   if (!theme) return <main>{children}</main>;
-  
+
   const style = {
     '--primary': theme.colors?.primary || '#3b82f6',
     '--secondary': theme.colors?.secondary || '#1e40af',
@@ -252,7 +252,7 @@ function ThemedLayout({ theme, children }) {
     '--gradient-bg': theme.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     '--font-family': theme.font ? `'${theme.font}', sans-serif` : 'system-ui, sans-serif',
   };
-  
+
   return <main style={style}>{children}</main>;
 }
 
@@ -260,7 +260,7 @@ function generateSmartTestimonials(businessData) {
   const niche = businessData.niche?.toLowerCase() || 'service';
   const name = businessData.businessName || businessData.lead_magnet_title || 'Pro Services';
   const type = businessData.leadMagnet?.lead_magnet_title?.toLowerCase().includes('checklist') ? 'checklist' : 'guide';
-  
+
   // Generate niche-specific testimonials
   const nicheTestimonials = {
     landscape: [
@@ -341,14 +341,14 @@ function generateSmartTestimonials(businessData) {
   if (niche.includes('clean') || niche.includes('maid') || niche.includes('janitorial')) {
     return nicheTestimonials.clean;
   }
-  
+
   return nicheTestimonials.default;
 }
 
 function generateSmartFeatures(businessData) {
   const niche = businessData.niche || 'Service';
   const businessName = businessData.businessName || 'Our Team';
-  
+
   return [
     {
       title: `Expert ${niche} Solutions`,
@@ -370,7 +370,7 @@ function generateSmartFeatures(businessData) {
 
 function getThemeForNiche(niche) {
   const n = niche?.toLowerCase() || '';
-  
+
   // Real Estate / Law / Corporate (Navy & Gold/Slate)
   if (n.includes('estate') || n.includes('law') || n.includes('attorney') || n.includes('consult') || n.includes('agency')) {
     return {
@@ -396,7 +396,7 @@ function getThemeForNiche(niche) {
       }
     };
   }
-  
+
   // Cyan/Teal: Cleaning, Pool, Medical, Dental
   if (n.includes('clean') || n.includes('wash') || n.includes('maid') || n.includes('pool') || n.includes('dental') || n.includes('med') || n.includes('doctor')) {
     return {
@@ -409,7 +409,7 @@ function getThemeForNiche(niche) {
       }
     };
   }
-  
+
   // Red/Orange: Fitness, Gym, Emergency, Fire, Security
   if (n.includes('fitness') || n.includes('gym') || n.includes('train') || n.includes('sport') || n.includes('fire') || n.includes('security')) {
     return {
@@ -463,7 +463,7 @@ function getThemeForNiche(niche) {
 
 export async function generateMetadata({ params }) {
   const { businessId } = await params;
-  
+
   // Default metadata
   let meta = {
     title: 'Local Business Expert Guide',
@@ -473,7 +473,7 @@ export async function generateMetadata({ params }) {
   try {
     const cookieStore = await cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore });
-    
+
     // Look up by ID for preview pages (supports both 'ready' and 'prospect' status)
     const { data: business } = await supabase
       .from('businesses')
@@ -485,10 +485,10 @@ export async function generateMetadata({ params }) {
     if (business?.business_data) {
       const bd = business.business_data;
       const lm = bd.leadMagnet;
-      
+
       meta.title = lm?.landing_page?.hero_headline || `${bd.businessName || 'Expert'} - Free Guide`;
       meta.description = lm?.landing_page?.hero_subheadline || `Get professional ${bd.niche || 'service'} advice. Download our free guide now.`;
-      
+
       // Open Graph images would go here if we had them
     }
   } catch (e) {
@@ -514,17 +514,17 @@ export async function generateMetadata({ params }) {
 export default async function DynamicWebsite({ params }) {
   // Await params to fix Next.js 15 requirement
   const { businessId: paramBusinessId } = await params;
-  
+
   let businessData = null;
   let businessId = null;
   let business = null;
   let isProspect = false;
-  
+
   try {
     // Try to get data from Supabase first - lookup by ID for preview pages
     const cookieStore = await cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore });
-    
+
     // Support both 'ready' and 'prospect' status for preview pages
     const { data: businessRecord, error } = await supabase
       .from('businesses')
@@ -539,14 +539,14 @@ export default async function DynamicWebsite({ params }) {
       businessId = businessRecord.id;
       isProspect = businessRecord.status === 'prospect';
       console.log('✅ Loaded from database:', businessId, isProspect ? '(prospect)' : '');
-      
+
       // Initialize experiments if not exists (only for non-prospect)
       if (!isProspect && !businessData.experiments) {
         businessData.experiments = createDefaultExperiments();
         // Update business with default experiments
         await supabase
           .from('businesses')
-          .update({ 
+          .update({
             business_data: businessData,
             updated_at: new Date().toISOString()
           })
@@ -559,7 +559,7 @@ export default async function DynamicWebsite({ params }) {
   } catch (err) {
     console.log('⚠️  Database error:', err.message);
   }
-  
+
   // No mock data fallback for preview pages - they need a real business
   if (!businessData) {
     return (
@@ -583,7 +583,7 @@ export default async function DynamicWebsite({ params }) {
   // Get visitor tracking data
   const cookieStore = await cookies();
   const visitorId = await getVisitorId(cookieStore);
-  
+
   // Create segments based on available headers
   // Note: In production, you'd get these from the actual request headers
   const segments = {
@@ -592,7 +592,7 @@ export default async function DynamicWebsite({ params }) {
     trafficSource: 'direct',
     returning: false
   };
-  
+
   // Get active experiments and assign variants
   let heroVariant = null;
   if (businessId) {
@@ -613,7 +613,7 @@ export default async function DynamicWebsite({ params }) {
       }
     }
   }
-  
+
   const theme = businessData.theme || {};
   let layout = businessData.layout || [];
 
@@ -622,10 +622,10 @@ export default async function DynamicWebsite({ params }) {
     const lm = businessData.leadMagnet;
     const pdfContent = businessData.lead_magnet_pdf || {};
     const conversionOffer = businessData.conversion_offer || {};
-    
+
     // Resolve the niche from multiple sources
     const resolvedNiche = businessData.niche || business?.form_data?.niche || business?.form_data?.leadMagnetTopic || 'service';
-    
+
     // Enhanced business type detection and Layout Mode
     const designPrefs = businessData.design_preferences || {};
     let layoutMode = designPrefs.layout_mode;
@@ -633,11 +633,11 @@ export default async function DynamicWebsite({ params }) {
     // Fallback detection if layout_mode is missing
     if (!layoutMode) {
       const combinedText = `${resolvedNiche || ''} ${JSON.stringify(lm) || ''}`.toLowerCase();
-      
+
       // SERVICE/EMERGENCY detection FIRST (highest priority for service businesses)
       const serviceKeywords = ['plumb', 'plumber', 'plumbing', 'electrician', 'electric', 'hvac', 'repair', 'contractor', 'handyman', 'homefix', 'locksmith', 'roofing', 'cleaning', 'pest', 'moving', 'towing', 'emergency'];
       const hasServiceKeyword = serviceKeywords.some(k => combinedText.includes(k));
-      
+
       if (hasServiceKeyword) {
         layoutMode = 'emergency';
       } else {
@@ -645,7 +645,7 @@ export default async function DynamicWebsite({ params }) {
         // Use word boundaries to avoid matching "class" in "classification"
         const eventKeywords = ['event', 'workshop', 'webinar', 'seminar', 'conference', 'summit', 'ticket', 'zumba', 'yoga class', 'fitness class', 'master class', 'masterclass', 'bootcamp', 'retreat'];
         const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
-        
+
         if (hasEventKeyword) {
           layoutMode = 'event';
         } else {
@@ -664,33 +664,33 @@ export default async function DynamicWebsite({ params }) {
     const isEvent = layoutMode === 'event';
     const isVisual = layoutMode === 'visual';
     const isEmergency = layoutMode === 'emergency';
-    
+
     // Ensure benefits is an array
     const benefits = Array.isArray(lm.landing_page?.benefits) ? lm.landing_page.benefits : [];
-    
-    const features = benefits.length > 0 
+
+    const features = benefits.length > 0
       ? benefits.map(b => ({
-          title: b,
-          description: isEvent
-            ? 'Experience this firsthand at the event.'
-            : isVisual 
-              ? 'Proven strategies used by successful clients to achieve breakthrough results.'
-              : 'Practical steps you can implement immediately to see results.',
-          icon: '✅'
-        }))
+        title: b,
+        description: isEvent
+          ? 'Experience this firsthand at the event.'
+          : isVisual
+            ? 'Proven strategies used by successful clients to achieve breakthrough results.'
+            : 'Practical steps you can implement immediately to see results.',
+        icon: '✅'
+      }))
       : generateSmartFeatures({ ...businessData, niche: resolvedNiche });
 
     // Theme Defaults based on Layout Mode
     const modeTheme = {
-      event: { 
+      event: {
         gradient: 'linear-gradient(135deg, #ef4444 0%, #f59e0b 100%)',
         colors: { primary: '#ef4444', secondary: '#f59e0b' }
       },
-      visual: { 
+      visual: {
         gradient: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
         colors: { primary: '#db2777', secondary: '#7c3aed' }
       },
-      emergency: { 
+      emergency: {
         gradient: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
         colors: { primary: '#2563eb', secondary: '#1e3a8a' }
       }
@@ -711,11 +711,17 @@ export default async function DynamicWebsite({ params }) {
     // --- CONSTRUCT LAYOUT BASED ON MODE ---
     layout = [];
 
+    // Extract logo URL from uploaded images (if available)
+    const images = businessData.images || [];
+    const logoImage = images.find(img => img.type === 'logo');
+    const logoUrl = logoImage?.url || null;
+
     // 1. NAVBAR
     layout.push({
       component: 'NavBar',
       props: {
         businessName: resolvedBusinessName,
+        logoUrl: logoUrl, // Pass logo URL from uploaded images
         links: isEvent
           ? [{ label: 'Event', href: '#hero' }, { label: 'Details', href: '#details' }, { label: 'Register', href: '#register' }]
           : isVisual
@@ -745,132 +751,134 @@ export default async function DynamicWebsite({ params }) {
 
     // 3. DYNAMIC SECTIONS
     if (isEvent) {
-        // Event Details
-        layout.push({
-            component: 'FeatureGrid',
-            props: {
-                title: 'Event Details',
-                subtitle: 'What to expect',
-                features: features,
-                id: 'details'
-            }
-        });
-        
-        // Instructor/Speaker Bio section
-        if (pdfContent.instructor_bio || lm.landing_page?.instructor_bio) {
-            layout.push({
-                component: 'AboutCoach',
-                props: {
-                    title: `Meet Your Instructor: ${lm.landing_page?.instructor_name || 'Guest Instructor'}`,
-                    bio: pdfContent.instructor_bio || lm.landing_page?.instructor_bio,
-                    imageUrl: businessData.instructorImageUrl,
-                    businessName: lm.landing_page?.instructor_name || 'Featured Instructor',
-                    id: 'instructor'
-                }
-            });
+      // Event Details
+      layout.push({
+        component: 'FeatureGrid',
+        props: {
+          title: 'Event Details',
+          subtitle: 'What to expect',
+          features: features,
+          id: 'details'
         }
+      });
+
+      // Instructor/Speaker Bio section
+      if (pdfContent.instructor_bio || lm.landing_page?.instructor_bio) {
+        layout.push({
+          component: 'AboutCoach',
+          props: {
+            title: `Meet Your Instructor: ${lm.landing_page?.instructor_name || 'Guest Instructor'}`,
+            bio: pdfContent.instructor_bio || lm.landing_page?.instructor_bio,
+            imageUrl: businessData.instructorImageUrl,
+            businessName: lm.landing_page?.instructor_name || 'Featured Instructor',
+            logoUrl: logoUrl, // Pass logo URL from uploaded images
+            id: 'instructor'
+          }
+        });
+      }
     } else if (isVisual) {
-        // Portfolio / Visual Features
-        layout.push({
-            component: 'FeatureGrid',
-            props: {
-                title: 'Our Work',
-                subtitle: 'See the difference we make',
-                features: features, // TODO: Replace with images if available
-                id: 'portfolio'
-            }
-        });
-    } else {
-        // Emergency / Service: Problem & Solution
-        if (pdfContent.common_mistakes) {
-            layout.push({
-                component: 'FeatureGrid',
-                props: {
-                    title: 'Common Mistakes',
-                    subtitle: 'Avoid these costly errors',
-                    features: pdfContent.common_mistakes.map(m => ({
-                        title: m.title,
-                        description: m.description,
-                        icon: '⚠️'
-                    })),
-                    id: 'problems'
-                }
-            });
+      // Portfolio / Visual Features
+      layout.push({
+        component: 'FeatureGrid',
+        props: {
+          title: 'Our Work',
+          subtitle: 'See the difference we make',
+          features: features, // TODO: Replace with images if available
+          id: 'portfolio'
         }
+      });
+    } else {
+      // Emergency / Service: Problem & Solution
+      if (pdfContent.common_mistakes) {
         layout.push({
-            component: 'FeatureGrid',
-            props: {
-                title: 'Our Services',
-                subtitle: 'Professional solutions for you',
-                features: features,
-                id: 'services'
-            }
+          component: 'FeatureGrid',
+          props: {
+            title: 'Common Mistakes',
+            subtitle: 'Avoid these costly errors',
+            features: pdfContent.common_mistakes.map(m => ({
+              title: m.title,
+              description: m.description,
+              icon: '⚠️'
+            })),
+            id: 'problems'
+          }
         });
+      }
+      layout.push({
+        component: 'FeatureGrid',
+        props: {
+          title: 'Our Services',
+          subtitle: 'Professional solutions for you',
+          features: features,
+          id: 'services'
+        }
+      });
     }
 
     // 3.5. IMAGE GALLERY (if prospect images are available)
     const prospectImages = businessData.prospectImages || lm.images || [];
     if (prospectImages.length > 0) {
-        layout.push({
-            component: 'ImageGallery',
-            props: {
-                title: 'Our Work',
-                subtitle: 'See the quality of our work',
-                images: prospectImages,
-                id: 'gallery'
-            }
-        });
+      layout.push({
+        component: 'ImageGallery',
+        props: {
+          title: 'Our Work',
+          subtitle: 'See the quality of our work',
+          images: prospectImages,
+          id: 'gallery'
+        }
+      });
     }
 
     // 4. TESTIMONIALS
     const testimonials = businessData.testimonials || generateSmartTestimonials({ ...businessData, niche: resolvedNiche });
     layout.push({
-        component: 'TestimonialSlider',
-        props: {
-            title: 'Client Stories',
-            testimonials: testimonials,
-            id: 'reviews'
-        }
+      component: 'TestimonialSlider',
+      props: {
+        title: 'Client Stories',
+        testimonials: testimonials,
+        id: 'reviews'
+      }
     });
 
     // 5. ABOUT
     layout.push({
-        component: 'AboutCoach',
-        props: {
-            title: 'About Us',
-            bio: lm.landing_page?.about_business || `We are ${resolvedBusinessName}.`,
-            imageUrl: businessData.avatarUrl,
-            businessName: resolvedBusinessName,
-            id: 'about'
-        }
+      component: 'AboutCoach',
+      props: {
+        title: 'About Us',
+        bio: lm.landing_page?.about_business || `We are ${resolvedBusinessName}.`,
+        imageUrl: businessData.avatarUrl,
+        businessName: resolvedBusinessName,
+        logoUrl: logoUrl, // Pass logo URL from uploaded images
+        id: 'about'
+      }
     });
 
     // 6. FOOTER
     layout.push({
-        component: 'Footer',
-        props: {
-            businessName: resolvedBusinessName,
-            email: businessData.email,
-            phone: businessData.phone
-        }
+      component: 'Footer',
+      props: {
+        businessName: resolvedBusinessName,
+        email: businessData.email,
+        phone: businessData.phone
+      }
     });
   }
   // If no layout exists or layout is empty, create a fallback layout
   else if (!layout || layout.length === 0) {
     console.log('Creating fallback layout for:', subdomain);
-    
+
     // Detect if this is an e-commerce business
-    const isEcommerce = businessData.businessModel === 'ecommerce' || 
-                       businessData.isEcommerce ||
-                       (businessData.products && businessData.products.some(p => p.category || p.sku || p.variants));
-    
+    const isEcommerce = businessData.businessModel === 'ecommerce' ||
+      businessData.isEcommerce ||
+      (businessData.products && businessData.products.some(p => p.category || p.sku || p.variants));
+
     layout = [
       {
         component: 'NavBar',
         props: {
           businessName: businessData.businessName || businessData.name || 'Your Business',
           logo: businessData.logo || '🚀',
-          links: isEcommerce ? 
+          links: isEcommerce ?
             ['Home', 'Products', 'Categories', 'About', 'Contact'] :
             ['About', 'Services', 'Pricing', 'Contact'],
           ctaText: 'Get Started',
@@ -894,10 +902,10 @@ export default async function DynamicWebsite({ params }) {
             title: product.name,
             description: product.description
           })) || [
-            { icon: '⚡', title: 'Fast Results', description: 'Quick and efficient solutions' },
-            { icon: '🎯', title: 'Targeted Approach', description: 'Customized for your needs' },
-            { icon: '🚀', title: 'Growth Focused', description: 'Built for success' }
-          ]
+              { icon: '⚡', title: 'Fast Results', description: 'Quick and efficient solutions' },
+              { icon: '🎯', title: 'Targeted Approach', description: 'Customized for your needs' },
+              { icon: '🚀', title: 'Growth Focused', description: 'Built for success' }
+            ]
         }
       },
       {
@@ -950,7 +958,7 @@ export default async function DynamicWebsite({ params }) {
 
   // Generate tracking configuration
   const trackingConfig = getTrackingConfig(
-    visitorId, 
+    visitorId,
     businessId,
     heroVariant ? {
       experimentId: heroVariant.experimentId,
@@ -969,7 +977,7 @@ export default async function DynamicWebsite({ params }) {
                 <span className="font-medium">
                   🎁 This is a preview of your personalized lead capture funnel
                 </span>
-                <a 
+                <a
                   href={`https://www.launchfly.ai/claim/${businessId}?utm_source=preview&utm_medium=banner`}
                   className="bg-white text-orange-600 px-4 py-1 rounded-full text-sm font-semibold hover:bg-orange-50 transition-colors"
                 >
@@ -978,25 +986,25 @@ export default async function DynamicWebsite({ params }) {
               </div>
             </div>
           )}
-          
+
           {/* Visitor tracking for analytics */}
           <VisitorTracker businessId={businessId} subdomain={business?.subdomain} />
-          
+
           {/* Inject tracking script */}
           <TrackingScript config={trackingConfig} />
-          
+
           {/* Performance monitoring */}
           <PerformanceMonitor businessId={businessId} enabled={!!businessId} />
-          
+
           {/* Optimized image preloading for e-commerce products */}
           {businessData.products && businessData.products.length > 0 && (
-            <ImagePreloader 
-              products={businessData.products} 
-              priority="high" 
-              maxImages={6} 
+            <ImagePreloader
+              products={businessData.products}
+              priority="high"
+              maxImages={6}
             />
           )}
-          
+
           {layout.map((section, index) => {
             // Use OptimizedHero for Hero components
             if (section.component === 'Hero' && heroVariant) {
@@ -1005,7 +1013,7 @@ export default async function DynamicWebsite({ params }) {
                 segments,
                 businessData
               );
-              
+
               return (
                 <OptimizedHero
                   key={index}
@@ -1015,7 +1023,7 @@ export default async function DynamicWebsite({ params }) {
                 />
               );
             }
-            
+
             // Handle e-commerce product grids with lazy loading
             if (section.component === 'EcommerceProductGrid') {
               // Populate products from business data if not already set
@@ -1023,7 +1031,7 @@ export default async function DynamicWebsite({ params }) {
               if (!props.products || props.products.length === 0) {
                 props.products = businessData.products || [];
               }
-              
+
               // Extract categories from products
               if (!props.categories || props.categories.length === 0) {
                 const categories = [...new Set(
@@ -1033,7 +1041,7 @@ export default async function DynamicWebsite({ params }) {
                 )];
                 props.categories = categories;
               }
-              
+
               return (
                 <LazySection key={index} rootMargin="50px">
                   <LaunchflyUI.EcommerceProductGrid
@@ -1042,13 +1050,13 @@ export default async function DynamicWebsite({ params }) {
                 </LazySection>
               );
             }
-            
+
             const Component = LaunchflyUI[section.component];
             if (!Component) {
               console.warn(`Component ${section.component} not found`);
               return null;
             }
-            
+
             // Lazy load non-critical components (everything except Hero and NavBar)
             if (['Hero', 'NavBar'].includes(section.component)) {
               return <Component key={index} {...section.props} />;
@@ -1063,7 +1071,7 @@ export default async function DynamicWebsite({ params }) {
 
           {/* Sticky Call Button (Mobile Only) - Speed to Lead */}
           {(business?.phone_number || businessData?.phone) && (
-            <a 
+            <a
               href={`tel:${business?.phone_number || businessData?.phone}`}
               className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-xl flex items-center justify-center md:hidden transition-transform hover:scale-110"
               style={{ width: '64px', height: '64px' }}

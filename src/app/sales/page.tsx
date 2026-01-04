@@ -6,7 +6,7 @@ import Link from 'next/link';
 // Types
 interface ProspectImage {
   url: string;
-  type: 'before' | 'after' | 'team' | 'work' | 'general';
+  type: 'before' | 'after' | 'team' | 'work' | 'general' | 'logo';
   name: string;
 }
 
@@ -88,6 +88,7 @@ export default function SalesPage() {
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [prospectViewed, setProspectViewed] = useState(false);
+  const [editableContext, setEditableContext] = useState('');
 
   // Opener Selection State
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
@@ -421,12 +422,12 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
     setIsGeneratingPreview(true);
 
     try {
-      // Build rich context from all prospect data
-      // Prioritize raw_context (original Facebook data) over summarized notes
+      // Build context from basic prospect data + the editable context
       const painSignalLabels = prospect.pain_signals
         ?.map(s => PAIN_SIGNALS.find(p => p.value === s)?.label || s)
         .join(', ') || '';
 
+      // Use editableContext as the primary context source (user can edit before generating)
       const richContext = [
         `Business Name: ${prospect.business_name}`,
         `Service Type: ${SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type}`,
@@ -435,11 +436,8 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
         prospect.whatsapp_number ? `Phone/WhatsApp: ${prospect.whatsapp_number}` : '',
         prospect.email ? `Email: ${prospect.email}` : '',
         painSignalLabels ? `Pain Signals: ${painSignalLabels}` : '',
-        // Use raw_context if available (preserves original Facebook post details)
-        // Otherwise fall back to AI-summarized notes
-        prospect.raw_context
-          ? `\n--- ORIGINAL FACEBOOK/CONTEXT DATA ---\n${prospect.raw_context}\n--- END ---`
-          : (prospect.notes ? `Additional Notes: ${prospect.notes}` : ''),
+        // Use the editable context (which user may have modified)
+        editableContext ? `\n--- BUSINESS CONTEXT ---\n${editableContext}\n--- END ---` : '',
       ].filter(Boolean).join('\n');
 
       const res = await fetch('/api/sales/analyze', {
@@ -610,6 +608,8 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
                   }}
                   onShowDetails={() => {
                     setSelectedProspect(prospect);
+                    setEditableContext(prospect.raw_context || prospect.notes || '');
+                    setUploadedImages([]);
                     setShowDetailsModal(true);
                   }}
                   onFollowUp={() => {
@@ -1096,15 +1096,25 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
                 </div>
               </div>
             )}
+            {/* Editable Raw Context */}
+            <div className="mb-6">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
+                📋 Raw Context
+                <span className="text-xs font-normal text-slate-400 ml-2">(Edit before generating preview)</span>
+              </label>
+              <textarea
+                value={editableContext}
+                onChange={(e) => setEditableContext(e.target.value)}
+                placeholder="Paste or edit business context here...
 
-            {selectedProspect.notes && (
-              <div className="mb-6">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Notes</label>
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-slate-700 whitespace-pre-wrap">
-                  {selectedProspect.notes}
-                </div>
-              </div>
-            )}
+Services, pricing, reviews, contact info, etc."
+                rows={5}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-y"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                This context will be used to generate the landing page preview.
+              </p>
+            </div>
 
             {selectedProspect.preview_url && (
               <div className="mb-6">
@@ -1159,6 +1169,7 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
                       className="absolute bottom-0 left-0 right-0 text-xs bg-black/70 text-white px-1 py-0.5 rounded-b-lg"
                     >
                       <option value="general">General</option>
+                      <option value="logo">Logo</option>
                       <option value="before">Before</option>
                       <option value="after">After</option>
                       <option value="team">Team</option>
@@ -1258,8 +1269,8 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
                     fetchStockImages(cat);
                   }}
                   className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize whitespace-nowrap transition-colors ${stockCategory === cat
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                 >
                   {cat === 'aircon' ? '❄️' : cat === 'pest' ? '🐜' : cat === 'cleaning' ? '🧹' : cat === 'plumbing' ? '🔧' : '📷'} {cat}

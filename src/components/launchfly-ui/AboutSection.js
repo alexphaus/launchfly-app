@@ -5,7 +5,8 @@ export default function AboutSection({
     businessName = "Business Name",
     description = "A reputable and customer-oriented business that specializes in a wide range of solutions.",
     mission = "A reputable and customer-oriented business that specializes in a wide range of solutions.",
-    logoEmoji = "❄️"
+    logoEmoji = "❄️",
+    logoUrl = null // URL to logo image (from uploaded images)
 }) {
     return (
         <>
@@ -15,9 +16,17 @@ export default function AboutSection({
                     <div className="grid lg:grid-cols-2 gap-12 items-start">
                         {/* Logo */}
                         <div className="flex justify-center lg:justify-start">
-                            <div className="w-48 h-48 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center shadow-xl">
-                                <span className="text-7xl">{logoEmoji}</span>
-                            </div>
+                            {logoUrl ? (
+                                <img
+                                    src={logoUrl}
+                                    alt={businessName}
+                                    className="w-48 h-48 object-contain rounded-2xl shadow-xl bg-white p-4"
+                                />
+                            ) : (
+                                <div className="w-48 h-48 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center shadow-xl">
+                                    <span className="text-7xl">{logoEmoji}</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Text Content */}

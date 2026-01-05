@@ -19,7 +19,7 @@ export default function PhysicalAssetPack({ business, onClose }) {
 
   const fetchTemplates = async () => {
     if (!business?.id) return;
-    
+
     try {
       const response = await fetch(`/api/assets/share-templates?businessId=${business.id}`);
       if (response.ok) {
@@ -41,7 +41,7 @@ export default function PhysicalAssetPack({ business, onClose }) {
 
   const handleDownload = (type) => {
     let url = '';
-    switch(type) {
+    switch (type) {
       case 'whatsapp-status':
         url = `/api/assets/whatsapp-status?businessId=${business.id}`;
         break;
@@ -72,7 +72,7 @@ export default function PhysicalAssetPack({ business, onClose }) {
             </h2>
             <p className="text-emerald-100 text-sm">Print-ready flyers, stickers & share templates</p>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="text-white/80 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
           >
@@ -82,28 +82,44 @@ export default function PhysicalAssetPack({ business, onClose }) {
 
         {/* Tabs */}
         <div className="border-b border-slate-200 px-6">
-          <div className="flex gap-6">
+          <div className="flex gap-4 overflow-x-auto">
             <button
               onClick={() => setActiveTab('share')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'share'
-                  ? 'border-emerald-600 text-emerald-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
+              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'share'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
             >
               <MessageCircle size={16} className="inline mr-2" />
               Share Templates
             </button>
             <button
+              onClick={() => setActiveTab('cash')}
+              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'cash'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+            >
+              💰 Cash Script
+            </button>
+            <button
               onClick={() => setActiveTab('print')}
-              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'print'
-                  ? 'border-emerald-600 text-emerald-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
+              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'print'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
             >
               <Printer size={16} className="inline mr-2" />
               Print Assets
+            </button>
+            <button
+              onClick={() => setActiveTab('van')}
+              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${activeTab === 'van'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+            >
+              🚐 Van Magnet
             </button>
           </div>
         </div>
@@ -302,6 +318,117 @@ export default function PhysicalAssetPack({ business, onClose }) {
               </div>
             </div>
           )}
+
+          {/* Cash Injection Script Tab */}
+          {activeTab === 'cash' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-200">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="p-3 bg-amber-100 rounded-lg">
+                    <span className="text-2xl">💰</span>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg">"Cash Injection" Script</h3>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Copy this message and send it to your last 50 clients via WhatsApp.
+                      Most users see 3-5 bookings within 24 hours.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-5 border border-slate-200 mb-4">
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 leading-relaxed">
+                    {`Hi {{name}}! 👋
+
+Quick check - how's your ${business?.business_data?.niche || 'aircon'} doing?
+
+We have a few slots available this week and I'm offering a special rate for returning customers:
+
+✅ ${business?.business_data?.niche || 'General Service'} - 15% OFF
+✅ Priority booking
+✅ Same trusted technician
+
+Reply "BOOK" if you want to grab a slot!
+
+- ${business?.name || 'Your Local Pro'}`}
+                  </pre>
+                </div>
+
+                <button
+                  onClick={() => handleCopy('cash-script', `Hi {{name}}! 👋\n\nQuick check - how's your ${business?.business_data?.niche || 'aircon'} doing?\n\nWe have a few slots available this week and I'm offering a special rate for returning customers:\n\n✅ ${business?.business_data?.niche || 'General Service'} - 15% OFF\n✅ Priority booking\n✅ Same trusted technician\n\nReply "BOOK" if you want to grab a slot!\n\n- ${business?.name || 'Your Local Pro'}`)}
+                  className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-colors ${copiedId === 'cash-script'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                    }`}
+                >
+                  {copiedId === 'cash-script' ? <Check size={18} /> : <Copy size={18} />}
+                  {copiedId === 'cash-script' ? 'Copied!' : 'Copy Script'}
+                </button>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <h4 className="font-medium text-slate-800">💡 Pro Tips</h4>
+                <ul className="text-sm text-slate-600 mt-2 space-y-1">
+                  <li>• Send in the morning (9-11am) for best response</li>
+                  <li>• Personalize the name placeholder with their actual name</li>
+                  <li>• Follow up after 24 hours if no reply</li>
+                  <li>• Works best with clients from last 6 months</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Van Magnet QR Tab */}
+          {activeTab === 'van' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <span className="text-2xl">🚐</span>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg">Van Magnet QR Code</h3>
+                    <p className="text-sm text-slate-600 mt-1">
+                      This QR code links directly to your Instant Quote page.
+                      Turn your work vehicle into a 24/7 lead capture machine!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center bg-white rounded-xl p-8 border border-slate-200 mb-4">
+                  {/* QR Code will be generated here - for now show the sticker download */}
+                  <div className="w-48 h-48 bg-slate-100 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300 mb-4">
+                    <QrCode size={80} className="text-slate-400" />
+                  </div>
+                  <p className="text-xs text-slate-500 text-center mb-2">
+                    Points to: <span className="font-mono text-blue-600">/q/{business?.id?.slice(0, 8)}...</span>
+                  </p>
+                  <p className="text-xs text-slate-400 text-center">
+                    Customers scan → Get instant quote → You get the lead
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => handleDownload('sticker')}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition-colors"
+                >
+                  <Download size={18} />
+                  Download Van Magnet PDF
+                </button>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <h4 className="font-medium text-slate-800">🖨️ How to Get Your Magnet Printed</h4>
+                <ul className="text-sm text-slate-600 mt-2 space-y-1">
+                  <li>1. Download the PDF above</li>
+                  <li>2. Go to Shopee/Lazada → Search "custom car magnet sticker"</li>
+                  <li>3. Upload the PDF → Choose "outdoor vinyl" material</li>
+                  <li>4. Recommended size: 20cm x 20cm or larger</li>
+                  <li>5. Cost: Usually RM 15-30 for magnetic version</li>
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -329,11 +456,10 @@ function TemplateCard({ icon, title, description, content, onCopy, copied, color
         </div>
         <button
           onClick={onCopy}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
-            copied 
-              ? 'bg-green-100 text-green-700' 
-              : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
-          }`}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${copied
+            ? 'bg-green-100 text-green-700'
+            : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+            }`}
         >
           {copied ? <Check size={16} /> : <Copy size={16} />}
           {copied ? 'Copied!' : 'Copy'}

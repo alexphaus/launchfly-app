@@ -3,6 +3,7 @@ import { FileText, Globe, Mail, Share2, Users, Copy, ExternalLink, Download, Che
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import ContentEditor from './ContentEditor';
 import PhysicalAssetPack from './PhysicalAssetPack';
+import LaunchpadAssets from './LaunchpadAssets';
 
 export default function LaunchflyDashboard({ session, business, onUpdateBusiness }) {
   const [copied, setCopied] = useState(false);
@@ -268,8 +269,8 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 onClick={() => hasLeadMagnet && setShowOfferModal(true)}
                 disabled={!hasLeadMagnet}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg font-medium transition-colors ${hasLeadMagnet
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer'
-                    : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer'
+                  : 'bg-slate-50 text-slate-300 cursor-not-allowed'
                   }`}
               >
                 <FileText size={16} />
@@ -430,8 +431,8 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
               onClick={() => hasEmailSequence && setShowEmailModal(true)}
               disabled={!hasEmailSequence}
               className={`flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-lg font-medium transition-colors ${hasEmailSequence
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer'
-                  : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer'
+                : 'bg-slate-50 text-slate-300 cursor-not-allowed'
                 }`}
             >
               {hasEmailSequence ? <Users size={16} /> : <Loader2 size={16} className="animate-spin" />}
@@ -529,20 +530,21 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
           {/* Next Steps / Growth Checklist */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-lg">
             {/* Tab Navigation */}
-            <div className="flex gap-2 mb-6 border-b border-white/10 pb-4">
+            <div className="flex gap-2 mb-6 border-b border-white/10 pb-4 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('quickstart')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'quickstart' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'quickstart' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
                 Quick Start
               </button>
               <button
                 onClick={() => setActiveTab('playbook')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'playbook' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'playbook' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
               >
                 Lead Playbook
               </button>
             </div>
+
 
             {/* Quick Start Tab */}
             {activeTab === 'quickstart' && (

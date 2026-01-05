@@ -228,13 +228,22 @@ export default function LaunchflyDashboard({ session, business, onUpdateBusiness
                 : "Your digital sales manager is active. Use the Playbook below to close leads."}
             </p>
           </div>
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
-          >
-            <Settings size={18} />
-            <span className="hidden sm:inline">Settings</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/command/${business?.id}`}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
+            >
+              <Phone size={18} />
+              <span className="hidden sm:inline">Mobile View</span>
+            </a>
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <Settings size={18} />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+          </div>
         </div>
 
         {/* Asset Status Cards */}

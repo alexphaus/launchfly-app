@@ -75,17 +75,33 @@ export default function QuoteFunnel({
 
         setIsSubmitting(true);
         try {
-            // Submit lead to API
+            // Get the selected service for details
+            const selectedServiceData = services.find(s => s.id === selectedService);
+
+            // Submit lead to API - format matches /api/leads/submit expectations
             const response = await fetch('/api/leads/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     businessId,
-                    phone: whatsappInput,
-                    service: selectedService,
-                    units,
-                    estimatedPrice: `${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}`,
-                    source: 'quote-funnel',
+                    formData: {
+                        phone: whatsappInput,
+                        name: '', // Could add name field later
+                        type: 'quote_request',
+                        quoteDetails: {
+                            estimate: {
+                                min: low,
+                                max: high,
+                                currency: currency,
+                            },
+                            answers: {
+                                service: selectedService,
+                                serviceLabel: selectedServiceData?.label || selectedService,
+                                units: units,
+                            },
+                        },
+                        source: 'quote-funnel',
+                    },
                 }),
             });
 

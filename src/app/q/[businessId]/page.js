@@ -92,54 +92,64 @@ export default async function QuoteFunnelPage({ params }) {
 
     // Build services array from quoteCalculator or defaults
     let services = [];
-    if (quoteCalculator?.serviceTypes) {
-        services = quoteCalculator.serviceTypes.map(st => ({
-            id: st.id || st.name.toLowerCase().replace(/\s+/g, '_'),
-            label: st.name,
-            basePrice: st.basePrice || 500,
-            priceVariance: st.variance || 300,
-            isRange: st.isAssessment || false,
-            maxPrice: st.maxPrice,
-        }));
-    } else {
-        // Fallback based on niche
+    let basePrice = 500;
+
+    if (quoteCalculator) {
+        basePrice = quoteCalculator.basePrice || 500;
+
+        // Look for the service type question (type: 'select' with options)
+        const serviceQuestion = quoteCalculator.questions?.find(q => q.type === 'select' && q.options?.length > 0);
+
+        if (serviceQuestion?.options) {
+            // Convert options to service buttons
+            services = serviceQuestion.options.map((option, idx) => ({
+                id: option.toLowerCase().replace(/\s+/g, '_'),
+                label: option,
+                basePrice: basePrice * (idx === 0 ? 1 : idx === 1 ? 1.5 : 2), // Scale price by option
+                priceVariance: basePrice * 0.25,
+            }));
+        }
+    }
+
+    // Fallback based on niche if no services from quoteCalculator
+    if (services.length === 0) {
         const niche = (businessData.niche || '').toLowerCase();
         if (niche.includes('aircon') || niche.includes('ac') || niche.includes('hvac')) {
             services = [
-                { id: 'cleaning', label: 'Cleaning', basePrice: 1200, priceVariance: 300 },
-                { id: 'repair', label: 'Repair', basePrice: 500, isRange: true, maxPrice: 2500 },
-                { id: 'installation', label: 'Installation', basePrice: 3000, isRange: true, maxPrice: 8000 },
+                { id: 'general_service', label: 'General Service', basePrice: 80, priceVariance: 20 },
+                { id: 'chemical_wash', label: 'Chemical Wash', basePrice: 150, priceVariance: 50 },
+                { id: 'troubleshooting', label: 'Troubleshooting', basePrice: 100, isRange: true, maxPrice: 300 },
             ];
         } else if (niche.includes('pest')) {
             services = [
-                { id: 'general', label: 'General Pest', basePrice: 800, priceVariance: 400 },
-                { id: 'termite', label: 'Termite', basePrice: 2000, isRange: true, maxPrice: 5000 },
-                { id: 'rodent', label: 'Rodent Control', basePrice: 1200, priceVariance: 500 },
+                { id: 'general', label: 'General Pest', basePrice: 150, priceVariance: 50 },
+                { id: 'termite', label: 'Termite', basePrice: 500, isRange: true, maxPrice: 2000 },
+                { id: 'rodent', label: 'Rodent Control', basePrice: 200, priceVariance: 100 },
             ];
         } else if (niche.includes('clean')) {
             services = [
-                { id: 'regular', label: 'Regular Cleaning', basePrice: 500, priceVariance: 200 },
-                { id: 'deep', label: 'Deep Cleaning', basePrice: 1500, priceVariance: 500 },
-                { id: 'movein', label: 'Move-in/Out', basePrice: 2500, priceVariance: 1000 },
+                { id: 'regular', label: 'Regular Cleaning', basePrice: 150, priceVariance: 50 },
+                { id: 'deep', label: 'Deep Cleaning', basePrice: 400, priceVariance: 100 },
+                { id: 'movein', label: 'Move-in/Out', basePrice: 600, priceVariance: 200 },
             ];
         } else if (niche.includes('plumb')) {
             services = [
-                { id: 'repair', label: 'Repair', basePrice: 500, isRange: true, maxPrice: 2000 },
-                { id: 'installation', label: 'Installation', basePrice: 1500, isRange: true, maxPrice: 5000 },
-                { id: 'drain', label: 'Drain Cleaning', basePrice: 800, priceVariance: 400 },
+                { id: 'repair', label: 'Repair', basePrice: 150, isRange: true, maxPrice: 500 },
+                { id: 'installation', label: 'Installation', basePrice: 300, isRange: true, maxPrice: 1000 },
+                { id: 'drain', label: 'Drain Cleaning', basePrice: 100, priceVariance: 50 },
             ];
         } else {
             // Generic fallback
             services = [
-                { id: 'basic', label: 'Basic Service', basePrice: 500, priceVariance: 200 },
-                { id: 'standard', label: 'Standard', basePrice: 1000, priceVariance: 400 },
-                { id: 'premium', label: 'Premium', basePrice: 2000, priceVariance: 800 },
+                { id: 'basic', label: 'Basic Service', basePrice: 100, priceVariance: 50 },
+                { id: 'standard', label: 'Standard', basePrice: 250, priceVariance: 100 },
+                { id: 'premium', label: 'Premium', basePrice: 500, priceVariance: 200 },
             ];
         }
     }
 
-    // Determine currency
-    const currency = businessData.currency || '₱';
+    // Determine currency (prefer quoteCalculator, then businessData, then default)
+    const currency = quoteCalculator?.currency || businessData.currency || 'RM';
 
     // Build headline from niche
     const niche = businessData.niche || 'service';

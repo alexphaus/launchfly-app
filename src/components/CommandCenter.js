@@ -19,6 +19,10 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     });
     const [showBlastModal, setShowBlastModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedLead, setSelectedLead] = useState(null);
+    const [scheduleDate, setScheduleDate] = useState('tomorrow');
+    const [scheduleTime, setScheduleTime] = useState('morning');
     const [sendingBlast, setSendingBlast] = useState(false);
 
     const supabase = createClientComponentClient();
@@ -155,6 +159,79 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 activeQuotes: Math.max(0, prev.activeQuotes - 1),
                 booked: prev.booked + 1
             }));
+        }
+    };
+
+    // Open schedule modal for a lead
+    const openScheduleModal = (lead) => {
+        setSelectedLead(lead);
+        setScheduleDate('tomorrow');
+        setScheduleTime('morning');
+        setShowScheduleModal(true);
+    };
+
+    // Format date for display
+    const formatScheduleDate = () => {
+        const today = new Date();
+        if (scheduleDate === 'today') {
+            return 'Today';
+        } else if (scheduleDate === 'tomorrow') {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            return 'Tomorrow';
+        } else {
+            // Custom date
+            return new Date(scheduleDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+    };
+
+    // Format time for display
+    const formatScheduleTime = () => {
+        if (scheduleTime === 'morning') return '9:00 AM';
+        if (scheduleTime === 'afternoon') return '2:00 PM';
+        if (scheduleTime === 'evening') return '5:00 PM';
+        return scheduleTime;
+    };
+
+    // Handle schedule confirmation - "Pick, Click & Send"
+    const handleScheduleConfirm = async () => {
+        if (!selectedLead) return;
+
+        const dateStr = formatScheduleDate();
+        const timeStr = formatScheduleTime();
+        const customerName = selectedLead.name || 'there';
+        const phone = selectedLead.phone?.replace(/\D/g, '');
+
+        // 1. Format the confirmation message
+        const message = `Hi ${customerName}! ✅ I've confirmed your schedule for *${dateStr} at ${timeStr}*.\n\nI'll see you then! Please reply YES to confirm.\n\n- ${businessName}`;
+
+        // 2. Mark as booked in database
+        const { error } = await supabase
+            .from('customers')
+            .update({
+                status: 'booked',
+                notes: `${selectedLead.notes || ''}\n[SCHEDULED ${new Date().toISOString()}]: ${dateStr} at ${timeStr}`
+            })
+            .eq('id', selectedLead.id);
+
+        if (!error) {
+            // 3. Update local state
+            setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, status: 'booked' } : l));
+            setStats(prev => ({
+                ...prev,
+                activeQuotes: Math.max(0, prev.activeQuotes - 1),
+                booked: prev.booked + 1
+            }));
+        }
+
+        // 4. Close modal
+        setShowScheduleModal(false);
+        setSelectedLead(null);
+
+        // 5. Open WhatsApp with pre-filled message
+        if (phone) {
+            const encodedMsg = encodeURIComponent(message);
+            window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank');
         }
     };
 
@@ -312,19 +389,26 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                     >
                                         <MessageCircle className="w-4 h-4" /> WhatsApp
                                     </button>
-                                    {lead.status === 'booked' ? (
+                                    {lead.status === 'booked' || lead.status === 'confirmed' ? (
                                         <button
                                             disabled
                                             className="flex items-center justify-center gap-2 py-2 bg-green-100 text-green-700 rounded-lg font-bold text-sm"
                                         >
                                             <CheckCircle className="w-4 h-4" /> Booked ✓
                                         </button>
-                                    ) : (
+                                    ) : status.isWaiting ? (
                                         <button
                                             onClick={() => markAsBooked(lead.id)}
                                             className="flex items-center justify-center gap-2 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors"
                                         >
-                                            <CheckCircle className="w-4 h-4" /> Mark Booked
+                                            <CheckCircle className="w-4 h-4" /> Booked
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => openScheduleModal(lead)}
+                                            className="flex items-center justify-center gap-2 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors"
+                                        >
+                                            <Calendar className="w-4 h-4" /> Schedule
                                         </button>
                                     )}
                                 </div>
@@ -463,6 +547,117 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <ChevronRight className="w-5 h-5 text-slate-400" />
                             </a>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Schedule Modal - "Pick, Click & Send" */}
+            {showScheduleModal && selectedLead && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center">
+                    <div className="bg-white rounded-t-3xl w-full max-w-md p-6 animate-slide-up">
+                        <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="font-bold text-lg">Schedule Job</h3>
+                                <p className="text-sm text-slate-500">{selectedLead.name || 'Customer'}</p>
+                            </div>
+                            <button
+                                onClick={() => { setShowScheduleModal(false); setSelectedLead(null); }}
+                                className="p-2 hover:bg-slate-100 rounded-lg"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Date Selection */}
+                        <div className="mb-6">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                When is the job?
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    onClick={() => setScheduleDate('today')}
+                                    className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleDate === 'today'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Today
+                                </button>
+                                <button
+                                    onClick={() => setScheduleDate('tomorrow')}
+                                    className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleDate === 'tomorrow'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Tomorrow
+                                </button>
+                                <input
+                                    type="date"
+                                    onChange={(e) => setScheduleDate(e.target.value)}
+                                    className={`py-3 px-2 rounded-xl font-semibold text-sm text-center transition-colors ${scheduleDate !== 'today' && scheduleDate !== 'tomorrow'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                    min={new Date().toISOString().split('T')[0]}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Time Selection */}
+                        <div className="mb-6">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                What time?
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    onClick={() => setScheduleTime('morning')}
+                                    className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleTime === 'morning'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    🌅 Morning
+                                </button>
+                                <button
+                                    onClick={() => setScheduleTime('afternoon')}
+                                    className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleTime === 'afternoon'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    ☀️ Afternoon
+                                </button>
+                                <button
+                                    onClick={() => setScheduleTime('evening')}
+                                    className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleTime === 'evening'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    🌙 Evening
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Preview */}
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+                            <p className="text-xs text-green-600 font-bold mb-1">Message Preview:</p>
+                            <p className="text-sm text-green-800">
+                                &quot;Hi {selectedLead.name || 'there'}! ✅ I&apos;ve confirmed your schedule for <strong>{formatScheduleDate()} at {formatScheduleTime()}</strong>. I&apos;ll see you then! Please reply YES to confirm.&quot;
+                            </p>
+                        </div>
+
+                        {/* Confirm Button */}
+                        <button
+                            onClick={handleScheduleConfirm}
+                            className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-base flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <MessageCircle className="w-5 h-5" />
+                            Confirm & Send WhatsApp
+                        </button>
                     </div>
                 </div>
             )}

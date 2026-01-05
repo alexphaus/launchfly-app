@@ -485,7 +485,10 @@ export async function POST(request: Request) {
         lead_magnet_title: result.lead_magnet.title,
         lead_magnet_pdf: result.pdf_content || {},
         // Inject quoteCalculator from SERVICE_TEMPLATES for Quote Wizard
-        quoteCalculator: matchedTemplate?.quoteCalculator || null,
+        // BUT override the template currency with detected currency
+        quoteCalculator: matchedTemplate?.quoteCalculator
+          ? { ...matchedTemplate.quoteCalculator, currency: detectedCurrency.symbol }
+          : null,
         leadMagnet: {
           lead_magnet: {
             title: result.lead_magnet.title,

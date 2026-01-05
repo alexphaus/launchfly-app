@@ -136,12 +136,23 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         return { text: 'FOLLOW UP NEEDED', color: 'bg-red-100 text-red-700' };
     };
 
-    // Open WhatsApp
+    // Open WhatsApp - using native app scheme to bypass ISP blocks
     const openWhatsApp = (phone, name) => {
         const cleanPhone = phone?.replace(/\D/g, '');
         if (cleanPhone) {
             const message = encodeURIComponent(`Hi ${name || 'there'}! Following up on your quote request...`);
-            window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+
+            // Try native WhatsApp scheme first (bypasses ISP blocks on mobile)
+            // On mobile this opens the app directly, on desktop it falls back
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+            if (isMobile) {
+                // Native app URL scheme - bypasses all ISP DNS blocks
+                window.location.href = `whatsapp://send?phone=${cleanPhone}&text=${message}`;
+            } else {
+                // Desktop - use web URL
+                window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${message}`, '_blank');
+            }
         }
     };
 
@@ -579,8 +590,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <button
                                     onClick={() => setScheduleDate('today')}
                                     className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleDate === 'today'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                 >
                                     Today
@@ -588,8 +599,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <button
                                     onClick={() => setScheduleDate('tomorrow')}
                                     className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleDate === 'tomorrow'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                 >
                                     Tomorrow
@@ -598,8 +609,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                     type="date"
                                     onChange={(e) => setScheduleDate(e.target.value)}
                                     className={`py-3 px-2 rounded-xl font-semibold text-sm text-center transition-colors ${scheduleDate !== 'today' && scheduleDate !== 'tomorrow'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                     min={new Date().toISOString().split('T')[0]}
                                 />
@@ -615,8 +626,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <button
                                     onClick={() => setScheduleTime('morning')}
                                     className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleTime === 'morning'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                 >
                                     🌅 Morning
@@ -624,8 +635,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <button
                                     onClick={() => setScheduleTime('afternoon')}
                                     className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleTime === 'afternoon'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                 >
                                     ☀️ Afternoon
@@ -633,8 +644,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <button
                                     onClick={() => setScheduleTime('evening')}
                                     className={`py-3 rounded-xl font-semibold text-sm transition-colors ${scheduleTime === 'evening'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                 >
                                     🌙 Evening

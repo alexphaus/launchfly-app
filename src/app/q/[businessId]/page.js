@@ -149,6 +149,9 @@ export default async function QuoteFunnelPage({ params }) {
     // Primary color from theme
     const primaryColor = businessData.theme?.colors?.primary || '#2563eb';
 
+    // Check if this is a prospect (for claim banner)
+    const isProspect = business?.status === 'prospect';
+
     return (
         <QuoteFunnel
             businessName={businessData.businessName || business?.name || 'Local Service'}
@@ -163,6 +166,7 @@ export default async function QuoteFunnelPage({ params }) {
             unitLabel="How many units?"
             businessId={paramBusinessId}
             primaryColor={primaryColor}
+            isProspect={isProspect}
             recentBookings={[
                 { name: "Recent Customer", action: "Just requested a quote", time: "2 mins ago", avatar: "👤" },
             ]}

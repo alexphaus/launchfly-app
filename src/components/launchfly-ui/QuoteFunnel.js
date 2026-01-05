@@ -32,6 +32,8 @@ export default function QuoteFunnel({
         { icon: "✅", title: "We Confirm", desc: "Get tech photo" },
         { icon: "🎉", title: "Job Done", desc: "Pay after" },
     ],
+    isProspect = false, // Show claim banner for prospects
+    claimUrl = null, // Custom claim URL
 }) {
     const [selectedService, setSelectedService] = useState(services[0]?.id || 'cleaning');
     const [units, setUnits] = useState(1);
@@ -108,8 +110,25 @@ export default function QuoteFunnel({
 
     return (
         <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative overflow-hidden">
+            {/* Prospect Claim Banner */}
+            {isProspect && (
+                <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 px-4 text-center">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                        <span className="font-medium text-sm">
+                            🎁 This is a preview of your personalized quote funnel
+                        </span>
+                        <a
+                            href={claimUrl || `https://www.launchfly.ai/claim/${businessId}?utm_source=preview&utm_medium=banner`}
+                            className="bg-white text-orange-600 px-4 py-1 rounded-full text-xs font-semibold hover:bg-orange-50 transition-colors"
+                        >
+                            Claim This Funnel →
+                        </a>
+                    </div>
+                </div>
+            )}
+
             {/* Sticky Header - No Menu */}
-            <header className="sticky top-0 bg-white/95 backdrop-blur z-50 px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+            <header className={`sticky ${isProspect ? 'top-0' : 'top-0'} bg-white/95 backdrop-blur z-40 px-5 py-4 border-b border-gray-100 flex justify-between items-center`}>
                 <div className="flex items-center gap-2">
                     {logoUrl ? (
                         <img src={logoUrl} alt={businessName} className="w-8 h-8 object-contain rounded-lg" />
@@ -165,8 +184,8 @@ export default function QuoteFunnel({
                                     type="button"
                                     onClick={() => setSelectedService(service.id)}
                                     className={`font-semibold py-3 rounded-xl border transition-all ${selectedService === service.id
-                                            ? 'ring-2 ring-blue-600 bg-blue-50 text-blue-700 border-transparent'
-                                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                                        ? 'ring-2 ring-blue-600 bg-blue-50 text-blue-700 border-transparent'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
                                         }`}
                                 >
                                     {service.label}

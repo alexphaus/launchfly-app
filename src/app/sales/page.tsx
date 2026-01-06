@@ -304,11 +304,16 @@ Alex`
 
   // Generate pitch message (after they say yes)
   const generatePitch = (prospect: Prospect): string => {
-    return `Nice 👍  Here is the preview I made for you.
+    const quoteUrl = prospect.preview_business_id
+      ? `https://app.launchfly.ai/q/${prospect.preview_business_id}`
+      : '[QUOTE FUNNEL LINK]';
+    return `Nice 👍  Here is the quote system I made for you.
 
-👉 ${prospect.preview_url || '[PREVIEW LINK]'}
+⚡ ${quoteUrl}
 
-Just scroll & imagine customers clicking this while you’re busy on-site.`;
+Customers scan → get instant price → you get notified on WhatsApp.
+
+Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`;
   };
 
   // Generate follow-up message based on status (Day 1/3/5 strategy + Behavior)
@@ -853,27 +858,60 @@ Just scroll & imagine customers clicking this while you’re busy on-site.`;
 
             <hr className="my-4" />
 
-            {/* Generate Preview */}
-            {selectedProspect.preview_url ? (
-              <div className="text-center">
-                <p className="text-sm text-slate-500 mb-3">Preview already generated!</p>
-                <a
-                  href={selectedProspect.preview_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
-                >
-                  🔗 View Preview
-                </a>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(selectedProspect.preview_url!);
-                    showToast('success', '🔗 Link copied!');
-                  }}
-                  className="ml-2 px-4 py-2 border rounded-lg hover:bg-slate-50 text-sm"
-                >
-                  Copy Link
-                </button>
+            {/* Generated Links - Quote Funnel & Command Center */}
+            {selectedProspect.preview_business_id ? (
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                <p className="text-sm text-slate-500 font-medium">✅ System Generated!</p>
+
+                {/* Quote Funnel Link */}
+                <div className="flex items-center gap-2 bg-white p-3 rounded-lg border">
+                  <span className="text-blue-500">⚡</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500">Quote Funnel (share with customer)</p>
+                    <a
+                      href={`/q/${selectedProspect.preview_business_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm truncate block"
+                    >
+                      app.launchfly.ai/q/{selectedProspect.preview_business_id.slice(0, 8)}...
+                    </a>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://app.launchfly.ai/q/${selectedProspect.preview_business_id}`);
+                      showToast('success', '⚡ Quote Funnel link copied!');
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                {/* Command Center Link */}
+                <div className="flex items-center gap-2 bg-white p-3 rounded-lg border">
+                  <span className="text-green-500">📱</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500">Command Center (owner dashboard)</p>
+                    <a
+                      href={`/command/${selectedProspect.preview_business_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-600 hover:underline text-sm truncate block"
+                    >
+                      app.launchfly.ai/command/{selectedProspect.preview_business_id.slice(0, 8)}...
+                    </a>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://app.launchfly.ai/command/${selectedProspect.preview_business_id}`);
+                      showToast('success', '📱 Command Center link copied!');
+                    }}
+                    className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700"
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
             ) : (
               <div>
@@ -1116,28 +1154,44 @@ Services, pricing, reviews, contact info, etc."
               </p>
             </div>
 
-            {selectedProspect.preview_url && (
+            {selectedProspect.preview_business_id && (
               <div className="mb-6">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Preview Link</label>
-                <div className="flex items-center gap-3 bg-purple-50 p-4 rounded-lg border border-purple-100">
-                  <span className="text-purple-500 text-lg">🔗</span>
-                  <a
-                    href={selectedProspect.preview_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-purple-600 hover:underline flex-1 truncate"
-                  >
-                    {selectedProspect.preview_url}
-                  </a>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedProspect.preview_url!);
-                      showToast('success', '🔗 Link copied!');
-                    }}
-                    className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Copy
-                  </button>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Generated Links</label>
+                <div className="space-y-2">
+                  {/* Quote Funnel */}
+                  <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    <span className="text-blue-500">⚡</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-500">Quote Funnel</p>
+                      <span className="text-blue-600 text-sm">app.launchfly.ai/q/{selectedProspect.preview_business_id.slice(0, 8)}...</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://app.launchfly.ai/q/${selectedProspect.preview_business_id}`);
+                        showToast('success', '⚡ Quote Funnel copied!');
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  {/* Command Center */}
+                  <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg border border-green-100">
+                    <span className="text-green-500">📱</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-500">Command Center</p>
+                      <span className="text-green-600 text-sm">app.launchfly.ai/command/{selectedProspect.preview_business_id.slice(0, 8)}...</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://app.launchfly.ai/command/${selectedProspect.preview_business_id}`);
+                        showToast('success', '📱 Command Center copied!');
+                      }}
+                      className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700"
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

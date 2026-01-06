@@ -6,7 +6,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export default function ActivationStatus({ businessId, sessionId, initialBusiness }) {
   const supabase = createClientComponentClient();
-  
+
   // State management
   const [status, setStatus] = useState('activating'); // activating | building | ready | error
   const [business, setBusiness] = useState(initialBusiness);
@@ -17,7 +17,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
   // Activate the business (payment verification + setup)
   const activateBusiness = useCallback(async () => {
     if (!sessionId || !businessId) return null;
-    
+
     try {
       const response = await fetch('/api/claim/activate', {
         method: 'POST',
@@ -47,14 +47,14 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
 
   // Poll for generation progress
   const pollProgress = useCallback((dashSessionId) => {
-    if (!dashSessionId) return () => {};
-    
+    if (!dashSessionId) return () => { };
+
     let pollCount = 0;
     const MAX_POLLS = 60; // 2 minutes max (60 * 2 seconds)
-    
+
     const pollInterval = setInterval(async () => {
       pollCount++;
-      
+
       // Timeout fallback - if still stuck after 2 minutes, force ready
       if (pollCount >= MAX_POLLS) {
         console.log('⚠️ Polling timeout reached - forcing ready state');
@@ -62,7 +62,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
         setStatus('ready');
         return;
       }
-      
+
       try {
         const { data: session, error: sessErr } = await supabase
           .from('sessions')
@@ -77,7 +77,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
 
         if (session) {
           setProgress(session.progress || 0);
-          
+
           if (session.stage === 'complete' || session.progress >= 100) {
             clearInterval(pollInterval);
             setStatus('ready');
@@ -94,9 +94,9 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
 
   // Main effect: activate then poll
   useEffect(() => {
-    let cleanupFn = () => {};
+    let cleanupFn = () => { };
     let retryInterval = null;
-    
+
     const init = async () => {
       // If already has sessionId and is ready, skip activation
       if (initialBusiness?.sessionId && initialBusiness?.status === 'ready') {
@@ -116,7 +116,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
       // Otherwise, activate first
       setStatus('activating');
       const newSessionId = await activateBusiness();
-      
+
       if (newSessionId) {
         setStatus('building');
         setProgress(30); // Initial progress after activation
@@ -132,7 +132,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
             if (!error) setError('Unable to activate your funnel. Please contact support.');
             return;
           }
-          
+
           const retrySessionId = await activateBusiness();
           if (retrySessionId) {
             clearInterval(retryInterval);
@@ -165,8 +165,10 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
   };
 
   const businessName = business?.name || initialBusiness?.name || 'Your Business';
-  const subdomain = business?.subdomain || initialBusiness?.subdomain;
-  const funnelUrl = subdomain ? `https://${subdomain}.launchfly.ai` : null;
+  const businessIdForLinks = business?.id || initialBusiness?.id || businessId;
+  // New WhatsApp-focused deliverables
+  const quoteUrl = `/q/${businessIdForLinks}`;
+  const commandUrl = `/command/${businessIdForLinks}`;
   const dashboardUrl = dashboardSessionId ? `/dashboard/${dashboardSessionId}` : '/';
 
   // ==================== RENDER STATES ====================
@@ -177,49 +179,61 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
         <div className="text-6xl mb-4">🎉</div>
         <h1 className="text-3xl font-bold text-slate-800 mb-2">
-          Funnel Activated!
+          System Activated!
         </h1>
         <p className="text-slate-600 mb-6">
-          Your lead capture funnel for <strong>{businessName}</strong> is now live and ready to capture leads.
+          Your lead capture system for <strong>{businessName}</strong> is now live and ready to capture leads.
         </p>
 
-        <div className="bg-slate-50 rounded-xl p-4 mb-6">
-          <p className="text-sm text-slate-500 mb-2">Your funnel URL:</p>
-          {funnelUrl ? (
-            <a 
-              href={funnelUrl}
+        <div className="bg-slate-50 rounded-xl p-4 mb-6 space-y-3">
+          <div>
+            <p className="text-xs text-slate-500 mb-1">Quote Funnel (share with customers):</p>
+            <a
+              href={quoteUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 font-mono text-sm hover:underline break-all"
             >
-              {funnelUrl}
+              app.launchfly.ai{quoteUrl}
             </a>
-          ) : (
-            <span className="text-slate-400 text-sm">Setting up...</span>
-          )}
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 mb-1">Command Center (your mobile dashboard):</p>
+            <a
+              href={commandUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 font-mono text-sm hover:underline break-all"
+            >
+              app.launchfly.ai{commandUrl}
+            </a>
+          </div>
         </div>
 
         <div className="space-y-3">
-          {funnelUrl && (
-            <a 
-              href={funnelUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full bg-green-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-green-700 transition-colors"
-            >
-              View My Funnel →
-            </a>
-          )}
-          <Link 
+          <a
+            href={commandUrl}
+            className="block w-full bg-green-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-green-700 transition-colors"
+          >
+            📱 Open Command Center →
+          </a>
+          <a
+            href={quoteUrl}
+            target="_blank"
+            className="block w-full bg-blue-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+          >
+            ⚡ View Quote Funnel →
+          </a>
+          <Link
             href={dashboardUrl}
             className="block w-full bg-slate-100 text-slate-700 py-3 px-6 rounded-xl font-semibold hover:bg-slate-200 transition-colors"
           >
-            Go to Dashboard
+            Go to Full Dashboard
           </Link>
         </div>
 
         <p className="text-sm text-slate-500 mt-6">
-          Your funnel includes a PDF guide and email sequences. Check your dashboard for full details!
+          Share the Quote Funnel link to start capturing leads. Use Command Center to manage jobs!
         </p>
       </div>
     );
@@ -236,14 +250,14 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
         <p className="text-slate-600 mb-4">
           {error || "We had trouble activating your funnel. Your payment was successful - let's try again."}
         </p>
-        
+
         <button
           onClick={handleRetry}
           className="w-full bg-blue-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-blue-700 transition-colors mb-3"
         >
           Try Again
         </button>
-        
+
         <p className="text-sm text-slate-500">
           If this continues, please contact{' '}
           <a href="mailto:support@launchfly.ai" className="text-blue-600 hover:underline">
@@ -260,7 +274,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
     return (
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
         {/* Spinner */}
-        <div 
+        <div
           className="mx-auto mb-6 animate-spin"
           style={{
             width: '64px',
@@ -270,14 +284,14 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
             borderRadius: '50%'
           }}
         />
-        
+
         <h1 className="text-2xl font-bold text-slate-800 mb-2">
           Building Your Business System
         </h1>
         <p className="text-slate-600 mb-6">
           AI is generating your assets. This usually takes about 30-60 seconds.
         </p>
-        
+
         {/* Progress bar */}
         <div className="mb-6">
           <div className="flex justify-between mb-2 text-sm font-medium text-slate-600">
@@ -285,13 +299,13 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
             <span>{progress}%</span>
           </div>
           <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-blue-600 transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
-        
+
         {/* Progress steps */}
         <div className="text-left space-y-3">
           <div className={`flex items-center gap-3 ${progress > 10 ? 'text-green-600' : 'text-slate-400'}`}>
@@ -318,7 +332,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
   // ACTIVATING STATE - Initial activation (payment verification)
   return (
     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg text-center">
-      <div 
+      <div
         className="mx-auto mb-6 animate-spin"
         style={{
           width: '48px',
@@ -328,7 +342,7 @@ export default function ActivationStatus({ businessId, sessionId, initialBusines
           borderRadius: '50%'
         }}
       />
-      
+
       <h1 className="text-2xl font-bold text-slate-800 mb-2">
         Activating Your Funnel
       </h1>

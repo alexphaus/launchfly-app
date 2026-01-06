@@ -36,9 +36,8 @@ export async function GET(request) {
     const phone = business.phone_number || businessData.phone || '';
     const leadMagnetTitle = businessData.lead_magnet_title || `Free ${niche} Guide`;
     const couponOffer = businessData.lead_magnet_pdf?.coupon_offer || '15% Off First Service';
-    const landingPageUrl = business.subdomain 
-      ? `https://launchfly.app/sites/${business.subdomain}`
-      : `https://launchfly.app/preview/${businessId}`;
+    // URL points to Quote Funnel (new WhatsApp-focused deliverable)
+    const landingPageUrl = `https://app.launchfly.ai/q/${businessId}`;
 
     // Generate QR code as data URL
     let qrDataUrl = '';
@@ -69,7 +68,7 @@ export async function GET(request) {
       const words = text.split(' ');
       const lines = [];
       let currentLine = '';
-      
+
       words.forEach(word => {
         if ((currentLine + ' ' + word).trim().length <= maxChars) {
           currentLine = (currentLine + ' ' + word).trim();
@@ -79,7 +78,7 @@ export async function GET(request) {
         }
       });
       if (currentLine) lines.push(currentLine);
-      
+
       return lines.slice(0, 3);
     };
 
@@ -101,15 +100,15 @@ export async function GET(request) {
   
   <!-- Top Badge -->
   <rect x="290" y="150" width="500" height="60" rx="30" fill="rgba(255,255,255,0.2)"/>
-  <text x="${width/2}" y="190" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">📄 FREE GUIDE ALERT</text>
+  <text x="${width / 2}" y="190" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">📄 FREE GUIDE ALERT</text>
   
   <!-- Main Title -->
-  ${titleLines.map((line, i) => 
-    `<text x="${width/2}" y="${350 + (i * 90)}" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`
-  ).join('\n  ')}
+  ${titleLines.map((line, i) =>
+      `<text x="${width / 2}" y="${350 + (i * 90)}" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle">${escapeXml(line)}</text>`
+    ).join('\n  ')}
   
   <!-- Subtitle -->
-  <text x="${width/2}" y="${350 + (titleLines.length * 90) + 50}" font-family="Arial, sans-serif" font-size="36" fill="rgba(255,255,255,0.9)" text-anchor="middle">From ${escapeXml(businessName)}</text>
+  <text x="${width / 2}" y="${350 + (titleLines.length * 90) + 50}" font-family="Arial, sans-serif" font-size="36" fill="rgba(255,255,255,0.9)" text-anchor="middle">From ${escapeXml(businessName)}</text>
   
   <!-- QR Code Background -->
   <rect x="${(width - 410) / 2}" y="750" width="410" height="480" rx="30" fill="white"/>
@@ -118,23 +117,23 @@ export async function GET(request) {
   ${qrDataUrl ? `<image x="${(width - 300) / 2}" y="780" width="300" height="300" href="${qrDataUrl}"/>` : ''}
   
   <!-- Scan Text -->
-  <text x="${width/2}" y="1150" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1e40af" text-anchor="middle">👆 SCAN TO DOWNLOAD</text>
+  <text x="${width / 2}" y="1150" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1e40af" text-anchor="middle">👆 SCAN TO DOWNLOAD</text>
   
   <!-- Offer Box -->
   <rect x="100" y="1300" width="${width - 200}" height="100" rx="20" fill="#fbbf24"/>
-  <text x="${width/2}" y="1365" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1f2937" text-anchor="middle">🎁 ${escapeXml(couponOffer)}</text>
+  <text x="${width / 2}" y="1365" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1f2937" text-anchor="middle">🎁 ${escapeXml(couponOffer)}</text>
   
   <!-- Phone -->
   ${phone ? `
-  <text x="${width/2}" y="1520" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle">📞 ${escapeXml(phone)}</text>
-  <text x="${width/2}" y="1580" font-family="Arial, sans-serif" font-size="28" fill="rgba(255,255,255,0.8)" text-anchor="middle">Call/WhatsApp us now!</text>
+  <text x="${width / 2}" y="1520" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle">📞 ${escapeXml(phone)}</text>
+  <text x="${width / 2}" y="1580" font-family="Arial, sans-serif" font-size="28" fill="rgba(255,255,255,0.8)" text-anchor="middle">Call/WhatsApp us now!</text>
   ` : ''}
   
   <!-- Bottom CTA -->
-  <text x="${width/2}" y="1750" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="middle">Tap ⬆️ link in bio or scan QR code</text>
+  <text x="${width / 2}" y="1750" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="middle">Tap ⬆️ link in bio or scan QR code</text>
   
   <!-- Footer -->
-  <text x="${width/2}" y="1850" font-family="Arial, sans-serif" font-size="24" fill="rgba(255,255,255,0.6)" text-anchor="middle">© ${new Date().getFullYear()} ${escapeXml(businessName)}</text>
+  <text x="${width / 2}" y="1850" font-family="Arial, sans-serif" font-size="24" fill="rgba(255,255,255,0.6)" text-anchor="middle">© ${new Date().getFullYear()} ${escapeXml(businessName)}</text>
 </svg>`;
 
     // Try to convert to PNG using sharp if available, otherwise return SVG

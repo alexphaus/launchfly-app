@@ -38,9 +38,8 @@ export async function GET(request) {
     const leadMagnetTitle = businessData.lead_magnet_title || `Free ${niche} Guide`;
     const couponOffer = businessData.lead_magnet_pdf?.coupon_offer || '15% Off First Service';
     const couponCode = businessData.lead_magnet_pdf?.coupon_code || 'GUIDE15';
-    const landingPageUrl = business.subdomain 
-      ? `https://launchfly.app/sites/${business.subdomain}`
-      : `https://launchfly.app/preview/${businessId}`;
+    // QR code points to Quote Funnel (new WhatsApp-focused deliverable)
+    const landingPageUrl = `https://app.launchfly.ai/q/${businessId}`;
 
     // Import PDFKit dynamically
     const PDFDocument = (await import('pdfkit')).default;
@@ -81,7 +80,7 @@ export async function GET(request) {
       // STICKER FORMAT - Simple QR with minimal text
       // Background
       doc.rect(0, 0, pageWidth, pageHeight).fill('#1e40af');
-      
+
       // QR Code (centered, large)
       if (qrBuffer) {
         doc.image(qrBuffer, centerX - 70, 30, { width: 140 });
@@ -89,10 +88,10 @@ export async function GET(request) {
 
       // Text below QR
       doc.fillColor('#ffffff')
-         .fontSize(10)
-         .font('Helvetica-Bold')
-         .text('SCAN FOR', 0, 175, { width: pageWidth, align: 'center' })
-         .text('FREE GUIDE', 0, 186, { width: pageWidth, align: 'center' });
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text('SCAN FOR', 0, 175, { width: pageWidth, align: 'center' })
+        .text('FREE GUIDE', 0, 186, { width: pageWidth, align: 'center' });
 
     } else {
       // FLYER FORMAT (A5/A4)
@@ -101,20 +100,20 @@ export async function GET(request) {
 
       // Business name
       doc.fillColor('#ffffff')
-         .fontSize(format === 'a4' ? 28 : 22)
-         .font('Helvetica-Bold')
-         .text(businessName.toUpperCase(), 30, 30, { width: pageWidth - 60, align: 'center' });
+        .fontSize(format === 'a4' ? 28 : 22)
+        .font('Helvetica-Bold')
+        .text(businessName.toUpperCase(), 30, 30, { width: pageWidth - 60, align: 'center' });
 
       // Tagline
       doc.fontSize(format === 'a4' ? 14 : 11)
-         .font('Helvetica')
-         .text(`Your Trusted ${niche} Partner`, 30, format === 'a4' ? 70 : 60, { width: pageWidth - 60, align: 'center' });
+        .font('Helvetica')
+        .text(`Your Trusted ${niche} Partner`, 30, format === 'a4' ? 70 : 60, { width: pageWidth - 60, align: 'center' });
 
       // Phone number in header
       if (phone) {
         doc.fontSize(format === 'a4' ? 16 : 13)
-           .font('Helvetica-Bold')
-           .text(`📞 ${phone}`, 30, format === 'a4' ? 95 : 82, { width: pageWidth - 60, align: 'center' });
+          .font('Helvetica-Bold')
+          .text(`📞 ${phone}`, 30, format === 'a4' ? 95 : 82, { width: pageWidth - 60, align: 'center' });
       }
 
       // Main content area
@@ -122,52 +121,52 @@ export async function GET(request) {
 
       // "FREE GUIDE" banner
       doc.rect(30, contentY, pageWidth - 60, format === 'a4' ? 50 : 40)
-         .fill('#fbbf24');
-      
+        .fill('#fbbf24');
+
       doc.fillColor('#1f2937')
-         .fontSize(format === 'a4' ? 20 : 16)
-         .font('Helvetica-Bold')
-         .text('📄 FREE GUIDE INSIDE!', 30, contentY + (format === 'a4' ? 15 : 12), { width: pageWidth - 60, align: 'center' });
+        .fontSize(format === 'a4' ? 20 : 16)
+        .font('Helvetica-Bold')
+        .text('📄 FREE GUIDE INSIDE!', 30, contentY + (format === 'a4' ? 15 : 12), { width: pageWidth - 60, align: 'center' });
 
       // Guide title
       doc.fillColor('#1f2937')
-         .fontSize(format === 'a4' ? 24 : 18)
-         .font('Helvetica-Bold')
-         .text(leadMagnetTitle, 30, contentY + (format === 'a4' ? 70 : 55), { width: pageWidth - 60, align: 'center' });
+        .fontSize(format === 'a4' ? 24 : 18)
+        .font('Helvetica-Bold')
+        .text(leadMagnetTitle, 30, contentY + (format === 'a4' ? 70 : 55), { width: pageWidth - 60, align: 'center' });
 
       // QR Code section
       const qrY = contentY + (format === 'a4' ? 130 : 100);
       const qrSize = format === 'a4' ? 180 : 130;
 
       // QR background box
-      doc.rect(centerX - (qrSize/2) - 20, qrY - 10, qrSize + 40, qrSize + 60)
-         .fillAndStroke('#f8fafc', '#e2e8f0');
+      doc.rect(centerX - (qrSize / 2) - 20, qrY - 10, qrSize + 40, qrSize + 60)
+        .fillAndStroke('#f8fafc', '#e2e8f0');
 
       // QR Code
       if (qrBuffer) {
-        doc.image(qrBuffer, centerX - (qrSize/2), qrY, { width: qrSize });
+        doc.image(qrBuffer, centerX - (qrSize / 2), qrY, { width: qrSize });
       }
 
       // Scan instruction
       doc.fillColor('#3b82f6')
-         .fontSize(format === 'a4' ? 14 : 11)
-         .font('Helvetica-Bold')
-         .text('👆 SCAN TO DOWNLOAD', 30, qrY + qrSize + 15, { width: pageWidth - 60, align: 'center' });
+        .fontSize(format === 'a4' ? 14 : 11)
+        .font('Helvetica-Bold')
+        .text('👆 SCAN TO DOWNLOAD', 30, qrY + qrSize + 15, { width: pageWidth - 60, align: 'center' });
 
       // Offer box
       const offerY = qrY + qrSize + (format === 'a4' ? 70 : 50);
       doc.rect(30, offerY, pageWidth - 60, format === 'a4' ? 60 : 45)
-         .fill('#10b981');
+        .fill('#10b981');
 
       doc.fillColor('#ffffff')
-         .fontSize(format === 'a4' ? 18 : 14)
-         .font('Helvetica-Bold')
-         .text(`🎁 ${couponOffer}`, 30, offerY + (format === 'a4' ? 12 : 8), { width: pageWidth - 60, align: 'center' });
-      
+        .fontSize(format === 'a4' ? 18 : 14)
+        .font('Helvetica-Bold')
+        .text(`🎁 ${couponOffer}`, 30, offerY + (format === 'a4' ? 12 : 8), { width: pageWidth - 60, align: 'center' });
+
       if (couponCode) {
         doc.fontSize(format === 'a4' ? 14 : 11)
-           .font('Helvetica')
-           .text(`Use code: ${couponCode}`, 30, offerY + (format === 'a4' ? 38 : 28), { width: pageWidth - 60, align: 'center' });
+          .font('Helvetica')
+          .text(`Use code: ${couponCode}`, 30, offerY + (format === 'a4' ? 38 : 28), { width: pageWidth - 60, align: 'center' });
       }
 
       // Benefits list
@@ -179,8 +178,8 @@ export async function GET(request) {
       ];
 
       doc.fillColor('#374151')
-         .fontSize(format === 'a4' ? 13 : 10)
-         .font('Helvetica');
+        .fontSize(format === 'a4' ? 13 : 10)
+        .font('Helvetica');
 
       benefits.forEach((benefit, i) => {
         doc.text(benefit, 50, benefitsY + (i * (format === 'a4' ? 22 : 16)));
@@ -189,8 +188,8 @@ export async function GET(request) {
       // Footer
       const footerY = pageHeight - 50;
       doc.fontSize(format === 'a4' ? 10 : 8)
-         .fillColor('#9ca3af')
-         .text(`© ${new Date().getFullYear()} ${businessName} • ${landingPageUrl}`, 30, footerY, { width: pageWidth - 60, align: 'center' });
+        .fillColor('#9ca3af')
+        .text(`© ${new Date().getFullYear()} ${businessName} • ${landingPageUrl}`, 30, footerY, { width: pageWidth - 60, align: 'center' });
     }
 
     doc.end();
@@ -200,7 +199,7 @@ export async function GET(request) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
     });
 
-    const filename = format === 'sticker' 
+    const filename = format === 'sticker'
       ? `${businessName.replace(/[^a-z0-9]/gi, '_')}_qr_sticker.pdf`
       : `${businessName.replace(/[^a-z0-9]/gi, '_')}_flyer_${format}.pdf`;
 

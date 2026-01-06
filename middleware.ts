@@ -2,7 +2,7 @@ import { NextResponse, NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host');
-  
+
   // Skip middleware for API routes, static files, and Next.js internals
   if (
     request.nextUrl.pathname.startsWith('/api/') ||
@@ -15,17 +15,18 @@ export async function middleware(request: NextRequest) {
 
   // Extract subdomain from hostname
   const subdomain = hostname?.split('.')[0];
-  
+
   console.log('Middleware - Hostname:', hostname);
   console.log('Middleware - Subdomain:', subdomain);
   console.log('Middleware - Pathname:', request.nextUrl.pathname);
-  
-  // Skip localhost and main domain
+
+  // Skip localhost and main domain + reserved subdomains
   if (
     hostname?.includes('localhost') ||
     hostname?.includes('127.0.0.1') ||
     subdomain === 'launchfly' ||
-    subdomain === 'www'
+    subdomain === 'www' ||
+    subdomain === 'app'  // Reserved for main application
   ) {
     console.log('Middleware - Skipping for main domain/localhost');
     return NextResponse.next();
@@ -36,7 +37,7 @@ export async function middleware(request: NextRequest) {
     console.log('Middleware - Rewriting to:', `/sites/${subdomain}`);
     const url = request.nextUrl.clone();
     url.pathname = `/sites/${subdomain}`;
-    
+
     return NextResponse.rewrite(url);
   }
 

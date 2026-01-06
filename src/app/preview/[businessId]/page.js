@@ -981,7 +981,7 @@ export default async function DynamicWebsite({ params }) {
                   href={`https://www.launchfly.ai/claim/${businessId}?utm_source=preview&utm_medium=banner`}
                   className="bg-white text-orange-600 px-4 py-1 rounded-full text-sm font-semibold hover:bg-orange-50 transition-colors"
                 >
-                  Claim This Funnel →
+                  Go Live in 5 Minutes →
                 </a>
               </div>
             </div>

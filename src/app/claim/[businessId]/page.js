@@ -1,34 +1,36 @@
 // src/app/claim/[businessId]/page.js
-// Claim page for prospects who want to activate their preview funnel
+// Cleaner, high-conversion claim page for Launchfly Launchpad
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 import ClaimButton from './ClaimButton';
+import { Check, Shield, Star, Zap, MessageCircle, BarChart, Truck, ArrowRight } from 'lucide-react';
 
 export async function generateMetadata({ params }) {
   return {
-    title: 'Claim Your Lead Capture Funnel | Launchfly',
-    description: 'Activate your personalized lead capture funnel and start capturing leads today.',
+    title: 'Activate Your Launchpad | Launchfly',
+    description: 'Activate your personalized lead capture system.',
   };
 }
 
 export default async function ClaimPage({ params }) {
   const { businessId } = await params;
-  
+
   let business = null;
   let businessData = null;
-  
+
   try {
     const cookieStore = await cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore });
-    
+
+    // Fetch business data
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
       .eq('id', businessId)
       .eq('status', 'prospect')
       .single();
-    
+
     if (data && !error) {
       business = data;
       businessData = data.business_data || {};
@@ -37,223 +39,216 @@ export default async function ClaimPage({ params }) {
     console.error('Error fetching business:', err);
   }
 
+  // Error State
   if (!business) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
-          <div className="text-6xl mb-4">🔍</div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Preview Not Found</h1>
-          <p className="text-slate-600 mb-6">
-            This preview may have expired or already been claimed.
-          </p>
-          <Link 
-            href="https://www.launchfly.ai"
-            className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Create Your Own Funnel →
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center border border-slate-100">
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔍</div>
+          <h1 className="text-xl font-bold text-slate-800 mb-2">System Not Found</h1>
+          <p className="text-slate-500 mb-6">This preview may have expired or is invalid.</p>
+          <Link href="https://www.launchfly.ai" className="text-blue-600 font-medium hover:underline">
+            Go to Launchfly Home →
           </Link>
         </div>
       </div>
     );
   }
 
-  const leadMagnetTitle = businessData?.leadMagnet?.lead_magnet?.title || 'Lead Capture Funnel';
+  // Data prep
   const businessName = businessData?.businessName || business?.name || 'Your Business';
-  const niche = businessData?.niche || business?.form_data?.niche || 'your industry';
+  const niche = businessData?.niche || 'Service';
   const prospectEmail = business?.form_data?.prospectEmail || '';
-  const previewTips = businessData?.leadMagnet?.lead_magnet?.preview_tips || [];
-  const benefits = businessData?.leadMagnet?.lead_magnet?.benefits || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-      {/* Header */}
-      <div className="bg-white/10 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="text-white font-bold text-xl">🚀 Launchfly</div>
-          <a 
-            href={`/preview/${businessId}?preview=true`}
-            className="text-white/80 hover:text-white text-sm"
-          >
-            ← Back to Preview
-          </a>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100">
 
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {/* Hero */}
-        <div className="text-center mb-12">
-          <div className="inline-block bg-green-500/20 text-green-400 px-4 py-1 rounded-full text-sm font-medium mb-4">
-            ✨ Your Custom Funnel is Ready
+      {/* Minimal Header */}
+      <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🚀</span>
+            <span className="font-bold text-slate-900 tracking-tight">Launchfly</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Claim Your Lead Capture Funnel
+          <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+            <Shield size={12} />
+            <span>Secure Activation</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-8 md:py-12">
+
+        {/* Headline */}
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight leading-tight">
+            Use This System to Fill <br className="hidden md:block" />
+            <span className="text-blue-600">{businessName}&apos;s</span> Calendar.
           </h1>
-          <p className="text-xl text-slate-300 max-w-2xl mx-auto">
-            We&apos;ve built a personalized <strong>{leadMagnetTitle}</strong> for <strong>{businessName}</strong>. 
-            Activate it now and start capturing leads today.
+          <p className="text-lg text-slate-500">
+            Your automated &quot;Anti-Empty-Schedule&quot; system is built and ready to launch.
           </p>
         </div>
 
-        {/* What's Included */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 border border-white/10">
-          <h2 className="text-2xl font-bold text-white mb-6 text-center">
-            What&apos;s Included
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <span className="text-2xl">📄</span>
-              </div>
-              <h3 className="font-semibold text-white mb-1">Custom PDF Guide</h3>
-              <p className="text-slate-400 text-sm">
-                A professionally designed lead magnet tailored for {niche}
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <span className="text-2xl">🎯</span>
-              </div>
-              <h3 className="font-semibold text-white mb-1">Landing Page</h3>
-              <p className="text-slate-400 text-sm">
-                High-converting page to capture visitor emails
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <span className="text-2xl">📧</span>
-              </div>
-              <h3 className="font-semibold text-white mb-1">Email Delivery</h3>
-              <p className="text-slate-400 text-sm">
-                Automatic PDF delivery to your new leads
-              </p>
-            </div>
-          </div>
-        </div>
+        <div className="grid lg:grid-cols-12 gap-8 md:gap-12 items-start">
 
-        {/* LIVE PREVIEW SECTION - Show actual landing page */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 border border-white/10">
-          <h2 className="text-2xl font-bold text-white mb-2 text-center">
-            👀 Live Preview: Your Landing Page
-          </h2>
-          <p className="text-slate-400 text-center mb-6">
-            This is exactly what your customers will see. Click to interact!
-          </p>
-          
-          <div className="bg-slate-900 rounded-xl p-2 border border-white/20">
-            {/* Browser Chrome */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 mb-2">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-              </div>
-              <div className="flex-1 bg-white/10 rounded px-3 py-1 text-xs text-slate-400 truncate">
-                launchfly.app/sites/{business?.subdomain || businessId.slice(0,8)}
-              </div>
-            </div>
-            {/* Live iframe preview */}
-            <div className="relative overflow-hidden rounded-lg" style={{ height: '400px' }}>
-              <iframe 
-                src={`/preview/${businessId}?embed=true`}
-                className="w-full h-full border-0 pointer-events-none"
-                style={{ transform: 'scale(0.75)', transformOrigin: 'top left', width: '133.33%', height: '133.33%' }}
-                title="Landing Page Preview"
-              />
-              <a 
-                href={`/preview/${businessId}?preview=true`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors group"
-              >
-                <span className="bg-white text-slate-900 px-4 py-2 rounded-lg font-semibold opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                  Open Full Preview ↗
-                </span>
-              </a>
-            </div>
-          </div>
-        </div>
+          {/* LEFT COLUMN: The Product (Live Preview) */}
+          <div className="lg:col-span-7 space-y-6">
 
-        {/* Preview of Value - Show what's in the guide */}
-        {(previewTips.length > 0 || benefits.length > 0) && (
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8 border border-white/10">
-            <h2 className="text-2xl font-bold text-white mb-2 text-center">
-              📄 Sneak Peek: Your PDF Guide
-            </h2>
-            <p className="text-slate-400 text-center mb-6">
-              This is the quality content we&apos;ve already prepared for {businessName}
-            </p>
-            
-            {previewTips.length > 0 ? (
-              <div className="space-y-4">
-                {previewTips.map((tip, index) => (
-                  <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <span className="text-green-400 font-bold">{index + 1}</span>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-white mb-1">{tip.title}</h4>
-                        <p className="text-slate-400 text-sm">{tip.description}</p>
-                      </div>
-                    </div>
+            {/* Live Preview Card */}
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden relative group">
+              <div className="bg-slate-100 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                </div>
+                <div className="text-[10px] items-center gap-1.5 text-slate-400 font-medium uppercase tracking-wider hidden sm:flex">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  Live Preview Generated
+                </div>
+              </div>
+
+              <div className="aspect-[16/10] relative bg-slate-50">
+                <iframe
+                  src={`/preview/${businessId}?embed=true`}
+                  className="w-[200%] h-[200%] border-0 absolute top-0 left-0 origin-top-left scale-50 pointer-events-none"
+                  title="Preview"
+                />
+
+                {/* Overlay CTA */}
+                <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center">
+                  <a
+                    href={`/preview/${businessId}?preview=true`}
+                    target="_blank"
+                    className="bg-white text-slate-900 px-5 py-2.5 rounded-full font-bold shadow-lg transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center gap-2"
+                  >
+                    Interact with Website <ArrowRight size={16} />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Supporting Evidence */}
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Zap size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-500 uppercase">Speed</p>
+                <p className="font-semibold text-slate-900">Setup in 60s</p>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <MessageCircle size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-500 uppercase">Automation</p>
+                <p className="font-semibold text-slate-900">24/7 Replies</p>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Star size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-500 uppercase">Results</p>
+                <p className="font-semibold text-slate-900">Guaranteed</p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* RIGHT COLUMN: The Offer (Stack) */}
+          <div className="lg:col-span-5 relative">
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 md:p-8 sticky top-24">
+
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-slate-900">Launchfly Launchpad</h2>
+                <p className="text-slate-500 text-sm mt-1">Complete Lead Generation System for {niche}</p>
+              </div>
+
+              {/* The Stack List */}
+              <div className="space-y-4 mb-8">
+
+                <div className="flex gap-3">
+                  <div className="mt-1 flex-shrink-0 w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
+                    <Check size={12} strokeWidth={3} />
                   </div>
-                ))}
-                <p className="text-center text-slate-500 text-sm mt-4">
-                  + 5 more expert tips in the full guide
-                </p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-3 gap-4">
-                {benefits.map((benefit, index) => (
-                  <div key={index} className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
-                    <span className="text-2xl mb-2">✅</span>
-                    <p className="text-white text-sm">{benefit}</p>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">Instant Quote Engine</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Replaces "Contact Us". Gives customers instant price ranges so they stop shopping.
+                    </p>
                   </div>
-                ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="mt-1 flex-shrink-0 w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">WhatsApp Digital Receptionist</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Auto-replies to inquiries while you work. Captures leads 24/7.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="mt-1 flex-shrink-0 w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">"Cash Injection" Script</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Copy-paste reactivator for past clients. Fills calendar fast.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 -mx-2">
+                  <div className="mt-1 flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                    <Truck size={12} strokeWidth={3} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-blue-900 text-sm">BONUS: Van Magnet QR Design</h3>
+                    <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
+                      Turns your vehicle into a lead source.
+                    </p>
+                  </div>
+                </div>
+
               </div>
-            )}
-          </div>
-        )}
 
-        {/* CTA Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
-          <div className="text-5xl mb-4">🎁</div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">
-            Special Offer: $97 One-Time
-          </h2>
-          <p className="text-slate-600 mb-6">
-            Get your complete lead capture system. No monthly fees. Yours forever.
-          </p>
-          
-          <div className="space-y-4">
-            <ClaimButton 
-              businessId={businessId} 
-              email={prospectEmail}
-            />
-            
-            <p className="text-sm text-emerald-600 font-semibold">
-              🛡️ First 10 Leads in 30 Days or Full Refund • Instant Access
-            </p>
-          </div>
+              {/* Pricing & CTA */}
+              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 mb-6">
+                <div className="flex items-end gap-2 mb-2">
+                  <div className="text-4xl font-extrabold text-slate-900">₱5,000</div>
+                  <div className="text-sm font-medium text-slate-500 mb-1.5">one-time setup</div>
+                </div>
+                <div className="text-xs text-slate-400 line-through mb-4">No monthly fees. No subscriptions.</div>
 
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <p className="text-slate-500 text-sm mb-3">Have questions?</p>
-            <a 
-              href="mailto:hello@launchfly.ai?subject=Question about my preview funnel&body=Business ID: ${businessId}"
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Contact us at hello@launchfly.ai
-            </a>
+                <ClaimButton businessId={businessId} businessName={businessName} />
+
+                <div className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-2">
+                  <MessageCircle size={10} /> Chat directly with Alex
+                </div>
+              </div>
+
+              {/* Guarantee */}
+              <div className="text-center">
+                <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-100">
+                  <span className="text-lg">🛡️</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-bold uppercase tracking-wide opacity-70">The No-Risk Promise</p>
+                    <p className="text-xs font-bold leading-tight">3 Booked Jobs in 30 Days or Full Refund.</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
 
-        {/* Trust Badges */}
-        <div className="mt-8 flex flex-wrap justify-center gap-6 text-slate-400 text-sm">
-          <span>✓ 500+ Funnels Created</span>
-          <span>✓ Instant Setup</span>
-          <span>✓ No Technical Skills Needed</span>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

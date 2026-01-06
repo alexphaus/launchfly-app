@@ -1163,7 +1163,14 @@ Services, pricing, reviews, contact info, etc."
                     <span className="text-blue-500">⚡</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-500">Quote Funnel</p>
-                      <span className="text-blue-600 text-sm">app.launchfly.ai/q/{selectedProspect.preview_business_id.slice(0, 8)}...</span>
+                      <a
+                        href={`https://app.launchfly.ai/q/${selectedProspect.preview_business_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 text-sm hover:underline truncate block"
+                      >
+                        app.launchfly.ai/q/{selectedProspect.preview_business_id.slice(0, 8)}...
+                      </a>
                     </div>
                     <button
                       onClick={() => {
@@ -1180,7 +1187,14 @@ Services, pricing, reviews, contact info, etc."
                     <span className="text-green-500">📱</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-500">Command Center</p>
-                      <span className="text-green-600 text-sm">app.launchfly.ai/command/{selectedProspect.preview_business_id.slice(0, 8)}...</span>
+                      <a
+                        href={`https://app.launchfly.ai/command/${selectedProspect.preview_business_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-600 text-sm hover:underline truncate block"
+                      >
+                        app.launchfly.ai/command/{selectedProspect.preview_business_id.slice(0, 8)}...
+                      </a>
                     </div>
                     <button
                       onClick={() => {

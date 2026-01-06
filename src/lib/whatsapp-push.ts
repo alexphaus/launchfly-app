@@ -87,7 +87,8 @@ export async function sendJobCard(ownerPhone: string, job: {
         .join('\n');
 
     // Content Template SID for Job Card with interactive buttons
-    const JOB_CARD_TEMPLATE_SID = 'HXe196b188dd2e25f883a883a6ced68517';
+    // Template: 🆕 *JOB Request #{{1}}* {{2}} *{{3}}* 👤 {{4}} 📞 {{5}} 💰 *Est:* {{6}} 📋 *Details:* {{7}}
+    const JOB_CARD_TEMPLATE_SID = 'HX1a609be111ce4713fe3ac8b9eb024b1b';
 
     // Fallback plain text body (for mock mode or if template fails)
     const messageBody = `🆕 *JOB Request #${job.id}*\n\n` +
@@ -101,17 +102,19 @@ export async function sendJobCard(ownerPhone: string, job: {
     try {
         if (client && fromNumber) {
             // Use Content Template with interactive buttons
+            // Variables: 1=ID, 2=Emoji, 3=ServiceName, 4=CustomerName, 5=Phone, 6=Estimate, 7=Details
             const message = await client.messages.create({
                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                 to: recipient,
                 contentSid: JOB_CARD_TEMPLATE_SID,
                 contentVariables: JSON.stringify({
                     '1': job.id,
-                    '2': job.serviceName,
-                    '3': job.customerName,
-                    '4': job.customerPhone,
-                    '5': `${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}`,
-                    '6': details
+                    '2': job.serviceEmoji || '🔧',
+                    '3': job.serviceName,
+                    '4': job.customerName,
+                    '5': job.customerPhone,
+                    '6': `${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}`,
+                    '7': details
                 })
             });
             console.log(`✅ Job Card (with buttons) sent to ${recipient}: ${message.sid}`);

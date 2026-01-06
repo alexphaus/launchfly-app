@@ -74,6 +74,9 @@ export async function POST(req: Request) {
             business.business_data?.phone;
 
         if (ownerPhone) {
+            console.log(`📱 Owner phone found: ${ownerPhone}`);
+            console.log(`📱 Customer phone: ${formData.phone}`);
+
             if (formData.type === 'quote_request') {
                 // Get currency with fallback
                 const currency = formData.quoteDetails.estimate?.currency || 'RM';
@@ -82,8 +85,9 @@ export async function POST(req: Request) {
                     currency: currency
                 };
 
+                console.log('📤 Sending Job Card to owner...');
                 // Send Job Card to business owner
-                await sendJobCard(ownerPhone, {
+                const jobCardResult = await sendJobCard(ownerPhone, {
                     id: customer.id.substring(0, 8).toUpperCase(), // Short ID
                     serviceName: business.business_data?.niche || 'Service',
                     serviceEmoji: business.business_data?.emoji,
@@ -93,23 +97,28 @@ export async function POST(req: Request) {
                     answers: formData.quoteDetails.answers,
                     businessName: business.name
                 });
+                console.log(`📤 Job Card result: ${jobCardResult}`);
 
+                console.log('📤 Sending Quote Confirmation to customer...');
                 // Send confirmation to customer (the lead)
-                await sendQuoteConfirmation(formData.phone, {
+                const quoteResult = await sendQuoteConfirmation(formData.phone, {
                     businessName: business.name,
                     estimateMin: estimateWithCurrency.min,
                     estimateMax: estimateWithCurrency.max,
                     currency: currency
                 });
+                console.log(`📤 Quote Confirmation result: ${quoteResult}`);
 
+                console.log('📤 Sending Slot Suggester to customer...');
                 // Send slot suggestions for one-tap booking (Innovation 1: Slot Suggester)
-                await sendSlotSuggester(formData.phone, {
+                const slotResult = await sendSlotSuggester(formData.phone, {
                     businessName: business.name,
                     customerName: formData.name || 'there',
                     currency: currency,
                     estimateMin: estimateWithCurrency.min,
                     estimateMax: estimateWithCurrency.max
                 });
+                console.log(`📤 Slot Suggester result: ${slotResult}`);
 
                 // 4. Schedule Follow-up Messages via Inngest
                 // +2h: "Ready to book a slot?"

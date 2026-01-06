@@ -148,8 +148,8 @@ export default async function QuoteFunnelPage({ params }) {
         }
     }
 
-    // Determine currency (prefer quoteCalculator, then businessData, then default)
-    const currency = quoteCalculator?.currency || businessData.currency || 'RM';
+    // Determine currency (prefer businessData.currency from detection, then quoteCalculator, then default to PHP)
+    const currency = businessData.currency || quoteCalculator?.currency || '₱';
 
     // Build headline from niche
     const niche = businessData.niche || 'service';

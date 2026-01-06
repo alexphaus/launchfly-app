@@ -59,6 +59,9 @@ export default async function SubdomainQuotePage({ params }) {
             logoUrl={businessData.logo_url || businessData.logoUrl}
             serviceOptions={businessData.quoteConfig?.serviceOptions || businessData.serviceOptions}
             priceMatrix={businessData.quoteConfig?.priceMatrix || businessData.priceMatrix}
+            currency={businessData.currency || '₱'}
+            phoneNumber={businessData.phone || business.phone_number}
+            whatsappNumber={businessData.phone || business.phone_number}
         />
     );
 }

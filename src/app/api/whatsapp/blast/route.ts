@@ -28,10 +28,10 @@ export async function POST(req: Request) {
         // @ts-ignore
         const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
-        // 1. Get business details
+        // 1. Get business details including blast_credits
         const { data: business, error: bizError } = await supabase
             .from('businesses')
-            .select('id, name, business_data')
+            .select('id, name, business_data, blast_credits, blast_credits_used')
             .eq('id', businessId)
             .single();
 
@@ -59,6 +59,21 @@ export async function POST(req: Request) {
 
         if (!oldLeads || oldLeads.length === 0) {
             return NextResponse.json({ message: 'No leads to blast', sent: 0 });
+        }
+
+        // 3. CHECK CREDITS - ₱5 per message
+        const COST_PER_MESSAGE = 5;
+        const totalCost = oldLeads.length * COST_PER_MESSAGE;
+        const currentCredits = business.blast_credits || 0;
+
+        if (currentCredits < totalCost) {
+            return NextResponse.json({
+                error: 'Insufficient credits',
+                required: totalCost,
+                available: currentCredits,
+                recipientCount: oldLeads.length,
+                costPerMessage: COST_PER_MESSAGE
+            }, { status: 402 }); // 402 Payment Required
         }
 
         // 3. Prepare message
@@ -107,15 +122,43 @@ export async function POST(req: Request) {
             }
         }
 
-        // 5. Log the blast
-        console.log(`📢 Blast sent to ${sentCount}/${oldLeads.length} leads for ${businessName}`);
+        // 5. DEDUCT CREDITS after successful sends
+        const actualCost = sentCount * COST_PER_MESSAGE;
+        if (sentCount > 0) {
+            const newCredits = currentCredits - actualCost;
+            const newUsed = (business.blast_credits_used || 0) + actualCost;
+
+            await supabase
+                .from('businesses')
+                .update({
+                    blast_credits: newCredits,
+                    blast_credits_used: newUsed
+                })
+                .eq('id', businessId);
+
+            // Record transaction
+            await supabase
+                .from('blast_transactions')
+                .insert({
+                    business_id: businessId,
+                    type: 'blast',
+                    amount: -actualCost,
+                    recipient_count: sentCount,
+                    description: `Blast to ${sentCount} leads (₱${actualCost})`
+                });
+        }
+
+        // 6. Log the blast
+        console.log(`📢 Blast sent to ${sentCount}/${oldLeads.length} leads for ${businessName}. Cost: ₱${actualCost}`);
 
         return NextResponse.json({
             success: true,
             sent: sentCount,
             total: oldLeads.length,
             errors: errors.length,
-            message: `Sent to ${sentCount} leads`
+            cost: actualCost,
+            remainingCredits: currentCredits - actualCost,
+            message: `Sent to ${sentCount} leads (₱${actualCost})`
         });
 
     } catch (error: any) {

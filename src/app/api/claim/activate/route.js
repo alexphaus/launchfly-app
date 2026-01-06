@@ -24,18 +24,18 @@ export async function POST(request) {
 
     // Verify the Stripe session
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
+
     if (session.payment_status !== 'paid') {
-      return Response.json({ 
-        success: false, 
+      return Response.json({
+        success: false,
         error: 'Payment not completed',
         status: 'pending_payment'
       }, { status: 400 });
     }
 
     if (session.metadata?.businessId !== businessId) {
-      return Response.json({ 
-        success: false, 
+      return Response.json({
+        success: false,
         error: 'Session does not match business',
         status: 'invalid_session'
       }, { status: 400 });
@@ -50,8 +50,8 @@ export async function POST(request) {
 
     if (fetchError || !business) {
       console.error('Business not found:', fetchError);
-      return Response.json({ 
-        success: false, 
+      return Response.json({
+        success: false,
         error: 'Business not found',
         status: 'not_found'
       }, { status: 404 });
@@ -60,71 +60,71 @@ export async function POST(request) {
     // If already activated, return success with session_id
     if (business.status === 'ready') {
       console.log(`✅ Business already activated: ${businessId}`);
-      
+
       // Check if content is actually ready
-      const hasContent = business.business_data?.leadMagnet?.lead_magnet_content || 
-                        business.business_data?.lead_magnet_content;
-      
+      const hasContent = business.business_data?.leadMagnet?.lead_magnet_content ||
+        business.business_data?.lead_magnet_content;
+
       // Get existing session_id
       const { data: existingSession } = await supabase
         .from('sessions')
         .select('id')
         .eq('business_id', businessId)
         .single();
-      
+
       let finalSessionId = existingSession?.id || business.session_id;
 
       // RECOVERY: If session_id is missing OR content is missing, we need to regenerate
       if (!finalSessionId || !hasContent) {
-         console.log('⚠️ Business ready but missing session_id or content. Regenerating...');
-         const generateId = (len = 12) => {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            let result = '';
-            for (let i = 0; i < len; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-            return result;
-         };
-         finalSessionId = generateId(12);
-         
-         // Update business to generating state
-         await supabase.from('businesses').update({ 
-           session_id: finalSessionId,
-           status: hasContent ? 'ready' : 'generating' 
-         }).eq('id', businessId);
-         
-         // Create session
-         await supabase.from('sessions').insert({ 
-           id: finalSessionId, 
-           business_id: businessId, 
-           stage: hasContent ? 'complete' : 'generating', 
-           progress: hasContent ? 100 : 30 
-         });
+        console.log('⚠️ Business ready but missing session_id or content. Regenerating...');
+        const generateId = (len = 12) => {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          let result = '';
+          for (let i = 0; i < len; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+          return result;
+        };
+        finalSessionId = generateId(12);
 
-         // If missing content, trigger generation
-         if (!hasContent) {
-           const businessData = business.business_data || {};
-           const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title || 
-                                  businessData.businessName + ' Guide';
-           
-           try {
-             await inngest.send({
-               name: 'lead-magnet/generation.requested',
-               data: {
-                 businessId: businessId,
-                 topic: leadMagnetTitle,
-                 audience: businessData.niche || 'local customers',
-                 language: 'English',
-                 sessionId: finalSessionId,
-                 websiteUrl: businessData.websiteUrl,
-                 businessContext: `${businessData.businessName} - ${businessData.niche}`
-               }
-             });
-             console.log('✅ Triggered content regeneration via Inngest');
-           } catch (e) {
-             console.error('Failed to trigger Inngest for recovery:', e);
-           }
-         }
+        // Update business to generating state
+        await supabase.from('businesses').update({
+          session_id: finalSessionId,
+          status: hasContent ? 'ready' : 'generating'
+        }).eq('id', businessId);
+
+        // Create session
+        await supabase.from('sessions').insert({
+          id: finalSessionId,
+          business_id: businessId,
+          stage: hasContent ? 'complete' : 'generating',
+          progress: hasContent ? 100 : 30
+        });
+
+        // If missing content, trigger generation
+        if (!hasContent) {
+          const businessData = business.business_data || {};
+          const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title ||
+            businessData.businessName + ' Guide';
+
+          try {
+            await inngest.send({
+              name: 'lead-magnet/generation.requested',
+              data: {
+                businessId: businessId,
+                topic: leadMagnetTitle,
+                audience: businessData.niche || 'local customers',
+                language: 'English',
+                sessionId: finalSessionId,
+                websiteUrl: businessData.websiteUrl,
+                businessContext: `${businessData.businessName} - ${businessData.niche}`
+              }
+            });
+            console.log('✅ Triggered content regeneration via Inngest');
+          } catch (e) {
+            console.error('Failed to trigger Inngest for recovery:', e);
+          }
+        }
       }
-      
+
       return Response.json({
         success: true,
         status: 'activated',
@@ -146,7 +146,7 @@ export async function POST(request) {
       return result;
     };
     const newSessionId = generateId(12);
-    
+
     console.log(`Generated new session ID: ${newSessionId}`);
 
     // Attempt to link to existing user by email
@@ -159,7 +159,7 @@ export async function POST(request) {
         .select('id')
         .eq('email', customerEmail)
         .single();
-      
+
       if (profile) {
         targetUserId = profile.id;
         console.log(`🔗 Linking business to existing user: ${targetUserId}`);
@@ -170,7 +170,7 @@ export async function POST(request) {
     // Note: Don't use paid_plan_session_id as it has FK to platform_subscriptions
     const { data: updated, error: updateError } = await supabase
       .from('businesses')
-      .update({ 
+      .update({
         status: 'generating', // Set to generating while we create the full funnel
         source: `claimed-prospect:${sessionId}`,
         expires_at: null,
@@ -186,8 +186,8 @@ export async function POST(request) {
 
     if (updateError) {
       console.error('Failed to activate business:', updateError);
-      return Response.json({ 
-        success: false, 
+      return Response.json({
+        success: false,
         error: 'Failed to activate business: ' + updateError.message,
         status: 'activation_failed'
       }, { status: 500 });
@@ -196,13 +196,13 @@ export async function POST(request) {
     // Create a session record for dashboard access
     const { error: sessError } = await supabase
       .from('sessions')
-      .insert({ 
-        id: newSessionId, 
-        business_id: businessId, 
-        stage: 'generating', 
-        progress: 30 
+      .insert({
+        id: newSessionId,
+        business_id: businessId,
+        stage: 'generating',
+        progress: 30
       });
-    
+
     if (sessError) {
       console.error('Failed to create session:', sessError);
       // Continue anyway - session is nice to have but not critical
@@ -232,12 +232,28 @@ export async function POST(request) {
       // FAST PATH: Prospect already has full content from /sales/analyze
       // Just set to ready - no need to regenerate
       console.log('✅ Prospect has complete content - activating immediately');
-      
+
+      // Grant ₱500 bonus blast credits on activation
+      const BONUS_CREDITS = 500;
+
       await supabase
         .from('businesses')
-        .update({ status: 'ready' })
+        .update({
+          status: 'ready',
+          blast_credits: BONUS_CREDITS
+        })
         .eq('id', businessId);
-      
+
+      // Record bonus transaction
+      await supabase
+        .from('blast_transactions')
+        .insert({
+          business_id: businessId,
+          type: 'bonus',
+          amount: BONUS_CREDITS,
+          description: 'Welcome bonus - 100 free blasts'
+        });
+
       await supabase
         .from('sessions')
         .update({ stage: 'complete', progress: 100 })
@@ -257,9 +273,9 @@ export async function POST(request) {
 
     // SLOW PATH: Need to generate content via Inngest
     // This happens if prospect was created with minimal data
-    const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title || 
-                           businessData.businessName + ' Guide';
-    
+    const leadMagnetTitle = businessData.leadMagnet?.lead_magnet?.title ||
+      businessData.businessName + ' Guide';
+
     let inngestTriggered = false;
     try {
       const sendResult = await inngest.send({
@@ -280,16 +296,31 @@ export async function POST(request) {
       inngestTriggered = true;
     } catch (e) {
       console.error('❌ Failed to trigger Inngest:', e.message, e.stack);
-      
+
       // FALLBACK: If Inngest fails, set business as ready with basic content
       // and update progress so the UI doesn't get stuck
       console.log('⚠️ Inngest failed - setting business as ready with basic funnel');
-      
+
+      const BONUS_CREDITS = 500;
+
       await supabase
         .from('businesses')
-        .update({ status: 'ready' })
+        .update({
+          status: 'ready',
+          blast_credits: BONUS_CREDITS
+        })
         .eq('id', businessId);
-      
+
+      // Record bonus transaction
+      await supabase
+        .from('blast_transactions')
+        .insert({
+          business_id: businessId,
+          type: 'bonus',
+          amount: BONUS_CREDITS,
+          description: 'Welcome bonus - 100 free blasts'
+        });
+
       // Update session to complete so polling stops
       await supabase
         .from('sessions')
@@ -312,8 +343,8 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Activation error:', error);
-    return Response.json({ 
-      success: false, 
+    return Response.json({
+      success: false,
       error: error.message,
       status: 'error'
     }, { status: 500 });

@@ -443,7 +443,39 @@ export async function POST(request: Request) {
     const finalOwnerName = resolvedOwnerName || result.scrapedData?.ownerName || '';
 
     if (createPreview && result.lead_magnet) {
-      const subdomain = `preview-${nanoid(8)}`.toLowerCase();
+      // Generate clean subdomain from business name instead of preview-xxxx
+      const generateCleanSubdomain = (name: string): string => {
+        if (!name) return `biz-${nanoid(6)}`.toLowerCase();
+        // Clean the business name: remove special chars, convert to lowercase, replace spaces with dashes
+        let clean = name
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '') // Remove special chars except spaces and dashes
+          .replace(/\s+/g, '-')          // Replace spaces with dashes
+          .replace(/-+/g, '-')           // Replace multiple dashes with single dash
+          .replace(/^-|-$/g, '')         // Remove leading/trailing dashes
+          .substring(0, 30);             // Limit length
+
+        // If the result is too short or empty, use fallback
+        if (clean.length < 3) {
+          clean = `biz-${nanoid(6)}`.toLowerCase();
+        }
+
+        return clean;
+      };
+
+      let subdomain = generateCleanSubdomain(finalBusinessName);
+
+      // Check if subdomain already exists, if so add a short suffix
+      const { data: existingBusiness } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('subdomain', subdomain)
+        .single();
+
+      if (existingBusiness) {
+        subdomain = `${subdomain}-${nanoid(4)}`.toLowerCase();
+      }
+
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + PROSPECT_EXPIRY_DAYS);
 
@@ -556,11 +588,10 @@ export async function POST(request: Request) {
 
         if (!bizErr && business) {
           businessId = business.id;
-          // Use www.launchfly.ai for preview links (not app.launchfly.ai)
-          const baseUrl = process.env.PREVIEW_BASE_URL || 'https://www.launchfly.ai';
-          previewUrl = `${baseUrl}/preview/${business.id}`;
+          // Use subdomain format for professional URLs: mybusiness.launchfly.ai/quote
+          previewUrl = `https://${subdomain}.launchfly.ai/quote`;
 
-          console.log(`✅ Created prospect business: ${businessId} (expires: ${expiresAt.toISOString()})`);
+          console.log(`✅ Created prospect business: ${businessId} with subdomain ${subdomain} (expires: ${expiresAt.toISOString()})`);
         } else {
           console.error('Failed to create prospect business:', bizErr);
         }

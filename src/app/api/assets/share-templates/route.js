@@ -36,8 +36,10 @@ export async function GET(request) {
     const leadMagnetTitle = businessData.lead_magnet_title || `Free ${niche} Guide`;
     const couponOffer = businessData.lead_magnet_pdf?.coupon_offer || '15% Off First Service';
     const couponCode = businessData.lead_magnet_pdf?.coupon_code || 'GUIDE15';
-    // URL points to Quote Funnel (new WhatsApp-focused deliverable)
-    const landingPageUrl = `https://app.launchfly.ai/q/${businessId}`;
+    // URL points to Quote Funnel - use subdomain format when available
+    const landingPageUrl = business.subdomain
+      ? `https://${business.subdomain}.launchfly.ai/quote`
+      : `https://app.launchfly.ai/q/${businessId}`;
 
     // Generate templates
     const templates = {

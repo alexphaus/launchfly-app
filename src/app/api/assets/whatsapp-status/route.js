@@ -36,8 +36,10 @@ export async function GET(request) {
     const phone = business.phone_number || businessData.phone || '';
     const leadMagnetTitle = businessData.lead_magnet_title || `Free ${niche} Guide`;
     const couponOffer = businessData.lead_magnet_pdf?.coupon_offer || '15% Off First Service';
-    // URL points to Quote Funnel (new WhatsApp-focused deliverable)
-    const landingPageUrl = `https://app.launchfly.ai/q/${businessId}`;
+    // URL points to Quote Funnel - use subdomain format when available
+    const landingPageUrl = business.subdomain
+      ? `https://${business.subdomain}.launchfly.ai/quote`
+      : `https://app.launchfly.ai/q/${businessId}`;
 
     // Generate QR code as data URL
     let qrDataUrl = '';

@@ -221,15 +221,15 @@ export default async function ClaimPage({ params }) {
               {/* Pricing & CTA */}
               <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 mb-6">
                 <div className="flex items-end gap-2 mb-2">
-                  <div className="text-4xl font-extrabold text-slate-900">₱5,000</div>
+                  <div className="text-4xl font-extrabold text-slate-900">$297</div>
                   <div className="text-sm font-medium text-slate-500 mb-1.5">one-time setup</div>
                 </div>
                 <div className="text-xs text-slate-400 line-through mb-4">No monthly fees. No subscriptions.</div>
 
-                <ClaimButton businessId={businessId} businessName={businessName} />
+                <ClaimButton businessId={businessId} email={prospectEmail} />
 
                 <div className="text-[10px] text-center text-slate-400 mt-3 flex items-center justify-center gap-2">
-                  <MessageCircle size={10} /> Chat directly with Alex
+                  <Shield size={10} /> Secure checkout via Stripe
                 </div>
               </div>
 

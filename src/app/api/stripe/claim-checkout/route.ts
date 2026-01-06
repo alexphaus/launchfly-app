@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Business ID is required' }, { status: 400 });
     }
 
-    // Launch Pack pricing (test: $1)
+    // Launchfly Launchpad pricing: $297
     const priceConfig = {
-      amount: 9700, // $1.00 for testing
-      name: 'Launchfly Launch Pack',
-      description: 'Full Lead Capture Funnel + 1 Year Hosting + Email Delivery'
+      amount: 29700, // $297.00
+      name: 'Launchfly Launchpad',
+      description: 'Complete Lead Generation System: Quote Engine + WhatsApp Receptionist + Cash Script + Van QR'
     };
 
     console.log(`Creating claim checkout for business: ${businessId}`, { email });
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       allow_promotion_codes: true,
     });
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       sessionId: session.id,
       url: session.url
     });
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Claim checkout error:', error);
     return NextResponse.json(
-      { error: 'Failed to create checkout session' }, 
+      { error: 'Failed to create checkout session' },
       { status: 500 }
     );
   }

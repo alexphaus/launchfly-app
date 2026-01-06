@@ -1,32 +1,62 @@
 'use client';
 
-import { MessageCircle } from 'lucide-react';
+import { useState } from 'react';
+import { CreditCard } from 'lucide-react';
 
-export default function ClaimButton({ businessId, businessName }) {
-  const handleActivate = () => {
-    // Pre-filled WhatsApp message to Alex
-    const launchflyNumber = '639627459049';
-    const name = businessName || 'my business';
-    const message = encodeURIComponent(
-      `Hi Alex! I just saw the demo for ${name}. It looks great. I want to activate it for the ₱5,000 promo. How do I pay?`
-    );
+export default function ClaimButton({ businessId, email }) {
+  const [isLoading, setIsLoading] = useState(false);
 
-    // Use native scheme on mobile, web URL on desktop
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = `whatsapp://send?phone=${launchflyNumber}&text=${message}`;
-    } else {
-      window.open(`https://api.whatsapp.com/send?phone=${launchflyNumber}&text=${message}`, '_blank');
+  const handleClaim = async () => {
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/stripe/claim-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          email,
+          plan: 'launchpad'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout');
+      }
+
+      // Redirect to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Something went wrong. Please try again.');
+      setIsLoading(false);
     }
   };
 
   return (
     <button
-      onClick={handleActivate}
-      className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-green-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl"
+      onClick={handleClaim}
+      disabled={isLoading}
+      className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      <MessageCircle size={20} />
-      Go Live in 5 Minutes →
+      {isLoading ? (
+        <span className="flex items-center justify-center gap-2">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          Processing...
+        </span>
+      ) : (
+        <>
+          <CreditCard size={20} />
+          Activate Now →
+        </>
+      )}
     </button>
   );
 }

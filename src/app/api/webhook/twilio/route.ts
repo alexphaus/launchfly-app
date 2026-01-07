@@ -342,11 +342,26 @@ export async function POST(request: NextRequest) {
                         isToday ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
                     const formatDate = (d: Date) => d.toISOString().split('T')[0];
 
+                    // Fetch business slot settings (or use defaults)
+                    const { data: businessData } = await supabase
+                        .from('businesses')
+                        .select('slot_settings')
+                        .eq('id', businessId)
+                        .single();
+
                     const DEFAULT_SLOTS = [
-                        { id: 'morning', label: '9am - 11am', startHour: 9 },
-                        { id: 'early_afternoon', label: '1pm - 3pm', startHour: 13 },
-                        { id: 'late_afternoon', label: '3pm - 5pm', startHour: 15 },
+                        { id: 'morning', label: '9am - 11am', start: '09:00', startHour: 9, enabled: true },
+                        { id: 'early_afternoon', label: '1pm - 3pm', start: '13:00', startHour: 13, enabled: true },
+                        { id: 'late_afternoon', label: '3pm - 5pm', start: '15:00', startHour: 15, enabled: true },
                     ];
+
+                    // Use business settings or defaults, filter to enabled slots only
+                    const slotConfig = (businessData?.slot_settings?.slots || DEFAULT_SLOTS)
+                        .filter((s: { enabled?: boolean }) => s.enabled !== false)
+                        .map((s: { id: string; label: string; start?: string; startHour?: number }) => ({
+                            ...s,
+                            startHour: s.startHour || parseInt(s.start?.split(':')[0] || '9')
+                        }));
 
                     const bookedSlotIds = new Set((bookings || []).map(b => `${b.slot_date}_${b.slot_time}`));
                     const blockedDates = new Set((bookings || []).filter(b => b.slot_time === 'all_day').map(b => b.slot_date));
@@ -359,7 +374,7 @@ export async function POST(request: NextRequest) {
 
                         if (blockedDates.has(dateStr)) continue;
 
-                        for (const slot of DEFAULT_SLOTS) {
+                        for (const slot of slotConfig) {
                             if (isToday && hour >= slot.startHour - 2) continue;
                             const slotId = `${dateStr}_${slot.id}`;
                             if (bookedSlotIds.has(slotId)) continue;

@@ -21,10 +21,22 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [showTopUpModal, setShowTopUpModal] = useState(false);
+    const [showSlotSettingsModal, setShowSlotSettingsModal] = useState(false);
     const [selectedLead, setSelectedLead] = useState(null);
     const [scheduleDate, setScheduleDate] = useState('tomorrow');
     const [scheduleTime, setScheduleTime] = useState('morning');
     const [sendingBlast, setSendingBlast] = useState(false);
+    const [savingSlots, setSavingSlots] = useState(false);
+
+    // Slot settings state
+    const defaultSlots = [
+        { id: 'morning', label: '9am - 11am', start: '09:00', end: '11:00', enabled: true },
+        { id: 'early_afternoon', label: '1pm - 3pm', start: '13:00', end: '15:00', enabled: true },
+        { id: 'late_afternoon', label: '3pm - 5pm', start: '15:00', end: '17:00', enabled: true },
+    ];
+    const [slotSettings, setSlotSettings] = useState(
+        business?.slot_settings?.slots || defaultSlots
+    );
 
     // Wallet/Credits state
     const [blastCredits, setBlastCredits] = useState(business?.blast_credits || 0);
@@ -669,7 +681,105 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 <span className="font-medium">View Quote Page</span>
                                 <ChevronRight className="w-5 h-5 text-slate-400" />
                             </a>
+                            <button
+                                onClick={() => { setShowSettingsModal(false); setShowSlotSettingsModal(true); }}
+                                className="w-full flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 text-left"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-blue-600" />
+                                    <span className="font-medium text-blue-700">Slot Times</span>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-blue-400" />
+                            </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Slot Settings Modal */}
+            {showSlotSettingsModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-lg">⏰ Slot Times</h3>
+                            <button onClick={() => setShowSlotSettingsModal(false)}>
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <p className="text-sm text-slate-500 mb-4">
+                            Set when you're available for bookings
+                        </p>
+
+                        <div className="space-y-3 mb-6">
+                            {slotSettings.map((slot, idx) => (
+                                <div key={slot.id} className="bg-slate-50 rounded-xl p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="font-medium text-slate-700">{slot.label}</span>
+                                        <button
+                                            onClick={() => {
+                                                const newSlots = [...slotSettings];
+                                                newSlots[idx].enabled = !newSlots[idx].enabled;
+                                                setSlotSettings(newSlots);
+                                            }}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${slot.enabled !== false
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-slate-200 text-slate-500'
+                                                }`}
+                                        >
+                                            {slot.enabled !== false ? '✓ Active' : 'Off'}
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="time"
+                                            value={slot.start}
+                                            onChange={(e) => {
+                                                const newSlots = [...slotSettings];
+                                                newSlots[idx].start = e.target.value;
+                                                setSlotSettings(newSlots);
+                                            }}
+                                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                        />
+                                        <span className="text-slate-400">to</span>
+                                        <input
+                                            type="time"
+                                            value={slot.end}
+                                            onChange={(e) => {
+                                                const newSlots = [...slotSettings];
+                                                newSlots[idx].end = e.target.value;
+                                                setSlotSettings(newSlots);
+                                            }}
+                                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={async () => {
+                                setSavingSlots(true);
+                                try {
+                                    const { error } = await supabase
+                                        .from('businesses')
+                                        .update({
+                                            slot_settings: { slots: slotSettings, days_ahead: 3, buffer_hours: 2 }
+                                        })
+                                        .eq('id', business.id);
+
+                                    if (error) throw error;
+                                    alert('✅ Slot times saved!');
+                                    setShowSlotSettingsModal(false);
+                                } catch (e) {
+                                    alert('Failed to save slots');
+                                }
+                                setSavingSlots(false);
+                            }}
+                            disabled={savingSlots}
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl disabled:opacity-50"
+                        >
+                            {savingSlots ? 'Saving...' : 'Save Slot Times'}
+                        </button>
                     </div>
                 </div>
             )}

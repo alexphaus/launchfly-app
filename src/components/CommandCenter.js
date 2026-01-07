@@ -272,11 +272,11 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 if (data.remainingCredits !== undefined) {
                     setBlastCredits(data.remainingCredits);
                 }
-                alert(`✅ Blast sent to ${data.sent} leads! Cost: ₱${data.cost}`);
+                alert(`✅ Blast sent to ${data.sent} leads! Cost: ${currency}${data.cost}`);
                 setShowBlastModal(false);
             } else if (response.status === 402) {
                 // Insufficient credits
-                alert(`❌ Insufficient credits. Need ₱${data.required}, have ₱${data.available}`);
+                alert(`❌ Insufficient credits. Need ${currency}${data.required}, have ${currency}${data.available}`);
                 setShowBlastModal(false);
                 setShowTopUpModal(true);
             } else {
@@ -466,7 +466,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                         onClick={() => setShowBlastModal(true)}
                         className="w-full py-2 bg-white text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-50 transition-colors"
                     >
-                        Send Blast (₱{oldLeadsCount * COST_PER_MESSAGE} cost)
+                        Send Blast ({currency}{oldLeadsCount * COST_PER_MESSAGE} cost)
                     </button>
                 </div>
 
@@ -528,11 +528,11 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                             <div className="flex justify-between items-center">
                                 <div>
                                     <p className="text-xs text-blue-100">Blast Wallet</p>
-                                    <p className="text-2xl font-bold">₱{blastCredits.toFixed(0)}</p>
+                                    <p className="text-2xl font-bold">{currency}{blastCredits.toFixed(0)}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs text-blue-100">Cost per blast</p>
-                                    <p className="text-lg font-semibold">₱{COST_PER_MESSAGE}</p>
+                                    <p className="text-lg font-semibold">{currency}{COST_PER_MESSAGE}</p>
                                 </div>
                             </div>
                         </div>
@@ -549,12 +549,12 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Cost</span>
-                                <span className="font-medium">₱{oldLeadsCount * COST_PER_MESSAGE}</span>
+                                <span className="font-medium">{currency}{oldLeadsCount * COST_PER_MESSAGE}</span>
                             </div>
                             <div className="border-t pt-2 flex justify-between">
                                 <span className="text-slate-500">After blast</span>
                                 <span className={`font-bold ${blastCredits >= oldLeadsCount * COST_PER_MESSAGE ? 'text-green-600' : 'text-red-600'}`}>
-                                    ₱{(blastCredits - oldLeadsCount * COST_PER_MESSAGE).toFixed(0)}
+                                    {currency}{(blastCredits - oldLeadsCount * COST_PER_MESSAGE).toFixed(0)}
                                 </span>
                             </div>
                         </div>
@@ -571,7 +571,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                 disabled={sendingBlast || oldLeadsCount === 0}
                                 className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl disabled:opacity-50"
                             >
-                                {sendingBlast ? 'Sending...' : `Send Blast (₱${oldLeadsCount * COST_PER_MESSAGE} cost)`}
+                                {sendingBlast ? 'Sending...' : `Send Blast (${currency}${oldLeadsCount * COST_PER_MESSAGE} cost)`}
                             </button>
                         ) : (
                             <div className="space-y-2">
@@ -760,7 +760,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                         {/* Current Balance */}
                         <div className="bg-slate-100 p-3 rounded-lg mb-4 text-center">
                             <p className="text-xs text-slate-500">Current Balance</p>
-                            <p className="text-2xl font-bold text-slate-800">₱{blastCredits.toFixed(0)}</p>
+                            <p className="text-2xl font-bold text-slate-800">{currency}{blastCredits.toFixed(0)}</p>
                         </div>
 
                         {/* Top-Up Options */}

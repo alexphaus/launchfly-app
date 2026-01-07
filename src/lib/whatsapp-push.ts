@@ -72,6 +72,7 @@ export async function sendJobCard(ownerPhone: string, job: {
     estimate: { min: number; max: number; currency: string };
     answers: Record<string, string | number>;
     businessName: string;
+    businessId?: string; // For dashboard link
 }) {
     if (!ownerPhone) {
         console.warn('⚠️ No owner phone provided for job card');
@@ -81,31 +82,33 @@ export async function sendJobCard(ownerPhone: string, job: {
     const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
     const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
 
-    // Format Q&A pairs    // Prepare details string (truncate to avoid template limits)
+    // Format Q&A pairs (truncate for safety)
     const details = job.answers
         ? Object.entries(job.answers)
             .map(([k, v]) => `${k}: ${v}`)
             .join(', ')
-            .substring(0, 50) // Truncate to 50 chars for safety
+            .substring(0, 50)
         : 'No additional details';
 
-    // Content Template SID for Job Card with interactive buttons
-    // Template: 🆕 *JOB Request #{{1}}* {{2}} *{{3}}* 👤 {{4}} 📞 {{5}} 💰 *Est:* {{6}} 📋 *Details:* {{7}}
-    const JOB_CARD_TEMPLATE_SID = 'HX1a609be111ce4713fe3ac8b9eb024b1b';
+    // Clean customer phone for wa.me link (remove + and spaces)
+    const customerPhoneClean = job.customerPhone.replace(/[^\d]/g, '');
 
-    // Fallback plain text body (for mock mode or if template fails)
-    const messageBody = `🆕 *JOB Request #${job.id}*\n\n` +
+    // Content Template SID for Job Card with URL buttons
+    // Template should have: "📞 Call Customer" → wa.me/{{8}} and "📋 View Dashboard" → app.launchfly.ai/command/{{9}}
+    // Variables: 1=ID, 2=Emoji, 3=ServiceName, 4=CustomerName, 5=Phone, 6=Estimate, 7=Details, 8=CustomerPhoneClean, 9=BusinessId
+    const JOB_CARD_TEMPLATE_SID = process.env.TWILIO_JOB_CARD_TEMPLATE_SID || 'HX1a609be111ce4713fe3ac8b9eb024b1b';
+
+    // Fallback plain text body (for mock mode)
+    const messageBody = `🆕 *NEW JOB REQUEST #${job.id}*\n\n` +
         `${job.serviceEmoji || '🔧'} *${job.serviceName}*\n` +
         `👤 ${job.customerName}\n` +
         `📞 ${job.customerPhone}\n` +
         `💰 *Est:* ${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}\n\n` +
-        `📋 *Details:*\n${details}\n\n` +
-        `👉 *Reply to accept this job.*`;
+        `📋 *Details:* ${details}\n\n` +
+        `Customer will self-book. You'll be notified when confirmed! 🎯`;
 
     try {
         if (client && fromNumber) {
-            // Use Content Template with interactive buttons
-            // Variables: 1=ID, 2=Emoji, 3=ServiceName, 4=CustomerName, 5=Phone, 6=Estimate, 7=Details
             const message = await client.messages.create({
                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                 to: recipient,
@@ -117,10 +120,12 @@ export async function sendJobCard(ownerPhone: string, job: {
                     '4': job.customerName,
                     '5': job.customerPhone,
                     '6': `${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}`,
-                    '7': details
+                    '7': details,
+                    '8': customerPhoneClean, // For "Call Customer" button URL
+                    '9': job.businessId || '' // For "View Dashboard" button URL
                 })
             });
-            console.log(`✅ Job Card (with buttons) sent to ${recipient}: ${message.sid}`);
+            console.log(`✅ Job Card (template) sent to ${recipient}: ${message.sid}`);
             return true;
         } else {
             console.log('---------------------------------------------------');

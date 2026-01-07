@@ -92,6 +92,19 @@ export async function POST(request: NextRequest) {
             messageText.toLowerCase().includes('requested') ||
             messageText.toLowerCase().includes('estimated');
 
+        // Detect button quick-reply texts (these should be ignored, not treated as addresses)
+        const buttonTexts = ['accept job', 'decline', 'view details', 'call customer', 'view dashboard'];
+        const isButtonReply = buttonTexts.some(btn => messageText.toLowerCase() === btn);
+
+        if (isButtonReply) {
+            console.log(`🔘 Detected button reply: "${messageText}" - ignoring`);
+            // Return empty TwiML (acknowledge but don't process)
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // Check if this looks like an address (longer message, not a quote or slot)
         // Address messages are typically 10+ characters and don't match other patterns
         // OR it's a location pin share

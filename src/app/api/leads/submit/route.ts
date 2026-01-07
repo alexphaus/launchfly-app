@@ -95,7 +95,8 @@ export async function POST(req: Request) {
                     customerPhone: formData.phone,
                     estimate: estimateWithCurrency,
                     answers: formData.quoteDetails.answers,
-                    businessName: business.name
+                    businessName: business.name,
+                    businessId: business.id // For dashboard link
                 });
                 console.log(`📤 Job Card result: ${jobCardResult}`);
 

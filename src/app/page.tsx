@@ -164,20 +164,30 @@ export default function LaunchflyAgencyPage() {
                                     <p className="text-slate-600 pl-10 border-l-2 border-slate-100">The lead is sent directly to your WhatsApp. &quot;New Job: Cleaning, 2 Units, Makati.&quot;</p>
                                 </div>
 
-                                {/* Phone Mockup */}
-                                <div className="bg-slate-900 rounded-[2.5rem] p-4 shadow-2xl border-4 border-slate-800 transform group-hover:scale-[1.02] transition-transform duration-300">
-                                    <div className="bg-white rounded-[2rem] overflow-hidden h-[400px] w-full flex flex-col items-center justify-center bg-slate-50 border border-slate-200 relative">
-                                        {/* Simulated Screen Content */}
-                                        <Smartphone className="w-12 h-12 text-slate-300 mb-4" />
-                                        <p className="text-slate-400 font-bold mb-2">Interactive Demo</p>
-                                        <a
-                                            href="/q/demo"
-                                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm font-bold shadow-lg shadow-blue-200 transition-all"
-                                        >
-                                            Tap to Try
-                                        </a>
+                                {/* Phone Mockup with Live Demo */}
+                                <a
+                                    href="/q/525b6e62-efb4-4c85-aee0-da47eedbdcc4"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block bg-slate-900 rounded-[2.5rem] p-3 shadow-2xl border-4 border-slate-800 transform group-hover:scale-[1.02] transition-transform duration-300"
+                                >
+                                    <div className="bg-gradient-to-b from-blue-50 to-white rounded-[2rem] overflow-hidden h-[500px] w-full relative flex flex-col items-center justify-center p-6">
+                                        {/* Simulated Quote UI */}
+                                        <div className="w-full max-w-[200px] space-y-4 text-center">
+                                            <div className="bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-bold">
+                                                🔧 Aircon Cleaning
+                                            </div>
+                                            <div className="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-sm">
+                                                <p className="text-xs text-slate-500 mb-1">Estimated Price</p>
+                                                <p className="text-2xl font-black text-slate-900">₱1,200 - ₱1,500</p>
+                                            </div>
+                                            <div className="bg-green-500 text-white py-3 px-6 rounded-xl font-bold text-sm shadow-lg animate-pulse">
+                                                📱 Get Quote via WhatsApp
+                                            </div>
+                                        </div>
+                                        <p className="absolute bottom-4 text-xs text-slate-400 font-medium">Tap to try the live demo →</p>
                                     </div>
-                                </div>
+                                </a>
                             </div>
                         </div>
                     </div>

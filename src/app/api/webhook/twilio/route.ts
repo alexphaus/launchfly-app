@@ -4,12 +4,48 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendQuoteConfirmation, sendSlotSuggester } from '@/lib/whatsapp-push';
+import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard } from '@/lib/whatsapp-push';
+import twilio from 'twilio';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
 );
+
+// Twilio client for sending messages
+const twilioClient = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+);
+const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+
+// Generate slot labels based on current time (same logic as sendSlotSuggester)
+function getSlotLabel(slotNumber: number): string {
+    const now = new Date();
+    const hour = now.getHours();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(now);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+
+    const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    const slots: string[] = [];
+
+    // Today slots (if before 3pm)
+    if (hour < 15) {
+        slots.push(`Today ${hour < 12 ? '2pm - 4pm' : '4pm - 6pm'}`);
+    }
+    // Tomorrow slots
+    slots.push(`${formatDate(tomorrow)} 9am - 11am`);
+    slots.push(`${formatDate(tomorrow)} 2pm - 4pm`);
+    // Day after
+    if (slots.length < 3) {
+        slots.push(`${formatDate(dayAfter)} 9am - 11am`);
+    }
+
+    return slots[slotNumber - 1] || slots[0];
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -26,13 +62,224 @@ export async function POST(request: NextRequest) {
 
         // Extract phone number from WhatsApp format
         const customerPhone = from.replace('whatsapp:', '');
+        const messageText = body?.trim() || '';
+
+        // Check if this is a slot selection (1, 2, or 3)
+        const isSlotSelection = /^[123]$/.test(messageText);
 
         // Check if this looks like a quote request (matches our prefilled message pattern)
-        const isQuoteRequest = body?.toLowerCase().includes('quote') ||
-            body?.toLowerCase().includes('requested') ||
-            body?.toLowerCase().includes('estimated');
+        const isQuoteRequest = messageText.toLowerCase().includes('quote') ||
+            messageText.toLowerCase().includes('requested') ||
+            messageText.toLowerCase().includes('estimated');
 
-        if (isQuoteRequest) {
+        // Check if this looks like an address (longer message, not a quote or slot)
+        // Address messages are typically 10+ characters and don't match other patterns
+        const isAddressMessage = messageText.length >= 10 &&
+            !isSlotSelection &&
+            !isQuoteRequest &&
+            !messageText.toLowerCase().startsWith('hi') &&
+            !messageText.toLowerCase().startsWith('hello');
+
+        if (isSlotSelection) {
+            // ========== SLOT SELECTION HANDLER ==========
+            console.log(`🗓️ Detected slot selection: ${messageText}`);
+
+            const slotNumber = parseInt(messageText);
+
+            // Find the customer
+            const { data: customer, error } = await supabase
+                .from('customers')
+                .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
+                .eq('phone', customerPhone)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (customer && !error) {
+                const businessName = customer.businesses?.name || 'Local Service';
+                const customerName = customer.name || 'Customer';
+                const businessId = customer.business_id;
+
+                // Extract stored available slots from notes
+                const slotsMatch = customer.notes?.match(/AVAILABLE_SLOTS: (\[.*?\])/);
+                let availableSlots: { label: string; value: string }[] = [];
+                let selectedSlot = getSlotLabel(slotNumber); // Fallback
+                let selectedSlotValue = '';
+
+                if (slotsMatch) {
+                    try {
+                        availableSlots = JSON.parse(slotsMatch[1]);
+                        if (availableSlots[slotNumber - 1]) {
+                            selectedSlot = availableSlots[slotNumber - 1].label;
+                            selectedSlotValue = availableSlots[slotNumber - 1].value;
+                        }
+                    } catch (e) {
+                        console.log('⚠️ Could not parse stored slots');
+                    }
+                }
+
+                console.log(`✅ Found customer: ${customerName} for business: ${businessName}`);
+                console.log(`📅 Selected slot: ${selectedSlot} (${selectedSlotValue})`);
+
+                // Create a pending booking in the database to block this slot
+                if (selectedSlotValue) {
+                    const [slotDate, slotTime] = selectedSlotValue.split('_');
+                    const slotTimeId = selectedSlotValue.replace(`${slotDate}_`, '');
+
+                    await supabase
+                        .from('bookings')
+                        .insert({
+                            business_id: businessId,
+                            customer_id: customer.id,
+                            slot_date: slotDate,
+                            slot_time: slotTimeId,
+                            slot_label: selectedSlot,
+                            status: 'pending',
+                            booking_type: 'customer',
+                            customer_name: customerName,
+                            customer_phone: customerPhone,
+                            notes: 'Awaiting address confirmation'
+                        });
+                    console.log(`📅 Created pending booking for slot: ${selectedSlot}`);
+                }
+
+                // Ask for address (don't confirm yet)
+                const askAddressMessage = `Great choice! ✅\n\n` +
+                    `I've reserved the *${selectedSlot}* slot for you.\n\n` +
+                    `To finalize your booking, please reply with your *Complete Address*:\n` +
+                    `📍 Unit #, Building, Street, City\n\n` +
+                    `Or share your *Location Pin* below 👇`;
+
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: from,
+                        body: askAddressMessage
+                    });
+                    console.log('✅ Sent address request to customer');
+                }
+
+                // Update customer status to waiting_for_address and store selected slot
+                await supabase
+                    .from('customers')
+                    .update({
+                        status: 'waiting_for_address',
+                        notes: `${customer.notes || ''}\n\n📅 SELECTED SLOT: ${selectedSlot}\n📅 SLOT_VALUE: ${selectedSlotValue}`
+                    })
+                    .eq('id', customer.id);
+
+
+            } else {
+                console.log(`⚠️ No customer found for slot selection from: ${customerPhone}`);
+            }
+        } else if (isAddressMessage) {
+            // ========== ADDRESS RECEIVED HANDLER ==========
+            console.log(`📍 Detected address message: ${messageText}`);
+
+            // Find customer waiting for address
+            const { data: customer, error } = await supabase
+                .from('customers')
+                .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
+                .eq('phone', customerPhone)
+                .eq('status', 'waiting_for_address')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (customer && !error) {
+                const businessName = customer.businesses?.name || 'Local Service';
+                const customerName = customer.name || 'Customer';
+
+                // Extract selected slot from notes
+                const slotMatch = customer.notes?.match(/📅 SELECTED SLOT: ([^\n]+)/);
+                const selectedSlot = slotMatch ? slotMatch[1] : 'As scheduled';
+
+                // Extract estimate from notes  
+                const estimateMatch = customer.notes?.match(/Estimate: ([^\n]+)/);
+                const estimate = estimateMatch ? estimateMatch[1] : 'As quoted';
+
+                console.log(`✅ Found customer waiting for address: ${customerName}`);
+                console.log(`📍 Address: ${messageText}`);
+                console.log(`📅 Slot: ${selectedSlot}`);
+
+                // 1. Send final confirmation to customer
+                const finalConfirmation = `🎉 *Booking Confirmed!*\n\n` +
+                    `Hi ${customerName}! Your service with *${businessName}* is confirmed:\n\n` +
+                    `📅 *Time:* ${selectedSlot}\n` +
+                    `📍 *Address:* ${messageText}\n` +
+                    `💰 *Estimate:* ${estimate}\n\n` +
+                    `A technician will contact you before arriving.\n` +
+                    `Reply *HELP* if you need to reschedule.\n\n` +
+                    `Thank you for choosing us! 🙏`;
+
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: from,
+                        body: finalConfirmation
+                    });
+                    console.log('✅ Sent final confirmation to customer');
+                }
+
+                // 2. Update customer status to booked with address
+                await supabase
+                    .from('customers')
+                    .update({
+                        status: 'booked',
+                        notes: `${customer.notes || ''}\n\n📍 ADDRESS: ${messageText}\n✅ BOOKING CONFIRMED`
+                    })
+                    .eq('id', customer.id);
+
+                // Also update the booking record with address
+                const slotValueMatch = customer.notes?.match(/📅 SLOT_VALUE: ([^\n]+)/);
+                if (slotValueMatch) {
+                    const slotValue = slotValueMatch[1];
+                    const [slotDate, slotTimeId] = slotValue.split('_');
+
+                    await supabase
+                        .from('bookings')
+                        .update({
+                            status: 'confirmed',
+                            customer_address: messageText,
+                            notes: 'Booking confirmed by customer'
+                        })
+                        .eq('customer_id', customer.id)
+                        .eq('status', 'pending');
+
+                    console.log('✅ Updated booking record with address');
+                }
+
+                // 3. Notify the business owner with full details
+                const ownerPhone = customer.businesses?.whatsapp_number ||
+                    customer.businesses?.phone_number ||
+                    customer.businesses?.business_data?.phone;
+
+                if (ownerPhone) {
+                    const ownerNotification = `🚨 *NEW JOB CONFIRMED!*\n\n` +
+                        `👤 *Customer:* ${customerName}\n` +
+                        `📞 *Phone:* ${customerPhone}\n` +
+                        `📅 *Time:* ${selectedSlot}\n` +
+                        `📍 *Address:* ${messageText}\n` +
+                        `💰 *Estimate:* ${estimate}\n\n` +
+                        `Customer is waiting - contact them now! 💪`;
+
+                    const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                    await twilioClient.messages.create({
+                        from: fromNumber?.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${cleanOwnerPhone}`,
+                        body: ownerNotification
+                    });
+                    console.log(`✅ Sent job notification to owner: ${cleanOwnerPhone}`);
+                } else {
+                    console.log('⚠️ No owner phone found for job notification');
+                }
+
+            } else {
+                console.log(`⚠️ No customer waiting for address from: ${customerPhone}`);
+            }
+
+        } else if (isQuoteRequest) {
+            // ========== QUOTE REQUEST HANDLER ==========
             console.log('🎯 Detected quote request message');
 
             // Find the most recent pending customer with this phone
@@ -50,19 +297,6 @@ export async function POST(request: NextRequest) {
                 // Parse quote details from notes
                 const notes = customer.notes || '';
                 const estimateMatch = notes.match(/Estimate: ([^\n]+)/);
-                const estimate = estimateMatch ? estimateMatch[1] : 'Check with us';
-
-                // Extract service from notes
-                const serviceMatch = notes.match(/Details: (.+)/);
-                let serviceName = 'Service';
-                if (serviceMatch) {
-                    try {
-                        const details = JSON.parse(serviceMatch[1]);
-                        serviceName = details.type || details.service || 'Service';
-                    } catch {
-                        serviceName = 'Service';
-                    }
-                }
 
                 // Now we can send the confirmation - customer is in 24h window!
                 console.log('📤 Sending Quote Confirmation (customer now in 24h window)...');
@@ -88,29 +322,90 @@ export async function POST(request: NextRequest) {
 
                 console.log(`📤 Quote Confirmation result: ${confirmResult}`);
 
-                // Also send slot suggester
+                // Fetch real-time available slots from API
+                const businessId = customer.business_id;
+                let availableSlots: { label: string; value: string }[] = [];
+
+                try {
+                    const slotsUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '')}/api/slots/available?businessId=${businessId}`;
+                    // Use internal API call (same server)
+                    const { data: bookings } = await supabase
+                        .from('bookings')
+                        .select('slot_date, slot_time, status')
+                        .eq('business_id', businessId)
+                        .in('status', ['pending', 'confirmed', 'blocked']);
+
+                    // Generate slots and subtract booked ones
+                    const now = new Date();
+                    const hour = now.getHours();
+                    const formatDateLabel = (d: Date, isToday: boolean) =>
+                        isToday ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+
+                    const DEFAULT_SLOTS = [
+                        { id: 'morning', label: '9am - 11am', startHour: 9 },
+                        { id: 'early_afternoon', label: '1pm - 3pm', startHour: 13 },
+                        { id: 'late_afternoon', label: '3pm - 5pm', startHour: 15 },
+                    ];
+
+                    const bookedSlotIds = new Set((bookings || []).map(b => `${b.slot_date}_${b.slot_time}`));
+                    const blockedDates = new Set((bookings || []).filter(b => b.slot_time === 'all_day').map(b => b.slot_date));
+
+                    for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
+                        const date = new Date(now);
+                        date.setDate(date.getDate() + dayOffset);
+                        const dateStr = formatDate(date);
+                        const isToday = dayOffset === 0;
+
+                        if (blockedDates.has(dateStr)) continue;
+
+                        for (const slot of DEFAULT_SLOTS) {
+                            if (isToday && hour >= slot.startHour - 2) continue;
+                            const slotId = `${dateStr}_${slot.id}`;
+                            if (bookedSlotIds.has(slotId)) continue;
+
+                            availableSlots.push({
+                                label: `${formatDateLabel(date, isToday)} ${slot.label}`,
+                                value: slotId
+                            });
+                        }
+                    }
+                    availableSlots = availableSlots.slice(0, 3);
+                    console.log(`📅 Found ${availableSlots.length} available slots`);
+                } catch (e) {
+                    console.log('⚠️ Could not fetch dynamic slots, using defaults');
+                }
+
+                // Send slot suggester with dynamic slots
                 const slotResult = await sendSlotSuggester(customerPhone, {
                     businessName: customer.businesses?.name || 'Local Service',
                     customerName: customer.name || 'there',
                     currency,
                     estimateMin,
-                    estimateMax
+                    estimateMax,
+                    slots: availableSlots.length > 0 ? availableSlots : undefined
                 });
 
                 console.log(`📤 Slot Suggester result: ${JSON.stringify(slotResult)}`);
 
-                // Update customer status
+                // Store available slots in notes for slot selection handler
+                const slotsJson = JSON.stringify(availableSlots);
+
+                // Update customer status and store slots
                 await supabase
                     .from('customers')
-                    .update({ status: 'contacted' })
+                    .update({
+                        status: 'contacted',
+                        notes: `${customer.notes || ''}\n\nAVAILABLE_SLOTS: ${slotsJson}`
+                    })
                     .eq('id', customer.id);
 
             } else {
                 console.log(`⚠️ No matching customer found for phone: ${customerPhone}`);
             }
         } else {
-            // Generic message - could be a reply, follow-up question, etc.
-            console.log('💬 Generic message received (not a quote request)');
+            // ========== GENERIC MESSAGE HANDLER ==========
+            console.log('💬 Generic message received (not a quote or slot selection)');
             // TODO: Add AI response or forward to owner
         }
 
@@ -133,3 +428,4 @@ export async function POST(request: NextRequest) {
 export async function GET() {
     return NextResponse.json({ status: 'Twilio webhook active' });
 }
+

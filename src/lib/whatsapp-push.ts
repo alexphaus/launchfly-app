@@ -206,10 +206,9 @@ export async function sendQuoteConfirmation(customerPhone: string, options: {
     const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
     const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
 
-    const messageBody = `✅ *Quote Received!*\n\n` +
+    const messageBody = `✅ *Quote Ready: ${options.currency} ${options.estimateMin} - ${options.estimateMax}*\n\n` +
         `Hi! Thanks for requesting a quote from *${options.businessName}*.\n\n` +
-        `💰 *Your Estimate:* ${options.currency} ${options.estimateMin} - ${options.estimateMax}\n\n` +
-        `We'll get back to you shortly to confirm your booking! 📞`;
+        `We have openings this week! *Check available slots below* 👇`;
 
     try {
         if (client && fromNumber) {
@@ -268,6 +267,7 @@ function generateSlotOptions(): { label: string; value: string }[] {
 
 /**
  * Send slot suggestions to customer for one-tap booking
+ * Can accept pre-fetched slots from API or generate defaults
  */
 export async function sendSlotSuggester(customerPhone: string, options: {
     businessName: string;
@@ -275,6 +275,7 @@ export async function sendSlotSuggester(customerPhone: string, options: {
     currency: string;
     estimateMin: number;
     estimateMax: number;
+    slots?: { label: string; value: string }[]; // Optional: pre-fetched from /api/slots/available
 }) {
     if (!customerPhone) {
         console.warn('⚠️ No customer phone provided for slot suggester');
@@ -284,7 +285,27 @@ export async function sendSlotSuggester(customerPhone: string, options: {
     const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
     const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
 
-    const slots = generateSlotOptions();
+    // Use provided slots or generate defaults
+    const slots = options.slots || generateSlotOptions();
+
+    if (slots.length === 0) {
+        // No slots available - fully booked
+        const noSlotsMessage = `📅 *Booking Request*\n\n` +
+            `Hi ${options.customerName}! Thanks for your interest.\n\n` +
+            `We're currently fully booked for the next few days.\n` +
+            `We'll contact you as soon as a slot opens up! 📞\n\n` +
+            `💰 *Estimate:* ${options.currency} ${options.estimateMin} - ${options.estimateMax}`;
+
+        if (client && fromNumber) {
+            await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                body: noSlotsMessage
+            });
+        }
+        return { success: true, slots: [], fullyBooked: true };
+    }
+
     const slotList = slots.map((s, i) => `${['1️⃣', '2️⃣', '3️⃣'][i]} ${s.label}`).join('\n');
 
     const messageBody = `📅 *Book Your Service*\n\n` +

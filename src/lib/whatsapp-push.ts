@@ -81,10 +81,13 @@ export async function sendJobCard(ownerPhone: string, job: {
     const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
     const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
 
-    // Format Q&A pairs for template variable
-    const details = Object.entries(job.answers)
-        .map(([q, a]) => `• ${q}: ${a}`)
-        .join('\n');
+    // Format Q&A pairs    // Prepare details string (truncate to avoid template limits)
+    const details = job.answers
+        ? Object.entries(job.answers)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ')
+            .substring(0, 50) // Truncate to 50 chars for safety
+        : 'No additional details';
 
     // Content Template SID for Job Card with interactive buttons
     // Template: 🆕 *JOB Request #{{1}}* {{2}} *{{3}}* 👤 {{4}} 📞 {{5}} 💰 *Est:* {{6}} 📋 *Details:* {{7}}

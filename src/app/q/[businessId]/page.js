@@ -166,8 +166,8 @@ export default async function QuoteFunnelPage({ params }) {
         <QuoteFunnel
             businessName={businessData.businessName || business?.name || 'Local Service'}
             logoUrl={logoUrl}
-            phoneNumber={businessData.phone || business?.phone_number}
-            whatsappNumber={businessData.phone || business?.phone_number}
+            phoneNumber={business?.whatsapp_number || business?.phone_number || businessData.phone}
+            whatsappNumber="+13203627874"
             headline={headline}
             subheadline="No hidden fees. 100% Free Estimate."
             urgencyText="⚡ Response in 2 mins"

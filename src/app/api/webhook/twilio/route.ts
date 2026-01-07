@@ -181,6 +181,7 @@ export async function POST(request: NextRequest) {
                     `📍 Unit #, Building, Street, City\n\n` +
                     `Or share your *Location Pin* below 👇`;
 
+                console.log(`📤 Preparing to send address request to ${from} via ${fromNumber}`);
                 if (twilioClient && fromNumber) {
                     await twilioClient.messages.create({
                         from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -389,11 +390,16 @@ export async function POST(request: NextRequest) {
                 let currency = 'RM';
                 if (estimateMatch) {
                     const parts = estimateMatch[1].split(' ');
-                    currency = parts[0] || 'RM';
+                    // currency is usually the first part, strip numbers
+                    const rawCurrency = parts[0] || 'RM';
+                    currency = rawCurrency.replace(/[0-9]/g, '') || 'RM';
+
                     const range = parts.slice(1).join(' ').split('-').map((s: string) => parseInt(s.replace(/\D/g, '')));
                     estimateMin = range[0] || 0;
                     estimateMax = range[1] || estimateMin;
                 }
+
+                console.log(`💱 Parsed Estimate: ${currency} ${estimateMin}-${estimateMax}`);
 
                 const confirmResult = await sendQuoteConfirmation(customerPhone, {
                     businessName: customer.businesses?.name || 'Local Service',

@@ -56,13 +56,29 @@ export async function POST(request: NextRequest) {
         const body = formData.get('Body') as string;
         const to = formData.get('To') as string;
 
+        // Location pin data from Twilio
+        const latitude = formData.get('Latitude') as string | null;
+        const longitude = formData.get('Longitude') as string | null;
+        const locationAddress = formData.get('Address') as string | null; // Address label if provided
+        const locationLabel = formData.get('Label') as string | null; // Location name/label
+
         console.log('📨 Incoming WhatsApp message:');
         console.log(`   From: ${from}`);
         console.log(`   Body: ${body?.substring(0, 100)}...`);
+        if (latitude && longitude) {
+            console.log(`   📍 Location: ${latitude}, ${longitude}`);
+            if (locationAddress) console.log(`   📍 Address: ${locationAddress}`);
+        }
 
         // Extract phone number from WhatsApp format
         const customerPhone = from.replace('whatsapp:', '');
         const messageText = body?.trim() || '';
+
+        // Check if this is a location pin share
+        const isLocationPin = !!(latitude && longitude);
+        // Construct address from location data (prefer Address > Label > coordinates)
+        const locationDerivedAddress = locationAddress || locationLabel ||
+            (isLocationPin ? `📍 Location: ${latitude}, ${longitude}` : null);
 
         // Check if this is a slot selection (1, 2, or 3)
         const isSlotSelection = /^[123]$/.test(messageText);
@@ -74,11 +90,12 @@ export async function POST(request: NextRequest) {
 
         // Check if this looks like an address (longer message, not a quote or slot)
         // Address messages are typically 10+ characters and don't match other patterns
-        const isAddressMessage = messageText.length >= 10 &&
+        // OR it's a location pin share
+        const isAddressMessage = isLocationPin || (messageText.length >= 10 &&
             !isSlotSelection &&
             !isQuoteRequest &&
             !messageText.toLowerCase().startsWith('hi') &&
-            !messageText.toLowerCase().startsWith('hello');
+            !messageText.toLowerCase().startsWith('hello'));
 
         if (isSlotSelection) {
             // ========== SLOT SELECTION HANDLER ==========
@@ -255,15 +272,18 @@ export async function POST(request: NextRequest) {
                 const estimateMatch = customer.notes?.match(/Estimate: ([^\n]+)/);
                 const estimate = estimateMatch ? estimateMatch[1] : 'As quoted';
 
+                // Use location-derived address if it's a location pin, otherwise use message text
+                const customerAddress = locationDerivedAddress || messageText;
+
                 console.log(`✅ Found customer waiting for address: ${customerName}`);
-                console.log(`📍 Address: ${messageText}`);
+                console.log(`📍 Address: ${customerAddress}${isLocationPin ? ' (from location pin)' : ''}`);
                 console.log(`📅 Slot: ${selectedSlot}`);
 
                 // 1. Send final confirmation to customer
                 const finalConfirmation = `🎉 *Booking Confirmed!*\n\n` +
                     `Hi ${customerName}! Your service with *${businessName}* is confirmed:\n\n` +
                     `📅 *Time:* ${selectedSlot}\n` +
-                    `📍 *Address:* ${messageText}\n` +
+                    `📍 *Address:* ${customerAddress}\n` +
                     `💰 *Estimate:* ${estimate}\n\n` +
                     `A technician will contact you before arriving.\n` +
                     `Reply *HELP* if you need to reschedule.\n\n` +
@@ -283,7 +303,7 @@ export async function POST(request: NextRequest) {
                     .from('customers')
                     .update({
                         status: 'booked',
-                        notes: `${customer.notes || ''}\n\n📍 ADDRESS: ${messageText}\n✅ BOOKING CONFIRMED`
+                        notes: `${customer.notes || ''}\n\n📍 ADDRESS: ${customerAddress}\n✅ BOOKING CONFIRMED`
                     })
                     .eq('id', customer.id);
 
@@ -297,7 +317,7 @@ export async function POST(request: NextRequest) {
                         .from('bookings')
                         .update({
                             status: 'confirmed',
-                            customer_address: messageText,
+                            customer_address: customerAddress,
                             notes: 'Booking confirmed by customer'
                         })
                         .eq('customer_id', customer.id)
@@ -316,7 +336,7 @@ export async function POST(request: NextRequest) {
                         `👤 *Customer:* ${customerName}\n` +
                         `📞 *Phone:* ${customerPhone}\n` +
                         `📅 *Time:* ${selectedSlot}\n` +
-                        `📍 *Address:* ${messageText}\n` +
+                        `📍 *Address:* ${customerAddress}\n` +
                         `💰 *Estimate:* ${estimate}\n\n` +
                         `Customer is waiting - contact them now! 💪`;
 

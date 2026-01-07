@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard } from '@/lib/whatsapp-push';
+import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard, sendJobConfirmed } from '@/lib/whatsapp-push';
 import twilio from 'twilio';
 
 const supabase = createClient(
@@ -343,27 +343,23 @@ export async function POST(request: NextRequest) {
                     console.log('✅ Updated booking record with address');
                 }
 
-                // 3. Notify the business owner with full details
+                // 3. Notify the business owner with full details using template with Navigate button
                 const ownerPhone = customer.businesses?.whatsapp_number ||
                     customer.businesses?.phone_number ||
                     customer.businesses?.business_data?.phone;
 
                 if (ownerPhone) {
-                    const ownerNotification = `🚨 *NEW JOB CONFIRMED!*\n\n` +
-                        `👤 *Customer:* ${customerName}\n` +
-                        `📞 *Phone:* ${customerPhone}\n` +
-                        `📅 *Time:* ${selectedSlot}\n` +
-                        `📍 *Address:* ${customerAddress}\n` +
-                        `💰 *Estimate:* ${estimate}\n\n` +
-                        `Customer is waiting - contact them now! 💪`;
-
-                    const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
-                    await twilioClient.messages.create({
-                        from: fromNumber?.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                        to: `whatsapp:${cleanOwnerPhone}`,
-                        body: ownerNotification
+                    await sendJobConfirmed(ownerPhone, {
+                        id: customer.id.substring(0, 8).toUpperCase(),
+                        serviceName: customer.businesses?.business_data?.niche || 'Service',
+                        serviceEmoji: customer.businesses?.business_data?.emoji,
+                        timeSlot: selectedSlot,
+                        address: customerAddress,
+                        customerName: customerName,
+                        customerPhone: customerPhone,
+                        estimate: estimate
                     });
-                    console.log(`✅ Sent job notification to owner: ${cleanOwnerPhone}`);
+                    console.log(`✅ Sent job confirmed notification to owner via sendJobConfirmed`);
                 } else {
                     console.log('⚠️ No owner phone found for job notification');
                 }

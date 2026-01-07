@@ -113,16 +113,15 @@ export async function sendJobCard(ownerPhone: string, job: {
                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                 to: recipient,
                 contentSid: JOB_CARD_TEMPLATE_SID,
+                // NEW LEAD ALERT template: {{1}}=ID, {{2}}=Emoji, {{3}}=Service, {{4}}=Price, {{5}}=CustomerName, {{6}}=Phone, {{7}}=BusinessId
                 contentVariables: JSON.stringify({
                     '1': job.id,
                     '2': job.serviceEmoji || '🔧',
                     '3': job.serviceName,
-                    '4': job.customerName,
-                    '5': job.customerPhone,
-                    '6': `${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}`,
-                    '7': details,
-                    '8': customerPhoneClean, // For "Call Customer" button URL
-                    '9': job.businessId || '' // For "View Dashboard" button URL
+                    '4': `${job.estimate.currency} ${job.estimate.min} - ${job.estimate.max}`,
+                    '5': job.customerName,
+                    '6': job.customerPhone,
+                    '7': job.businessId || ''
                 })
             });
             console.log(`✅ Job Card (template) sent to ${recipient}: ${message.sid}`);
@@ -137,6 +136,84 @@ export async function sendJobCard(ownerPhone: string, job: {
         }
     } catch (error) {
         console.error('❌ Error sending WhatsApp Job Card:', error);
+        return false;
+    }
+}
+
+// Send Job Confirmed notification to owner (after customer confirms booking with address)
+// This uses a template with Navigate (Waze) and Call Customer buttons
+export async function sendJobConfirmed(ownerPhone: string, job: {
+    id: string;
+    serviceName: string;
+    serviceEmoji?: string;
+    timeSlot: string;
+    address: string;
+    customerName: string;
+    customerPhone: string;
+    estimate?: string;
+}) {
+    if (!ownerPhone) {
+        console.warn('⚠️ No owner phone provided for job confirmed');
+        return false;
+    }
+
+    const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
+    const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+
+    // Clean customer phone for wa.me link
+    const customerPhoneClean = job.customerPhone.replace(/[^\d]/g, '');
+
+    // URL-encode the address for Waze
+    const wazeAddress = encodeURIComponent(job.address);
+
+    // Content Template SID for Job Confirmed with URL buttons
+    // Template: 🟢 JOB CONFIRMED #{{1}} | {{2}} {{3}} | 🗓️ {{4}} | 📍 {{5}} | 👤 {{6}}
+    // Buttons: Navigate (waze.com/ul?q={{7}}) | Call Customer (wa.me/{{8}})
+    const JOB_CONFIRMED_TEMPLATE_SID = process.env.TWILIO_JOB_CONFIRMED_TEMPLATE_SID;
+
+    // Fallback plain text body
+    const messageBody = `🟢 *JOB CONFIRMED #${job.id}*\n\n` +
+        `${job.serviceEmoji || '🔧'} *${job.serviceName}*\n` +
+        `🗓️ *Time:* ${job.timeSlot}\n` +
+        `📍 *Address:* ${job.address}\n` +
+        `👤 *Customer:* ${job.customerName}\n` +
+        `📞 *Phone:* ${job.customerPhone}\n` +
+        (job.estimate ? `💰 *Estimate:* ${job.estimate}\n\n` : '\n') +
+        `Drive safe! 🚚\n\n` +
+        `🗺️ Navigate: https://www.google.com/maps/search/${wazeAddress}\n` +
+        `📞 Call: https://wa.me/${customerPhoneClean}`;
+
+    try {
+        if (client && fromNumber) {
+            // Use Twilio Content Template
+            // JOB CONFIRMED: {{1}}=ID, {{2}}=Emoji, {{3}}=Service, {{4}}=Time, {{5}}=Location, {{6}}=CustomerName, {{7}}=MapAddress, {{8}}=Phone
+            const message = await client.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: recipient,
+                contentSid: JOB_CONFIRMED_TEMPLATE_SID,
+                contentVariables: JSON.stringify({
+                    '1': job.id,
+                    '2': job.serviceEmoji || '🔧',
+                    '3': job.serviceName,
+                    '4': job.timeSlot,
+                    '5': job.address,
+                    '6': job.customerName,
+                    '7': wazeAddress, // URL-encoded address for Google Maps
+                    '8': job.customerPhone
+                })
+            });
+            console.log(`✅ Job Confirmed (template) sent to ${recipient}: ${message.sid}`);
+            return true;
+        } else {
+            console.log('---------------------------------------------------');
+            console.log('⚠️ Twilio credentials missing. MOCKING JOB CONFIRMED:');
+            console.log(`To: ${recipient}`);
+            console.log(`Body:\n${messageBody}`);
+            console.log('---------------------------------------------------');
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ Error sending Job Confirmed notification:', error);
         return false;
     }
 }

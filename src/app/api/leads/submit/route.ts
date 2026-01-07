@@ -99,26 +99,10 @@ export async function POST(req: Request) {
                 });
                 console.log(`📤 Job Card result: ${jobCardResult}`);
 
-                console.log('📤 Sending Quote Confirmation to customer...');
-                // Send confirmation to customer (the lead)
-                const quoteResult = await sendQuoteConfirmation(formData.phone, {
-                    businessName: business.name,
-                    estimateMin: estimateWithCurrency.min,
-                    estimateMax: estimateWithCurrency.max,
-                    currency: currency
-                });
-                console.log(`📤 Quote Confirmation result: ${quoteResult}`);
-
-                console.log('📤 Sending Slot Suggester to customer...');
-                // Send slot suggestions for one-tap booking (Innovation 1: Slot Suggester)
-                const slotResult = await sendSlotSuggester(formData.phone, {
-                    businessName: business.name,
-                    customerName: formData.name || 'there',
-                    currency: currency,
-                    estimateMin: estimateWithCurrency.min,
-                    estimateMax: estimateWithCurrency.max
-                });
-                console.log(`📤 Slot Suggester result: ${slotResult}`);
+                // NOTE: Quote Confirmation and Slot Suggester are now sent via webhook
+                // /api/webhook/twilio - triggered AFTER customer sends their WhatsApp message
+                // This respects the WhatsApp 24-hour window rule
+                console.log('⏳ Customer confirmation will be sent when they message the bot');
 
                 // 4. Schedule Follow-up Messages via Inngest
                 // +2h: "Ready to book a slot?"

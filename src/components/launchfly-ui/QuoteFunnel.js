@@ -109,10 +109,12 @@ export default function QuoteFunnel({
                 setSubmitted(true);
                 // Redirect to WhatsApp if number available
                 if (whatsappNumber) {
+                    const cleanPhone = whatsappNumber.replace(/\D/g, '');
                     const message = encodeURIComponent(
                         `Hi! I just requested a quote for ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}`
                     );
-                    window.open(`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${message}`, '_blank');
+                    // Use native WhatsApp scheme to bypass ISP blocks on wa.me
+                    window.location.href = `whatsapp://send?phone=${cleanPhone}&text=${message}`;
                 }
             }
         } catch (err) {

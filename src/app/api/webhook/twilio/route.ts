@@ -86,14 +86,45 @@ export async function POST(request: NextRequest) {
 
             const slotNumber = parseInt(messageText);
 
-            // Find the customer
-            const { data: customer, error } = await supabase
+            // Normalize phone for lookup (try multiple formats)
+            const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+            const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+            console.log(`📱 Looking up customer with phone: ${phoneWithPlus} or ${phoneWithoutPlus}`);
+
+            // Find the customer - try both phone formats
+            let customer = null;
+            let error = null;
+
+            // Try with plus first
+            const result1 = await supabase
                 .from('customers')
                 .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
-                .eq('phone', customerPhone)
+                .eq('phone', phoneWithPlus)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
+
+            if (result1.data) {
+                customer = result1.data;
+                console.log(`✅ Found customer with +: ${customer.name}`);
+            } else {
+                // Try without plus
+                const result2 = await supabase
+                    .from('customers')
+                    .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
+                    .eq('phone', phoneWithoutPlus)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (result2.data) {
+                    customer = result2.data;
+                    console.log(`✅ Found customer without +: ${customer.name}`);
+                } else {
+                    error = result2.error;
+                    console.log(`❌ No customer found for either format`);
+                }
+            }
 
             if (customer && !error) {
                 const businessName = customer.businesses?.name || 'Local Service';
@@ -175,16 +206,41 @@ export async function POST(request: NextRequest) {
         } else if (isAddressMessage) {
             // ========== ADDRESS RECEIVED HANDLER ==========
             console.log(`📍 Detected address message: ${messageText}`);
+            // Normalize phone for lookup
+            const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+            const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
 
-            // Find customer waiting for address
-            const { data: customer, error } = await supabase
+            // Find customer waiting for address - try both phone formats
+            let customer = null;
+            let error = null;
+
+            const result1 = await supabase
                 .from('customers')
                 .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
-                .eq('phone', customerPhone)
+                .eq('phone', phoneWithPlus)
                 .eq('status', 'waiting_for_address')
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
+
+            if (result1.data) {
+                customer = result1.data;
+            } else {
+                const result2 = await supabase
+                    .from('customers')
+                    .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
+                    .eq('phone', phoneWithoutPlus)
+                    .eq('status', 'waiting_for_address')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (result2.data) {
+                    customer = result2.data;
+                } else {
+                    error = result2.error;
+                }
+            }
 
             if (customer && !error) {
                 const businessName = customer.businesses?.name || 'Local Service';
@@ -282,14 +338,40 @@ export async function POST(request: NextRequest) {
             // ========== QUOTE REQUEST HANDLER ==========
             console.log('🎯 Detected quote request message');
 
-            // Find the most recent pending customer with this phone
-            const { data: customer, error } = await supabase
+            // Normalize phone for lookup
+            const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+            const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+            console.log(`📱 Looking up customer for quote: ${phoneWithPlus} or ${phoneWithoutPlus}`);
+
+            // Find the most recent pending customer with this phone - try both formats
+            let customer = null;
+            let error = null;
+
+            const result1 = await supabase
                 .from('customers')
                 .select('*, businesses(name, business_data)')
-                .eq('phone', customerPhone)
+                .eq('phone', phoneWithPlus)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
+
+            if (result1.data) {
+                customer = result1.data;
+            } else {
+                const result2 = await supabase
+                    .from('customers')
+                    .select('*, businesses(name, business_data)')
+                    .eq('phone', phoneWithoutPlus)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (result2.data) {
+                    customer = result2.data;
+                } else {
+                    error = result2.error;
+                }
+            }
 
             if (customer && !error) {
                 console.log(`✅ Found customer: ${customer.name} for business: ${customer.businesses?.name}`);

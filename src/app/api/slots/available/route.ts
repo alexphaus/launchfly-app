@@ -53,10 +53,15 @@ export async function GET(request: NextRequest) {
         const slotConfig = business?.slot_settings?.slots || DEFAULT_SLOTS;
         const daysAhead = business?.slot_settings?.days_ahead || 3;
         const bufferHours = business?.slot_settings?.buffer_hours || 2;
+        // Timezone offset in hours (default to UTC+8 for SEA businesses)
+        const timezoneOffset = business?.slot_settings?.timezone_offset ?? 8;
 
         // 2. Generate all potential slots for the next N days
         const now = new Date();
-        const currentHour = now.getHours();
+        // Convert UTC hour to local hour using timezone offset
+        const utcHour = now.getUTCHours();
+        const currentHour = (utcHour + timezoneOffset + 24) % 24; // Handle wraparound
+        console.log(`🕐 UTC hour: ${utcHour}, Local hour (UTC+${timezoneOffset}): ${currentHour}`);
         const potentialSlots: SlotOption[] = [];
 
         for (let dayOffset = 0; dayOffset < daysAhead; dayOffset++) {

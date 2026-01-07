@@ -20,9 +20,13 @@ const twilioClient = twilio(
 const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
 // Generate slot labels based on current time (same logic as sendSlotSuggester)
+// Uses UTC+8 timezone offset for SEA businesses
 function getSlotLabel(slotNumber: number): string {
     const now = new Date();
-    const hour = now.getHours();
+    // Convert UTC to UTC+8 (SEA timezone)
+    const utcHour = now.getUTCHours();
+    const hour = (utcHour + 8 + 24) % 24;
+
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const dayAfter = new Date(now);
@@ -32,7 +36,7 @@ function getSlotLabel(slotNumber: number): string {
 
     const slots: string[] = [];
 
-    // Today slots (if before 3pm)
+    // Today slots (if before 3pm local time)
     if (hour < 15) {
         slots.push(`Today ${hour < 12 ? '2pm - 4pm' : '4pm - 6pm'}`);
     }
@@ -445,18 +449,25 @@ export async function POST(request: NextRequest) {
 
                     // Generate slots and subtract booked ones
                     const now = new Date();
-                    const hour = now.getHours();
-                    const formatDateLabel = (d: Date, isToday: boolean) =>
-                        isToday ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-                    const formatDate = (d: Date) => d.toISOString().split('T')[0];
 
-                    // Fetch business slot settings (or use defaults)
+                    // Fetch business slot settings first (needed for timezone)
                     const { data: businessData } = await supabase
                         .from('businesses')
                         .select('slot_settings')
                         .eq('id', businessId)
                         .single();
 
+                    // Use UTC+8 timezone offset for SEA businesses (or from business settings)
+                    const timezoneOffset = businessData?.slot_settings?.timezone_offset ?? 8;
+                    const utcHour = now.getUTCHours();
+                    const hour = (utcHour + timezoneOffset + 24) % 24;
+                    console.log(`🕐 Slot generation - UTC hour: ${utcHour}, Local hour (UTC+${timezoneOffset}): ${hour}`);
+
+                    const formatDateLabel = (d: Date, isToday: boolean) =>
+                        isToday ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+
+                    // Slot defaults
                     const DEFAULT_SLOTS = [
                         { id: 'morning', label: '9am - 11am', start: '09:00', startHour: 9, enabled: true },
                         { id: 'early_afternoon', label: '1pm - 3pm', start: '13:00', startHour: 13, enabled: true },

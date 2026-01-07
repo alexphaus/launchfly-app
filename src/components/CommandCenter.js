@@ -658,13 +658,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                             </button>
                         </div>
                         <div className="space-y-4">
-                            <a
-                                href={`/dashboard`}
-                                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100"
-                            >
-                                <span className="font-medium">Full Dashboard</span>
-                                <ChevronRight className="w-5 h-5 text-slate-400" />
-                            </a>
+
                             <a
                                 href={`/preview/${business.id}`}
                                 target="_blank"
@@ -722,8 +716,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                                 setSlotSettings(newSlots);
                                             }}
                                             className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${slot.enabled !== false
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-slate-200 text-slate-500'
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-slate-200 text-slate-500'
                                                 }`}
                                         >
                                             {slot.enabled !== false ? '✓ Active' : 'Off'}

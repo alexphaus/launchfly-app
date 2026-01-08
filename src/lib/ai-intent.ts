@@ -108,8 +108,9 @@ function quickPatternMatch(
 ): IntentClassification | null {
     const text = message.toLowerCase().trim();
 
-    // Slot selection - only if awaiting slot
-    if (context.customerStatus === 'awaiting_slot' || context.hasQuote) {
+    // Slot selection - only if awaiting slot or quote sent
+    // quote_sent is critical because that's the status after sending options
+    if (context.customerStatus === 'awaiting_slot' || context.customerStatus === 'quote_sent' || context.hasQuote) {
         if (/^[123]$/.test(text)) {
             return {
                 intent: 'SLOT_SELECTION',

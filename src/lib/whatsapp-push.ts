@@ -14,6 +14,34 @@ if (accountSid && authToken) {
     }
 }
 
+/**
+ * Send typing indicator to show "Typing..." status on user's WhatsApp
+ * This masks AI/DB processing delay and makes the bot feel responsive
+ * Typing status auto-expires after 25s or when a message is sent
+ */
+export async function sendTypingIndicator(incomingMessageSid: string): Promise<boolean> {
+    if (!client || !incomingMessageSid) {
+        return false;
+    }
+
+    try {
+        await client.request({
+            method: 'POST',
+            uri: 'https://messaging.twilio.com/v2/Indicators/Typing.json',
+            form: {
+                Channel: 'whatsapp',
+                MessageId: incomingMessageSid
+            }
+        });
+        console.log('💬 Typing indicator sent');
+        return true;
+    } catch (error) {
+        // Non-critical - don't break flow if this fails
+        console.warn('⚠️ Could not send typing indicator:', error);
+        return false;
+    }
+}
+
 interface LeadData {
     name?: string;
     email?: string;

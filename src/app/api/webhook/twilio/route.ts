@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard, sendJobConfirmed } from '@/lib/whatsapp-push';
+import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard, sendJobConfirmed, sendTypingIndicator } from '@/lib/whatsapp-push';
 import { classifyIntent, shouldEscalate, isPriceObjection, type ConversationContext } from '@/lib/ai-intent';
 import { handleFAQ, generateEscalationMessage, type BusinessContext } from '@/lib/faq-handler';
 import twilio from 'twilio';
@@ -77,12 +77,18 @@ export async function POST(request: NextRequest) {
         const from = formData.get('From') as string; // e.g., whatsapp:+34683233450
         const body = formData.get('Body') as string;
         const to = formData.get('To') as string;
+        const messageSid = formData.get('MessageSid') as string; // For typing indicator
 
         // Location pin data from Twilio
         const latitude = formData.get('Latitude') as string | null;
         const longitude = formData.get('Longitude') as string | null;
         const locationAddress = formData.get('Address') as string | null; // Address label if provided
         const locationLabel = formData.get('Label') as string | null; // Location name/label
+
+        // 🔥 IMMEDIATELY show "Typing..." to mask AI processing delay
+        if (messageSid) {
+            sendTypingIndicator(messageSid).catch(() => { }); // Fire and forget, don't block
+        }
 
         console.log('📨 Incoming WhatsApp message:');
         console.log(`   From: ${from}`);

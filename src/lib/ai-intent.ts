@@ -108,16 +108,14 @@ function quickPatternMatch(
 ): IntentClassification | null {
     const text = message.toLowerCase().trim();
 
-    // Slot selection - only if awaiting slot or quote sent
-    // quote_sent is critical because that's the status after sending options
-    if (context.customerStatus === 'awaiting_slot' || context.customerStatus === 'quote_sent' || context.hasQuote) {
-        if (/^[123]$/.test(text)) {
-            return {
-                intent: 'SLOT_SELECTION',
-                confidence: 1.0,
-                entities: { slot_number: parseInt(text) }
-            };
-        }
+    // Slot selection - aggressively match 1, 2, 3
+    // We let the webhook handler decide if it's valid based on customer state
+    if (/^[123]$/.test(text)) {
+        return {
+            intent: 'SLOT_SELECTION',
+            confidence: 1.0,
+            entities: { slot_number: parseInt(text) }
+        };
     }
 
     // Button text - ignore these

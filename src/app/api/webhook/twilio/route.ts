@@ -504,26 +504,12 @@ export async function POST(request: NextRequest) {
                 console.log(`📅 Selected slot: ${selectedSlot} (${selectedSlotValue})`);
 
                 // Create a pending booking in the database to block this slot
+                // DEPRECATED: We now create the booking only after address is received to prevent spam
+                /* 
                 if (selectedSlotValue) {
-                    const [slotDate, slotTime] = selectedSlotValue.split('_');
-                    const slotTimeId = selectedSlotValue.replace(`${slotDate}_`, '');
-
-                    await supabase
-                        .from('bookings')
-                        .insert({
-                            business_id: businessId,
-                            customer_id: customer.id,
-                            slot_date: slotDate,
-                            slot_time: slotTimeId,
-                            slot_label: selectedSlot,
-                            status: 'pending',
-                            booking_type: 'customer',
-                            customer_name: customerName,
-                            customer_phone: customerPhone,
-                            notes: 'Awaiting address confirmation'
-                        });
-                    console.log(`📅 Created pending booking for slot: ${selectedSlot}`);
+                     ... removed to prevent multiple pending bookings ...
                 }
+                */
 
                 // Ask for address (don't confirm yet)
                 const askAddressMessage = `Great choice! ✅\n\n` +
@@ -598,9 +584,10 @@ export async function POST(request: NextRequest) {
                 const businessName = customer.businesses?.name || 'Local Service';
                 const customerName = customer.name || 'Customer';
 
-                // Extract selected slot from notes
-                const slotMatch = customer.notes?.match(/📅 SELECTED SLOT: ([^\n]+)/);
-                const selectedSlot = slotMatch ? slotMatch[1] : 'As scheduled';
+                // Extract selected slot from notes (Get the LAST one if multiple)
+                // Use split/pop to find the latest valid selection
+                const slotParts = customer.notes?.split('📅 SELECTED SLOT: ');
+                const selectedSlot = (slotParts && slotParts.length > 1) ? slotParts.pop()?.split('\n')[0] : 'As scheduled';
 
                 // Extract estimate from notes  
                 const estimateMatch = customer.notes?.match(/Estimate: ([^\n]+)/);
@@ -641,23 +628,30 @@ export async function POST(request: NextRequest) {
                     })
                     .eq('id', customer.id);
 
-                // Also update the booking record with address
-                const slotValueMatch = customer.notes?.match(/📅 SLOT_VALUE: ([^\n]+)/);
-                if (slotValueMatch) {
-                    const slotValue = slotValueMatch[1];
+                // Create the final booking record
+                const slotValueParts = customer.notes?.split('📅 SLOT_VALUE: ');
+                const slotValue = (slotValueParts && slotValueParts.length > 1) ? slotValueParts.pop()?.split('\n')[0] : null;
+
+                if (slotValue) {
                     const [slotDate, slotTimeId] = slotValue.split('_');
 
                     await supabase
                         .from('bookings')
-                        .update({
+                        .insert({
+                            business_id: customer.business_id,
+                            customer_id: customer.id,
+                            slot_date: slotDate,
+                            slot_time: slotTimeId,
+                            slot_label: selectedSlot,
                             status: 'confirmed',
+                            booking_type: 'customer',
+                            customer_name: customerName,
                             customer_address: customerAddress,
-                            notes: 'Booking confirmed by customer'
-                        })
-                        .eq('customer_id', customer.id)
-                        .eq('status', 'pending');
+                            customer_phone: customerPhone,
+                            notes: 'Booking confirmed by customer via WhatsApp'
+                        });
 
-                    console.log('✅ Updated booking record with address');
+                    console.log('✅ Created confirmed booking record');
                 }
 
                 // 3. Notify the business owner with full details using template with Navigate button

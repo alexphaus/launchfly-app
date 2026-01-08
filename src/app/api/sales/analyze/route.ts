@@ -516,6 +516,8 @@ export async function POST(request: Request) {
         // Store the full PDF content for immediate PDF generation
         lead_magnet_title: result.lead_magnet.title,
         lead_magnet_pdf: result.pdf_content || {},
+        // ⭐ Store raw context for AI FAQ handler (services, reviews, etc from FB)
+        notes: context || '',
         // Inject quoteCalculator from SERVICE_TEMPLATES for Quote Wizard
         // BUT override the template currency with detected currency
         quoteCalculator: matchedTemplate?.quoteCalculator

@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
                 warranty: customerLookup?.businesses?.business_data?.warranty,
                 services: customerLookup?.businesses?.business_data?.services,
                 ownerName: customerLookup?.businesses?.business_data?.owner_name,
+                notes: customerLookup?.businesses?.business_data?.notes,  // Rich FB context
             };
 
             const faqResponse = await handleFAQ(messageText, businessCtx);

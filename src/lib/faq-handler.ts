@@ -31,6 +31,7 @@ export interface BusinessContext {
     services?: string[];              // e.g., ['Cleaning', 'Repair', 'Installation']
     ownerName?: string;
     phone?: string;
+    notes?: string;                   // Rich context from FB extraction (services, reviews, etc)
 }
 
 // FAQ response result
@@ -220,13 +221,20 @@ function getKnownAnswer(question: string, business: BusinessContext): FAQRespons
 function buildFAQSystemPrompt(business: BusinessContext): string {
     const areas = business.serviceAreas?.join(', ') || 'various areas';
     const hours = business.operatingHours || 'regular business hours';
+    const services = business.services?.join(', ') || 'various services';
+
+    // Rich context from FB extraction (most valuable for answering questions)
+    const notesContext = business.notes
+        ? `\n\nADDITIONAL BUSINESS DETAILS (from their page):\n${business.notes}`
+        : '';
 
     return `You are a helpful assistant for ${business.name}, a ${business.niche} business.
 
 BUSINESS INFO:
 - Service areas: ${areas}
-- Operating hours: ${hours}
-- Services: ${business.services?.join(', ') || 'various services'}
+- Operating hours: ${hours}  
+- Services: ${services}
+${notesContext}
 
 RULES:
 1. Be friendly and helpful
@@ -237,6 +245,7 @@ RULES:
 6. Use emojis sparingly (1-2 max)
 7. Match the user's language (English, Taglish, or Filipino)
 8. Use local honorifics like 'Boss', 'Sir', 'Maam' naturally if the user uses them
+9. Use the ADDITIONAL BUSINESS DETAILS to answer specific questions about services offered
 
 Respond naturally to the customer's question in their language style.`;
 }

@@ -275,10 +275,10 @@ export default function SalesPage() {
     const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
     const area = customArea || prospect.area;
     return `Hi boss 👋 You still handling ${service} jobs around ${area}?
-    
-I made a simple WhatsApp booking page for ${prospect.business_name} that auto-collects customer details while you’re on the job — so you don’t miss enquiries.
 
-Want to see? 😄`;
+I built a WhatsApp tool that automatically replies to 'Hm po?' inquiries and quotes prices while you are driving or on a ladder. 🪜
+
+Want to see the demo?`;
   };
 
   // Generate Email Opener
@@ -519,12 +519,6 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
             className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer"
           >
             <span>➕</span> Quick Add
-          </Link>
-          <Link
-            href="/sales/blast"
-            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center gap-2 whitespace-nowrap cursor-pointer"
-          >
-            <span>📢</span> Blast
           </Link>
         </div>
 

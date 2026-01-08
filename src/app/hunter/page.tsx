@@ -88,15 +88,46 @@ export default function HunterPage() {
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Image upload for prospects
-  const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Send Opener Modal
+  const [showOpenerModal, setShowOpenerModal] = useState(false);
+  const [savedProspect, setSavedProspect] = useState<{
+    business_name: string;
+    service_type: string;
+    area: string;
+    whatsapp_number: string;
+    owner_name?: string;
+  } | null>(null);
+  const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
+  const [selectedOpenerPhone, setSelectedOpenerPhone] = useState('');
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Generate opener message (same as sales page)
+  const generateOpener = (prospect: { service_type: string; area: string; business_name: string }, customArea?: string): string => {
+    const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
+    const area = customArea || prospect.area;
+    return `Hi boss 👋 You still handling ${service} jobs around ${area}?
+
+I built a WhatsApp tool that automatically replies to 'Hm po?' inquiries and quotes prices while you are driving or on a ladder. 🪜
+
+Want to see the demo?`;
+  };
+
+  // Open WhatsApp with message
+  const openWhatsApp = (message: string, phone?: string) => {
+    const phoneToUse = phone || savedProspect?.whatsapp_number || '';
+    const cleanPhone = phoneToUse.replace(/[^\d+]/g, '');
+    const encoded = encodeURIComponent(message);
+    window.open(`https://wa.me/${cleanPhone.replace('+', '')}?text=${encoded}`, '_blank');
+  };
+
+  // Image upload for prospects
+  const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Image upload handlers
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -175,7 +206,17 @@ export default function HunterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showToast('success', '✅ Prospect added!');
+      // Save prospect data for opener modal
+      setSavedProspect({
+        business_name: formData.business_name,
+        service_type: formData.service_type,
+        area: formData.area,
+        whatsapp_number: formData.whatsapp_number,
+        owner_name: formData.owner_name,
+      });
+      setSelectedOpenerArea(formData.area.split(/[,/]+/)[0]?.trim() || formData.area);
+      setSelectedOpenerPhone(formData.whatsapp_number.match(/\+?\d{8,}/)?.[0] || formData.whatsapp_number);
+      setShowOpenerModal(true);
       setAddedCount(prev => prev + 1);
 
       setFormData({
@@ -601,6 +642,115 @@ Reviews: 'Very fast service, same day!'"
           </div>
         </div>
       </div>
+
+      {/* Send Opener Modal */}
+      {showOpenerModal && savedProspect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 relative">
+            <h3 className="text-lg font-semibold mb-4">📤 Send Opener</h3>
+
+            {/* Area Selection Chips */}
+            {savedProspect.area.match(/[,/]+/) && (
+              <div className="mb-4">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Select Area</label>
+                <div className="flex flex-wrap gap-2">
+                  {savedProspect.area.split(/[,/]+/).map(s => s.trim()).filter(Boolean).map((area, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedOpenerArea(area)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerArea === area
+                        ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setSelectedOpenerArea(savedProspect.area)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerArea === savedProspect.area
+                      ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                  >
+                    All Areas
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Phone Selection Chips */}
+            {(savedProspect.whatsapp_number.match(/\+?\d{8,}/g)?.length || 0) > 1 && (
+              <div className="mb-4">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Select Phone</label>
+                <div className="flex flex-wrap gap-2">
+                  {(savedProspect.whatsapp_number.match(/\+?\d{8,}/g) || []).map((phone, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedOpenerPhone(phone)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${selectedOpenerPhone === phone
+                        ? 'bg-green-100 text-green-700 ring-2 ring-green-500'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      {phone}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Message Preview */}
+            <div className="bg-slate-100 rounded-lg p-4 mb-4">
+              <p className="text-slate-800 whitespace-pre-wrap font-medium">
+                {generateOpener(savedProspect, selectedOpenerArea)}
+              </p>
+            </div>
+
+            <div className="text-sm text-slate-500 mb-4">
+              <p><strong>To:</strong> {savedProspect.business_name}</p>
+              <p><strong>WhatsApp:</strong> {selectedOpenerPhone || savedProspect.whatsapp_number}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(generateOpener(savedProspect, selectedOpenerArea));
+                  showToast('success', '📋 Copied!');
+                }}
+                className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium shadow-sm hover:shadow hover:bg-slate-50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+              >
+                📋 Copy Text
+              </button>
+              <button
+                onClick={() => {
+                  openWhatsApp(generateOpener(savedProspect, selectedOpenerArea), selectedOpenerPhone || undefined);
+                }}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-600 hover:to-green-700 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+              >
+                💬 WhatsApp
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowOpenerModal(false);
+                showToast('success', '✅ Prospect added to pipeline!');
+              }}
+              className="w-full mt-4 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+            >
+              ✅ Mark as sent & close
+            </button>
+
+            <button
+              onClick={() => setShowOpenerModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

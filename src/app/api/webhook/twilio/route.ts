@@ -1,10 +1,13 @@
 // /api/webhook/twilio/route.ts
 // Twilio WhatsApp Webhook - Receives incoming messages from customers
 // This is called when a customer sends a message to the Launchfly assistant number
+// Now with AI-powered intent classification (Smart Receptionist)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard, sendJobConfirmed } from '@/lib/whatsapp-push';
+import { classifyIntent, shouldEscalate, isPriceObjection, type ConversationContext } from '@/lib/ai-intent';
+import { handleFAQ, generateEscalationMessage, type BusinessContext } from '@/lib/faq-handler';
 import twilio from 'twilio';
 
 const supabase = createClient(
@@ -84,45 +87,131 @@ export async function POST(request: NextRequest) {
         const locationDerivedAddress = locationAddress || locationLabel ||
             (isLocationPin ? `📍 Location: ${latitude}, ${longitude}` : null);
 
-        // Check if this is a slot selection (1, 2, or 3)
-        const isSlotSelection = /^[123]$/.test(messageText);
+        // ========== AI INTENT CLASSIFICATION ==========
+        // First, lookup customer to get conversation context
+        const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+        const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
 
-        // Check if this looks like a quote request (matches our prefilled message pattern)
-        const isQuoteRequest = messageText.toLowerCase().includes('quote') ||
-            messageText.toLowerCase().includes('requested') ||
-            messageText.toLowerCase().includes('estimated');
+        const { data: customerLookup } = await supabase
+            .from('customers')
+            .select('*, businesses(name, business_data, whatsapp_number)')
+            .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
-        // Detect button quick-reply texts (these should be ignored, not treated as addresses)
-        const buttonTexts = ['accept job', 'decline', 'view details', 'call customer', 'view dashboard'];
-        const isButtonReply = buttonTexts.some(btn => messageText.toLowerCase() === btn);
+        // Build conversation context for AI
+        const conversationContext: ConversationContext = {
+            customerStatus: customerLookup?.status,
+            hasQuote: customerLookup?.notes?.includes('AVAILABLE_SLOTS'),
+            businessName: customerLookup?.businesses?.name,
+            businessNiche: customerLookup?.businesses?.business_data?.niche,
+        };
 
-        if (isButtonReply) {
-            console.log(`🔘 Detected button reply: "${messageText}" - ignoring`);
-            // Return empty TwiML (acknowledge but don't process)
+        // Special handling for location pins - always treat as address if awaiting
+        if (isLocationPin && conversationContext.customerStatus === 'awaiting_address') {
+            console.log('📍 Location pin received while awaiting address - treating as ADDRESS intent');
+            // Continue to ADDRESS handler below
+        }
+
+        // Classify intent using AI
+        const classification = await classifyIntent(messageText, conversationContext);
+        console.log(`🤖 Intent: ${classification.intent} (confidence: ${classification.confidence})`);
+
+        // Check for escalation
+        if (shouldEscalate(classification)) {
+            console.log('🚨 Escalation needed - notifying owner');
+            const ownerPhone = customerLookup?.businesses?.whatsapp_number;
+            if (ownerPhone && twilioClient && fromNumber) {
+                const businessCtx: BusinessContext = {
+                    name: customerLookup?.businesses?.name || 'Business',
+                    niche: customerLookup?.businesses?.business_data?.niche || 'service',
+                    ownerName: customerLookup?.businesses?.business_data?.owner_name,
+                };
+
+                // Send escalation message to customer
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: generateEscalationMessage(businessCtx)
+                });
+
+                // Notify owner
+                const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${cleanOwnerPhone}`,
+                    body: `🚨 *Customer needs help!*\n\nFrom: ${customerPhone}\nMessage: "${messageText}"\n\nPlease respond to them directly.`
+                });
+            }
             return new NextResponse(
                 '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                 { headers: { 'Content-Type': 'text/xml' } }
             );
         }
 
-        // Check if this looks like an address (longer message, not a quote or slot)
-        // Address messages are typically 10+ characters and don't match other patterns
-        // OR it's a location pin share
-        const isAddressMessage = isLocationPin || (messageText.length >= 10 &&
-            !isSlotSelection &&
-            !isQuoteRequest &&
-            !messageText.toLowerCase().startsWith('hi') &&
-            !messageText.toLowerCase().startsWith('hello'));
+        // Handle FAQ intent
+        if (classification.intent === 'FAQ') {
+            console.log('❓ FAQ intent detected');
+            const businessCtx: BusinessContext = {
+                name: customerLookup?.businesses?.name || 'Business',
+                niche: customerLookup?.businesses?.business_data?.niche || 'service',
+                serviceAreas: customerLookup?.businesses?.business_data?.service_areas,
+                operatingHours: customerLookup?.businesses?.business_data?.operating_hours,
+                paymentMethods: customerLookup?.businesses?.business_data?.payment_methods,
+                warranty: customerLookup?.businesses?.business_data?.warranty,
+                services: customerLookup?.businesses?.business_data?.services,
+                ownerName: customerLookup?.businesses?.business_data?.owner_name,
+            };
+
+            const faqResponse = await handleFAQ(messageText, businessCtx);
+
+            if (twilioClient && fromNumber) {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: faqResponse.answer
+                });
+                console.log(`✅ FAQ response sent: ${faqResponse.topic}`);
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // Handle greeting - send a friendly welcome
+        if (classification.intent === 'GREETING') {
+            console.log('👋 Greeting detected');
+            if (twilioClient && fromNumber) {
+                const businessName = customerLookup?.businesses?.name || 'us';
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `Hello! 👋 Welcome to ${businessName}!\n\nHow can we help you today? You can ask about our services, pricing, or book an appointment.`
+                });
+            }
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // Map AI intent to existing handlers
+        const isSlotSelection = classification.intent === 'SLOT_SELECTION' ||
+            (classification.entities.slot_number && classification.entities.slot_number >= 1 && classification.entities.slot_number <= 3);
+        const isQuoteRequest = classification.intent === 'QUOTE_REQUEST';
+        const isAddressMessage = classification.intent === 'ADDRESS' || isLocationPin;
 
         if (isSlotSelection) {
             // ========== SLOT SELECTION HANDLER ==========
             console.log(`🗓️ Detected slot selection: ${messageText}`);
 
-            const slotNumber = parseInt(messageText);
+            // Use AI-extracted slot number or fall back to parsing
+            const slotNumber = classification.entities.slot_number || parseInt(messageText) || 1;
 
-            // Normalize phone for lookup (try multiple formats)
-            const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-            const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+            // Phone already normalized above for AI intent context
             console.log(`📱 Looking up customer with phone: ${phoneWithPlus} or ${phoneWithoutPlus}`);
 
             // Find the customer - try both phone formats

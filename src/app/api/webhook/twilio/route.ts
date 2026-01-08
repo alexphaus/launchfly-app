@@ -220,9 +220,16 @@ export async function POST(request: NextRequest) {
                         to: `whatsapp:${customerPhone}`,
                         body: `Awesome Boss! 👍 Which time slot works best for you?\n\nJust reply with 1, 2, or 3 to select.`
                     });
-                } else if (status === 'quote_sent' && customerLookup?.businesses?.whatsapp_number) {
-                    // Re-send slot options
-                    await sendSlotSuggester(customerPhone, customerLookup.businesses.whatsapp_number);
+                } else if (status === 'quote_sent' && customerLookup?.businesses) {
+                    // Re-send slot options with proper data
+                    const businessData = customerLookup.businesses.business_data || {};
+                    await sendSlotSuggester(customerPhone, {
+                        businessName: customerLookup.businesses.name || 'Business',
+                        customerName: customerLookup.name || 'Customer',
+                        currency: businessData.currency || 'PHP',
+                        estimateMin: customerLookup.estimate_min || 0,
+                        estimateMax: customerLookup.estimate_max || 0,
+                    });
                 } else {
                     // No clear context - ask what they need
                     await twilioClient.messages.create({
@@ -297,12 +304,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Handle Reschedule
         if (classification.intent === 'RESCHEDULE') {
             console.log('🗓️ Reschedule request detected');
-            if (twilioClient && fromNumber && customerLookup?.businesses?.whatsapp_number) {
-                // Just send slot suggestions directly (sendSlotSuggester includes its own intro message)
-                await sendSlotSuggester(customerPhone, customerLookup.businesses.whatsapp_number);
+            if (twilioClient && fromNumber && customerLookup?.businesses) {
+                // Send slot suggestions with proper data
+                const businessData = customerLookup.businesses.business_data || {};
+                await sendSlotSuggester(customerPhone, {
+                    businessName: customerLookup.businesses.name || 'Business',
+                    customerName: customerLookup.name || 'Customer',
+                    currency: businessData.currency || 'PHP',
+                    estimateMin: customerLookup.estimate_min || 0,
+                    estimateMax: customerLookup.estimate_max || 0,
+                });
             } else if (twilioClient && fromNumber) {
                 // Fallback if no business found
                 await twilioClient.messages.create({

@@ -395,7 +395,37 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                         <p className="text-xs text-slate-500 mt-1">
                                             {lead.name || 'Customer'} • {lead.phone || 'No phone'}
                                         </p>
-                                        {estimate && (
+
+                                        {/* Display Booking Details if available */}
+                                        {(lead.status === 'booked' || lead.status === 'confirmed') && lead.notes ? (
+                                            <div className="mt-2 text-sm bg-slate-50 p-2 rounded border border-slate-100">
+                                                {(() => {
+                                                    // Get LAST valid slot from notes (in case of multiple changes)
+                                                    const slotParts = lead.notes ? lead.notes.split('📅 SELECTED SLOT: ') : [];
+                                                    const slot = (slotParts.length > 1) ? slotParts.pop().split('\n')[0] : null;
+
+                                                    const addrMatch = lead.notes ? lead.notes.match(/📍 ADDRESS: ([^\n]+)/) : null;
+                                                    const addr = addrMatch ? addrMatch[1] : null;
+
+                                                    return (
+                                                        <>
+                                                            {slot && (
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                                                                    <span className="font-bold text-blue-900">{slot}</span>
+                                                                </div>
+                                                            )}
+                                                            {addr && (
+                                                                <div className="flex items-start gap-2">
+                                                                    <div className="mt-0.5"><div className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div></div></div>
+                                                                    <span className="text-slate-600 leading-tight">{addr}</span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        ) : estimate && (
                                             <p className="text-lg font-black text-slate-900 mt-1">{estimate}</p>
                                         )}
                                     </div>

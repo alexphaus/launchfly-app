@@ -245,6 +245,35 @@ export async function POST(request: NextRequest) {
                         estimateMin: customerLookup.estimate_min || 0,
                         estimateMax: customerLookup.estimate_max || 0,
                     });
+                } else if (status === 'awaiting_discount_confirmation' && customerLookup?.businesses) {
+                    // Applied 5% discount
+                    const businessData = customerLookup.businesses.business_data || {};
+                    let minWithDiscount = Math.floor((customerLookup.estimate_min || 0) * 0.95);
+                    let maxWithDiscount = Math.floor((customerLookup.estimate_max || 0) * 0.95);
+
+                    // Respond with discounted price and slots
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Discount Applied! 🎁\n\nYour new estimate is: ${businessData.currency || 'RM'} ${minWithDiscount} - ${maxWithDiscount}.\n\nHere are the available slots:`
+                    });
+
+                    // Update DB with new estimates
+                    await supabase.from('customers').update({
+                        estimate_min: minWithDiscount,
+                        estimate_max: maxWithDiscount,
+                        status: 'quote_sent' // Move to quote_sent state
+                    }).eq('id', customerLookup.id);
+
+                    // Show slots
+                    await sendSlotSuggester(customerPhone, {
+                        businessName: customerLookup.businesses.name || 'Business',
+                        customerName: customerLookup.name || 'Customer',
+                        currency: businessData.currency || 'PHP',
+                        estimateMin: minWithDiscount,
+                        estimateMax: maxWithDiscount,
+                    });
+
                 } else {
                     // No clear context - ask what they need
                     await twilioClient.messages.create({
@@ -278,11 +307,12 @@ export async function POST(request: NextRequest) {
                     body: `I understand Boss! For our first-time customers, I can ask my manager for a special **5% Welcome Discount**. 🎁\n\nWould that help? Shall we proceed with the booking?`
                 });
 
-                // Track discount offer in customer notes
+                // Track discount offer in customer notes AND set status
                 if (customerLookup?.id) {
                     const existingNotes = customerLookup.notes || '';
                     await supabase.from('customers').update({
-                        notes: existingNotes + '\n[DISCOUNT_OFFERED: 5% Welcome - ' + new Date().toISOString() + ']'
+                        notes: existingNotes + '\n[DISCOUNT_OFFERED: 5% Welcome - ' + new Date().toISOString() + ']',
+                        status: 'awaiting_discount_confirmation'
                     }).eq('id', customerLookup.id);
                 }
             } else if (twilioClient && fromNumber) {
@@ -323,13 +353,27 @@ export async function POST(request: NextRequest) {
             console.log('🗓️ Reschedule request detected');
             if (twilioClient && fromNumber && customerLookup?.businesses) {
                 // Send slot suggestions with proper data
+                // Send slot suggestions with proper data
                 const businessData = customerLookup.businesses.business_data || {};
+
+                // Robust estimate retrieval: Try DB columns first, then parse notes
+                let min = customerLookup.estimate_min || 0;
+                let max = customerLookup.estimate_max || 0;
+
+                if (min === 0 && max === 0 && customerLookup.notes) {
+                    const estimateMatch = customerLookup.notes.match(/Estimate: [^\d]*(\d+)[^\d]*(\d+)/);
+                    if (estimateMatch) {
+                        min = parseInt(estimateMatch[1]);
+                        max = parseInt(estimateMatch[2]);
+                    }
+                }
+
                 await sendSlotSuggester(customerPhone, {
                     businessName: customerLookup.businesses.name || 'Business',
                     customerName: customerLookup.name || 'Customer',
                     currency: businessData.currency || 'PHP',
-                    estimateMin: customerLookup.estimate_min || 0,
-                    estimateMax: customerLookup.estimate_max || 0,
+                    estimateMin: min,
+                    estimateMax: max,
                 });
             } else if (twilioClient && fromNumber) {
                 // Fallback if no business found

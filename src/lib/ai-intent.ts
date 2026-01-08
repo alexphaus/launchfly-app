@@ -193,13 +193,13 @@ Classify the user's message into ONE of these intents:
 - SLOT_SELECTION: User is selecting a time slot (responds to slot options)
 - ADDRESS: User is providing their address or location
 - QUOTE_REQUEST: User is asking for price or quote
-- FAQ: User has a question about services, hours, location, or warranty
+- FAQ: User has a question about services, hours, location, warranty, OR mentions a specific service (e.g., "repair", "cleaning")
 - PRICE_OBJECTION: User thinks price is too expensive, asking for discount
 - CONFIRMATION: User is confirming/agreeing to something
 - CANCELLATION: User wants to cancel or stop
 - RESCHEDULE: User wants to change time/date or says they are not available
 - HUMAN_NEEDED: User is angry, confused, or request is complex
-- GREETING: Simple hello/hi
+- GREETING: Simple hello/hi ONLY (no other content)
 - UNKNOWN: Cannot determine intent
 
 IMPORTANT CONTEXT:

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-
+import { generateOpenerMessage, openWhatsAppWithMessage } from '@/lib/opener-utils';
 // Types
 interface ProspectImage {
   url: string;
@@ -91,6 +91,7 @@ export default function HunterPage() {
   // Send Opener Modal
   const [showOpenerModal, setShowOpenerModal] = useState(false);
   const [savedProspect, setSavedProspect] = useState<{
+    id: string;
     business_name: string;
     service_type: string;
     area: string;
@@ -105,23 +106,15 @@ export default function HunterPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Generate opener message (same as sales page)
-  const generateOpener = (prospect: { service_type: string; area: string; business_name: string }, customArea?: string): string => {
-    const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
-    const area = customArea || prospect.area;
-    return `Hi boss 👋 You still handling ${service} jobs around ${area}?
-
-I built a WhatsApp tool that automatically replies to 'Hm po?' inquiries and quotes prices while you are driving or on a ladder. 🪜
-
-Want to see the demo?`;
+  // Use shared opener generator
+  const generateOpener = (prospect: { service_type: string; area: string }, customArea?: string): string => {
+    return generateOpenerMessage(prospect.service_type, prospect.area, customArea);
   };
 
-  // Open WhatsApp with message
+  // Use shared WhatsApp opener
   const openWhatsApp = (message: string, phone?: string) => {
     const phoneToUse = phone || savedProspect?.whatsapp_number || '';
-    const cleanPhone = phoneToUse.replace(/[^\d+]/g, '');
-    const encoded = encodeURIComponent(message);
-    window.open(`https://wa.me/${cleanPhone.replace('+', '')}?text=${encoded}`, '_blank');
+    openWhatsAppWithMessage(phoneToUse, message);
   };
 
   // Image upload for prospects
@@ -206,8 +199,9 @@ Want to see the demo?`;
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Save prospect data for opener modal
+      // Save prospect data for opener modal (including ID for status update)
       setSavedProspect({
+        id: data.prospect?.id || data.id || '',
         business_name: formData.business_name,
         service_type: formData.service_type,
         area: formData.area,
@@ -733,9 +727,21 @@ Reviews: 'Very fast service, same day!'"
             </div>
 
             <button
-              onClick={() => {
+              onClick={async () => {
+                // Update prospect status to opener_sent in database
+                if (savedProspect?.id) {
+                  try {
+                    await fetch(`/api/hunter/prospects/${savedProspect.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: 'opener_sent' }),
+                    });
+                  } catch (err) {
+                    console.error('Failed to update status:', err);
+                  }
+                }
                 setShowOpenerModal(false);
-                showToast('success', '✅ Prospect added to pipeline!');
+                showToast('success', '✅ Opener sent! Prospect moved to pipeline.');
               }}
               className="w-full mt-4 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium shadow hover:shadow-lg hover:bg-slate-800 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
             >

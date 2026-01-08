@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-
+import { generateOpenerMessage } from '@/lib/opener-utils';
 // Types
 interface ProspectImage {
   url: string;
@@ -270,15 +270,9 @@ export default function SalesPage() {
     morningAction: prospects.filter(p => needsFollowUp(p)).length,
   };
 
-  // Generate opener message
+  // Generate opener message (using shared utility)
   const generateOpener = (prospect: Prospect, customArea?: string): string => {
-    const service = SERVICE_TYPES.find(t => t.value === prospect.service_type)?.service || prospect.service_type;
-    const area = customArea || prospect.area;
-    return `Hi boss 👋 You still handling ${service} jobs around ${area}?
-
-I built a WhatsApp tool that automatically replies to 'Hm po?' inquiries and quotes prices while you are driving or on a ladder. 🪜
-
-Want to see the demo?`;
+    return generateOpenerMessage(prospect.service_type, prospect.area, customArea);
   };
 
   // Generate Email Opener

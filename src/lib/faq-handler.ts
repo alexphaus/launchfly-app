@@ -235,8 +235,10 @@ RULES:
 4. If asked about pricing, say "I'll connect you with the team for accurate pricing"
 5. End with a question to keep conversation going
 6. Use emojis sparingly (1-2 max)
+7. Match the user's language (English, Taglish, or Filipino)
+8. Use local honorifics like 'Boss', 'Sir', 'Maam' naturally if the user uses them
 
-Respond naturally to the customer's question.`;
+Respond naturally to the customer's question in their language style.`;
 }
 
 /**

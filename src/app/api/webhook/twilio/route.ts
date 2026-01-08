@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
 
         const { data: customerLookup } = await supabase
             .from('customers')
-            .select('*, businesses(name, business_data, whatsapp_number)')
+            .select('*, businesses(name, business_data, whatsapp_number), bookings(id)')
             .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -190,6 +190,84 @@ export async function POST(request: NextRequest) {
                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                     to: `whatsapp:${customerPhone}`,
                     body: `Hello! 👋 Welcome to ${businessName}!\n\nHow can we help you today? You can ask about our services, pricing, or book an appointment.`
+                });
+            }
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // Handle Price Objection ("The Closer")
+        if (classification.intent === 'PRICE_OBJECTION') {
+            console.log('💰 Price objection detected - checking for discount eligibility');
+
+            // Logic: If NEW customer (0 or 1 bookings), offer 5% discount
+            // Otherwise, escalate to owner
+            const bookingCount = customerLookup?.bookings?.length || 0;
+            const isNewCustomer = bookingCount <= 1;
+
+            if (isNewCustomer && twilioClient && fromNumber) {
+                console.log('✨ Offering 5% new customer discount');
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `I understand Boss! For our first-time customers, I can ask my manager for a special **5% Welcome Discount**. 🎁\n\nWould that help? Shall we proceed with the booking?`
+                });
+
+                // Track discount offer in customer notes
+                if (customerLookup?.id) {
+                    const existingNotes = customerLookup.notes || '';
+                    await supabase.from('customers').update({
+                        notes: existingNotes + '\n[DISCOUNT_OFFERED: 5% Welcome - ' + new Date().toISOString() + ']'
+                    }).eq('id', customerLookup.id);
+                }
+            } else if (twilioClient && fromNumber) {
+                console.log('⚠️ Existing customer price objection - escalating');
+                // Escalate to owner for custom pricing
+                // ... reuse escalation logic ...
+                const businessCtx: BusinessContext = {
+                    name: customerLookup?.businesses?.name || 'Business',
+                    niche: customerLookup?.businesses?.business_data?.niche || 'service',
+                    ownerName: customerLookup?.businesses?.business_data?.owner_name,
+                };
+
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `Best price na po yan Boss for quality service! ⭐\n\nBut let me check with ${businessCtx.ownerName || 'the owner'} if we have any other promos running. One moment please. 🙏`
+                });
+
+                // Notify owner
+                const ownerPhone = customerLookup?.businesses?.whatsapp_number;
+                if (ownerPhone) {
+                    const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${cleanOwnerPhone}`,
+                        body: `💰 *Price Negotiation*\n\nCustomer finds it expensive.\nFrom: ${customerPhone}\n\n*Action:* I told them I'll check with you. Please reply to them!`
+                    });
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // Handle Reschedule
+        if (classification.intent === 'RESCHEDULE') {
+            console.log('🗓️ Reschedule request detected');
+            if (twilioClient && fromNumber && customerLookup?.businesses?.whatsapp_number) {
+                // Just send slot suggestions directly (sendSlotSuggester includes its own intro message)
+                await sendSlotSuggester(customerPhone, customerLookup.businesses.whatsapp_number);
+            } else if (twilioClient && fromNumber) {
+                // Fallback if no business found
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `No problem Boss! Let me check available slots for you. 🗓️ One moment please.`
                 });
             }
             return new NextResponse(

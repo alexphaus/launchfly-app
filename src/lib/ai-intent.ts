@@ -17,6 +17,7 @@ export type Intent =
     | 'PRICE_OBJECTION'   // User thinks price is too high
     | 'CONFIRMATION'      // User confirming something (yes, ok, sure)
     | 'CANCELLATION'      // User wants to cancel
+    | 'RESCHEDULE'        // User wants to change time/date
     | 'HUMAN_NEEDED'      // User is angry, confused, or needs escalation
     | 'GREETING'          // Simple hello/hi
     | 'UNKNOWN';          // Can't determine intent
@@ -149,6 +150,11 @@ function quickPatternMatch(
         return { intent: 'CANCELLATION', confidence: 0.8, entities: {} };
     }
 
+    // Rescheduling patterns
+    if (/reschedule|rebook|move|change|lipat|ibang araw|not available|busy/i.test(text)) {
+        return { intent: 'RESCHEDULE', confidence: 0.8, entities: {} };
+    }
+
     // Address detection - if awaiting address and message is long enough
     if (context.customerStatus === 'awaiting_address' && text.length >= 10) {
         return {
@@ -185,9 +191,14 @@ Classify the user's message into ONE of these intents:
 - PRICE_OBJECTION: User thinks price is too expensive, asking for discount
 - CONFIRMATION: User is confirming/agreeing to something
 - CANCELLATION: User wants to cancel or stop
+- RESCHEDULE: User wants to change time/date or says they are not available
 - HUMAN_NEEDED: User is angry, confused, or request is complex
 - GREETING: Simple hello/hi
 - UNKNOWN: Cannot determine intent
+
+IMPORTANT CONTEXT:
+- Match the user's language (English, Taglish, or Filipino)
+- Look for Filipino keywords (magkano, mahal, saan, kailan, hindi pwede)
 
 Return JSON only:
 {

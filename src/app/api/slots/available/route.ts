@@ -151,7 +151,10 @@ export async function POST(request: NextRequest) {
 
         if (action === 'block_day') {
             // Create an "all_day" block for the specified date
-            const blockDate = date || formatDate(new Date());
+            // Use UTC+8 (SEA) for "Today" if no date provided
+            const now = new Date();
+            const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+            const blockDate = date || formatDate(localNow);
 
             const { data, error } = await supabase
                 .from('bookings')

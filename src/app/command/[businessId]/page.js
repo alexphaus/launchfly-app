@@ -59,6 +59,8 @@ export default async function CommandCenterPage({ params }) {
             .from('customers')
             .select('*')
             .eq('business_id', businessId)
+            .neq('status', 'completed')
+            .neq('status', 'archived')
             .order('created_at', { ascending: false })
             .limit(20);
 

@@ -483,7 +483,10 @@ export async function POST(request: NextRequest) {
                 const businessId = customer.business_id;
 
                 // Extract stored available slots from notes
-                const slotsMatch = customer.notes?.match(/AVAILABLE_SLOTS: (\[.*?\])/);
+                // Extract stored available slots from notes (Get LAST one)
+                const slotsParts = customer.notes?.split('AVAILABLE_SLOTS: ');
+                const slotsJson = (slotsParts && slotsParts.length > 1) ? slotsParts.pop()?.split('\n')[0] : null;
+                const slotsMatch = slotsJson ? [null, slotsJson] : null; // Mock match structure for legacy code compatibility
                 let availableSlots: { label: string; value: string }[] = [];
                 let selectedSlot = getSlotLabel(slotNumber); // Fallback
                 let selectedSlotValue = '';
@@ -806,7 +809,9 @@ export async function POST(request: NextRequest) {
                     const blockedDates = new Set((bookings || []).filter(b => b.slot_time === 'all_day').map(b => b.slot_date));
 
                     for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-                        const date = new Date(now);
+                        // Use LOCAL time for date calculation to ensure "Today" means Business Today
+                        const localNow = new Date(now.getTime() + (timezoneOffset * 60 * 60 * 1000));
+                        const date = new Date(localNow);
                         date.setDate(date.getDate() + dayOffset);
                         const dateStr = formatDate(date);
                         const isToday = dayOffset === 0;
@@ -816,7 +821,7 @@ export async function POST(request: NextRequest) {
                         for (const slot of slotConfig) {
                             if (isToday && hour >= slot.startHour - 2) continue;
                             const slotId = `${dateStr}_${slot.id}`;
-                            if (bookedSlotIds.has(slotId)) continue;
+                            // if (bookedSlotIds.has(slotId)) continue; // USER REQUEST: Allow multiple bookings per slot
 
                             availableSlots.push({
                                 label: `${formatDateLabel(date, isToday)} ${slot.label}`,

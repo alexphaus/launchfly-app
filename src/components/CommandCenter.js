@@ -190,6 +190,21 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         }
     };
 
+    // Archive job (remove from feed)
+    const archiveJob = async (leadId) => {
+        if (!confirm('Remove this job from the live feed? (It will be archived)')) return;
+
+        const { error } = await supabase
+            .from('customers')
+            .update({ status: 'archived' })
+            .eq('id', leadId);
+
+        if (!error) {
+            setLeads(prev => prev.filter(l => l.id !== leadId));
+            setStats(prev => ({ ...prev, booked: Math.max(0, prev.booked - 1) }));
+        }
+    };
+
     // Open schedule modal for a lead
     const openScheduleModal = (lead) => {
         setSelectedLead(lead);
@@ -460,10 +475,10 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                     </button>
                                     {lead.status === 'booked' || lead.status === 'confirmed' ? (
                                         <button
-                                            disabled
-                                            className="flex items-center justify-center gap-2 py-2 bg-green-100 text-green-700 rounded-lg font-bold text-sm"
+                                            onClick={() => archiveJob(lead.id)}
+                                            className="flex items-center justify-center gap-2 py-2 bg-slate-100 text-slate-500 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors"
                                         >
-                                            <CheckCircle className="w-4 h-4" /> Booked ✓
+                                            <CheckCircle className="w-4 h-4" /> Archive Job
                                         </button>
                                     ) : status.isWaiting ? (
                                         <button

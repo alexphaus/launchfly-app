@@ -218,35 +218,45 @@ export async function sendJobConfirmed(ownerPhone: string, job: {
     }
 }
 
-// Follow-up message templates with Urgency Cascade
-const FOLLOWUP_TEMPLATES: Record<string, string> = {
-    // Stage 1: Helpful (+2 hours)
-    '2h_slot_check': `Hi! 👋 Quick check — we have a slot at 4pm today. Want to grab it before it's gone?`,
+// Follow-up message template generators with Urgency Cascade
+// Now uses dynamic slot times instead of hardcoded values
+function getFollowUpMessage(type: string, nextSlot?: string): string {
+    const slot = nextSlot || 'soon';
 
-    // Stage 2: Urgency (+6 hours)
-    '6h_last_chance': `⚠️ Last chance for today's slot! Reply "YES" to confirm or we'll give it to someone else.`,
+    const templates: Record<string, string> = {
+        // Stage 1: Helpful (+2 hours) - Dynamic slot
+        '2h_slot_check': `Hi! 👋 Quick check — we have a slot ${slot}. Want to grab it before it's gone?`,
 
-    // Stage 3: Re-engage (+24 hours)  
-    '24h_nudge': `Hi! 👋 Still need help? We kept a slot reserved for you. Just reply if you're still interested — no pressure!`,
+        // Stage 2: Urgency (+6 hours)
+        '6h_last_chance': `⚠️ Last chance for today's slot! Reply "YES" to confirm or we'll give it to someone else.`,
 
-    // Stage 4: Discount (+72 hours)
-    '72h_discount': `🔥 Special offer: 10% off if you book today! Use code SAVE10. Reply "BOOK" to claim.`,
+        // Stage 3: Re-engage (+24 hours)  
+        '24h_nudge': `Hi! 👋 Still need help? We kept a slot reserved for you. Just reply if you're still interested — no pressure!`,
 
-    // Legacy compatibility
-    '3d_promo': `🔥 Final reminder: Priority slot available! Reply to claim before it's gone.`
-};
+        // Stage 4: Discount (+72 hours)
+        '72h_discount': `🔥 Special offer: 10% off if you book today! Just reply "YES" to claim your discount and we'll send available slots.`,
 
-export async function sendFollowUpMessage(customerPhone: string, options: { type: string; businessName: string }) {
+        // Legacy compatibility
+        '3d_promo': `🔥 Final reminder: Priority slot available! Reply to claim before it's gone.`
+    };
+
+    return templates[type] || templates['2h_slot_check'];
+}
+
+export async function sendFollowUpMessage(customerPhone: string, options: {
+    type: string;
+    businessName: string;
+    nextSlot?: string;  // e.g., "today 4pm-6pm" or "tomorrow 10am"
+}) {
     if (!customerPhone) {
         console.warn('⚠️ No customer phone provided for follow-up');
         return false;
     }
 
-    const cleanPhone = customerPhone.replace(/[^\d+]/g, '');
+    const cleanPhone = customerPhone.replace(/[^\\d+]/g, '');
     const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
 
-    const templateKey = options.type || '2h_slot_check';
-    const messageBody = FOLLOWUP_TEMPLATES[templateKey] || FOLLOWUP_TEMPLATES['2h_slot_check'];
+    const messageBody = getFollowUpMessage(options.type, options.nextSlot);
 
     try {
         if (client && fromNumber) {
@@ -270,6 +280,7 @@ export async function sendFollowUpMessage(customerPhone: string, options: { type
         return false;
     }
 }
+
 
 /**
  * Send a confirmation message to the customer after they submit a quote request

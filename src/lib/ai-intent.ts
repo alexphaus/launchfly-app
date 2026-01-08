@@ -140,8 +140,8 @@ function quickPatternMatch(
         return { intent: 'QUOTE_REQUEST', confidence: 0.9, entities: {} };
     }
 
-    // Confirmation
-    if (/^(yes|ok|okay|sure|confirm|go|sige|oo)[\s!]*$/i.test(text)) {
+    // Confirmation (includes "BOOK" for discount claims)
+    if (/^(yes|ok|okay|sure|confirm|go|sige|oo|book|claim)[\\s!]*$/i.test(text)) {
         return { intent: 'CONFIRMATION', confidence: 0.9, entities: {} };
     }
 

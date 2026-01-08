@@ -198,6 +198,46 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Handle CONFIRMATION ("Yes", "Ok", "Sige") - Resume booking flow
+        if (classification.intent === 'CONFIRMATION') {
+            console.log('✅ Confirmation detected - resuming booking flow');
+            const status = customerLookup?.status || 'unknown';
+
+            if (twilioClient && fromNumber) {
+                // Resume based on where customer left off
+                if (status === 'awaiting_address') {
+                    // They already selected a slot, need address
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Great Boss! 🎉 Just send me your address or location pin 📍 and we'll confirm your booking!`
+                    });
+                } else if (status === 'awaiting_slot' || customerLookup?.notes?.includes('AVAILABLE_SLOTS')) {
+                    // They have a quote, need to pick a slot
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Awesome Boss! 👍 Which time slot works best for you?\n\nJust reply with 1, 2, or 3 to select.`
+                    });
+                } else if (status === 'quote_sent' && customerLookup?.businesses?.whatsapp_number) {
+                    // Re-send slot options
+                    await sendSlotSuggester(customerPhone, customerLookup.businesses.whatsapp_number);
+                } else {
+                    // No clear context - ask what they need
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Great! 🙌 What service would you like to book today?`
+                    });
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // Handle Price Objection ("The Closer")
         if (classification.intent === 'PRICE_OBJECTION') {
             console.log('💰 Price objection detected - checking for discount eligibility');

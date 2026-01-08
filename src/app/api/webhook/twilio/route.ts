@@ -22,8 +22,9 @@ const twilioClient = twilio(
 );
 const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
-// Generate slot labels based on current time (same logic as sendSlotSuggester)
+// Generate slot labels based on current time (synced with generateSlotOptions in whatsapp-push.ts)
 // Uses UTC+8 timezone offset for SEA businesses
+// Only shows FUTURE slots - never past times
 function getSlotLabel(slotNumber: number): string {
     const now = new Date();
     // Convert UTC to UTC+8 (SEA timezone)
@@ -39,19 +40,30 @@ function getSlotLabel(slotNumber: number): string {
 
     const slots: string[] = [];
 
-    // Today slots (if before 3pm local time)
-    if (hour < 15) {
-        slots.push(`Today ${hour < 12 ? '2pm - 4pm' : '4pm - 6pm'}`);
+    // Today slots - only if before the slot starts (synced with whatsapp-push.ts)
+    if (hour < 9) {
+        slots.push('Today 9am - 11am');
     }
-    // Tomorrow slots
-    slots.push(`${formatDate(tomorrow)} 9am - 11am`);
-    slots.push(`${formatDate(tomorrow)} 2pm - 4pm`);
-    // Day after
-    if (slots.length < 3) {
-        slots.push(`${formatDate(dayAfter)} 9am - 11am`);
+    if (hour < 14) {
+        slots.push('Today 2pm - 4pm');
+    }
+    if (hour < 16) {
+        slots.push('Today 4pm - 6pm');
     }
 
-    return slots[slotNumber - 1] || slots[0];
+    // Tomorrow slots (always available)
+    if (slots.length < 3) {
+        slots.push(`${formatDate(tomorrow)} 9am - 11am`);
+    }
+    if (slots.length < 3) {
+        slots.push(`${formatDate(tomorrow)} 2pm - 4pm`);
+    }
+    // Day after (if needed)
+    if (slots.length < 3) {
+        slots.push(`${formatDate(dayAfter)} 10am - 12pm`);
+    }
+
+    return slots[slotNumber - 1] || slots[0] || `${formatDate(tomorrow)} 9am - 11am`;
 }
 
 export async function POST(request: NextRequest) {

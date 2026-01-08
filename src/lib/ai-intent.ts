@@ -141,17 +141,22 @@ function quickPatternMatch(
     }
 
     // Confirmation (includes "BOOK" for discount claims)
+    // Only trigger if NOT awaiting address - "ok" when awaiting_address should ask for address
     if (/^(yes|ok|okay|sure|confirm|go|sige|oo|book|claim)[\\s!]*$/i.test(text)) {
+        // If awaiting address, don't treat short confirmations as CONFIRMATION intent
+        if (context.customerStatus === 'awaiting_address') {
+            return null; // Let AI handle it or fall through to ADDRESS check
+        }
         return { intent: 'CONFIRMATION', confidence: 0.9, entities: {} };
     }
 
-    // Cancellation
-    if (/cancel|nevermind|never mind|no need|hindi na/i.test(text)) {
+    // Cancellation - must be explicit, not just "no"
+    if (/^(cancel|nevermind|never mind|no need|hindi na|cancel na|don't need|ayaw ko na)[\\s!.]*$/i.test(text)) {
         return { intent: 'CANCELLATION', confidence: 0.8, entities: {} };
     }
 
-    // Rescheduling patterns
-    if (/reschedule|rebook|move|change|lipat|ibang araw|not available|busy/i.test(text)) {
+    // Rescheduling patterns - be specific to avoid false positives
+    if (/reschedule|rebook|move.*date|change.*date|change.*time|lipat|ibang araw|not available|busy.*that day|can't make it/i.test(text)) {
         return { intent: 'RESCHEDULE', confidence: 0.8, entities: {} };
     }
 

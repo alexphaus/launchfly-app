@@ -248,8 +248,21 @@ export async function POST(request: NextRequest) {
                 } else if (status === 'awaiting_discount_confirmation' && customerLookup?.businesses) {
                     // Applied 5% discount
                     const businessData = customerLookup.businesses.business_data || {};
-                    let minWithDiscount = Math.floor((customerLookup.estimate_min || 0) * 0.95);
-                    let maxWithDiscount = Math.floor((customerLookup.estimate_max || 0) * 0.95);
+
+                    // Robust estimate retrieval
+                    let baseMin = customerLookup.estimate_min || 0;
+                    let baseMax = customerLookup.estimate_max || 0;
+
+                    if (baseMin === 0 && baseMax === 0 && customerLookup.notes) {
+                        const estimateMatch = customerLookup.notes.match(/Estimate: [^\d]*(\d+)[^\d]*(\d+)/);
+                        if (estimateMatch) {
+                            baseMin = parseInt(estimateMatch[1]);
+                            baseMax = parseInt(estimateMatch[2]);
+                        }
+                    }
+
+                    let minWithDiscount = Math.floor(baseMin * 0.95);
+                    let maxWithDiscount = Math.floor(baseMax * 0.95);
 
                     // Respond with discounted price and slots
                     await twilioClient.messages.create({

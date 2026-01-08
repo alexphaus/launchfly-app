@@ -330,6 +330,30 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Handle CANCELLATION ("Cancel na lang", "Nevermind", "Hindi na push through")
+        if (classification.intent === 'CANCELLATION') {
+            console.log('❌ Cancellation detected');
+            if (twilioClient && fromNumber) {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `No worries Boss! Your booking has been cancelled. 🙏\n\nIf you need our services in the future, just message us anytime. We're always here to help! 💪`
+                });
+
+                // Update customer status to cancelled
+                if (customerLookup?.id) {
+                    await supabase.from('customers').update({
+                        status: 'cancelled',
+                        notes: (customerLookup.notes || '') + '\n[CANCELLED by customer - ' + new Date().toISOString() + ']'
+                    }).eq('id', customerLookup.id);
+                }
+            }
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // Map AI intent to existing handlers
         const isSlotSelection = classification.intent === 'SLOT_SELECTION' ||
             (classification.entities.slot_number && classification.entities.slot_number >= 1 && classification.entities.slot_number <= 3);

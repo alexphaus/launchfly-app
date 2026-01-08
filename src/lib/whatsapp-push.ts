@@ -328,6 +328,7 @@ export async function sendQuoteConfirmation(customerPhone: string, options: {
 
 /**
  * Generate smart time slots based on current day/time
+ * Only shows future slots - never past times
  */
 function generateSlotOptions(): { label: string; value: string }[] {
     const now = new Date();
@@ -337,18 +338,31 @@ function generateSlotOptions(): { label: string; value: string }[] {
     // Helper to format date
     const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 
-    // Today slots (if before 3pm)
-    if (hour < 15) {
-        slots.push({ label: `Today ${hour < 12 ? '2pm - 4pm' : '4pm - 6pm'}`, value: 'today_afternoon' });
+    // Today slots - only if before the slot starts
+    // Morning slot: only if before 9am (slot is 9am-11am)
+    if (hour < 9) {
+        slots.push({ label: 'Today 9am - 11am', value: 'today_morning' });
+    }
+    // Afternoon slot: only if before 2pm (slot is 2pm-4pm)
+    if (hour < 14) {
+        slots.push({ label: 'Today 2pm - 4pm', value: 'today_afternoon' });
+    }
+    // Late afternoon: only if before 4pm (slot is 4pm-6pm)
+    if (hour < 16) {
+        slots.push({ label: 'Today 4pm - 6pm', value: 'today_late' });
     }
 
-    // Tomorrow slots
+    // Tomorrow slots (always show)
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    slots.push({ label: `${formatDate(tomorrow)} 9am - 11am`, value: 'tomorrow_morning' });
-    slots.push({ label: `${formatDate(tomorrow)} 2pm - 4pm`, value: 'tomorrow_afternoon' });
+    if (slots.length < 3) {
+        slots.push({ label: `${formatDate(tomorrow)} 9am - 11am`, value: 'tomorrow_morning' });
+    }
+    if (slots.length < 3) {
+        slots.push({ label: `${formatDate(tomorrow)} 2pm - 4pm`, value: 'tomorrow_afternoon' });
+    }
 
-    // Day after tomorrow
+    // Day after tomorrow (if needed)
     if (slots.length < 3) {
         const dayAfter = new Date(now);
         dayAfter.setDate(dayAfter.getDate() + 2);

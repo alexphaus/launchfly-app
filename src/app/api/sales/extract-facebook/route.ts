@@ -107,11 +107,14 @@ Respond with valid JSON only.`,
 
     const extracted = JSON.parse(content);
 
+    // Get location context for phone number formatting
+    const locationContext = extracted.area || extracted.notes || context;
+
     // Validate and clean the response
     const result = {
       businessName: extracted.businessName || '',
       ownerName: extracted.ownerName || '',
-      phone: cleanPhoneNumber(extracted.phone || ''),
+      phone: cleanPhoneNumber(extracted.phone || '', locationContext),
       email: extracted.email || '',
       area: extracted.area || '',
       website: cleanWebsiteUrl(extracted.website || ''),
@@ -133,9 +136,57 @@ Respond with valid JSON only.`,
   }
 }
 
+// Country code mapping based on location keywords
+const COUNTRY_CODES: { [key: string]: string } = {
+  'philippines': '+63',
+  'manila': '+63',
+  'makati': '+63',
+  'cebu': '+63',
+  'davao': '+63',
+  'cagayan': '+63',
+  'quezon': '+63',
+  'pasig': '+63',
+  'taguig': '+63',
+  'ph': '+63',
+  'malaysia': '+60',
+  'kuala lumpur': '+60',
+  'kl': '+60',
+  'selangor': '+60',
+  'johor': '+60',
+  'penang': '+60',
+  'my': '+60',
+  'singapore': '+65',
+  'sg': '+65',
+  'indonesia': '+62',
+  'jakarta': '+62',
+  'id': '+62',
+  'thailand': '+66',
+  'bangkok': '+66',
+  'th': '+66',
+  'vietnam': '+84',
+  'hanoi': '+84',
+  'vn': '+84',
+};
+
+// Detect country code from location string
+function detectCountryCode(location: string): string {
+  const lower = location.toLowerCase();
+  for (const [keyword, code] of Object.entries(COUNTRY_CODES)) {
+    if (lower.includes(keyword)) {
+      return code;
+    }
+  }
+  // Default to Malaysia if no match
+  return '+60';
+}
+
 // Clean phone number to standardized format
-function cleanPhoneNumber(phone: string): string {
+function cleanPhoneNumber(phone: string, location: string = ''): string {
   if (!phone) return '';
+
+  // Detect country code from location
+  const countryCode = detectCountryCode(location);
+  const countryDigits = countryCode.replace('+', '');
 
   // Split by comma if multiple numbers
   const numbers = phone.split(',').map(p => p.trim()).filter(Boolean);
@@ -144,15 +195,15 @@ function cleanPhoneNumber(phone: string): string {
     // Remove all non-numeric characters except +
     let cleaned = num.replace(/[^\d+]/g, '');
 
-    // Handle Malaysian numbers
-    if (cleaned.startsWith('60')) {
+    // If already has the correct country code, use it
+    if (cleaned.startsWith(countryDigits)) {
       cleaned = '+' + cleaned;
     } else if (cleaned.startsWith('0')) {
-      // Convert local format to international
-      cleaned = '+60' + cleaned.substring(1);
+      // Convert local format (09xx) to international (+639xx)
+      cleaned = countryCode + cleaned.substring(1);
     } else if (!cleaned.startsWith('+') && cleaned.length >= 9) {
-      // Assume Malaysian if no country code
-      cleaned = '+60' + cleaned;
+      // No country code - use detected one
+      cleaned = countryCode + cleaned;
     }
 
     return cleaned;

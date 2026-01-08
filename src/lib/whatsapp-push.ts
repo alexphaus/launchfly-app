@@ -330,9 +330,20 @@ export async function sendQuoteConfirmation(customerPhone: string, options: {
  * Generate smart time slots based on current day/time
  * Only shows future slots - never past times
  */
+/**
+ * Generate smart time slots based on current day/time
+ * Only shows future slots - never past times
+ * Uses explicit UTC+8 timezone for SEA businesses
+ */
 function generateSlotOptions(): { label: string; value: string }[] {
     const now = new Date();
-    const hour = now.getHours();
+    // Convert UTC to UTC+8 (SEA timezone)
+    const utcHour = now.getUTCHours();
+    const hour = (utcHour + 8 + 24) % 24;
+
+    // Adjust 'now' object to reflect the local time (for getting tomorrow's date correctly)
+    const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+
     const slots: { label: string; value: string }[] = [];
 
     // Helper to format date
@@ -353,7 +364,7 @@ function generateSlotOptions(): { label: string; value: string }[] {
     }
 
     // Tomorrow slots (always show)
-    const tomorrow = new Date(now);
+    const tomorrow = new Date(localNow);
     tomorrow.setDate(tomorrow.getDate() + 1);
     if (slots.length < 3) {
         slots.push({ label: `${formatDate(tomorrow)} 9am - 11am`, value: 'tomorrow_morning' });

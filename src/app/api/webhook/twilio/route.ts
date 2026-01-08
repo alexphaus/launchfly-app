@@ -31,9 +31,12 @@ function getSlotLabel(slotNumber: number): string {
     const utcHour = now.getUTCHours();
     const hour = (utcHour + 8 + 24) % 24;
 
-    const tomorrow = new Date(now);
+    // Adjust 'now' object to reflect the local time (for getting tomorrow's date correctly)
+    const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+
+    const tomorrow = new Date(localNow);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayAfter = new Date(now);
+    const dayAfter = new Date(localNow);
     dayAfter.setDate(dayAfter.getDate() + 2);
 
     const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -791,12 +794,14 @@ export async function POST(request: NextRequest) {
                 // Store available slots in notes for slot selection handler
                 const slotsJson = JSON.stringify(availableSlots);
 
-                // Update customer status and store slots
+                // Update customer status, store slots, and SAVE ESTIMATES for future reference
                 await supabase
                     .from('customers')
                     .update({
-                        status: 'contacted',
-                        notes: `${customer.notes || ''}\n\nAVAILABLE_SLOTS: ${slotsJson}`
+                        status: 'quote_sent', // Set to quote_sent so CONFIRMATION handlers work
+                        notes: `${customer.notes || ''}\n\nAVAILABLE_SLOTS: ${slotsJson}`,
+                        estimate_min: estimateMin,
+                        estimate_max: estimateMax
                     })
                     .eq('id', customer.id);
 

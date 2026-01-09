@@ -1,79 +1,88 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-import { 
-  TrendingUp, Users, DollarSign, MousePointerClick, 
-  ArrowUpRight, ArrowDownRight, Activity, Calendar 
+import {
+  TrendingUp, Users, DollarSign, MousePointerClick,
+  ArrowUpRight, ArrowDownRight, Activity, Calendar
 } from 'lucide-react';
 
-export default function AnalyticsDashboard({ 
-  data, 
-  revenue, 
-  leads, 
-  businesses, 
-  recentActivity 
-}: { 
-  data: any, 
-  revenue: number, 
-  leads: number, 
-  businesses: number, 
-  recentActivity: any[] 
+export default function AnalyticsDashboard({
+  data,
+  revenue,
+  leads,
+  businesses,
+  recentActivity
+}: {
+  data: any,
+  revenue: number,
+  leads: number,
+  businesses: number,
+  recentActivity: any[]
 }) {
 
   // Process data for charts
   const chartData = useMemo(() => {
-    // Group by date
+    // Helper to get consistent date keys and labels
+    const getDateInfo = (dateStr: string) => {
+      const d = new Date(dateStr);
+      // Use efficient YYYY-MM-DD format for sorting
+      const sortKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+      // Use MMM D format for display
+      const label = d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'Asia/Manila'
+      });
+      return { sortKey, label };
+    };
+
+    // Group by date using sortKey
     const grouped = new Map();
-    
+
     // Add openers and replies
     data.prospects?.forEach((p: any) => {
       // Opener Sent
       if (p.opener_sent_at) {
-        const openerDate = new Date(p.opener_sent_at).toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric',
-          timeZone: 'Asia/Manila'
-        });
-        if (!grouped.has(openerDate)) grouped.set(openerDate, { date: openerDate, openers: 0, revenue: 0, replies: 0 });
-        grouped.get(openerDate).openers += 1;
+        const { sortKey, label } = getDateInfo(p.opener_sent_at);
+        if (!grouped.has(sortKey)) {
+          grouped.set(sortKey, { date: label, sortKey, openers: 0, revenue: 0, replies: 0 });
+        }
+        grouped.get(sortKey).openers += 1;
       }
 
       // Reply Received
       if (p.replied_at) {
-        const replyDate = new Date(p.replied_at).toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric',
-          timeZone: 'Asia/Manila'
-        });
-        if (!grouped.has(replyDate)) grouped.set(replyDate, { date: replyDate, openers: 0, revenue: 0, replies: 0 });
-        grouped.get(replyDate).replies += 1;
+        const { sortKey, label } = getDateInfo(p.replied_at);
+        if (!grouped.has(sortKey)) {
+          grouped.set(sortKey, { date: label, sortKey, openers: 0, revenue: 0, replies: 0 });
+        }
+        grouped.get(sortKey).replies += 1;
       }
     });
 
     // Add orders (revenue)
     data.orders.forEach((o: any) => {
-      const date = new Date(o.created_at).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        timeZone: 'Asia/Manila'
-      });
-      if (!grouped.has(date)) grouped.set(date, { date, openers: 0, revenue: 0, replies: 0 });
-      grouped.get(date).revenue += (o.total_amount || 0);
+      const createdDate = o.created_at || new Date().toISOString();
+      const { sortKey, label } = getDateInfo(createdDate);
+      if (!grouped.has(sortKey)) {
+        grouped.set(sortKey, { date: label, sortKey, openers: 0, revenue: 0, replies: 0 });
+      }
+      grouped.get(sortKey).revenue += (o.total_amount || 0);
     });
 
-    // Convert to array and sort
+    // Convert to array and sort by full date key
     return Array.from(grouped.values())
-      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .sort((a: any, b: any) => a.sortKey.localeCompare(b.sortKey))
       .slice(-30); // Last 30 days
   }, [data]);
 
   // AI Insights Generation
   const insights = useMemo(() => {
     const insightsList = [];
-    
+
     if (leads > 0 && businesses > 0) {
       const avgLeads = (leads / businesses).toFixed(1);
       insightsList.push({
@@ -115,32 +124,32 @@ export default function AnalyticsDashboard({
     <div className="space-y-8">
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard 
-          title="Total Revenue" 
-          value={`$${revenue.toLocaleString()}`} 
+        <KpiCard
+          title="Total Revenue"
+          value={`$${revenue.toLocaleString()}`}
           icon={<DollarSign className="w-6 h-6 text-green-600" />}
-          trend="+12.5%" 
+          trend="+12.5%"
           trendUp={true}
         />
-        <KpiCard 
-          title="Active Businesses" 
-          value={businesses.toString()} 
+        <KpiCard
+          title="Active Businesses"
+          value={businesses.toString()}
           icon={<Users className="w-6 h-6 text-blue-600" />}
-          trend="+4 this week" 
+          trend="+4 this week"
           trendUp={true}
         />
-        <KpiCard 
-          title="Total Leads" 
-          value={leads.toString()} 
+        <KpiCard
+          title="Total Leads"
+          value={leads.toString()}
           icon={<MousePointerClick className="w-6 h-6 text-purple-600" />}
-          trend="+24%" 
+          trend="+24%"
           trendUp={true}
         />
-        <KpiCard 
-          title="Avg. Conversion" 
-          value="3.2%" 
+        <KpiCard
+          title="Avg. Conversion"
+          value="3.2%"
           icon={<Activity className="w-6 h-6 text-orange-600" />}
-          trend="-0.4%" 
+          trend="-0.4%"
           trendUp={false}
         />
       </div>
@@ -165,22 +174,22 @@ export default function AnalyticsDashboard({
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorOpeners" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorReplies" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <Tooltip 
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                <Tooltip
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue ($)" />
@@ -214,7 +223,7 @@ export default function AnalyticsDashboard({
                 </div>
               </div>
             ))}
-            
+
             {insights.length === 0 && (
               <p className="text-sm text-slate-500 italic">Not enough data for insights yet.</p>
             )}
@@ -260,7 +269,7 @@ export default function AnalyticsDashboard({
                     </div>
                   </td>
                   <td className="px-6 py-4 text-slate-500" suppressHydrationWarning>
-                    {new Date(activity.created_at).toLocaleString('en-US', { 
+                    {new Date(activity.created_at).toLocaleString('en-US', {
                       timeZone: 'Asia/Manila',
                       year: 'numeric',
                       month: 'numeric',

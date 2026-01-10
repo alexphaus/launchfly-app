@@ -213,6 +213,37 @@ CREATE TABLE public.ai_usage (
   CONSTRAINT ai_usage_pkey PRIMARY KEY (id),
   CONSTRAINT ai_usage_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.blast_transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  type text NOT NULL CHECK (type = ANY (ARRAY['topup'::text, 'blast'::text, 'bonus'::text, 'refund'::text])),
+  amount numeric NOT NULL,
+  recipient_count integer,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT blast_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT blast_transactions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.bookings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  customer_id uuid,
+  slot_date date NOT NULL,
+  slot_time text NOT NULL,
+  slot_label text,
+  status text NOT NULL DEFAULT 'pending'::text,
+  booking_type text NOT NULL DEFAULT 'customer'::text,
+  customer_name text,
+  customer_phone text,
+  customer_address text,
+  estimate text,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+);
 CREATE TABLE public.business_metrics (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -356,6 +387,9 @@ CREATE TABLE public.businesses (
   notify_preference text DEFAULT 'whatsapp'::text,
   whatsapp_api_config jsonb,
   whatsapp_number text,
+  blast_credits numeric DEFAULT 0,
+  blast_credits_used numeric DEFAULT 0,
+  slot_settings jsonb DEFAULT '{"slots": [{"id": "morning", "end": "11:00", "label": "9am - 11am", "start": "09:00"}, {"id": "early_afternoon", "end": "15:00", "label": "1pm - 3pm", "start": "13:00"}, {"id": "late_afternoon", "end": "17:00", "label": "3pm - 5pm", "start": "15:00"}], "days_ahead": 3, "buffer_hours": 2}'::jsonb,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT businesses_guarantee_id_fkey FOREIGN KEY (guarantee_id) REFERENCES public.revenue_guarantees(id),
@@ -506,6 +540,8 @@ CREATE TABLE public.customers (
   status text DEFAULT 'lead'::text,
   source text DEFAULT 'unknown'::text,
   name text,
+  notes text,
+  tags ARRAY,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
   CONSTRAINT customers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );

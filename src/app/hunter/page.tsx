@@ -101,6 +101,17 @@ export default function HunterPage() {
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
   const [selectedOpenerPhone, setSelectedOpenerPhone] = useState('');
 
+  // CSV Import
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvData, setCsvData] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    skipped: number;
+    errors: number;
+    details?: { skipped: string[]; errors: string[] };
+  } | null>(null);
+
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3000);
@@ -183,6 +194,41 @@ export default function HunterPage() {
     };
     fetchTodayCount();
   }, []);
+
+  // CSV Import handler
+  const handleCsvImport = async () => {
+    if (!csvData.trim()) return;
+
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const res = await fetch('/api/hunter/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvData }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setImportResult({
+        imported: data.imported,
+        skipped: data.skipped,
+        errors: data.errors,
+        details: data.details,
+      });
+
+      if (data.imported > 0) {
+        setAddedCount(prev => prev + data.imported);
+        showToast('success', `✅ Imported ${data.imported} prospects!`);
+      }
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   // Add prospect (manual)
   const handleAddProspect = async (e: React.FormEvent) => {
@@ -348,6 +394,12 @@ export default function HunterPage() {
           >
             📋 View Pipeline
           </Link>
+          <button
+            onClick={() => { setShowCsvModal(true); setImportResult(null); setCsvData(''); }}
+            className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg text-sm font-medium hover:from-green-700 hover:to-green-800 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
+          >
+            📥 Import CSV
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -750,6 +802,85 @@ Reviews: 'Very fast service, same day!'"
 
             <button
               onClick={() => setShowOpenerModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import Modal */}
+      {showCsvModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">📥 Import Google Maps CSV</h3>
+
+            <p className="text-sm text-slate-600 mb-4">
+              Paste your Google Maps export data below. The importer will automatically extract business names, phone numbers, and service types.
+            </p>
+
+            <textarea
+              value={csvData}
+              onChange={e => setCsvData(e.target.value)}
+              placeholder="Paste your Google Maps CSV data here (tab-separated)...
+
+Example row:
+https://www.google.com/maps/place/...	Business Name	5,0	(25)	Servicio de reparación de aire acondicionado	·	Address Here	...	0927 588 6236	..."
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg h-64 text-xs font-mono focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+            />
+
+            <div className="text-xs text-slate-500 mt-2 mb-4">
+              Rows: ~{csvData.split('\n').filter(l => l.includes('google.com/maps')).length} detected
+            </div>
+
+            {/* Import Results */}
+            {importResult && (
+              <div className="bg-slate-50 rounded-lg p-4 mb-4 text-sm">
+                <div className="grid grid-cols-3 gap-4 mb-3">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{importResult.imported}</div>
+                    <div className="text-xs text-slate-500">Imported</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-600">{importResult.skipped}</div>
+                    <div className="text-xs text-slate-500">Skipped (Duplicates)</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">{importResult.errors}</div>
+                    <div className="text-xs text-slate-500">Errors</div>
+                  </div>
+                </div>
+
+                {importResult.details?.skipped && importResult.details.skipped.length > 0 && (
+                  <details className="text-xs text-slate-600">
+                    <summary className="cursor-pointer font-medium">Skipped items</summary>
+                    <ul className="mt-1 space-y-0.5 pl-4 list-disc">
+                      {importResult.details.skipped.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCsvModal(false)}
+                className="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleCsvImport}
+                disabled={isImporting || !csvData.trim()}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-medium shadow hover:shadow-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                {isImporting ? '⏳ Importing...' : '📥 Import to Pipeline'}
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowCsvModal(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
             >
               ✕

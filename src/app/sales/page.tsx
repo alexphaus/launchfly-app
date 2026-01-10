@@ -19,6 +19,7 @@ interface Prospect {
   email?: string;
   owner_name?: string;
   website_url?: string;
+  google_maps_url?: string;
   source: string;
   pain_signals: string[];
   status: string;
@@ -1099,7 +1100,19 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">🔍</span>
-                      <span className="text-slate-900 capitalize">{selectedProspect.source}</span>
+                      {selectedProspect.google_maps_url ? (
+                        <a
+                          href={selectedProspect.google_maps_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline capitalize flex items-center gap-1"
+                        >
+                          {selectedProspect.source}
+                          <span className="text-xs">↗</span>
+                        </a>
+                      ) : (
+                        <span className="text-slate-900 capitalize">{selectedProspect.source}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">📅</span>

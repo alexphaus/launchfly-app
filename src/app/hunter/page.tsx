@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Papa from 'papaparse';
 import { generateOpenerMessage, openWhatsAppWithMessage } from '@/lib/opener-utils';
 // Types
 interface ProspectImage {
@@ -121,6 +122,116 @@ export default function HunterPage() {
   const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // CSV Import
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // Clean phone number from Google Maps CSV format
+  const cleanPhoneNumber = (rawPhone: string): string | null => {
+    if (!rawPhone) return null;
+
+    // Remove spaces, dashes, parentheses
+    let phone = rawPhone.replace(/[\s\-\(\)]/g, '');
+
+    // Filter: Reject Landlines (Starts with 02, 2, 8, or 1800)
+    if (phone.startsWith('02') || phone.startsWith('8') || phone.startsWith('1800') || phone.startsWith('2')) {
+      return null; // Skip landlines
+    }
+
+    // Format: Convert '0917...' to '+63917...'
+    if (phone.startsWith('09')) {
+      phone = '+63' + phone.substring(1);
+    }
+
+    // Final Validation: Must start with +639 and be 13 chars total
+    const isValidMobile = /^\+639\d{9}$/.test(phone);
+    if (!isValidMobile) return null;
+
+    return phone;
+  };
+
+  // Handle CSV Import
+  const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      Papa.parse(file, {
+        header: false, // CSV has no headers or messy headers
+        skipEmptyLines: true,
+        complete: async (results) => {
+          const rows = results.data as string[][];
+          const prospects: any[] = [];
+
+          for (const row of rows) {
+            // Skip empty or header-like rows
+            if (!row[1] || row[1].includes('href')) continue;
+
+            const rawName = row[1];       // Column B: Business Name
+            const rawRating = row[2];     // Column C: Rating (e.g., "5,0" or "3,7")
+            const rawPhone = row[10];     // Column K: Phone Number
+
+            const cleanedPhone = cleanPhoneNumber(rawPhone);
+            if (!cleanedPhone) continue; // Skip if no valid mobile
+
+            // Analyze Rating for "Pain Signals"
+            const painSignals: string[] = [];
+            const ratingNum = parseFloat(rawRating?.replace(',', '.'));
+
+            if (ratingNum && ratingNum < 4.0) {
+              painSignals.push('bad_reviews');
+            } else if (!rawRating || rawRating.trim() === '') {
+              painSignals.push('no_reviews');
+            }
+
+            prospects.push({
+              business_name: rawName,
+              whatsapp_number: cleanedPhone,
+              service_type: 'aircon', // Default based on CSV content
+              area: 'Unknown',
+              pain_signals: painSignals,
+              source: 'google_maps',
+              notes: rawRating ? `Rating: ${rawRating}` : 'No rating',
+            });
+          }
+
+          if (prospects.length === 0) {
+            showToast('error', '❌ No valid mobile numbers found in CSV');
+            setIsImporting(false);
+            return;
+          }
+
+          // Send to bulk API
+          const response = await fetch('/api/hunter/prospects/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prospects }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            showToast('success', `✅ Imported ${data.imported} prospects! (${data.duplicates} duplicates, ${data.skipped} skipped)`);
+            setAddedCount(prev => prev + data.imported);
+          } else {
+            showToast('error', `❌ Import failed: ${data.error}`);
+          }
+
+          setIsImporting(false);
+          if (csvInputRef.current) csvInputRef.current.value = '';
+        },
+        error: (error) => {
+          showToast('error', `❌ CSV parse error: ${error.message}`);
+          setIsImporting(false);
+        }
+      });
+    } catch (err: any) {
+      showToast('error', err.message);
+      setIsImporting(false);
+    }
+  };
 
   // Image upload handlers
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,7 +442,6 @@ export default function HunterPage() {
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
@@ -342,12 +452,29 @@ export default function HunterPage() {
             </h1>
             <p className="text-slate-600 mt-2 text-sm">Quickly add prospects to the pipeline</p>
           </div>
-          <Link
-            href="/sales"
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
-          >
-            📋 View Pipeline
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* CSV Import Button */}
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              ref={csvInputRef}
+              onChange={handleCSVImport}
+            />
+            <button
+              onClick={() => csvInputRef.current?.click()}
+              disabled={isImporting}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap disabled:opacity-50"
+            >
+              {isImporting ? '📥 Importing...' : '📥 Import CSV'}
+            </button>
+            <Link
+              href="/sales"
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
+            >
+              📋 View Pipeline
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

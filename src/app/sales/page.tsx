@@ -186,6 +186,7 @@ export default function SalesPage() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
+      params.set('limit', '100');
 
       const res = await fetch(`/api/hunter/prospects?${params}`, {
         // Ensure fresh data

@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     try {
         const supabase = getSupabase();
         const body = await request.json();
-        const { csvData } = body;
+        const { csvData, defaultArea } = body;
 
         if (!csvData || typeof csvData !== 'string') {
             return NextResponse.json(
@@ -250,11 +250,11 @@ export async function POST(request: NextRequest) {
                 continue;
             }
 
-            // Add to insert batch
+            // Add to insert batch - use defaultArea if provided, otherwise parsed area
             toInsert.push({
                 business_name: row.business_name,
                 service_type: row.service_type,
-                area: row.area,
+                area: defaultArea?.trim() || row.area,
                 whatsapp_number: row.whatsapp_number,
                 website_url: row.website_url,
                 google_maps_url: row.google_maps_url,

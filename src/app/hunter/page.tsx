@@ -104,6 +104,7 @@ export default function HunterPage() {
   // CSV Import
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [csvData, setCsvData] = useState('');
+  const [defaultArea, setDefaultArea] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     imported: number;
@@ -206,7 +207,7 @@ export default function HunterPage() {
       const res = await fetch('/api/hunter/import-csv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvData }),
+        body: JSON.stringify({ csvData, defaultArea: defaultArea.trim() || undefined }),
       });
 
       const data = await res.json();
@@ -395,7 +396,7 @@ export default function HunterPage() {
             📋 View Pipeline
           </Link>
           <button
-            onClick={() => { setShowCsvModal(true); setImportResult(null); setCsvData(''); }}
+            onClick={() => { setShowCsvModal(true); setImportResult(null); setCsvData(''); setDefaultArea(''); }}
             className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg text-sm font-medium hover:from-green-700 hover:to-green-800 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
           >
             📥 Import CSV
@@ -832,6 +833,21 @@ https://www.google.com/maps/place/...	Business Name	5,0	(25)	Servicio de reparac
 
             <div className="text-xs text-slate-500 mt-2 mb-4">
               Rows: ~{csvData.split('\n').filter(l => l.includes('google.com/maps')).length} detected
+            </div>
+
+            {/* Default Area Input */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-slate-700 block mb-1">
+                📍 Default Area <span className="text-slate-400 font-normal">(city you searched for)</span>
+              </label>
+              <input
+                type="text"
+                value={defaultArea}
+                onChange={e => setDefaultArea(e.target.value)}
+                placeholder="e.g., Manila, Paranaque, Las Piñas"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+              />
+              <p className="text-xs text-slate-400 mt-1">This will override the auto-extracted area for all imports</p>
             </div>
 
             {/* Import Results */}

@@ -1368,26 +1368,72 @@ Services, pricing, reviews, contact info, etc."
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              {!selectedProspect.preview_url && (
+
+            <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-slate-100">
+              {/* Status-based Action Buttons */}
+              {selectedProspect.status === 'new' && (
                 <button
-                  onClick={() => generatePreview(selectedProspect)}
-                  disabled={isGeneratingPreview}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                  onClick={() => {
+                    // Initialize selection state for opener
+                    setSelectedOpenerArea(selectedProspect.area.split(/[,/]+/).map(s => s.trim())[0]);
+                    const phones = selectedProspect.whatsapp_number?.match(/\+?\d{8,}/g) || [selectedProspect.whatsapp_number];
+                    setSelectedOpenerPhone(phones[0] || '');
+                    setShowDetailsModal(false);
+                    setShowOpenerModal(true);
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm font-medium"
                 >
-                  {isGeneratingPreview ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Generating...
-                    </>
-                  ) : (
-                    <>🚀 Generate Preview</>
-                  )}
+                  📤 Send Opener
                 </button>
               )}
+
+              {(selectedProspect.status === 'replied' || selectedProspect.status === 'interested') && (
+                <button
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    setShowPitchModal(true);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium"
+                >
+                  🔥 Send Pitch
+                </button>
+              )}
+
+              {(selectedProspect.status === 'opener_sent' || selectedProspect.status === 'preview_sent' ||
+                selectedProspect.status === 'follow_up_1' || selectedProspect.status === 'follow_up_2') && (
+                  <button
+                    onClick={() => {
+                      const phones = selectedProspect.whatsapp_number?.match(/\+?\d{8,}/g) || [selectedProspect.whatsapp_number];
+                      setSelectedOpenerPhone(phones[0] || '');
+                      setProspectViewed(false);
+                      setShowDetailsModal(false);
+                      setShowFollowUpModal(true);
+                    }}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center gap-2 text-sm font-medium"
+                  >
+                    📲 Follow Up
+                  </button>
+                )}
+
+              {/* Generate/Regenerate Preview */}
+              <button
+                onClick={() => generatePreview(selectedProspect)}
+                disabled={isGeneratingPreview}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+              >
+                {isGeneratingPreview ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>{selectedProspect.preview_url ? '🔄 Regenerate' : '🚀 Generate Preview'}</>
+                )}
+              </button>
+
               <button
                 onClick={() => setShowDetailsModal(false)}
-                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm font-medium"
               >
                 Close
               </button>

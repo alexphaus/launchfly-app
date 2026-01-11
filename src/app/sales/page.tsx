@@ -441,16 +441,19 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
         editableContext ? `\n--- BUSINESS CONTEXT ---\n${editableContext}\n--- END ---` : '',
       ].filter(Boolean).join('\n');
 
-      const res = await fetch('/api/sales/analyze', {
+      // Use fast quick-preview endpoint (3-5s vs 60s)
+      const res = await fetch('/api/sales/quick-preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: prospect.website_url || '',
           businessName: prospect.business_name,
-          niche: prospect.service_type,
+          serviceType: prospect.service_type,
+          area: prospect.area,
+          phone: prospect.whatsapp_number,
+          email: prospect.email,
+          ownerName: prospect.owner_name,
+          websiteUrl: prospect.website_url,
           context: richContext,
-          prospectId: prospect.id,
-          images: uploadedImages, // Pass uploaded images for landing page
         }),
       });
 

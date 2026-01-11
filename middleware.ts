@@ -34,9 +34,11 @@ export async function middleware(request: NextRequest) {
 
   // If we have a subdomain, treat it as a dynamic site
   if (subdomain && (hostname?.includes('launchfly.ai') || hostname?.includes('vercel.app'))) {
-    console.log('Middleware - Rewriting to:', `/sites/${subdomain}`);
     const url = request.nextUrl.clone();
-    url.pathname = `/sites/${subdomain}`;
+    // Preserve the pathname (e.g., /quote) by appending it to /sites/[subdomain]
+    const pathname = request.nextUrl.pathname === '/' ? '' : request.nextUrl.pathname;
+    url.pathname = `/sites/${subdomain}${pathname}`;
+    console.log('Middleware - Rewriting to:', url.pathname);
 
     return NextResponse.rewrite(url);
   }

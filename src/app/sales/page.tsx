@@ -301,9 +301,7 @@ Alex`
 
   // Generate pitch message (after they say yes)
   const generatePitch = (prospect: Prospect): string => {
-    const quoteUrl = prospect.preview_business_id
-      ? `https://app.launchfly.ai/q/${prospect.preview_business_id}`
-      : '[QUOTE FUNNEL LINK]';
+    const quoteUrl = prospect.preview_url || '[QUOTE FUNNEL LINK]';
     return `Nice 👍  Here is the quote system I made for you.
 
 ⚡ ${quoteUrl}
@@ -922,17 +920,17 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-slate-500">Quote Funnel (share with customer)</p>
                     <a
-                      href={`/q/${selectedProspect.preview_business_id}`}
+                      href={selectedProspect.preview_url || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline text-sm truncate block"
                     >
-                      app.launchfly.ai/q/{selectedProspect.preview_business_id.slice(0, 8)}...
+                      {selectedProspect.preview_url?.replace('https://', '') || 'No preview yet'}
                     </a>
                   </div>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://app.launchfly.ai/q/${selectedProspect.preview_business_id}`);
+                      navigator.clipboard.writeText(selectedProspect.preview_url || '');
                       showToast('success', '⚡ Quote Funnel link copied!');
                     }}
                     className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
@@ -1237,7 +1235,7 @@ Services, pricing, reviews, contact info, etc."
               </div>
             </div>
 
-            {selectedProspect.preview_business_id && (
+            {selectedProspect.preview_url && (
               <div className="mb-6">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Generated Links</label>
                 <div className="space-y-2">
@@ -1247,17 +1245,17 @@ Services, pricing, reviews, contact info, etc."
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-500">Quote Funnel</p>
                       <a
-                        href={`https://app.launchfly.ai/q/${selectedProspect.preview_business_id}`}
+                        href={selectedProspect.preview_url || '#'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 text-sm hover:underline truncate block"
                       >
-                        app.launchfly.ai/q/{selectedProspect.preview_business_id.slice(0, 8)}...
+                        {selectedProspect.preview_url?.replace('https://', '') || 'No preview yet'}
                       </a>
                     </div>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://app.launchfly.ai/q/${selectedProspect.preview_business_id}`);
+                        navigator.clipboard.writeText(selectedProspect.preview_url || '');
                         showToast('success', '⚡ Quote Funnel copied!');
                       }}
                       className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700"
@@ -1271,17 +1269,17 @@ Services, pricing, reviews, contact info, etc."
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-500">Command Center</p>
                       <a
-                        href={`https://app.launchfly.ai/command/${selectedProspect.preview_business_id}`}
+                        href={`https://app.launchfly.ai/command/${selectedProspect.preview_business_id || ''}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-green-600 text-sm hover:underline truncate block"
                       >
-                        app.launchfly.ai/command/{selectedProspect.preview_business_id.slice(0, 8)}...
+                        app.launchfly.ai/command/{selectedProspect.preview_business_id?.slice(0, 8) || '...'}
                       </a>
                     </div>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://app.launchfly.ai/command/${selectedProspect.preview_business_id}`);
+                        navigator.clipboard.writeText(`https://app.launchfly.ai/command/${selectedProspect.preview_business_id || ''}`);
                         showToast('success', '📱 Command Center copied!');
                       }}
                       className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700"

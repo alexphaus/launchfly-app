@@ -88,6 +88,7 @@ export default function SalesPage() {
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [isExtractingContext, setIsExtractingContext] = useState(false);
   const [prospectViewed, setProspectViewed] = useState(false);
   const [editableContext, setEditableContext] = useState('');
 
@@ -415,6 +416,65 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
       // Revert on error - reload prospects
       showToast('error', err.message);
       loadProspects();
+    }
+  };
+
+  // Extract business info from context and update prospect
+  const extractAndUpdateFromContext = async () => {
+    if (!selectedProspect || !editableContext.trim()) {
+      showToast('error', 'Please enter some context to extract from');
+      return;
+    }
+
+    setIsExtractingContext(true);
+    try {
+      // Call the FB extract API
+      const res = await fetch('/api/sales/extract-facebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: editableContext }),
+      });
+
+      const extracted = await res.json();
+      if (!res.ok) throw new Error(extracted.error);
+
+      // Build update payload - only include non-empty values
+      const updates: any = { raw_context: editableContext };
+      if (extracted.businessName) updates.business_name = extracted.businessName;
+      if (extracted.ownerName) updates.owner_name = extracted.ownerName;
+      if (extracted.phone) updates.whatsapp_number = extracted.phone;
+      if (extracted.email) updates.email = extracted.email;
+      if (extracted.area) updates.area = extracted.area;
+      if (extracted.website) updates.website_url = extracted.website;
+      if (extracted.serviceType && extracted.serviceType !== 'other') updates.service_type = extracted.serviceType;
+      if (extracted.painSignals?.length) updates.pain_signals = extracted.painSignals;
+      if (extracted.notes) updates.notes = extracted.notes;
+
+      // Update prospect in database
+      const updateRes = await fetch(`/api/hunter/prospects/${selectedProspect.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (!updateRes.ok) {
+        const err = await updateRes.json();
+        throw new Error(err.error);
+      }
+
+      // Update local state
+      const updatedProspect = {
+        ...selectedProspect,
+        ...updates,
+      };
+      setSelectedProspect(updatedProspect);
+      setProspects(prev => prev.map(p => p.id === selectedProspect.id ? updatedProspect : p));
+
+      showToast('success', '✅ Extracted and updated! Phone: ' + (extracted.phone || 'N/A') + ', Area: ' + (extracted.area || 'N/A'));
+    } catch (err: any) {
+      showToast('error', err.message);
+    } finally {
+      setIsExtractingContext(false);
     }
   };
 
@@ -1154,9 +1214,27 @@ Services, pricing, reviews, contact info, etc."
                 rows={5}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-y"
               />
-              <p className="text-xs text-slate-500 mt-1">
-                This context will be used to generate the landing page preview.
-              </p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-slate-500">
+                  Paste FB/Google context, then Extract to update.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={extractAndUpdateFromContext}
+                    disabled={isExtractingContext || !editableContext.trim()}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                  >
+                    {isExtractingContext ? '⏳ Extracting...' : '🔍 Extract & Update'}
+                  </button>
+                  <button
+                    onClick={() => generatePreview(selectedProspect)}
+                    disabled={isGeneratingPreview}
+                    className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white text-xs font-medium rounded-lg hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1"
+                  >
+                    {isGeneratingPreview ? '⏳ Generating...' : '🚀 Regenerate Preview'}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {selectedProspect.preview_business_id && (

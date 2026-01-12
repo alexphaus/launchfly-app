@@ -35,6 +35,14 @@ export async function PATCH(
       'preview_sent_at',
       'last_follow_up_at',
       'closed_at',
+      // Added missing fields for context extraction updates
+      'raw_context',
+      'email',
+      'whatsapp_number',
+      'area',
+      'business_name',
+      'service_type',
+      'pain_signals',
     ];
 
     // Filter to only allowed fields

@@ -57,6 +57,9 @@ export default async function SubdomainQuotePage({ params }) {
             businessName={businessData.businessName || business.name}
             niche={businessData.niche}
             logoUrl={businessData.logo_url || businessData.logoUrl}
+            // Route to Launchfly Assistant Bot
+            whatsappNumber="13203627874"
+            phoneNumber={businessData.phone || businessData.whatsapp_number}
             serviceOptions={businessData.quoteConfig?.serviceOptions || businessData.serviceOptions}
             priceMatrix={businessData.quoteConfig?.priceMatrix || businessData.priceMatrix}
         />

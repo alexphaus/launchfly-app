@@ -111,7 +111,7 @@ export default function QuoteFunnel({
                 if (whatsappNumber) {
                     const cleanPhone = whatsappNumber.replace(/\D/g, '');
                     const message = encodeURIComponent(
-                        `Hi! I just requested a quote for ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}`
+                        `Hi! I want to request a quote for ${businessName}. Service: ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}`
                     );
                     // Use native WhatsApp scheme to bypass ISP blocks on wa.me
                     window.location.href = `whatsapp://send?phone=${cleanPhone}&text=${message}`;

@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Download, Copy, Check, X, FileText, Image, MessageCircle, Facebook, Phone, QrCode, Printer, Share2 } from 'lucide-react';
+import QRCodeLib from 'qrcode';
 
 export default function PhysicalAssetPack({ business, onClose }) {
   const [activeTab, setActiveTab] = useState('share');
@@ -58,6 +59,115 @@ export default function PhysicalAssetPack({ business, onClose }) {
         return;
     }
     window.open(url, '_blank');
+  };
+
+  const generateVanSticker = async () => {
+    // Construct quote URL
+    const quoteUrl = business?.subdomain
+      // Use window.location.origin to support any environment
+      ? `${window.location.origin}/sites/${business.subdomain}/quote`
+      : `${window.location.origin}/q/${business?.id}`;
+
+    const canvas = document.createElement('canvas');
+    const size = 2000; // High res for printing
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Colors
+    const brandBlue = '#0F172A'; // Dark slate/blue
+    const whatsappGreen = '#25D366';
+
+    // 1. Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+
+    // 2. Thick Border (Inset)
+    const borderWidth = 40;
+    const margin = 60;
+    ctx.strokeStyle = brandBlue;
+    ctx.lineWidth = borderWidth;
+    ctx.lineJoin = 'round';
+    ctx.strokeRect(margin, margin, size - (margin * 2), size - (margin * 2));
+
+    // 3. Headline: BOOK [SERVICE]
+    // Handle undefined business data safely
+    const niche = business?.business_data?.niche || 'SERVICE';
+    let serviceHeadline = (niche || 'SERVICE').toUpperCase();
+    if (!serviceHeadline.includes('SERVICE')) {
+      serviceHeadline += ' SERVICE';
+    }
+
+    ctx.fillStyle = brandBlue;
+    ctx.font = 'bold 160px "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    const headlineY = margin + 120;
+    ctx.fillText(`BOOK ${serviceHeadline}`, size / 2, headlineY);
+
+    // 4. Footer: Scan for Instant Price
+    ctx.font = 'bold 90px "Inter", sans-serif';
+    ctx.fillText('Scan for Instant Price', size / 2, size - margin - 280);
+
+    // 5. QR Code
+    const qrSize = 900;
+    const qrX = (size - qrSize) / 2;
+    const qrY = (size - qrSize) / 2 + 50;
+
+    try {
+      const qrDataUrl = await QRCodeLib.toDataURL(quoteUrl, {
+        width: qrSize,
+        margin: 1,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#000000', light: '#ffffff' }
+      });
+
+      const qrImg = new Image();
+      qrImg.src = qrDataUrl;
+      await new Promise((resolve) => { qrImg.onload = resolve; });
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+      // 6. WhatsApp Icon Overlay
+      const iconSize = qrSize * 0.22;
+      const iconX = size / 2;
+      const iconY = qrY + (qrSize / 2);
+
+      // Green Circle
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, (iconSize / 2) - 10, 0, Math.PI * 2);
+      ctx.fillStyle = whatsappGreen;
+      ctx.fill();
+
+      // Phone Icon Path
+      const s = iconSize * 0.5;
+      ctx.fillStyle = '#ffffff';
+      ctx.save();
+      ctx.translate(iconX, iconY);
+      ctx.scale(s / 24, s / 24);
+      ctx.translate(-12, -12);
+      const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+      ctx.fill(phonePath);
+      ctx.restore();
+
+      // Download
+      const link = document.createElement('a');
+      const safeName = (business?.name || 'Business').replace(/\s+/g, '_');
+      link.download = `${safeName}_Van_Sticker.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (err) {
+      console.error('Error creating van sticker:', err);
+      alert('Failed to generate sticker. Please try again.');
+    }
   };
 
   return (
@@ -401,7 +511,7 @@ Reply "BOOK" if you want to grab a slot!
                     <QrCode size={80} className="text-slate-400" />
                   </div>
                   <p className="text-xs text-slate-500 text-center mb-2">
-                    Points to: <span className="font-mono text-blue-600">/q/{business?.id?.slice(0, 8)}...</span>
+                    Points to: <span className="font-mono text-blue-600">/quote</span>
                   </p>
                   <p className="text-xs text-slate-400 text-center">
                     Customers scan → Get instant quote → You get the lead
@@ -409,22 +519,21 @@ Reply "BOOK" if you want to grab a slot!
                 </div>
 
                 <button
-                  onClick={() => handleDownload('sticker')}
+                  onClick={generateVanSticker}
                   className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition-colors"
                 >
                   <Download size={18} />
-                  Download Van Magnet PDF
+                  Download High-Res / Sticker
                 </button>
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <h4 className="font-medium text-slate-800">🖨️ How to Get Your Magnet Printed</h4>
                 <ul className="text-sm text-slate-600 mt-2 space-y-1">
-                  <li>1. Download the PDF above</li>
+                  <li>1. Download the PNG file above</li>
                   <li>2. Go to Shopee/Lazada → Search "custom car magnet sticker"</li>
-                  <li>3. Upload the PDF → Choose "outdoor vinyl" material</li>
-                  <li>4. Recommended size: 20cm x 20cm or larger</li>
-                  <li>5. Cost: Usually RM 15-30 for magnetic version</li>
+                  <li>3. Upload the file → Choose "outdoor vinyl" material</li>
+                  <li>4. Recommended size: 30cm x 30cm (High Visibility)</li>
                 </ul>
               </div>
             </div>

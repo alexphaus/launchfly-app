@@ -7,8 +7,9 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
     Settings, Snowflake, Wrench, MessageCircle, CheckCircle,
     Calendar, Megaphone, QrCode, Bot, Phone, Clock, X,
-    Zap, TrendingUp, Users, ChevronRight
+    Zap, TrendingUp, Users, ChevronRight, Download
 } from 'lucide-react';
+import QRCodeLib from 'qrcode';
 
 export default function CommandCenter({ business, initialLeads = [], initialStats = {} }) {
     const [leads, setLeads] = useState(initialLeads);
@@ -318,8 +319,109 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     };
 
     // Download QR
-    const downloadQR = () => {
-        window.open(`/api/assets/flyer?businessId=${business.id}&format=sticker`, '_blank');
+    const downloadQR = async () => {
+        // Construct quote URL
+        const quoteUrl = business?.subdomain
+            ? `${window.location.origin}/sites/${business.subdomain}/quote`
+            : `${window.location.origin}/q/${business?.id}`;
+
+        const canvas = document.createElement('canvas');
+        const size = 2000; // High res for printing
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Colors
+        const brandBlue = '#0F172A'; // Dark slate/blue
+        const whatsappGreen = '#25D366';
+
+        // 1. Background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+
+        // 2. Thick Border (Inset)
+        const borderWidth = 40;
+        const margin = 60;
+        ctx.strokeStyle = brandBlue;
+        ctx.lineWidth = borderWidth;
+        ctx.lineJoin = 'round';
+        ctx.strokeRect(margin, margin, size - (margin * 2), size - (margin * 2));
+
+        // 3. Headline: BOOK [SERVICE]
+        let serviceHeadline = (niche || 'SERVICE').toUpperCase();
+        if (!serviceHeadline.includes('SERVICE')) {
+            serviceHeadline += ' SERVICE';
+        }
+
+        ctx.fillStyle = brandBlue;
+        ctx.font = 'bold 160px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const headlineY = margin + 120;
+        ctx.fillText(`BOOK ${serviceHeadline}`, size / 2, headlineY);
+
+        // 4. Footer: Scan for Instant Price
+        ctx.font = 'bold 90px "Inter", sans-serif';
+        ctx.fillText('Scan for Instant Price', size / 2, size - margin - 280);
+
+        // 5. QR Code
+        const qrSize = 900;
+        const qrX = (size - qrSize) / 2;
+        const qrY = (size - qrSize) / 2 + 50;
+
+        try {
+            const qrDataUrl = await QRCodeLib.toDataURL(quoteUrl, {
+                width: qrSize,
+                margin: 1,
+                errorCorrectionLevel: 'H',
+                color: { dark: '#000000', light: '#ffffff' }
+            });
+
+            const qrImg = new Image();
+            qrImg.src = qrDataUrl;
+            await new Promise((resolve) => { qrImg.onload = resolve; });
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            // 6. WhatsApp Icon Overlay
+            const iconSize = qrSize * 0.22;
+            const iconX = size / 2;
+            const iconY = qrY + (qrSize / 2);
+
+            // Green Circle
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, (iconSize / 2) - 10, 0, Math.PI * 2);
+            ctx.fillStyle = whatsappGreen;
+            ctx.fill();
+
+            // Phone Icon Path
+            const s = iconSize * 0.5;
+            ctx.fillStyle = '#ffffff';
+            ctx.save();
+            ctx.translate(iconX, iconY);
+            ctx.scale(s / 24, s / 24);
+            ctx.translate(-12, -12);
+            const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+            ctx.fill(phonePath);
+            ctx.restore();
+
+            // Download
+            const link = document.createElement('a');
+            const safeName = (businessName || 'Business').replace(/\s+/g, '_');
+            link.download = `${safeName}_Van_Sticker.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            console.error('Error creating van sticker:', err);
+            alert('Failed to generate sticker. Please try again.');
+        }
     };
 
     // Count old leads for blast

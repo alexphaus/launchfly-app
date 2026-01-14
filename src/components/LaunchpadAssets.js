@@ -21,20 +21,124 @@ export default function LaunchpadAssets({ business, quoteUrl }) {
         }
     }, [quoteUrl]);
 
-    const downloadQr = () => {
-        if (!qrCodeUrl) return;
-        const link = document.createElement('a');
-        link.download = `${business?.business_name?.replace(/\s+/g, '_')}_qr_magnet.png`;
-        link.href = qrCodeUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+    const generateVanSticker = async () => {
+        if (!quoteUrl) return;
 
-    const copyScript = () => {
-        navigator.clipboard.writeText(reengagementScript);
-        setCopiedScript(true);
-        setTimeout(() => setCopiedScript(false), 2000);
+        const canvas = document.createElement('canvas');
+        const size = 2000; // High res for printing
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Colors
+        const brandBlue = '#0F172A'; // Dark slate/blue for professional look
+        const whatsappGreen = '#25D366';
+
+        // 1. Background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+
+        // 2. Thick Border (Inset)
+        const borderWidth = 40;
+        const margin = 60;
+        ctx.strokeStyle = brandBlue;
+        ctx.lineWidth = borderWidth;
+        ctx.lineJoin = 'round';
+        ctx.strokeRect(margin, margin, size - (margin * 2), size - (margin * 2));
+
+        // 3. Headline: BOOK [SERVICE] SERVICE
+        const serviceName = (business?.business_data?.niche || 'SERVICE').toUpperCase();
+        ctx.fillStyle = brandBlue;
+        ctx.font = 'bold 160px "Inter", sans-serif'; // High res font
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // Handle long text wrapping if needed, but for now simple center
+        const headlineY = margin + 120;
+        ctx.fillText(`BOOK ${serviceName}`, size / 2, headlineY);
+        ctx.fillText('SERVICE', size / 2, headlineY + 180);
+
+        // 4. Footer: Scan for Instant Price
+        ctx.font = 'bold 90px "Inter", sans-serif';
+        ctx.fillText('Scan for Instant Price', size / 2, size - margin - 180);
+
+        // 5. QR Code (High Error Correction for logo overlay)
+        const qrSize = 900;
+        const qrX = (size - qrSize) / 2;
+        const qrY = (size - qrSize) / 2 + 50; // Centered vertically adjusted for text
+
+        try {
+            const qrDataUrl = await QRCode.toDataURL(quoteUrl, {
+                width: qrSize,
+                margin: 1,
+                errorCorrectionLevel: 'H', // High error correction for logo
+                color: { dark: '#000000', light: '#ffffff' }
+            });
+
+            const qrImg = new Image();
+            qrImg.src = qrDataUrl;
+            await new Promise((resolve) => { qrImg.onload = resolve; });
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            // 6. WhatsApp Icon Overlay
+            const iconSize = qrSize * 0.22; // 22% of QR size
+            const iconX = size / 2;
+            const iconY = qrY + (qrSize / 2);
+
+            // Green Circle Background
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff'; // White border for contrast
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, (iconSize / 2) - 10, 0, Math.PI * 2);
+            ctx.fillStyle = whatsappGreen;
+            ctx.fill();
+
+            // Phone Icon (Simplified path)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            // Simple phone handset shape
+            // Scale and position relative to center
+            const s = iconSize * 0.5; // symbol size
+            const x = iconX - s / 2;
+            const y = iconY - s / 2;
+            // Draw a simplified phone handset path or 'W' text if path is too complex for canvas primitives manually
+            // Using a "W" for now to ensure reliability, or simpler graphical representation
+            ctx.font = `bold ${s}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // Use unicode phone or WhatsApp 'W'
+            // ctx.fillText('📞', iconX, iconY + (s * 0.1)); 
+
+            // Actually, let's draw a nice rounded bubble path (WhatsApp logo shape)
+            // Or just a white "WA" text
+            // Loading an actual SVG image is safer for quality but requires asset.
+
+            // Drawing simple phone path
+            ctx.save();
+            ctx.translate(iconX, iconY);
+            ctx.scale(s / 24, s / 24); // Scale standard 24px icon path
+            ctx.translate(-12, -12); // Center path
+            const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+            ctx.fill(phonePath);
+            ctx.restore();
+
+
+            // Download
+            const link = document.createElement('a');
+            const safeName = (business?.name || business?.business_name || 'My_Business').replace(/\s+/g, '_');
+            link.download = `${safeName}_Van_Sticker.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (err) {
+            console.error('Error creating van sticker:', err);
+            alert('Failed to generate sticker');
+        }
     };
 
     return (
@@ -75,14 +179,14 @@ export default function LaunchpadAssets({ business, quoteUrl }) {
                     </div>
 
                     <button
-                        onClick={downloadQr}
+                        onClick={generateVanSticker}
                         className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-black transition-colors"
                     >
                         <Download size={18} />
-                        Download High-Res PNG
+                        Download High-Res / Sticker
                     </button>
                     <p className="text-xs text-center text-gray-500 mt-3">
-                        Send this to your sticker printer. Ask for "Outdoor Vinyl Magnet".
+                        Generates a 2000px print-ready file for your van.
                     </p>
                 </div>
 
@@ -116,8 +220,8 @@ export default function LaunchpadAssets({ business, quoteUrl }) {
                     <button
                         onClick={copyScript}
                         className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-colors ${copiedScript
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                             }`}
                     >
                         {copiedScript ? 'Copied to Clipboard!' : 'Copy Script'}

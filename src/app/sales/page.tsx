@@ -91,6 +91,7 @@ export default function SalesPage() {
   const [isExtractingContext, setIsExtractingContext] = useState(false);
   const [prospectViewed, setProspectViewed] = useState(false);
   const [editableContext, setEditableContext] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
   // Opener Selection State
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
@@ -182,12 +183,16 @@ export default function SalesPage() {
   };
 
   // Load prospects from API
-  const loadProspects = useCallback(async () => {
+  const loadProspects = useCallback(async (queryOverride?: string) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      params.set('limit', '100');
+
+      const activeSearch = queryOverride !== undefined ? queryOverride : debouncedSearchQuery;
+      if (activeSearch) params.set('q', activeSearch);
+
+      params.set('limit', activeSearch ? '100' : '100'); // Keep 100 for now
 
       const res = await fetch(`/api/hunter/prospects?${params}`, {
         // Ensure fresh data
@@ -202,7 +207,16 @@ export default function SalesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, debouncedSearchQuery]);
+
+  // Handle debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     loadProspects();
@@ -250,14 +264,7 @@ export default function SalesPage() {
       if (!needsFollowUp(p)) return false;
     }
 
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      p.business_name.toLowerCase().includes(query) ||
-      p.area.toLowerCase().includes(query) ||
-      p.whatsapp_number.includes(query) ||
-      (p.owner_name && p.owner_name.toLowerCase().includes(query))
-    );
+    return true; // Filtering handled by server
   });
 
   // Stats
@@ -620,7 +627,7 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
                 )}
               </button>
               <button
-                onClick={loadProspects}
+                onClick={() => loadProspects()}
                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 rounded-lg transition-all cursor-pointer"
               >
                 🔄 Refresh

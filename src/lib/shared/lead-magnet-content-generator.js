@@ -20,31 +20,46 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ============ CURRENCY DETECTION ============
 export function detectCurrency(text) {
-  if (!text) return { symbol: '$', code: 'USD', name: 'dollars' };
+  if (!text) return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
   const lowerText = text.toLowerCase();
-  
-  if (lowerText.includes('rm') || lowerText.includes('ringgit') || lowerText.includes('malaysia')) {
+
+  // 1. Explicit Currency Symbols/Codes
+  if (lowerText.includes('rm') || lowerText.includes('ringgit')) {
     return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
   }
-  if (lowerText.includes('sgd') || lowerText.includes('singapore')) {
+  if (lowerText.includes('sgd') || lowerText.includes('s$')) {
     return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
   }
-  if (lowerText.includes('php') || lowerText.includes('peso') || lowerText.includes('philippines')) {
+  if (lowerText.includes('php') || lowerText.includes('peso') || lowerText.includes('₱')) {
     return { symbol: '₱', code: 'PHP', name: 'pesos' };
   }
-  if (lowerText.includes('idr') || lowerText.includes('rupiah') || lowerText.includes('indonesia')) {
+  if (lowerText.includes('idr') || lowerText.includes('rupiah') || lowerText.includes('rp ')) {
     return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
   }
-  if (lowerText.includes('thb') || lowerText.includes('baht') || lowerText.includes('thailand')) {
+  if (lowerText.includes('thb') || lowerText.includes('baht') || lowerText.includes('฿')) {
     return { symbol: '฿', code: 'THB', name: 'baht' };
   }
-  if (lowerText.includes('£') || lowerText.includes('gbp') || lowerText.includes('pound')) {
-    return { symbol: '£', code: 'GBP', name: 'pounds' };
-  }
-  if (lowerText.includes('€') || lowerText.includes('eur') || lowerText.includes('euro')) {
-    return { symbol: '€', code: 'EUR', name: 'euros' };
-  }
-  return { symbol: '$', code: 'USD', name: 'dollars' };
+
+  // 2. Location Signals (Cities/Regions)
+  const malaysiaSignals = ['kuala lumpur', 'kl ', 'selangor', 'johor', 'penang', 'malaysia', 'petaling jaya', 'shah alam', 'subang jaya'];
+  const philippinesSignals = ['philippines', 'manila', 'quezon city', 'makati', 'cebu', 'davao', 'cavite', 'laguna', 'bulacan'];
+  const singaporeSignals = ['singapore', 'orchard', 'jurong', 'tampines'];
+  const indonesiaSignals = ['indonesia', 'jakarta', 'bali', 'surabaya', 'bandung'];
+
+  if (malaysiaSignals.some(s => lowerText.includes(s))) return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
+  if (philippinesSignals.some(s => lowerText.includes(s))) return { symbol: '₱', code: 'PHP', name: 'pesos' };
+  if (singaporeSignals.some(s => lowerText.includes(s))) return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
+  if (indonesiaSignals.some(s => lowerText.includes(s))) return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
+
+  // 3. Phone Number Prefixes
+  if (lowerText.includes('+60')) return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
+  if (lowerText.includes('+63')) return { symbol: '₱', code: 'PHP', name: 'pesos' };
+  if (lowerText.includes('+65')) return { symbol: 'S$', code: 'SGD', name: 'Singapore dollars' };
+  if (lowerText.includes('+62')) return { symbol: 'Rp', code: 'IDR', name: 'rupiah' };
+  if (lowerText.includes('+66')) return { symbol: '฿', code: 'THB', name: 'baht' };
+
+  // Default to RM for SEA context if nothing else found
+  return { symbol: 'RM', code: 'MYR', name: 'ringgit' };
 }
 
 // ============ LANGUAGE DETECTION ============
@@ -54,7 +69,7 @@ export function detectLanguage(text) {
   // Philippines / Luzon / PHP indicators (English-first)
   const philippinesSignals = [
     'philippines', 'luzon', 'metro manila', 'manila', 'quezon', 'cavite',
-    'laguna', 'bulacan', 'pampanga', 'batangas', '₱', 'php',
+    'laguna', 'bulacan', 'pampanga', 'batangas', '₱', 'php', 'makati', '+63',
     'salamat', 'kumusta', 'kamusta', 'po', 'opo', 'pwede', 'pwedeng', 'tingin'
   ];
   if (philippinesSignals.some(s => lowerText.includes(s))) {
@@ -94,50 +109,50 @@ export function detectLanguage(text) {
 // ============ BUSINESS TYPE DETECTION ============
 export function detectBusinessType(topicText, contextText = '') {
   const combinedText = `${topicText || ''} ${contextText || ''}`.toLowerCase();
-  
+
   // SERVICE keywords get highest priority (check FIRST)
   const serviceKeywords = [
-    'plumb', 'plumber', 'plumbing', 'electrician', 'electric', 'hvac', 
-    'repair', 'contractor', 'handyman', 'homefix', 'locksmith', 'roofing', 
+    'plumb', 'plumber', 'plumbing', 'electrician', 'electric', 'hvac',
+    'repair', 'contractor', 'handyman', 'homefix', 'locksmith', 'roofing',
     'cleaning', 'pest', 'moving', 'towing', 'emergency', 'paip', 'bocor',
     'aircon', 'ac service', 'air conditioning', 'maintenance'
   ];
-  
+
   if (serviceKeywords.some(k => combinedText.includes(k))) {
     return 'local_service';
   }
-  
+
   // EVENT keywords
   const eventKeywords = [
     'event', 'workshop', 'webinar', 'seminar', 'conference', 'summit',
     'ticket', 'zumba', 'yoga class', 'fitness class', 'master class',
     'masterclass', 'bootcamp', 'retreat', 'registration'
   ];
-  
+
   const eventPatterns = [
     /\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,
     /rm\s*\d+/i,
     /\$\s*\d+\s*(per|\/)\s*(person|pax|ticket)/i,
     /\d{1,2}:\d{2}\s*(am|pm)/i
   ];
-  
+
   const hasEventKeyword = eventKeywords.some(k => combinedText.includes(k));
   const hasEventPattern = eventPatterns.some(p => p.test(combinedText));
-  
+
   if (hasEventKeyword && hasEventPattern) {
     return 'event';
   }
-  
+
   // COACHING keywords
   const coachingKeywords = [
-    'coach', 'coaching', 'consultant', 'consulting', 'mentor', 
+    'coach', 'coaching', 'consultant', 'consulting', 'mentor',
     'trainer', 'advisor', 'expert', 'strategist', 'therapist'
   ];
-  
+
   if (coachingKeywords.some(k => combinedText.includes(k))) {
     return 'coaching';
   }
-  
+
   return 'local_service'; // Default
 }
 
@@ -358,8 +373,8 @@ export function mergeProspectContent(existingBusinessData, newContent) {
   const merged = {
     ...existingBusinessData,
     // Upgrade with any better content from regeneration
-    testimonials: newContent.testimonials?.length > 0 
-      ? newContent.testimonials 
+    testimonials: newContent.testimonials?.length > 0
+      ? newContent.testimonials
       : existingBusinessData.testimonials,
     // Ensure we have full PDF content
     lead_magnet_pdf: {
@@ -375,19 +390,19 @@ export function mergeProspectContent(existingBusinessData, newContent) {
     // Keep design preferences
     design_preferences: existingBusinessData.design_preferences || newContent.design_preferences
   };
-  
+
   return merged;
 }
 
 // ============ CHECK IF CONTENT IS COMPLETE ============
 export function isContentComplete(businessData) {
   if (!businessData) return false;
-  
+
   const hasLeadMagnet = businessData.leadMagnet?.lead_magnet?.title || businessData.lead_magnet_title;
   const hasPdfContent = businessData.lead_magnet_pdf?.diagnostic_questions?.length > 0 ||
-                        businessData.lead_magnet_pdf?.common_mistakes?.length > 0;
+    businessData.lead_magnet_pdf?.common_mistakes?.length > 0;
   const hasTestimonials = businessData.testimonials?.length > 0;
-  
+
   return hasLeadMagnet && hasPdfContent && hasTestimonials;
 }
 

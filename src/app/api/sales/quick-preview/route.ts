@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
 import { SERVICE_TEMPLATES, getServiceTemplate } from '@/lib/content-library';
+import { detectCurrency } from '@/lib/shared/lead-magnet-content-generator';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -118,9 +119,13 @@ export async function POST(request: Request) {
             email,
             ownerName,
             websiteUrl,
-            currency = 'RM',
+            currency: manualCurrency,
             context  // Optional raw context for notes
         } = await request.json();
+
+        // Detect currency if not explicitly provided
+        const detected = detectCurrency(`${businessName} ${area} ${phone} ${context || ''}`);
+        const currency = manualCurrency || detected.symbol;
 
         // Validate required fields
         if (!businessName) {

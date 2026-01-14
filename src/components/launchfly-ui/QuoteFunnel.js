@@ -12,7 +12,7 @@ export default function QuoteFunnel({
     headline = "Get your service price in 30 seconds.",
     subheadline = "No hidden fees. 100% Free Estimate.",
     urgencyText = "⚡ Response in 2 mins",
-    currency = "₱",
+    currency = "RM",
     services = [
         { id: 'cleaning', label: 'Cleaning', basePrice: 1200 },
         { id: 'repair', label: 'Repair', basePrice: 500, isRange: true, maxPrice: 1500 },

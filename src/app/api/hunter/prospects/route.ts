@@ -20,23 +20,30 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const serviceType = searchParams.get('service_type');
-    const limit = parseInt(searchParams.get('limit') || '50'); // Reduced default for faster initial load
+    const query = searchParams.get('q');
+    const limit = parseInt(searchParams.get('limit') || (query ? '100' : '50')); // Increased limit when searching
 
-    let query = supabase
+    let supabaseQuery = supabase
       .from('hunter_prospects')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+      .order('created_at', { ascending: false });
 
     if (status && status !== 'all') {
-      query = query.eq('status', status);
+      supabaseQuery = supabaseQuery.eq('status', status);
     }
 
     if (serviceType && serviceType !== 'all') {
-      query = query.eq('service_type', serviceType);
+      supabaseQuery = supabaseQuery.eq('service_type', serviceType);
     }
 
-    const { data, error } = await query;
+    if (query) {
+      supabaseQuery = supabaseQuery.or(`business_name.ilike.%${query}%,area.ilike.%${query}%,whatsapp_number.ilike.%${query}%,owner_name.ilike.%${query}%`);
+    }
+
+    // Apply limit at the end
+    supabaseQuery = supabaseQuery.limit(limit);
+
+    const { data, error } = await supabaseQuery;
 
     if (error) {
       console.error('Error fetching prospects:', error);

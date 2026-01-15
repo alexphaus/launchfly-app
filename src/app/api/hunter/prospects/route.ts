@@ -20,13 +20,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const serviceType = searchParams.get('service_type');
-    const limit = parseInt(searchParams.get('limit') || '50'); // Reduced default for faster initial load
+    const search = searchParams.get('search');
+    const limit = parseInt(searchParams.get('limit') || '50');
 
     let query = supabase
       .from('hunter_prospects')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+      .order('created_at', { ascending: false });
+
+    if (search) {
+      // Search across multiple fields
+      query = query.or(`business_name.ilike.%${search}%,area.ilike.%${search}%,whatsapp_number.ilike.%${search}%,owner_name.ilike.%${search}%`);
+    }
 
     if (status && status !== 'all') {
       query = query.eq('status', status);
@@ -34,6 +39,12 @@ export async function GET(request: NextRequest) {
 
     if (serviceType && serviceType !== 'all') {
       query = query.eq('service_type', serviceType);
+    }
+
+    if (!search) {
+      query = query.limit(limit);
+    } else {
+      query = query.limit(200); // Allow more results when searching
     }
 
     const { data, error } = await query;

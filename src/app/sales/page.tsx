@@ -101,6 +101,18 @@ export default function SalesPage() {
 
   // Toast
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
 
   // Image upload for previews
   const [uploadedImages, setUploadedImages] = useState<ProspectImage[]>([]);
@@ -187,6 +199,7 @@ export default function SalesPage() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (debouncedSearchQuery) params.set('search', debouncedSearchQuery);
       params.set('limit', '100');
 
       const res = await fetch(`/api/hunter/prospects?${params}`, {
@@ -202,7 +215,7 @@ export default function SalesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, debouncedSearchQuery]);
 
   useEffect(() => {
     loadProspects();
@@ -243,21 +256,14 @@ export default function SalesPage() {
     return false;
   };
 
-  // Filter prospects by search and morning action
+  // Filter prospects by morning action
   const filteredProspects = prospects.filter(p => {
     // Morning action filter - show only prospects needing follow-up
     if (morningActionFilter) {
       if (!needsFollowUp(p)) return false;
     }
 
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      p.business_name.toLowerCase().includes(query) ||
-      p.area.toLowerCase().includes(query) ||
-      p.whatsapp_number.includes(query) ||
-      (p.owner_name && p.owner_name.toLowerCase().includes(query))
-    );
+    return true;
   });
 
   // Stats

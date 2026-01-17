@@ -80,6 +80,9 @@ export default function SalesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [morningActionFilter, setMorningActionFilter] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalProspects, setTotalProspects] = useState(0);
+  const PAGE_SIZE = 100;
 
   // Modals
   const [showOpenerModal, setShowOpenerModal] = useState(false);
@@ -226,7 +229,8 @@ export default function SalesPage() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (debouncedSearchQuery) params.set('search', debouncedSearchQuery);
-      params.set('limit', '100');
+      params.set('limit', PAGE_SIZE.toString());
+      params.set('offset', ((currentPage - 1) * PAGE_SIZE).toString());
 
       const res = await fetch(`/api/hunter/prospects?${params}`, {
         // Ensure fresh data
@@ -236,6 +240,7 @@ export default function SalesPage() {
 
       if (!res.ok) throw new Error(data.error);
       setProspects(data.prospects || []);
+      setTotalProspects(data.totalCount || 0);
     } catch (err: any) {
       showToast('error', err.message);
     } finally {
@@ -245,7 +250,12 @@ export default function SalesPage() {
 
   useEffect(() => {
     loadProspects();
-  }, [loadProspects]);
+  }, [loadProspects, currentPage]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, debouncedSearchQuery, morningActionFilter]);
 
   // Check if prospect needs follow-up based on time (for Morning Action filter)
   const needsFollowUp = (prospect: Prospect): boolean => {
@@ -732,6 +742,34 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
               ))
             )}
           </div>
+
+          {/* Pagination Controls */}
+          {totalProspects > PAGE_SIZE && (
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <p className="text-xs text-slate-500">
+                Showing <span className="font-medium">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to <span className="font-medium">{Math.min(currentPage * PAGE_SIZE, totalProspects)}</span> of <span className="font-medium">{totalProspects}</span> prospects
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1 || isLoading}
+                  className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center px-3 text-xs font-bold text-slate-600">
+                  Page {currentPage} of {Math.ceil(totalProspects / PAGE_SIZE)}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalProspects / PAGE_SIZE), prev + 1))}
+                  disabled={currentPage >= Math.ceil(totalProspects / PAGE_SIZE) || isLoading}
+                  className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

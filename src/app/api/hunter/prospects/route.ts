@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
     const serviceType = searchParams.get('service_type');
     const search = searchParams.get('search');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
     let query = supabase
       .from('hunter_prospects')
-      .select('*')
+      .select('*', { count: 'exact' }) // Get total count for pagination
       .order('created_at', { ascending: false });
 
     if (search) {
@@ -41,13 +42,12 @@ export async function GET(request: NextRequest) {
       query = query.eq('service_type', serviceType);
     }
 
-    if (!search) {
-      query = query.limit(limit);
-    } else {
-      query = query.limit(200); // Allow more results when searching
-    }
+    // Apply pagination
+    const from = offset;
+    const to = offset + (search ? 200 : limit) - 1;
+    query = query.range(from, to);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) {
       console.error('Error fetching prospects:', error);
@@ -56,7 +56,10 @@ export async function GET(request: NextRequest) {
 
     // No cache for fresh pipeline data
     return NextResponse.json(
-      { prospects: data },
+      {
+        prospects: data,
+        totalCount: count || 0
+      },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',

@@ -1445,8 +1445,7 @@ Services, pricing, reviews, contact info, etc."
                 ) : (
                   <button
                     onClick={() => {
-                      const msg = generateOpener(selectedProspect);
-                      openWhatsApp(selectedProspect, msg);
+                      openWhatsApp(selectedProspect, "/opener");
                       setWasWhatsAppClicked(true);
                     }}
                     className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"

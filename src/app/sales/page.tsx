@@ -594,22 +594,11 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
               Sales Pipeline
-              <span className="text-sm font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                {stats.total}
-              </span>
             </h1>
             <div className="mt-2 flex gap-4 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="text-slate-500 text-sm">Sent Today:</span>
                 <strong className="text-slate-900 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 text-sm">{stats.todaySent}</strong>
-              </div>
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <span className="text-slate-500 text-sm">Hot Leads:</span>
-                <strong className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 text-sm">{stats.replied}</strong>
-              </div>
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <span className="text-slate-500 text-sm">Won:</span>
-                <strong className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 text-sm">{stats.won}</strong>
               </div>
             </div>
           </div>

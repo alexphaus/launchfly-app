@@ -1618,7 +1618,7 @@ function ProspectCard({
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions - Hidden for now
         <div className="flex flex-col gap-2 flex-shrink-0">
           {prospect.status === 'new' && (
             <button
@@ -1721,6 +1721,7 @@ function ProspectCard({
             </span>
           )}
         </div>
+        */}
       </div>
     </div>
   );

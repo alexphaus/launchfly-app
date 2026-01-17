@@ -246,16 +246,16 @@ export default function SalesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter, debouncedSearchQuery]);
+  }, [statusFilter, debouncedSearchQuery, currentPage]);
 
   useEffect(() => {
     loadProspects();
-  }, [loadProspects, currentPage]);
+  }, [loadProspects]);
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, debouncedSearchQuery, morningActionFilter]);
+  }, [statusFilter, debouncedSearchQuery]);
 
   // Check if prospect needs follow-up based on time (for Morning Action filter)
   const needsFollowUp = (prospect: Prospect): boolean => {
@@ -304,7 +304,7 @@ export default function SalesPage() {
 
   // Stats
   const stats = {
-    total: prospects.length,
+    total: totalProspects,
     pipeline: prospects.filter(p => !['closed_won', 'closed_lost'].includes(p.status)).length,
     replied: prospects.filter(p => ['replied', 'interested', 'preview_sent'].includes(p.status)).length,
     won: prospects.filter(p => p.status === 'closed_won').length,

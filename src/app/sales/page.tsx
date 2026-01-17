@@ -1601,16 +1601,17 @@ function ProspectCard({
   const followUpStatus = getFollowUpAvailability();
 
   return (
-    <div className="p-6 hover:bg-slate-50 transition">
+    <div
+      className="p-6 hover:bg-slate-50 transition !cursor-pointer w-full block hover:ring-1 hover:ring-blue-100"
+      style={{ cursor: 'pointer !important' } as any}
+      onClick={onShowDetails}
+    >
       <div className="flex items-start justify-between gap-4">
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">{service?.label.split(' ')[0] || '🔨'}</span>
-            <h3
-              onClick={onShowDetails}
-              className="font-semibold text-slate-900 truncate cursor-pointer hover:text-blue-600 transition-colors"
-            >
+            <h3 className="font-semibold text-slate-900 truncate">
               {prospect.business_name}
             </h3>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.color}`}>

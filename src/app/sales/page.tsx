@@ -1297,7 +1297,7 @@ Services, pricing, reviews, contact info, etc."
               </div>
             )}
 
-            {/* Image Upload Section */}
+            {/* Image Upload Section - Hidden for now
             <div className="mb-6">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">📸 Business Images</label>
               <p className="text-xs text-slate-500 mb-3">
@@ -1333,7 +1333,6 @@ Services, pricing, reviews, contact info, etc."
                   </div>
                 ))}
 
-                {/* Upload Button */}
                 <label className={`w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   {isUploading ? (
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -1354,7 +1353,6 @@ Services, pricing, reviews, contact info, etc."
                   />
                 </label>
 
-                {/* Stock Library Button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1373,6 +1371,7 @@ Services, pricing, reviews, contact info, etc."
                 </p>
               )}
             </div>
+            */}
 
 
             <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-slate-100">

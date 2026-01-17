@@ -646,6 +646,7 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
                   <option key={key} value={key}>{config.emoji} {config.label}</option>
                 ))}
               </select>
+              {/* 
               <button
                 onClick={() => setMorningActionFilter(!morningActionFilter)}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2 ${morningActionFilter
@@ -661,6 +662,7 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
                   </span>
                 )}
               </button>
+              */}
               <button
                 onClick={loadProspects}
                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 rounded-lg transition-all cursor-pointer"

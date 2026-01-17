@@ -169,7 +169,9 @@ const COUNTRY_CODES: { [key: string]: string } = {
 };
 
 // Detect country code from location string
-function detectCountryCode(location: string): string {
+function detectCountryCode(location: any): string {
+  if (!location || typeof location !== 'string') return '+60';
+
   const lower = location.toLowerCase();
   for (const [keyword, code] of Object.entries(COUNTRY_CODES)) {
     if (lower.includes(keyword)) {
@@ -181,8 +183,8 @@ function detectCountryCode(location: string): string {
 }
 
 // Clean phone number to standardized format
-function cleanPhoneNumber(phone: string, location: string = ''): string {
-  if (!phone) return '';
+function cleanPhoneNumber(phone: any, location: any = ''): string {
+  if (!phone || typeof phone !== 'string') return '';
 
   // Detect country code from location
   const countryCode = detectCountryCode(location);
@@ -213,8 +215,8 @@ function cleanPhoneNumber(phone: string, location: string = ''): string {
 }
 
 // Ensure website URL starts with https://
-function cleanWebsiteUrl(url: string): string {
-  if (!url) return '';
+function cleanWebsiteUrl(url: any): string {
+  if (!url || typeof url !== 'string') return '';
   let cleaned = url.trim();
   if (!cleaned.match(/^https?:\/\//i)) {
     cleaned = 'https://' + cleaned;

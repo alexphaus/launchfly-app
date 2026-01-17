@@ -31,11 +31,13 @@ export function generateOpenerMessage(
     const service = SERVICE_TYPE_LABELS[serviceType] || serviceType;
     const areaToUse = customArea || area;
 
-    return `Hi boss 👋 You still handling ${service} jobs around ${areaToUse}?
+    return `Hi Boss 👋 Saw you operate in ${areaToUse}.
 
-I built a WhatsApp tool that automatically replies to 'Hm po?' inquiries and quotes prices while you are driving or on a ladder. 🪜
+Quick q — do you find it hard to reply to inquiries while you are driving or on a ladder? 🪜
 
-Want to see the demo?`;
+I built a WhatsApp tool that auto-replies to customers and creates a Job Card for you, so you never miss a booking.
+
+Can I send a 30-sec demo?`;
 }
 
 /**

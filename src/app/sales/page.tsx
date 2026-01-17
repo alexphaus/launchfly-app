@@ -130,6 +130,32 @@ export default function SalesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Android back gesture handling for modals
+  useEffect(() => {
+    const isAnyModalOpen = showDetailsModal || showOpenerModal || showPitchModal || showFollowUpModal || showStockPicker;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (isAnyModalOpen) {
+        // Close all modals
+        setShowDetailsModal(false);
+        setShowOpenerModal(false);
+        setShowPitchModal(false);
+        setShowFollowUpModal(false);
+        setShowStockPicker(false);
+      }
+    };
+
+    if (isAnyModalOpen) {
+      // Push a new state so the back button/gesture triggers popstate instead of navigating
+      window.history.pushState({ modalOpen: true }, '');
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showDetailsModal, showOpenerModal, showPitchModal, showFollowUpModal, showStockPicker]);
+
   // Image upload handlers
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

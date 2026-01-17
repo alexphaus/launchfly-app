@@ -118,6 +118,27 @@ export default function HunterPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Android back gesture handling for modals
+  useEffect(() => {
+    const isAnyModalOpen = showOpenerModal || showCsvModal;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (isAnyModalOpen) {
+        setShowOpenerModal(false);
+        setShowCsvModal(false);
+      }
+    };
+
+    if (isAnyModalOpen) {
+      window.history.pushState({ modalOpen: true }, '');
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showOpenerModal, showCsvModal]);
+
   // Use shared opener generator
   const generateOpener = (prospect: { service_type: string; area: string }, customArea?: string): string => {
     return generateOpenerMessage(prospect.service_type, prospect.area, customArea);

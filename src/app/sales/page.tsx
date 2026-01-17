@@ -94,6 +94,7 @@ export default function SalesPage() {
   const [isExtractingContext, setIsExtractingContext] = useState(false);
   const [prospectViewed, setProspectViewed] = useState(false);
   const [editableContext, setEditableContext] = useState('');
+  const [wasWhatsAppClicked, setWasWhatsAppClicked] = useState(false);
 
   // Opener Selection State
   const [selectedOpenerArea, setSelectedOpenerArea] = useState('');
@@ -699,6 +700,7 @@ Just share the link anywhere - van sticker, FB, WhatsApp status. No app needed.`
                     setSelectedProspect(prospect);
                     setEditableContext(prospect.raw_context || prospect.notes || '');
                     setUploadedImages([]);
+                    setWasWhatsAppClicked(false);
                     setShowDetailsModal(true);
                   }}
                   onFollowUp={() => {
@@ -1429,15 +1431,29 @@ Services, pricing, reviews, contact info, etc."
             <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-slate-100">
               {/* Status-based Action Buttons */}
               {selectedProspect.status === 'new' && (
-                <button
-                  onClick={() => {
-                    const msg = generateOpener(selectedProspect);
-                    openWhatsApp(selectedProspect, msg);
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
-                >
-                  💬 WhatsApp
-                </button>
+                wasWhatsAppClicked ? (
+                  <button
+                    onClick={() => {
+                      updateStatus(selectedProspect.id, 'opener_sent');
+                      setWasWhatsAppClicked(false);
+                      setShowDetailsModal(false);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
+                  >
+                    ✅ Mark as Sent
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const msg = generateOpener(selectedProspect);
+                      openWhatsApp(selectedProspect, msg);
+                      setWasWhatsAppClicked(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
+                  >
+                    💬 WhatsApp
+                  </button>
+                )
               )}
 
               {(selectedProspect.status === 'replied' || selectedProspect.status === 'interested') && (

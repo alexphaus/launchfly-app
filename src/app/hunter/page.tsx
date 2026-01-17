@@ -410,18 +410,20 @@ export default function HunterPage() {
             </h1>
             <p className="text-slate-600 mt-2 text-sm">Quickly add prospects to the pipeline</p>
           </div>
-          <Link
-            href="/sales"
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
-          >
-            📋 View Pipeline
-          </Link>
-          <button
-            onClick={() => { setShowCsvModal(true); setImportResult(null); setCsvData(''); setDefaultArea(''); }}
-            className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg text-sm font-medium hover:from-green-700 hover:to-green-800 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
-          >
-            📥 Import CSV
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowCsvModal(true); setImportResult(null); setCsvData(''); setDefaultArea(''); }}
+              className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg text-sm font-medium hover:from-green-700 hover:to-green-800 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
+            >
+              📥 Import CSV
+            </button>
+            <Link
+              href="/sales"
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-300 shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-pointer whitespace-nowrap"
+            >
+              📋 View Pipeline
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

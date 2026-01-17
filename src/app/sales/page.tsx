@@ -1380,16 +1380,12 @@ Services, pricing, reviews, contact info, etc."
               {selectedProspect.status === 'new' && (
                 <button
                   onClick={() => {
-                    // Initialize selection state for opener
-                    setSelectedOpenerArea(selectedProspect.area.split(/[,/]+/).map(s => s.trim())[0]);
-                    const phones = selectedProspect.whatsapp_number?.match(/\+?\d{8,}/g) || [selectedProspect.whatsapp_number];
-                    setSelectedOpenerPhone(phones[0] || '');
-                    setShowDetailsModal(false);
-                    setShowOpenerModal(true);
+                    const msg = generateOpener(selectedProspect);
+                    openWhatsApp(selectedProspect, msg);
                   }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm font-medium"
+                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
                 >
-                  📤 Send Opener
+                  💬 WhatsApp
                 </button>
               )}
 

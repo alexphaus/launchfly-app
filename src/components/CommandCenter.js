@@ -320,10 +320,14 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
 
     // Download QR
     const downloadQR = async () => {
-        // Construct quote URL
-        const quoteUrl = business?.subdomain
-            ? `${window.location.origin}/sites/${business.subdomain}/quote`
-            : `${window.location.origin}/q/${business?.id}`;
+        // Direct-to-WhatsApp link (preferred) or fallback to quote funnel
+        const whatsappNumber = business?.whatsapp_number?.replace(/[^\d]/g, '');
+        const stickerTrigger = "Hi, I scanned the Service Sticker";
+        const qrUrl = whatsappNumber
+            ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(stickerTrigger)}`
+            : (business?.subdomain
+                ? `${window.location.origin}/sites/${business.subdomain}/quote`
+                : `${window.location.origin}/q/${business?.id}`);
 
         const canvas = document.createElement('canvas');
         const size = 2000; // High res for printing
@@ -361,9 +365,9 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         const headlineY = margin + 120;
         ctx.fillText(`BOOK ${serviceHeadline}`, size / 2, headlineY);
 
-        // 4. Footer: Scan for Instant Price
+        // 4. Footer: Scan to Book via WhatsApp
         ctx.font = 'bold 90px "Inter", sans-serif';
-        ctx.fillText('Scan for Instant Price', size / 2, size - margin - 280);
+        ctx.fillText(whatsappNumber ? 'Scan to WhatsApp Us' : 'Scan for Instant Price', size / 2, size - margin - 280);
 
         // 5. QR Code
         const qrSize = 900;
@@ -371,7 +375,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         const qrY = (size - qrSize) / 2 + 50;
 
         try {
-            const qrDataUrl = await QRCodeLib.toDataURL(quoteUrl, {
+            const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
                 margin: 1,
                 errorCorrectionLevel: 'H',

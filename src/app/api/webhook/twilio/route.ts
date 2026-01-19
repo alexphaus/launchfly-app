@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard, sendJobConfirmed, sendTypingIndicator } from '@/lib/whatsapp-push';
 import { classifyIntent, shouldEscalate, isPriceObjection, type ConversationContext } from '@/lib/ai-intent';
 import { handleFAQ, generateEscalationMessage, type BusinessContext } from '@/lib/faq-handler';
+import { getFlowConfig, generateStickerGreeting, generateCleaningPrompt, generateRepairPrompt, generatePriceList, generateUnitsConfirmation } from '@/lib/sticker-flow-templates';
 import twilio from 'twilio';
 
 const supabase = createClient(
@@ -195,6 +196,172 @@ export async function POST(request: NextRequest) {
                     body: faqResponse.answer
                 });
                 console.log(`✅ FAQ response sent: ${faqResponse.topic}`);
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== STICKER SCAN HANDLER ==========
+        // Direct-to-WhatsApp flow for QR sticker scans
+        if (classification.intent === 'STICKER_SCAN') {
+            console.log('🏷️ Sticker scan detected - starting VIP flow');
+
+            const businessName = customerLookup?.businesses?.name || 'us';
+            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+
+            if (twilioClient && fromNumber) {
+                // Send VIP greeting with service menu
+                const greeting = generateStickerGreeting(flowConfig, businessName);
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: greeting
+                });
+
+                // Update customer status to sticker_menu (waiting for 1/2/3 selection)
+                if (customerLookup?.id) {
+                    await supabase.from('customers').update({
+                        status: 'sticker_menu',
+                        notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]`
+                    }).eq('id', customerLookup.id);
+                } else {
+                    // Create new customer record for sticker scan
+                    await supabase.from('customers').insert({
+                        phone: phoneWithPlus,
+                        status: 'sticker_menu',
+                        notes: `[STICKER_SCAN: ${new Date().toISOString()}]`,
+                        business_id: customerLookup?.businesses?.id || null
+                    });
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== STICKER MENU HANDLER ==========
+        // Handle menu selection (1/2/3) after sticker scan
+        if (classification.intent === 'STICKER_MENU') {
+            console.log('📋 Sticker menu selection detected');
+
+            const selection = classification.entities.slot_number;
+            const businessName = customerLookup?.businesses?.name || 'Business';
+            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+
+            if (twilioClient && fromNumber && selection) {
+                let responseMessage = '';
+                let newStatus = '';
+
+                switch (selection) {
+                    case 1: // Cleaning / Primary Service
+                        responseMessage = generateCleaningPrompt(flowConfig);
+                        newStatus = 'sticker_units';
+                        break;
+                    case 2: // Repair / Issue
+                        responseMessage = generateRepairPrompt(flowConfig);
+                        newStatus = 'sticker_repair';
+                        break;
+                    case 3: // Check Price
+                        responseMessage = generatePriceList(flowConfig, businessName);
+                        newStatus = 'sticker_menu'; // Stay in menu after showing prices
+                        break;
+                    default:
+                        responseMessage = 'Please reply with 1, 2, or 3 to select an option.';
+                        newStatus = 'sticker_menu';
+                }
+
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: responseMessage
+                });
+
+                // Update status
+                if (customerLookup?.id) {
+                    await supabase.from('customers').update({
+                        status: newStatus,
+                        notes: (customerLookup.notes || '') + `\n[STICKER_MENU: Selected ${selection} at ${new Date().toISOString()}]`
+                    }).eq('id', customerLookup.id);
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== STICKER UNITS HANDLER ==========
+        // Handle units/quantity response after selecting cleaning
+        if (conversationContext.customerStatus === 'sticker_units') {
+            console.log('🔢 Sticker units response detected');
+
+            // Extract number from message
+            const unitsMatch = messageText.match(/(\d+)/);
+            const units = unitsMatch ? parseInt(unitsMatch[1]) : 1;
+
+            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+
+            if (twilioClient && fromNumber) {
+                // Send confirmation with total and ask for address
+                const confirmMessage = generateUnitsConfirmation(flowConfig, units);
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: confirmMessage
+                });
+
+                // Save units and transition to awaiting_address
+                if (customerLookup?.id) {
+                    const total = flowConfig.pricePerUnit * units;
+                    await supabase.from('customers').update({
+                        status: 'awaiting_address',
+                        estimate_min: total,
+                        estimate_max: total,
+                        notes: (customerLookup.notes || '') + `\n[STICKER_UNITS: ${units} ${flowConfig.unitLabel}(s) = ${flowConfig.currency} ${total}]`
+                    }).eq('id', customerLookup.id);
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== STICKER REPAIR HANDLER ==========
+        // Handle photo/description response for repair requests
+        if (conversationContext.customerStatus === 'sticker_repair') {
+            console.log('🔧 Sticker repair response detected');
+
+            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+
+            if (twilioClient && fromNumber) {
+                // Thank them and ask for address
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `Thanks! I've noted that down. 📝\n\nPlease share your *Address* or send a *Location Pin* 📍 so we can schedule the inspection.`
+                });
+
+                // Save issue description and transition to awaiting_address
+                if (customerLookup?.id) {
+                    await supabase.from('customers').update({
+                        status: 'awaiting_address',
+                        estimate_min: flowConfig.repairInspectionFee,
+                        estimate_max: flowConfig.repairInspectionFee,
+                        notes: (customerLookup.notes || '') + `\n[REPAIR_ISSUE: ${messageText.substring(0, 200)}]`
+                    }).eq('id', customerLookup.id);
+                }
             }
 
             return new NextResponse(

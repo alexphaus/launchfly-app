@@ -20,7 +20,10 @@ export type Intent =
     | 'RESCHEDULE'        // User wants to change time/date
     | 'HUMAN_NEEDED'      // User is angry, confused, or needs escalation
     | 'GREETING'          // Simple hello/hi
+    | 'STICKER_SCAN'      // Customer scanned QR sticker (trigger phrase)
+    | 'STICKER_MENU'      // Customer selecting from sticker menu (1/2/3)
     | 'UNKNOWN';          // Can't determine intent
+
 
 // Entities extracted from the message
 export interface IntentEntities {
@@ -122,6 +125,20 @@ function quickPatternMatch(
     const buttonTexts = ['accept job', 'decline', 'view details', 'call customer', 'view dashboard'];
     if (buttonTexts.includes(text)) {
         return { intent: 'UNKNOWN', confidence: 1.0, entities: {} };
+    }
+
+    // STICKER SCAN - Customer scanned QR sticker (high priority check)
+    if (/sticker|scanned.*sticker|service sticker|i scanned/i.test(text)) {
+        return { intent: 'STICKER_SCAN', confidence: 1.0, entities: {} };
+    }
+
+    // STICKER MENU - When in sticker flow, 1/2/3 means menu selection, not slot
+    if (context.customerStatus === 'sticker_menu' && /^[123]$/.test(text)) {
+        return {
+            intent: 'STICKER_MENU',
+            confidence: 1.0,
+            entities: { slot_number: parseInt(text) }
+        };
     }
 
     // Simple greetings

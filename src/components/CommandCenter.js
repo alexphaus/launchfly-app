@@ -365,7 +365,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
 
         // 3. Header Text - "[NICHE] MAINTENANCE RECORD"
         // White text on Blue background
-        let serviceType = (niche || 'AIRCON').toUpperCase();
+        let serviceType = "UNIT"; //(niche || 'AIRCON').toUpperCase();
 
         // Font stack to closely match reference Gothic/Impact style
         ctx.font = '900 130px "Inter", "Arial Black", sans-serif'; // Ultra bold

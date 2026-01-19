@@ -330,9 +330,9 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 : `${window.location.origin}/q/${business?.id}`);
 
         const canvas = document.createElement('canvas');
-        // Landscape orientation for maintenance record sticker matches reference (4:3 ratio approx)
+        // Compact landscape orientation - reduced height to eliminate bottom whitespace
         const width = 2400;
-        const height = 1800;
+        const height = 1500;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -355,7 +355,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         // 2. White Inner Content Area
         // Leave a small blue border around edges
         const padding = 30; // Thin blue border
-        const headerHeight = 280; // Taller header to match reference
+        const headerHeight = 240; // Optimized header height
 
         ctx.fillStyle = brandWhite;
         ctx.beginPath();
@@ -368,7 +368,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         let serviceType = (niche || 'AIRCON').toUpperCase();
 
         // Font stack to closely match reference Gothic/Impact style
-        ctx.font = '900 130px "Inter", "Arial Black", sans-serif'; // Ultra bold
+        ctx.font = '900 120px "Inter", "Arial Black", sans-serif'; // Ultra bold
         // Compact the text slightly to fit long titles
         ctx.fillStyle = brandWhite;
         ctx.textAlign = 'center';
@@ -378,59 +378,57 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
 
         // --- CONTENT AREA START ---
         // Left side content area
-        const leftRefX = 120; // Left margin
-        const contentStartY = headerHeight + 150;
-        const lineSpacing = 280; // Reduced vertical spacing between sections
-        const lineWidth = 1000; // Wider lines
+        const leftX = 100; // Left margin
+        const contentStartY = headerHeight + 100; // Start closer to header
+        const lineWidth = 1050; // Line width
 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
         // 4. "Date Cleaned:" label
         ctx.fillStyle = textBlack;
-        // Condensed-style bold font
-        ctx.font = '600 90px "Inter Tight", "Arial Narrow", sans-serif';
-        ctx.fillText('Date Cleaned:', leftRefX, contentStartY);
+        ctx.font = '600 85px "Inter Tight", "Arial Narrow", sans-serif';
+        ctx.fillText('Date Cleaned:', leftX, contentStartY);
 
-        // Blank line for Date Cleaned
+        // Line for Date Cleaned (positioned immediately below label)
+        const line1Y = contentStartY + 20; // Very tight spacing
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 5;
         ctx.beginPath();
-        // Line starts below text
-        ctx.moveTo(leftRefX, contentStartY + 40);
-        ctx.lineTo(leftRefX + lineWidth, contentStartY + 40);
+        ctx.moveTo(leftX, line1Y);
+        ctx.lineTo(leftX + lineWidth, line1Y);
         ctx.stroke();
 
-        // 5. "Technician:" label
-        const techY = contentStartY + lineSpacing;
-        ctx.fillText('Technician:', leftRefX, techY);
+        // 5. "Technician:" label (compact spacing from previous section)
+        const techY = line1Y + 170; // Reduced spacing
+        ctx.fillText('Technician:', leftX, techY);
 
-        // Blank line for Technician
+        // Line for Technician
+        const line2Y = techY + 20;
         ctx.beginPath();
-        ctx.moveTo(leftRefX, techY + 40);
-        ctx.lineTo(leftRefX + lineWidth, techY + 40);
+        ctx.moveTo(leftX, line2Y);
+        ctx.lineTo(leftX + lineWidth, line2Y);
         ctx.stroke();
 
         // 6. "NEXT SERVICE DUE:" label (in red, very bold)
-        const nextServiceY = techY + lineSpacing + 20;
+        const nextServiceY = line2Y + 170; // Reduced spacing
         ctx.fillStyle = redText;
-        ctx.font = '900 100px "Inter", "Arial Black", sans-serif';
-        ctx.fillText('NEXT SERVICE DUE:', leftRefX, nextServiceY);
+        ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
+        ctx.fillText('NEXT SERVICE DUE:', leftX, nextServiceY);
 
-        // Box for Next Service Due date
-        const boxTop = nextServiceY + 40;
+        // Box for Next Service Due date (positioned immediately below label)
+        const boxTop = nextServiceY + 25;
         const boxWidth = lineWidth;
-        const boxHeight = 220; // Taller box
-
+        const boxHeight = 200;
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 6; // Thicker border
-        ctx.strokeRect(leftRefX, boxTop, boxWidth, boxHeight);
+        ctx.lineWidth = 6;
+        ctx.strokeRect(leftX, boxTop, boxWidth, boxHeight);
 
         // --- QR CODE AREA (RIGHT SIDE) ---
-        // Reference has very large QR taking up right half
-        const qrSize = 950; // Much larger
-        const qrX = width - qrSize - 100; // Right aligned with margin
-        const qrY = headerHeight + 80;
+        // Large QR aligned to start at same level as form content
+        const qrSize = 900;
+        const qrX = width - qrSize - 120;
+        const qrY = contentStartY - 20; // Align with "Date Cleaned" line
 
         try {
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
@@ -476,14 +474,12 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
             ctx.restore();
 
             // 7. "SCAN TO BOOK NEXT SERVICE" text below QR
-            // Reference: Two lines, bold black
-            const footerTextY = qrY + qrSize + 110;
+            const footerTextY = qrY + qrSize + 90;
             ctx.fillStyle = textBlack;
             ctx.textAlign = 'center';
-            // Impact-style font
-            ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
+            ctx.font = '900 90px "Inter", "Arial Black", sans-serif';
             ctx.fillText('SCAN TO BOOK', qrX + qrSize / 2, footerTextY);
-            ctx.fillText('NEXT SERVICE', qrX + qrSize / 2, footerTextY + 110);
+            ctx.fillText('NEXT SERVICE', qrX + qrSize / 2, footerTextY + 105);
 
             // Download
             const link = document.createElement('a');

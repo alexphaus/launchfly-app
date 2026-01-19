@@ -318,7 +318,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         }
     };
 
-    // Download QR
+    // Download QR - Maintenance Record Sticker Design
     const downloadQR = async () => {
         // Direct-to-WhatsApp link (preferred) or fallback to quote funnel
         const whatsappNumber = business?.whatsapp_number?.replace(/[^\d]/g, '');
@@ -330,54 +330,112 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 : `${window.location.origin}/q/${business?.id}`);
 
         const canvas = document.createElement('canvas');
-        const size = 2000; // High res for printing
-        canvas.width = size;
-        canvas.height = size;
+        // Landscape orientation for maintenance record sticker matches reference (4:3 ratio approx)
+        const width = 2400;
+        const height = 1800;
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
 
         // Colors
-        const brandBlue = '#0F172A'; // Dark slate/blue
+        const headerBlue = '#0070DE'; // Brighter reference blue
+        const textBlack = '#111111';
+        const redText = '#D92D20'; // Stronger red
         const whatsappGreen = '#25D366';
+        const brandWhite = '#FFFFFF';
 
-        // 1. Background
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, size, size);
+        // 1. Blue Background (Full bleed) with White Content Area
+        // Reference image shows a blue outer border which is actually the background card color
+        ctx.fillStyle = headerBlue;
+        ctx.beginPath();
+        const outerRadius = 60;
+        ctx.roundRect(0, 0, width, height, outerRadius);
+        ctx.fill();
 
-        // 2. Thick Border (Inset)
-        const borderWidth = 40;
-        const margin = 60;
-        ctx.strokeStyle = brandBlue;
-        ctx.lineWidth = borderWidth;
-        ctx.lineJoin = 'round';
-        ctx.strokeRect(margin, margin, size - (margin * 2), size - (margin * 2));
+        // 2. White Inner Content Area
+        // Leave a small blue border around edges
+        const padding = 30; // Thin blue border
+        const headerHeight = 280; // Taller header to match reference
 
-        // 3. Headline: BOOK [SERVICE]
-        let serviceHeadline = (niche || 'SERVICE').toUpperCase();
-        if (!serviceHeadline.includes('SERVICE')) {
-            serviceHeadline += ' SERVICE';
-        }
+        ctx.fillStyle = brandWhite;
+        ctx.beginPath();
+        // Inner white area starts AFTER the header section
+        // The top part stays blue, bottom part is white
+        ctx.fillRect(padding, headerHeight, width - (padding * 2), height - headerHeight - padding);
 
-        ctx.fillStyle = brandBlue;
-        ctx.font = 'bold 160px "Inter", sans-serif';
+        // 3. Header Text - "[NICHE] MAINTENANCE RECORD"
+        // White text on Blue background
+        let serviceType = (niche || 'AIRCON').toUpperCase();
+
+        // Font stack to closely match reference Gothic/Impact style
+        ctx.font = '900 130px "Inter", "Arial Black", sans-serif'; // Ultra bold
+        // Compact the text slightly to fit long titles
+        ctx.fillStyle = brandWhite;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+        ctx.textBaseline = 'middle';
+        // Position exactly in middle of blue header strip
+        ctx.fillText(`${serviceType} MAINTENANCE RECORD`, width / 2, headerHeight / 2);
 
-        const headlineY = margin + 120;
-        ctx.fillText(`BOOK ${serviceHeadline}`, size / 2, headlineY);
+        // --- CONTENT AREA START ---
+        // Left side content area
+        const leftRefX = 120; // Left margin
+        const contentStartY = headerHeight + 150;
+        const lineSpacing = 280; // Reduced vertical spacing between sections
+        const lineWidth = 1000; // Wider lines
 
-        // 4. Footer: Scan to Book via WhatsApp
-        ctx.font = 'bold 90px "Inter", sans-serif';
-        ctx.fillText(whatsappNumber ? 'Scan to WhatsApp Us' : 'Scan for Instant Price', size / 2, size - margin - 280);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
 
-        // 5. QR Code
-        const qrSize = 900;
-        const qrX = (size - qrSize) / 2;
-        const qrY = (size - qrSize) / 2 + 50;
+        // 4. "Date Cleaned:" label
+        ctx.fillStyle = textBlack;
+        // Condensed-style bold font
+        ctx.font = '600 90px "Inter Tight", "Arial Narrow", sans-serif';
+        ctx.fillText('Date Cleaned:', leftRefX, contentStartY);
+
+        // Blank line for Date Cleaned
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        // Line starts below text
+        ctx.moveTo(leftRefX, contentStartY + 40);
+        ctx.lineTo(leftRefX + lineWidth, contentStartY + 40);
+        ctx.stroke();
+
+        // 5. "Technician:" label
+        const techY = contentStartY + lineSpacing;
+        ctx.fillText('Technician:', leftRefX, techY);
+
+        // Blank line for Technician
+        ctx.beginPath();
+        ctx.moveTo(leftRefX, techY + 40);
+        ctx.lineTo(leftRefX + lineWidth, techY + 40);
+        ctx.stroke();
+
+        // 6. "NEXT SERVICE DUE:" label (in red, very bold)
+        const nextServiceY = techY + lineSpacing + 20;
+        ctx.fillStyle = redText;
+        ctx.font = '900 100px "Inter", "Arial Black", sans-serif';
+        ctx.fillText('NEXT SERVICE DUE:', leftRefX, nextServiceY);
+
+        // Box for Next Service Due date
+        const boxTop = nextServiceY + 40;
+        const boxWidth = lineWidth;
+        const boxHeight = 220; // Taller box
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 6; // Thicker border
+        ctx.strokeRect(leftRefX, boxTop, boxWidth, boxHeight);
+
+        // --- QR CODE AREA (RIGHT SIDE) ---
+        // Reference has very large QR taking up right half
+        const qrSize = 950; // Much larger
+        const qrX = width - qrSize - 100; // Right aligned with margin
+        const qrY = headerHeight + 80;
 
         try {
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
-                margin: 1,
+                margin: 0, // No margin in QR generation, handled by canvas
                 errorCorrectionLevel: 'H',
                 color: { dark: '#000000', light: '#ffffff' }
             });
@@ -387,43 +445,56 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
             await new Promise((resolve) => { qrImg.onload = resolve; });
             ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-            // 6. WhatsApp Icon Overlay
-            const iconSize = qrSize * 0.22;
-            const iconX = size / 2;
-            const iconY = qrY + (qrSize / 2);
+            // WhatsApp Icon Overlay in center of QR
+            const iconSize = qrSize * 0.18; // Smaller proportional icon
+            const iconX = qrX + qrSize / 2;
+            const iconY = qrY + qrSize / 2;
 
-            // Green Circle
+            // White circle background (thick stroke effect)
             ctx.beginPath();
-            ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+            ctx.arc(iconX, iconY, iconSize / 2 + 15, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
             ctx.fill();
 
+            // Green WhatsApp circle
+            const greenCircleRadius = iconSize / 2;
             ctx.beginPath();
-            ctx.arc(iconX, iconY, (iconSize / 2) - 10, 0, Math.PI * 2);
+            ctx.arc(iconX, iconY, greenCircleRadius, 0, Math.PI * 2);
             ctx.fillStyle = whatsappGreen;
             ctx.fill();
 
-            // Phone Icon Path
-            const s = iconSize * 0.5;
+            // Phone Icon Path (white)
+            const s = iconSize * 0.6;
             ctx.fillStyle = '#ffffff';
             ctx.save();
             ctx.translate(iconX, iconY);
             ctx.scale(s / 24, s / 24);
             ctx.translate(-12, -12);
+            // Filled phone icon path
             const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
             ctx.fill(phonePath);
             ctx.restore();
 
+            // 7. "SCAN TO BOOK NEXT SERVICE" text below QR
+            // Reference: Two lines, bold black
+            const footerTextY = qrY + qrSize + 110;
+            ctx.fillStyle = textBlack;
+            ctx.textAlign = 'center';
+            // Impact-style font
+            ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
+            ctx.fillText('SCAN TO BOOK', qrX + qrSize / 2, footerTextY);
+            ctx.fillText('NEXT SERVICE', qrX + qrSize / 2, footerTextY + 110);
+
             // Download
             const link = document.createElement('a');
             const safeName = (businessName || 'Business').replace(/\s+/g, '_');
-            link.download = `${safeName}_Van_Sticker.png`;
+            link.download = `${safeName}_Maintenance_Sticker.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         } catch (err) {
-            console.error('Error creating van sticker:', err);
+            console.error('Error creating maintenance sticker:', err);
             alert('Failed to generate sticker. Please try again.');
         }
     };

@@ -325,4 +325,4 @@ ${priceInfo}
 - sticker_repair: Customer has issue, ask for details/photo
 - awaiting_address: Got service details, need address to book
 - awaiting_slot: Got address, show time slot options
-- booked: Booking confirmed, send job card`;
+- booked: Booking confirmed, send job card`;}

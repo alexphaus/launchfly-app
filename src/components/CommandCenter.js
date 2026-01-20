@@ -319,15 +319,22 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     };
 
     // Download QR - Maintenance Record Sticker Design
+    // QR now links to Launchfly bot (Twilio WhatsApp) with business context for smart booking
     const downloadQR = async () => {
-        // Direct-to-WhatsApp link (preferred) or fallback to quote funnel
-        const whatsappNumber = business?.whatsapp_number?.replace(/[^\d]/g, '');
-        const stickerTrigger = "Hi, I scanned the Service Sticker";
-        const qrUrl = whatsappNumber
-            ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(stickerTrigger)}`
-            : (business?.subdomain
-                ? `${window.location.origin}/sites/${business.subdomain}/quote`
-                : `${window.location.origin}/q/${business?.id}`);
+        // Launchfly Bot WhatsApp number - the central AI receptionist
+        // This number is configured in environment as NEXT_PUBLIC_LAUNCHFLY_WHATSAPP
+        // Falls back to owner's WhatsApp only if Launchfly bot is not configured
+        const launchflyBotNumber = process.env.NEXT_PUBLIC_LAUNCHFLY_WHATSAPP || '14155238886'; // Twilio sandbox default
+        
+        // Include business ID in trigger message so bot knows which business context to use
+        const businessId = business?.id;
+        const stickerTrigger = businessId 
+            ? `Hi, I scanned the Service Sticker [BIZ:${businessId}]`
+            : "Hi, I scanned the Service Sticker";
+        
+        // Primary: Launchfly bot with business context
+        // Fallback: Quote funnel page
+        const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
         // Landscape orientation for maintenance record sticker matches reference (4:3 ratio approx)

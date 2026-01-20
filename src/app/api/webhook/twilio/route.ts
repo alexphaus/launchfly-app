@@ -2,13 +2,24 @@
 // Twilio WhatsApp Webhook - Receives incoming messages from customers
 // This is called when a customer sends a message to the Launchfly assistant number
 // Now with AI-powered intent classification (Smart Receptionist)
+// Supports multi-business routing via [BIZ:id] in sticker scan messages
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendQuoteConfirmation, sendSlotSuggester, sendJobCard, sendJobConfirmed, sendTypingIndicator } from '@/lib/whatsapp-push';
 import { classifyIntent, shouldEscalate, isPriceObjection, type ConversationContext } from '@/lib/ai-intent';
 import { handleFAQ, generateEscalationMessage, type BusinessContext } from '@/lib/faq-handler';
-import { getFlowConfig, generateStickerGreeting, generateCleaningPrompt, generateRepairPrompt, generatePriceList, generateUnitsConfirmation } from '@/lib/sticker-flow-templates';
+import { 
+    getFlowConfig, 
+    generateStickerGreeting, 
+    generateCleaningPrompt, 
+    generateRepairPrompt, 
+    generatePriceList, 
+    generateUnitsConfirmation,
+    extractBusinessIdFromTrigger,
+    generateBookingConfirmation,
+    generateSlotOptions
+} from '@/lib/sticker-flow-templates';
 import twilio from 'twilio';
 
 const supabase = createClient(
@@ -206,11 +217,35 @@ export async function POST(request: NextRequest) {
 
         // ========== STICKER SCAN HANDLER ==========
         // Direct-to-WhatsApp flow for QR sticker scans
+        // Now supports business context via [BIZ:id] in the trigger message
         if (classification.intent === 'STICKER_SCAN') {
             console.log('🏷️ Sticker scan detected - starting VIP flow');
 
-            const businessName = customerLookup?.businesses?.name || 'us';
-            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            // Extract business ID from trigger message if present
+            const extractedBusinessId = extractBusinessIdFromTrigger(messageText);
+            console.log(`📋 Extracted business ID: ${extractedBusinessId || 'none'}`);
+
+            // Look up business - either from extracted ID or from existing customer relationship
+            let business = customerLookup?.businesses;
+            let businessId = customerLookup?.business_id;
+
+            if (extractedBusinessId && !business) {
+                // New customer scanning a specific business's sticker
+                const { data: businessLookup } = await supabase
+                    .from('businesses')
+                    .select('id, name, business_data, whatsapp_number, phone_number')
+                    .eq('id', extractedBusinessId)
+                    .single();
+                
+                if (businessLookup) {
+                    business = businessLookup;
+                    businessId = businessLookup.id;
+                    console.log(`✅ Found business: ${business.name}`);
+                }
+            }
+
+            const businessName = business?.name || business?.business_data?.businessName || 'us';
+            const businessNiche = business?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
 
             if (twilioClient && fromNumber) {
@@ -222,20 +257,31 @@ export async function POST(request: NextRequest) {
                     body: greeting
                 });
 
-                // Update customer status to sticker_menu (waiting for 1/2/3 selection)
+                // Update or create customer record for sticker scan
                 if (customerLookup?.id) {
                     await supabase.from('customers').update({
                         status: 'sticker_menu',
-                        notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]`
+                        business_id: businessId || customerLookup.business_id,
+                        notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]` + 
+                            (extractedBusinessId ? ` [BIZ:${extractedBusinessId}]` : '')
                     }).eq('id', customerLookup.id);
                 } else {
                     // Create new customer record for sticker scan
                     await supabase.from('customers').insert({
                         phone: phoneWithPlus,
                         status: 'sticker_menu',
-                        notes: `[STICKER_SCAN: ${new Date().toISOString()}]`,
-                        business_id: customerLookup?.businesses?.id || null
+                        notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
+                            (extractedBusinessId ? ` [BIZ:${extractedBusinessId}]` : ''),
+                        business_id: businessId || null
                     });
+                }
+
+                // Notify owner that someone scanned their sticker (optional - for tracking)
+                const ownerPhone = business?.whatsapp_number || business?.phone_number;
+                if (ownerPhone) {
+                    const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                    // Silent tracking - don't spam owner for every scan
+                    console.log(`📊 Sticker scanned for ${businessName} - owner: ${cleanOwnerPhone}`);
                 }
             }
 
@@ -725,14 +771,16 @@ export async function POST(request: NextRequest) {
             const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
 
             // Find customer waiting for address - try both phone formats
+            // Support both 'waiting_for_address' (quote flow) and 'awaiting_address' (sticker flow)
             let customer = null;
             let error = null;
 
+            // Try with plus first - check both status types
             const result1 = await supabase
                 .from('customers')
                 .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
                 .eq('phone', phoneWithPlus)
-                .eq('status', 'waiting_for_address')
+                .in('status', ['waiting_for_address', 'awaiting_address'])
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
@@ -744,7 +792,7 @@ export async function POST(request: NextRequest) {
                     .from('customers')
                     .select('*, businesses(id, name, business_data, whatsapp_number, phone_number)')
                     .eq('phone', phoneWithoutPlus)
-                    .eq('status', 'waiting_for_address')
+                    .in('status', ['waiting_for_address', 'awaiting_address'])
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .single();
@@ -759,32 +807,81 @@ export async function POST(request: NextRequest) {
             if (customer && !error) {
                 const businessName = customer.businesses?.name || 'Local Service';
                 const customerName = customer.name || 'Customer';
+                const isFromStickerFlow = customer.status === 'awaiting_address';
 
                 // Extract selected slot from notes (Get the LAST one if multiple)
                 // Use split/pop to find the latest valid selection
                 const slotParts = customer.notes?.split('📅 SELECTED SLOT: ');
-                const selectedSlot = (slotParts && slotParts.length > 1) ? slotParts.pop()?.split('\n')[0] : 'As scheduled';
+                const hasSelectedSlot = slotParts && slotParts.length > 1;
+                const selectedSlot = hasSelectedSlot ? slotParts.pop()?.split('\n')[0] : null;
 
-                // Extract estimate from notes  
-                const estimateMatch = customer.notes?.match(/Estimate: ([^\n]+)/);
-                const estimate = estimateMatch ? estimateMatch[1] : 'As quoted';
+                // Extract estimate from notes or DB
+                let estimate = 'As quoted';
+                if (customer.estimate_min && customer.estimate_max) {
+                    const businessData = customer.businesses?.business_data || {};
+                    const currency = businessData.currency || 'RM';
+                    estimate = customer.estimate_min === customer.estimate_max 
+                        ? `${currency} ${customer.estimate_min}`
+                        : `${currency} ${customer.estimate_min} - ${currency} ${customer.estimate_max}`;
+                } else {
+                    const estimateMatch = customer.notes?.match(/Estimate: ([^\n]+)/);
+                    if (estimateMatch) estimate = estimateMatch[1];
+                }
 
                 // Use location-derived address if it's a location pin, otherwise use message text
                 const customerAddress = locationDerivedAddress || messageText;
 
                 console.log(`✅ Found customer waiting for address: ${customerName}`);
                 console.log(`📍 Address: ${customerAddress}${isLocationPin ? ' (from location pin)' : ''}`);
-                console.log(`📅 Slot: ${selectedSlot}`);
+                console.log(`📅 Has slot: ${hasSelectedSlot ? selectedSlot : 'No - need to show slots'}`);
+                console.log(`🏷️ From sticker flow: ${isFromStickerFlow}`);
 
+                // For sticker flow customers without a slot selected - show slot options
+                if (isFromStickerFlow && !hasSelectedSlot) {
+                    // Generate available slots
+                    const slots = generateSlotOptions();
+                    const slotMessage = `Thanks! 📍\n\n` +
+                        `Address: *${customerAddress}*\n\n` +
+                        `When works best for you?\n\n` +
+                        `1️⃣ ${slots[0].label}\n` +
+                        `2️⃣ ${slots[1].label}\n` +
+                        `3️⃣ ${slots[2].label}\n\n` +
+                        `Reply with 1, 2, or 3`;
+
+                    if (twilioClient && fromNumber) {
+                        await twilioClient.messages.create({
+                            from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                            to: from,
+                            body: slotMessage
+                        });
+                        console.log('✅ Sent slot options to sticker flow customer');
+                    }
+
+                    // Update customer with address and move to slot selection state
+                    await supabase
+                        .from('customers')
+                        .update({
+                            status: 'quote_sent', // Uses standard slot selection handler
+                            notes: `${customer.notes || ''}\n\n📍 ADDRESS: ${customerAddress}\n\nAVAILABLE_SLOTS: ${JSON.stringify(slots)}`
+                        })
+                        .eq('id', customer.id);
+
+                    return new NextResponse(
+                        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                        { headers: { 'Content-Type': 'text/xml' } }
+                    );
+                }
+
+                // Customer has already selected a slot - confirm booking
                 // 1. Send final confirmation to customer
-                const finalConfirmation = `🎉 *Booking Confirmed!*\n\n` +
-                    `Hi ${customerName}! Your service with *${businessName}* is confirmed:\n\n` +
-                    `📅 *Time:* ${selectedSlot}\n` +
-                    `📍 *Address:* ${customerAddress}\n` +
-                    `💰 *Estimate:* ${estimate}\n\n` +
-                    `A technician will contact you before arriving.\n` +
-                    `Reply *HELP* if you need to reschedule.\n\n` +
-                    `Thank you for choosing us! 🙏`;
+                const finalConfirmation = generateBookingConfirmation({
+                    customerName,
+                    businessName,
+                    serviceName: customer.businesses?.business_data?.niche || 'Service',
+                    timeSlot: selectedSlot || 'As scheduled',
+                    address: customerAddress,
+                    estimate
+                });
 
                 if (twilioClient && fromNumber) {
                     await twilioClient.messages.create({
@@ -824,7 +921,7 @@ export async function POST(request: NextRequest) {
                             customer_name: customerName,
                             customer_address: customerAddress,
                             customer_phone: customerPhone,
-                            notes: 'Booking confirmed by customer via WhatsApp'
+                            notes: 'Booking confirmed by customer via WhatsApp (Sticker Flow)'
                         });
 
                     console.log('✅ Created confirmed booking record');
@@ -840,7 +937,7 @@ export async function POST(request: NextRequest) {
                         id: customer.id.substring(0, 8).toUpperCase(),
                         serviceName: customer.businesses?.business_data?.niche || 'Service',
                         serviceEmoji: customer.businesses?.business_data?.emoji,
-                        timeSlot: selectedSlot,
+                        timeSlot: selectedSlot || 'As scheduled',
                         address: customerAddress,
                         customerName: customerName,
                         customerPhone: customerPhone,

@@ -60,6 +60,19 @@ STRIPE_SECRET_KEY=your_stripe_secret_key
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
 # ================================
+# WHATSAPP BOT / STICKER FLOW
+# ================================
+
+# Launchfly Bot WhatsApp Number (for QR sticker flow)
+# This is the Twilio WhatsApp-enabled number customers message
+NEXT_PUBLIC_LAUNCHFLY_WHATSAPP=14155238886
+
+# Twilio credentials (for sending WhatsApp messages)
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+
+# ================================
 # MIGRATION NOTES
 # ================================
 

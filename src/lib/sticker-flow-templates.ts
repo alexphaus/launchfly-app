@@ -177,10 +177,152 @@ Please reply with your *Name & Full Address* (or tap the Location pin 📍) so I
 }
 
 /**
- * Generate direct WhatsApp link for QR codes
+ * Generate direct WhatsApp link for QR codes with business context
+ * The business ID is embedded so the bot knows which business this is for
  */
-export function generateStickerWhatsAppLink(whatsappNumber: string): string {
-    const cleanPhone = whatsappNumber.replace(/[^\d]/g, '');
-    const triggerMessage = "Hi, I scanned the Service Sticker";
+export function generateStickerWhatsAppLink(launchflyBotNumber: string, businessId?: string): string {
+    const cleanPhone = launchflyBotNumber.replace(/[^\d]/g, '');
+    const triggerMessage = businessId 
+        ? `Hi, I scanned the Service Sticker [BIZ:${businessId}]`
+        : "Hi, I scanned the Service Sticker";
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(triggerMessage)}`;
 }
+
+/**
+ * Extract business ID from sticker scan trigger message
+ */
+export function extractBusinessIdFromTrigger(message: string): string | null {
+    const match = message.match(/\[BIZ:([a-zA-Z0-9-]+)\]/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Generate slot options for booking
+ */
+export function generateSlotOptions(): { label: string; value: string }[] {
+    const now = new Date();
+    // UTC+8 for SEA timezone
+    const utcHour = now.getUTCHours();
+    const hour = (utcHour + 8 + 24) % 24;
+    
+    const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const tomorrow = new Date(localNow);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(localNow);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+    
+    const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const formatDateValue = (d: Date) => d.toISOString().split('T')[0];
+    
+    const slots: { label: string; value: string }[] = [];
+    
+    // Today slots - only if before the slot starts
+    if (hour < 9) {
+        slots.push({ label: 'Today 9am - 11am', value: `${formatDateValue(localNow)}_morning` });
+    }
+    if (hour < 14) {
+        slots.push({ label: 'Today 2pm - 4pm', value: `${formatDateValue(localNow)}_afternoon` });
+    }
+    if (hour < 16) {
+        slots.push({ label: 'Today 4pm - 6pm', value: `${formatDateValue(localNow)}_evening` });
+    }
+    
+    // Tomorrow slots
+    if (slots.length < 3) {
+        slots.push({ label: `${formatDate(tomorrow)} 9am - 11am`, value: `${formatDateValue(tomorrow)}_morning` });
+    }
+    if (slots.length < 3) {
+        slots.push({ label: `${formatDate(tomorrow)} 2pm - 4pm`, value: `${formatDateValue(tomorrow)}_afternoon` });
+    }
+    if (slots.length < 3) {
+        slots.push({ label: `${formatDate(dayAfter)} 10am - 12pm`, value: `${formatDateValue(dayAfter)}_morning` });
+    }
+    
+    return slots.slice(0, 3);
+}
+
+/**
+ * Generate booking confirmation "Job Card" message
+ */
+export function generateBookingConfirmation(params: {
+    customerName: string;
+    businessName: string;
+    serviceName: string;
+    serviceDetails?: string;
+    timeSlot: string;
+    address: string;
+    estimate?: string;
+}): string {
+    return `All set! ✅
+
+*Booking Confirmed:*
+👤 *Name:* ${params.customerName}
+📅 *Date:* ${params.timeSlot}
+🛠️ *Service:* ${params.serviceName}${params.serviceDetails ? ` (${params.serviceDetails})` : ''}
+📍 *Location:* ${params.address}
+${params.estimate ? `💰 *Estimate:* ${params.estimate}\n` : ''}
+Our team from *${params.businessName}* will WhatsApp you 30 mins before arrival.
+
+See you then! 🙏`;
+}
+
+/**
+ * Generate the universal AI system prompt for any business niche
+ * This creates a dynamic persona based on business data
+ */
+export function generateUniversalSystemPrompt(business: {
+    name: string;
+    niche?: string;
+    ownerName?: string;
+    services?: string[];
+    priceList?: { service: string; price: string }[];
+    currency?: string;
+    serviceAreas?: string[];
+    operatingHours?: string;
+    phone?: string;
+}): string {
+    const serviceList = business.services?.length 
+        ? business.services.map(s => `• ${s}`).join('\n')
+        : '• General services available';
+    
+    const priceInfo = business.priceList?.length
+        ? business.priceList.map(p => `• ${p.service}: ${business.currency || 'RM'} ${p.price}`).join('\n')
+        : 'Prices quoted upon request';
+
+    return `You are the AI Receptionist for ${business.name}.
+Your tone is: Friendly, Professional, and Concise.
+
+## Business Information
+- Owner: ${business.ownerName || 'The owner'}
+- Niche: ${business.niche || 'Service Business'}
+- Currency: ${business.currency || 'RM'}
+${business.serviceAreas?.length ? `- Service Areas: ${business.serviceAreas.join(', ')}` : ''}
+${business.operatingHours ? `- Hours: ${business.operatingHours}` : ''}
+
+## Services Offered
+${serviceList}
+
+## Pricing Guide
+${priceInfo}
+
+## YOUR GOAL
+1. Identify the customer's problem/need
+2. Give them a rough price estimate (based on the list above)
+3. Get their Name and Address
+4. Secure the Booking (Get a Date/Time)
+
+## RULES
+- Keep replies under 3 sentences
+- Do not use flowery language - be direct
+- If the service is NOT in the list, say you need to check with ${business.ownerName || 'the owner'}
+- If they ask for a discount on first visit, you can offer 5% Welcome Discount
+- Never make up prices - use the list or say "I'll get you an accurate quote"
+- Always try to move towards booking
+
+## CONVERSATION STATES
+- sticker_menu: Customer just scanned QR, show service menu (1/2/3)
+- sticker_units: Customer selected cleaning, ask how many units
+- sticker_repair: Customer has issue, ask for details/photo
+- awaiting_address: Got service details, need address to book
+- awaiting_slot: Got address, show time slot options
+- booked: Booking confirmed, send job card`;

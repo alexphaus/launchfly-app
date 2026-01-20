@@ -111,16 +111,6 @@ function quickPatternMatch(
 ): IntentClassification | null {
     const text = message.toLowerCase().trim();
 
-    // Slot selection - aggressively match 1, 2, 3
-    // We let the webhook handler decide if it's valid based on customer state
-    if (/^[123]$/.test(text)) {
-        return {
-            intent: 'SLOT_SELECTION',
-            confidence: 1.0,
-            entities: { slot_number: parseInt(text) }
-        };
-    }
-
     // Button text - ignore these
     const buttonTexts = ['accept job', 'decline', 'view details', 'call customer', 'view dashboard'];
     if (buttonTexts.includes(text)) {
@@ -128,14 +118,26 @@ function quickPatternMatch(
     }
 
     // STICKER SCAN - Customer scanned QR sticker (high priority check)
-    if (/sticker|scanned.*sticker|service sticker|i scanned/i.test(text)) {
+    // Also matches messages with [BIZ:id] tag
+    if (/sticker|scanned.*sticker|service sticker|i scanned|\[biz:/i.test(text)) {
         return { intent: 'STICKER_SCAN', confidence: 1.0, entities: {} };
     }
 
     // STICKER MENU - When in sticker flow, 1/2/3 means menu selection, not slot
+    // This must be checked BEFORE generic slot selection
     if (context.customerStatus === 'sticker_menu' && /^[123]$/.test(text)) {
         return {
             intent: 'STICKER_MENU',
+            confidence: 1.0,
+            entities: { slot_number: parseInt(text) }
+        };
+    }
+
+    // Slot selection - aggressively match 1, 2, 3
+    // We let the webhook handler decide if it's valid based on customer state
+    if (/^[123]$/.test(text)) {
+        return {
+            intent: 'SLOT_SELECTION',
             confidence: 1.0,
             entities: { slot_number: parseInt(text) }
         };

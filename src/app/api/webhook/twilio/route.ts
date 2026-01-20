@@ -286,8 +286,13 @@ export async function POST(request: NextRequest) {
 
                 switch (selection) {
                     case 1: // Cleaning / Primary Service
-                        responseMessage = generateCleaningPrompt(flowConfig);
-                        newStatus = 'sticker_units';
+                        if (flowConfig.isCustomQuote) {
+                            responseMessage = generateCleaningPrompt(flowConfig);
+                            newStatus = 'sticker_repair'; // Transition to inspection (photo/desc) instead of units
+                        } else {
+                            responseMessage = generateCleaningPrompt(flowConfig);
+                            newStatus = 'sticker_units';
+                        }
                         break;
                     case 2: // Repair / Issue
                         responseMessage = generateRepairPrompt(flowConfig);
@@ -801,15 +806,14 @@ export async function POST(request: NextRequest) {
                 console.log(`📍 Address: ${customerAddress}${isLocationPin ? ' (from location pin)' : ''}`);
                 console.log(`📅 Slot: ${selectedSlot}`);
 
-                // 1. Send final confirmation to customer
-                const finalConfirmation = `🎉 *Booking Confirmed!*\n\n` +
-                    `Hi ${customerName}! Your service with *${businessName}* is confirmed:\n\n` +
-                    `📅 *Time:* ${selectedSlot}\n` +
-                    `📍 *Address:* ${customerAddress}\n` +
-                    `💰 *Estimate:* ${estimate}\n\n` +
-                    `A technician will contact you before arriving.\n` +
-                    `Reply *HELP* if you need to reschedule.\n\n` +
-                    `Thank you for choosing us! 🙏`;
+                // 1. Send final confirmation to customer (VIP Job Card style)
+                const finalConfirmation = `All set! ✅\n\n` +
+                    `*Booking Confirmed:*\n` +
+                    `👤 *Name:* ${customerName}\n` +
+                    `📅 *Date:* ${selectedSlot}\n` +
+                    `🛠️ *Service:* ${customer.businesses?.business_data?.niche || 'Service'}\n` +
+                    `📍 *Loc:* ${customerAddress}\n\n` +
+                    `Our team will WhatsApp you 30 mins before arrival. See you then! 🙏`;
 
                 if (twilioClient && fromNumber) {
                     await twilioClient.messages.create({

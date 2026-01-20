@@ -16,6 +16,7 @@ export interface StickerFlowConfig {
     unitLabel: string;            // e.g., "unit", "room", "sqm"
     repairInspectionFee: number;  // Inspection fee for repairs
     currency: string;             // Currency symbol
+    isCustomQuote?: boolean;      // If true, skip fixed price and ask for inspection
 }
 
 // Service-specific configurations
@@ -30,6 +31,18 @@ export const SERVICE_FLOW_CONFIGS: Record<string, StickerFlowConfig> = {
         unitLabel: 'unit',
         repairInspectionFee: 80,
         currency: 'RM'
+    },
+    chiller: {
+        serviceName: 'Chiller / Coldroom',
+        cleaningLabel: 'Service / Maintenance ❄️',
+        repairLabel: 'System Fault / Repair 🔧',
+        priceLabel: 'Corporate Rates 💰',
+        quantifierQuestion: 'Can you describe the type of equipment?',
+        pricePerUnit: 0,
+        unitLabel: 'system',
+        repairInspectionFee: 150,
+        currency: 'RM',
+        isCustomQuote: true
     },
     pest_control: {
         serviceName: 'Pest Control',
@@ -130,6 +143,12 @@ Reply with 1, 2, or 3`;
  * Generate cleaning/booking flow message
  */
 export function generateCleaningPrompt(config: StickerFlowConfig): string {
+    if (config.isCustomQuote) {
+        return `Got it. For ${config.serviceName}, we need to perform a site inspection to provide an accurate quote. 🛠️
+        
+${config.quantifierQuestion}`;
+    }
+
     return `Got it. ${config.serviceName.split(' ')[0]} Cleaning is ${config.currency} ${config.pricePerUnit} / ${config.unitLabel}.
 
 ${config.quantifierQuestion}`;
@@ -140,21 +159,32 @@ ${config.quantifierQuestion}`;
  */
 export function generateRepairPrompt(config: StickerFlowConfig): string {
     if (config.repairInspectionFee === 0) {
-        return `Understood. For ${config.repairLabel.replace(/[^\w\s]/g, '').trim()}, we need to assess first.
+        return `Understood. Let's get that fixed. 🛠️
+For ${config.repairLabel.replace(/[^\w\s]/g, '').trim()}, we need to assess the issue first.
 
-Can you briefly describe the issue or send a photo? 📸`;
+Can you briefly describe the problem or send a photo/video? 📸 It helps us bring the right tools.`;
     }
 
-    return `Understood. For repairs, our Inspection Fee is ${config.currency} ${config.repairInspectionFee}.
+    return `Understood. Let's get that fixed. 🛠️
+For repairs, our Inspection Fee is ${config.currency} ${config.repairInspectionFee}.
 *(Note: If you proceed with the repair, we waive this fee!)*
 
-Can you send a photo or describe the issue? 📸`;
+Can you send a photo/video or describe the issue? 📸 It helps us bring the right tools.`;
 }
 
 /**
  * Generate price list message
  */
 export function generatePriceList(config: StickerFlowConfig, businessName: string): string {
+    if (config.isCustomQuote) {
+        return `Since you are a corporate/commercial client for ${businessName}, we provide custom quotations based on your specific equipment. ❄️
+
+- Inspection Fee: ${config.currency} ${config.repairInspectionFee} (waived if service is performed)
+- Maintenance: Quote upon inspection
+
+Ready to schedule an inspection? Reply with what you need!`;
+    }
+
     return `Here are our prices for ${businessName}:
 
 🧹 ${config.cleaningLabel.replace(/[^\w\s]/g, '').trim()}: ${config.currency} ${config.pricePerUnit} / ${config.unitLabel}

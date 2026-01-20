@@ -62,14 +62,10 @@ export default function PhysicalAssetPack({ business, onClose }) {
   };
 
   const generateVanSticker = async () => {
-    // Direct-to-WhatsApp link (preferred) or fallback to quote funnel
-    const whatsappNumber = business?.whatsapp_number?.replace(/[^\d]/g, '');
-    const stickerTrigger = "Hi, I scanned the Service Sticker";
-    const qrUrl = whatsappNumber
-      ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(stickerTrigger)}`
-      : (business?.subdomain
-        ? `${window.location.origin}/sites/${business.subdomain}/quote`
-        : `${window.location.origin}/q/${business?.id}`);
+    // Direct-to-WhatsApp link for Launchfly Assistant Bot
+    const assistantNumber = "13203627874";
+    const stickerTrigger = `Hi, I scanned the Service Sticker [REF:${business?.subdomain}]`;
+    const qrUrl = `https://wa.me/${assistantNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
     const canvas = document.createElement('canvas');
     const size = 2000; // High res for printing

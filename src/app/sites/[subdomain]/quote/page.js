@@ -59,6 +59,7 @@ export default async function SubdomainQuotePage({ params }) {
             logoUrl={businessData.logo_url || businessData.logoUrl}
             // Route to Launchfly Assistant Bot
             whatsappNumber="13203627874"
+            subdomain={subdomain}
             phoneNumber={businessData.phone || businessData.whatsapp_number}
             serviceOptions={businessData.quoteConfig?.serviceOptions || businessData.serviceOptions}
             priceMatrix={businessData.quoteConfig?.priceMatrix || businessData.priceMatrix}

@@ -34,6 +34,7 @@ export default function QuoteFunnel({
     ],
     isProspect = false, // Show claim banner for prospects
     claimUrl = null, // Custom claim URL
+    subdomain = null, // Unique business subdomain for routing
 }) {
     const [selectedService, setSelectedService] = useState(services[0]?.id || 'cleaning');
     const [units, setUnits] = useState(1);
@@ -111,7 +112,7 @@ export default function QuoteFunnel({
                 if (whatsappNumber) {
                     const cleanPhone = whatsappNumber.replace(/\D/g, '');
                     const message = encodeURIComponent(
-                        `Hi! I want to request a quote for ${businessName}. Service: ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}`
+                        `Hi! I want to request a quote for ${businessName}. Service: ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()} [REF:${subdomain}]`
                     );
                     // Use native WhatsApp scheme to bypass ISP blocks on wa.me
                     window.location.href = `whatsapp://send?phone=${cleanPhone}&text=${message}`;

@@ -138,17 +138,42 @@ export async function POST(request: NextRequest) {
 
         // Classify intent using AI
         const classification = await classifyIntent(messageText, conversationContext);
-        console.log(`🤖 Intent: ${classification.intent} (confidence: ${classification.confidence})`);
+        console.log(`🤖 Intent: ${classification.intent} (confidence: ${classification.confidence}, ref: ${classification.entities?.business_ref})`);
+
+        // ========== GLOBAL ROUTING OVERRIDE ==========
+        // If a business reference is provided (e.g. from QR or sticker), 
+        // we use that to determine the business context, even if customer is new.
+        let activeBusiness: any = customerLookup?.businesses;
+        const businessRef = classification.entities?.business_ref;
+
+        if (businessRef) {
+            console.log(`📍 Business reference detected: ${businessRef} - fetching context`);
+            const { data: refBusiness } = await supabase
+                .from('businesses')
+                .select('*')
+                .or(`subdomain.eq.${businessRef},id.eq.${businessRef}`)
+                .single();
+
+            if (refBusiness) {
+                console.log(`✅ Switched context to business: ${refBusiness.name}`);
+                activeBusiness = refBusiness;
+            }
+        }
+
+        // If no business found yet (neither from customer lookup nor REF), we can't proceed
+        if (!activeBusiness) {
+            console.log('⚠️ No active business context found - using default/none');
+        }
 
         // Check for escalation
         if (shouldEscalate(classification)) {
             console.log('🚨 Escalation needed - notifying owner');
-            const ownerPhone = customerLookup?.businesses?.whatsapp_number;
+            const ownerPhone = activeBusiness?.whatsapp_number;
             if (ownerPhone && twilioClient && fromNumber) {
                 const businessCtx: BusinessContext = {
-                    name: customerLookup?.businesses?.name || 'Business',
-                    niche: customerLookup?.businesses?.business_data?.niche || 'service',
-                    ownerName: customerLookup?.businesses?.business_data?.owner_name,
+                    name: activeBusiness?.name || 'Business',
+                    niche: activeBusiness?.business_data?.niche || 'service',
+                    ownerName: activeBusiness?.business_data?.owner_name,
                 };
 
                 // Send escalation message to customer
@@ -176,15 +201,15 @@ export async function POST(request: NextRequest) {
         if (classification.intent === 'FAQ') {
             console.log('❓ FAQ intent detected');
             const businessCtx: BusinessContext = {
-                name: customerLookup?.businesses?.name || 'Business',
-                niche: customerLookup?.businesses?.business_data?.niche || 'service',
-                serviceAreas: customerLookup?.businesses?.business_data?.service_areas,
-                operatingHours: customerLookup?.businesses?.business_data?.operating_hours,
-                paymentMethods: customerLookup?.businesses?.business_data?.payment_methods,
-                warranty: customerLookup?.businesses?.business_data?.warranty,
-                services: customerLookup?.businesses?.business_data?.services,
-                ownerName: customerLookup?.businesses?.business_data?.owner_name,
-                notes: customerLookup?.businesses?.business_data?.notes,  // Rich FB context
+                name: activeBusiness?.name || 'Business',
+                niche: activeBusiness?.business_data?.niche || 'service',
+                serviceAreas: activeBusiness?.business_data?.service_areas,
+                operatingHours: activeBusiness?.business_data?.operating_hours,
+                paymentMethods: activeBusiness?.business_data?.payment_methods,
+                warranty: activeBusiness?.business_data?.warranty,
+                services: activeBusiness?.business_data?.services,
+                ownerName: activeBusiness?.business_data?.owner_name,
+                notes: activeBusiness?.business_data?.notes,  // Rich FB context
             };
 
             const faqResponse = await handleFAQ(messageText, businessCtx);
@@ -209,8 +234,8 @@ export async function POST(request: NextRequest) {
         if (classification.intent === 'STICKER_SCAN') {
             console.log('🏷️ Sticker scan detected - starting VIP flow');
 
-            const businessName = customerLookup?.businesses?.name || 'us';
-            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const businessName = activeBusiness?.name || 'us';
+            const businessNiche = activeBusiness?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
 
             if (twilioClient && fromNumber) {
@@ -234,7 +259,7 @@ export async function POST(request: NextRequest) {
                         phone: phoneWithPlus,
                         status: 'sticker_menu',
                         notes: `[STICKER_SCAN: ${new Date().toISOString()}]`,
-                        business_id: customerLookup?.businesses?.id || null
+                        business_id: activeBusiness?.id || null
                     });
                 }
             }
@@ -251,8 +276,8 @@ export async function POST(request: NextRequest) {
             console.log('📋 Sticker menu selection detected');
 
             const selection = classification.entities.slot_number;
-            const businessName = customerLookup?.businesses?.name || 'Business';
-            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const businessName = activeBusiness?.name || 'Business';
+            const businessNiche = activeBusiness?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
 
             if (twilioClient && fromNumber && selection) {
@@ -307,7 +332,7 @@ export async function POST(request: NextRequest) {
             const unitsMatch = messageText.match(/(\d+)/);
             const units = unitsMatch ? parseInt(unitsMatch[1]) : 1;
 
-            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const businessNiche = activeBusiness?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
 
             if (twilioClient && fromNumber) {
@@ -342,7 +367,7 @@ export async function POST(request: NextRequest) {
         if (conversationContext.customerStatus === 'sticker_repair') {
             console.log('🔧 Sticker repair response detected');
 
-            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const businessNiche = activeBusiness?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
 
             if (twilioClient && fromNumber) {
@@ -374,7 +399,7 @@ export async function POST(request: NextRequest) {
         if (classification.intent === 'GREETING') {
             console.log('👋 Greeting detected');
             if (twilioClient && fromNumber) {
-                const businessName = customerLookup?.businesses?.name || 'us';
+                const businessName = activeBusiness?.name || 'us';
                 await twilioClient.messages.create({
                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                     to: `whatsapp:${customerPhone}`,
@@ -408,7 +433,7 @@ export async function POST(request: NextRequest) {
                         to: `whatsapp:${customerPhone}`,
                         body: `Awesome Boss! 👍 Which time slot works best for you?\n\nJust reply with 1, 2, or 3 to select.`
                     });
-                } else if (status === 'quote_sent' && customerLookup?.businesses) {
+                } else if (status === 'quote_sent' && activeBusiness) {
                     // Re-send slot options with proper data
                     const businessData = customerLookup.businesses.business_data || {};
                     await sendSlotSuggester(customerPhone, {
@@ -418,7 +443,7 @@ export async function POST(request: NextRequest) {
                         estimateMin: customerLookup.estimate_min || 0,
                         estimateMax: customerLookup.estimate_max || 0,
                     });
-                } else if (status === 'awaiting_discount_confirmation' && customerLookup?.businesses) {
+                } else if (status === 'awaiting_discount_confirmation' && activeBusiness) {
                     // Applied 5% discount
                     const businessData = customerLookup.businesses.business_data || {};
 
@@ -506,9 +531,9 @@ export async function POST(request: NextRequest) {
                 // Escalate to owner for custom pricing
                 // ... reuse escalation logic ...
                 const businessCtx: BusinessContext = {
-                    name: customerLookup?.businesses?.name || 'Business',
-                    niche: customerLookup?.businesses?.business_data?.niche || 'service',
-                    ownerName: customerLookup?.businesses?.business_data?.owner_name,
+                    name: activeBusiness?.name || 'Business',
+                    niche: activeBusiness?.business_data?.niche || 'service',
+                    ownerName: activeBusiness?.business_data?.owner_name,
                 };
 
                 await twilioClient.messages.create({
@@ -518,7 +543,7 @@ export async function POST(request: NextRequest) {
                 });
 
                 // Notify owner
-                const ownerPhone = customerLookup?.businesses?.whatsapp_number;
+                const ownerPhone = activeBusiness?.whatsapp_number;
                 if (ownerPhone) {
                     const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
                     await twilioClient.messages.create({
@@ -537,7 +562,7 @@ export async function POST(request: NextRequest) {
 
         if (classification.intent === 'RESCHEDULE') {
             console.log('🗓️ Reschedule request detected');
-            if (twilioClient && fromNumber && customerLookup?.businesses) {
+            if (twilioClient && fromNumber && activeBusiness) {
                 // Send slot suggestions with proper data
                 // Send slot suggestions with proper data
                 const businessData = customerLookup.businesses.business_data || {};

@@ -31,6 +31,7 @@ export interface IntentEntities {
     address_text?: string;          // Extracted address if providing location
     service_type?: string;          // Type of service mentioned
     question_topic?: string;        // FAQ topic (hours, location, warranty, etc.)
+    business_ref?: string;          // Business subdomain/ref code (e.g. from [REF:...] in QR)
 }
 
 // Full classification result
@@ -127,9 +128,16 @@ function quickPatternMatch(
         return { intent: 'UNKNOWN', confidence: 1.0, entities: {} };
     }
 
+    // IDENTITY EXTRACTION - Look for [REF:subdomain] (any intent can have this)
+    const refMatch = text.match(/\[ref:\s*([^\]\s]+)\]/i);
+    const entities: IntentEntities = {};
+    if (refMatch) {
+        entities.business_ref = refMatch[1];
+    }
+
     // STICKER SCAN - Customer scanned QR sticker (high priority check)
     if (/sticker|scanned.*sticker|service sticker|i scanned/i.test(text)) {
-        return { intent: 'STICKER_SCAN', confidence: 1.0, entities: {} };
+        return { intent: 'STICKER_SCAN', confidence: 1.0, entities };
     }
 
     // STICKER MENU - When in sticker flow, 1/2/3 means menu selection, not slot
@@ -137,23 +145,23 @@ function quickPatternMatch(
         return {
             intent: 'STICKER_MENU',
             confidence: 1.0,
-            entities: { slot_number: parseInt(text) }
+            entities: { ...entities, slot_number: parseInt(text) }
         };
     }
 
     // Simple greetings
     if (/^(hi|hello|hey|good morning|good afternoon|good evening)[\s!]*$/i.test(text)) {
-        return { intent: 'GREETING', confidence: 0.9, entities: {} };
+        return { intent: 'GREETING', confidence: 0.9, entities };
     }
 
     // Price objection keywords
     if (/mahal|expensive|too much|discount|cheaper|less/i.test(text)) {
-        return { intent: 'PRICE_OBJECTION', confidence: 0.8, entities: {} };
+        return { intent: 'PRICE_OBJECTION', confidence: 0.8, entities };
     }
 
     // Quote request patterns (Filipino + English)
     if (/hm po|how much|price|quote|estimate|magkano/i.test(text)) {
-        return { intent: 'QUOTE_REQUEST', confidence: 0.9, entities: {} };
+        return { intent: 'QUOTE_REQUEST', confidence: 0.9, entities };
     }
 
     // Confirmation (includes "BOOK" for discount claims)
@@ -161,19 +169,19 @@ function quickPatternMatch(
     if (/^(yes|ok|okay|sure|confirm|go|sige|oo|book|claim)[\\s!]*$/i.test(text)) {
         // If awaiting address, don't treat short confirmations as CONFIRMATION intent
         if (context.customerStatus === 'awaiting_address') {
-            return null; // Let AI handle it or fall through to ADDRESS check
+            return entities.business_ref ? { intent: 'UNKNOWN', confidence: 0.5, entities } : null;
         }
-        return { intent: 'CONFIRMATION', confidence: 0.9, entities: {} };
+        return { intent: 'CONFIRMATION', confidence: 0.9, entities };
     }
 
     // Cancellation - must be explicit, not just "no"
     if (/^(cancel|nevermind|never mind|no need|hindi na|cancel na|don't need|ayaw ko na)[\\s!.]*$/i.test(text)) {
-        return { intent: 'CANCELLATION', confidence: 0.8, entities: {} };
+        return { intent: 'CANCELLATION', confidence: 0.8, entities };
     }
 
     // Rescheduling patterns - be specific to avoid false positives
     if (/reschedule|rebook|move.*date|change.*date|change.*time|lipat|ibang araw|not available|busy.*that day|can't make it/i.test(text)) {
-        return { intent: 'RESCHEDULE', confidence: 0.8, entities: {} };
+        return { intent: 'RESCHEDULE', confidence: 0.8, entities };
     }
 
     // Address detection - if awaiting address and message is long enough
@@ -181,11 +189,12 @@ function quickPatternMatch(
         return {
             intent: 'ADDRESS',
             confidence: 0.7,
-            entities: { address_text: message }
+            entities: { ...entities, address_text: message }
         };
     }
 
-    return null; // No quick match, use AI
+    // Fallback if we have a direct business reference but no other intent
+    return entities.business_ref ? { intent: 'GREETING', confidence: 0.5, entities } : null;
 }
 
 /**

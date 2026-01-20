@@ -734,13 +734,11 @@ export default async function DynamicWebsite({ params }) {
             : isCoaching ? 'Get My Free Blueprint' : 'Download Free Guide'),
           showEmailCapture: true,
           businessId: businessId,
-          // WhatsApp integration (for events and local service)
-          whatsappNumber: isCoaching ? null : (business?.phone_number || businessData?.phone || businessData?.whatsapp),
-          whatsappMessage: isEvent
+          // WhatsApp integration (for events and local service) - Route to Global Assistant
+          whatsappNumber: "13203627874",
+          whatsappMessage: (isEvent
             ? `Hi! I'd like to register for ${lm.event_name || 'the event'} on ${lm.event_date || 'the upcoming date'}. Please let me know the next steps!`
-            : isCoaching
-              ? null
-              : (businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`),
+            : (businessData?.whatsapp_message || `Hi! I just downloaded your ${lm.lead_magnet?.title || 'guide'} and I'd like to schedule a free inspection. When is your earliest availability?`)) + ` [REF:${subdomain}]`,
           // Urgency/scarcity
           urgencyText: isEvent
             ? `🔥 Limited Spots – ${lm.event_date || 'Register Now!'}`

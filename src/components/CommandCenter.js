@@ -320,14 +320,10 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
 
     // Download QR - Maintenance Record Sticker Design
     const downloadQR = async () => {
-        // Direct-to-WhatsApp link (preferred) or fallback to quote funnel
-        const whatsappNumber = business?.whatsapp_number?.replace(/[^\d]/g, '');
-        const stickerTrigger = "Hi, I scanned the Service Sticker";
-        const qrUrl = whatsappNumber
-            ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(stickerTrigger)}`
-            : (business?.subdomain
-                ? `${window.location.origin}/sites/${business.subdomain}/quote`
-                : `${window.location.origin}/q/${business?.id}`);
+        // Direct-to-WhatsApp link for Launchfly Assistant Bot
+        const assistantNumber = "13203627874";
+        const stickerTrigger = `Hi, I scanned the Service Sticker [REF:${business?.subdomain}]`;
+        const qrUrl = `https://wa.me/${assistantNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
         // Landscape orientation for maintenance record sticker matches reference (4:3 ratio approx)

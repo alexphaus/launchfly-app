@@ -110,8 +110,9 @@ export default function QuoteFunnel({
                 // Redirect to WhatsApp if number available
                 if (whatsappNumber) {
                     const cleanPhone = whatsappNumber.replace(/\D/g, '');
+                    // Include business ID so bot knows context: [BIZ:id]
                     const message = encodeURIComponent(
-                        `Hi! I want to request a quote for ${businessName}. Service: ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}`
+                        `Hi! I want to request a quote for ${businessName}. Service: ${selectedService} (${units} unit${units > 1 ? 's' : ''}). Estimated: ${currency}${low.toLocaleString()} - ${currency}${high.toLocaleString()}${businessId ? ` [BIZ:${businessId}]` : ''}`
                     );
                     // Use native WhatsApp scheme to bypass ISP blocks on wa.me
                     window.location.href = `whatsapp://send?phone=${cleanPhone}&text=${message}`;

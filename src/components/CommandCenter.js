@@ -322,9 +322,8 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     // QR now links to Launchfly bot (Twilio WhatsApp) with business context for smart booking
     const downloadQR = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
-        // This number is configured in environment as NEXT_PUBLIC_LAUNCHFLY_WHATSAPP
-        // Falls back to owner's WhatsApp only if Launchfly bot is not configured
-        const launchflyBotNumber = process.env.NEXT_PUBLIC_LAUNCHFLY_WHATSAPP || '14155238886'; // Twilio sandbox default
+        // +1 (320) 362-7874 is the production Launchfly bot number
+        const launchflyBotNumber = '13203627874';
         
         // Include business ID in trigger message so bot knows which business context to use
         const businessId = business?.id;
@@ -333,7 +332,6 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
             : "Hi, I scanned the Service Sticker";
         
         // Primary: Launchfly bot with business context
-        // Fallback: Quote funnel page
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');

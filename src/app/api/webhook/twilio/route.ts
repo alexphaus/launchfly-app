@@ -120,6 +120,25 @@ export async function POST(request: NextRequest) {
         const locationDerivedAddress = locationAddress || locationLabel ||
             (isLocationPin ? `📍 Location: ${latitude}, ${longitude}` : null);
 
+        // ========== BUSINESS CONTEXT EXTRACTION ==========
+        // Extract business ID from message if present [BIZ:uuid]
+        const extractedBusinessId = extractBusinessIdFromTrigger(messageText);
+        let targetBusiness: any = null;
+        
+        if (extractedBusinessId) {
+            console.log(`🏢 Extracted business ID from message: ${extractedBusinessId}`);
+            const { data: bizData } = await supabase
+                .from('businesses')
+                .select('id, name, business_data, whatsapp_number, phone_number')
+                .eq('id', extractedBusinessId)
+                .single();
+            
+            if (bizData) {
+                targetBusiness = bizData;
+                console.log(`✅ Found target business: ${bizData.name}`);
+            }
+        }
+
         // ========== AI INTENT CLASSIFICATION ==========
         // First, lookup customer to get conversation context
         const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
@@ -127,18 +146,21 @@ export async function POST(request: NextRequest) {
 
         const { data: customerLookup } = await supabase
             .from('customers')
-            .select('*, businesses(name, business_data, whatsapp_number), bookings(id)')
+            .select('*, businesses(id, name, business_data, whatsapp_number, phone_number), bookings(id)')
             .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
+        // Use extracted business or customer's existing business
+        const businessContext = targetBusiness || customerLookup?.businesses;
+
         // Build conversation context for AI
         const conversationContext: ConversationContext = {
             customerStatus: customerLookup?.status,
             hasQuote: customerLookup?.notes?.includes('AVAILABLE_SLOTS'),
-            businessName: customerLookup?.businesses?.name,
-            businessNiche: customerLookup?.businesses?.business_data?.niche,
+            businessName: businessContext?.name,
+            businessNiche: businessContext?.business_data?.niche,
         };
 
         // Special handling for location pins - always treat as address if awaiting
@@ -221,28 +243,11 @@ export async function POST(request: NextRequest) {
         if (classification.intent === 'STICKER_SCAN') {
             console.log('🏷️ Sticker scan detected - starting VIP flow');
 
-            // Extract business ID from trigger message if present
-            const extractedBusinessId = extractBusinessIdFromTrigger(messageText);
-            console.log(`📋 Extracted business ID: ${extractedBusinessId || 'none'}`);
+            // Use already extracted business context or fall back to customer's business
+            const business = targetBusiness || customerLookup?.businesses;
+            const businessId = targetBusiness?.id || customerLookup?.business_id;
 
-            // Look up business - either from extracted ID or from existing customer relationship
-            let business = customerLookup?.businesses;
-            let businessId = customerLookup?.business_id;
-
-            if (extractedBusinessId && !business) {
-                // New customer scanning a specific business's sticker
-                const { data: businessLookup } = await supabase
-                    .from('businesses')
-                    .select('id, name, business_data, whatsapp_number, phone_number')
-                    .eq('id', extractedBusinessId)
-                    .single();
-                
-                if (businessLookup) {
-                    business = businessLookup;
-                    businessId = businessLookup.id;
-                    console.log(`✅ Found business: ${business.name}`);
-                }
-            }
+            console.log(`📋 Business context: ${business?.name || 'none'} (ID: ${businessId || 'none'})`);
 
             const businessName = business?.name || business?.business_data?.businessName || 'us';
             const businessNiche = business?.business_data?.niche || 'default';
@@ -263,7 +268,7 @@ export async function POST(request: NextRequest) {
                         status: 'sticker_menu',
                         business_id: businessId || customerLookup.business_id,
                         notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]` + 
-                            (extractedBusinessId ? ` [BIZ:${extractedBusinessId}]` : '')
+                            (businessId ? ` [BIZ:${businessId}]` : '')
                     }).eq('id', customerLookup.id);
                 } else {
                     // Create new customer record for sticker scan
@@ -271,7 +276,7 @@ export async function POST(request: NextRequest) {
                         phone: phoneWithPlus,
                         status: 'sticker_menu',
                         notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
-                            (extractedBusinessId ? ` [BIZ:${extractedBusinessId}]` : ''),
+                            (businessId ? ` [BIZ:${businessId}]` : ''),
                         business_id: businessId || null
                     });
                 }

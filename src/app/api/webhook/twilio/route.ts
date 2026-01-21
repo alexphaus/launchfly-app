@@ -3,6 +3,7 @@
 // This is called when a customer sends a message to the Launchfly assistant number
 // Now with AI-powered intent classification (Smart Receptionist)
 // Supports multi-business routing via [BIZ:id] in sticker scan messages
+// Updated with "Forever Customer Engine" - returning customer recognition
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -20,6 +21,18 @@ import {
     generateBookingConfirmation,
     generateSlotOptions
 } from '@/lib/sticker-flow-templates';
+import {
+    isTechRegistrationTrigger,
+    generateTechRegistrationPrompt,
+    generateTechRegistrationConfirmation,
+    generateReturningCustomerGreeting,
+    generateServiceHistoryMessage,
+    isServiceDueSoon,
+    generateServiceDueNudge,
+    formatDateSEA,
+    calculateNextServiceDue,
+    type CustomerServiceHistory,
+} from '@/lib/warranty-flow';
 import twilio from 'twilio';
 
 const supabase = createClient(
@@ -240,6 +253,7 @@ export async function POST(request: NextRequest) {
         // ========== STICKER SCAN HANDLER ==========
         // Direct-to-WhatsApp flow for QR sticker scans
         // Now supports business context via [BIZ:id] in the trigger message
+        // Enhanced with "Forever Customer Engine" - returning customer recognition
         if (classification.intent === 'STICKER_SCAN') {
             console.log('🏷️ Sticker scan detected - starting VIP flow');
 
@@ -253,40 +267,112 @@ export async function POST(request: NextRequest) {
             const businessNiche = business?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
 
+            // ========== CHECK FOR RETURNING CUSTOMER ==========
+            // Look up service history for this customer + business
+            let serviceHistory: any[] = [];
+            let isReturningCustomer = false;
+            
+            if (customerLookup?.id && businessId) {
+                const { data: historyData } = await supabase
+                    .from('service_records')
+                    .select('id, service_date, service_name, appliance_type, warranty_expires_at, next_service_due_at')
+                    .eq('customer_id', customerLookup.id)
+                    .eq('business_id', businessId)
+                    .order('service_date', { ascending: false })
+                    .limit(5);
+                
+                if (historyData && historyData.length > 0) {
+                    serviceHistory = historyData;
+                    isReturningCustomer = true;
+                    console.log(`🔄 Returning customer detected! ${serviceHistory.length} past services`);
+                }
+            }
+
             if (twilioClient && fromNumber) {
-                // Send VIP greeting with service menu
-                const greeting = generateStickerGreeting(flowConfig, businessName);
+                let greeting: string;
+
+                if (isReturningCustomer && serviceHistory.length > 0) {
+                    // ========== RETURNING CUSTOMER PATH ==========
+                    const customerName = customerLookup?.name || customerLookup?.first_name || 'there';
+                    const history: CustomerServiceHistory = {
+                        customerId: customerLookup!.id,
+                        customerName: customerName,
+                        totalServices: serviceHistory.length,
+                        lastServiceDate: serviceHistory[0]?.service_date ? new Date(serviceHistory[0].service_date) : undefined,
+                        nextDueDate: serviceHistory[0]?.next_service_due_at ? new Date(serviceHistory[0].next_service_due_at) : undefined,
+                        services: serviceHistory.map(s => ({
+                            id: s.id,
+                            serviceDate: new Date(s.service_date),
+                            serviceName: s.service_name || flowConfig.serviceName,
+                            applianceType: s.appliance_type,
+                            warrantyActive: s.warranty_expires_at ? new Date(s.warranty_expires_at) > new Date() : false,
+                            warrantyExpiresAt: s.warranty_expires_at ? new Date(s.warranty_expires_at) : undefined,
+                        })),
+                    };
+
+                    // Check if service is due soon
+                    if (history.nextDueDate && isServiceDueSoon(history.nextDueDate, 30)) {
+                        // Service due - show nudge
+                        const lastServiceDateStr = history.lastServiceDate 
+                            ? formatDateSEA(history.lastServiceDate)
+                            : 'recently';
+                        const daysToDue = Math.ceil((history.nextDueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                        
+                        greeting = generateServiceDueNudge({
+                            customerName: history.customerName,
+                            applianceType: history.services[0]?.applianceType || flowConfig.serviceName.split(' ')[0].toLowerCase(),
+                            daysToDue: daysToDue,
+                            lastServiceDate: lastServiceDateStr,
+                        });
+                    } else {
+                        // Normal returning customer greeting
+                        greeting = generateReturningCustomerGreeting(history, businessName);
+                    }
+
+                    // Update customer as repeat customer
+                    await supabase.from('customers').update({
+                        is_repeat_customer: true,
+                        status: 'returning_menu',
+                        notes: (customerLookup?.notes || '') + `\n[RETURNING_SCAN: ${new Date().toISOString()}]`
+                    }).eq('id', customerLookup!.id);
+
+                } else {
+                    // ========== NEW CUSTOMER PATH ==========
+                    greeting = generateStickerGreeting(flowConfig, businessName);
+
+                    // Update or create customer record for sticker scan
+                    if (customerLookup?.id) {
+                        await supabase.from('customers').update({
+                            status: 'sticker_menu',
+                            business_id: businessId || customerLookup.business_id,
+                            notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]` + 
+                                (businessId ? ` [BIZ:${businessId}]` : '')
+                        }).eq('id', customerLookup.id);
+                    } else {
+                        // Create new customer record for sticker scan
+                        await supabase.from('customers').insert({
+                            phone: phoneWithPlus,
+                            status: 'sticker_menu',
+                            notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
+                                (businessId ? ` [BIZ:${businessId}]` : ''),
+                            business_id: businessId || null
+                        });
+                    }
+                }
+
+                // Send greeting
                 await twilioClient.messages.create({
                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                     to: `whatsapp:${customerPhone}`,
                     body: greeting
                 });
 
-                // Update or create customer record for sticker scan
-                if (customerLookup?.id) {
-                    await supabase.from('customers').update({
-                        status: 'sticker_menu',
-                        business_id: businessId || customerLookup.business_id,
-                        notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]` + 
-                            (businessId ? ` [BIZ:${businessId}]` : '')
-                    }).eq('id', customerLookup.id);
-                } else {
-                    // Create new customer record for sticker scan
-                    await supabase.from('customers').insert({
-                        phone: phoneWithPlus,
-                        status: 'sticker_menu',
-                        notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
-                            (businessId ? ` [BIZ:${businessId}]` : ''),
-                        business_id: businessId || null
-                    });
-                }
-
                 // Notify owner that someone scanned their sticker (optional - for tracking)
                 const ownerPhone = business?.whatsapp_number || business?.phone_number;
                 if (ownerPhone) {
                     const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
                     // Silent tracking - don't spam owner for every scan
-                    console.log(`📊 Sticker scanned for ${businessName} - owner: ${cleanOwnerPhone}`);
+                    console.log(`📊 Sticker scanned for ${businessName} - owner: ${cleanOwnerPhone}${isReturningCustomer ? ' (RETURNING CUSTOMER!)' : ''}`);
                 }
             }
 

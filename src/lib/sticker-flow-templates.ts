@@ -111,13 +111,13 @@ export function getFlowConfig(niche?: string): StickerFlowConfig {
 }
 
 /**
- * Generate VIP greeting message for sticker scan
+ * Generate greeting message for NEW customer sticker scan (no service history)
  */
 export function generateStickerGreeting(config: StickerFlowConfig, businessName: string): string {
-    return `Welcome back! 👋
-Since you scanned the sticker, I have pulled up your Priority Record. 🛠️
+    return `Hi there! 👋
+Thanks for scanning the service sticker from *${businessName}*.
 
-What do you need help with today?
+How can I help you today?
 
 1️⃣ ${config.cleaningLabel}
 2️⃣ ${config.repairLabel}

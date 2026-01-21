@@ -173,32 +173,50 @@ Thanks for choosing *${params.businessName}*! 🙏`;
 /**
  * Generate VIP greeting for returning customer
  */
-export function generateReturningCustomerGreeting(history: CustomerServiceHistory, businessName: string): string {
+export function generateReturningCustomerGreeting(
+    history: CustomerServiceHistory, 
+    businessName: string,
+    flowConfig?: { cleaningLabel: string; repairLabel: string; priceLabel: string }
+): string {
     const lastService = history.services[0];
     const lastServiceDateStr = lastService?.serviceDate
         ? new Date(lastService.serviceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
         : 'recently';
 
     // Check if warranty is active
-    const warrantyStatus = lastService?.warrantyActive
-        ? `🛡️ Your warranty is *ACTIVE* until ${new Date(lastService.warrantyExpiresAt!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-        : '🛡️ Warranty has expired';
+    const warrantyActive = lastService?.warrantyActive;
+    const warrantyExpiry = lastService?.warrantyExpiresAt
+        ? new Date(lastService.warrantyExpiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+        : null;
+    
+    const warrantyLine = warrantyActive && warrantyExpiry
+        ? `🛡️ Warranty: *Active until ${warrantyExpiry}*`
+        : '🛡️ Warranty: Expired';
 
-    return `Welcome back, *${history.customerName}*! 👋
+    // Default menu options if flowConfig not provided
+    const option1 = flowConfig?.cleaningLabel || 'Book Cleaning 💨';
+    const option2 = flowConfig?.repairLabel || 'Not Cooling / Repair 🔧';
+    const option3 = flowConfig?.priceLabel || 'Check Price 💰';
 
-I see you're a valued customer of *${businessName}*.
+    // Name handling - use first name or "there"
+    const displayName = history.customerName && history.customerName !== 'there' 
+        ? history.customerName.split(' ')[0] 
+        : '';
+    const nameGreeting = displayName ? `, *${displayName}*` : '';
 
-📋 *Your Last Service:*
-• ${lastService?.serviceName || 'Service'} on ${lastServiceDateStr}
-${warrantyStatus}
+    return `Welcome back${nameGreeting}! 👋
 
-How can I help you today?
+📋 *Your Record with ${businessName}:*
+• Last: ${lastService?.serviceName || 'Service'} (${lastServiceDateStr})
+${warrantyLine}
 
-1️⃣ Book Another Service 📅
-2️⃣ Report an Issue (Warranty) 🔧
-3️⃣ View My Service History 📋
+What do you need help with today?
 
-Reply with 1, 2, or 3:`;
+1️⃣ ${option1}
+2️⃣ ${option2}
+3️⃣ ${option3}
+
+Reply with 1, 2, or 3`;
 }
 
 /**

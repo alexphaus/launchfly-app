@@ -543,8 +543,12 @@ export async function POST(request: NextRequest) {
                             lastServiceDate: lastServiceDateStr,
                         });
                     } else {
-                        // Normal returning customer greeting
-                        greeting = generateReturningCustomerGreeting(history, businessName);
+                        // Normal returning customer greeting - pass flowConfig for consistent menu
+                        greeting = generateReturningCustomerGreeting(history, businessName, {
+                            cleaningLabel: flowConfig.cleaningLabel,
+                            repairLabel: flowConfig.repairLabel,
+                            priceLabel: flowConfig.priceLabel,
+                        });
                     }
 
                     // Update customer as repeat customer

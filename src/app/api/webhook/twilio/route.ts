@@ -251,12 +251,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-            return new NextResponse(
-                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-                { headers: { 'Content-Type': 'text/xml' } }
-            );
-        }
-
         // ========== TECH REGISTRATION FLOW (Detailed Log) ==========
         // Handle the multi-step flow for owners registering a service
         

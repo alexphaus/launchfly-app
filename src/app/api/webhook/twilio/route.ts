@@ -25,6 +25,7 @@ import {
     isTechRegistrationTrigger,
     generateTechRegistrationPrompt,
     generateTechRegistrationConfirmation,
+    generateServiceDetailsPrompt,
     generateReturningCustomerGreeting,
     generateServiceHistoryMessage,
     isServiceDueSoon,
@@ -250,6 +251,191 @@ export async function POST(request: NextRequest) {
             );
         }
 
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== TECH REGISTRATION FLOW (Detailed Log) ==========
+        // Handle the multi-step flow for owners registering a service
+        
+        // STEP 1: Owner sent customer phone -> Ask for Service Type
+        if (customerLookup?.status === 'tech_registering') {
+            console.log('📝 Tech Registration: Received phone number');
+            
+            // Extract phone number from message
+            const inputPhone = messageText.replace(/[^\d+]/g, '');
+            if (inputPhone.length < 8) {
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: '⚠️ Please enter a valid phone number (e.g., +6012...).'
+                    });
+                }
+                return new NextResponse(
+                    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                    { headers: { 'Content-Type': 'text/xml' } }
+                );
+            }
+
+            // Save phone in notes and move to next step
+            // We store the target customer's phone in the OWNER's notes temporarily
+            const flowConfig = getFlowConfig(customerLookup.businesses?.business_data?.niche);
+            const prompt = generateServiceDetailsPrompt(flowConfig);
+
+            await supabase.from('customers').update({
+                status: 'tech_awaiting_service',
+                notes: (customerLookup.notes || '') + `\n[TECH_TARGET_PHONE: ${inputPhone}]`
+            }).eq('id', customerLookup.id);
+
+            if (twilioClient && fromNumber) {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: prompt
+                });
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // STEP 2: Owner selected Service Type -> Create Record
+        if (customerLookup?.status === 'tech_awaiting_service') {
+            console.log('📝 Tech Registration: Service selection received');
+            
+            const selection = parseInt(messageText.replace(/[^\d]/g, ''));
+            const flowConfig = getFlowConfig(customerLookup.businesses?.business_data?.niche);
+            
+            let serviceType = 'cleaning'; // Default
+            let serviceName = flowConfig.serviceName;
+
+            if (selection === 2) {
+                serviceType = 'repair';
+                serviceName = flowConfig.repairLabel.replace(/[^\w\s]/g, '').trim();
+            } else if (selection === 3 || isNaN(selection)) {
+                serviceType = 'maintenance'; // "Other" maps to maintenance for now
+            } else {
+                serviceName = flowConfig.cleaningLabel.replace(/[^\w\s]/g, '').trim();
+            }
+
+            // Extract target customer phone from notes
+            const notes = customerLookup.notes || '';
+            const phoneMatch = notes.match(/\[TECH_TARGET_PHONE: ([^\]]+)\]/);
+            const targetPhone = phoneMatch ? phoneMatch[1] : null;
+
+            if (targetPhone) {
+                // Find or create the customer being registered
+                // Note: We need to use a server-side call (API) or direct DB insert
+                // For now, we'll do a quick DB lookup/insert here
+                
+                let targetCustomerId: string | null = null;
+                
+                // Try finding customer
+                const { data: existingTarget } = await supabase
+                    .from('customers')
+                    .select('id')
+                    .or(`phone.eq.${targetPhone},phone.eq.+${targetPhone}`)
+                    .limit(1)
+                    .single();
+
+                if (existingTarget) {
+                    targetCustomerId = existingTarget.id;
+                } else {
+                    // Create new customer
+                    const { data: newTarget } = await supabase
+                        .from('customers')
+                        .insert({
+                            phone: targetPhone,
+                            status: 'lead',
+                            source: 'tech_register',
+                            business_id: customerLookup.business_id
+                        })
+                        .select('id')
+                        .single();
+                    if (newTarget) targetCustomerId = newTarget.id;
+                }
+
+                if (targetCustomerId && customerLookup.business_id) {
+                    // Create Service Record using our API logic (replicated here for speed/simplicity)
+                    // We call the API endpoint internally or just insert directly
+                    // Direct insert is safer here to avoid self-call auth issues
+                    const serviceDate = new Date();
+                    
+                    // Import helper logic dynamically or assume defaults
+                    const warrantyDays = serviceType === 'repair' ? 30 : 30; // Default
+                    const intervalDays = serviceType === 'repair' ? 90 : 180; // 6 months for cleaning
+                    
+                    const warrantyExpiresAt = new Date(serviceDate);
+                    warrantyExpiresAt.setDate(warrantyExpiresAt.getDate() + warrantyDays);
+                    
+                    const nextDueAt = new Date(serviceDate);
+                    nextDueAt.setDate(nextDueAt.getDate() + intervalDays);
+
+                    const { error: recordError } = await supabase
+                        .from('service_records')
+                        .insert({
+                            business_id: customerLookup.business_id,
+                            customer_id: targetCustomerId,
+                            service_type: serviceType,
+                            service_name: serviceName,
+                            appliance_type: flowConfig.serviceName.split(' ')[0].toLowerCase(),
+                            warranty_days: warrantyDays,
+                            warranty_expires_at: warrantyExpiresAt,
+                            service_interval_days: intervalDays,
+                            next_service_due_at: nextDueAt,
+                            registered_via: 'tech_register',
+                            registered_by: 'technician'
+                        });
+
+                    if (!recordError) {
+                        // Send confirmation to Owner
+                        const confirmMsg = generateTechRegistrationConfirmation({
+                            customerPhone: targetPhone,
+                            serviceName: serviceName,
+                            warrantyDays: warrantyDays,
+                            warrantyExpiresAt: warrantyExpiresAt.toLocaleDateString(),
+                            nextReminderDate: nextDueAt.toLocaleDateString(),
+                        });
+
+                        if (twilioClient && fromNumber) {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${customerPhone}`,
+                                body: confirmMsg
+                            });
+                        }
+
+                        // Reset owner status
+                        await supabase.from('customers').update({
+                            status: 'lead', // Reset to default
+                            notes: notes + `\n[TECH_REGISTER_COMPLETE: ${new Date().toISOString()}]`
+                        }).eq('id', customerLookup.id);
+                    } else {
+                        console.error('❌ Failed to create service record from tech flow:', recordError);
+                    }
+                }
+            } else {
+                console.error('❌ Tech flow error: Target phone lost from notes');
+                if (twilioClient && fromNumber) {
+                     await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: '❌ Error: Could not find customer phone. Please scan sticker again to restart.'
+                    });
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // ========== STICKER SCAN HANDLER ==========
         // Direct-to-WhatsApp flow for QR sticker scans
         // Now supports business context via [BIZ:id] in the trigger message
@@ -266,6 +452,44 @@ export async function POST(request: NextRequest) {
             const businessName = business?.name || business?.business_data?.businessName || 'us';
             const businessNiche = business?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
+
+            // ========== CHECK FOR OWNER SCAN (Admin Mode) ==========
+            // If the sender is the business owner, enter Service Registration Mode
+            const ownerPhone = business?.whatsapp_number || business?.phone_number;
+            const cleanOwnerPhone = ownerPhone ? ownerPhone.replace(/[^\d]/g, '') : null;
+            const cleanSenderPhone = customerPhone.replace(/[^\d]/g, '');
+
+            // Check if sender matches owner (try exact match and with/without country code)
+            const isOwner = cleanOwnerPhone && (
+                cleanSenderPhone === cleanOwnerPhone || 
+                cleanSenderPhone.endsWith(cleanOwnerPhone.slice(-10)) // Last 10 digits match
+            );
+
+            if (isOwner && twilioClient && fromNumber) {
+                console.log('👑 Owner scanned sticker - starting Service Registration Flow');
+                
+                const prompt = generateTechRegistrationPrompt(businessName);
+                
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: prompt
+                });
+
+                // Update owner's state to "tech_registering"
+                // We treat the owner as a "customer" record for flow state management
+                if (customerLookup?.id) {
+                    await supabase.from('customers').update({
+                        status: 'tech_registering', // Defined in warranty-flow.ts
+                        notes: (customerLookup.notes || '') + `\n[ADMIN_MODE: registering service at ${new Date().toISOString()}]`
+                    }).eq('id', customerLookup.id);
+                }
+                
+                return new NextResponse(
+                    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                    { headers: { 'Content-Type': 'text/xml' } }
+                );
+            }
 
             // ========== CHECK FOR RETURNING CUSTOMER ==========
             // Look up service history for this customer + business

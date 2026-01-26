@@ -476,3 +476,141 @@ export function getDefaultWarrantyDays(serviceType: string): number {
             return 30;
     }
 }
+
+// ============================================================================
+// FEEDBACK & REVIEW FLOW
+// ============================================================================
+// Post-service feedback collection with Google Review redirect
+
+/**
+ * Generate feedback request after warranty activation
+ * Sent to customer after tech registers the service
+ */
+export function generateFeedbackRequest(params: {
+    customerName: string;
+    serviceName: string;
+    businessName: string;
+    feedbackUrl?: string; // URL to web feedback page
+}): string {
+    const name = params.customerName?.split(' ')[0] || '';
+    const greeting = name ? `Hi ${name}! ` : '';
+    
+    return `${greeting}✅ *Warranty Activated!*
+
+Your ${params.serviceName} from *${params.businessName}* is now covered.
+
+📝 *Quick Question:* How was the service today?
+
+1️⃣ ⭐ Excellent - Loved it!
+2️⃣ 👍 Good - Satisfied
+3️⃣ 😐 Okay - Could be better
+4️⃣ 👎 Not Good - Had issues
+
+Reply with 1, 2, 3, or 4`;
+}
+
+/**
+ * Detect feedback rating from message
+ * Returns rating 1-4 or null if not a rating
+ */
+export function detectFeedbackRating(message: string): number | null {
+    const cleaned = message.trim().toLowerCase();
+    
+    // Direct number
+    if (['1', '2', '3', '4'].includes(cleaned)) {
+        return parseInt(cleaned);
+    }
+    
+    // Keywords
+    if (cleaned.includes('excellent') || cleaned.includes('loved') || cleaned.includes('amazing') || cleaned.includes('great')) {
+        return 1; // Excellent
+    }
+    if (cleaned.includes('good') || cleaned.includes('satisfied') || cleaned.includes('nice')) {
+        return 2; // Good
+    }
+    if (cleaned.includes('okay') || cleaned.includes('ok') || cleaned.includes('fine') || cleaned.includes('better')) {
+        return 3; // Okay
+    }
+    if (cleaned.includes('not good') || cleaned.includes('bad') || cleaned.includes('issue') || cleaned.includes('problem') || cleaned.includes('poor')) {
+        return 4; // Not Good
+    }
+    
+    return null;
+}
+
+/**
+ * Generate response based on feedback rating
+ */
+export function generateFeedbackResponse(params: {
+    rating: number;
+    businessName: string;
+    googleReviewLink?: string;
+    ownerWhatsApp?: string;
+}): string {
+    const reviewLink = params.googleReviewLink || 'https://g.page/review'; // Fallback
+    
+    if (params.rating <= 2) {
+        // Positive feedback (1 = Excellent, 2 = Good)
+        return `🙏 *Thank you so much!* We're thrilled you had a great experience!
+
+If you have 30 seconds, a quick Google review would really help us grow:
+
+👉 ${reviewLink}
+
+It means the world to small businesses like *${params.businessName}*! ⭐`;
+    } else {
+        // Negative feedback (3 = Okay, 4 = Not Good)
+        return `😔 We're sorry to hear that. Your feedback matters to us.
+
+Please tell us what went wrong so we can make it right:
+
+_(Just type your concern and we'll get back to you ASAP)_`;
+    }
+}
+
+/**
+ * Generate alert to tech/owner about negative feedback
+ */
+export function generateServiceRecoveryAlert(params: {
+    customerName: string;
+    customerPhone: string;
+    rating: number;
+    serviceName: string;
+    serviceDate?: string;
+    complaint?: string;
+}): string {
+    const ratingEmoji = params.rating === 3 ? '😐' : '👎';
+    const urgency = params.rating === 4 ? '🚨 URGENT' : '⚠️ ATTENTION';
+    
+    return `${urgency} *Service Recovery Needed*
+
+${ratingEmoji} Customer rated *${params.rating}/4*
+
+👤 *Customer:* ${params.customerName}
+📱 *Phone:* ${params.customerPhone}
+🛠️ *Service:* ${params.serviceName}${params.serviceDate ? `\n📅 *Date:* ${params.serviceDate}` : ''}${params.complaint ? `\n\n💬 *Feedback:*\n"${params.complaint}"` : ''}
+
+👉 *Tap to message customer now:*
+https://wa.me/${params.customerPhone.replace(/[^\d]/g, '')}
+
+_Quick response = happy customer = saved review!_`;
+}
+
+/**
+ * Generate thank you after complaint is logged
+ */
+export function generateComplaintAcknowledgment(businessName: string, ownerName?: string): string {
+    const name = ownerName || 'our team';
+    return `✅ *Feedback Received*
+
+Thank you for letting us know. ${name} from *${businessName}* will review this personally and get back to you soon.
+
+We appreciate you giving us the chance to make things right! 🙏`;
+}
+
+/**
+ * Check if customer is in feedback flow
+ */
+export function isFeedbackFlowStatus(status: string): boolean {
+    return ['feedback_pending', 'feedback_negative', 'complaint_pending'].includes(status);
+}

@@ -33,6 +33,13 @@ import {
     formatDateSEA,
     calculateNextServiceDue,
     type CustomerServiceHistory,
+    // Feedback flow
+    generateFeedbackRequest,
+    detectFeedbackRating,
+    generateFeedbackResponse,
+    generateServiceRecoveryAlert,
+    generateComplaintAcknowledgment,
+    isFeedbackFlowStatus,
 } from '@/lib/warranty-flow';
 import twilio from 'twilio';
 
@@ -251,6 +258,136 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // ========== FEEDBACK FLOW HANDLER ==========
+        // Handle customer feedback responses (1-4 rating)
+        if (customerLookup?.status === 'feedback_pending') {
+            console.log('📝 Feedback Flow: Processing rating');
+            
+            const rating = detectFeedbackRating(messageText);
+            
+            if (rating !== null) {
+                // Get business info for response
+                const business = customerLookup?.businesses;
+                const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
+                const googleReviewLink = business?.business_data?.googleReviewLink || 
+                                         business?.business_data?.google_review_link ||
+                                         null;
+                
+                // Generate appropriate response
+                const responseMsg = generateFeedbackResponse({
+                    rating: rating,
+                    businessName: businessName,
+                    googleReviewLink: googleReviewLink,
+                });
+
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: responseMsg
+                    });
+                }
+
+                // Update customer status based on rating
+                const newStatus = rating <= 2 ? 'feedback_positive' : 'feedback_negative';
+                await supabase.from('customers').update({
+                    status: newStatus,
+                    notes: (customerLookup.notes || '') + `\n[FEEDBACK_RATING: ${rating}/4 at ${new Date().toISOString()}]`
+                }).eq('id', customerLookup.id);
+
+                // If negative feedback, alert the business owner/tech
+                if (rating >= 3) {
+                    const ownerPhone = business?.whatsapp_number || business?.phone_number;
+                    if (ownerPhone && twilioClient && fromNumber) {
+                        const alertMsg = generateServiceRecoveryAlert({
+                            customerName: customerLookup.name || customerLookup.first_name || 'Customer',
+                            customerPhone: customerPhone,
+                            rating: rating,
+                            serviceName: 'Recent Service', // Could be enhanced to pull from service_records
+                        });
+
+                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        await twilioClient.messages.create({
+                            from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                            to: `whatsapp:${cleanOwnerPhone}`,
+                            body: alertMsg
+                        });
+                        console.log(`🚨 Service recovery alert sent to owner: ${cleanOwnerPhone}`);
+                    }
+                }
+
+                console.log(`✅ Feedback recorded: ${rating}/4 for customer ${customerLookup.id}`);
+            } else {
+                // Couldn't parse rating - prompt again
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Please reply with a number:\n\n1️⃣ ⭐ Excellent\n2️⃣ 👍 Good\n3️⃣ 😐 Okay\n4️⃣ 👎 Not Good`
+                    });
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== COMPLAINT HANDLER ==========
+        // Handle complaint text from negative feedback
+        if (customerLookup?.status === 'feedback_negative') {
+            console.log('📝 Complaint Flow: Receiving complaint details');
+            
+            // This is the customer typing what went wrong
+            const complaint = messageText;
+            const business = customerLookup?.businesses;
+            const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
+            
+            // Send acknowledgment to customer
+            if (twilioClient && fromNumber) {
+                const ackMsg = generateComplaintAcknowledgment(businessName);
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: ackMsg
+                });
+            }
+
+            // Log complaint in customer notes
+            await supabase.from('customers').update({
+                status: 'complaint_logged',
+                notes: (customerLookup.notes || '') + `\n[COMPLAINT: ${new Date().toISOString()}]\n"${complaint}"`
+            }).eq('id', customerLookup.id);
+
+            // Alert owner with the complaint
+            const ownerPhone = business?.whatsapp_number || business?.phone_number;
+            if (ownerPhone && twilioClient && fromNumber) {
+                const alertMsg = generateServiceRecoveryAlert({
+                    customerName: customerLookup.name || customerLookup.first_name || 'Customer',
+                    customerPhone: customerPhone,
+                    rating: 4, // Assume worst since they wrote complaint
+                    serviceName: 'Recent Service',
+                    complaint: complaint,
+                });
+
+                const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${cleanOwnerPhone}`,
+                    body: alertMsg
+                });
+                console.log(`🚨 Complaint alert sent to owner: ${cleanOwnerPhone}`);
+            }
+
+            console.log(`✅ Complaint logged for customer ${customerLookup.id}`);
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // ========== TECH REGISTRATION FLOW (Detailed Log) ==========
         // Handle the multi-step flow for owners registering a service
         
@@ -387,7 +524,7 @@ export async function POST(request: NextRequest) {
                         });
 
                     if (!recordError) {
-                        // Send confirmation to Owner
+                        // Send confirmation to Owner/Tech
                         const confirmMsg = generateTechRegistrationConfirmation({
                             customerPhone: targetPhone,
                             serviceName: serviceName,
@@ -402,6 +539,41 @@ export async function POST(request: NextRequest) {
                                 to: `whatsapp:${customerPhone}`,
                                 body: confirmMsg
                             });
+
+                            // ========== SEND FEEDBACK REQUEST TO CUSTOMER ==========
+                            // Get target customer details for personalization
+                            const { data: targetCustomer } = await supabase
+                                .from('customers')
+                                .select('name, first_name')
+                                .eq('id', targetCustomerId)
+                                .single();
+                            
+                            const customerName = targetCustomer?.first_name || targetCustomer?.name || '';
+                            const businessName = customerLookup?.businesses?.name || 
+                                                 customerLookup?.businesses?.business_data?.businessName || 
+                                                 'Your Service Provider';
+                            
+                            const feedbackMsg = generateFeedbackRequest({
+                                customerName: customerName,
+                                serviceName: serviceName,
+                                businessName: businessName,
+                            });
+
+                            // Send to the CUSTOMER (not the tech)
+                            const cleanTargetPhone = targetPhone.replace(/[^\d+]/g, '');
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanTargetPhone}`,
+                                body: feedbackMsg
+                            });
+
+                            // Update target customer status to await feedback
+                            await supabase.from('customers').update({
+                                status: 'feedback_pending',
+                                notes: (targetCustomer ? '' : '') + `\n[FEEDBACK_REQUESTED: ${new Date().toISOString()}]`
+                            }).eq('id', targetCustomerId);
+
+                            console.log(`📝 Feedback request sent to customer: ${cleanTargetPhone}`);
                         }
 
                         // Reset owner status

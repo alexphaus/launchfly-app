@@ -139,9 +139,10 @@ export async function POST(request: NextRequest) {
             const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
             
             // Add context about current customer phone for tools
-            const contextMessage = `[SYSTEM CONTEXT: Customer phone is ${customerPhone}. Business ID is ${businessId}. Use these values when calling tools.]`;
+            const contextMessage = `[SYSTEM CONTEXT: Customer phone is ${customerPhone}. Business ID is ${businessId}. When calling getAvailableSlots, use businessId: "${businessId}"]`;
             
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
+            console.log(`   📋 Business ID for tools: ${businessId}`);
             
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
@@ -153,9 +154,18 @@ export async function POST(request: NextRequest) {
                 tools: receptionistTools,
                 // @ts-ignore - maxSteps is available in AI SDK 3.1+ but type def might be lagging
                 maxSteps: 5,
-                onStepFinish: async ({ toolCalls }) => {
+                toolChoice: 'auto', // Ensure tools can be called
+                onStepFinish: async ({ toolCalls, toolResults }) => {
                     if (toolCalls && toolCalls.length > 0) {
                        console.log(`   🔧 Tool calls:`, toolCalls.map(t => t.toolName).join(', '));
+                       // Log the arguments being passed
+                       toolCalls.forEach(tc => {
+                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                           console.log(`   📥 ${tc.toolName} args:`, JSON.stringify((tc as any).args || {}));
+                       });
+                    }
+                    if (toolResults && toolResults.length > 0) {
+                       console.log(`   📤 Tool results received:`, toolResults.length);
                     }
                 },
             });

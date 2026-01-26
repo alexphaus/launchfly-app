@@ -363,6 +363,15 @@ export const receptionistTools = {
             const dateObj = new Date(date);
             const dayLabel = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
 
+            // Fetch business owner phone for notification
+            const { data: business } = await supabase
+                .from('businesses')
+                .select('whatsapp_number, phone_number, name, business_data')
+                .eq('id', businessId)
+                .single();
+            
+            const ownerPhone = business?.whatsapp_number || business?.phone_number;
+
             // Create booking record
             const { data: booking, error } = await supabase
                 .from('bookings')
@@ -405,6 +414,10 @@ export const receptionistTools = {
                 address,
                 estimate: `${currency} ${estimateAmount}`,
                 serviceType,
+                customerName,
+                customerPhone,
+                ownerPhone, // For notification routing
+                businessName: business?.name,
                 // This message guides the AI on what to tell the customer
                 customerMessage: `Booking request received! Technician will confirm and WhatsApp you 30 mins before arrival.`,
             };

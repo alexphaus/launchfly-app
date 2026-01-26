@@ -12,7 +12,7 @@ import twilio from 'twilio';
 import { receptionistTools } from '../../../../../lib/ai-receptionist/tools';
 import { generateSystemPrompt, type BusinessContext, type CustomerContext } from '../../../../../lib/ai-receptionist/system-prompt';
 import { getConversationHistory, saveMessage, getLastBusinessId } from '../../../../../lib/ai-receptionist/history';
-import { sendTypingIndicator } from '../../../../../lib/whatsapp-push';
+import { sendTypingIndicator, sendJobConfirmed, sendJobCard } from '../../../../../lib/whatsapp-push';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -203,11 +203,15 @@ export async function POST(request: NextRequest) {
                 console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
             }
 
-            // Handle owner notifications
+            // Handle tool results for notifications
             for (const step of result.steps) {
                 for (const toolResult of step.toolResults || []) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const res = (toolResult as any).result;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const toolName = (toolResult as any).toolName;
+                    
+                    // 1. Handle notifyOwner (plain text alerts for complaints/escalations)
                     if (res?.action === 'notify_owner' && res?.phone) {
                         if (twilioClient && fromNumber) {
                             try {
@@ -216,10 +220,35 @@ export async function POST(request: NextRequest) {
                                     to: `whatsapp:${res.phone}`,
                                     body: res.message || 'Notification from AI Receptionist',
                                 });
-                                console.log(`   📤 Notified owner: ${res.phone}`);
+                                console.log(`   📤 Notified owner (plain): ${res.phone}`);
                             } catch (e) {
                                 console.error(`   ❌ Failed to notify owner:`, e);
                             }
+                        }
+                    }
+                    
+                    // 2. Handle createBooking → Send JOB CONFIRMED template to owner
+                    if (toolName === 'createBooking' && res?.success) {
+                        const ownerPhone = res.ownerPhone;
+                        
+                        if (ownerPhone) {
+                            try {
+                                await sendJobConfirmed(ownerPhone, {
+                                    id: res.bookingId?.substring(0, 8).toUpperCase() || 'NEW',
+                                    serviceName: res.serviceType || businessContext?.niche || 'Service',
+                                    serviceEmoji: '🔧',
+                                    timeSlot: res.slotLabel || 'As scheduled',
+                                    address: res.address || 'Address provided',
+                                    customerName: res.customerName || customerContext?.name || 'Customer',
+                                    customerPhone: res.customerPhone || customerPhone,
+                                    estimate: res.estimate
+                                });
+                                console.log(`   📤 Sent JOB CONFIRMED template to owner: ${ownerPhone}`);
+                            } catch (e) {
+                                console.error(`   ❌ Failed to send job confirmed:`, e);
+                            }
+                        } else {
+                            console.log(`   ⚠️ No owner phone found for job notification`);
                         }
                     }
                 }

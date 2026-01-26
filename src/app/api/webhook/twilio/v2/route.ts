@@ -163,42 +163,50 @@ export async function POST(request: NextRequest) {
             let aiResponse = result.text;
             const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
             
-            // Handle empty response after tool calls
-            if (!aiResponse && allToolCalls.length > 0) {
-                for (const step of result.steps) {
-                    if (step.text && step.text.trim()) {
-                        aiResponse = step.text;
-                        break;
-                    }
-                }
+            // Check if response is just a filler message (e.g. "I'll check that...")
+            // We look for phrases indicating a pause or future action without results
+            const isFiller = aiResponse.length < 200 && (
+                aiResponse.toLowerCase().includes('moment') || 
+                aiResponse.toLowerCase().includes('checking') ||
+                aiResponse.toLowerCase().includes('bear with me') ||
+                aiResponse.toLowerCase().includes('hold on')
+            );
+            
+            // Handle empty response OR filler response after tool calls
+            // This ensures we don't just send "I'll check..." and stop, but actually send the slots
+            if ((!aiResponse || isFiller) && allToolCalls.length > 0) {
+                console.log(`   ⚠️ AI called tools but response was empty or filler ("${aiResponse}"), forcing continuation...`);
                 
-                if (!aiResponse) {
-                    console.log(`   ⚠️ AI called tools but generated no response, forcing continuation...`);
-                    
-                    const toolResultsSummary = result.steps
-                        .flatMap(step => step.toolResults || [])
-                        .map(tr => {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const toolResult = tr as any;
-                            console.log(`   📊 Tool ${toolResult.toolName} result:`, JSON.stringify(toolResult.result).substring(0, 200));
-                            return `Tool ${toolResult.toolName}: ${JSON.stringify(toolResult.result)}`;
-                        })
-                        .join('\n');
-                    
+                const toolResultsSummary = result.steps
+                    .flatMap(step => step.toolResults || [])
+                    .map(tr => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const toolResult = tr as any;
+                        const resultStr = JSON.stringify(toolResult.result);
+                        console.log(`   📊 Tool ${toolResult.toolName} result used for continuation:`, resultStr.substring(0, 100));
+                        return `Tool ${toolResult.toolName}: ${resultStr}`;
+                    })
+                    .join('\n');
+                
+                // If we found tool results, generate the real answer
+                if (toolResultsSummary) {
                     const continuationResult = await generateText({
                         model: openai('gpt-4o-mini'),
-                        system: systemPrompt + `\n\nYou already called tools and received results. Now compose your response to the customer based on the tool results. If slots were returned, present them as numbered options.`,
+                        system: systemPrompt + `\n\nSYSTEM UPDATE: You just called a tool and got results. DO NOT say "I'll check". The check is DONE. Response with the data now.`,
                         messages: [
                             ...history,
                             { role: 'user', content: messageText },
                             { 
                                 role: 'assistant', 
-                                content: `I gathered the following information:\n${toolResultsSummary}\n\nNow I will respond to the customer with the available slots:` 
+                                content: `I have executed the tools. Here are the results:\n${toolResultsSummary}\n\nBased on this, the final response to the customer is:` 
                             },
                         ],
                     });
                     
-                    aiResponse = continuationResult.text || "Hi! How can I help you today?";
+                    if (continuationResult.text && continuationResult.text.trim()) {
+                         aiResponse = continuationResult.text;
+                         console.log(`   🔄 Continuation response generated: ${aiResponse.substring(0, 50)}...`);
+                    }
                 }
             }
             

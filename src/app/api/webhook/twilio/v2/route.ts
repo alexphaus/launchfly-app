@@ -160,12 +160,12 @@ export async function POST(request: NextRequest) {
                 },
             });
 
-            let aiResponse = result.text;
+            let aiResponse = result.text || '';
             const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
             
             // Check if response is just a filler message (e.g. "I'll check that...")
             // We look for phrases indicating a pause or future action without results
-            const isFiller = aiResponse.length < 200 && (
+            const isFiller = aiResponse && aiResponse.length < 200 && (
                 aiResponse.toLowerCase().includes('moment') || 
                 aiResponse.toLowerCase().includes('checking') ||
                 aiResponse.toLowerCase().includes('bear with me') ||
@@ -175,14 +175,14 @@ export async function POST(request: NextRequest) {
             // Handle empty response OR filler response after tool calls
             // This ensures we don't just send "I'll check..." and stop, but actually send the slots
             if ((!aiResponse || isFiller) && allToolCalls.length > 0) {
-                console.log(`   ⚠️ AI called tools but response was empty or filler ("${aiResponse}"), forcing continuation...`);
+                console.log(`   ⚠️ AI called tools but response was empty or filler ("${aiResponse || ''}"), forcing continuation...`);
                 
                 const toolResultsSummary = result.steps
                     .flatMap(step => step.toolResults || [])
                     .map(tr => {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const toolResult = tr as any;
-                        const resultStr = JSON.stringify(toolResult.result);
+                        const resultStr = JSON.stringify(toolResult.result || {});
                         console.log(`   📊 Tool ${toolResult.toolName} result used for continuation:`, resultStr.substring(0, 100));
                         return `Tool ${toolResult.toolName}: ${resultStr}`;
                     })
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
                 if (toolResultsSummary) {
                     const continuationResult = await generateText({
                         model: openai('gpt-4o-mini'),
-                        system: systemPrompt + `\n\nSYSTEM UPDATE: You just called a tool and got results. DO NOT say "I'll check". The check is DONE. Response with the data now.`,
+                        system: systemPrompt + `\n\nSYSTEM UPDATE: You just called a tool and got results. DO NOT say "I'll check". The check is DONE. Respond with the data now.`,
                         messages: [
                             ...history,
                             { role: 'user', content: messageText },
@@ -206,8 +206,21 @@ export async function POST(request: NextRequest) {
                     if (continuationResult.text && continuationResult.text.trim()) {
                          aiResponse = continuationResult.text;
                          console.log(`   🔄 Continuation response generated: ${aiResponse.substring(0, 50)}...`);
+                    } else {
+                         // Fallback if continuation also fails
+                         aiResponse = "Hi! How can I help you today?";
+                         console.log(`   ⚠️ Continuation failed, using fallback response`);
                     }
+                } else {
+                    // No tool results found, use fallback
+                    aiResponse = "Hi! How can I help you today?";
+                    console.log(`   ⚠️ No tool results found, using fallback response`);
                 }
+            }
+            
+            // Final safety check before logging
+            if (!aiResponse) {
+                aiResponse = "Hi! How can I help you today?";
             }
             
             console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);

@@ -200,15 +200,29 @@ export function generateCustomerServiceTypePrompt(config: {
     cleaningLabel: string; 
     repairLabel: string; 
 }): string {
-    return `Great! Let's activate your warranty. 🛡️
+    return `Welcome to the *Warranty Registration Center* 🛡️
 
-What service was completed?
+To activate your warranty, please tell us:
+*What service was just completed?*
 
 1️⃣ ${config.cleaningLabel.replace(/[^\w\s\/]/g, '').trim()}
 2️⃣ ${config.repairLabel.replace(/[^\w\s\/]/g, '').trim()}
 3️⃣ Other service
 
 Reply with 1, 2, or 3:`;
+}
+
+/**
+ * Generate name capture prompt (Golden Flow Step 2)
+ */
+export function generateNameCapturePrompt(params: {
+    serviceName: string;
+    businessName: string;
+}): string {
+    return `✅ Registering: *${params.serviceName}*
+Provider: *${params.businessName}*
+
+To complete your warranty activation, please reply with your *FULL NAME*:`;
 }
 
 /**
@@ -542,54 +556,69 @@ export function getDefaultWarrantyDays(serviceType: string): number {
 /**
  * Generate feedback request after warranty activation
  * Sent to customer after tech registers the service
+ * Uses "validate workmanship" framing from Golden Flow
  */
 export function generateFeedbackRequest(params: {
     customerName: string;
     serviceName: string;
     businessName: string;
+    warrantyDays?: number;
+    warrantyExpires?: string;
+    nextServiceDue?: string;
     feedbackUrl?: string; // URL to web feedback page
 }): string {
     const name = params.customerName?.split(' ')[0] || '';
-    const greeting = name ? `Hi ${name}! ` : '';
+    const greeting = name ? `Thanks, ${name}! ` : '';
     
-    return `${greeting}✅ *Warranty Activated!*
+    // Build warranty details section
+    let warrantyInfo = '';
+    if (params.warrantyDays && params.warrantyExpires) {
+        warrantyInfo = `\n🛡️ *Coverage:* ${params.warrantyDays} Days (Workmanship)\n📅 *Valid Until:* ${params.warrantyExpires}`;
+    }
+    if (params.nextServiceDue) {
+        warrantyInfo += `\n🔔 *Next Service Due:* ${params.nextServiceDue}`;
+    }
+    
+    return `${greeting}✅ *Warranty ACTIVATED!*
+${warrantyInfo}
 
-Your ${params.serviceName} from *${params.businessName}* is now covered.
+_One final step to validate the workmanship:_
+*How would you rate the service today?*
 
-📝 *Quick Question:* How was the service today?
+1️⃣ ⭐ *Excellent* - Loved it!
+2️⃣ 👍 *Good* - Satisfied
+3️⃣ 👎 *Not Good* - Had issues
 
-1️⃣ ⭐ Excellent - Loved it!
-2️⃣ 👍 Good - Satisfied
-3️⃣ 😐 Okay - Could be better
-4️⃣ 👎 Not Good - Had issues
-
-Reply with 1, 2, 3, or 4`;
+Reply 1, 2, or 3:`;
 }
 
 /**
  * Detect feedback rating from message
- * Returns rating 1-4 or null if not a rating
+ * Returns rating 1-3 or null if not a rating
+ * Golden Flow: 1=Excellent, 2=Good, 3=Not Good
  */
 export function detectFeedbackRating(message: string): number | null {
     const cleaned = message.trim().toLowerCase();
     
-    // Direct number
-    if (['1', '2', '3', '4'].includes(cleaned)) {
+    // Direct number (1-3 scale now)
+    if (['1', '2', '3'].includes(cleaned)) {
         return parseInt(cleaned);
     }
     
+    // Legacy support for '4' -> map to 3 (Not Good)
+    if (cleaned === '4') {
+        return 3;
+    }
+    
     // Keywords
-    if (cleaned.includes('excellent') || cleaned.includes('loved') || cleaned.includes('amazing') || cleaned.includes('great')) {
+    if (cleaned.includes('excellent') || cleaned.includes('loved') || cleaned.includes('amazing') || cleaned.includes('great') || cleaned.includes('perfect')) {
         return 1; // Excellent
     }
-    if (cleaned.includes('good') || cleaned.includes('satisfied') || cleaned.includes('nice')) {
+    if (cleaned.includes('good') || cleaned.includes('satisfied') || cleaned.includes('nice') || cleaned.includes('okay') || cleaned.includes('ok')) {
         return 2; // Good
     }
-    if (cleaned.includes('okay') || cleaned.includes('ok') || cleaned.includes('fine') || cleaned.includes('better')) {
-        return 3; // Okay
-    }
-    if (cleaned.includes('not good') || cleaned.includes('bad') || cleaned.includes('issue') || cleaned.includes('problem') || cleaned.includes('poor')) {
-        return 4; // Not Good
+    if (cleaned.includes('not good') || cleaned.includes('bad') || cleaned.includes('issue') || cleaned.includes('problem') || cleaned.includes('poor') || cleaned.includes('terrible') || cleaned.includes('awful')) {
+        return 3; // Not Good
     }
     
     return null;
@@ -608,20 +637,22 @@ export function generateFeedbackResponse(params: {
     
     if (params.rating <= 2) {
         // Positive feedback (1 = Excellent, 2 = Good)
-        return `🙏 *Thank you so much!* We're thrilled you had a great experience!
+        return `🌟 *Awesome!* We're so glad you had a great experience!
 
-If you have 30 seconds, a quick Google review would really help us grow:
+To finalize your warranty, please tap the link below and share your rating on Google Maps - it helps *${params.businessName}* a lot!
 
 👉 ${reviewLink}
 
-It means the world to small businesses like *${params.businessName}*! ⭐`;
+_Reply 'DONE' when finished._
+
+You don't need to remember your next service date - we'll send you a reminder automatically when it's time! 🔔`;
     } else {
-        // Negative feedback (3 = Okay, 4 = Not Good)
-        return `😔 We're sorry to hear that. Your feedback matters to us.
+        // Negative feedback (3 = Not Good)
+        return `😔 We're sorry to hear that.
 
-Please tell us what went wrong so we can make it right:
+Your feedback is *private* and won't be posted publicly. Please tell us what went wrong so we can fix it immediately:
 
-_(Just type your concern and we'll get back to you ASAP)_`;
+_(Just type your concern below)_`;
     }
 }
 

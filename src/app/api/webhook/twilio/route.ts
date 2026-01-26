@@ -43,6 +43,7 @@ import {
     // Customer self-activation
     generateWarrantyOffer,
     generateCustomerServiceTypePrompt,
+    generateNameCapturePrompt,
     isWarrantyActivationChoice,
     getDefaultWarrantyDays,
     getDefaultServiceInterval,
@@ -265,7 +266,8 @@ export async function POST(request: NextRequest) {
         }
 
         // ========== FEEDBACK FLOW HANDLER ==========
-        // Handle customer feedback responses (1-4 rating)
+        // Handle customer feedback responses (1-3 rating - Golden Flow)
+        // 1 = Excellent, 2 = Good (both positive), 3 = Not Good (negative)
         if (customerLookup?.status === 'feedback_pending') {
             console.log('📝 Feedback Flow: Processing rating');
             
@@ -294,15 +296,15 @@ export async function POST(request: NextRequest) {
                     });
                 }
 
-                // Update customer status based on rating
+                // Update customer status based on rating (1-2 positive, 3 negative)
                 const newStatus = rating <= 2 ? 'feedback_positive' : 'feedback_negative';
                 await supabase.from('customers').update({
                     status: newStatus,
-                    notes: (customerLookup.notes || '') + `\n[FEEDBACK_RATING: ${rating}/4 at ${new Date().toISOString()}]`
+                    notes: (customerLookup.notes || '') + `\n[FEEDBACK_RATING: ${rating}/3 at ${new Date().toISOString()}]`
                 }).eq('id', customerLookup.id);
 
-                // If negative feedback, alert the business owner/tech
-                if (rating >= 3) {
+                // If negative feedback (3 = Not Good), alert the business owner/tech immediately
+                if (rating === 3) {
                     const ownerPhone = business?.whatsapp_number || business?.phone_number;
                     if (ownerPhone && twilioClient && fromNumber) {
                         const alertMsg = generateServiceRecoveryAlert({
@@ -322,14 +324,14 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
-                console.log(`✅ Feedback recorded: ${rating}/4 for customer ${customerLookup.id}`);
+                console.log(`✅ Feedback recorded: ${rating}/3 for customer ${customerLookup.id}`);
             } else {
-                // Couldn't parse rating - prompt again
+                // Couldn't parse rating - prompt again with 3-option scale
                 if (twilioClient && fromNumber) {
                     await twilioClient.messages.create({
                         from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                         to: `whatsapp:${customerPhone}`,
-                        body: `Please reply with a number:\n\n1️⃣ ⭐ Excellent\n2️⃣ 👍 Good\n3️⃣ 😐 Okay\n4️⃣ 👎 Not Good`
+                        body: `Please reply with 1, 2, or 3:\n\n1️⃣ ⭐ *Excellent* - Loved it!\n2️⃣ 👍 *Good* - Satisfied\n3️⃣ 👎 *Not Good* - Had issues`
                     });
                 }
             }
@@ -475,12 +477,12 @@ export async function POST(request: NextRequest) {
 
         // ========== CUSTOMER WARRANTY SERVICE TYPE HANDLER ==========
         // Handle service type selection for customer self-activation
+        // Golden Flow Step: Ask for service type, then ask for name
         if (customerLookup?.status === 'customer_warranty_service') {
             console.log('📝 Customer Warranty: Processing service type');
             
             const choice = messageText.trim();
             const business = customerLookup?.businesses;
-            const businessId = customerLookup?.business_id;
             const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
             const businessNiche = business?.business_data?.niche || 'default';
             const flowConfig = getFlowConfig(businessNiche);
@@ -512,7 +514,66 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Create service record for customer self-activation
+            // Golden Flow: Ask for name before creating warranty
+            const namePrompt = generateNameCapturePrompt({
+                serviceName: serviceName,
+                businessName: businessName,
+            });
+
+            if (twilioClient && fromNumber) {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: namePrompt
+                });
+            }
+
+            // Store service type temporarily and wait for name
+            await supabase.from('customers').update({
+                status: 'customer_warranty_name', // New status - waiting for name
+                notes: (customerLookup.notes || '') + `\n[WARRANTY_SERVICE_TYPE: ${serviceType}|${serviceName}]`
+            }).eq('id', customerLookup.id);
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== CUSTOMER WARRANTY NAME CAPTURE HANDLER ==========
+        // Golden Flow Step 2: Capture customer name before warranty activation
+        if (customerLookup?.status === 'customer_warranty_name') {
+            console.log('📝 Customer Warranty: Capturing customer name');
+            
+            const customerName = messageText.trim();
+            const business = customerLookup?.businesses;
+            const businessId = customerLookup?.business_id;
+            const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
+            const businessNiche = business?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+            const googleReviewLink = business?.business_data?.googleReviewLink;
+
+            // Validate name (at least 2 characters)
+            if (customerName.length < 2) {
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Please enter your *full name* to complete the warranty registration:`
+                    });
+                }
+                return new NextResponse(
+                    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                    { headers: { 'Content-Type': 'text/xml' } }
+                );
+            }
+
+            // Extract service type from notes
+            const notesMatch = customerLookup.notes?.match(/\[WARRANTY_SERVICE_TYPE: ([^|]+)\|([^\]]+)\]/);
+            const serviceType = notesMatch?.[1] || 'cleaning';
+            const serviceName = notesMatch?.[2] || flowConfig.cleaningLabel.replace(/[^\w\s\/]/g, '').trim();
+
+            // Create service record with customer name
             const warrantyDays = getDefaultWarrantyDays(serviceType);
             const intervalDays = getDefaultServiceInterval(serviceType);
             const serviceDate = new Date();
@@ -533,18 +594,30 @@ export async function POST(request: NextRequest) {
                     warranty_expires_at: warrantyExpiresAt,
                     service_interval_days: intervalDays,
                     next_service_due_at: nextDueAt,
-                    registered_via: 'sticker_scan',  // Customer scanned the sticker
+                    registered_via: 'sticker_scan',
                     registered_by: 'customer'
                 });
 
             if (!recordError) {
-                // Send feedback request to customer (same as tech flow)
-                const customerName = customerLookup.first_name || customerLookup.name || '';
-                
+                // Update customer name in database
+                const nameParts = customerName.split(' ');
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ') || '';
+
+                await supabase.from('customers').update({
+                    name: customerName,
+                    first_name: firstName,
+                    last_name: lastName,
+                }).eq('id', customerLookup.id);
+
+                // Golden Flow: Send warranty confirmation + feedback request (Reputation Gate)
                 const feedbackMsg = generateFeedbackRequest({
                     customerName: customerName,
                     serviceName: serviceName,
                     businessName: businessName,
+                    warrantyDays: warrantyDays,
+                    warrantyExpires: formatDateSEA(warrantyExpiresAt),
+                    nextServiceDue: formatDateSEA(nextDueAt),
                 });
 
                 if (twilioClient && fromNumber) {
@@ -561,7 +634,7 @@ export async function POST(request: NextRequest) {
                     notes: (customerLookup.notes || '') + `\n[CUSTOMER_WARRANTY_ACTIVATED: ${serviceType} at ${new Date().toISOString()}]`
                 }).eq('id', customerLookup.id);
 
-                console.log(`✅ Customer self-activated warranty: ${serviceName}`);
+                console.log(`✅ Customer ${customerName} self-activated warranty: ${serviceName}`);
             } else {
                 console.error('❌ Failed to create service record from customer activation:', recordError);
                 if (twilioClient && fromNumber) {

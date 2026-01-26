@@ -1202,12 +1202,240 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // ========== AWAITING ADDRESS HANDLER (STICKER FLOW) ==========
+        // MUST be BEFORE sticker_units to prevent "123 ave" being read as quantity
+        if (customerLookup?.status === 'awaiting_address') {
+            console.log('📍 Awaiting address - processing address input');
+            
+            const businessName = customerLookup?.businesses?.name || 'Business';
+            const businessData = customerLookup?.businesses?.business_data || {};
+            const currency = businessData.currency || 'RM';
+            const customerName = customerLookup?.name || customerLookup?.first_name || 'Customer';
+            
+            // Get estimate from customer record
+            let estimate = 'As quoted';
+            if (customerLookup.estimate_min && customerLookup.estimate_max) {
+                estimate = customerLookup.estimate_min === customerLookup.estimate_max
+                    ? `${currency} ${customerLookup.estimate_min}`
+                    : `${currency} ${customerLookup.estimate_min} - ${currency} ${customerLookup.estimate_max}`;
+            }
+            
+            // Check if this is from repair flow (needs inspection) vs cleaning (direct book)
+            const isRepairFlow = customerLookup.notes?.includes('[REPAIR_ISSUE:');
+            
+            if (twilioClient && fromNumber) {
+                if (isRepairFlow) {
+                    // Repair flow - send slot options for inspection
+                    // Don't show price (it's RM 0-0 for inspection quote)
+                    const slotResult = await sendSlotSuggester(customerPhone, {
+                        businessName: businessName,
+                        customerName: customerName,
+                        currency: currency,
+                        estimateMin: 80, // Show inspection fee instead of 0
+                        estimateMax: 80,
+                    });
+                    
+                    // Update status to awaiting slot selection
+                    const slotsJson = (slotResult && typeof slotResult === 'object' && 'slots' in slotResult) 
+                        ? JSON.stringify(slotResult.slots) 
+                        : '';
+                    await supabase.from('customers').update({
+                        status: 'awaiting_slot',
+                        address: messageText,
+                        notes: (customerLookup.notes || '') + `\n[ADDRESS: ${messageText}]\n${slotsJson ? 'AVAILABLE_SLOTS: ' + slotsJson : ''}`
+                    }).eq('id', customerLookup.id);
+                } else {
+                    // Cleaning flow - direct booking confirmation
+                    // Generate a default slot (tomorrow morning)
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const dayName = tomorrow.toLocaleDateString('en-US', { weekday: 'short' });
+                    const dateStr = tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                    const defaultSlot = `${dayName} ${dateStr} 9am - 11am`;
+                    
+                    const confirmMsg = `All set! ✅\n\n*Booking Confirmed:*\n👤 *Name:* ${customerName}\n📅 *Date:* ${defaultSlot}\n🛠️ *Service:* ${businessData.niche || 'Service'}\n📍 *Location:* ${messageText}\n💰 *Estimate:* ${estimate}\n\nOur team from *${businessName}* will WhatsApp you 30 mins before arrival.\n\nSee you then! 🙏`;
+                    
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: confirmMsg
+                    });
+                    
+                    // Update status to booked
+                    await supabase.from('customers').update({
+                        status: 'booked',
+                        address: messageText,
+                        notes: (customerLookup.notes || '') + `\n[BOOKED: ${defaultSlot} at ${messageText}]`
+                    }).eq('id', customerLookup.id);
+                    
+                    // Notify owner of new booking
+                    const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
+                    if (ownerPhone) {
+                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                body: `📥 *New Booking!*\n\n👤 ${customerName}\n📅 ${defaultSlot}\n📍 ${messageText}\n💰 ${estimate}\n📞 ${customerPhone}`
+                            });
+                        } catch (e) {
+                            console.error('Failed to notify owner:', e);
+                        }
+                    }
+                }
+            }
+            
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== AWAITING SLOT HANDLER ==========
+        // Handle time slot selection after address received (for repairs)
+        if (customerLookup?.status === 'awaiting_slot' && hasMenuSelection) {
+            console.log('📅 Awaiting slot - processing slot selection');
+            
+            const slotNumber = classification.entities.slot_number || 1;
+            const businessName = customerLookup?.businesses?.name || 'Business';
+            const businessData = customerLookup?.businesses?.business_data || {};
+            const currency = businessData.currency || 'RM';
+            const customerName = customerLookup?.name || customerLookup?.first_name || 'Customer';
+            const customerAddress = customerLookup?.address || 'Address on file';
+            
+            // Extract slots from notes
+            const slotsParts = customerLookup.notes?.split('AVAILABLE_SLOTS: ');
+            const slotsJson = (slotsParts && slotsParts.length > 1) ? slotsParts.pop()?.split('\n')[0] : null;
+            let selectedSlot = 'Scheduled';
+            
+            if (slotsJson) {
+                try {
+                    const slots = JSON.parse(slotsJson);
+                    if (slots[slotNumber - 1]) {
+                        selectedSlot = slots[slotNumber - 1].label;
+                    }
+                } catch (e) {
+                    console.log('Could not parse slots');
+                }
+            }
+            
+            // Get estimate - for repairs, show inspection fee
+            let estimate = `${currency} ${businessData.repairInspectionFee || 80} (Inspection)`;
+            
+            if (twilioClient && fromNumber) {
+                const confirmMsg = `All set! ✅\n\n*Inspection Booked:*\n👤 *Name:* ${customerName}\n📅 *Date:* ${selectedSlot}\n🛠️ *Service:* Inspection / Repair\n📍 *Location:* ${customerAddress}\n💰 *Fee:* ${estimate}\n*(Waived if you proceed with repair!)*\n\nOur technician from *${businessName}* will WhatsApp you 30 mins before arrival.\n\nSee you then! 🙏`;
+                
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: confirmMsg
+                });
+                
+                // Update status to booked
+                await supabase.from('customers').update({
+                    status: 'booked',
+                    notes: (customerLookup.notes || '') + `\n[BOOKED: ${selectedSlot}]`
+                }).eq('id', customerLookup.id);
+                
+                // Notify owner
+                const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
+                if (ownerPhone) {
+                    const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                    try {
+                        await twilioClient.messages.create({
+                            from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                            to: `whatsapp:${cleanOwnerPhone}`,
+                            body: `📥 *New Inspection Booking!*\n\n👤 ${customerName}\n📅 ${selectedSlot}\n📍 ${customerAddress}\n📞 ${customerPhone}\n\n*Issue:* Check notes`
+                        });
+                    } catch (e) {
+                        console.error('Failed to notify owner:', e);
+                    }
+                }
+            }
+            
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // ========== STICKER UNITS HANDLER ==========
         // Handle units/quantity response after selecting cleaning
+        // NOTE: Only triggers if message is JUST a number (not an address like "123 ave")
+        // NOTE: Only triggers if message is JUST a number (not an address like "123 ave")
         if (conversationContext.customerStatus === 'sticker_units') {
             console.log('🔢 Sticker units response detected');
 
-            // Extract number from message
+            // Only accept if message is PRIMARILY a number (e.g., "1", "2 units", "3")
+            // NOT addresses like "123 ave makati" which contain numbers but are addresses
+            const isJustANumber = /^\s*\d+\s*(units?)?\s*$/i.test(messageText.trim());
+            
+            if (!isJustANumber) {
+                // This looks like an address, not a quantity - treat as address
+                console.log('📍 Message contains number but looks like address, treating as address');
+                
+                // Transition to address handler logic
+                const businessName = customerLookup?.businesses?.name || 'Business';
+                const businessData = customerLookup?.businesses?.business_data || {};
+                const businessNiche = businessData.niche || 'default';
+                const flowConfig = getFlowConfig(businessNiche);
+                const currency = businessData.currency || flowConfig.currency;
+                const customerName = customerLookup?.name || customerLookup?.first_name || 'Customer';
+                
+                // Default to 1 unit if we didn't get a clear quantity
+                const units = 1;
+                const total = flowConfig.pricePerUnit * units;
+                
+                // Generate slot for tomorrow
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const dayName = tomorrow.toLocaleDateString('en-US', { weekday: 'short' });
+                const dateStr = tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                const defaultSlot = `${dayName} ${dateStr} 9am - 11am`;
+                
+                if (twilioClient && fromNumber) {
+                    const confirmMsg = `All set! ✅\n\n*Booking Confirmed:*\n👤 *Name:* ${customerName}\n📅 *Date:* ${defaultSlot}\n🛠️ *Service:* ${flowConfig.cleaningLabel}\n📍 *Location:* ${messageText}\n💰 *Estimate:* ${currency} ${total}\n\nOur team from *${businessName}* will WhatsApp you 30 mins before arrival.\n\nSee you then! 🙏`;
+                    
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: confirmMsg
+                    });
+                    
+                    // Update status to booked
+                    if (customerLookup?.id) {
+                        await supabase.from('customers').update({
+                            status: 'booked',
+                            address: messageText,
+                            estimate_min: total,
+                            estimate_max: total,
+                            notes: (customerLookup.notes || '') + `\n[BOOKED_DIRECT: 1 unit, ${defaultSlot} at ${messageText}]`
+                        }).eq('id', customerLookup.id);
+                    }
+                    
+                    // Notify owner
+                    const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
+                    if (ownerPhone) {
+                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                body: `📥 *New Booking!*\n\n👤 ${customerName}\n📅 ${defaultSlot}\n📍 ${messageText}\n💰 ${currency} ${total}\n📞 ${customerPhone}`
+                            });
+                        } catch (e) {
+                            console.error('Failed to notify owner:', e);
+                        }
+                    }
+                }
+                
+                return new NextResponse(
+                    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                    { headers: { 'Content-Type': 'text/xml' } }
+                );
+            }
+
+            // Extract number from message (now we know it's just a number)
             const unitsMatch = messageText.match(/(\d+)/);
             const units = unitsMatch ? parseInt(unitsMatch[1]) : 1;
 

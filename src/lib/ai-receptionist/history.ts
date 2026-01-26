@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // How many messages to keep in context
-const MAX_HISTORY_LENGTH = 20;
+const MAX_HISTORY_LENGTH = 50;
 // How old messages can be before we start fresh (24 hours)
 const HISTORY_EXPIRY_HOURS = 24;
 
@@ -34,12 +34,13 @@ export async function getConversationHistory(phone: string, businessId?: string)
     const cutoffTime = new Date();
     cutoffTime.setHours(cutoffTime.getHours() - HISTORY_EXPIRY_HOURS);
 
+    // FIX: Order by DESCENDING to get the *latest* messages, then reverse them
     const query = supabase
         .from('chat_history')
         .select('role, content, created_at')
         .eq('phone', phoneNormalized)
         .gte('created_at', cutoffTime.toISOString())
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false }) // Get NEWEST first
         .limit(MAX_HISTORY_LENGTH);
 
     if (businessId) {
@@ -53,8 +54,11 @@ export async function getConversationHistory(phone: string, businessId?: string)
         return [];
     }
 
+    // Reverse to put back in chronological order (oldest -> newest) for the AI
+    const chronologicalMessages = messages.reverse();
+
     // Convert to CoreMessage format
-    return messages.map(msg => ({
+    return chronologicalMessages.map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
     }));

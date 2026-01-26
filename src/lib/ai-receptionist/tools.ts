@@ -214,10 +214,18 @@ export const receptionistTools = {
      * Get next available slots across multiple days
      */
     getAvailableSlots: tool({
-        description: 'Get the next 4 available arrival windows for booking. Call this when customer is ready to pick a time.',
+        description: 'Get the next 4 available arrival windows for booking. Call this when customer is ready to pick a time. Requires businessId.',
         inputSchema: getAvailableSlotsSchema,
         execute: async (input: GetAvailableSlotsInput) => {
             const { businessId } = input;
+            
+            if (!businessId) {
+                console.error('❌ getAvailableSlots called without businessId');
+                return { slots: [], fullyBooked: false, error: 'Missing businessId' };
+            }
+            
+            console.log(`   📅 getAvailableSlots called for business: ${businessId}`);
+            
             const maxPerWindow = 3;
             const slots: { label: string; date: string; window: string; available: boolean }[] = [];
             
@@ -232,6 +240,8 @@ export const receptionistTools = {
 
             const sDateStr = startDate.toISOString().split('T')[0];
             const eDateStr = endDate.toISOString().split('T')[0];
+            
+            console.log(`   📅 Checking slots from ${sDateStr} to ${eDateStr}`);
 
             // OPTIMIZATION: Fetch all relevant bookings in ONE query instead of 8 loop queries
             const { data: allBookings, error } = await supabase
@@ -243,9 +253,11 @@ export const receptionistTools = {
                 .in('status', ['pending', 'confirmed', 'blocked']);
             
             if (error) {
-                console.error('Error fetching slots:', error);
+                console.error('❌ Error fetching slots:', error);
                 return { slots: [], fullyBooked: true, error: 'Failed to check availability' };
             }
+            
+            console.log(`   📅 Found ${allBookings?.length || 0} existing bookings`);
 
             for (let dayOffset = 0; dayOffset < 4 && slots.length < 4; dayOffset++) {
                 const date = new Date(localNow);

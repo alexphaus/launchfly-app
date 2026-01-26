@@ -40,13 +40,16 @@ export function generateSystemPrompt(
 
     const customerSection = customer?.isReturning ? `
 CURRENT CUSTOMER:
+- Customer ID: ${customer.id || 'Unknown'}
 - Name: ${customer.name || 'Unknown'}
+- Phone: (use the phone from the incoming message)
 - Warranty Status: ${customer.warrantyActive ? `✅ Active until ${customer.warrantyEndDate}` : '❌ Expired or None'}
 - Last Service: ${customer.lastServiceDate || 'Unknown'} (${customer.lastServiceType || 'Unknown'})
 - Address on File: ${customer.address || 'None'}
 ` : `
 CURRENT CUSTOMER:
 - New customer (first interaction)
+- Phone: (use the phone from the incoming message)
 `;
 
     return `You are the friendly AI Receptionist for **${business.name}**.
@@ -59,11 +62,14 @@ You communicate via WhatsApp - keep messages SHORT (under 200 words).
 You are also a SALESMAN - gently upsell when appropriate.
 
 BUSINESS INFO:
-- Business: ${business.name}
+- Business ID: ${business.id}
+- Business Name: ${business.name}
 - Service: ${business.niche}
 - Currency: ${business.currency}
 - Operating Hours: ${business.operatingHours || '9am - 5pm'}
 - Owner: ${business.ownerName || 'the owner'}
+
+IMPORTANT: When calling tools that require businessId, ALWAYS use: "${business.id}"
 
 PRICING:
 - Standard Cleaning: ${business.currency} ${business.cleaningPrice} per unit

@@ -138,11 +138,14 @@ export async function POST(request: NextRequest) {
             // Now build the prompt and call AI with history from parallel fetch
             const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
             
+            // Add context about current customer phone for tools
+            const contextMessage = `[SYSTEM CONTEXT: Customer phone is ${customerPhone}. Business ID is ${businessId}. Use these values when calling tools.]`;
+            
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
             
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
-                system: systemPrompt,
+                system: systemPrompt + `\n\n${contextMessage}`,
                 messages: [
                     ...history,
                     { role: 'user', content: messageText },
@@ -177,19 +180,20 @@ export async function POST(request: NextRequest) {
                         .map(tr => {
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const toolResult = tr as any;
+                            console.log(`   📊 Tool ${toolResult.toolName} result:`, JSON.stringify(toolResult.result).substring(0, 200));
                             return `Tool ${toolResult.toolName}: ${JSON.stringify(toolResult.result)}`;
                         })
                         .join('\n');
                     
                     const continuationResult = await generateText({
                         model: openai('gpt-4o-mini'),
-                        system: systemPrompt + `\n\nYou already called tools and received results. Now compose your response to the customer.`,
+                        system: systemPrompt + `\n\nYou already called tools and received results. Now compose your response to the customer based on the tool results. If slots were returned, present them as numbered options.`,
                         messages: [
                             ...history,
                             { role: 'user', content: messageText },
                             { 
                                 role: 'assistant', 
-                                content: `I gathered the following information:\n${toolResultsSummary}\n\nNow I will respond to the customer:` 
+                                content: `I gathered the following information:\n${toolResultsSummary}\n\nNow I will respond to the customer with the available slots:` 
                             },
                         ],
                     });

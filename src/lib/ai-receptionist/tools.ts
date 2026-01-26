@@ -209,10 +209,31 @@ export const receptionistTools = {
             const maxPerWindow = 3;
             const slots: { label: string; date: string; window: string; available: boolean }[] = [];
             
-            // Check next 4 days, both windows
+            // Check next 4 days
             const now = new Date();
             const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // UTC+8
             const currentHour = localNow.getUTCHours();
+            
+            const startDate = new Date(localNow);
+            const endDate = new Date(localNow);
+            endDate.setDate(endDate.getDate() + 5); // Fetch a bit more just in case
+
+            const sDateStr = startDate.toISOString().split('T')[0];
+            const eDateStr = endDate.toISOString().split('T')[0];
+
+            // OPTIMIZATION: Fetch all relevant bookings in ONE query instead of 8 loop queries
+            const { data: allBookings, error } = await supabase
+                .from('bookings')
+                .select('slot_date, slot_time')
+                .eq('business_id', businessId)
+                .gte('slot_date', sDateStr)
+                .lte('slot_date', eDateStr)
+                .in('status', ['pending', 'confirmed', 'blocked']);
+            
+            if (error) {
+                console.error('Error fetching slots:', error);
+                return { slots: [], fullyBooked: true, error: 'Failed to check availability' };
+            }
 
             for (let dayOffset = 0; dayOffset < 4 && slots.length < 4; dayOffset++) {
                 const date = new Date(localNow);
@@ -222,17 +243,16 @@ export const receptionistTools = {
                 const dayLabel = isToday ? 'Today' : dayOffset === 1 ? 'Tomorrow' : 
                     date.toLocaleDateString('en-GB', { weekday: 'long' });
 
+                // Filter bookings for this day in memory
+                const dayBookings = allBookings?.filter(b => b.slot_date === dateStr) || [];
+
                 // Check morning window (skip if today and past 10am)
                 if (!(isToday && currentHour >= 10)) {
-                    const { data: morningBookings } = await supabase
-                        .from('bookings')
-                        .select('id')
-                        .eq('business_id', businessId)
-                        .eq('slot_date', dateStr)
-                        .or('slot_time.eq.morning,slot_time.eq.all_day')
-                        .in('status', ['pending', 'confirmed', 'blocked']);
+                    const morningCount = dayBookings.filter(b => 
+                        b.slot_time === 'morning' || b.slot_time === 'all_day'
+                    ).length;
                     
-                    if ((morningBookings?.length || 0) < maxPerWindow) {
+                    if (morningCount < maxPerWindow) {
                         slots.push({
                             label: `${dayLabel} Morning (9am - 12pm window)`,
                             date: dateStr,
@@ -244,15 +264,11 @@ export const receptionistTools = {
 
                 // Check afternoon window (skip if today and past 3pm)
                 if (!(isToday && currentHour >= 15) && slots.length < 4) {
-                    const { data: afternoonBookings } = await supabase
-                        .from('bookings')
-                        .select('id')
-                        .eq('business_id', businessId)
-                        .eq('slot_date', dateStr)
-                        .or('slot_time.eq.afternoon,slot_time.eq.all_day')
-                        .in('status', ['pending', 'confirmed', 'blocked']);
+                    const afternoonCount = dayBookings.filter(b => 
+                        b.slot_time === 'afternoon' || b.slot_time === 'all_day'
+                    ).length;
                     
-                    if ((afternoonBookings?.length || 0) < maxPerWindow) {
+                    if (afternoonCount < maxPerWindow) {
                         slots.push({
                             label: `${dayLabel} Afternoon (1pm - 5pm window)`,
                             date: dateStr,

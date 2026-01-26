@@ -21,11 +21,13 @@ if (accountSid && authToken) {
  */
 export async function sendTypingIndicator(incomingMessageSid: string): Promise<boolean> {
     if (!client || !incomingMessageSid) {
+        console.log('💬 Typing indicator skipped - no client or messageSid');
         return false;
     }
 
     try {
-        await client.request({
+        // Method 1: Twilio Messaging API typing indicator
+        const response = await client.request({
             method: 'POST',
             uri: 'https://messaging.twilio.com/v2/Indicators/Typing.json',
             form: {
@@ -33,12 +35,38 @@ export async function sendTypingIndicator(incomingMessageSid: string): Promise<b
                 MessageId: incomingMessageSid
             }
         });
-        console.log('💬 Typing indicator sent');
+        console.log('💬 Typing indicator sent via Messaging API');
         return true;
-    } catch (error) {
-        // Non-critical - don't break flow if this fails
-        console.warn('⚠️ Could not send typing indicator:', error);
-        return false;
+    } catch (error: unknown) {
+        // If Messaging API fails, try alternative approach using fetch
+        try {
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            
+            const response = await fetch('https://messaging.twilio.com/v2/Indicators/Typing.json', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    Channel: 'whatsapp',
+                    MessageId: incomingMessageSid,
+                }),
+            });
+            
+            if (response.ok) {
+                console.log('💬 Typing indicator sent via fetch');
+                return true;
+            } else {
+                const errorText = await response.text();
+                console.warn('⚠️ Typing indicator failed:', response.status, errorText);
+                return false;
+            }
+        } catch (fetchError) {
+            console.warn('⚠️ Could not send typing indicator:', error);
+            return false;
+        }
     }
 }
 

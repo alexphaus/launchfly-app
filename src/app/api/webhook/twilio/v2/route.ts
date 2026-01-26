@@ -45,7 +45,9 @@ export async function POST(request: NextRequest) {
         
         // 🚀 Send typing indicator IMMEDIATELY to show bot is responding
         // This makes the customer see "typing..." while AI processes
-        sendTypingIndicator(messageSid).catch(() => {}); // Fire and forget
+        console.log(`   💬 Sending typing indicator for MessageSid: ${messageSid}`);
+        sendTypingIndicator(messageSid).catch((e) => console.warn('Typing indicator error:', e));
+        
         let messageText = body?.trim() || '';
 
         // Handle location pins

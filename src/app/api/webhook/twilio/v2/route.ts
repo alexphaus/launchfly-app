@@ -12,6 +12,7 @@ import twilio from 'twilio';
 import { receptionistTools } from '../../../../../lib/ai-receptionist/tools';
 import { generateSystemPrompt, type BusinessContext, type CustomerContext } from '../../../../../lib/ai-receptionist/system-prompt';
 import { getConversationHistory, saveMessage, getLastBusinessId } from '../../../../../lib/ai-receptionist/history';
+import { sendTypingIndicator } from '../../../../../lib/whatsapp-push';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,10 +37,15 @@ export async function POST(request: NextRequest) {
         const formData = await request.formData();
         const from = formData.get('From') as string;
         const body = formData.get('Body') as string;
+        const messageSid = formData.get('MessageSid') as string; // For typing indicator
         const latitude = formData.get('Latitude') as string | null;
         const longitude = formData.get('Longitude') as string | null;
 
         const customerPhone = from.replace('whatsapp:', '');
+        
+        // 🚀 Send typing indicator IMMEDIATELY to show bot is responding
+        // This makes the customer see "typing..." while AI processes
+        sendTypingIndicator(messageSid).catch(() => {}); // Fire and forget
         let messageText = body?.trim() || '';
 
         // Handle location pins

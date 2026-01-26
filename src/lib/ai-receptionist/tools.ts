@@ -1,0 +1,468 @@
+// src/lib/ai-receptionist/tools.ts
+// The "Hands" - Database operations the AI can call
+// Each tool is a discrete action with typed parameters
+
+import { tool } from 'ai';
+import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+);
+
+// ============================================================
+// TOOL DEFINITIONS - These are the ONLY "hardcoded" operations
+// The AI decides WHEN to call them based on conversation context
+// ============================================================
+
+// Schema definitions
+const lookupCustomerSchema = z.object({
+    phone: z.string().describe('Customer phone number in international format'),
+});
+
+const getBusinessConfigSchema = z.object({
+    businessId: z.string().describe('The business UUID from [BIZ:xxx] tag'),
+});
+
+const checkAvailabilitySchema = z.object({
+    businessId: z.string().describe('Business UUID'),
+    date: z.string().describe('Date in YYYY-MM-DD format'),
+    window: z.enum(['morning', 'afternoon']).describe('Time window'),
+});
+
+const getAvailableSlotsSchema = z.object({
+    businessId: z.string().describe('Business UUID'),
+});
+
+const activateWarrantySchema = z.object({
+    businessId: z.string().describe('Business UUID'),
+    phone: z.string().describe('Customer phone number'),
+    name: z.string().describe('Customer name'),
+    serviceType: z.string().describe('Service type: cleaning or repair'),
+    warrantyDays: z.number().optional().describe('Warranty duration in days (default 30)'),
+});
+
+const createBookingSchema = z.object({
+    businessId: z.string().describe('Business UUID'),
+    customerId: z.string().optional().describe('Customer UUID if known'),
+    customerName: z.string().describe('Customer name'),
+    customerPhone: z.string().describe('Customer phone'),
+    address: z.string().describe('Service address'),
+    date: z.string().describe('Booking date YYYY-MM-DD'),
+    window: z.enum(['morning', 'afternoon']).describe('Time window'),
+    serviceType: z.string().describe('e.g., "Aircon Cleaning (2 units)"'),
+    estimateAmount: z.number().describe('Estimated price'),
+    currency: z.string().optional().describe('Currency code, default RM'),
+});
+
+const updateCustomerSchema = z.object({
+    customerId: z.string().describe('Customer UUID'),
+    address: z.string().optional().describe('New address'),
+    status: z.string().optional().describe('New status'),
+    notes: z.string().optional().describe('Additional notes to append'),
+});
+
+const notifyOwnerSchema = z.object({
+    ownerPhone: z.string().describe('Owner phone number'),
+    message: z.string().describe('Notification message'),
+});
+
+const calculatePriceSchema = z.object({
+    serviceType: z.enum(['cleaning', 'repair_inspection']).describe('Type of service'),
+    units: z.number().optional().describe('Number of units (for cleaning)'),
+    pricePerUnit: z.number().describe('Price per unit'),
+    currency: z.string().optional().describe('Currency code'),
+});
+
+// Type inference from schemas
+type LookupCustomerInput = z.infer<typeof lookupCustomerSchema>;
+type GetBusinessConfigInput = z.infer<typeof getBusinessConfigSchema>;
+type CheckAvailabilityInput = z.infer<typeof checkAvailabilitySchema>;
+type GetAvailableSlotsInput = z.infer<typeof getAvailableSlotsSchema>;
+type ActivateWarrantyInput = z.infer<typeof activateWarrantySchema>;
+type CreateBookingInput = z.infer<typeof createBookingSchema>;
+type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
+type NotifyOwnerInput = z.infer<typeof notifyOwnerSchema>;
+type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
+
+export const receptionistTools = {
+    /**
+     * Look up customer by phone number
+     * Returns: warranty status, service history, name
+     */
+    lookupCustomer: tool({
+        description: 'Look up a customer by their phone number to check warranty status, service history, and profile. Call this when a returning customer messages or after sticker scan.',
+        inputSchema: lookupCustomerSchema,
+        execute: async (input: LookupCustomerInput) => {
+            const { phone } = input;
+            const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
+            const phoneWithoutPlus = phone.replace(/^\+/, '');
+
+            const { data: customer, error } = await supabase
+                .from('customers')
+                .select('*, businesses(id, name, business_data, whatsapp_number)')
+                .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error || !customer) {
+                return { found: false, message: 'Customer not found - this is a new customer' };
+            }
+
+            const warrantyActive = customer.warranty_end_date && 
+                new Date(customer.warranty_end_date) > new Date();
+            
+            return {
+                found: true,
+                id: customer.id,
+                name: customer.name || customer.first_name,
+                phone: customer.phone,
+                warrantyActive,
+                warrantyEndDate: customer.warranty_end_date,
+                lastServiceDate: customer.last_service_date,
+                lastServiceType: customer.service_type,
+                address: customer.address,
+                businessId: customer.business_id,
+                businessName: customer.businesses?.name,
+                status: customer.status,
+            };
+        },
+    }),
+
+    /**
+     * Get business configuration by ID
+     * Returns: pricing, services, operating hours
+     */
+    getBusinessConfig: tool({
+        description: 'Get business configuration including pricing, services, and settings. Call this when you see [BIZ:id] in the message or need pricing info.',
+        inputSchema: getBusinessConfigSchema,
+        execute: async (input: GetBusinessConfigInput) => {
+            const { businessId } = input;
+            const { data: business, error } = await supabase
+                .from('businesses')
+                .select('*')
+                .eq('id', businessId)
+                .single();
+
+            if (error || !business) {
+                return { found: false, message: 'Business not found' };
+            }
+
+            const config = business.business_data || {};
+            return {
+                found: true,
+                id: business.id,
+                name: business.name,
+                niche: config.niche || 'Aircon Service',
+                currency: config.currency || 'RM',
+                cleaningPrice: config.cleaningPrice || 120,
+                repairInspectionFee: config.repairInspectionFee || 80,
+                warrantyDays: config.warrantyDays || 30,
+                serviceInterval: config.serviceInterval || 90,
+                ownerPhone: business.whatsapp_number || business.phone_number,
+                operatingHours: config.operatingHours || '9am - 5pm',
+            };
+        },
+    }),
+
+    /**
+     * Check slot availability for a specific day/window
+     */
+    checkAvailability: tool({
+        description: 'Check if a specific arrival window is available for booking. Morning = 9am-12pm, Afternoon = 1pm-5pm.',
+        inputSchema: checkAvailabilitySchema,
+        execute: async (input: CheckAvailabilityInput) => {
+            const { businessId, date, window } = input;
+            const maxPerWindow = 3; // Default cap
+
+            const { data: bookings } = await supabase
+                .from('bookings')
+                .select('id')
+                .eq('business_id', businessId)
+                .eq('slot_date', date)
+                .or(`slot_time.eq.${window},slot_time.eq.all_day`)
+                .in('status', ['pending', 'confirmed', 'blocked']);
+
+            const count = bookings?.length || 0;
+            const available = count < maxPerWindow;
+            const remaining = maxPerWindow - count;
+
+            return {
+                available,
+                bookedCount: count,
+                remainingSlots: remaining,
+                windowLabel: window === 'morning' ? '9am - 12pm' : '1pm - 5pm',
+            };
+        },
+    }),
+
+    /**
+     * Get next available slots across multiple days
+     */
+    getAvailableSlots: tool({
+        description: 'Get the next 4 available arrival windows for booking. Call this when customer is ready to pick a time.',
+        inputSchema: getAvailableSlotsSchema,
+        execute: async (input: GetAvailableSlotsInput) => {
+            const { businessId } = input;
+            const maxPerWindow = 3;
+            const slots: { label: string; date: string; window: string; available: boolean }[] = [];
+            
+            // Check next 4 days, both windows
+            const now = new Date();
+            const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // UTC+8
+            const currentHour = localNow.getUTCHours();
+
+            for (let dayOffset = 0; dayOffset < 4 && slots.length < 4; dayOffset++) {
+                const date = new Date(localNow);
+                date.setDate(date.getDate() + dayOffset);
+                const dateStr = date.toISOString().split('T')[0];
+                const isToday = dayOffset === 0;
+                const dayLabel = isToday ? 'Today' : dayOffset === 1 ? 'Tomorrow' : 
+                    date.toLocaleDateString('en-GB', { weekday: 'long' });
+
+                // Check morning window (skip if today and past 10am)
+                if (!(isToday && currentHour >= 10)) {
+                    const { data: morningBookings } = await supabase
+                        .from('bookings')
+                        .select('id')
+                        .eq('business_id', businessId)
+                        .eq('slot_date', dateStr)
+                        .or('slot_time.eq.morning,slot_time.eq.all_day')
+                        .in('status', ['pending', 'confirmed', 'blocked']);
+                    
+                    if ((morningBookings?.length || 0) < maxPerWindow) {
+                        slots.push({
+                            label: `${dayLabel} Morning (9am - 12pm window)`,
+                            date: dateStr,
+                            window: 'morning',
+                            available: true,
+                        });
+                    }
+                }
+
+                // Check afternoon window (skip if today and past 3pm)
+                if (!(isToday && currentHour >= 15) && slots.length < 4) {
+                    const { data: afternoonBookings } = await supabase
+                        .from('bookings')
+                        .select('id')
+                        .eq('business_id', businessId)
+                        .eq('slot_date', dateStr)
+                        .or('slot_time.eq.afternoon,slot_time.eq.all_day')
+                        .in('status', ['pending', 'confirmed', 'blocked']);
+                    
+                    if ((afternoonBookings?.length || 0) < maxPerWindow) {
+                        slots.push({
+                            label: `${dayLabel} Afternoon (1pm - 5pm window)`,
+                            date: dateStr,
+                            window: 'afternoon',
+                            available: true,
+                        });
+                    }
+                }
+            }
+
+            return {
+                slots: slots.slice(0, 4),
+                fullyBooked: slots.length === 0,
+            };
+        },
+    }),
+
+    /**
+     * Activate warranty for a customer
+     */
+    activateWarranty: tool({
+        description: 'Register/activate warranty for a customer after sticker scan. Creates customer if new.',
+        inputSchema: activateWarrantySchema,
+        execute: async (input: ActivateWarrantyInput) => {
+            const { businessId, phone, name, serviceType, warrantyDays = 30 } = input;
+            const now = new Date();
+            const warrantyEndDate = new Date(now);
+            warrantyEndDate.setDate(warrantyEndDate.getDate() + warrantyDays);
+
+            const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
+
+            // Upsert customer
+            const { data: customer, error } = await supabase
+                .from('customers')
+                .upsert({
+                    business_id: businessId,
+                    phone: phoneWithPlus,
+                    name,
+                    service_type: serviceType,
+                    last_service_date: now.toISOString().split('T')[0],
+                    warranty_end_date: warrantyEndDate.toISOString().split('T')[0],
+                    status: 'warranty_activated',
+                }, {
+                    onConflict: 'business_id,phone',
+                })
+                .select()
+                .single();
+
+            if (error) {
+                return { success: false, error: error.message };
+            }
+
+            const endDateFormatted = warrantyEndDate.toLocaleDateString('en-GB', { 
+                day: 'numeric', month: 'short', year: 'numeric' 
+            });
+
+            return {
+                success: true,
+                customerId: customer?.id,
+                warrantyEndDate: endDateFormatted,
+                message: `Warranty activated until ${endDateFormatted}`,
+            };
+        },
+    }),
+
+    /**
+     * Create a booking request
+     */
+    createBooking: tool({
+        description: 'Create a booking request once customer has provided address and selected a time window. This sends notification to the business owner.',
+        inputSchema: createBookingSchema,
+        execute: async (input: CreateBookingInput) => {
+            const { 
+                businessId, customerId, customerName, customerPhone, 
+                address, date, window, serviceType, estimateAmount, 
+                currency = 'RM' 
+            } = input;
+            
+            const windowLabel = window === 'morning' ? 'Morning (9am - 12pm window)' : 'Afternoon (1pm - 5pm window)';
+            const dateObj = new Date(date);
+            const dayLabel = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+
+            // Create booking record
+            const { data: booking, error } = await supabase
+                .from('bookings')
+                .insert({
+                    business_id: businessId,
+                    customer_id: customerId,
+                    slot_date: date,
+                    slot_time: window,
+                    slot_label: `${dayLabel} ${windowLabel}`,
+                    status: 'pending',
+                    booking_type: 'customer',
+                    customer_name: customerName,
+                    customer_phone: customerPhone,
+                    customer_address: address,
+                    estimate: `${currency} ${estimateAmount}`,
+                    notes: `Service: ${serviceType}`,
+                })
+                .select()
+                .single();
+
+            if (error) {
+                return { success: false, error: error.message };
+            }
+
+            // Update customer status
+            if (customerId) {
+                await supabase
+                    .from('customers')
+                    .update({ 
+                        status: 'booked',
+                        address,
+                    })
+                    .eq('id', customerId);
+            }
+
+            return {
+                success: true,
+                bookingId: booking?.id,
+                slotLabel: `${dayLabel} ${windowLabel}`,
+                address,
+                estimate: `${currency} ${estimateAmount}`,
+                serviceType,
+                // This message guides the AI on what to tell the customer
+                customerMessage: `Booking request received! Technician will confirm and WhatsApp you 30 mins before arrival.`,
+            };
+        },
+    }),
+
+    /**
+     * Update customer status/notes
+     */
+    updateCustomer: tool({
+        description: 'Update customer record with new information like address, status, or notes.',
+        inputSchema: updateCustomerSchema,
+        execute: async (input: UpdateCustomerInput) => {
+            const { customerId, address, status, notes } = input;
+            const updates: Record<string, string> = {};
+            if (address) updates.address = address;
+            if (status) updates.status = status;
+
+            const { error } = await supabase
+                .from('customers')
+                .update(updates)
+                .eq('id', customerId);
+
+            if (notes) {
+                // Append to existing notes
+                const { data: current } = await supabase
+                    .from('customers')
+                    .select('notes')
+                    .eq('id', customerId)
+                    .single();
+                
+                await supabase
+                    .from('customers')
+                    .update({ notes: (current?.notes || '') + '\n' + notes })
+                    .eq('id', customerId);
+            }
+
+            return { success: !error };
+        },
+    }),
+
+    /**
+     * Send notification to business owner
+     */
+    notifyOwner: tool({
+        description: 'Send a WhatsApp notification to the business owner about a new booking or important event.',
+        inputSchema: notifyOwnerSchema,
+        execute: async (input: NotifyOwnerInput) => {
+            const { ownerPhone, message } = input;
+            // This will be handled by the main route which has Twilio access
+            // We just return the intent for the orchestrator to process
+            return {
+                action: 'notify_owner' as const,
+                phone: ownerPhone,
+                message,
+            };
+        },
+    }),
+
+    /**
+     * Calculate service price
+     */
+    calculatePrice: tool({
+        description: 'Calculate the total price for a service. Use this when customer specifies number of units.',
+        inputSchema: calculatePriceSchema,
+        execute: async (input: CalculatePriceInput) => {
+            const { serviceType, units = 1, pricePerUnit, currency = 'RM' } = input;
+            
+            if (serviceType === 'repair_inspection') {
+                return {
+                    total: pricePerUnit,
+                    label: `${currency} ${pricePerUnit} (Inspection fee - waived if you proceed with repair)`,
+                    units: 1,
+                };
+            }
+
+            const total = pricePerUnit * units;
+            return {
+                total,
+                label: `${currency} ${total}`,
+                units,
+                breakdown: `${units} unit${units > 1 ? 's' : ''} × ${currency} ${pricePerUnit} = ${currency} ${total}`,
+            };
+        },
+    }),
+};
+
+// Export tool names for type safety
+export type ReceptionistToolName = keyof typeof receptionistTools;

@@ -362,14 +362,30 @@ export const receptionistTools = {
      * Create a booking request
      */
     createBooking: tool({
-        description: 'Create a booking request once customer has provided address and selected a time window. This sends notification to the business owner.',
+        description: 'Create a booking request once customer has provided address and selected a time window. This sends notification to the business owner. ALL parameters are required.',
         inputSchema: createBookingSchema,
         execute: async (input: CreateBookingInput) => {
+            console.log('   📝 createBooking called with:', JSON.stringify(input));
+            
             const { 
                 businessId, customerId, customerName, customerPhone, 
                 address, date, window, serviceType, estimateAmount, 
                 currency = 'RM' 
             } = input;
+            
+            // Validate required fields
+            if (!businessId || !customerName || !customerPhone || !address || !date || !window || !serviceType) {
+                const missing = [];
+                if (!businessId) missing.push('businessId');
+                if (!customerName) missing.push('customerName');
+                if (!customerPhone) missing.push('customerPhone');
+                if (!address) missing.push('address');
+                if (!date) missing.push('date');
+                if (!window) missing.push('window');
+                if (!serviceType) missing.push('serviceType');
+                console.error('   ❌ createBooking missing required fields:', missing.join(', '));
+                return { success: false, error: `Missing required fields: ${missing.join(', ')}. Please provide all booking details.` };
+            }
             
             const windowLabel = window === 'morning' ? 'Morning (9am - 12pm window)' : 'Afternoon (1pm - 5pm window)';
             const dateObj = new Date(date);

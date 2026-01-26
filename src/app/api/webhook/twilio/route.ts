@@ -342,6 +342,34 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // ========== DONE AFTER REVIEW HANDLER ==========
+        // Handle "Done" after customer left a Google review
+        if (customerLookup?.status === 'feedback_positive' && /^(done|ok|okay|yes|finished|submitted|posted)$/i.test(messageText.trim())) {
+            console.log('✅ Customer completed Google review');
+            
+            const business = customerLookup?.businesses;
+            const businessName = business?.name || 'Your Service Provider';
+            
+            if (twilioClient && fromNumber) {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: `Thank you so much for the review! 🙏✨\n\nYour *warranty is now active* and we'll message you automatically when it's time for your next service.\n\nHave a cool day! ❄️\n- *${businessName}*`
+                });
+            }
+
+            // Update status to completed
+            await supabase.from('customers').update({
+                status: 'warranty_complete',
+                notes: (customerLookup.notes || '') + `\n[REVIEW_DONE: ${new Date().toISOString()}]`
+            }).eq('id', customerLookup.id);
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // ========== COMPLAINT HANDLER ==========
         // Handle complaint text from negative feedback
         if (customerLookup?.status === 'feedback_negative') {
@@ -352,13 +380,13 @@ export async function POST(request: NextRequest) {
             const business = customerLookup?.businesses;
             const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
             
-            // Send acknowledgment to customer
+            // Send acknowledgment to customer - mention warranty for reassurance
             if (twilioClient && fromNumber) {
-                const ackMsg = generateComplaintAcknowledgment(businessName);
+                const warrantyMsg = `😔 We're sorry to hear that.\n\nSince you just activated your *30-Day Warranty*, we want to fix this for FREE if it's a workmanship issue.\n\nPlease tell us exactly what is wrong (e.g., Leaking, Not Cold, Noisy) so we can send the team back:`;
                 await twilioClient.messages.create({
                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                     to: `whatsapp:${customerPhone}`,
-                    body: ackMsg
+                    body: warrantyMsg
                 });
             }
 
@@ -1060,9 +1088,64 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // ========== RETURNING CUSTOMER MENU HANDLER ==========
+        // Handle menu selection (1/2/3) for returning customers
+        // MUST be before STICKER_MENU to catch returning_menu status
+        if (customerLookup?.status === 'returning_menu' && classification.intent === 'STICKER_MENU') {
+            console.log('📋 Returning customer menu selection detected');
+
+            const selection = classification.entities.slot_number;
+            const businessName = customerLookup?.businesses?.name || 'Business';
+            const businessNiche = customerLookup?.businesses?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+
+            if (twilioClient && fromNumber && selection) {
+                let responseMessage = '';
+                let newStatus = '';
+
+                switch (selection) {
+                    case 1: // Cleaning / Primary Service
+                        responseMessage = generateCleaningPrompt(flowConfig);
+                        newStatus = 'sticker_units';
+                        break;
+                    case 2: // Repair / Issue
+                        responseMessage = generateRepairPrompt(flowConfig);
+                        newStatus = 'sticker_repair';
+                        break;
+                    case 3: // Check Price (NOT slot selection!)
+                        responseMessage = generatePriceList(flowConfig, businessName);
+                        newStatus = 'returning_menu'; // Stay in menu after showing prices
+                        break;
+                    default:
+                        responseMessage = 'Please reply with 1, 2, or 3 to select an option.';
+                        newStatus = 'returning_menu';
+                }
+
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${customerPhone}`,
+                    body: responseMessage
+                });
+
+                // Update status
+                if (customerLookup?.id) {
+                    await supabase.from('customers').update({
+                        status: newStatus,
+                        notes: (customerLookup.notes || '') + `\n[RETURNING_MENU: Selected ${selection} at ${new Date().toISOString()}]`
+                    }).eq('id', customerLookup.id);
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // ========== STICKER MENU HANDLER ==========
-        // Handle menu selection (1/2/3) after sticker scan
-        if (classification.intent === 'STICKER_MENU') {
+        // Handle menu selection (1/2/3) after sticker scan (new customers)
+        if (classification.intent === 'STICKER_MENU' && 
+            (customerLookup?.status === 'sticker_menu' || customerLookup?.status === 'warranty_offer')) {
             console.log('📋 Sticker menu selection detected');
 
             const selection = classification.entities.slot_number;
@@ -1471,8 +1554,11 @@ export async function POST(request: NextRequest) {
         }
 
         // Map AI intent to existing handlers
-        const isSlotSelection = classification.intent === 'SLOT_SELECTION' ||
-            (classification.entities.slot_number && classification.entities.slot_number >= 1 && classification.entities.slot_number <= 3);
+        // IMPORTANT: Only treat as slot selection if customer is in quote/booking flow, NOT menu flow
+        const isInBookingFlow = ['quote_sent', 'awaiting_slot', 'awaiting_discount_confirmation'].includes(customerLookup?.status || '');
+        const isSlotSelection = (classification.intent === 'SLOT_SELECTION' ||
+            (classification.entities.slot_number && classification.entities.slot_number >= 1 && classification.entities.slot_number <= 3))
+            && isInBookingFlow; // Only if in booking flow!
         const isQuoteRequest = classification.intent === 'QUOTE_REQUEST';
         const isAddressMessage = classification.intent === 'ADDRESS' || isLocationPin;
 

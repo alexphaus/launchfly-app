@@ -1091,7 +1091,12 @@ export async function POST(request: NextRequest) {
         // ========== RETURNING CUSTOMER MENU HANDLER ==========
         // Handle menu selection (1/2/3) for returning customers
         // MUST be before STICKER_MENU to catch returning_menu status
-        if (customerLookup?.status === 'returning_menu' && classification.intent === 'STICKER_MENU') {
+        // Note: AI may classify "1", "2", "3" as either STICKER_MENU or SLOT_SELECTION
+        const hasMenuSelection = classification.entities.slot_number && 
+            classification.entities.slot_number >= 1 && 
+            classification.entities.slot_number <= 3;
+        
+        if (customerLookup?.status === 'returning_menu' && hasMenuSelection) {
             console.log('📋 Returning customer menu selection detected');
 
             const selection = classification.entities.slot_number;
@@ -1144,7 +1149,8 @@ export async function POST(request: NextRequest) {
 
         // ========== STICKER MENU HANDLER ==========
         // Handle menu selection (1/2/3) after sticker scan (new customers)
-        if (classification.intent === 'STICKER_MENU' && 
+        // Note: AI may classify "1", "2", "3" as either STICKER_MENU or SLOT_SELECTION
+        if (hasMenuSelection && 
             (customerLookup?.status === 'sticker_menu' || customerLookup?.status === 'warranty_offer')) {
             console.log('📋 Sticker menu selection detected');
 

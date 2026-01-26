@@ -151,9 +151,54 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        const aiResponse = result.text;
+        let aiResponse = result.text;
         // Collect all tool calls from all steps
         const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
+        
+        // IMPORTANT: If AI used tools but didn't generate text, we need to 
+        // force a continuation call to get the actual response
+        if (!aiResponse && allToolCalls.length > 0) {
+            // Check if any step has text content
+            for (const step of result.steps) {
+                if (step.text && step.text.trim()) {
+                    aiResponse = step.text;
+                    break;
+                }
+            }
+            
+            // If still no response, make a continuation call with tool results as context
+            if (!aiResponse) {
+                console.log(`   ⚠️ AI called tools but generated no response, forcing continuation...`);
+                
+                // Summarize tool results for a clean follow-up
+                const toolResultsSummary = result.steps
+                    .flatMap(step => step.toolResults || [])
+                    .map(tr => {
+                        // Tool results have toolName and result properties
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const toolResult = tr as any;
+                        return `Tool ${toolResult.toolName}: ${JSON.stringify(toolResult.result)}`;
+                    })
+                    .join('\n');
+                
+                // Make a simple follow-up call asking for a response
+                const continuationResult = await generateText({
+                    model: openai('gpt-4o-mini'),
+                    system: systemPrompt + `\n\nYou already called tools and received results. Now compose your response to the customer.`,
+                    messages: [
+                        ...history,
+                        { role: 'user', content: messageText },
+                        { 
+                            role: 'assistant', 
+                            content: `I gathered the following information:\n${toolResultsSummary}\n\nNow I will respond to the customer:` 
+                        },
+                    ],
+                    // No tools this time - force text response
+                });
+                
+                aiResponse = continuationResult.text || "Hi! How can I help you today?";
+            }
+        }
         
         console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
         if (allToolCalls.length > 0) {

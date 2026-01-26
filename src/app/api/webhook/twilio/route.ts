@@ -1012,15 +1012,26 @@ export async function POST(request: NextRequest) {
                             notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]` + 
                                 (businessId ? ` [BIZ:${businessId}]` : '')
                         }).eq('id', customerLookup.id);
+                        console.log(`✅ Updated existing customer ${customerLookup.id} with warranty_offer status`);
                     } else {
                         // Create new customer record for sticker scan
-                        await supabase.from('customers').insert({
-                            phone: phoneWithPlus,
-                            status: 'warranty_offer',
-                            notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
-                                (businessId ? ` [BIZ:${businessId}]` : ''),
-                            business_id: businessId || null
-                        });
+                        const { data: newCustomer, error: insertError } = await supabase
+                            .from('customers')
+                            .insert({
+                                phone: phoneWithPlus,
+                                status: 'warranty_offer',
+                                notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
+                                    (businessId ? ` [BIZ:${businessId}]` : ''),
+                                business_id: businessId || null
+                            })
+                            .select()
+                            .single();
+                        
+                        if (insertError) {
+                            console.error(`❌ Failed to create customer for sticker scan:`, insertError);
+                        } else {
+                            console.log(`✅ Created new customer ${newCustomer?.id} with phone ${phoneWithPlus} status warranty_offer`);
+                        }
                     }
                 }
 

@@ -40,6 +40,12 @@ import {
     generateServiceRecoveryAlert,
     generateComplaintAcknowledgment,
     isFeedbackFlowStatus,
+    // Customer self-activation
+    generateWarrantyOffer,
+    generateCustomerServiceTypePrompt,
+    isWarrantyActivationChoice,
+    getDefaultWarrantyDays,
+    getDefaultServiceInterval,
 } from '@/lib/warranty-flow';
 import twilio from 'twilio';
 
@@ -381,6 +387,191 @@ export async function POST(request: NextRequest) {
             }
 
             console.log(`✅ Complaint logged for customer ${customerLookup.id}`);
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== CUSTOMER WARRANTY OFFER HANDLER ==========
+        // Handle customer's choice from warranty offer menu (1=activate, 2/3/4=booking)
+        if (customerLookup?.status === 'warranty_offer') {
+            console.log('📝 Warranty Offer: Processing customer choice');
+            
+            const choice = messageText.trim();
+            const business = customerLookup?.businesses;
+            const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
+            const businessNiche = business?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+            
+            if (choice === '1' || isWarrantyActivationChoice(messageText)) {
+                // Customer wants warranty activation - ask for service type
+                if (twilioClient && fromNumber) {
+                    const servicePrompt = generateCustomerServiceTypePrompt({
+                        cleaningLabel: flowConfig.cleaningLabel,
+                        repairLabel: flowConfig.repairLabel,
+                    });
+                    
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: servicePrompt
+                    });
+                }
+
+                await supabase.from('customers').update({
+                    status: 'customer_warranty_service', // Waiting for service type
+                    notes: (customerLookup.notes || '') + `\n[WARRANTY_SELF_ACTIVATE: ${new Date().toISOString()}]`
+                }).eq('id', customerLookup.id);
+
+            } else if (['2', '3', '4'].includes(choice)) {
+                // Customer wants booking - redirect to normal sticker menu flow
+                // Map: 2→1 (cleaning), 3→2 (repair), 4→3 (price)
+                const menuChoice = (parseInt(choice) - 1).toString();
+                
+                // Update status to sticker_menu and re-process
+                await supabase.from('customers').update({
+                    status: 'sticker_menu',
+                    notes: (customerLookup.notes || '') + `\n[SKIPPED_WARRANTY: chose option ${choice}]`
+                }).eq('id', customerLookup.id);
+
+                // Generate appropriate response based on choice
+                let response: string;
+                if (choice === '2') {
+                    response = generateCleaningPrompt(flowConfig);
+                    await supabase.from('customers').update({ status: 'cleaning_qty' }).eq('id', customerLookup.id);
+                } else if (choice === '3') {
+                    response = generateRepairPrompt(flowConfig);
+                    await supabase.from('customers').update({ status: 'repair_describe' }).eq('id', customerLookup.id);
+                } else {
+                    response = generatePriceList(flowConfig, businessName);
+                    await supabase.from('customers').update({ status: 'sticker_menu' }).eq('id', customerLookup.id);
+                }
+
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: response
+                    });
+                }
+            } else {
+                // Invalid choice - prompt again
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Please reply with 1, 2, 3, or 4:\n\n1️⃣ ✅ Activate warranty\n2️⃣ Book Cleaning\n3️⃣ Not Cooling / Repair\n4️⃣ Check Price`
+                    });
+                }
+            }
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ========== CUSTOMER WARRANTY SERVICE TYPE HANDLER ==========
+        // Handle service type selection for customer self-activation
+        if (customerLookup?.status === 'customer_warranty_service') {
+            console.log('📝 Customer Warranty: Processing service type');
+            
+            const choice = messageText.trim();
+            const business = customerLookup?.businesses;
+            const businessId = customerLookup?.business_id;
+            const businessName = business?.name || business?.business_data?.businessName || 'Your Service Provider';
+            const businessNiche = business?.business_data?.niche || 'default';
+            const flowConfig = getFlowConfig(businessNiche);
+
+            let serviceType: string;
+            let serviceName: string;
+
+            if (choice === '1') {
+                serviceType = 'cleaning';
+                serviceName = flowConfig.cleaningLabel.replace(/[^\w\s\/]/g, '').trim();
+            } else if (choice === '2') {
+                serviceType = 'repair';
+                serviceName = flowConfig.repairLabel.replace(/[^\w\s\/]/g, '').trim();
+            } else if (choice === '3') {
+                serviceType = 'maintenance';
+                serviceName = 'Other Service';
+            } else {
+                // Invalid - prompt again
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Please reply with 1, 2, or 3:\n\n1️⃣ Cleaning\n2️⃣ Repair\n3️⃣ Other`
+                    });
+                }
+                return new NextResponse(
+                    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                    { headers: { 'Content-Type': 'text/xml' } }
+                );
+            }
+
+            // Create service record for customer self-activation
+            const warrantyDays = getDefaultWarrantyDays(serviceType);
+            const intervalDays = getDefaultServiceInterval(serviceType);
+            const serviceDate = new Date();
+            const warrantyExpiresAt = new Date(serviceDate);
+            warrantyExpiresAt.setDate(warrantyExpiresAt.getDate() + warrantyDays);
+            const nextDueAt = new Date(serviceDate);
+            nextDueAt.setDate(nextDueAt.getDate() + intervalDays);
+
+            const { error: recordError } = await supabase
+                .from('service_records')
+                .insert({
+                    business_id: businessId,
+                    customer_id: customerLookup.id,
+                    service_type: serviceType,
+                    service_name: serviceName,
+                    appliance_type: flowConfig.serviceName.split(' ')[0].toLowerCase(),
+                    warranty_days: warrantyDays,
+                    warranty_expires_at: warrantyExpiresAt,
+                    service_interval_days: intervalDays,
+                    next_service_due_at: nextDueAt,
+                    registered_via: 'customer_scan',
+                    registered_by: 'customer'
+                });
+
+            if (!recordError) {
+                // Send feedback request to customer (same as tech flow)
+                const customerName = customerLookup.first_name || customerLookup.name || '';
+                
+                const feedbackMsg = generateFeedbackRequest({
+                    customerName: customerName,
+                    serviceName: serviceName,
+                    businessName: businessName,
+                });
+
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: feedbackMsg
+                    });
+                }
+
+                // Update customer status to await feedback
+                await supabase.from('customers').update({
+                    status: 'feedback_pending',
+                    notes: (customerLookup.notes || '') + `\n[CUSTOMER_WARRANTY_ACTIVATED: ${serviceType} at ${new Date().toISOString()}]`
+                }).eq('id', customerLookup.id);
+
+                console.log(`✅ Customer self-activated warranty: ${serviceName}`);
+            } else {
+                console.error('❌ Failed to create service record from customer activation:', recordError);
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `❌ Sorry, there was an error activating your warranty. Please try scanning the sticker again or contact ${businessName} directly.`
+                    });
+                }
+            }
 
             return new NextResponse(
                 '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
@@ -732,12 +923,18 @@ export async function POST(request: NextRequest) {
 
                 } else {
                     // ========== NEW CUSTOMER PATH ==========
-                    greeting = generateStickerGreeting(flowConfig, businessName);
+                    // Offer warranty activation OR booking menu
+                    greeting = generateWarrantyOffer({
+                        businessName: businessName,
+                        cleaningLabel: flowConfig.cleaningLabel,
+                        repairLabel: flowConfig.repairLabel,
+                        priceLabel: flowConfig.priceLabel,
+                    });
 
                     // Update or create customer record for sticker scan
                     if (customerLookup?.id) {
                         await supabase.from('customers').update({
-                            status: 'sticker_menu',
+                            status: 'warranty_offer', // New status - waiting for 1/2/3/4 choice
                             business_id: businessId || customerLookup.business_id,
                             notes: (customerLookup.notes || '') + `\n[STICKER_SCAN: ${new Date().toISOString()}]` + 
                                 (businessId ? ` [BIZ:${businessId}]` : '')
@@ -746,7 +943,7 @@ export async function POST(request: NextRequest) {
                         // Create new customer record for sticker scan
                         await supabase.from('customers').insert({
                             phone: phoneWithPlus,
-                            status: 'sticker_menu',
+                            status: 'warranty_offer',
                             notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
                                 (businessId ? ` [BIZ:${businessId}]` : ''),
                             business_id: businessId || null

@@ -166,6 +166,63 @@ Thanks for choosing *${params.businessName}*! 🙏`;
 }
 
 // ============================================================================
+// CUSTOMER SELF-ACTIVATION FLOW
+// ============================================================================
+// When customer scans sticker directly (tech didn't register)
+
+/**
+ * Generate warranty activation offer for new customer scan
+ * Gives customer choice to activate warranty or just book
+ */
+export function generateWarrantyOffer(params: {
+    businessName: string;
+    cleaningLabel: string;
+    repairLabel: string;
+    priceLabel: string;
+}): string {
+    return `Hi there! 👋
+Thanks for scanning the service sticker from *${params.businessName}*.
+
+Did you just have a service completed? 🛠️
+
+1️⃣ ✅ Yes - Activate my warranty
+2️⃣ ${params.cleaningLabel}
+3️⃣ ${params.repairLabel}
+4️⃣ ${params.priceLabel}
+
+Reply with 1, 2, 3, or 4`;
+}
+
+/**
+ * Generate service type selection for customer self-activation
+ */
+export function generateCustomerServiceTypePrompt(config: { 
+    cleaningLabel: string; 
+    repairLabel: string; 
+}): string {
+    return `Great! Let's activate your warranty. 🛡️
+
+What service was completed?
+
+1️⃣ ${config.cleaningLabel.replace(/[^\w\s\/]/g, '').trim()}
+2️⃣ ${config.repairLabel.replace(/[^\w\s\/]/g, '').trim()}
+3️⃣ Other service
+
+Reply with 1, 2, or 3:`;
+}
+
+/**
+ * Detect if customer wants warranty activation
+ */
+export function isWarrantyActivationChoice(message: string): boolean {
+    const cleaned = message.trim().toLowerCase();
+    return cleaned === '1' || 
+           cleaned.includes('yes') || 
+           cleaned.includes('warranty') ||
+           cleaned.includes('activate');
+}
+
+// ============================================================================
 // RETURNING CUSTOMER FLOW
 // ============================================================================
 // Personalized experience for customers who have service history

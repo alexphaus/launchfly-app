@@ -75,6 +75,16 @@ const calculatePriceSchema = z.object({
     currency: z.string().optional().describe('Currency code'),
 });
 
+const getCustomerBookingsSchema = z.object({
+    customerPhone: z.string().describe('Customer phone number'),
+    businessId: z.string().describe('Business UUID'),
+});
+
+const cancelBookingSchema = z.object({
+    bookingId: z.string().describe('The booking UUID to cancel'),
+    reason: z.string().optional().describe('Reason for cancellation'),
+});
+
 // Type inference from schemas
 type LookupCustomerInput = z.infer<typeof lookupCustomerSchema>;
 type GetBusinessConfigInput = z.infer<typeof getBusinessConfigSchema>;
@@ -85,6 +95,8 @@ type CreateBookingInput = z.infer<typeof createBookingSchema>;
 type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 type NotifyOwnerInput = z.infer<typeof notifyOwnerSchema>;
 type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
+type GetCustomerBookingsInput = z.infer<typeof getCustomerBookingsSchema>;
+type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
 export const receptionistTools = {
     /**
@@ -475,6 +487,99 @@ export const receptionistTools = {
                 label: `${currency} ${total}`,
                 units,
                 breakdown: `${units} unit${units > 1 ? 's' : ''} × ${currency} ${pricePerUnit} = ${currency} ${total}`,
+            };
+        },
+    }),
+
+    /**
+     * Get customer's bookings
+     */
+    getCustomerBookings: tool({
+        description: 'Look up all bookings for a customer. Call this when customer asks about their reservations, appointments, or bookings.',
+        inputSchema: getCustomerBookingsSchema,
+        execute: async (input: GetCustomerBookingsInput) => {
+            const { customerPhone, businessId } = input;
+            const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+            const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+
+            const { data: bookings, error } = await supabase
+                .from('bookings')
+                .select('id, slot_date, slot_time, slot_label, status, customer_address, estimate, notes, created_at')
+                .eq('business_id', businessId)
+                .or(`customer_phone.eq.${phoneWithPlus},customer_phone.eq.${phoneWithoutPlus}`)
+                .in('status', ['pending', 'confirmed'])
+                .order('slot_date', { ascending: true })
+                .limit(5);
+
+            if (error) {
+                console.error('Error fetching bookings:', error);
+                return { found: false, bookings: [], error: error.message };
+            }
+
+            if (!bookings || bookings.length === 0) {
+                return { found: false, bookings: [], message: 'No upcoming bookings found' };
+            }
+
+            return {
+                found: true,
+                count: bookings.length,
+                bookings: bookings.map(b => ({
+                    id: b.id,
+                    date: b.slot_label || `${b.slot_date} ${b.slot_time}`,
+                    status: b.status,
+                    address: b.customer_address,
+                    estimate: b.estimate,
+                    service: b.notes?.replace('Service: ', '') || 'Service',
+                })),
+            };
+        },
+    }),
+
+    /**
+     * Cancel a booking
+     */
+    cancelBooking: tool({
+        description: 'Cancel a customer booking. Call this when customer wants to cancel their appointment.',
+        inputSchema: cancelBookingSchema,
+        execute: async (input: CancelBookingInput) => {
+            const { bookingId, reason } = input;
+
+            // First check if booking exists and is cancellable
+            const { data: booking, error: fetchError } = await supabase
+                .from('bookings')
+                .select('id, status, slot_label, customer_name')
+                .eq('id', bookingId)
+                .single();
+
+            if (fetchError || !booking) {
+                return { success: false, error: 'Booking not found' };
+            }
+
+            if (booking.status === 'cancelled') {
+                return { success: false, error: 'Booking is already cancelled' };
+            }
+
+            if (booking.status === 'completed') {
+                return { success: false, error: 'Cannot cancel a completed booking' };
+            }
+
+            // Update the booking status
+            const { error: updateError } = await supabase
+                .from('bookings')
+                .update({
+                    status: 'cancelled',
+                    notes: reason ? `Cancelled: ${reason}` : 'Cancelled by customer',
+                })
+                .eq('id', bookingId);
+
+            if (updateError) {
+                return { success: false, error: updateError.message };
+            }
+
+            return {
+                success: true,
+                message: `Booking for ${booking.slot_label} has been cancelled`,
+                bookingId,
             };
         },
     }),

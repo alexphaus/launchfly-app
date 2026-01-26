@@ -1,5 +1,5 @@
 // src/app/api/whatsapp/blast/route.ts
-// Enhanced WhatsApp Blast API with Smart Segments
+// Enhanced WhatsApp Blast API with Smart Segments + Template Support
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
@@ -8,6 +8,9 @@ import { NextResponse } from 'next/server';
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+
+// Template SIDs for outside 24-hour window
+const PROMO_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_PROMO || '';
 
 let client: any = null;
 if (accountSid && authToken) {
@@ -258,17 +261,32 @@ export async function POST(req: Request) {
 
         // 5. Send messages
         let sentCount = 0;
+        let sentViaTemplate = 0;
+        let sentViaFreeform = 0;
         const errors: string[] = [];
 
         for (const lead of leads) {
             if (!lead.phone) continue;
 
             const cleanPhone = lead.phone.replace(/[^\d+]/g, '');
-            const recipient = cleanPhone.startsWith('whatsapp:') ? cleanPhone : `whatsapp:${cleanPhone}`;
+            // Format phone number properly
+            let formattedPhone = cleanPhone;
+            if (!formattedPhone.startsWith('+')) {
+                if (formattedPhone.startsWith('0')) {
+                    formattedPhone = '+60' + formattedPhone.substring(1);
+                } else if (formattedPhone.startsWith('63')) {
+                    formattedPhone = '+' + formattedPhone;
+                } else if (formattedPhone.startsWith('60')) {
+                    formattedPhone = '+' + formattedPhone;
+                } else {
+                    formattedPhone = '+63' + formattedPhone; // Default to PH
+                }
+            }
+            const recipient = `whatsapp:${formattedPhone}`;
 
             // Personalize message if template supports it
             let personalizedMessage = blastMessage;
-            const customerName = lead.first_name || lead.name?.split(' ')[0];
+            const customerName = lead.first_name || lead.name?.split(' ')[0] || 'there';
             if (customerName) {
                 personalizedMessage = personalizedMessage.replace(/Hi!/, `Hi ${customerName}!`);
             }
@@ -278,27 +296,66 @@ export async function POST(req: Request) {
 
             try {
                 if (client && fromNumber) {
-                    await client.messages.create({
-                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                        to: recipient,
-                        body: personalizedMessage
-                    });
-                    sentCount++;
+                    const whatsappFrom = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
+                    
+                    // WATERFALL: Try freeform first (free if within 24h), then template
+                    let sent = false;
+                    
+                    try {
+                        // Try freeform first (works within 24h window - FREE)
+                        await client.messages.create({
+                            from: whatsappFrom,
+                            to: recipient,
+                            body: personalizedMessage
+                        });
+                        sentViaFreeform++;
+                        sent = true;
+                    } catch (freeformErr: any) {
+                        // If freeform fails (outside 24h), try template
+                        if (freeformErr.code === 63016 || freeformErr.message?.includes('outside the allowed window')) {
+                            console.log(`⏰ Outside 24h window for ${lead.phone}, trying template...`);
+                            
+                            if (PROMO_TEMPLATE_SID) {
+                                // Use Marketing template (₱2.50)
+                                await client.messages.create({
+                                    from: whatsappFrom,
+                                    to: recipient,
+                                    contentSid: PROMO_TEMPLATE_SID,
+                                    contentVariables: JSON.stringify({
+                                        '1': customerName,
+                                        '2': businessName,
+                                        '3': niche.toLowerCase(),
+                                    }),
+                                });
+                                sentViaTemplate++;
+                                sent = true;
+                            } else {
+                                throw new Error('No template configured for outside 24h window');
+                            }
+                        } else {
+                            throw freeformErr;
+                        }
+                    }
 
-                    // Update customer
-                    await supabase
-                        .from('customers')
-                        .update({
-                            status: segment === 'service_due_soon' ? 'reminder_sent' : 'reengaged',
-                            last_blast_at: new Date().toISOString(),
-                            notes: `${lead.notes || ''}\n[BLAST:${segment} ${new Date().toISOString()}]: ${templateId || 'custom'}`
-                        })
-                        .eq('id', lead.id);
+                    if (sent) {
+                        sentCount++;
+                        
+                        // Update customer
+                        await supabase
+                            .from('customers')
+                            .update({
+                                status: segment === 'service_due_soon' ? 'reminder_sent' : 'reengaged',
+                                last_blast_at: new Date().toISOString(),
+                                notes: `${lead.notes || ''}\n[BLAST:${segment} ${new Date().toISOString()}]: ${templateId || 'custom'}`
+                            })
+                            .eq('id', lead.id);
+                    }
 
                 } else {
                     // Mock mode
                     console.log(`[MOCK BLAST] To: ${recipient}\nMessage: ${personalizedMessage}`);
                     sentCount++;
+                    sentViaFreeform++;
                 }
 
                 // Small delay to avoid rate limits
@@ -310,9 +367,13 @@ export async function POST(req: Request) {
             }
         }
 
-        // 6. DEDUCT CREDITS
-        const actualCost = sentCount * COST_PER_MESSAGE;
-        if (sentCount > 0) {
+        // 6. DEDUCT CREDITS (templates cost more!)
+        // Freeform within 24h = free session msg, Template = ₱2.50
+        const freeformCost = 0; // Session messages are free
+        const templateCost = sentViaTemplate * 2.50; // Marketing template cost
+        const actualCost = freeformCost + templateCost;
+        
+        if (sentCount > 0 && actualCost > 0) {
             const newCredits = currentCredits - actualCost;
             const newUsed = (business.blast_credits_used || 0) + actualCost;
 
@@ -332,15 +393,17 @@ export async function POST(req: Request) {
                     type: 'blast',
                     amount: -actualCost,
                     recipient_count: sentCount,
-                    description: `${getSegmentName(segment)} blast to ${sentCount} leads (₱${actualCost})`
+                    description: `${getSegmentName(segment)} blast: ${sentViaFreeform} free + ${sentViaTemplate} template (₱${actualCost.toFixed(2)})`
                 });
         }
 
-        console.log(`📢 Blast [${segment}] sent to ${sentCount}/${leads.length} for ${businessName}. Cost: ₱${actualCost}`);
+        console.log(`📢 Blast [${segment}] sent to ${sentCount}/${leads.length} for ${businessName}. Freeform: ${sentViaFreeform}, Template: ${sentViaTemplate}, Cost: ₱${actualCost.toFixed(2)}`);
 
         return NextResponse.json({
             success: true,
             sent: sentCount,
+            sentViaFreeform,
+            sentViaTemplate,
             total: leads.length,
             errors: errors.length,
             cost: actualCost,
@@ -348,7 +411,7 @@ export async function POST(req: Request) {
             segment,
             segmentName: getSegmentName(segment),
             templateId: templateId || 'custom',
-            message: `Sent to ${sentCount} leads (₱${actualCost})`
+            message: `Sent to ${sentCount} leads (${sentViaFreeform} free + ${sentViaTemplate} template = ₱${actualCost.toFixed(2)})`
         });
 
     } catch (error: any) {

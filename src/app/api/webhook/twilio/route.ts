@@ -1202,12 +1202,68 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Handle CONFIRMATION ("Yes", "Ok", "Sige") - Resume booking flow
+        // Handle CONFIRMATION ("Yes", "Ok", "Sige", "Book") - Resume booking flow
         if (classification.intent === 'CONFIRMATION') {
             console.log('✅ Confirmation detected - resuming booking flow');
             const status = customerLookup?.status || 'unknown';
 
             if (twilioClient && fromNumber) {
+                // ========== SPECIAL CASE: Customer replying to reminder (YES to book) ==========
+                if (status === 'reminder_sent' || status === 'reengaged') {
+                    console.log('🔔 Customer responding to reminder/blast - entering booking flow!');
+                    
+                    // Get business data
+                    const businessData = customerLookup?.businesses?.business_data || {};
+                    const businessName = customerLookup?.businesses?.name || 'Business';
+                    const customerName = customerLookup?.first_name || customerLookup?.name?.split(' ')[0] || 'Boss';
+                    const niche = businessData.niche || 'Service';
+                    
+                    // Get their last service for context
+                    const { data: lastService } = await supabase
+                        .from('service_records')
+                        .select('service_name, appliance_type, next_service_due_at')
+                        .eq('customer_id', customerLookup?.id)
+                        .order('service_date', { ascending: false })
+                        .limit(1)
+                        .single();
+                    
+                    const serviceName = lastService?.service_name || businessData.serviceName || niche;
+                    
+                    // Send warm booking prompt
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: `whatsapp:${customerPhone}`,
+                        body: `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`
+                    });
+                    
+                    // Update status to booking flow
+                    await supabase.from('customers').update({
+                        status: 'sticker_units',
+                        notes: (customerLookup?.notes || '') + `\n[REMINDER_CONVERTED: ${new Date().toISOString()}]`
+                    }).eq('id', customerLookup?.id);
+                    
+                    // 🔔 NOTIFY OWNER - Customer converting from reminder!
+                    const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
+                    if (ownerPhone) {
+                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                body: `🔔 *HOT LEAD!*\n\n${customerName} (${customerPhone}) responded to your reminder and wants to book!\n\nThey're in the booking flow now. 🎯`
+                            });
+                            console.log(`📢 Notified owner ${cleanOwnerPhone} about hot lead`);
+                        } catch (notifyErr) {
+                            console.error('Failed to notify owner:', notifyErr);
+                        }
+                    }
+                    
+                    return new NextResponse(
+                        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                        { headers: { 'Content-Type': 'text/xml' } }
+                    );
+                }
+                
                 // Resume based on where customer left off
                 if (status === 'awaiting_address') {
                     // They already selected a slot, need address

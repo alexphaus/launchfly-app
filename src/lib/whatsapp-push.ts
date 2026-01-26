@@ -359,8 +359,9 @@ export async function sendQuoteConfirmation(customerPhone: string, options: {
  * Only shows future slots - never past times
  */
 /**
- * Generate smart time slots based on current day/time
- * Only shows future slots - never past times
+ * Generate arrival window slots based on current day/time
+ * "Blue Collar Scheduling" - wider windows for technicians with unpredictable traffic
+ * Only shows future windows - never past times
  * Uses explicit UTC+8 timezone for SEA businesses
  */
 function generateSlotOptions(): { label: string; value: string }[] {
@@ -374,41 +375,53 @@ function generateSlotOptions(): { label: string; value: string }[] {
 
     const slots: { label: string; value: string }[] = [];
 
-    // Helper to format date
-    const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    // Helper to format date nicely
+    const formatDate = (d: Date, includeDay: boolean = false) => {
+        const dayOfWeek = d.toLocaleDateString('en-GB', { weekday: 'long' });
+        const dateNum = d.getDate();
+        const month = d.toLocaleDateString('en-GB', { month: 'short' });
+        return includeDay ? `${dayOfWeek} ${dateNum} ${month}` : `${dayOfWeek}`;
+    };
 
-    // Today slots - only if before the slot starts
-    // Morning slot: only if before 9am (slot is 9am-11am)
-    if (hour < 9) {
-        slots.push({ label: 'Today 9am - 11am', value: 'today_morning' });
+    // Arrival Window Definitions (not specific times - technician-friendly)
+    // Morning Window: 9am - 12pm (3 hour window)
+    // Afternoon Window: 1pm - 5pm (4 hour window)
+    
+    // Today windows - only if enough time left in window
+    // Morning window: only if before 10am (so tech can still arrive by 12pm)
+    if (hour < 10) {
+        slots.push({ label: 'Today Morning (9am - 12pm window)', value: 'today_morning' });
     }
-    // Afternoon slot: only if before 2pm (slot is 2pm-4pm)
-    if (hour < 14) {
-        slots.push({ label: 'Today 2pm - 4pm', value: 'today_afternoon' });
-    }
-    // Late afternoon: only if before 4pm (slot is 4pm-6pm)
-    if (hour < 16) {
-        slots.push({ label: 'Today 4pm - 6pm', value: 'today_late' });
+    // Afternoon window: only if before 3pm (so tech can still arrive by 5pm)
+    if (hour < 15) {
+        slots.push({ label: 'Today Afternoon (1pm - 5pm window)', value: 'today_afternoon' });
     }
 
-    // Tomorrow slots (always show)
+    // Tomorrow windows (always show if not full)
     const tomorrow = new Date(localNow);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    if (slots.length < 3) {
-        slots.push({ label: `${formatDate(tomorrow)} 9am - 11am`, value: 'tomorrow_morning' });
+    if (slots.length < 4) {
+        slots.push({ label: `Tomorrow Morning (9am - 12pm window)`, value: 'tomorrow_morning' });
     }
-    if (slots.length < 3) {
-        slots.push({ label: `${formatDate(tomorrow)} 2pm - 4pm`, value: 'tomorrow_afternoon' });
+    if (slots.length < 4) {
+        slots.push({ label: `Tomorrow Afternoon (1pm - 5pm window)`, value: 'tomorrow_afternoon' });
     }
 
-    // Day after tomorrow (if needed)
-    if (slots.length < 3) {
-        const dayAfter = new Date(now);
+    // Day after tomorrow (if needed for variety)
+    if (slots.length < 4) {
+        const dayAfter = new Date(localNow);
         dayAfter.setDate(dayAfter.getDate() + 2);
-        slots.push({ label: `${formatDate(dayAfter)} 10am - 12pm`, value: 'day_after' });
+        const dayName = formatDate(dayAfter);
+        slots.push({ label: `${dayName} Morning (9am - 12pm window)`, value: 'day_after_morning' });
+    }
+    if (slots.length < 4) {
+        const dayAfter = new Date(localNow);
+        dayAfter.setDate(dayAfter.getDate() + 2);
+        const dayName = formatDate(dayAfter);
+        slots.push({ label: `${dayName} Afternoon (1pm - 5pm window)`, value: 'day_after_afternoon' });
     }
 
-    return slots.slice(0, 3);
+    return slots.slice(0, 4); // Show up to 4 windows
 }
 
 /**
@@ -452,14 +465,14 @@ export async function sendSlotSuggester(customerPhone: string, options: {
         return { success: true, slots: [], fullyBooked: true };
     }
 
-    const slotList = slots.map((s, i) => `${['1️⃣', '2️⃣', '3️⃣'][i]} ${s.label}`).join('\n');
+    const slotList = slots.map((s, i) => `${['1️⃣', '2️⃣', '3️⃣', '4️⃣'][i]} ${s.label}`).join('\n');
 
-    const messageBody = `📅 *Book Your Service*\n\n` +
-        `Hi ${options.customerName}! Here are available slots:\n\n` +
+    const messageBody = `📅 *Request a Service Visit*\n\n` +
+        `Hi ${options.customerName}! Here are available arrival windows:\n\n` +
         `${slotList}\n\n` +
-        `💰 *${options.currency} ${options.estimateMin} - ${options.estimateMax}*\n\n` +
-        `Reply *1*, *2*, or *3* to confirm your booking! 🎯\n\n` +
-        `_Slots fill fast - first come, first served!_`;
+        `💰 *Estimate: ${options.currency} ${options.estimateMin} - ${options.estimateMax}*\n\n` +
+        `Reply *1*, *2*, *3*, or *4* to request your slot! 🎯\n\n` +
+        `_Technician will confirm exact time & message 30 mins before arrival._`;
 
     try {
         if (client && fromNumber) {

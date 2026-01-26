@@ -62,9 +62,268 @@ const twilioClient = twilio(
 );
 const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
-// Generate slot labels based on current time (synced with generateSlotOptions in whatsapp-push.ts)
+// ========== OWNER/TECHNICIAN COMMAND SYSTEM ==========
+// Allows business owners to manage their schedule via WhatsApp commands
+
+interface OwnerCommand {
+    action: 'block' | 'unblock' | 'status' | 'help';
+    date?: string;      // YYYY-MM-DD format
+    window?: 'morning' | 'afternoon' | 'all_day';
+    rawText: string;
+}
+
+/**
+ * Check if the incoming phone number belongs to a business owner
+ */
+async function checkIfOwner(phone: string): Promise<{ businessId: string; businessName: string } | null> {
+    const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
+    const phoneWithoutPlus = phone.replace(/^\+/, '');
+    
+    const { data: business } = await supabase
+        .from('businesses')
+        .select('id, name')
+        .or(`whatsapp_number.eq.${phoneWithPlus},whatsapp_number.eq.${phoneWithoutPlus},phone_number.eq.${phoneWithPlus},phone_number.eq.${phoneWithoutPlus}`)
+        .limit(1)
+        .single();
+    
+    if (business) {
+        return { businessId: business.id, businessName: business.name };
+    }
+    return null;
+}
+
+/**
+ * Parse owner commands like "Block Tuesday", "Unblock Tomorrow Morning", "Status"
+ */
+function parseOwnerCommand(text: string): OwnerCommand | null {
+    const normalizedText = text.toLowerCase().trim();
+    
+    // Help command
+    if (normalizedText === 'help' || normalizedText === 'commands' || normalizedText === '?') {
+        return { action: 'help', rawText: text };
+    }
+    
+    // Status command - show today's bookings
+    if (normalizedText === 'status' || normalizedText === 'bookings' || normalizedText === 'schedule' || normalizedText === 'today') {
+        return { action: 'status', rawText: text };
+    }
+    
+    // Block/Unblock patterns
+    const blockMatch = normalizedText.match(/^(block|unblock)\s+(.+)$/);
+    if (!blockMatch) return null;
+    
+    const action = blockMatch[1] as 'block' | 'unblock';
+    const targetText = blockMatch[2];
+    
+    // Parse the target (day + optional window)
+    const now = new Date();
+    const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // UTC+8
+    
+    let targetDate: Date = new Date(localNow);
+    let window: 'morning' | 'afternoon' | 'all_day' = 'all_day';
+    
+    // Parse day
+    if (targetText.includes('today')) {
+        targetDate = new Date(localNow);
+    } else if (targetText.includes('tomorrow')) {
+        targetDate = new Date(localNow);
+        targetDate.setDate(targetDate.getDate() + 1);
+    } else {
+        // Parse day names (Monday, Tuesday, etc.)
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        for (let i = 0; i < dayNames.length; i++) {
+            if (targetText.includes(dayNames[i])) {
+                const todayDay = localNow.getDay();
+                let daysAhead = i - todayDay;
+                if (daysAhead <= 0) daysAhead += 7; // Next week
+                targetDate = new Date(localNow);
+                targetDate.setDate(targetDate.getDate() + daysAhead);
+                break;
+            }
+        }
+    }
+    
+    // Parse window (morning/afternoon)
+    if (targetText.includes('morning') || targetText.includes('am')) {
+        window = 'morning';
+    } else if (targetText.includes('afternoon') || targetText.includes('pm') || targetText.includes('evening')) {
+        window = 'afternoon';
+    }
+    
+    // Format date as YYYY-MM-DD
+    const dateStr = targetDate.toISOString().split('T')[0];
+    
+    return {
+        action,
+        date: dateStr,
+        window,
+        rawText: text
+    };
+}
+
+/**
+ * Execute owner command and return result message
+ */
+async function handleOwnerCommand(
+    command: OwnerCommand, 
+    businessId: string
+): Promise<{ success: boolean; message: string }> {
+    
+    // Help command
+    if (command.action === 'help') {
+        return {
+            success: true,
+            message: `🛠️ *Schedule Commands*\n\n` +
+                `📅 *Block/Unblock Slots:*\n` +
+                `• Block Tomorrow\n` +
+                `• Block Tuesday Morning\n` +
+                `• Block Wednesday Afternoon\n` +
+                `• Unblock Tomorrow\n\n` +
+                `📊 *Check Status:*\n` +
+                `• Status (see today's bookings)\n` +
+                `• Today (same as status)\n\n` +
+                `_Windows: Morning (9am-12pm), Afternoon (1pm-5pm)_`
+        };
+    }
+    
+    // Status command
+    if (command.action === 'status') {
+        const today = new Date();
+        const localToday = new Date(today.getTime() + (8 * 60 * 60 * 1000));
+        const todayStr = localToday.toISOString().split('T')[0];
+        
+        const { data: bookings } = await supabase
+            .from('bookings')
+            .select('slot_time, slot_label, customer_name, customer_phone, status, customer_address')
+            .eq('business_id', businessId)
+            .eq('slot_date', todayStr)
+            .order('slot_time');
+        
+        if (!bookings || bookings.length === 0) {
+            return {
+                success: true,
+                message: `📅 *Today's Schedule*\n\nNo bookings or blocks for today! 🎉\n\n_Send "help" for commands._`
+            };
+        }
+        
+        const bookingList = bookings.map(b => {
+            const windowLabel = b.slot_time === 'morning' ? '🌅 Morning' : 
+                               b.slot_time === 'afternoon' ? '☀️ Afternoon' : 
+                               b.slot_time === 'all_day' ? '🚫 BLOCKED' : b.slot_label;
+            
+            if (b.status === 'blocked') {
+                return `${windowLabel} - *BLOCKED*`;
+            }
+            return `${windowLabel}\n   👤 ${b.customer_name || 'Customer'}\n   📍 ${b.customer_address || 'Address pending'}\n   📱 ${b.customer_phone || ''}`;
+        }).join('\n\n');
+        
+        return {
+            success: true,
+            message: `📅 *Today's Schedule*\n\n${bookingList}\n\n_Send "help" for commands._`
+        };
+    }
+    
+    // Block command
+    if (command.action === 'block' && command.date) {
+        // Check if already blocked
+        const { data: existing } = await supabase
+            .from('bookings')
+            .select('id')
+            .eq('business_id', businessId)
+            .eq('slot_date', command.date)
+            .eq('slot_time', command.window)
+            .eq('status', 'blocked')
+            .single();
+        
+        if (existing) {
+            const dayLabel = formatDateForOwner(command.date);
+            const windowLabel = command.window === 'morning' ? 'Morning' : 
+                               command.window === 'afternoon' ? 'Afternoon' : 'All Day';
+            return {
+                success: false,
+                message: `⚠️ ${dayLabel} ${windowLabel} is already blocked.`
+            };
+        }
+        
+        // Create block
+        await supabase
+            .from('bookings')
+            .insert({
+                business_id: businessId,
+                slot_date: command.date,
+                slot_time: command.window,
+                slot_label: `Blocked via WhatsApp`,
+                status: 'blocked',
+                booking_type: 'admin_block',
+                notes: `Blocked by owner: "${command.rawText}"`
+            });
+        
+        const dayLabel = formatDateForOwner(command.date);
+        const windowLabel = command.window === 'morning' ? 'Morning (9am-12pm)' : 
+                           command.window === 'afternoon' ? 'Afternoon (1pm-5pm)' : 'All Day';
+        
+        return {
+            success: true,
+            message: `🚫 *Blocked!*\n\n📅 ${dayLabel}\n⏰ ${windowLabel}\n\n_Customers won't be able to book this window._`
+        };
+    }
+    
+    // Unblock command
+    if (command.action === 'unblock' && command.date) {
+        const { data: deleted, error } = await supabase
+            .from('bookings')
+            .delete()
+            .eq('business_id', businessId)
+            .eq('slot_date', command.date)
+            .eq('slot_time', command.window)
+            .eq('status', 'blocked')
+            .select();
+        
+        const dayLabel = formatDateForOwner(command.date);
+        const windowLabel = command.window === 'morning' ? 'Morning (9am-12pm)' : 
+                           command.window === 'afternoon' ? 'Afternoon (1pm-5pm)' : 'All Day';
+        
+        if (deleted && deleted.length > 0) {
+            return {
+                success: true,
+                message: `✅ *Unblocked!*\n\n📅 ${dayLabel}\n⏰ ${windowLabel}\n\n_This window is now open for bookings._`
+            };
+        } else {
+            return {
+                success: false,
+                message: `⚠️ ${dayLabel} ${windowLabel} wasn't blocked.`
+            };
+        }
+    }
+    
+    return {
+        success: false,
+        message: `❓ I didn't understand that command.\n\nSend "help" to see available commands.`
+    };
+}
+
+/**
+ * Format date for owner-friendly display
+ */
+function formatDateForOwner(dateStr: string): string {
+    const date = new Date(dateStr + 'T12:00:00Z');
+    const now = new Date();
+    const localNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const today = localNow.toISOString().split('T')[0];
+    
+    const tomorrow = new Date(localNow);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    
+    if (dateStr === today) return 'Today';
+    if (dateStr === tomorrowStr) return 'Tomorrow';
+    
+    return date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+// Generate arrival window labels based on current time (synced with generateSlotOptions in whatsapp-push.ts)
+// "Blue Collar Scheduling" - wider windows for technicians
 // Uses UTC+8 timezone offset for SEA businesses
-// Only shows FUTURE slots - never past times
 function getSlotLabel(slotNumber: number): string {
     const now = new Date();
     // Convert UTC to UTC+8 (SEA timezone)
@@ -79,34 +338,36 @@ function getSlotLabel(slotNumber: number): string {
     const dayAfter = new Date(localNow);
     dayAfter.setDate(dayAfter.getDate() + 2);
 
-    const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'long' });
 
     const slots: string[] = [];
 
-    // Today slots - only if before the slot starts (synced with whatsapp-push.ts)
-    if (hour < 9) {
-        slots.push('Today 9am - 11am');
+    // Today arrival windows - only if enough time left in window
+    // Morning window: only if before 10am (so tech can still arrive by 12pm)
+    if (hour < 10) {
+        slots.push('Today Morning (9am - 12pm window)');
     }
-    if (hour < 14) {
-        slots.push('Today 2pm - 4pm');
-    }
-    if (hour < 16) {
-        slots.push('Today 4pm - 6pm');
+    // Afternoon window: only if before 3pm (so tech can still arrive by 5pm)
+    if (hour < 15) {
+        slots.push('Today Afternoon (1pm - 5pm window)');
     }
 
-    // Tomorrow slots (always available)
-    if (slots.length < 3) {
-        slots.push(`${formatDate(tomorrow)} 9am - 11am`);
+    // Tomorrow windows (always available)
+    if (slots.length < 4) {
+        slots.push('Tomorrow Morning (9am - 12pm window)');
     }
-    if (slots.length < 3) {
-        slots.push(`${formatDate(tomorrow)} 2pm - 4pm`);
+    if (slots.length < 4) {
+        slots.push('Tomorrow Afternoon (1pm - 5pm window)');
     }
     // Day after (if needed)
-    if (slots.length < 3) {
-        slots.push(`${formatDate(dayAfter)} 10am - 12pm`);
+    if (slots.length < 4) {
+        slots.push(`${formatDate(dayAfter)} Morning (9am - 12pm window)`);
+    }
+    if (slots.length < 4) {
+        slots.push(`${formatDate(dayAfter)} Afternoon (1pm - 5pm window)`);
     }
 
-    return slots[slotNumber - 1] || slots[0] || `${formatDate(tomorrow)} 9am - 11am`;
+    return slots[slotNumber - 1] || slots[0] || 'Tomorrow Morning (9am - 12pm window)';
 }
 
 export async function POST(request: NextRequest) {
@@ -195,6 +456,32 @@ export async function POST(request: NextRequest) {
         if (isLocationPin && conversationContext.customerStatus === 'awaiting_address') {
             console.log('📍 Location pin received while awaiting address - treating as ADDRESS intent');
             // Continue to ADDRESS handler below
+        }
+
+        // ========== OWNER/TECHNICIAN COMMAND HANDLER ==========
+        // Check if message is from business owner (before AI classification)
+        const isFromOwner = await checkIfOwner(customerPhone);
+        
+        if (isFromOwner) {
+            const ownerCommand = parseOwnerCommand(messageText);
+            
+            if (ownerCommand) {
+                console.log(`🔧 Owner command detected: ${ownerCommand.action}`);
+                const result = await handleOwnerCommand(ownerCommand, isFromOwner.businessId);
+                
+                if (twilioClient && fromNumber) {
+                    await twilioClient.messages.create({
+                        from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                        to: from,
+                        body: result.message
+                    });
+                }
+                
+                return new NextResponse(
+                    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                    { headers: { 'Content-Type': 'text/xml' } }
+                );
+            }
         }
 
         // Classify intent using AI
@@ -1245,15 +1532,13 @@ export async function POST(request: NextRequest) {
                         notes: (customerLookup.notes || '') + `\n[ADDRESS: ${messageText}]\n${slotsJson ? 'AVAILABLE_SLOTS: ' + slotsJson : ''}`
                     }).eq('id', customerLookup.id);
                 } else {
-                    // Cleaning flow - direct booking confirmation
-                    // Generate a default slot (tomorrow morning)
+                    // Cleaning flow - direct booking request
+                    // Generate a default window (tomorrow morning)
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
-                    const dayName = tomorrow.toLocaleDateString('en-US', { weekday: 'short' });
-                    const dateStr = tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                    const defaultSlot = `${dayName} ${dateStr} 9am - 11am`;
+                    const defaultSlot = 'Tomorrow Morning (9am - 12pm window)';
                     
-                    const confirmMsg = `All set! ✅\n\n*Booking Confirmed:*\n👤 *Name:* ${customerName}\n📅 *Date:* ${defaultSlot}\n🛠️ *Service:* ${businessData.niche || 'Service'}\n📍 *Location:* ${messageText}\n💰 *Estimate:* ${estimate}\n\nOur team from *${businessName}* will WhatsApp you 30 mins before arrival.\n\nSee you then! 🙏`;
+                    const confirmMsg = `Request received! 📋\n\n*Booking Request:*\n👤 *Name:* ${customerName}\n📅 *Window:* ${defaultSlot}\n🛠️ *Service:* ${businessData.niche || 'Service'}\n📍 *Location:* ${messageText}\n💰 *Estimate:* ${estimate}\n\nOur technician from *${businessName}* will confirm your booking & WhatsApp you 30 mins before arrival.\n\n_Arrival time will be within the selected window._\n\nThank you! 🙏`;
                     
                     await twilioClient.messages.create({
                         from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -1261,14 +1546,14 @@ export async function POST(request: NextRequest) {
                         body: confirmMsg
                     });
                     
-                    // Update status to booked
+                    // Update status to booked (pending confirmation)
                     await supabase.from('customers').update({
                         status: 'booked',
                         address: messageText,
-                        notes: (customerLookup.notes || '') + `\n[BOOKED: ${defaultSlot} at ${messageText}]`
+                        notes: (customerLookup.notes || '') + `\n[BOOKING REQUEST: ${defaultSlot} at ${messageText}]`
                     }).eq('id', customerLookup.id);
                     
-                    // Notify owner of new booking
+                    // Notify owner of new booking request
                     const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
                     if (ownerPhone) {
                         const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
@@ -1323,7 +1608,7 @@ export async function POST(request: NextRequest) {
             let estimate = `${currency} ${businessData.repairInspectionFee || 80} (Inspection)`;
             
             if (twilioClient && fromNumber) {
-                const confirmMsg = `All set! ✅\n\n*Inspection Booked:*\n👤 *Name:* ${customerName}\n📅 *Date:* ${selectedSlot}\n🛠️ *Service:* Inspection / Repair\n📍 *Location:* ${customerAddress}\n💰 *Fee:* ${estimate}\n*(Waived if you proceed with repair!)*\n\nOur technician from *${businessName}* will WhatsApp you 30 mins before arrival.\n\nSee you then! 🙏`;
+                const confirmMsg = `Request received! 📋\n\n*Inspection Booking Request:*\n👤 *Name:* ${customerName}\n📅 *Window:* ${selectedSlot}\n🛠️ *Service:* Inspection / Repair\n📍 *Location:* ${customerAddress}\n💰 *Fee:* ${estimate}\n*(Waived if you proceed with repair!)*\n\nOur technician from *${businessName}* will confirm & WhatsApp you 30 mins before arrival.\n\n_Arrival time will be within the selected window._\n\nThank you! 🙏`;
                 
                 await twilioClient.messages.create({
                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -1331,13 +1616,13 @@ export async function POST(request: NextRequest) {
                     body: confirmMsg
                 });
                 
-                // Update status to booked
+                // Update status to booked (pending confirmation)
                 await supabase.from('customers').update({
                     status: 'booked',
-                    notes: (customerLookup.notes || '') + `\n[BOOKED: ${selectedSlot}]`
+                    notes: (customerLookup.notes || '') + `\n[BOOKING REQUEST: ${selectedSlot}]`
                 }).eq('id', customerLookup.id);
                 
-                // Notify owner
+                // Notify owner of new booking request
                 const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
                 if (ownerPhone) {
                     const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
@@ -1345,7 +1630,7 @@ export async function POST(request: NextRequest) {
                         await twilioClient.messages.create({
                             from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                             to: `whatsapp:${cleanOwnerPhone}`,
-                            body: `📥 *New Inspection Booking!*\n\n👤 ${customerName}\n📅 ${selectedSlot}\n📍 ${customerAddress}\n📞 ${customerPhone}\n\n*Issue:* Check notes`
+                            body: `📥 *New Inspection Request!*\n\n👤 ${customerName}\n📅 ${selectedSlot}\n📍 ${customerAddress}\n📞 ${customerPhone}\n\n*Issue:* Check notes\n\n_Reply CONFIRM to accept or reschedule manually._`
                         });
                     } catch (e) {
                         console.error('Failed to notify owner:', e);
@@ -1386,15 +1671,11 @@ export async function POST(request: NextRequest) {
                 const units = 1;
                 const total = flowConfig.pricePerUnit * units;
                 
-                // Generate slot for tomorrow
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const dayName = tomorrow.toLocaleDateString('en-US', { weekday: 'short' });
-                const dateStr = tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                const defaultSlot = `${dayName} ${dateStr} 9am - 11am`;
+                // Use arrival window instead of specific time
+                const defaultSlot = 'Tomorrow Morning (9am - 12pm window)';
                 
                 if (twilioClient && fromNumber) {
-                    const confirmMsg = `All set! ✅\n\n*Booking Confirmed:*\n👤 *Name:* ${customerName}\n📅 *Date:* ${defaultSlot}\n🛠️ *Service:* ${flowConfig.cleaningLabel}\n📍 *Location:* ${messageText}\n💰 *Estimate:* ${currency} ${total}\n\nOur team from *${businessName}* will WhatsApp you 30 mins before arrival.\n\nSee you then! 🙏`;
+                    const confirmMsg = `Request received! 📋\n\n*Booking Request:*\n👤 *Name:* ${customerName}\n📅 *Window:* ${defaultSlot}\n🛠️ *Service:* ${flowConfig.cleaningLabel}\n📍 *Location:* ${messageText}\n💰 *Estimate:* ${currency} ${total}\n\nOur team from *${businessName}* will confirm & WhatsApp you 30 mins before arrival.\n\n_Arrival time will be within the selected window._\n\nThank you! 🙏`;
                     
                     await twilioClient.messages.create({
                         from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -1402,18 +1683,18 @@ export async function POST(request: NextRequest) {
                         body: confirmMsg
                     });
                     
-                    // Update status to booked
+                    // Update status to booked (pending confirmation)
                     if (customerLookup?.id) {
                         await supabase.from('customers').update({
                             status: 'booked',
                             address: messageText,
                             estimate_min: total,
                             estimate_max: total,
-                            notes: (customerLookup.notes || '') + `\n[BOOKED_DIRECT: 1 unit, ${defaultSlot} at ${messageText}]`
+                            notes: (customerLookup.notes || '') + `\n[BOOKING REQUEST: 1 unit, ${defaultSlot} at ${messageText}]`
                         }).eq('id', customerLookup.id);
                     }
                     
-                    // Notify owner
+                    // Notify owner of new booking request
                     const ownerPhone = customerLookup?.businesses?.whatsapp_number || customerLookup?.businesses?.phone_number;
                     if (ownerPhone) {
                         const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
@@ -1421,7 +1702,7 @@ export async function POST(request: NextRequest) {
                             await twilioClient.messages.create({
                                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                                 to: `whatsapp:${cleanOwnerPhone}`,
-                                body: `📥 *New Booking!*\n\n👤 ${customerName}\n📅 ${defaultSlot}\n📍 ${messageText}\n💰 ${currency} ${total}\n📞 ${customerPhone}`
+                                body: `📥 *New Booking Request!*\n\n👤 ${customerName}\n📅 ${defaultSlot}\n📍 ${messageText}\n💰 ${currency} ${total}\n📞 ${customerPhone}\n\n_Reply CONFIRM to accept._`
                             });
                         } catch (e) {
                             console.error('Failed to notify owner:', e);
@@ -2042,11 +2323,11 @@ export async function POST(request: NextRequest) {
                     .from('customers')
                     .update({
                         status: 'booked',
-                        notes: `${customer.notes || ''}\n\n📍 ADDRESS: ${customerAddress}\n✅ BOOKING CONFIRMED`
+                        notes: `${customer.notes || ''}\n\n📍 ADDRESS: ${customerAddress}\n📋 BOOKING REQUEST RECEIVED`
                     })
                     .eq('id', customer.id);
 
-                // Create the final booking record
+                // Create the booking record (pending confirmation)
                 const slotValueParts = customer.notes?.split('📅 SLOT_VALUE: ');
                 const slotValue = (slotValueParts && slotValueParts.length > 1) ? slotValueParts.pop()?.split('\n')[0] : null;
 
@@ -2061,15 +2342,15 @@ export async function POST(request: NextRequest) {
                             slot_date: slotDate,
                             slot_time: slotTimeId,
                             slot_label: selectedSlot,
-                            status: 'confirmed',
+                            status: 'pending', // Changed from 'confirmed' to 'pending'
                             booking_type: 'customer',
                             customer_name: customerName,
                             customer_address: customerAddress,
                             customer_phone: customerPhone,
-                            notes: 'Booking confirmed by customer via WhatsApp (Sticker Flow)'
+                            notes: 'Booking request via WhatsApp (Sticker Flow) - pending tech confirmation'
                         });
 
-                    console.log('✅ Created confirmed booking record');
+                    console.log('✅ Created pending booking record');
                 }
 
                 // 3. Notify the business owner with full details using template with Navigate button

@@ -37,14 +37,17 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     const [customMessage, setCustomMessage] = useState('');
     const [loadingSegments, setLoadingSegments] = useState(false);
 
-    // Slot settings state
+    // Arrival Window settings state - "Blue Collar Scheduling"
+    // Wider windows that work better for technicians with unpredictable schedules
     const defaultSlots = [
-        { id: 'morning', label: '9am - 11am', start: '09:00', end: '11:00', enabled: true },
-        { id: 'early_afternoon', label: '1pm - 3pm', start: '13:00', end: '15:00', enabled: true },
-        { id: 'late_afternoon', label: '3pm - 5pm', start: '15:00', end: '17:00', enabled: true },
+        { id: 'morning', label: '9am - 12pm window', start: '09:00', end: '12:00', enabled: true },
+        { id: 'afternoon', label: '1pm - 5pm window', start: '13:00', end: '17:00', enabled: true },
     ];
     const [slotSettings, setSlotSettings] = useState(
         business?.slot_settings?.slots || defaultSlots
+    );
+    const [maxPerWindow, setMaxPerWindow] = useState(
+        business?.slot_settings?.max_per_window || 3
     );
 
     // Wallet/Credits state
@@ -100,6 +103,15 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffHours < 24) return `${diffHours}h ago`;
         return `${diffDays}d ago`;
+    };
+
+    // Format time from 24h to 12h format
+    const formatTime = (time24) => {
+        if (!time24) return '';
+        const [hours, minutes] = time24.split(':').map(Number);
+        const period = hours >= 12 ? 'pm' : 'am';
+        const hours12 = hours % 12 || 12;
+        return `${hours12}${period}`;
     };
 
     // Get service icon
@@ -1026,7 +1038,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                             >
                                 <div className="flex items-center gap-2">
                                     <Clock className="w-4 h-4 text-blue-600" />
-                                    <span className="font-medium text-blue-700">Slot Times</span>
+                                    <span className="font-medium text-blue-700">Arrival Windows</span>
                                 </div>
                                 <ChevronRight className="w-5 h-5 text-blue-400" />
                             </button>
@@ -1035,25 +1047,28 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 </div>
             )}
 
-            {/* Slot Settings Modal */}
+            {/* Arrival Windows Settings Modal - "Blue Collar Scheduling" */}
             {showSlotSettingsModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+                    <div className="bg-white rounded-2xl max-w-sm w-full p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-lg">⏰ Slot Times</h3>
+                            <h3 className="font-bold text-lg">🕐 Arrival Windows</h3>
                             <button onClick={() => setShowSlotSettingsModal(false)}>
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <p className="text-sm text-slate-500 mb-4">
-                            Set when you're available for bookings
+                            Set wide arrival windows that work with traffic & job overruns
                         </p>
 
+                        {/* Arrival Windows */}
                         <div className="space-y-3 mb-6">
                             {slotSettings.map((slot, idx) => (
                                 <div key={slot.id} className="bg-slate-50 rounded-xl p-4">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="font-medium text-slate-700">{slot.label}</span>
+                                        <span className="font-medium text-slate-700">
+                                            {slot.id === 'morning' ? '🌅 Morning' : '☀️ Afternoon'}
+                                        </span>
                                         <button
                                             onClick={() => {
                                                 const newSlots = [...slotSettings];
@@ -1067,6 +1082,9 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                         >
                                             {slot.enabled !== false ? '✓ Active' : 'Off'}
                                         </button>
+                                    </div>
+                                    <div className="text-sm text-slate-600 mb-2">
+                                        {slot.label}
                                     </div>
                                     <div className="flex gap-2 items-center">
                                         <input
@@ -1086,6 +1104,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                             onChange={(e) => {
                                                 const newSlots = [...slotSettings];
                                                 newSlots[idx].end = e.target.value;
+                                                newSlots[idx].label = `${formatTime(e.target.value)} window`;
                                                 setSlotSettings(newSlots);
                                             }}
                                             className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm"
@@ -1095,6 +1114,41 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                             ))}
                         </div>
 
+                        {/* Max Bookings Per Window */}
+                        <div className="bg-blue-50 rounded-xl p-4 mb-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="font-medium text-slate-700">Max per window</span>
+                                    <p className="text-xs text-slate-500">Limit bookings per arrival window</p>
+                                </div>
+                                <select
+                                    value={maxPerWindow}
+                                    onChange={(e) => setMaxPerWindow(parseInt(e.target.value))}
+                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold"
+                                >
+                                    <option value={1}>1 job</option>
+                                    <option value={2}>2 jobs</option>
+                                    <option value={3}>3 jobs</option>
+                                    <option value={4}>4 jobs</option>
+                                    <option value={5}>5 jobs</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* WhatsApp Commands Help */}
+                        <div className="bg-green-50 rounded-xl p-4 mb-6">
+                            <div className="font-medium text-green-800 mb-2">📱 WhatsApp Commands</div>
+                            <p className="text-xs text-green-700 mb-2">
+                                Send these to your Launchfly number:
+                            </p>
+                            <div className="text-xs text-green-600 space-y-1 font-mono">
+                                <div>• &quot;Block Tomorrow&quot;</div>
+                                <div>• &quot;Block Tuesday Morning&quot;</div>
+                                <div>• &quot;Unblock Wednesday&quot;</div>
+                                <div>• &quot;Status&quot; - see today&apos;s bookings</div>
+                            </div>
+                        </div>
+
                         <button
                             onClick={async () => {
                                 setSavingSlots(true);
@@ -1102,22 +1156,28 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                                     const { error } = await supabase
                                         .from('businesses')
                                         .update({
-                                            slot_settings: { slots: slotSettings, days_ahead: 3, buffer_hours: 2 }
+                                            slot_settings: { 
+                                                slots: slotSettings, 
+                                                days_ahead: 4, 
+                                                morning_buffer: 2,
+                                                afternoon_buffer: 2,
+                                                max_per_window: maxPerWindow
+                                            }
                                         })
                                         .eq('id', business.id);
 
                                     if (error) throw error;
-                                    alert('✅ Slot times saved!');
+                                    alert('✅ Arrival windows saved!');
                                     setShowSlotSettingsModal(false);
                                 } catch (e) {
-                                    alert('Failed to save slots');
+                                    alert('Failed to save settings');
                                 }
                                 setSavingSlots(false);
                             }}
                             disabled={savingSlots}
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl disabled:opacity-50"
                         >
-                            {savingSlots ? 'Saving...' : 'Save Slot Times'}
+                            {savingSlots ? 'Saving...' : 'Save Settings'}
                         </button>
                     </div>
                 </div>

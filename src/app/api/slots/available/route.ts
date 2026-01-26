@@ -1,6 +1,7 @@
 // /api/slots/available/route.ts
-// Smart Slot Availability API - Returns available slots using "subtraction logic"
-// Assumes owner is always free, subtracts already-booked slots in real-time
+// Smart Slot Availability API - "Blue Collar Scheduling" with Arrival Windows
+// Uses wider time windows to accommodate technician schedules
+// Supports max_per_window cap to limit bookings per slot
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -10,12 +11,14 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// Default slot configuration
+// Default arrival window configuration - wider windows for technicians
 const DEFAULT_SLOTS = [
-    { id: 'morning', label: '9am - 11am', start: '09:00', end: '11:00' },
-    { id: 'early_afternoon', label: '1pm - 3pm', start: '13:00', end: '15:00' },
-    { id: 'late_afternoon', label: '3pm - 5pm', start: '15:00', end: '17:00' },
+    { id: 'morning', label: '9am - 12pm window', start: '09:00', end: '12:00' },
+    { id: 'afternoon', label: '1pm - 5pm window', start: '13:00', end: '17:00' },
 ];
+
+// Default max bookings per window (can be overridden in business settings)
+const DEFAULT_MAX_PER_WINDOW = 3;
 
 interface SlotOption {
     id: string;
@@ -29,9 +32,10 @@ function formatDate(d: Date): string {
     return d.toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
-function formatDateLabel(d: Date, isToday: boolean): string {
+function formatDateLabel(d: Date, isToday: boolean, isTomorrow: boolean = false): string {
     if (isToday) return 'Today';
-    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (isTomorrow) return 'Tomorrow';
+    return d.toLocaleDateString('en-GB', { weekday: 'long' });
 }
 
 export async function GET(request: NextRequest) {
@@ -51,10 +55,15 @@ export async function GET(request: NextRequest) {
             .single();
 
         const slotConfig = business?.slot_settings?.slots || DEFAULT_SLOTS;
-        const daysAhead = business?.slot_settings?.days_ahead || 3;
-        const bufferHours = business?.slot_settings?.buffer_hours || 2;
+        const daysAhead = business?.slot_settings?.days_ahead || 4;
+        // Buffer before morning window (need 2 hours before 9am to show morning)
+        const morningBuffer = business?.slot_settings?.morning_buffer || 2;
+        // Buffer before afternoon window (need to be before 3pm to show afternoon)
+        const afternoonBuffer = business?.slot_settings?.afternoon_buffer || 2;
         // Timezone offset in hours (default to UTC+8 for SEA businesses)
         const timezoneOffset = business?.slot_settings?.timezone_offset ?? 8;
+        // Max bookings per arrival window (default 3)
+        const maxPerWindow = business?.slot_settings?.max_per_window ?? DEFAULT_MAX_PER_WINDOW;
 
         // 2. Generate all potential slots for the next N days
         const now = new Date();
@@ -69,20 +78,28 @@ export async function GET(request: NextRequest) {
             date.setDate(date.getDate() + dayOffset);
             const dateStr = formatDate(date);
             const isToday = dayOffset === 0;
+            const isTomorrow = dayOffset === 1;
 
             for (const slot of slotConfig) {
                 const slotStartHour = parseInt(slot.start.split(':')[0]);
+                const slotEndHour = parseInt(slot.end.split(':')[0]);
 
-                // Skip past slots for today (with buffer)
-                if (isToday && currentHour >= slotStartHour - bufferHours) {
-                    continue;
+                // For arrival windows, we need enough time for tech to arrive within window
+                // Morning (9am-12pm): show if before 10am local time (tech can arrive by noon)
+                // Afternoon (1pm-5pm): show if before 3pm local time (tech can arrive by 5pm)
+                if (isToday) {
+                    // Calculate cutoff: if window ends at 12pm, cutoff is 10am (2 hours before end)
+                    const cutoffHour = slotEndHour - morningBuffer;
+                    if (currentHour >= cutoffHour) {
+                        continue;
+                    }
                 }
 
                 potentialSlots.push({
                     id: `${dateStr}_${slot.id}`,
                     date: dateStr,
                     time: slot.id,
-                    label: `${formatDateLabel(date, isToday)} ${slot.label}`,
+                    label: `${formatDateLabel(date, isToday, isTomorrow)} ${slot.label}`,
                     value: `${dateStr}_${slot.id}`
                 });
             }
@@ -97,38 +114,46 @@ export async function GET(request: NextRequest) {
             .in('slot_date', dates)
             .in('status', ['pending', 'confirmed', 'blocked']);
 
-        // 4. Create a set of booked slot IDs
-        const bookedSlotIds = new Set(
-            (bookings || []).map(b => {
-                // Handle "all_day" blocks
-                if (b.slot_time === 'all_day') {
-                    return `blocked_${b.slot_date}`;
-                }
-                return `${b.slot_date}_${b.slot_time}`;
-            })
-        );
+        // 4. Count bookings per slot for cap enforcement
+        const slotBookingCounts: Record<string, number> = {};
+        const blockedDates = new Set<string>();
+        
+        (bookings || []).forEach(b => {
+            // Handle "all_day" blocks - entire day unavailable
+            if (b.slot_time === 'all_day') {
+                blockedDates.add(b.slot_date);
+                return;
+            }
+            // Count bookings per slot for cap
+            const slotKey = `${b.slot_date}_${b.slot_time}`;
+            slotBookingCounts[slotKey] = (slotBookingCounts[slotKey] || 0) + 1;
+        });
 
-        // Also mark full-day blocks
-        const blockedDates = new Set(
-            (bookings || [])
-                .filter(b => b.slot_time === 'all_day')
-                .map(b => b.slot_date)
-        );
-
-        // 5. Subtract booked slots
+        // 5. Filter to available slots (under cap and not blocked)
         const availableSlots = potentialSlots.filter(slot => {
             // Check if entire day is blocked
             if (blockedDates.has(slot.date)) {
                 return false;
             }
-            // Check if specific slot is booked
-            return !bookedSlotIds.has(slot.value);
+            // Check if slot is at or over capacity
+            const bookingCount = slotBookingCounts[slot.value] || 0;
+            if (bookingCount >= maxPerWindow) {
+                return false;
+            }
+            return true;
         });
 
-        // 6. Return top 3 available slots
+        // Add remaining capacity info for UI
+        const slotsWithCapacity = availableSlots.slice(0, 4).map(slot => ({
+            ...slot,
+            booked: slotBookingCounts[slot.value] || 0,
+            remaining: maxPerWindow - (slotBookingCounts[slot.value] || 0)
+        }));
+
+        // 6. Return top 4 available arrival windows
         return NextResponse.json({
             success: true,
-            slots: availableSlots.slice(0, 3),
+            slots: slotsWithCapacity,
             totalAvailable: availableSlots.length,
             totalBooked: bookings?.length || 0
         });

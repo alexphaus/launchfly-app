@@ -242,7 +242,8 @@ export function generateSlotOptions(): { label: string; value: string }[] {
 }
 
 /**
- * Generate booking confirmation "Job Card" message
+ * Generate booking request "Job Card" message
+ * Changed from "Confirmed" to "Request Received" for arrival window scheduling
  */
 export function generateBookingConfirmation(params: {
     customerName: string;
@@ -253,17 +254,19 @@ export function generateBookingConfirmation(params: {
     address: string;
     estimate?: string;
 }): string {
-    return `All set! ✅
+    return `Request received! 📋
 
-*Booking Confirmed:*
+*Booking Request:*
 👤 *Name:* ${params.customerName}
-📅 *Date:* ${params.timeSlot}
+📅 *Window:* ${params.timeSlot}
 🛠️ *Service:* ${params.serviceName}${params.serviceDetails ? ` (${params.serviceDetails})` : ''}
 📍 *Location:* ${params.address}
 ${params.estimate ? `💰 *Estimate:* ${params.estimate}\n` : ''}
-Our team from *${params.businessName}* will WhatsApp you 30 mins before arrival.
+Our technician from *${params.businessName}* will confirm your booking & WhatsApp you 30 mins before arrival.
 
-See you then! 🙏`;
+_Arrival time will be within the selected window._
+
+Thank you! 🙏`;
 }
 
 /**

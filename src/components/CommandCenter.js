@@ -29,6 +29,14 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
     const [sendingBlast, setSendingBlast] = useState(false);
     const [savingSlots, setSavingSlots] = useState(false);
 
+    // Blast enhancement states
+    const [blastSegments, setBlastSegments] = useState(null);
+    const [blastTemplates, setBlastTemplates] = useState([]);
+    const [selectedSegment, setSelectedSegment] = useState('all_old_leads');
+    const [selectedTemplate, setSelectedTemplate] = useState('promo_10off');
+    const [customMessage, setCustomMessage] = useState('');
+    const [loadingSegments, setLoadingSegments] = useState(false);
+
     // Slot settings state
     const defaultSlots = [
         { id: 'morning', label: '9am - 11am', start: '09:00', end: '11:00', enabled: true },
@@ -288,8 +296,9 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     businessId: business.id,
-                    template: 'promo',
-                    message: `🔥 ${niche} Promo! 10% OFF this week only. Reply "BOOK" to claim your slot! - ${businessName}`
+                    segment: selectedSegment,
+                    templateId: selectedTemplate,
+                    message: customMessage || null
                 })
             });
 
@@ -300,8 +309,9 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 if (data.remainingCredits !== undefined) {
                     setBlastCredits(data.remainingCredits);
                 }
-                alert(`✅ Blast sent to ${data.sent} leads! Cost: ${currency}${data.cost}`);
+                alert(`✅ Blast sent to ${data.sent} ${data.segmentName || 'leads'}! Cost: ${currency}${data.cost}`);
                 setShowBlastModal(false);
+                setCustomMessage('');
             } else if (response.status === 402) {
                 // Insufficient credits
                 alert(`❌ Insufficient credits. Need ${currency}${data.required}, have ${currency}${data.available}`);
@@ -315,6 +325,24 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
             alert('❌ Error sending blast');
         } finally {
             setSendingBlast(false);
+        }
+    };
+
+    // Fetch blast segments when modal opens
+    const fetchBlastSegments = async () => {
+        if (!business?.id) return;
+        setLoadingSegments(true);
+        try {
+            const res = await fetch(`/api/whatsapp/blast?businessId=${business.id}`);
+            const data = await res.json();
+            if (data.segments) {
+                setBlastSegments(data.segments);
+                setBlastTemplates(data.templates || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch segments:', err);
+        } finally {
+            setLoadingSegments(false);
         }
     };
 
@@ -688,7 +716,7 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
             <div className="px-5 pb-5">
                 <h2 className="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">Quick Actions</h2>
 
-                {/* Blast Promo Card - Always visible */}
+                {/* Blast Promo Card - Smart Segments */}
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 rounded-xl shadow-lg text-white mb-4 relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 bg-white/10 w-24 h-24 rounded-full blur-2xl"></div>
 
@@ -696,16 +724,16 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                         <div className="p-2 bg-white/20 rounded-lg backdrop-blur">
                             <Megaphone className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="font-bold">Blast Promo</h3>
+                        <h3 className="font-bold">Smart Blast</h3>
                     </div>
                     <p className="text-sm text-blue-100 mb-4">
-                        Send "10% Off Promo" to {oldLeadsCount || leads.length || 'your'} old leads?
+                        Target specific leads with personalized messages
                     </p>
                     <button
-                        onClick={() => setShowBlastModal(true)}
+                        onClick={() => { setShowBlastModal(true); fetchBlastSegments(); }}
                         className="w-full py-2 bg-white text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-50 transition-colors"
                     >
-                        Send Blast ({currency}{oldLeadsCount * COST_PER_MESSAGE} cost)
+                        Choose Audience & Message
                     </button>
                 </div>
 
@@ -790,85 +818,175 @@ export default function CommandCenter({ business, initialLeads = [], initialStat
                 </div>
             </div>
 
-            {/* Blast Modal */}
+            {/* Blast Modal - Enhanced with Segments */}
             {showBlastModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+                    <div className="bg-white rounded-2xl max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-lg">💸 Digital Flyer Blast</h3>
+                            <h3 className="font-bold text-lg">📣 Smart Blast</h3>
                             <button onClick={() => setShowBlastModal(false)}>
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
                         {/* Wallet Balance */}
-                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-4 rounded-xl mb-4">
+                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 rounded-xl mb-4">
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <p className="text-xs text-blue-100">Blast Wallet</p>
-                                    <p className="text-2xl font-bold">{currency}{blastCredits.toFixed(0)}</p>
+                                    <p className="text-xs text-blue-100">Wallet</p>
+                                    <p className="text-xl font-bold">{currency}{blastCredits.toFixed(0)}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs text-blue-100">Cost per blast</p>
+                                    <p className="text-xs text-blue-100">Per message</p>
                                     <p className="text-lg font-semibold">{currency}{COST_PER_MESSAGE}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <p className="text-sm text-slate-600 mb-3">
-                            Send WhatsApp promo to <strong>{oldLeadsCount} leads</strong> who haven&apos;t booked in 3+ days.
-                        </p>
-
-                        {/* Cost Summary */}
-                        <div className="bg-slate-50 p-3 rounded-lg text-sm mb-4 space-y-2">
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Recipients</span>
-                                <span className="font-medium">{oldLeadsCount} leads</span>
+                        {loadingSegments ? (
+                            <div className="text-center py-8">
+                                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                                <p className="text-sm text-slate-500">Loading segments...</p>
                             </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Cost</span>
-                                <span className="font-medium">{currency}{oldLeadsCount * COST_PER_MESSAGE}</span>
-                            </div>
-                            <div className="border-t pt-2 flex justify-between">
-                                <span className="text-slate-500">After blast</span>
-                                <span className={`font-bold ${blastCredits >= oldLeadsCount * COST_PER_MESSAGE ? 'text-green-600' : 'text-red-600'}`}>
-                                    {currency}{(blastCredits - oldLeadsCount * COST_PER_MESSAGE).toFixed(0)}
-                                </span>
-                            </div>
-                        </div>
+                        ) : blastSegments ? (
+                            <>
+                                {/* Segment Selection */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Target Audience</label>
+                                    <div className="space-y-2">
+                                        {Object.entries(blastSegments).map(([key, seg]) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => setSelectedSegment(key)}
+                                                className={`w-full p-3 rounded-lg border text-left transition-all ${
+                                                    selectedSegment === key 
+                                                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                                                        : 'border-slate-200 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-lg">{seg.icon}</span>
+                                                        <div>
+                                                            <p className="font-medium text-sm">{seg.name}</p>
+                                                            <p className="text-xs text-slate-500">{seg.description}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`text-lg font-bold ${seg.count > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                                                            {seg.count}
+                                                        </span>
+                                                        {seg.recommended && (
+                                                            <span className="block text-[10px] text-green-600 font-medium">⭐ Best</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
 
-                        {/* Message Preview */}
-                        <div className="bg-green-50 border border-green-100 p-3 rounded-lg text-sm mb-4">
-                            <p className="text-xs text-green-600 font-medium mb-1">📱 Message Preview</p>
-                            🔥 {niche} Promo! 10% OFF this week only. Reply &quot;BOOK&quot; to claim your slot! - {businessName}
-                        </div>
+                                {/* Message Template */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Message</label>
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {blastTemplates.map(t => (
+                                            <button
+                                                key={t.id}
+                                                onClick={() => {
+                                                    setSelectedTemplate(t.id);
+                                                    setCustomMessage('');
+                                                }}
+                                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                                                    selectedTemplate === t.id && !customMessage
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {t.icon} {t.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <textarea
+                                        value={customMessage}
+                                        onChange={(e) => setCustomMessage(e.target.value)}
+                                        placeholder="Or write custom message..."
+                                        className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none"
+                                        rows={2}
+                                    />
+                                </div>
 
-                        {blastCredits >= oldLeadsCount * COST_PER_MESSAGE ? (
-                            <button
-                                onClick={sendBlast}
-                                disabled={sendingBlast || oldLeadsCount === 0}
-                                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl disabled:opacity-50"
-                            >
-                                {sendingBlast ? 'Sending...' : `Send Blast (${currency}${oldLeadsCount * COST_PER_MESSAGE} cost)`}
-                            </button>
+                                {/* Cost Summary */}
+                                {blastSegments[selectedSegment] && (
+                                    <div className="bg-slate-50 p-3 rounded-lg text-sm mb-4">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-slate-500">Recipients</span>
+                                            <span className="font-medium">{blastSegments[selectedSegment].count} leads</span>
+                                        </div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-slate-500">Cost</span>
+                                            <span className="font-medium">{currency}{blastSegments[selectedSegment].count * COST_PER_MESSAGE}</span>
+                                        </div>
+                                        <div className="border-t pt-2 flex justify-between">
+                                            <span className="text-slate-500">Remaining</span>
+                                            <span className={`font-bold ${
+                                                blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE 
+                                                    ? 'text-green-600' 
+                                                    : 'text-red-600'
+                                            }`}>
+                                                {currency}{(blastCredits - blastSegments[selectedSegment].count * COST_PER_MESSAGE).toFixed(0)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Send Button */}
+                                {blastSegments[selectedSegment]?.count > 0 ? (
+                                    blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE ? (
+                                        <button
+                                            onClick={sendBlast}
+                                            disabled={sendingBlast}
+                                            className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl disabled:opacity-50"
+                                        >
+                                            {sendingBlast ? 'Sending...' : `Send to ${blastSegments[selectedSegment].count} Leads`}
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <button disabled className="w-full py-3 bg-gray-300 text-gray-500 font-bold rounded-xl cursor-not-allowed">
+                                                Insufficient Credits
+                                            </button>
+                                            <button
+                                                onClick={() => { setShowBlastModal(false); setShowTopUpModal(true); }}
+                                                className="w-full py-3 bg-green-600 text-white font-bold rounded-xl"
+                                            >
+                                                💳 Top Up Wallet
+                                            </button>
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="text-center py-3 text-slate-500 text-sm">
+                                        No leads in this segment
+                                    </div>
+                                )}
+                            </>
                         ) : (
-                            <div className="space-y-2">
+                            /* Fallback to old UI if segments fail to load */
+                            <>
+                                <p className="text-sm text-slate-600 mb-3">
+                                    Send WhatsApp promo to <strong>{oldLeadsCount} leads</strong> who haven&apos;t booked in 3+ days.
+                                </p>
+                                <div className="bg-green-50 border border-green-100 p-3 rounded-lg text-sm mb-4">
+                                    <p className="text-xs text-green-600 font-medium mb-1">📱 Message Preview</p>
+                                    🔥 {niche} Promo! 10% OFF this week only. Reply &quot;BOOK&quot; to claim your slot! - {businessName}
+                                </div>
                                 <button
-                                    disabled
-                                    className="w-full py-3 bg-gray-300 text-gray-500 font-bold rounded-xl cursor-not-allowed"
+                                    onClick={sendBlast}
+                                    disabled={sendingBlast || oldLeadsCount === 0}
+                                    className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl disabled:opacity-50"
                                 >
-                                    Insufficient Credits
+                                    {sendingBlast ? 'Sending...' : `Send Blast (${currency}${oldLeadsCount * COST_PER_MESSAGE} cost)`}
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        setShowBlastModal(false);
-                                        setShowTopUpModal(true);
-                                    }}
-                                    className="w-full py-3 bg-green-600 text-white font-bold rounded-xl"
-                                >
-                                    💳 Top Up Wallet
-                                </button>
-                            </div>
+                            </>
                         )}
                     </div>
                 </div>

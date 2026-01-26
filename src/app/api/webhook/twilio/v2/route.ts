@@ -187,19 +187,26 @@ export async function POST(request: NextRequest) {
             if ((!aiResponse || isFiller) && allToolCalls.length > 0) {
                 console.log(`   ⚠️ AI called tools but response was empty or filler ("${aiResponse || ''}"), forcing continuation...`);
                 
+                // Extract tool results from steps - Vercel AI SDK structure
                 const toolResultsSummary = result.steps
                     .flatMap(step => step.toolResults || [])
                     .map(tr => {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const toolResult = tr as any;
-                        const resultStr = JSON.stringify(toolResult.result || {});
-                        console.log(`   📊 Tool ${toolResult.toolName} result used for continuation:`, resultStr.substring(0, 100));
-                        return `Tool ${toolResult.toolName}: ${resultStr}`;
+                        // In Vercel AI SDK, the result is directly in the toolResult object
+                        // Try multiple possible property names
+                        const actualResult = toolResult.result ?? toolResult.output ?? toolResult;
+                        const resultStr = JSON.stringify(actualResult);
+                        console.log(`   📊 Tool ${toolResult.toolName || 'unknown'} full object keys:`, Object.keys(toolResult));
+                        console.log(`   📊 Tool result for continuation:`, resultStr.substring(0, 200));
+                        return `Tool ${toolResult.toolName || 'tool'}: ${resultStr}`;
                     })
                     .join('\n');
                 
+                console.log(`   📋 Full toolResultsSummary:`, toolResultsSummary.substring(0, 300));
+                
                 // If we found tool results, generate the real answer
-                if (toolResultsSummary) {
+                if (toolResultsSummary && !toolResultsSummary.includes('{}')) {
                     const continuationResult = await generateText({
                         model: openai('gpt-4o-mini'),
                         system: systemPrompt + `\n\nSYSTEM UPDATE: You just called a tool and got results. DO NOT say "I'll check". The check is DONE. Respond with the data now.`,

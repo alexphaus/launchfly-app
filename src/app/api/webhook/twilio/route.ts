@@ -1015,10 +1015,13 @@ export async function POST(request: NextRequest) {
                         console.log(`✅ Updated existing customer ${customerLookup.id} with warranty_offer status`);
                     } else {
                         // Create new customer record for sticker scan
+                        // Email required by DB constraint - use phone-based placeholder for WhatsApp customers
+                        const placeholderEmail = `${phoneWithPlus.replace(/[^0-9]/g, '')}@wa.customer`;
                         const { data: newCustomer, error: insertError } = await supabase
                             .from('customers')
                             .insert({
                                 phone: phoneWithPlus,
+                                email: placeholderEmail,
                                 status: 'warranty_offer',
                                 notes: `[STICKER_SCAN: ${new Date().toISOString()}]` + 
                                     (businessId ? ` [BIZ:${businessId}]` : ''),

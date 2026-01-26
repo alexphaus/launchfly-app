@@ -59,17 +59,36 @@ export async function POST(request: NextRequest) {
             businessId = await getLastBusinessId(customerPhone);
         }
 
-        // 3. Build context for the AI
+        // 3. Build context for the AI - PARALLEL FETCHING for speed (Gap 3 fix)
         let businessContext: BusinessContext | null = null;
         let customerContext: CustomerContext | null = null;
 
+        // Prepare phone formats for customer lookup
+        const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+        const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+
         if (businessId) {
-            // Fetch business config
-            const { data: business } = await supabase
-                .from('businesses')
-                .select('*')
-                .eq('id', businessId)
-                .single();
+            // Run business, customer, and history queries in PARALLEL
+            const [businessResult, customerResult, history] = await Promise.all([
+                // Fetch business config
+                supabase
+                    .from('businesses')
+                    .select('*')
+                    .eq('id', businessId)
+                    .single(),
+                // Fetch customer context
+                supabase
+                    .from('customers')
+                    .select('*')
+                    .eq('business_id', businessId)
+                    .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
+                    .single(),
+                // Get conversation history
+                getConversationHistory(customerPhone, businessId),
+            ]);
+
+            const business = businessResult.data;
+            const customer = customerResult.data;
 
             if (business) {
                 const config = business.business_data || {};
@@ -86,17 +105,6 @@ export async function POST(request: NextRequest) {
                     operatingHours: config.operatingHours || '9am - 5pm',
                 };
             }
-
-            // Fetch customer context
-            const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-            const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
-
-            const { data: customer } = await supabase
-                .from('customers')
-                .select('*')
-                .eq('business_id', businessId)
-                .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
-                .single();
 
             if (customer) {
                 const warrantyActive = customer.warranty_end_date && 
@@ -115,139 +123,159 @@ export async function POST(request: NextRequest) {
             } else {
                 customerContext = { isReturning: false, warrantyActive: false };
             }
-        }
 
-        // 4. Get conversation history
-        const history = await getConversationHistory(customerPhone, businessId || undefined);
+            // Save incoming message to history (can run after parallel fetch)
+            await saveMessage(customerPhone, 'user', messageText, businessId);
 
-        // 5. Save incoming message to history
-        await saveMessage(customerPhone, 'user', messageText, businessId || undefined);
+            // Now build the prompt and call AI with history from parallel fetch
+            const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
+            
+            console.log(`   🧠 Calling AI with ${history.length} history messages...`);
+            
+            const result = await generateText({
+                model: openai('gpt-4o-mini'),
+                system: systemPrompt,
+                messages: [
+                    ...history,
+                    { role: 'user', content: messageText },
+                ],
+                tools: receptionistTools,
+                // @ts-ignore - maxSteps is available in AI SDK 3.1+ but type def might be lagging
+                maxSteps: 5,
+                onStepFinish: async ({ toolCalls }) => {
+                    if (toolCalls && toolCalls.length > 0) {
+                       console.log(`   🔧 Tool calls:`, toolCalls.map(t => t.toolName).join(', '));
+                    }
+                },
+            });
 
-        // 6. Generate system prompt with context
-        const systemPrompt = businessContext 
-            ? generateSystemPrompt(businessContext, customerContext || undefined)
-            : `You are a helpful assistant. A customer has messaged but we couldn't identify which business they're contacting. Ask them to scan their service sticker or provide more details.`;
-
-
-        // 7. THE MAGIC: Call the AI with tools
-        // Using built-in maxSteps for automatic tool execution
-        console.log(`   🧠 Calling AI with ${history.length} history messages...`);
-        
-        const result = await generateText({
-            model: openai('gpt-4o-mini'),
-            system: systemPrompt,
-            messages: [
-                ...history,
-                { role: 'user', content: messageText },
-            ],
-            tools: receptionistTools,
-            // @ts-ignore - maxSteps is available in AI SDK 3.1+ but type def might be lagging
-            maxSteps: 5, // Automatically execute tools and recurse up to 5 steps
-            onStepFinish: async ({ toolCalls }) => {
-                // Log tool usage
-                if (toolCalls && toolCalls.length > 0) {
-                   console.log(`   🔧 Tool calls:`, toolCalls.map(t => t.toolName).join(', '));
+            let aiResponse = result.text;
+            const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
+            
+            // Handle empty response after tool calls
+            if (!aiResponse && allToolCalls.length > 0) {
+                for (const step of result.steps) {
+                    if (step.text && step.text.trim()) {
+                        aiResponse = step.text;
+                        break;
+                    }
                 }
-            },
-        });
-
-        let aiResponse = result.text;
-        // Collect all tool calls from all steps
-        const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
-        
-        // IMPORTANT: If AI used tools but didn't generate text, we need to 
-        // force a continuation call to get the actual response
-        if (!aiResponse && allToolCalls.length > 0) {
-            // Check if any step has text content
-            for (const step of result.steps) {
-                if (step.text && step.text.trim()) {
-                    aiResponse = step.text;
-                    break;
+                
+                if (!aiResponse) {
+                    console.log(`   ⚠️ AI called tools but generated no response, forcing continuation...`);
+                    
+                    const toolResultsSummary = result.steps
+                        .flatMap(step => step.toolResults || [])
+                        .map(tr => {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const toolResult = tr as any;
+                            return `Tool ${toolResult.toolName}: ${JSON.stringify(toolResult.result)}`;
+                        })
+                        .join('\n');
+                    
+                    const continuationResult = await generateText({
+                        model: openai('gpt-4o-mini'),
+                        system: systemPrompt + `\n\nYou already called tools and received results. Now compose your response to the customer.`,
+                        messages: [
+                            ...history,
+                            { role: 'user', content: messageText },
+                            { 
+                                role: 'assistant', 
+                                content: `I gathered the following information:\n${toolResultsSummary}\n\nNow I will respond to the customer:` 
+                            },
+                        ],
+                    });
+                    
+                    aiResponse = continuationResult.text || "Hi! How can I help you today?";
                 }
             }
             
-            // If still no response, make a continuation call with tool results as context
-            if (!aiResponse) {
-                console.log(`   ⚠️ AI called tools but generated no response, forcing continuation...`);
-                
-                // Summarize tool results for a clean follow-up
-                const toolResultsSummary = result.steps
-                    .flatMap(step => step.toolResults || [])
-                    .map(tr => {
-                        // Tool results have toolName and result properties
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const toolResult = tr as any;
-                        return `Tool ${toolResult.toolName}: ${JSON.stringify(toolResult.result)}`;
-                    })
-                    .join('\n');
-                
-                // Make a simple follow-up call asking for a response
-                const continuationResult = await generateText({
-                    model: openai('gpt-4o-mini'),
-                    system: systemPrompt + `\n\nYou already called tools and received results. Now compose your response to the customer.`,
-                    messages: [
-                        ...history,
-                        { role: 'user', content: messageText },
-                        { 
-                            role: 'assistant', 
-                            content: `I gathered the following information:\n${toolResultsSummary}\n\nNow I will respond to the customer:` 
-                        },
-                    ],
-                    // No tools this time - force text response
-                });
-                
-                aiResponse = continuationResult.text || "Hi! How can I help you today?";
+            console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
+            if (allToolCalls.length > 0) {
+                console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
             }
-        }
-        
-        console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
-        if (allToolCalls.length > 0) {
-            console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
-        }
 
-        // 8. Handle any owner notifications from tool calls
-        // extracted from the full execution trace
-        for (const step of result.steps) {
-            for (const toolResult of step.toolResults || []) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const res = (toolResult as any).result;
-                if (res?.action === 'notify_owner' && res?.phone) {
-                    if (twilioClient && fromNumber) {
-                        try {
-                            await twilioClient.messages.create({
-                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                                to: `whatsapp:${res.phone}`,
-                                body: res.message || 'Notification from AI Receptionist',
-                            });
-                            console.log(`   📤 Notified owner: ${res.phone}`);
-                        } catch (e) {
-                            console.error(`   ❌ Failed to notify owner:`, e);
+            // Handle owner notifications
+            for (const step of result.steps) {
+                for (const toolResult of step.toolResults || []) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const res = (toolResult as any).result;
+                    if (res?.action === 'notify_owner' && res?.phone) {
+                        if (twilioClient && fromNumber) {
+                            try {
+                                await twilioClient.messages.create({
+                                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                    to: `whatsapp:${res.phone}`,
+                                    body: res.message || 'Notification from AI Receptionist',
+                                });
+                                console.log(`   📤 Notified owner: ${res.phone}`);
+                            } catch (e) {
+                                console.error(`   ❌ Failed to notify owner:`, e);
+                            }
                         }
                     }
                 }
             }
+
+            // Send response to customer
+            if (aiResponse && twilioClient && fromNumber) {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: from,
+                    body: aiResponse,
+                });
+                console.log(`   📤 Sent response to customer`);
+            }
+
+            // Save AI response to history
+            await saveMessage(
+                customerPhone, 
+                'assistant', 
+                aiResponse, 
+                businessId,
+                allToolCalls.length > 0 ? allToolCalls : undefined
+            );
+
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
         }
 
-        // 9. Send response back to WhatsApp
-        if (aiResponse && twilioClient && fromNumber) {
+        // No business ID found - simplified flow (ask to scan sticker)
+        const history = await getConversationHistory(customerPhone);
+        await saveMessage(customerPhone, 'user', messageText);
+        
+        const fallbackPrompt = `You are a helpful assistant. A customer has messaged but we couldn't identify which business they're contacting. Ask them to scan their service sticker or provide more details about which business they're trying to reach.`;
+
+        console.log(`   🧠 No business ID - calling AI with fallback prompt...`);
+        
+        const result = await generateText({
+            model: openai('gpt-4o-mini'),
+            system: fallbackPrompt,
+            messages: [
+                ...history,
+                { role: 'user', content: messageText },
+            ],
+        });
+
+        const aiResponse = result.text || "Hi! To help you, please scan the service sticker on your aircon unit. This will connect me to your technician's system. 📱";
+        
+        console.log(`   ✅ Fallback Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
+
+        // Send response to customer
+        if (twilioClient && fromNumber) {
             await twilioClient.messages.create({
                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                 to: from,
                 body: aiResponse,
             });
-            console.log(`   📤 Sent response to customer`);
+            console.log(`   📤 Sent fallback response to customer`);
         }
 
-        // 10. Save AI response to history
-        await saveMessage(
-            customerPhone, 
-            'assistant', 
-            aiResponse, 
-            businessId || undefined,
-            allToolCalls.length > 0 ? allToolCalls : undefined
-        );
+        // Save AI response to history
+        await saveMessage(customerPhone, 'assistant', aiResponse);
 
-        // 11. Return empty TwiML (we already sent the message)
         return new NextResponse(
             '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
             { headers: { 'Content-Type': 'text/xml' } }

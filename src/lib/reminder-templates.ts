@@ -1,13 +1,25 @@
 /**
  * Reminder Templates
  * 
- * SMS and WhatsApp message templates for the Smart Nag system.
- * These are used by the service-reminders cron job to send follow-ups.
+ * WhatsApp Template → SMS Fallback Waterfall System
  * 
- * Cost Strategy:
- * - Use SMS for initial reminders (cheaper, no opt-in needed)
- * - SMS nudges customer to WhatsApp for booking
- * - Once in WhatsApp 24h window, booking is free
+ * PRICING REALITY (Twilio 2026):
+ * ┌─────────────────────────────┬──────────┬──────────┐
+ * │ Channel                     │ PH (₱)   │ MY (RM)  │
+ * ├─────────────────────────────┼──────────┼──────────┤
+ * │ WhatsApp Utility Template   │ 0.17     │ 0.15     │  ← CHEAPEST
+ * │ WhatsApp Marketing Template │ 2.50     │ 0.90     │
+ * │ Twilio SMS                  │ 3.25     │ 0.18     │  ← EXPENSIVE!
+ * └─────────────────────────────┴──────────┴──────────┘
+ * 
+ * STRATEGY: 
+ * 1. Try WhatsApp UTILITY Template first (cheapest, trusted)
+ * 2. If WhatsApp fails → Fall back to SMS
+ * 
+ * WHY UTILITY vs MARKETING:
+ * - Customer REGISTERED warranty (scanned sticker)
+ * - 6-month reminder = "Post-Purchase Update" = UTILITY category
+ * - UTILITY = ₱0.17 vs MARKETING = ₱2.50
  */
 
 // ============================================================================
@@ -36,82 +48,163 @@ export interface ReminderRecipient {
 export interface ReminderTemplate {
     id: string;
     name: string;
-    channel: 'sms' | 'whatsapp_template' | 'whatsapp_session';
+    channel: 'sms' | 'whatsapp_utility' | 'whatsapp_marketing';
+    category?: 'utility' | 'marketing'; // WhatsApp template category
+    templateSid?: string; // Twilio Content Template SID
     triggerDays: number; // Days before/after due date (negative = before)
     sequence: number; // 1st, 2nd, 3rd reminder
     getMessage: (recipient: ReminderRecipient) => string;
-    costEstimate: { MY: number; PH: number }; // Approximate cost per message
+    getTemplateVariables?: (recipient: ReminderRecipient) => Record<string, string>;
+    costEstimate: { MY: number; PH: number }; // Accurate Twilio costs
 }
 
 // ============================================================================
-// SMS TEMPLATES (Primary channel - avoid WhatsApp template costs)
+// REAL TWILIO COSTS (2026)
 // ============================================================================
 
+export const TWILIO_COSTS = {
+    SMS: { PH: 3.25, MY: 0.18 },              // ₱3.25 / RM0.18 per SMS
+    WHATSAPP_UTILITY: { PH: 0.17, MY: 0.15 },  // ₱0.17 / RM0.15 per utility template
+    WHATSAPP_MARKETING: { PH: 2.50, MY: 0.90 }, // ₱2.50 / RM0.90 per marketing template
+};
+
 const LAUNCHFLY_BOT_NUMBER = '13203627874'; // Without + prefix
+
+// ============================================================================
+// WHATSAPP UTILITY TEMPLATES (PRIMARY - CHEAPEST!)
+// ============================================================================
+// These must be pre-approved in Twilio Console as "UTILITY" category
+// Utility = Post-purchase updates, appointment reminders, account alerts
+
+/**
+ * WhatsApp Utility: Service Due Reminder
+ * Category: UTILITY (Post-purchase update for registered warranty)
+ * Cost: ₱0.17 (19x cheaper than SMS!)
+ * 
+ * Template must be approved in Twilio Console with this exact format:
+ * "Hi {{1}}! Friendly reminder from {{2}}: Your {{3}} was last serviced on {{4}}. 
+ * It's now due for maintenance to keep running efficiently. Reply YES to book a slot."
+ */
+export const WA_UTILITY_SERVICE_DUE: ReminderTemplate = {
+    id: 'wa_utility_service_due',
+    name: 'WhatsApp Service Due (Utility)',
+    channel: 'whatsapp_utility',
+    category: 'utility',
+    templateSid: process.env.TWILIO_TEMPLATE_SERVICE_DUE || '', // Set in env
+    triggerDays: 0, // On due date
+    sequence: 1,
+    getMessage: (r) => {
+        // Fallback plain text if template fails
+        const lastServiceStr = r.lastServiceDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        return `Hi ${r.customerName}! Friendly reminder from ${r.businessName}: Your ${r.applianceType || 'unit'} was last serviced on ${lastServiceStr}. It's now due for maintenance to keep running efficiently. Reply YES to book a slot.`;
+    },
+    getTemplateVariables: (r) => ({
+        '1': r.customerName,
+        '2': r.businessName,
+        '3': r.applianceType || 'unit',
+        '4': r.lastServiceDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    }),
+    costEstimate: TWILIO_COSTS.WHATSAPP_UTILITY,
+};
+
+/**
+ * WhatsApp Utility: Service Overdue
+ * Category: UTILITY (Account/service status alert)
+ */
+export const WA_UTILITY_SERVICE_OVERDUE: ReminderTemplate = {
+    id: 'wa_utility_service_overdue',
+    name: 'WhatsApp Service Overdue (Utility)',
+    channel: 'whatsapp_utility',
+    category: 'utility',
+    templateSid: process.env.TWILIO_TEMPLATE_SERVICE_OVERDUE || '',
+    triggerDays: 7, // 1 week after due
+    sequence: 2,
+    getMessage: (r) => {
+        const daysPast = Math.abs(r.daysUntilDue);
+        return `Hi ${r.customerName}, this is ${r.businessName}. Your ${r.applianceType || 'unit'} is ${daysPast} days past its recommended service date. Skipping maintenance can lead to higher electricity bills and breakdowns. Reply YES to check available slots.`;
+    },
+    getTemplateVariables: (r) => ({
+        '1': r.customerName,
+        '2': r.businessName,
+        '3': r.applianceType || 'unit',
+        '4': Math.abs(r.daysUntilDue).toString(),
+    }),
+    costEstimate: TWILIO_COSTS.WHATSAPP_UTILITY,
+};
+
+// ============================================================================
+// SMS TEMPLATES (FALLBACK - When WhatsApp fails)
+// ============================================================================
+// Only used if customer doesn't have WhatsApp or template delivery fails
 
 /**
  * SMS Reminder 1: Due Soon (sent 2 weeks before due date)
  * Goal: Give early heads-up, plant the seed
+ * FALLBACK: Only used if WhatsApp fails
  */
 export const SMS_DUE_SOON: ReminderTemplate = {
     id: 'sms_due_soon',
-    name: 'Service Due Soon',
+    name: 'SMS Service Due Soon (Fallback)',
     channel: 'sms',
     triggerDays: -14, // 14 days before due
     sequence: 1,
     getMessage: (r) => {
         const applianceText = r.applianceType || 'appliance';
-        return `Hi ${r.customerName}! Your ${applianceText} will be due for ${r.serviceName} in 2 weeks. Book early for best slots! Reply on WhatsApp: wa.me/${LAUNCHFLY_BOT_NUMBER} - ${r.businessName}`;
+        // Short SMS - nudge to WhatsApp for details
+        return `Hi ${r.customerName}! Your ${applianceText} due for service in 2 wks. Book early: wa.me/${LAUNCHFLY_BOT_NUMBER} - ${r.businessName}`;
     },
-    costEstimate: { MY: 0.05, PH: 0.02 } // RM / PHP
+    costEstimate: TWILIO_COSTS.SMS, // ₱3.25 / RM0.18
 };
 
 /**
  * SMS Reminder 2: Due Now (sent on due date)
  * Goal: Direct call-to-action
+ * FALLBACK: Only used if WhatsApp fails
  */
 export const SMS_DUE_NOW: ReminderTemplate = {
     id: 'sms_due_now',
-    name: 'Service Due Now',
+    name: 'SMS Service Due Now (Fallback)',
     channel: 'sms',
     triggerDays: 0, // On due date
     sequence: 2,
     getMessage: (r) => {
-        return `${r.customerName}, it's time for your ${r.applianceType || 'service'} maintenance! Keep it running efficiently. Book now: wa.me/${LAUNCHFLY_BOT_NUMBER}?text=Hi - ${r.businessName}`;
+        return `${r.customerName}, ${r.applianceType || 'service'} maintenance due! Keep it efficient. Book: wa.me/${LAUNCHFLY_BOT_NUMBER} - ${r.businessName}`;
     },
-    costEstimate: { MY: 0.05, PH: 0.02 }
+    costEstimate: TWILIO_COSTS.SMS,
 };
 
 /**
  * SMS Reminder 3: Overdue (sent 1 week after due date)
  * Goal: Urgency + social proof
+ * FALLBACK: Only used if WhatsApp fails
  */
 export const SMS_OVERDUE: ReminderTemplate = {
     id: 'sms_overdue',
-    name: 'Service Overdue',
+    name: 'SMS Service Overdue (Fallback)',
     channel: 'sms',
     triggerDays: 7, // 7 days after due
     sequence: 3,
     getMessage: (r) => {
-        return `Reminder: ${r.customerName}, your ${r.applianceType || 'service'} is ${Math.abs(r.daysUntilDue)} days overdue for maintenance. Don't wait for problems! Book: wa.me/${LAUNCHFLY_BOT_NUMBER}`;
+        return `${r.customerName}, ${r.applianceType || 'service'} ${Math.abs(r.daysUntilDue)} days overdue. Don't wait for problems! wa.me/${LAUNCHFLY_BOT_NUMBER}`;
     },
-    costEstimate: { MY: 0.05, PH: 0.02 }
+    costEstimate: TWILIO_COSTS.SMS,
 };
 
 /**
  * SMS Reminder 4: Final Notice (sent 2 weeks after due date)
  * Goal: Last attempt before going silent
+ * FALLBACK: Only used if WhatsApp fails
  */
 export const SMS_FINAL_NOTICE: ReminderTemplate = {
     id: 'sms_final_notice',
-    name: 'Final Reminder',
+    name: 'SMS Final Reminder (Fallback)',
     channel: 'sms',
     triggerDays: 14, // 14 days after due
     sequence: 4,
     getMessage: (r) => {
-        return `Final reminder: ${r.customerName}, skipping maintenance can lead to costly repairs. ${r.businessName} can help. Reply YES to book: wa.me/${LAUNCHFLY_BOT_NUMBER}`;
+        return `Last notice: ${r.customerName}, skipping maintenance = costly repairs. ${r.businessName}: wa.me/${LAUNCHFLY_BOT_NUMBER}`;
     },
-    costEstimate: { MY: 0.05, PH: 0.02 }
+    costEstimate: TWILIO_COSTS.SMS,
 };
 
 /**
@@ -120,45 +213,43 @@ export const SMS_FINAL_NOTICE: ReminderTemplate = {
  */
 export const SMS_WARRANTY_EXPIRING: ReminderTemplate = {
     id: 'sms_warranty_expiring',
-    name: 'Warranty Expiring',
+    name: 'SMS Warranty Expiring',
     channel: 'sms',
     triggerDays: -7, // 7 days before warranty expires
     sequence: 1,
     getMessage: (r) => {
-        return `Hi ${r.customerName}! Your ${r.businessName} service warranty expires in 7 days. Any issues? Report now at wa.me/${LAUNCHFLY_BOT_NUMBER}`;
+        return `${r.customerName}, your ${r.businessName} warranty expires in 7 days. Issues? wa.me/${LAUNCHFLY_BOT_NUMBER}`;
     },
-    costEstimate: { MY: 0.05, PH: 0.02 }
+    costEstimate: TWILIO_COSTS.SMS,
 };
 
 // ============================================================================
-// WHATSAPP TEMPLATE MESSAGES (Premium option for higher engagement)
+// WHATSAPP MARKETING TEMPLATES (For promos - use sparingly)
 // ============================================================================
-// Note: These require approved templates in Twilio and cost more
+// More expensive but higher engagement for special offers
 
 /**
- * WhatsApp Template: Service Reminder (Utility category)
- * Only use this if customer opted in for WhatsApp reminders
+ * WhatsApp Marketing: Promotional Offer
+ * Category: MARKETING (Promotions, discounts)
+ * Cost: ₱2.50 / RM0.90 - use sparingly!
  */
-export const WHATSAPP_REMINDER: ReminderTemplate = {
-    id: 'wa_reminder',
-    name: 'WhatsApp Service Reminder',
-    channel: 'whatsapp_template',
+export const WA_MARKETING_PROMO: ReminderTemplate = {
+    id: 'wa_marketing_promo',
+    name: 'WhatsApp Promo (Marketing)',
+    channel: 'whatsapp_marketing',
+    category: 'marketing',
+    templateSid: process.env.TWILIO_TEMPLATE_PROMO || '',
     triggerDays: 0,
     sequence: 1,
     getMessage: (r) => {
-        // This would use a pre-approved template with variables
-        // Template: "Hi {{1}}! Your {{2}} is due for {{3}}. Book your slot: {{4}}"
-        return JSON.stringify({
-            templateName: 'service_reminder_v1',
-            variables: {
-                '1': r.customerName,
-                '2': r.applianceType || 'appliance',
-                '3': r.serviceName,
-                '4': `wa.me/${LAUNCHFLY_BOT_NUMBER}?text=BOOK_${r.serviceRecordId.substring(0, 8)}`
-            }
-        });
+        return `Hi ${r.customerName}! 🎉 Special offer from ${r.businessName}: Book your ${r.applianceType || 'service'} this week and get 10% OFF! Reply YES to claim.`;
     },
-    costEstimate: { MY: 0.20, PH: 0.08 } // WhatsApp templates cost more
+    getTemplateVariables: (r) => ({
+        '1': r.customerName,
+        '2': r.businessName,
+        '3': r.applianceType || 'service',
+    }),
+    costEstimate: TWILIO_COSTS.WHATSAPP_MARKETING,
 };
 
 // ============================================================================
@@ -166,52 +257,91 @@ export const WHATSAPP_REMINDER: ReminderTemplate = {
 // ============================================================================
 
 export const ALL_REMINDER_TEMPLATES: ReminderTemplate[] = [
+    // WhatsApp Utility (PRIMARY - Cheapest!)
+    WA_UTILITY_SERVICE_DUE,
+    WA_UTILITY_SERVICE_OVERDUE,
+    // SMS (FALLBACK - Expensive but works without WhatsApp)
     SMS_DUE_SOON,
     SMS_DUE_NOW,
     SMS_OVERDUE,
     SMS_FINAL_NOTICE,
     SMS_WARRANTY_EXPIRING,
-    WHATSAPP_REMINDER,
+    // WhatsApp Marketing (Promos only)
+    WA_MARKETING_PROMO,
 ];
+
+// ============================================================================
+// WATERFALL STRATEGY: WhatsApp Template → SMS Fallback
+// ============================================================================
+
+export interface WaterfallResult {
+    primary: ReminderTemplate;
+    fallback: ReminderTemplate | null;
+    estimatedCost: { MY: number; PH: number };
+}
+
+/**
+ * Get templates using waterfall strategy:
+ * 1. Try WhatsApp Utility first (₱0.17)
+ * 2. Fall back to SMS if needed (₱3.25)
+ */
+export function getWaterfallTemplates(
+    daysUntilDue: number,
+    reminderCount: number
+): WaterfallResult | null {
+    const sequence = reminderCount + 1;
+    
+    // Sequence 1: Due Soon or On Due Date
+    if (sequence === 1 && daysUntilDue <= 14 && daysUntilDue > -7) {
+        return {
+            primary: WA_UTILITY_SERVICE_DUE,
+            fallback: daysUntilDue > 0 ? SMS_DUE_SOON : SMS_DUE_NOW,
+            estimatedCost: WA_UTILITY_SERVICE_DUE.costEstimate,
+        };
+    }
+    
+    // Sequence 2: Overdue (1 week)
+    if (sequence === 2 && daysUntilDue <= -7 && daysUntilDue > -14) {
+        return {
+            primary: WA_UTILITY_SERVICE_OVERDUE,
+            fallback: SMS_OVERDUE,
+            estimatedCost: WA_UTILITY_SERVICE_OVERDUE.costEstimate,
+        };
+    }
+    
+    // Sequence 3: Very Overdue (2 weeks) - SMS only
+    if (sequence === 3 && daysUntilDue <= -14) {
+        return {
+            primary: SMS_FINAL_NOTICE,
+            fallback: null,
+            estimatedCost: SMS_FINAL_NOTICE.costEstimate,
+        };
+    }
+    
+    return null; // Max reminders reached
+}
 
 /**
  * Get the appropriate template based on days until due and sequence
+ * DEPRECATED: Use getWaterfallTemplates() instead for cost optimization
  */
 export function getApplicableTemplate(
     daysUntilDue: number,
     reminderCount: number,
     preference: 'sms' | 'whatsapp' | 'both'
 ): ReminderTemplate | null {
-    // Determine which sequence we're on
-    const sequence = reminderCount + 1; // Next reminder to send
-
-    // Find matching template
-    for (const template of ALL_REMINDER_TEMPLATES) {
-        // Check if timing matches
-        const isMatch = 
-            (template.triggerDays === -14 && daysUntilDue <= 14 && daysUntilDue > 7 && sequence === 1) ||
-            (template.triggerDays === 0 && daysUntilDue <= 0 && daysUntilDue > -7 && sequence === 2) ||
-            (template.triggerDays === 7 && daysUntilDue <= -7 && daysUntilDue > -14 && sequence === 3) ||
-            (template.triggerDays === 14 && daysUntilDue <= -14 && sequence === 4);
-
-        if (isMatch) {
-            // Check channel preference
-            if (template.channel === 'sms' && (preference === 'sms' || preference === 'both')) {
-                return template;
-            }
-            if (template.channel.startsWith('whatsapp') && (preference === 'whatsapp' || preference === 'both')) {
-                return template;
-            }
-        }
+    // Use waterfall for best cost optimization
+    const waterfall = getWaterfallTemplates(daysUntilDue, reminderCount);
+    
+    if (!waterfall) return null;
+    
+    // If preference is SMS-only, return fallback (or primary if it's SMS)
+    if (preference === 'sms') {
+        return waterfall.fallback || waterfall.primary;
     }
-
-    // Default to SMS if available
-    if (sequence === 1) return SMS_DUE_SOON;
-    if (sequence === 2) return SMS_DUE_NOW;
-    if (sequence === 3) return SMS_OVERDUE;
-    if (sequence === 4) return SMS_FINAL_NOTICE;
-
-    return null; // Max reminders reached
+    
+    // Default: return primary (WhatsApp if available)
+    return waterfall.primary;
 }
 
 // ============================================================================

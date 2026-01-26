@@ -5,16 +5,19 @@
  * 
  * Runs daily at 9 AM UTC+8 (SEA timezone) to:
  * 1. Find services due for reminder
- * 2. Send SMS reminders nudging customers to WhatsApp
+ * 2. Send WhatsApp Templates first (cheapest!) → SMS fallback if needed
  * 3. Track reminder delivery and conversion
  * 
- * This is the core of the "Forever Customer Engine" - automatic
- * follow-ups that turn one-time customers into repeat revenue.
+ * COST STRATEGY (Updated 2026):
+ * - WhatsApp Utility: ₱0.17 / RM0.06 per message (PRIMARY!)
+ * - SMS: ₱3.25 / RM0.18 per message (FALLBACK - 19x more expensive!)
+ * - Each reminder can bring back a RM 120 / ₱800 job
+ * - ROI: ~470x for WhatsApp, ~25x for SMS
  * 
- * Cost Strategy:
- * - SMS costs ~RM 0.05 / ₱1 per message
- * - Each SMS can bring back a RM 120 / ₱800 job
- * - ROI: ~2,400% - 80,000%
+ * WATERFALL STRATEGY:
+ * 1. Try WhatsApp Utility Template (₱0.17)
+ * 2. If fails, fall back to SMS (₱3.25)
+ * 3. If SMS fails, mark for retry tomorrow
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -22,8 +25,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import twilio from 'twilio';
 import {
     type ReminderRecipient,
-    getApplicableTemplate,
+    type ReminderTemplate,
+    getWaterfallTemplates,
     hasReachedMaxReminders,
+    TWILIO_COSTS,
 } from '@/lib/reminder-templates';
 
 // Initialize clients
@@ -40,15 +45,17 @@ const twilioClient = twilio(
 // Config
 const MAX_REMINDERS_PER_SERVICE = 4;
 const BATCH_SIZE = 50; // Process 50 at a time to avoid timeout
-const SMS_COST_ESTIMATE = { MY: 0.05, PH: 0.02 }; // RM / PHP
+const LAUNCHFLY_BOT_NUMBER = '13203627874';
 
 interface CronResult {
     success: boolean;
     processed: number;
     sent: number;
+    sentWhatsApp: number;
+    sentSms: number;
     failed: number;
     skipped: number;
-    totalCost: number;
+    totalCost: { MY: number; PH: number };
     errors: string[];
     duration: number;
 }
@@ -70,9 +77,11 @@ export async function GET(request: NextRequest) {
         success: true,
         processed: 0,
         sent: 0,
+        sentWhatsApp: 0,
+        sentSms: 0,
         failed: 0,
         skipped: 0,
-        totalCost: 0,
+        totalCost: { MY: 0, PH: 0 },
         errors: [],
         duration: 0,
     };
@@ -124,7 +133,7 @@ export async function GET(request: NextRequest) {
                     customerPhone: service.customer_phone,
                     businessId: service.business_id,
                     businessName: service.business_name,
-                    businessPhone: '13203627874', // Launchfly bot number
+                    businessPhone: LAUNCHFLY_BOT_NUMBER,
                     serviceRecordId: service.service_record_id,
                     serviceName: service.service_name || 'maintenance',
                     applianceType: service.appliance_type,
@@ -132,32 +141,69 @@ export async function GET(request: NextRequest) {
                     nextDueDate: new Date(service.next_due_at),
                     daysUntilDue: service.days_until_due,
                     reminderCount: service.reminder_count,
-                    reminderPreference: service.reminder_preference || 'sms',
+                    reminderPreference: service.reminder_preference || 'both',
                     currency: 'RM', // Default
                 };
 
-                // Get appropriate template
-                const template = getApplicableTemplate(
+                // Get waterfall templates (WA primary, SMS fallback)
+                const waterfall = getWaterfallTemplates(
                     recipient.daysUntilDue,
-                    recipient.reminderCount,
-                    recipient.reminderPreference
+                    recipient.reminderCount
                 );
 
-                if (!template) {
+                if (!waterfall) {
                     console.log(`⏭️ Skipping ${service.customer_name}: no applicable template`);
                     result.skipped++;
                     continue;
                 }
 
-                // Generate message
-                const message = template.getMessage(recipient);
+                // Try primary channel first (WhatsApp if available)
+                let sendResult: SendResult;
+                let usedTemplate: ReminderTemplate = waterfall.primary;
+                let channel: 'whatsapp' | 'sms' = waterfall.primary.channel.startsWith('whatsapp') ? 'whatsapp' : 'sms';
 
-                // Send SMS
-                const sendResult = await sendSmsReminder(recipient.customerPhone, message);
+                if (waterfall.primary.channel.startsWith('whatsapp')) {
+                    // Try WhatsApp Template first (₱0.17)
+                    const message = waterfall.primary.getMessage(recipient);
+                    const templateVars = waterfall.primary.getTemplateVariables?.(recipient);
+                    
+                    sendResult = await sendWhatsAppTemplate(
+                        recipient.customerPhone,
+                        waterfall.primary.templateSid || '',
+                        templateVars || {},
+                        message // fallback to freeform if no template
+                    );
+
+                    // If WhatsApp failed and we have SMS fallback, try that
+                    if (!sendResult.success && waterfall.fallback) {
+                        console.log(`⚠️ WhatsApp failed for ${recipient.customerName}, trying SMS fallback...`);
+                        
+                        const smsMessage = waterfall.fallback.getMessage(recipient);
+                        sendResult = await sendSmsReminder(recipient.customerPhone, smsMessage);
+                        usedTemplate = waterfall.fallback;
+                        channel = 'sms';
+                    }
+                } else {
+                    // Primary is SMS (no WhatsApp template for this sequence)
+                    const message = waterfall.primary.getMessage(recipient);
+                    sendResult = await sendSmsReminder(recipient.customerPhone, message);
+                }
+
+                // Process result
+                const message = usedTemplate.getMessage(recipient);
+                const cost = usedTemplate.costEstimate;
 
                 if (sendResult.success) {
                     result.sent++;
-                    result.totalCost += SMS_COST_ESTIMATE.MY; // Estimate
+                    if (channel === 'whatsapp') {
+                        result.sentWhatsApp++;
+                        result.totalCost.MY += cost.MY;
+                        result.totalCost.PH += cost.PH;
+                    } else {
+                        result.sentSms++;
+                        result.totalCost.MY += cost.MY;
+                        result.totalCost.PH += cost.PH;
+                    }
 
                     // Log to service_reminders table
                     await supabase.from('service_reminders').insert({
@@ -167,12 +213,12 @@ export async function GET(request: NextRequest) {
                         scheduled_for: new Date(),
                         reminder_type: recipient.daysUntilDue > 0 ? 'due_soon' : 
                                        recipient.daysUntilDue === 0 ? 'due_now' : 'overdue',
-                        channel: 'sms',
+                        channel,
                         status: 'sent',
                         sent_at: new Date(),
-                        message_template: template.id,
+                        message_template: usedTemplate.id,
                         message_sent: message,
-                        cost: SMS_COST_ESTIMATE.MY,
+                        cost: cost.MY, // Track MY cost for now
                         sequence_number: recipient.reminderCount + 1,
                     });
 
@@ -186,7 +232,7 @@ export async function GET(request: NextRequest) {
                         })
                         .eq('id', service.service_record_id);
 
-                    console.log(`✅ Sent reminder to ${recipient.customerName}: ${template.name}`);
+                    console.log(`✅ Sent ${channel.toUpperCase()} reminder to ${recipient.customerName}: ${usedTemplate.name}`);
                 } else {
                     result.failed++;
                     result.errors.push(`Failed to send to ${recipient.customerPhone}: ${sendResult.error}`);
@@ -198,9 +244,9 @@ export async function GET(request: NextRequest) {
                         customer_id: service.customer_id,
                         scheduled_for: new Date(),
                         reminder_type: 'due_now',
-                        channel: 'sms',
+                        channel,
                         status: 'failed',
-                        message_template: template.id,
+                        message_template: usedTemplate.id,
                         message_sent: message,
                         error_message: sendResult.error,
                     });
@@ -224,8 +270,8 @@ export async function GET(request: NextRequest) {
             business_id: process.env.SYSTEM_BUSINESS_ID || dueServices[0]?.business_id,
             type: 'smart_nag_run',
             icon: '🔔',
-            message: `Smart Nag: Sent ${result.sent} reminders`,
-            details: `Processed: ${result.processed}, Sent: ${result.sent}, Failed: ${result.failed}, Skipped: ${result.skipped}`,
+            message: `Smart Nag: ${result.sentWhatsApp} WhatsApp + ${result.sentSms} SMS sent`,
+            details: `Processed: ${result.processed}, WA: ${result.sentWhatsApp}, SMS: ${result.sentSms}, Failed: ${result.failed}, Skipped: ${result.skipped}`,
             metadata: {
                 ...result,
                 timestamp: new Date().toISOString(),
@@ -235,11 +281,12 @@ export async function GET(request: NextRequest) {
         console.log('─'.repeat(50));
         console.log('🔔 Service Reminders Cron Complete');
         console.log(`   Processed: ${result.processed}`);
-        console.log(`   Sent: ${result.sent}`);
-        console.log(`   Failed: ${result.failed}`);
-        console.log(`   Skipped: ${result.skipped}`);
-        console.log(`   Est. Cost: RM ${result.totalCost.toFixed(2)}`);
-        console.log(`   Duration: ${result.duration}ms`);
+        console.log(`   📱 WhatsApp Sent: ${result.sentWhatsApp} (₱${(result.sentWhatsApp * TWILIO_COSTS.WHATSAPP_UTILITY.PH).toFixed(2)})`);
+        console.log(`   💬 SMS Sent: ${result.sentSms} (₱${(result.sentSms * TWILIO_COSTS.SMS.PH).toFixed(2)})`);
+        console.log(`   ❌ Failed: ${result.failed}`);
+        console.log(`   ⏭️ Skipped: ${result.skipped}`);
+        console.log(`   💰 Total Cost: RM ${result.totalCost.MY.toFixed(2)} / ₱${result.totalCost.PH.toFixed(2)}`);
+        console.log(`   ⏱️ Duration: ${result.duration}ms`);
         console.log('─'.repeat(50));
 
         return NextResponse.json(result);
@@ -267,42 +314,111 @@ interface SendResult {
     success: boolean;
     messageSid?: string;
     error?: string;
+    channel?: 'whatsapp' | 'sms';
 }
 
 /**
- * Send SMS via Twilio
+ * Send WhatsApp Template Message via Twilio
+ * 
+ * Uses Twilio's Content API for pre-approved templates.
+ * These are MUCH cheaper than SMS: ₱0.17 vs ₱3.25
+ * 
+ * Note: If no templateSid provided, falls back to freeform message
+ * (only works within 24-hour window)
+ */
+async function sendWhatsAppTemplate(
+    phoneNumber: string,
+    templateSid: string,
+    variables: Record<string, string>,
+    fallbackMessage: string
+): Promise<SendResult> {
+    try {
+        // Format phone number
+        let formattedPhone = formatPhoneNumber(phoneNumber);
+        const whatsappTo = `whatsapp:${formattedPhone}`;
+        
+        // Validate Twilio credentials
+        if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+            console.warn('⚠️ Twilio credentials not configured');
+            console.log(`📱 [MOCK WA TEMPLATE] To: ${whatsappTo}`);
+            console.log(`   Template: ${templateSid || 'FREEFORM'}`);
+            console.log(`   Message: ${fallbackMessage}`);
+            return { success: true, messageSid: 'MOCK_WA_' + Date.now(), channel: 'whatsapp' };
+        }
+
+        const whatsappFrom = `whatsapp:+${process.env.TWILIO_WHATSAPP_NUMBER || '13203627874'}`;
+
+        // If we have a template SID, use Content API
+        if (templateSid) {
+            const twilioMessage = await twilioClient.messages.create({
+                contentSid: templateSid,
+                contentVariables: JSON.stringify(variables),
+                from: whatsappFrom,
+                to: whatsappTo,
+            });
+            
+            console.log(`📱 WhatsApp Template sent: ${twilioMessage.sid}`);
+            return { success: true, messageSid: twilioMessage.sid, channel: 'whatsapp' };
+        } else {
+            // No template - try freeform (only works in 24h window)
+            // This will likely fail for outbound, but worth trying
+            const twilioMessage = await twilioClient.messages.create({
+                body: fallbackMessage,
+                from: whatsappFrom,
+                to: whatsappTo,
+            });
+            
+            console.log(`📱 WhatsApp Freeform sent: ${twilioMessage.sid}`);
+            return { success: true, messageSid: twilioMessage.sid, channel: 'whatsapp' };
+        }
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`❌ WhatsApp send error:`, error);
+        return { success: false, error: errorMsg, channel: 'whatsapp' };
+    }
+}
+
+/**
+ * Format phone number with country code
+ */
+function formatPhoneNumber(phoneNumber: string): string {
+    let formattedPhone = phoneNumber.replace(/[^\d+]/g, '');
+    if (!formattedPhone.startsWith('+')) {
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+60' + formattedPhone.substring(1); // Malaysia
+        } else if (formattedPhone.startsWith('60')) {
+            formattedPhone = '+' + formattedPhone;
+        } else if (formattedPhone.startsWith('63')) {
+            formattedPhone = '+' + formattedPhone; // Philippines
+        } else {
+            formattedPhone = '+60' + formattedPhone; // Default to MY
+        }
+    }
+    return formattedPhone;
+}
+
+/**
+ * Send SMS via Twilio (Fallback)
+ * 
+ * Cost: ₱3.25 / RM0.18 per message - use as fallback only!
  */
 async function sendSmsReminder(phoneNumber: string, message: string): Promise<SendResult> {
     try {
-        // Ensure phone number has country code
-        let formattedPhone = phoneNumber.replace(/[^\d+]/g, '');
-        if (!formattedPhone.startsWith('+')) {
-            // Assume Malaysian number if no prefix
-            if (formattedPhone.startsWith('0')) {
-                formattedPhone = '+60' + formattedPhone.substring(1);
-            } else if (formattedPhone.startsWith('60')) {
-                formattedPhone = '+' + formattedPhone;
-            } else if (formattedPhone.startsWith('63')) {
-                formattedPhone = '+' + formattedPhone; // Philippines
-            } else {
-                formattedPhone = '+60' + formattedPhone; // Default to MY
-            }
-        }
+        const formattedPhone = formatPhoneNumber(phoneNumber);
 
         // Validate we have Twilio credentials
         if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
             console.warn('⚠️ Twilio credentials not configured');
-            // Mock mode for development
             console.log(`📱 [MOCK SMS] To: ${formattedPhone}`);
             console.log(`   Message: ${message}`);
-            return { success: true, messageSid: 'MOCK_' + Date.now() };
+            return { success: true, messageSid: 'MOCK_SMS_' + Date.now(), channel: 'sms' };
         }
 
-        // Get SMS-capable number (different from WhatsApp number)
+        // Get SMS-capable number
         const fromNumber = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_PHONE_NUMBER;
         if (!fromNumber) {
             console.warn('⚠️ No SMS-capable Twilio number configured');
-            return { success: false, error: 'No SMS number configured' };
+            return { success: false, error: 'No SMS number configured', channel: 'sms' };
         }
 
         // Send SMS
@@ -312,12 +428,13 @@ async function sendSmsReminder(phoneNumber: string, message: string): Promise<Se
             to: formattedPhone,
         });
 
-        return { success: true, messageSid: twilioMessage.sid };
+        console.log(`💬 SMS sent: ${twilioMessage.sid}`);
+        return { success: true, messageSid: twilioMessage.sid, channel: 'sms' };
 
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error(`❌ SMS send error:`, error);
-        return { success: false, error: errorMsg };
+        return { success: false, error: errorMsg, channel: 'sms' };
     }
 }
 

@@ -213,14 +213,19 @@ Runs daily at 9 AM (SEA timezone):
    d. Log to service_reminders table
 ```
 
-#### 2.2 Cost Reality
+#### 2.2 Cost Reality (Updated 2026)
 
-| Country | SMS Cost | WhatsApp Template Cost | Recommendation |
-|---------|----------|------------------------|----------------|
-| Malaysia | ~RM 0.05 | ~RM 0.20 | Use SMS |
-| Philippines | ~₱1.00 | ~₱4.00 | Use SMS |
+| Channel | Philippines | Malaysia | Recommendation |
+|---------|-------------|----------|----------------|
+| **WhatsApp Utility** | ₱0.17 | RM 0.15 | **PRIMARY!** |
+| SMS | ₱3.25 | RM 0.18 | Fallback only |
+| WhatsApp Marketing | ₱2.50 | RM 0.90 | Promos only |
 
-**ROI Pitch to Tech:** "This reminder costs ₱1. It brings you a ₱1,500 cleaning job. Good trade?"
+**IMPORTANT:** WhatsApp Utility templates are **19x cheaper** than SMS in the Philippines!
+
+**Strategy:** WhatsApp Template first → SMS fallback if WA fails
+
+**ROI Pitch to Tech:** "This reminder costs ₱0.17. It brings you a ₱1,500 cleaning job. That's 8,800x ROI!"
 
 #### 2.3 Files to Create
 

@@ -533,7 +533,7 @@ export async function POST(request: NextRequest) {
                     warranty_expires_at: warrantyExpiresAt,
                     service_interval_days: intervalDays,
                     next_service_due_at: nextDueAt,
-                    registered_via: 'customer_scan',
+                    registered_via: 'sticker_scan',  // Customer scanned the sticker
                     registered_by: 'customer'
                 });
 

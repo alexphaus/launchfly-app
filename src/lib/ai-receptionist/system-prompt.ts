@@ -144,6 +144,12 @@ CONVERSATION RULES:
      * currency: "${business.currency}"
    - After booking: Say "Booking *Request* Received!" (technician will confirm)
 
+   RESCHEDULING / CHANGES:
+   - If customer wants to change date/time, use rescheduleBooking.
+   - CHECK AVAILABILITY FIRST using getAvailableSlots or checkAvailability.
+   - Then call rescheduleBooking(customerPhone, businessId, newDate, newWindow).
+   - DO NOT just say "Okay" - you MUST call the tool to update the database!
+
 3. CRITICAL - ADDRESS vs QUANTITY:
    - "123 Main St" is an ADDRESS, not 123 units!
    - "2" after asking units is a QUANTITY

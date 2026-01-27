@@ -179,6 +179,16 @@ When calling notifyOwner (for complaints/human request/escalation), use:
   customerPhone: "${customerPhone}"
   businessId: "${businessId}"
   reason: (optional reason)
+
+⚠️ RESCHEDULING: When customer wants to change date/time:
+  1. Check availability for the new date/time FIRST.
+  2. Call rescheduleBooking with:
+     customerPhone: "${customerPhone}"
+     businessId: "${businessId}"
+     newDate: (YYYY-MM-DD)
+     newWindow: "morning" or "afternoon"
+  3. DO NOT just say "Okay" or "Updated" - you MUST call the tool!
+  reason: (optional reason)
 The tool will automatically find and cancel their active booking.
 
 ❌ NEVER say "Booking Request Received" without calling createBooking first!

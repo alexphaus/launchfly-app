@@ -87,6 +87,14 @@ const cancelBookingSchema = z.object({
     reason: z.string().optional().describe('Reason for cancellation'),
 });
 
+const rescheduleBookingSchema = z.object({
+    bookingId: z.string().optional().describe('The booking UUID to reschedule (if known)'),
+    customerPhone: z.string().optional().describe('Customer phone number (if bookingId not known)'),
+    businessId: z.string().optional().describe('Business ID (required if using customerPhone)'),
+    newDate: z.string().describe('New date in YYYY-MM-DD format'),
+    newWindow: z.enum(['morning', 'afternoon']).describe('New time window'),
+});
+
 // Type inference from schemas
 type LookupCustomerInput = z.infer<typeof lookupCustomerSchema>;
 type GetBusinessConfigInput = z.infer<typeof getBusinessConfigSchema>;
@@ -99,6 +107,7 @@ type NotifyOwnerInput = z.infer<typeof notifyOwnerSchema>;
 type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 type GetCustomerBookingsInput = z.infer<typeof getCustomerBookingsSchema>;
 type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
+type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
 
 export const receptionistTools = {
     /**
@@ -721,6 +730,115 @@ export const receptionistTools = {
             return {
                 success: true,
                 message: `Booking for ${booking.slot_label} has been cancelled`,
+                bookingId,
+            };
+        },
+    }),
+
+    /**
+     * Reschedule a booking
+     */
+    rescheduleBooking: tool({
+        description: 'Reschedule an existing booking to a new date/time. Call this when customer wants to change their appointment.',
+        inputSchema: rescheduleBookingSchema,
+        execute: async (input: RescheduleBookingInput) => {
+            let { bookingId, customerPhone, businessId, newDate, newWindow } = input;
+            
+            console.log('   🔄 rescheduleBooking called with:', JSON.stringify(input));
+
+            // If no bookingId, try to find by phone
+            if (!bookingId && customerPhone && businessId) {
+                const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+                const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+                const today = new Date().toISOString().split('T')[0];
+                
+                const { data: bookings, error: findError } = await supabase
+                    .from('bookings')
+                    .select('id, slot_label')
+                    .eq('business_id', businessId)
+                    .or(`customer_phone.eq.${phoneWithPlus},customer_phone.eq.${phoneWithoutPlus}`)
+                    .in('status', ['pending', 'confirmed'])
+                    .gte('slot_date', today)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+                
+                if (findError || !bookings || bookings.length === 0) {
+                    return { success: false, error: 'No active booking found to reschedule' };
+                }
+                
+                bookingId = bookings[0].id;
+                console.log('   ✅ Found booking to reschedule:', bookingId);
+            }
+
+            if (!bookingId) {
+                return { success: false, error: 'Need bookingId or customerPhone+businessId to reschedule' };
+            }
+
+            // Check availability for the new slot
+            if (businessId) {
+                const { data: existingSlots } = await supabase
+                    .from('bookings')
+                    .select('id')
+                    .eq('business_id', businessId)
+                    .eq('slot_date', newDate)
+                    .or(`slot_time.eq.${newWindow},slot_time.eq.all_day`)
+                    .in('status', ['pending', 'confirmed', 'blocked']);
+                
+                if (existingSlots && existingSlots.length >= 3) {
+                     return { success: false, error: 'The selected slot is fully booked. Please choose another time.' };
+                }
+            }
+
+            const newDateObj = new Date(newDate);
+            const newDayLabel = newDateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+            const windowLabel = newWindow === 'morning' ? 'Morning (9am - 12pm window)' : 'Afternoon (1pm - 5pm window)';
+            const newSlotLabel = `${newDayLabel} ${windowLabel}`;
+
+            // Update the booking
+            const { error: updateError } = await supabase
+                .from('bookings')
+                .update({
+                    slot_date: newDate,
+                    slot_time: newWindow,
+                    slot_label: newSlotLabel,
+                    status: 'pending', // Reset to pending if it was confirmed
+                    notes: `Rescheduled to ${newSlotLabel}`,
+                })
+                .eq('id', bookingId);
+
+            if (updateError) {
+                return { success: false, error: updateError.message };
+            }
+
+            // Update customer notes too for dashboard visibility
+            const { data: booking } = await supabase
+                .from('bookings')
+                .select('customer_id')
+                .eq('id', bookingId)
+                .single();
+
+            if (booking?.customer_id) {
+                const { data: customer } = await supabase
+                    .from('customers')
+                    .select('notes')
+                    .eq('id', booking.customer_id)
+                    .single();
+                
+                const newNote = `📅 RESCHEDULED TO: ${newSlotLabel}`;
+                const currentNotes = customer?.notes || '';
+                
+                await supabase
+                    .from('customers')
+                    .update({ 
+                        notes: currentNotes + '\n' + newNote
+                    })
+                    .eq('id', booking.customer_id);
+            }
+
+            return {
+                success: true,
+                message: `Booking rescheduled to ${newSlotLabel}`,
+                newSlotLabel,
                 bookingId,
             };
         },

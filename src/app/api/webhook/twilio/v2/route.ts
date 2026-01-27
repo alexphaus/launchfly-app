@@ -368,7 +368,7 @@ The tool will automatically find and cancel their active booking.
                     // 3. Handle cancelBooking → Send ALERT to owner
                     if (toolName === 'cancelBooking' && res?.success) {
                         const ownerPhone = businessContext?.ownerPhone;
-                        if (ownerPhone) {
+                        if (ownerPhone && fromNumber && twilioClient) {
                             try {
                                 await twilioClient.messages.create({
                                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -388,7 +388,7 @@ The tool will automatically find and cancel their active booking.
                     // 4. Handle rescheduleBooking → Send ALERT to owner
                     if (toolName === 'rescheduleBooking' && res?.success) {
                         const ownerPhone = businessContext?.ownerPhone;
-                        if (ownerPhone) {
+                        if (ownerPhone && fromNumber && twilioClient) {
                             try {
                                 await twilioClient.messages.create({
                                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,

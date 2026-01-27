@@ -148,6 +148,7 @@ CONVERSATION RULES:
    - If customer wants to change date/time, use rescheduleBooking.
    - CHECK AVAILABILITY FIRST using getAvailableSlots or checkAvailability.
    - Then call rescheduleBooking(customerPhone, businessId, newDate, newWindow).
+   - DO NOT cancel the old booking first. rescheduleBooking handles the update directly!
    - DO NOT just say "Okay" - you MUST call the tool to update the database!
 
 3. CRITICAL - ADDRESS vs QUANTITY:

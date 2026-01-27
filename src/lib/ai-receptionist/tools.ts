@@ -511,6 +511,7 @@ export const receptionistTools = {
                 customerPhone,
                 ownerPhone, // For notification routing
                 businessName: business?.name,
+                message: `Booking created explicitly from tool for ${dayLabel} ${windowLabel}`, // Explicit message
                 // This message guides the AI on what to tell the customer
                 customerMessage: `Booking request received! Technician will confirm and WhatsApp you 30 mins before arrival.`,
             };
@@ -731,6 +732,8 @@ export const receptionistTools = {
                 success: true,
                 message: `Booking for ${booking.slot_label} has been cancelled`,
                 bookingId,
+                customerName: booking.customer_name,
+                slotLabel: booking.slot_label,
             };
         },
     }),
@@ -746,28 +749,30 @@ export const receptionistTools = {
             
             console.log('   🔄 rescheduleBooking called with:', JSON.stringify(input));
 
+            const phoneWithPlus = customerPhone ? (customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`) : undefined;
+            const phoneWithoutPlus = customerPhone ? customerPhone.replace(/^\+/, '') : undefined;
+
             // If no bookingId, try to find by phone
             if (!bookingId && customerPhone && businessId) {
-                const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-                const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
                 const today = new Date().toISOString().split('T')[0];
                 
+                // Allow finding 'cancelled' bookings too, in case AI cancelled it first by mistake
                 const { data: bookings, error: findError } = await supabase
                     .from('bookings')
-                    .select('id, slot_label')
+                    .select('id, slot_label, customer_name, status')
                     .eq('business_id', businessId)
                     .or(`customer_phone.eq.${phoneWithPlus},customer_phone.eq.${phoneWithoutPlus}`)
-                    .in('status', ['pending', 'confirmed'])
+                    .in('status', ['pending', 'confirmed', 'cancelled']) // Allow reviving cancelled bookings
                     .gte('slot_date', today)
-                    .order('created_at', { ascending: false })
+                    .order('updated_at', { ascending: false }) // Get most recently touched
                     .limit(1);
                 
                 if (findError || !bookings || bookings.length === 0) {
-                    return { success: false, error: 'No active booking found to reschedule' };
+                    return { success: false, error: 'No active or recent booking found to reschedule' };
                 }
                 
-                bookingId = bookings[0].id;
-                console.log('   ✅ Found booking to reschedule:', bookingId);
+                bookingId = bookings[0].id; // Use the most recent one
+                console.log('   ✅ Found booking to reschedule:', bookingId, 'Status:', bookings[0].status);
             }
 
             if (!bookingId) {
@@ -782,7 +787,7 @@ export const receptionistTools = {
                     .eq('business_id', businessId)
                     .eq('slot_date', newDate)
                     .or(`slot_time.eq.${newWindow},slot_time.eq.all_day`)
-                    .in('status', ['pending', 'confirmed', 'blocked']);
+                    .in('status', ['pending', 'confirmed', 'blocked']); // Don't count cancelled here
                 
                 if (existingSlots && existingSlots.length >= 3) {
                      return { success: false, error: 'The selected slot is fully booked. Please choose another time.' };
@@ -795,33 +800,29 @@ export const receptionistTools = {
             const newSlotLabel = `${newDayLabel} ${windowLabel}`;
 
             // Update the booking
-            const { error: updateError } = await supabase
+            const { data: updatedBooking, error: updateError } = await supabase
                 .from('bookings')
                 .update({
                     slot_date: newDate,
                     slot_time: newWindow,
                     slot_label: newSlotLabel,
-                    status: 'pending', // Reset to pending if it was confirmed
+                    status: 'pending', // Always reset to pending (revives cancelled bookings too)
                     notes: `Rescheduled to ${newSlotLabel}`,
                 })
-                .eq('id', bookingId);
+                .eq('id', bookingId)
+                .select()
+                .single();
 
             if (updateError) {
                 return { success: false, error: updateError.message };
             }
 
             // Update customer notes too for dashboard visibility
-            const { data: booking } = await supabase
-                .from('bookings')
-                .select('customer_id')
-                .eq('id', bookingId)
-                .single();
-
-            if (booking?.customer_id) {
+            if (updatedBooking?.customer_id) {
                 const { data: customer } = await supabase
                     .from('customers')
                     .select('notes')
-                    .eq('id', booking.customer_id)
+                    .eq('id', updatedBooking.customer_id)
                     .single();
                 
                 const newNote = `📅 RESCHEDULED TO: ${newSlotLabel}`;
@@ -832,7 +833,7 @@ export const receptionistTools = {
                     .update({ 
                         notes: currentNotes + '\n' + newNote
                     })
-                    .eq('id', booking.customer_id);
+                    .eq('id', updatedBooking.customer_id);
             }
 
             return {
@@ -840,6 +841,7 @@ export const receptionistTools = {
                 message: `Booking rescheduled to ${newSlotLabel}`,
                 newSlotLabel,
                 bookingId,
+                customerName: updatedBooking?.customer_name,
             };
         },
     }),

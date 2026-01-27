@@ -364,6 +364,46 @@ The tool will automatically find and cancel their active booking.
                             console.log(`   ⚠️ No owner phone found for job notification`);
                         }
                     }
+
+                    // 3. Handle cancelBooking → Send ALERT to owner
+                    if (toolName === 'cancelBooking' && res?.success) {
+                        const ownerPhone = businessContext?.ownerPhone;
+                        if (ownerPhone) {
+                            try {
+                                await twilioClient.messages.create({
+                                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                    to: `whatsapp:${ownerPhone}`,
+                                    body: `🔴 *JOB CANCELLED*\n\n` +
+                                          `👤 ${res.customerName || 'Customer'}\n` +
+                                          `🗓️ Slot: ${res.slotLabel || 'Unknown slot'}\n` +
+                                          `⚠️ Please check dashboard.`
+                                });
+                                console.log(`   📤 Notified owner of CANCELLATION: ${ownerPhone}`);
+                            } catch (e) {
+                                console.error(`   ❌ Failed to notify owner of cancellation:`, e);
+                            }
+                        }
+                    }
+
+                    // 4. Handle rescheduleBooking → Send ALERT to owner
+                    if (toolName === 'rescheduleBooking' && res?.success) {
+                        const ownerPhone = businessContext?.ownerPhone;
+                        if (ownerPhone) {
+                            try {
+                                await twilioClient.messages.create({
+                                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                    to: `whatsapp:${ownerPhone}`,
+                                    body: `🔄 *JOB RESCHEDULED*\n\n` +
+                                          `👤 ${res.customerName || 'Customer'}\n` +
+                                          `🗓️ NEW: ${res.newSlotLabel || 'New slot'}\n` +
+                                          `⚠️ Please check dashboard.`
+                                });
+                                console.log(`   📤 Notified owner of RESCHEDULE: ${ownerPhone}`);
+                            } catch (e) {
+                                console.error(`   ❌ Failed to notify owner of reschedule:`, e);
+                            }
+                        }
+                    }
                 }
             }
 

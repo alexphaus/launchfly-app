@@ -139,8 +139,22 @@ export async function POST(request: NextRequest) {
             // Now build the prompt and call AI with history from parallel fetch
             const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
             
-            // Add context about current customer phone for tools
-            const contextMessage = `[SYSTEM CONTEXT: Customer phone is ${customerPhone}. Business ID is ${businessId}. When calling getAvailableSlots, use businessId: "${businessId}"]`;
+            // Add context about current customer phone for tools - be very explicit!
+            const contextMessage = `
+[SYSTEM CONTEXT - USE THESE VALUES WHEN CALLING TOOLS]
+- Customer Phone: ${customerPhone}
+- Business ID: ${businessId}
+
+When calling activateWarranty, use:
+  businessId: "${businessId}"
+  phone: "${customerPhone}"
+  name: (the name the customer provided)
+  serviceType: "cleaning"
+
+When calling getAvailableSlots or createBooking, use:
+  businessId: "${businessId}"
+  customerPhone: "${customerPhone}"
+`;
             
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
             console.log(`   📋 Business ID for tools: ${businessId}`);

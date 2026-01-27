@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
                     warrantyDays: config.warrantyDays || 30,
                     serviceInterval: config.serviceInterval || 90,
                     ownerName: config.ownerName,
+                    ownerPhone: business.whatsapp_number || business.phone_number,
                     operatingHours: config.operatingHours || '9am - 5pm',
                     googleReviewLink: config.googleReviewLink,
                 };
@@ -148,6 +149,7 @@ export async function POST(request: NextRequest) {
 - Business ID: ${businessId}
 - Customer ID: ${customerContext?.id || 'unknown (will be created)'}
 - Customer Name: ${customerContext?.name || 'unknown'}
+- Owner Phone: ${businessContext?.ownerPhone || 'Not configured'}
 
 When calling activateWarranty, use:
   businessId: "${businessId}"
@@ -175,6 +177,10 @@ When calling getAvailableSlots, use:
   businessId: "${businessId}"
   reason: (optional reason)
 The tool will automatically find and cancel their active booking.
+
+⚠️ ESCALATION: When customer is angry, asks for human, or you can't help, call notifyOwner with:
+  ownerPhone: "${businessContext?.ownerPhone || ''}"
+  message: "🚨 NEEDS ATTENTION: Customer ${customerContext?.name || customerPhone} needs help. Issue: [describe briefly]"
 
 ❌ NEVER say "Booking Request Received" without calling createBooking first!
 ❌ Do NOT ask "Shall I book it?" - when they select a slot, JUST BOOK IT!

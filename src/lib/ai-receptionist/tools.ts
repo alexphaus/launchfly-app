@@ -650,12 +650,21 @@ export const receptionistTools = {
      * Cancel a booking
      */
     cancelBooking: tool({
-        description: 'Cancel a customer booking. Can use bookingId if known, or customerPhone+businessId to find and cancel their most recent pending booking.',
+        description: 'Cancel a customer booking PERMANENTLY. Only use this if the customer wants to CANCEL entirely (not reschedule). For date/time changes, use rescheduleBooking instead!',
         inputSchema: cancelBookingSchema,
         execute: async (input: CancelBookingInput) => {
             let { bookingId, customerPhone, businessId, reason } = input;
             
             console.log('   🗑️ cancelBooking called with:', JSON.stringify(input));
+
+            // SAFETY: Reject if this looks like a reschedule attempt
+            if (reason && (reason.toLowerCase().includes('reschedul') || reason.toLowerCase().includes('moving') || reason.toLowerCase().includes('change date'))) {
+                console.log('   ❌ cancelBooking rejected: reason suggests reschedule, not cancel');
+                return { 
+                    success: false, 
+                    error: 'This looks like a reschedule request, not a cancellation. Use rescheduleBooking tool instead to change the date/time while preserving the booking.' 
+                };
+            }
 
             // If no bookingId, try to find by phone
             if (!bookingId && customerPhone && businessId) {
@@ -742,7 +751,7 @@ export const receptionistTools = {
      * Reschedule a booking
      */
     rescheduleBooking: tool({
-        description: 'Reschedule an existing booking to a new date/time. Call this when customer wants to change their appointment.',
+        description: 'PREFERRED: Reschedule an existing booking to a new date/time. Call this when customer wants to CHANGE their appointment date or time. This is an atomic update - it modifies the existing booking directly without cancelling. DO NOT use cancelBooking for date changes!',
         inputSchema: rescheduleBookingSchema,
         execute: async (input: RescheduleBookingInput) => {
             let { bookingId, customerPhone, businessId, newDate, newWindow } = input;

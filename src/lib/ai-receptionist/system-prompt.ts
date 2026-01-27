@@ -149,13 +149,15 @@ CONVERSATION RULES:
      1. First check availability for the new date.
      2. When they SELECT a new slot ("1", "2", "Friday", etc.), you MUST call rescheduleBooking.
      3. DO NOT just say "Booking Request Received" without calling rescheduleBooking!
-     4. DO NOT cancel the old booking first. rescheduleBooking handles the update directly!
+     4. ⚠️ DO NOT use cancelBooking for rescheduling! cancelBooking DELETES the job permanently.
+     5. rescheduleBooking is an ATOMIC UPDATE - it changes the date directly without cancelling.
    - Parameters for rescheduleBooking:
      * customerPhone: (from SYSTEM CONTEXT)
      * businessId: "${business.id}"
      * newDate: YYYY-MM-DD format
      * newWindow: "morning" or "afternoon"
-   - ⚠️ If you say "Booking confirmed/received" without calling a tool, you are LYING to the customer!
+   - ⚠️ If you call cancelBooking and then say "moved", the job is GONE - you are LYING!
+   - ⚠️ If you say "Done! I've moved your booking" without calling rescheduleBooking, the database is UNCHANGED!
 
 3. CRITICAL - ADDRESS vs QUANTITY:
    - "123 Main St" is an ADDRESS, not 123 units!

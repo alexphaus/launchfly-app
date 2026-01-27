@@ -175,12 +175,14 @@ When calling notifyOwner (for complaints/human request/escalation), use:
   estimateAmount: (the price as a number, e.g., 120)
   currency: "RM"
 
-⚠️ CANCELLATION: When customer wants to cancel, call cancelBooking with:
+⚠️ CANCELLATION (PERMANENT DELETE - use sparingly):
+When customer wants to CANCEL entirely (not reschedule), call cancelBooking:
   customerPhone: "${customerPhone}"
   businessId: "${businessId}"
-  reason: (optional reason)
+  reason: (reason for cancellation)
+⚠️ DO NOT use cancelBooking for date changes! It will DELETE the job!
 
-⚠️ RESCHEDULING (CRITICAL!):
+⚠️ RESCHEDULING (PREFERRED for date/time changes):
 When customer has an existing booking and wants to CHANGE the date/time:
   1. Check availability for the new date/time.
   2. When they SELECT a new slot (reply "1", "2", "Friday", etc.), IMMEDIATELY call rescheduleBooking:
@@ -188,17 +190,17 @@ When customer has an existing booking and wants to CHANGE the date/time:
      businessId: "${businessId}"
      newDate: (YYYY-MM-DD of the new slot)
      newWindow: "morning" or "afternoon"
-  3. NEVER say "Booking Request Received" or "Confirmed" without calling rescheduleBooking!
-  4. If you confirm a reschedule without calling the tool, the database will NOT be updated and you will be LYING!
+  3. rescheduleBooking is ATOMIC - it updates the booking directly without cancelling!
+  4. NEVER call cancelBooking when the customer just wants to move the appointment!
 
-⚠️ RULE: Any time you're about to say "Booking" + "Received/Confirmed", CHECK:
-  - Did I call createBooking? (for NEW bookings)
-  - Did I call rescheduleBooking? (for CHANGES)
-  If NO, you MUST call the tool FIRST!
-  reason: (optional reason)
-The tool will automatically find and cancel their active booking.
+⚠️ VERIFICATION RULE: Before saying "Done", "Moved", "Confirmed", or "Received":
+  - For NEW bookings: Did I call createBooking?
+  - For DATE CHANGES: Did I call rescheduleBooking?
+  - For CANCELLATIONS: Did I call cancelBooking?
+  If NO tool was called, you are about to LIE. Call the tool FIRST!
 
 ❌ NEVER say "Booking Request Received" without calling createBooking first!
+❌ NEVER say "I've moved your booking" without calling rescheduleBooking first!
 ❌ Do NOT ask "Shall I book it?" - when they select a slot, JUST BOOK IT!
 `;
             

@@ -310,14 +310,68 @@ The tool will automatically find and cancel their active booking.
             const claimsBooking = aiResponse.toLowerCase().includes('booking') && (
                 aiResponse.toLowerCase().includes('received') || 
                 aiResponse.toLowerCase().includes('confirmed') ||
-                aiResponse.toLowerCase().includes('booked')
+                aiResponse.toLowerCase().includes('booked') ||
+                aiResponse.toLowerCase().includes('set for')
             );
-            const actuallyCalledCreateBooking = allToolCalls.some(tc => tc.toolName === 'createBooking');
+            const claimsReschedule = aiResponse.toLowerCase().includes('moved') || 
+                aiResponse.toLowerCase().includes('rescheduled') ||
+                aiResponse.toLowerCase().includes('changed to') ||
+                (aiResponse.toLowerCase().includes('now set for') && allToolCalls.length > 0);
             
-            if (claimsBooking && !actuallyCalledCreateBooking) {
-                console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking but did NOT call createBooking!`);
-                console.error(`   ⚠️ Response was: ${aiResponse.substring(0, 300)}`);
-                // TODO: Could force-call createBooking here if we have the details
+            const actuallyCalledBookingTool = allToolCalls.some(tc => 
+                tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'
+            );
+            
+            // If AI is hallucinating a booking/reschedule, BLOCK and RETRY
+            if ((claimsBooking || claimsReschedule) && !actuallyCalledBookingTool) {
+                console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking/reschedule but did NOT call the tool!`);
+                console.error(`   ⚠️ Blocking fake response and retrying with explicit instruction...`);
+                
+                // Retry with VERY explicit instruction
+                const retryResult = await generateText({
+                    model: openai('gpt-4o-mini'),
+                    system: `You are a booking assistant. You MUST call a tool to complete this action.
+                    
+CRITICAL: The user has selected a slot. You MUST call one of these tools NOW:
+- createBooking: For NEW bookings (customer just provided address + selected slot)
+- rescheduleBooking: For CHANGING existing bookings
+
+DO NOT say "Booking Request Received" or "confirmed" without calling the tool first.
+If you don't call a tool, the booking will NOT be saved and the customer will be lied to.
+
+Customer Phone: ${customerPhone}
+Business ID: ${businessId}
+Customer Name: ${customerContext?.name || 'Customer'}`,
+                    messages: [
+                        { role: 'user', content: `Previous conversation context: Customer wants to book/reschedule. Their message was: "${messageText}". 
+                        
+You MUST call createBooking or rescheduleBooking NOW with the correct parameters. Do not just say it's confirmed - CALL THE TOOL.` },
+                    ],
+                    tools: receptionistTools,
+                    maxSteps: 3,
+                    toolChoice: 'required', // FORCE tool usage
+                });
+                
+                const retryToolCalls = retryResult.steps.flatMap(step => step.toolCalls || []);
+                const retriedBooking = retryToolCalls.some(tc => 
+                    tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'
+                );
+                
+                if (retriedBooking) {
+                    console.log(`   ✅ Retry successful! Tool was called: ${retryToolCalls.map(t => t.toolName).join(', ')}`);
+                    // Use the retry response if it has one, otherwise use original
+                    if (retryResult.text && retryResult.text.trim()) {
+                        aiResponse = retryResult.text;
+                    }
+                    // Merge the retry tool calls for notification handling
+                    allToolCalls.push(...retryToolCalls);
+                    
+                    // Also merge the retry steps for notification processing
+                    result.steps.push(...retryResult.steps);
+                } else {
+                    console.error(`   ❌ Retry also failed to call tool. Sending warning to customer.`);
+                    aiResponse = "I apologize, I'm having trouble confirming your booking right now. Please reply 'BOOK' to try again, or say 'HUMAN' to speak with someone directly.";
+                }
             }
 
             // Handle tool results for notifications

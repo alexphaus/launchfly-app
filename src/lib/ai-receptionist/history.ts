@@ -12,8 +12,8 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// How many messages to keep in context
-const MAX_HISTORY_LENGTH = 50;
+// How many messages to keep in context (reduced to prevent context overload)
+const MAX_HISTORY_LENGTH = 20;
 // How old messages can be before we start fresh (24 hours)
 const HISTORY_EXPIRY_HOURS = 24;
 

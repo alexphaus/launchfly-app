@@ -149,7 +149,6 @@ export async function POST(request: NextRequest) {
 - Business ID: ${businessId}
 - Customer ID: ${customerContext?.id || 'unknown (will be created)'}
 - Customer Name: ${customerContext?.name || 'unknown'}
-- Owner Phone: ${businessContext?.ownerPhone || 'Not configured'}
 
 When calling activateWarranty, use:
   businessId: "${businessId}"
@@ -159,6 +158,10 @@ When calling activateWarranty, use:
 
 When calling getAvailableSlots, use:
   businessId: "${businessId}"
+
+When calling notifyOwner (for complaints/human request/escalation), use:
+  ownerPhone: "${businessContext?.ownerPhone || ''}"
+  message: (summary of the issue and customer phone)
 
 ⚠️ CRITICAL: When customer selects a time slot, call createBooking IMMEDIATELY with:
   businessId: "${businessId}"
@@ -177,10 +180,6 @@ When calling getAvailableSlots, use:
   businessId: "${businessId}"
   reason: (optional reason)
 The tool will automatically find and cancel their active booking.
-
-⚠️ ESCALATION: When customer is angry, asks for human, or you can't help, call notifyOwner with:
-  ownerPhone: "${businessContext?.ownerPhone || ''}"
-  message: "🚨 NEEDS ATTENTION: Customer ${customerContext?.name || customerPhone} needs help. Issue: [describe briefly]"
 
 ❌ NEVER say "Booking Request Received" without calling createBooking first!
 ❌ Do NOT ask "Shall I book it?" - when they select a slot, JUST BOOK IT!

@@ -454,14 +454,27 @@ When customer has an existing booking and wants to CHANGE the date/time:
             
             // SAFETY CHECK 4: Detect reschedule request that didn't call rescheduleBooking
             const looksLikeRescheduleRequest = (
-                (messageLower.includes('afternoon') && messageLower.includes('instead')) ||
-                (messageLower.includes('morning') && messageLower.includes('instead')) ||
-                (messageLower.includes('change') && (messageLower.includes('time') || messageLower.includes('date'))) ||
-                (messageLower.includes('move') && (messageLower.includes('to') || messageLower.includes('booking'))) ||
-                (messageLower.includes('reschedule') && !messageLower.includes('?'))
+                // Pattern: "X instead" (afternoon instead, morning instead)
+                (messageLower.includes('instead')) ||
+                // Pattern: "change to/my X"
+                (messageLower.includes('change') && (messageLower.includes('to') || messageLower.includes('time') || messageLower.includes('date') || messageLower.includes('my'))) ||
+                // Pattern: "move to/it"
+                (messageLower.includes('move') && (messageLower.includes('to') || messageLower.includes('it'))) ||
+                // Pattern: "switch to"
+                (messageLower.includes('switch')) ||
+                // Pattern: "make it X"
+                (messageLower.includes('make it')) ||
+                // Pattern: "reschedule" (not as question)
+                (messageLower.includes('reschedule') && !messageLower.includes('?')) ||
+                // Pattern: "can't make morning/afternoon"
+                (messageLower.includes("can't make") || messageLower.includes("cant make")) ||
+                // Pattern: "X doesn't work"
+                (messageLower.includes("doesn't work") || messageLower.includes("doesnt work")) ||
+                // Pattern: just "afternoon please" or "morning please" (after showing booking)
+                ((messageLower.includes('afternoon') || messageLower.includes('morning')) && messageLower.includes('please'))
             );
             const calledRescheduleBooking = allToolCalls.some(tc => tc.toolName === 'rescheduleBooking');
-            const hasExistingBooking = customerContext?.id || lastAssistantMsg.includes('booking') || lastAssistantMsg.includes('scheduled');
+            const hasExistingBooking = customerContext?.id || lastAssistantMsg.includes('booking') || lastAssistantMsg.includes('scheduled') || lastAssistantMsg.includes('appointment');
             
             if (looksLikeRescheduleRequest && hasExistingBooking && !calledRescheduleBooking) {
                 console.log(`   ⚠️ RESCHEDULE REQUEST DETECTED but rescheduleBooking not called! Message: "${messageText}"`);
@@ -469,40 +482,53 @@ When customer has an existing booking and wants to CHANGE the date/time:
                 
                 // Determine the new window from the message
                 const wantsAfternoon = messageLower.includes('afternoon');
-                const wantsMorning = messageLower.includes('morning');
+                const wantsMorning = messageLower.includes('morning') && !messageLower.includes("can't") && !messageLower.includes("cant");
                 const today = new Date();
                 const tomorrow = new Date(today);
                 tomorrow.setDate(tomorrow.getDate() + 1);
                 const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                const targetWindow = wantsAfternoon ? 'afternoon' : (wantsMorning ? 'morning' : 'afternoon');
                 
                 const rescheduleRetryResult = await generateText({
                     model: openai('gpt-4o-mini'),
-                    system: systemPrompt + `\n\nSYSTEM ALERT: Customer wants to RESCHEDULE their existing booking.
-                    They said: "${messageText}"
-                    ${wantsAfternoon ? 'They want AFTERNOON (1pm-5pm).' : ''}
-                    ${wantsMorning ? 'They want MORNING (9am-12pm).' : ''}
-                    
-                    You MUST call rescheduleBooking NOW with:
-                    - customerPhone: "${customerPhone}"
-                    - businessId: "${businessId}"
-                    - newDate: "${tomorrowStr}" (or the date they specified)
-                    - newWindow: "${wantsAfternoon ? 'afternoon' : wantsMorning ? 'morning' : 'afternoon'}"
-                    
-                    DO NOT create a new booking. DO NOT ask for confirmation. JUST CALL rescheduleBooking!`,
+                    system: `You are a booking assistant. Your ONLY job right now is to call rescheduleBooking.
+
+CALL rescheduleBooking with EXACTLY these values:
+- customerPhone: "${customerPhone}"
+- businessId: "${businessId}"  
+- newDate: "${tomorrowStr}"
+- newWindow: "${targetWindow}"
+
+Do NOT use bookingId - leave it empty and the system will find it.
+Do NOT call any other tool. ONLY call rescheduleBooking.`,
                     messages: [
-                        ...history.slice(-10),
-                        { role: 'user', content: messageText },
+                        { role: 'user', content: `Reschedule booking to ${targetWindow}` },
                     ],
-                    tools: receptionistTools,
-                    toolChoice: 'required',
+                    tools: {
+                        rescheduleBooking: receptionistTools.rescheduleBooking,
+                    },
+                    toolChoice: { type: 'tool', toolName: 'rescheduleBooking' },
                 });
                 
                 const rescheduleRetryToolCalls = rescheduleRetryResult.steps.flatMap(step => step.toolCalls || []);
+                const rescheduleRetryResults = rescheduleRetryResult.steps.flatMap(step => step.toolResults || []);
+                
                 if (rescheduleRetryToolCalls.some(tc => tc.toolName === 'rescheduleBooking')) {
                     console.log(`   ✅ Reschedule retry successful! rescheduleBooking called.`);
-                    aiResponse = rescheduleRetryResult.text || aiResponse;
+                    
+                    // Check if it actually succeeded
+                    const rescheduleResult = rescheduleRetryResults.find(tr => (tr as any).toolName === 'rescheduleBooking');
+                    const rescheduleOutput = (rescheduleResult as any)?.output ?? (rescheduleResult as any)?.result;
+                    
+                    if (rescheduleOutput?.success) {
+                        aiResponse = `Done! ✅ Your booking has been rescheduled to **${rescheduleOutput.newSlotLabel || targetWindow}**.\n\nThe technician will WhatsApp you 30 minutes before arrival. Anything else I can help with?`;
+                    } else {
+                        aiResponse = `I apologize, I had trouble rescheduling your booking. ${rescheduleOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;
+                    }
+                    
                     allToolCalls.push(...rescheduleRetryToolCalls);
-                    rescheduleRetryResult.steps.forEach(step => result.steps.push(step));
+                    // Don't push steps since they have different tool types
+                    // The tool results are still captured in allToolCalls
                 }
             }
             

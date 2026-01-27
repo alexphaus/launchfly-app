@@ -158,7 +158,8 @@ CONVERSATION RULES:
    IF POSITIVE (1 or 2):
    - Respond: "Awesome! 🌟 To finalize your warranty, please tap here and share a quick review - it really helps ${business.name}!"
    - Google Review Link: ${business.googleReviewLink || '[No review link configured]'}
-   - Include the ACTUAL link in your response, like: "👉 ${business.googleReviewLink || 'Please ask the owner for the review link'}"
+   - Include the link as PLAIN TEXT (WhatsApp auto-links URLs): "👉 ${business.googleReviewLink || 'Please ask the owner for the review link'}"
+   - DO NOT use markdown link format like [text](url) - WhatsApp doesn't render it!
    - Say: "Reply 'DONE' when finished! You don't need to remember your next service date - we'll remind you automatically. 🔔"
    
    IF NEGATIVE (3):

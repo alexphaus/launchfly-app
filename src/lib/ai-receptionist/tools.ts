@@ -595,6 +595,9 @@ export const receptionistTools = {
             const { customerPhone, businessId } = input;
             const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
             const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+            
+            // Only show bookings from today onwards (not old completed ones)
+            const today = new Date().toISOString().split('T')[0];
 
             const { data: bookings, error } = await supabase
                 .from('bookings')
@@ -602,6 +605,7 @@ export const receptionistTools = {
                 .eq('business_id', businessId)
                 .or(`customer_phone.eq.${phoneWithPlus},customer_phone.eq.${phoneWithoutPlus}`)
                 .in('status', ['pending', 'confirmed'])
+                .gte('slot_date', today)  // Only future/today bookings
                 .order('slot_date', { ascending: true })
                 .limit(5);
 

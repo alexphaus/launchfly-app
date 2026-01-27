@@ -116,17 +116,19 @@ export async function POST(request: NextRequest) {
             }
 
             if (customer) {
-                const warrantyActive = customer.warranty_end_date && 
-                    new Date(customer.warranty_end_date) > new Date();
+                // Note: warranty is stored in next_reminder_due field (schema doesn't have warranty_end_date)
+                const warrantyEndDate = customer.next_reminder_due;
+                const warrantyActive = warrantyEndDate && 
+                    new Date(warrantyEndDate) > new Date();
                 
                 customerContext = {
                     id: customer.id,
                     name: customer.name || customer.first_name,
                     isReturning: true,
                     warrantyActive,
-                    warrantyEndDate: customer.warranty_end_date,
+                    warrantyEndDate: warrantyEndDate ? new Date(warrantyEndDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : undefined,
                     lastServiceDate: customer.last_service_date,
-                    lastServiceType: customer.service_type,
+                    lastServiceType: customer.notes?.includes('Service:') ? customer.notes.split('Service:')[1]?.split('.')[0]?.trim() : undefined,
                     address: customer.address,
                 };
             } else {

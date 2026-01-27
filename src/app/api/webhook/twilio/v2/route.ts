@@ -180,14 +180,21 @@ When calling notifyOwner (for complaints/human request/escalation), use:
   businessId: "${businessId}"
   reason: (optional reason)
 
-⚠️ RESCHEDULING: When customer wants to change date/time:
-  1. Check availability for the new date/time FIRST.
-  2. Call rescheduleBooking with:
+⚠️ RESCHEDULING (CRITICAL!):
+When customer has an existing booking and wants to CHANGE the date/time:
+  1. Check availability for the new date/time.
+  2. When they SELECT a new slot (reply "1", "2", "Friday", etc.), IMMEDIATELY call rescheduleBooking:
      customerPhone: "${customerPhone}"
      businessId: "${businessId}"
-     newDate: (YYYY-MM-DD)
+     newDate: (YYYY-MM-DD of the new slot)
      newWindow: "morning" or "afternoon"
-  3. DO NOT just say "Okay" or "Updated" - you MUST call the tool!
+  3. NEVER say "Booking Request Received" or "Confirmed" without calling rescheduleBooking!
+  4. If you confirm a reschedule without calling the tool, the database will NOT be updated and you will be LYING!
+
+⚠️ RULE: Any time you're about to say "Booking" + "Received/Confirmed", CHECK:
+  - Did I call createBooking? (for NEW bookings)
+  - Did I call rescheduleBooking? (for CHANGES)
+  If NO, you MUST call the tool FIRST!
   reason: (optional reason)
 The tool will automatically find and cancel their active booking.
 

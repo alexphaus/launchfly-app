@@ -301,7 +301,9 @@ CRITICAL RULES:
 9. If createBooking fails, tell the user: "I encountered an issue. Let me try once more..." and retry with correct parameters. If it fails twice, escalate to owner.
 10. When calling createBooking, ALL parameters are REQUIRED - do not call with empty values.
 11. ⚠️ TRUST THE CURRENT CUSTOMER CONTEXT ABOVE HISTORY: If CURRENT CUSTOMER says "New customer", treat them as NEW even if history suggests otherwise. The context is the source of truth.
-12. ⚠️ WARRANTY ACTIVATION: When a new customer provides their name, you MUST call activateWarranty IMMEDIATELY. Do not skip this step!`;
+12. ⚠️ WARRANTY ACTIVATION: When a new customer provides their name, you MUST call activateWarranty IMMEDIATELY. Do not skip this step!
+13. ⚠️ SLOT SELECTION = MUST CALL createBooking: When customer selects a slot (replies "1", "2", "3", "4", "tomorrow morning", "afternoon", etc.) AFTER seeing the available slots list, you MUST call createBooking tool. This is NOT optional. The booking is NOT real until createBooking succeeds!
+14. ⚠️ A TEXT RESPONSE IS NOT A BOOKING: Sending a message that says "Booking Request Received" does NOT create a booking. ONLY calling createBooking creates a real booking in the database and notifies the owner.`;
 }
 
 /**

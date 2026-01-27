@@ -146,6 +146,8 @@ export async function POST(request: NextRequest) {
 [SYSTEM CONTEXT - USE THESE VALUES WHEN CALLING TOOLS]
 - Customer Phone: ${customerPhone}
 - Business ID: ${businessId}
+- Customer ID: ${customerContext?.id || 'unknown (will be created)'}
+- Customer Name: ${customerContext?.name || 'unknown'}
 
 When calling activateWarranty, use:
   businessId: "${businessId}"
@@ -153,9 +155,22 @@ When calling activateWarranty, use:
   name: (the name the customer provided)
   serviceType: "cleaning"
 
-When calling getAvailableSlots or createBooking, use:
+When calling getAvailableSlots, use:
   businessId: "${businessId}"
+
+⚠️ CRITICAL: When customer selects a time slot, you MUST call createBooking with:
+  businessId: "${businessId}"
+  customerId: "${customerContext?.id || ''}"
   customerPhone: "${customerPhone}"
+  customerName: "${customerContext?.name || '(name from conversation)'}"
+  address: (the address they provided in conversation)
+  date: (YYYY-MM-DD from the selected slot)
+  window: "morning" or "afternoon"
+  serviceType: (e.g., "Aircon Cleaning (1 unit)")
+  estimateAmount: (the price as a number, e.g., 120)
+  currency: "RM"
+
+❌ NEVER say "Booking Request Received" without calling createBooking first!
 `;
             
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
@@ -260,6 +275,20 @@ When calling getAvailableSlots or createBooking, use:
             console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
             if (allToolCalls.length > 0) {
                 console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
+            }
+            
+            // SAFETY CHECK: Detect if AI claims to have booked without actually calling createBooking
+            const claimsBooking = aiResponse.toLowerCase().includes('booking') && (
+                aiResponse.toLowerCase().includes('received') || 
+                aiResponse.toLowerCase().includes('confirmed') ||
+                aiResponse.toLowerCase().includes('booked')
+            );
+            const actuallyCalledCreateBooking = allToolCalls.some(tc => tc.toolName === 'createBooking');
+            
+            if (claimsBooking && !actuallyCalledCreateBooking) {
+                console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking but did NOT call createBooking!`);
+                console.error(`   ⚠️ Response was: ${aiResponse.substring(0, 300)}`);
+                // TODO: Could force-call createBooking here if we have the details
             }
 
             // Handle tool results for notifications

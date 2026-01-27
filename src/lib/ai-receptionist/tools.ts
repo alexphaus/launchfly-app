@@ -415,7 +415,7 @@ export const receptionistTools = {
      * Create a booking request
      */
     createBooking: tool({
-        description: 'Create a booking request once customer has provided address and selected a time window. This sends notification to the business owner. ALL parameters are required.',
+        description: 'CRITICAL: Create a booking request. You MUST call this when customer selects a time slot (replies "1", "2", "tomorrow", etc.) after seeing available slots. This creates the actual booking in database and notifies the owner. Without calling this, NO BOOKING EXISTS. ALL parameters are required.',
         inputSchema: createBookingSchema,
         execute: async (input: CreateBookingInput) => {
             console.log('   📝 createBooking called with:', JSON.stringify(input));

@@ -175,6 +175,15 @@ When calling notifyOwner (for complaints/human request/escalation), use:
   estimateAmount: (the price as a number, e.g., 120)
   currency: "RM"
 
+⚠️ SLOT SELECTION TRIGGERS:
+The customer has CONFIRMED when they reply with ANY of these:
+- "1", "2", "3", "4" (number selection)
+- "tomorrow", "today", "Wednesday", "Friday" etc (day name)
+- "morning", "afternoon" (time window)
+- "first one", "second one", "the first", "option 1"
+- "yes", "ok", "sounds good" (after you showed slots)
+When you see these replies AFTER showing available slots → CALL createBooking!
+
 ⚠️ CANCELLATION (PERMANENT DELETE - use sparingly):
 When customer wants to CANCEL entirely (not reschedule), call cancelBooking:
   customerPhone: "${customerPhone}"
@@ -244,6 +253,14 @@ When customer has an existing booking and wants to CHANGE the date/time:
                 aiResponse.toLowerCase().includes('bear with me') ||
                 aiResponse.toLowerCase().includes('hold on')
             );
+            
+            // Special handling for notifyOwner - AI often forgets to respond after calling it
+            const calledNotifyOwner = allToolCalls.some(tc => tc.toolName === 'notifyOwner');
+            if (calledNotifyOwner && (!aiResponse || aiResponse.length < 20)) {
+                console.log(`   ⚠️ AI called notifyOwner but didn't respond, adding acknowledgment...`);
+                const ownerName = businessContext?.ownerName || 'the owner';
+                aiResponse = `I've notified ${ownerName} about your request - they'll reach out to you shortly. 🙏 Is there anything else I can help with in the meantime?`;
+            }
             
             // Handle empty response OR filler response after tool calls
             // This ensures we don't just send "I'll check..." and stop, but actually send the slots
@@ -338,6 +355,58 @@ When customer has an existing booking and wants to CHANGE the date/time:
             const actuallyCalledBookingTool = allToolCalls.some(tc => 
                 tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'
             );
+            
+            // ALSO check if customer appears to have selected a slot but no booking was made
+            const messageLower = messageText.toLowerCase().trim();
+            const looksLikeSlotSelection = (
+                /^[1-4]$/.test(messageLower) || // Just "1", "2", "3", "4"
+                messageLower === 'tomorrow' ||
+                messageLower === 'today' ||
+                messageLower.includes('morning') ||
+                messageLower.includes('afternoon') ||
+                messageLower === 'yes' ||
+                messageLower === 'ok' ||
+                messageLower === 'sure' ||
+                messageLower === 'sounds good' ||
+                messageLower.startsWith('first') ||
+                messageLower.startsWith('second') ||
+                /^option\s*[1-4]$/i.test(messageLower)
+            );
+            
+            // Check if previous response (from history) showed available slots
+            const lastAssistantMsg = history.filter(h => h.role === 'assistant').pop()?.content?.toLowerCase() || '';
+            const wasShowingSlots = lastAssistantMsg.includes('available') || 
+                                   lastAssistantMsg.includes('1️⃣') ||
+                                   lastAssistantMsg.includes('9am') ||
+                                   lastAssistantMsg.includes('morning') ||
+                                   lastAssistantMsg.includes('afternoon');
+            
+            // If customer selected a slot but we didn't book, force retry
+            if (looksLikeSlotSelection && wasShowingSlots && !actuallyCalledBookingTool && !claimsBooking) {
+                console.log(`   ⚠️ SLOT SELECTION DETECTED but no createBooking called! Message: "${messageText}"`);
+                console.log(`   🔄 Forcing createBooking retry...`);
+                
+                const slotRetryResult = await generateText({
+                    model: openai('gpt-4o-mini'),
+                    system: systemPrompt + `\n\nSYSTEM ALERT: The customer just selected a time slot by replying "${messageText}". 
+                    You MUST call createBooking NOW. Do not ask for confirmation - they already confirmed by selecting.
+                    Extract the slot details from the conversation and call createBooking IMMEDIATELY.`,
+                    messages: [
+                        ...history.slice(-10),
+                        { role: 'user', content: messageText },
+                    ],
+                    tools: receptionistTools,
+                    toolChoice: 'required',
+                });
+                
+                const slotRetryToolCalls = slotRetryResult.steps.flatMap(step => step.toolCalls || []);
+                if (slotRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
+                    console.log(`   ✅ Slot selection retry successful! createBooking called.`);
+                    aiResponse = slotRetryResult.text || aiResponse;
+                    allToolCalls.push(...slotRetryToolCalls);
+                    slotRetryResult.steps.forEach(step => result.steps.push(step));
+                }
+            }
             
             if (claimsBooking && !actuallyCalledBookingTool) {
                 console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking/reschedule but did NOT call tools!`);

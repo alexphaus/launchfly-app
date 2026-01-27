@@ -332,24 +332,64 @@ export const receptionistTools = {
             warrantyEndDate.setDate(warrantyEndDate.getDate() + warrantyDays);
 
             const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
-            console.log('   🛡️ Upserting customer:', { businessId, phone: phoneWithPlus, name });
-
-            // Upsert customer
-            const { data: customer, error } = await supabase
+            console.log('   🛡️ Looking for existing customer:', { businessId, phone: phoneWithPlus });
+            
+            // First, check if customer already exists
+            const { data: existingCustomer } = await supabase
                 .from('customers')
-                .upsert({
-                    business_id: businessId,
-                    phone: phoneWithPlus,
-                    name,
-                    service_type: serviceType || 'cleaning',
-                    last_service_date: now.toISOString().split('T')[0],
-                    warranty_end_date: warrantyEndDate.toISOString().split('T')[0],
-                    status: 'warranty_activated',
-                }, {
-                    onConflict: 'business_id,phone',
-                })
-                .select()
+                .select('id')
+                .eq('business_id', businessId)
+                .eq('phone', phoneWithPlus)
                 .single();
+            
+            // email is required, so we use phone as placeholder email
+            const placeholderEmail = `${phoneWithPlus.replace(/\+/g, '')}@whatsapp.customer`;
+            
+            let customer;
+            let error;
+            
+            if (existingCustomer) {
+                // Update existing customer
+                console.log('   🛡️ Updating existing customer:', existingCustomer.id);
+                const result = await supabase
+                    .from('customers')
+                    .update({
+                        name,
+                        first_name: name.split(' ')[0],
+                        last_name: name.split(' ').slice(1).join(' ') || null,
+                        last_service_date: now.toISOString(),
+                        next_reminder_due: warrantyEndDate.toISOString(),
+                        status: 'warranty_activated',
+                        notes: `Service: ${serviceType || 'cleaning'}. Warranty until ${warrantyEndDate.toISOString().split('T')[0]}`,
+                    })
+                    .eq('id', existingCustomer.id)
+                    .select()
+                    .single();
+                customer = result.data;
+                error = result.error;
+            } else {
+                // Insert new customer
+                console.log('   🛡️ Creating new customer');
+                const result = await supabase
+                    .from('customers')
+                    .insert({
+                        business_id: businessId,
+                        phone: phoneWithPlus,
+                        email: placeholderEmail,
+                        name,
+                        first_name: name.split(' ')[0],
+                        last_name: name.split(' ').slice(1).join(' ') || null,
+                        last_service_date: now.toISOString(),
+                        next_reminder_due: warrantyEndDate.toISOString(),
+                        status: 'warranty_activated',
+                        source: 'whatsapp_sticker',
+                        notes: `Service: ${serviceType || 'cleaning'}. Warranty until ${warrantyEndDate.toISOString().split('T')[0]}`,
+                    })
+                    .select()
+                    .single();
+                customer = result.data;
+                error = result.error;
+            }
 
             if (error) {
                 console.error('   ❌ activateWarranty DB error:', error);

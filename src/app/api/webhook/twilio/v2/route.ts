@@ -264,9 +264,12 @@ When calling getAvailableSlots or createBooking, use:
             for (const step of result.steps) {
                 for (const toolResult of step.toolResults || []) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const res = (toolResult as any).result;
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const toolName = (toolResult as any).toolName;
+                    const tr = toolResult as any;
+                    // Vercel AI SDK uses 'output' not 'result'
+                    const res = tr.output ?? tr.result;
+                    const toolName = tr.toolName;
+                    
+                    console.log(`   🔔 Checking tool result for notifications: ${toolName}`, res?.success ? 'success' : res?.error || 'no status');
                     
                     // 1. Handle notifyOwner (plain text alerts for complaints/escalations)
                     if (res?.action === 'notify_owner' && res?.phone) {

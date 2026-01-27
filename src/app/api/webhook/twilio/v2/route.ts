@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 [SYSTEM CONTEXT - USE THESE VALUES WHEN CALLING TOOLS]
 - Customer Phone: ${customerPhone}
 - Business ID: ${businessId}
-- Customer ID: ${customerContext?.id || 'unknown (will be created)'}
+- Customer ID: ${customerContext?.id || ''}
 - Customer Name: ${customerContext?.name || 'unknown'}
 
 When calling activateWarranty, use:

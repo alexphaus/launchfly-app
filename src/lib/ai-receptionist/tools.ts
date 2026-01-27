@@ -464,12 +464,20 @@ export const receptionistTools = {
             
             const ownerPhone = business?.whatsapp_number || business?.phone_number;
 
+            // Validate customerId - must be a valid UUID or null
+            // AI sometimes passes "unknown" or empty strings which crash the DB
+            const isValidUUID = (str: string | undefined) => {
+                if (!str) return false;
+                return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+            };
+            const validCustomerId = isValidUUID(customerId) ? customerId : null;
+
             // Create booking record
             const { data: booking, error } = await supabase
                 .from('bookings')
                 .insert({
                     business_id: businessId,
-                    customer_id: customerId,
+                    customer_id: validCustomerId, // Use validated ID or null
                     slot_date: date,
                     slot_time: window,
                     slot_label: `${dayLabel} ${windowLabel}`,

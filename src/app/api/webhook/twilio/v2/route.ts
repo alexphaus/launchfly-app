@@ -193,14 +193,22 @@ When customer wants to CANCEL entirely (not reschedule), call cancelBooking:
 
 ⚠️ RESCHEDULING (PREFERRED for date/time changes):
 When customer has an existing booking and wants to CHANGE the date/time:
-  1. Check availability for the new date/time.
-  2. When they SELECT a new slot (reply "1", "2", "Friday", etc.), IMMEDIATELY call rescheduleBooking:
+  1. If they specify the new time (e.g., "afternoon instead", "make it Friday"), IMMEDIATELY call rescheduleBooking!
+  2. If they just say "reschedule" without specifying when, show available slots first.
+  3. When calling rescheduleBooking, use:
      customerPhone: "${customerPhone}"
      businessId: "${businessId}"
      newDate: (YYYY-MM-DD of the new slot)
      newWindow: "morning" or "afternoon"
-  3. rescheduleBooking is ATOMIC - it updates the booking directly without cancelling!
-  4. NEVER call cancelBooking when the customer just wants to move the appointment!
+  
+  IMPORTANT RESCHEDULE TRIGGERS - Call rescheduleBooking IMMEDIATELY when customer says:
+  - "afternoon instead" / "morning instead" → same date, different window
+  - "tomorrow" / "Friday" / "next week" → different date
+  - "change to..." / "move to..." / "make it..." + any time reference
+  
+  rescheduleBooking is ATOMIC - it updates the existing booking directly. 
+  ❌ NEVER create a new booking when rescheduling!
+  ❌ NEVER call cancelBooking for date changes!
 
 ⚠️ VERIFICATION RULE: Before saying "Done", "Moved", "Confirmed", or "Received":
   - For NEW bookings: Did I call createBooking?
@@ -325,7 +333,25 @@ When customer has an existing booking and wants to CHANGE the date/time:
                 console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
             }
             
-            // SAFETY CHECK: Detect if AI claims to have booked without actually calling createBooking or rescheduleBooking
+            // SAFETY CHECK 1: Check if any booking/reschedule tool FAILED
+            let bookingToolFailed = false;
+            let bookingToolError = '';
+            for (const step of result.steps) {
+                for (const toolResult of step.toolResults || []) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const tr = toolResult as any;
+                    const res = tr.output ?? tr.result;
+                    const toolName = tr.toolName;
+                    
+                    if ((toolName === 'createBooking' || toolName === 'rescheduleBooking') && res?.success === false) {
+                        bookingToolFailed = true;
+                        bookingToolError = res.error || 'Unknown error';
+                        console.log(`   ⚠️ BOOKING TOOL FAILED: ${toolName} - ${bookingToolError}`);
+                    }
+                }
+            }
+            
+            // SAFETY CHECK 2: Detect if AI claims to have booked without actually calling createBooking or rescheduleBooking
             const responseLower = aiResponse.toLowerCase();
             const claimsBooking = (
                 // Pattern 1: "booking" + action word
@@ -346,12 +372,30 @@ When customer has an existing booking and wants to CHANGE the date/time:
                     responseLower.includes('moved') ||
                     responseLower.includes('rescheduled')
                 )) ||
-                // Pattern 3: "done" + booking details (date, address, estimate all present)
-                (responseLower.includes('done') && 
-                 responseLower.includes('date') && 
-                 responseLower.includes('address') &&
-                 (responseLower.includes('estimate') || responseLower.includes('rm ')))
+                // Pattern 3: "done" + specific booking language
+                (responseLower.includes('done') && (
+                    responseLower.includes('scheduled') ||
+                    responseLower.includes('rescheduled') ||
+                    responseLower.includes('moved') ||
+                    responseLower.includes('your booking') ||
+                    responseLower.includes('your cleaning')
+                ))
             );
+            
+            // If booking tool was called but FAILED, and AI claims success, override response
+            if (bookingToolFailed && claimsBooking) {
+                console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed success but booking tool FAILED!`);
+                console.error(`   ⚠️ Error was: ${bookingToolError}`);
+                console.error(`   ⚠️ AI response was: ${aiResponse.substring(0, 300)}`);
+                
+                // Override with honest error message
+                aiResponse = `It seems there was an issue while trying to ${
+                    allToolCalls.some(tc => tc.toolName === 'rescheduleBooking') ? 'reschedule' : 'complete'
+                } your booking. ${bookingToolError.includes('not found') ? 
+                    'Would you like me to create a new booking for you instead?' : 
+                    'Please try again or reply "HUMAN" to speak with the owner.'}`;
+            }
+            
             const actuallyCalledBookingTool = allToolCalls.some(tc => 
                 tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'
             );
@@ -405,6 +449,60 @@ When customer has an existing booking and wants to CHANGE the date/time:
                     aiResponse = slotRetryResult.text || aiResponse;
                     allToolCalls.push(...slotRetryToolCalls);
                     slotRetryResult.steps.forEach(step => result.steps.push(step));
+                }
+            }
+            
+            // SAFETY CHECK 4: Detect reschedule request that didn't call rescheduleBooking
+            const looksLikeRescheduleRequest = (
+                (messageLower.includes('afternoon') && messageLower.includes('instead')) ||
+                (messageLower.includes('morning') && messageLower.includes('instead')) ||
+                (messageLower.includes('change') && (messageLower.includes('time') || messageLower.includes('date'))) ||
+                (messageLower.includes('move') && (messageLower.includes('to') || messageLower.includes('booking'))) ||
+                (messageLower.includes('reschedule') && !messageLower.includes('?'))
+            );
+            const calledRescheduleBooking = allToolCalls.some(tc => tc.toolName === 'rescheduleBooking');
+            const hasExistingBooking = customerContext?.id || lastAssistantMsg.includes('booking') || lastAssistantMsg.includes('scheduled');
+            
+            if (looksLikeRescheduleRequest && hasExistingBooking && !calledRescheduleBooking) {
+                console.log(`   ⚠️ RESCHEDULE REQUEST DETECTED but rescheduleBooking not called! Message: "${messageText}"`);
+                console.log(`   🔄 Forcing rescheduleBooking retry...`);
+                
+                // Determine the new window from the message
+                const wantsAfternoon = messageLower.includes('afternoon');
+                const wantsMorning = messageLower.includes('morning');
+                const today = new Date();
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                
+                const rescheduleRetryResult = await generateText({
+                    model: openai('gpt-4o-mini'),
+                    system: systemPrompt + `\n\nSYSTEM ALERT: Customer wants to RESCHEDULE their existing booking.
+                    They said: "${messageText}"
+                    ${wantsAfternoon ? 'They want AFTERNOON (1pm-5pm).' : ''}
+                    ${wantsMorning ? 'They want MORNING (9am-12pm).' : ''}
+                    
+                    You MUST call rescheduleBooking NOW with:
+                    - customerPhone: "${customerPhone}"
+                    - businessId: "${businessId}"
+                    - newDate: "${tomorrowStr}" (or the date they specified)
+                    - newWindow: "${wantsAfternoon ? 'afternoon' : wantsMorning ? 'morning' : 'afternoon'}"
+                    
+                    DO NOT create a new booking. DO NOT ask for confirmation. JUST CALL rescheduleBooking!`,
+                    messages: [
+                        ...history.slice(-10),
+                        { role: 'user', content: messageText },
+                    ],
+                    tools: receptionistTools,
+                    toolChoice: 'required',
+                });
+                
+                const rescheduleRetryToolCalls = rescheduleRetryResult.steps.flatMap(step => step.toolCalls || []);
+                if (rescheduleRetryToolCalls.some(tc => tc.toolName === 'rescheduleBooking')) {
+                    console.log(`   ✅ Reschedule retry successful! rescheduleBooking called.`);
+                    aiResponse = rescheduleRetryResult.text || aiResponse;
+                    allToolCalls.push(...rescheduleRetryToolCalls);
+                    rescheduleRetryResult.steps.forEach(step => result.steps.push(step));
                 }
             }
             

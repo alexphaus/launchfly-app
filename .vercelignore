@@ -34,3 +34,5 @@ data/
 # Temporary files
 *.tmp
 *.log
+quick-test-slot.ts
+stress-test-ai-receptionist.ts

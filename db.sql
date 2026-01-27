@@ -441,6 +441,17 @@ CREATE TABLE public.cashout_transactions (
   CONSTRAINT cashout_transactions_pkey PRIMARY KEY (id),
   CONSTRAINT cashout_transactions_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.chat_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  phone text NOT NULL,
+  business_id uuid,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text])),
+  content text NOT NULL,
+  tool_calls jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT chat_history_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_history_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.clicks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   slug text NOT NULL UNIQUE,
@@ -542,8 +553,21 @@ CREATE TABLE public.customers (
   name text,
   notes text,
   tags ARRAY,
+  service_count integer DEFAULT 0,
+  last_service_date timestamp with time zone,
+  next_reminder_due timestamp with time zone,
+  reminder_preference text DEFAULT 'sms'::text CHECK (reminder_preference = ANY (ARRAY['sms'::text, 'whatsapp'::text, 'both'::text, 'none'::text])),
+  building_name text,
+  area text,
+  is_repeat_customer boolean DEFAULT false,
+  lifetime_services integer DEFAULT 0,
+  referral_code text UNIQUE,
+  referred_by uuid,
+  blast_optout boolean DEFAULT false,
+  last_blast_at timestamp with time zone,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
-  CONSTRAINT customers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+  CONSTRAINT customers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT customers_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES public.customers(id)
 );
 CREATE TABLE public.discount_codes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1011,6 +1035,30 @@ CREATE TABLE public.public_metrics (
   last_updated timestamp with time zone DEFAULT now(),
   CONSTRAINT public_metrics_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.referrals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  referrer_id uuid NOT NULL,
+  referral_code text NOT NULL,
+  referee_id uuid,
+  referee_phone text,
+  referee_name text,
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'clicked'::text, 'registered'::text, 'booked'::text, 'completed'::text, 'expired'::text])),
+  referrer_discount_percent integer DEFAULT 10,
+  referee_discount_percent integer DEFAULT 10,
+  referrer_reward_applied boolean DEFAULT false,
+  referee_reward_applied boolean DEFAULT false,
+  link_clicked_at timestamp with time zone,
+  registered_at timestamp with time zone,
+  booked_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  expires_at timestamp with time zone DEFAULT (now() + '30 days'::interval),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT referrals_pkey PRIMARY KEY (id),
+  CONSTRAINT referrals_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT referrals_referrer_id_fkey FOREIGN KEY (referrer_id) REFERENCES public.customers(id),
+  CONSTRAINT referrals_referee_id_fkey FOREIGN KEY (referee_id) REFERENCES public.customers(id)
+);
 CREATE TABLE public.revenue_forecasts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -1151,6 +1199,72 @@ CREATE TABLE public.scheduled_guarantee_checks (
   CONSTRAINT scheduled_guarantee_checks_pkey PRIMARY KEY (id),
   CONSTRAINT scheduled_guarantee_checks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
   CONSTRAINT scheduled_guarantee_checks_guarantee_id_fkey FOREIGN KEY (guarantee_id) REFERENCES public.revenue_guarantees(id)
+);
+CREATE TABLE public.service_records (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  service_type text NOT NULL CHECK (service_type = ANY (ARRAY['cleaning'::text, 'repair'::text, 'installation'::text, 'maintenance'::text, 'inspection'::text])),
+  service_name text,
+  appliance_type text,
+  units_serviced integer DEFAULT 1,
+  service_details text,
+  amount numeric,
+  currency text DEFAULT 'RM'::text,
+  payment_status text DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'paid'::text, 'partial'::text, 'waived'::text])),
+  address text,
+  building_name text,
+  area text,
+  coordinates point,
+  warranty_days integer DEFAULT 30,
+  warranty_expires_at timestamp with time zone,
+  warranty_claimed boolean DEFAULT false,
+  warranty_claimed_at timestamp with time zone,
+  service_interval_days integer DEFAULT 180,
+  next_service_due_at timestamp with time zone,
+  reminder_sent boolean DEFAULT false,
+  reminder_sent_at timestamp with time zone,
+  reminder_count integer DEFAULT 0,
+  rebooking_initiated boolean DEFAULT false,
+  rebooked_at timestamp with time zone,
+  rebooked_service_id uuid,
+  registered_via text DEFAULT 'sticker_scan'::text CHECK (registered_via = ANY (ARRAY['sticker_scan'::text, 'tech_register'::text, 'manual'::text, 'import'::text, 'booking_complete'::text])),
+  registered_by text,
+  service_date timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT service_records_pkey PRIMARY KEY (id),
+  CONSTRAINT service_records_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT service_records_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT service_records_rebooked_fkey FOREIGN KEY (rebooked_service_id) REFERENCES public.service_records(id)
+);
+CREATE TABLE public.service_reminders (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  service_record_id uuid NOT NULL,
+  business_id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  scheduled_for timestamp with time zone NOT NULL,
+  reminder_type text NOT NULL CHECK (reminder_type = ANY (ARRAY['due_soon'::text, 'due_now'::text, 'overdue'::text, 'warranty_expiring'::text, 'follow_up'::text])),
+  sequence_number integer DEFAULT 1,
+  channel text DEFAULT 'sms'::text CHECK (channel = ANY (ARRAY['sms'::text, 'whatsapp_template'::text, 'whatsapp_session'::text, 'email'::text])),
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'sent'::text, 'delivered'::text, 'failed'::text, 'clicked'::text, 'booked'::text, 'cancelled'::text])),
+  sent_at timestamp with time zone,
+  delivered_at timestamp with time zone,
+  clicked_at timestamp with time zone,
+  booked_at timestamp with time zone,
+  booking_id uuid,
+  message_template text,
+  message_sent text,
+  cost numeric DEFAULT 0,
+  cost_currency text DEFAULT 'USD'::text,
+  error_message text,
+  retry_count integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT service_reminders_pkey PRIMARY KEY (id),
+  CONSTRAINT service_reminders_service_record_fkey FOREIGN KEY (service_record_id) REFERENCES public.service_records(id),
+  CONSTRAINT service_reminders_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT service_reminders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT service_reminders_booking_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.sessions (
   id text NOT NULL,

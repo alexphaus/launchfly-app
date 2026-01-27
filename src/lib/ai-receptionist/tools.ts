@@ -317,12 +317,22 @@ export const receptionistTools = {
         description: 'Register/activate warranty for a customer after sticker scan. Creates customer if new.',
         inputSchema: activateWarrantySchema,
         execute: async (input: ActivateWarrantyInput) => {
+            console.log('   🛡️ activateWarranty called with:', JSON.stringify(input));
+            
             const { businessId, phone, name, serviceType, warrantyDays = 30 } = input;
+            
+            // Validate required fields
+            if (!businessId || !phone || !name) {
+                console.error('   ❌ activateWarranty missing required fields:', { businessId: !!businessId, phone: !!phone, name: !!name });
+                return { success: false, error: 'Missing businessId, phone, or name' };
+            }
+            
             const now = new Date();
             const warrantyEndDate = new Date(now);
             warrantyEndDate.setDate(warrantyEndDate.getDate() + warrantyDays);
 
             const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
+            console.log('   🛡️ Upserting customer:', { businessId, phone: phoneWithPlus, name });
 
             // Upsert customer
             const { data: customer, error } = await supabase
@@ -331,7 +341,7 @@ export const receptionistTools = {
                     business_id: businessId,
                     phone: phoneWithPlus,
                     name,
-                    service_type: serviceType,
+                    service_type: serviceType || 'cleaning',
                     last_service_date: now.toISOString().split('T')[0],
                     warranty_end_date: warrantyEndDate.toISOString().split('T')[0],
                     status: 'warranty_activated',
@@ -342,8 +352,11 @@ export const receptionistTools = {
                 .single();
 
             if (error) {
+                console.error('   ❌ activateWarranty DB error:', error);
                 return { success: false, error: error.message };
             }
+            
+            console.log('   ✅ Customer saved/updated:', customer?.id);
 
             const endDateFormatted = warrantyEndDate.toLocaleDateString('en-GB', { 
                 day: 'numeric', month: 'short', year: 'numeric' 

@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
                     serviceInterval: config.serviceInterval || 90,
                     ownerName: config.ownerName,
                     operatingHours: config.operatingHours || '9am - 5pm',
+                    googleReviewLink: config.googleReviewLink,
                 };
             }
 

@@ -309,13 +309,31 @@ When customer has an existing booking and wants to CHANGE the date/time:
             }
             
             // SAFETY CHECK: Detect if AI claims to have booked without actually calling createBooking or rescheduleBooking
-            const claimsBooking = aiResponse.toLowerCase().includes('booking') && (
-                aiResponse.toLowerCase().includes('received') || 
-                aiResponse.toLowerCase().includes('confirmed') ||
-                aiResponse.toLowerCase().includes('booked') ||
-                aiResponse.toLowerCase().includes('set for') ||
-                aiResponse.toLowerCase().includes('moved') ||
-                aiResponse.toLowerCase().includes('rescheduled')
+            const responseLower = aiResponse.toLowerCase();
+            const claimsBooking = (
+                // Pattern 1: "booking" + action word
+                (responseLower.includes('booking') && (
+                    responseLower.includes('received') || 
+                    responseLower.includes('confirmed') ||
+                    responseLower.includes('booked') ||
+                    responseLower.includes('set for') ||
+                    responseLower.includes('moved') ||
+                    responseLower.includes('rescheduled') ||
+                    responseLower.includes('scheduled') ||
+                    responseLower.includes('created')
+                )) ||
+                // Pattern 2: "i've scheduled/booked/moved"
+                (responseLower.includes("i've") && (
+                    responseLower.includes('scheduled') ||
+                    responseLower.includes('booked') ||
+                    responseLower.includes('moved') ||
+                    responseLower.includes('rescheduled')
+                )) ||
+                // Pattern 3: "done" + booking details (date, address, estimate all present)
+                (responseLower.includes('done') && 
+                 responseLower.includes('date') && 
+                 responseLower.includes('address') &&
+                 (responseLower.includes('estimate') || responseLower.includes('rm ')))
             );
             const actuallyCalledBookingTool = allToolCalls.some(tc => 
                 tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'

@@ -158,7 +158,7 @@ When calling activateWarranty, use:
 When calling getAvailableSlots, use:
   businessId: "${businessId}"
 
-⚠️ CRITICAL: When customer selects a time slot, you MUST call createBooking with:
+⚠️ CRITICAL: When customer selects a time slot, call createBooking IMMEDIATELY with:
   businessId: "${businessId}"
   customerId: "${customerContext?.id || ''}"
   customerPhone: "${customerPhone}"
@@ -170,7 +170,14 @@ When calling getAvailableSlots, use:
   estimateAmount: (the price as a number, e.g., 120)
   currency: "RM"
 
+⚠️ CANCELLATION: When customer wants to cancel, call cancelBooking with:
+  customerPhone: "${customerPhone}"
+  businessId: "${businessId}"
+  reason: (optional reason)
+The tool will automatically find and cancel their active booking.
+
 ❌ NEVER say "Booking Request Received" without calling createBooking first!
+❌ Do NOT ask "Shall I book it?" - when they select a slot, JUST BOOK IT!
 `;
             
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);

@@ -81,7 +81,9 @@ const getCustomerBookingsSchema = z.object({
 });
 
 const cancelBookingSchema = z.object({
-    bookingId: z.string().describe('The booking UUID to cancel'),
+    bookingId: z.string().optional().describe('The booking UUID to cancel (if known)'),
+    customerPhone: z.string().optional().describe('Customer phone number (if bookingId not known)'),
+    businessId: z.string().optional().describe('Business ID (required if using customerPhone)'),
     reason: z.string().optional().describe('Reason for cancellation'),
 });
 
@@ -477,13 +479,14 @@ export const receptionistTools = {
                 return { success: false, error: error.message };
             }
 
-            // Update customer status
+            // Update customer status AND notes for dashboard visibility
             if (customerId) {
                 await supabase
                     .from('customers')
                     .update({ 
                         status: 'booked',
                         address,
+                        notes: `📅 SELECTED SLOT: ${dayLabel} ${windowLabel}\n📍 ADDRESS: ${address}\n🛠️ Service: ${serviceType}\n💰 Estimate: ${currency} ${estimateAmount}`,
                     })
                     .eq('id', customerId);
             }
@@ -637,15 +640,46 @@ export const receptionistTools = {
      * Cancel a booking
      */
     cancelBooking: tool({
-        description: 'Cancel a customer booking. Call this when customer wants to cancel their appointment.',
+        description: 'Cancel a customer booking. Can use bookingId if known, or customerPhone+businessId to find and cancel their most recent pending booking.',
         inputSchema: cancelBookingSchema,
         execute: async (input: CancelBookingInput) => {
-            const { bookingId, reason } = input;
+            let { bookingId, customerPhone, businessId, reason } = input;
+            
+            console.log('   🗑️ cancelBooking called with:', JSON.stringify(input));
+
+            // If no bookingId, try to find by phone
+            if (!bookingId && customerPhone && businessId) {
+                const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+                const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+                const today = new Date().toISOString().split('T')[0];
+                
+                const { data: bookings, error: findError } = await supabase
+                    .from('bookings')
+                    .select('id, slot_label, customer_name')
+                    .eq('business_id', businessId)
+                    .or(`customer_phone.eq.${phoneWithPlus},customer_phone.eq.${phoneWithoutPlus}`)
+                    .in('status', ['pending', 'confirmed'])
+                    .gte('slot_date', today)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+                
+                if (findError || !bookings || bookings.length === 0) {
+                    console.log('   ❌ No active booking found for phone:', customerPhone);
+                    return { success: false, error: 'No active booking found for this customer' };
+                }
+                
+                bookingId = bookings[0].id;
+                console.log('   ✅ Found booking by phone:', bookingId);
+            }
+            
+            if (!bookingId) {
+                return { success: false, error: 'Need bookingId or customerPhone+businessId to cancel' };
+            }
 
             // First check if booking exists and is cancellable
             const { data: booking, error: fetchError } = await supabase
                 .from('bookings')
-                .select('id, status, slot_label, customer_name')
+                .select('id, status, slot_label, customer_name, customer_id')
                 .eq('id', bookingId)
                 .single();
 
@@ -673,6 +707,16 @@ export const receptionistTools = {
             if (updateError) {
                 return { success: false, error: updateError.message };
             }
+            
+            // Also update customer status back to warranty_activated if they had one
+            if (booking.customer_id) {
+                await supabase
+                    .from('customers')
+                    .update({ status: 'warranty_activated' })
+                    .eq('id', booking.customer_id);
+            }
+            
+            console.log('   ✅ Booking cancelled:', bookingId);
 
             return {
                 success: true,

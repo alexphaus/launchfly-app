@@ -37,6 +37,7 @@ export default async function CommandCenterPage({ params }) {
 
     let business = null;
     let leads = [];
+    let bookings = [];
     let stats = { activeQuotes: 0, pipeline: 0, booked: 0 };
 
     try {
@@ -54,7 +55,7 @@ export default async function CommandCenterPage({ params }) {
             business = businessRecord;
         }
 
-        // Fetch recent leads/jobs
+        // Fetch recent customers
         const { data: leadsData } = await supabase
             .from('customers')
             .select('*')
@@ -64,17 +65,32 @@ export default async function CommandCenterPage({ params }) {
             .order('created_at', { ascending: false })
             .limit(20);
 
+        // Fetch recent bookings (last 30 days and future)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const { data: bookingsData } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('business_id', businessId)
+            .gte('slot_date', thirtyDaysAgo.toISOString().split('T')[0])
+            .order('slot_date', { ascending: true });
+
+        if (bookingsData) {
+            bookings = bookingsData;
+        }
+
         if (leadsData) {
             leads = leadsData;
 
             // Calculate stats
-            stats.activeQuotes = leadsData.filter(l => l.status === 'new' || l.status === 'quoted').length;
-            stats.booked = leadsData.filter(l => l.status === 'booked' || l.status === 'confirmed').length;
+            stats.activeQuotes = leadsData.filter(l => l.status === 'new' || l.status === 'quoted' || l.status === 'warranty_activated').length;
+            stats.booked = bookingsData?.filter(b => b.status === 'pending' || b.status === 'confirmed').length || 0;
 
-            // Estimate pipeline from notes (quote values)
-            leadsData.forEach(lead => {
-                if (lead.notes && lead.notes.includes('Estimate:')) {
-                    const match = lead.notes.match(/Estimate:.*?(\d+)/);
+            // Estimate pipeline from bookings
+            bookingsData?.forEach(booking => {
+                if (booking.estimate && (booking.status === 'pending' || booking.status === 'confirmed')) {
+                    const match = booking.estimate.match(/(\d+)/);
                     if (match) {
                         stats.pipeline += parseInt(match[1]) || 0;
                     }
@@ -101,6 +117,7 @@ export default async function CommandCenterPage({ params }) {
         <CommandCenter
             business={business}
             initialLeads={leads}
+            initialBookings={bookings}
             initialStats={stats}
         />
     );

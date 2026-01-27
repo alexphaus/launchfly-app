@@ -1,13 +1,16 @@
 # Debug and test files
 debug-*.js
 test-*.js
+test-*.ts
 *-test.js
+*-test.ts
 check-*.js
 simulate-*.js
 comprehensive-test.js
 unit-test.js
 *.test.js
 *.spec.js
+stress-test-*.ts
 
 # Development files
 .env.local

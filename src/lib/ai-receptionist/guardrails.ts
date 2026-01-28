@@ -164,4 +164,4 @@ Output ONLY the category name, nothing else.`,
             return 'other';
         }
     }
-
+}

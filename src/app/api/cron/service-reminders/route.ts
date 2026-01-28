@@ -232,6 +232,14 @@ export async function GET(request: NextRequest) {
                         })
                         .eq('id', service.service_record_id);
 
+                    // Update customer status to 'reminder_sent' so V2 webhook knows to enter booking flow
+                    await supabase
+                        .from('customers')
+                        .update({
+                            status: 'reminder_sent',
+                        })
+                        .eq('id', service.customer_id);
+
                     console.log(`✅ Sent ${channel.toUpperCase()} reminder to ${recipient.customerName}: ${usedTemplate.name}`);
                 } else {
                     result.failed++;

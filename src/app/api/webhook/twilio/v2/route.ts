@@ -67,13 +67,30 @@ export async function POST(request: NextRequest) {
             businessId = await getLastBusinessId(customerPhone);
         }
 
-        // 3. Build context for the AI - PARALLEL FETCHING for speed (Gap 3 fix)
-        let businessContext: BusinessContext | null = null;
-        let customerContext: CustomerContext | null = null;
-
         // Prepare phone formats for customer lookup
         const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
         const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+
+        // If STILL no business ID, check if customer exists and get their business_id
+        // This is crucial for Smart Nag - customer replies "YES" without [BIZ:] tag
+        if (!businessId) {
+            const { data: existingCustomer } = await supabase
+                .from('customers')
+                .select('business_id, status')
+                .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+            
+            if (existingCustomer?.business_id) {
+                businessId = existingCustomer.business_id;
+                console.log(`   📱 Found customer's business_id from DB: ${businessId}`);
+            }
+        }
+
+        // 3. Build context for the AI - PARALLEL FETCHING for speed (Gap 3 fix)
+        let businessContext: BusinessContext | null = null;
+        let customerContext: CustomerContext | null = null;
 
         if (businessId) {
             // Run business, customer, and history queries in PARALLEL

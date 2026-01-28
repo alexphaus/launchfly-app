@@ -657,41 +657,58 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                 console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking/reschedule but did NOT call tools!`);
                 console.error(`   ⚠️ Response was: ${aiResponse.substring(0, 300)}`);
 
-                // Check if this looks like a new booking (has address info) or a reschedule
-                const historyText = history.map(h => h.content).join(' ').toLowerCase();
-                const hasAddressInConversation = historyText.includes('makati') || historyText.includes('manila') || 
-                    historyText.includes('ave') || historyText.includes('street') || historyText.includes('unit') ||
-                    historyText.includes('blk') || historyText.includes('lot') || /\d+\s+\w+\s+(?:street|st|ave|avenue)/i.test(historyText);
-                const hasDateInConversation = historyText.includes('friday') || historyText.includes('morning') || 
-                    historyText.includes('afternoon') || historyText.includes('tomorrow') || historyText.includes('today');
+                // Check if this looks like an address was just provided (for createBooking retry)
+                const looksLikeAddress = messageText.length > 5 && (
+                    /\d/.test(messageText) || // Has numbers (street number)
+                    messageText.toLowerCase().includes('street') ||
+                    messageText.toLowerCase().includes('ave') ||
+                    messageText.toLowerCase().includes('road') ||
+                    messageText.toLowerCase().includes('blvd') ||
+                    messageText.toLowerCase().includes('building') ||
+                    messageText.toLowerCase().includes('floor') ||
+                    messageText.toLowerCase().includes('unit') ||
+                    messageText.toLowerCase().includes('makati') ||
+                    messageText.toLowerCase().includes('manila') ||
+                    messageText.toLowerCase().includes('kl') ||
+                    messageText.toLowerCase().includes('selangor')
+                );
 
-                // RETRY MECHANISM: Force the AI to call the correct tool
+                // RETRY MECHANISM: Force the AI to call the tool
                 console.log(`   🔄 Retrying with strict tool enforcement...`);
-                console.log(`   📍 Has address: ${hasAddressInConversation}, Has date: ${hasDateInConversation}`);
+                console.log(`   📍 Looks like address provided: ${looksLikeAddress}`);
                 
-                // If we have both address and date info, this is likely a new booking that should be forced
-                if (hasAddressInConversation && hasDateInConversation) {
-                    console.log(`   🎯 Forcing createBooking with specific tool choice...`);
+                // If address was just provided, force createBooking specifically
+                if (looksLikeAddress) {
+                    console.log(`   🔄 Forcing createBooking with address...`);
                     
                     const bookingRetryResult = await generateText({
                         model: openai('gpt-4o-mini'),
-                        system: `You are a booking assistant. Your ONLY job is to call createBooking NOW.
+                        system: `You are a booking assistant. The customer just provided their ADDRESS: "${messageText}"
 
-Extract from the conversation:
-- Customer name: "${customerContext?.name || 'Customer'}"
-- Customer phone: "${customerPhone}"
-- Business ID: "${businessId}"
-- Customer ID: "${customerContext?.id || ''}"
-- Address: (find in conversation - look for street/ave/makati etc)
-- Date: (find in conversation - Friday = 2026-01-31, etc)
-- Window: "morning" or "afternoon" (from conversation)
-- Service type: "Aircon Cleaning (1 unit)" or similar
-- Estimate: 120 or the amount from conversation
+Your ONLY job is to call createBooking with ALL the details from conversation history.
 
-CALL createBooking NOW with these parameters. Do NOT ask questions.`,
+REQUIRED: Look through the conversation to find:
+- The selected DATE (e.g., "2026-01-30" or "Friday")
+- The selected WINDOW ("morning" or "afternoon")
+- The SERVICE TYPE (e.g., "Aircon Cleaning")
+- The PRICE ESTIMATE (e.g., 120)
+
+Then call createBooking with:
+- businessId: "${businessId}"
+- customerId: "${customerContext?.id || ''}"
+- customerPhone: "${customerPhone}"
+- customerName: "${customerContext?.name || ''}"
+- address: "${messageText}" (THE ADDRESS JUST PROVIDED!)
+- date: (YYYY-MM-DD format)
+- window: "morning" or "afternoon"
+- serviceType: (from conversation)
+- estimateAmount: (number from conversation)
+- currency: "RM"
+
+DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                         messages: [
                             ...history.slice(-15),
-                            { role: 'user', content: messageText },
+                            { role: 'user', content: `My address is: ${messageText}` },
                         ],
                         tools: {
                             createBooking: receptionistTools.createBooking,
@@ -703,23 +720,24 @@ CALL createBooking NOW with these parameters. Do NOT ask questions.`,
                     const bookingRetryResults = bookingRetryResult.steps.flatMap(step => step.toolResults || []);
                     
                     if (bookingRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
-                        console.log(`   ✅ Booking retry called createBooking!`);
+                        console.log(`   ✅ createBooking retry successful!`);
                         
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const bookingResult = bookingRetryResults.find(tr => (tr as any).toolName === 'createBooking');
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const bookingOutput = (bookingResult as any)?.output ?? (bookingResult as any)?.result;
                         
                         if (bookingOutput?.success) {
-                            console.log(`   ✅ createBooking SUCCESS in retry!`);
-                            aiResponse = bookingRetryResult.text || `Your booking has been confirmed! ✅\n\n📅 ${bookingOutput.slotLabel || 'Your selected slot'}\n📍 ${bookingOutput.address || 'Address confirmed'}\n💰 ${bookingOutput.estimate || 'Price confirmed'}\n\nThe technician will WhatsApp you 30 minutes before arrival. Anything else I can help with?`;
-                            allToolCalls.push(...bookingRetryToolCalls);
-                            // Note: Don't push steps since they have different tool types - results already captured
+                            aiResponse = `Done! ✅ Your booking is confirmed!\n\n📅 ${bookingOutput.slotLabel || 'Your selected time'}\n📍 ${messageText}\n💰 ${bookingOutput.estimate || 'RM 120'}\n\nThe technician will WhatsApp you 30 minutes before arrival. 🔧`;
                         } else {
-                            console.log(`   ❌ createBooking FAILED in retry: ${bookingOutput?.error}`);
-                            aiResponse = `I apologize, I had trouble completing your booking. ${bookingOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;
+                            aiResponse = `I apologize, I had trouble creating your booking. ${bookingOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;
                         }
+                        
+                        allToolCalls.push(...bookingRetryToolCalls);
+                        bookingRetryResult.steps.forEach(step => result.steps.push(step));
                     }
                 } else {
-                    // Generic retry with all tools
+                    // Generic retry for other cases
                     const retryResult = await generateText({
                         model: openai('gpt-4o-mini'),
                         system: systemPrompt + `\n\nSYSTEM ALERT: You just claimed to have booked/rescheduled an appointment but YOU DID NOT CALL THE DATABASE TOOL. 
@@ -739,9 +757,7 @@ CALL createBooking NOW with these parameters. Do NOT ask questions.`,
                         console.log(`   ✅ Retry successful! Tools called: ${retryToolCalls.map(t => t.toolName).join(', ')}`);
                         aiResponse = retryResult.text || aiResponse;
                         allToolCalls.push(...retryToolCalls);
-                        retryResult.steps.forEach(step => {
-                            result.steps.push(step);
-                        });
+                        retryResult.steps.forEach(step => result.steps.push(step));
                     } else {
                         console.error(`   ❌ Retry failed to call tool. Converting response to error.`);
                         aiResponse = "I apologize, I'm having trouble accessing the booking calendar right now. Please try again or reply 'HUMAN' to speak with the owner.";

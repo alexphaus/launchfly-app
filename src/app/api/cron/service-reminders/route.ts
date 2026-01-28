@@ -232,11 +232,11 @@ export async function GET(request: NextRequest) {
                         })
                         .eq('id', service.service_record_id);
 
-                    // Update customer status to 'reminder_sent' so V2 webhook knows to enter booking flow
-                    await supabase
-                        .from('customers')
-                        .update({
+                    // UPDATE CUSTOMER STATUS for V2 handler (Critical!)
+                    await supabase.from('customers')
+                        .update({ 
                             status: 'reminder_sent',
+                            notes: (service.customer_notes || '') + `\n[SMART_NAG_SENT: ${new Date().toISOString()}] Service: ${service.service_name || 'General Service'}`
                         })
                         .eq('id', service.customer_id);
 

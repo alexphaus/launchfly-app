@@ -734,7 +734,8 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                         }
                         
                         allToolCalls.push(...bookingRetryToolCalls);
-                        bookingRetryResult.steps.forEach(step => result.steps.push(step));
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        bookingRetryResult.steps.forEach(step => result.steps.push(step as any));
                     }
                 } else {
                     // Generic retry for other cases

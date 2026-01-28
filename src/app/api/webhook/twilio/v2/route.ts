@@ -13,6 +13,7 @@ import { receptionistTools } from '../../../../../lib/ai-receptionist/tools';
 import { generateSystemPrompt, type BusinessContext, type CustomerContext } from '../../../../../lib/ai-receptionist/system-prompt';
 import { getConversationHistory, saveMessage, getLastBusinessId } from '../../../../../lib/ai-receptionist/history';
 import { sendTypingIndicator, sendJobConfirmed, sendJobCard } from '../../../../../lib/whatsapp-push';
+import { Guardrails } from '@/lib/ai-receptionist/guardrails';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,6 +149,7 @@ export async function POST(request: NextRequest) {
                     lastServiceDate: customer.last_service_date,
                     lastServiceType: customer.notes?.includes('Service:') ? customer.notes.split('Service:')[1]?.split('.')[0]?.trim() : undefined,
                     address: customer.address,
+                    status: customer.status, // Pass status so system prompt knows if mid-booking
                 };
                 
                 // ============================================================
@@ -185,11 +187,14 @@ export async function POST(request: NextRequest) {
                         });
                     }
                     
-                    // Update status to booking flow
+                    // Update status to booking flow AND save context to history
                     await supabase.from('customers').update({
-                        status: 'sticker_units',
+                        status: 'booking_in_progress', // Use clear status that V2 won't override
                         notes: (customer.notes || '') + `\n[REMINDER_CONVERTED: ${new Date().toISOString()}]`
                     }).eq('id', customer.id);
+                    
+                    // Save the AI response to history so next message has context
+                    await saveMessage(customerPhone, 'assistant', `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`, businessId);
                     
                     // 🔔 NOTIFY OWNER - Customer converting from reminder!
                     const ownerPhone = business?.whatsapp_number || business?.phone_number;
@@ -433,35 +438,7 @@ When customer has an existing booking and wants to CHANGE the date/time:
             }
             
             // SAFETY CHECK 2: Detect if AI claims to have booked without actually calling createBooking or rescheduleBooking
-            const responseLower = aiResponse.toLowerCase();
-            const claimsBooking = (
-                // Pattern 1: "booking" + action word
-                (responseLower.includes('booking') && (
-                    responseLower.includes('received') || 
-                    responseLower.includes('confirmed') ||
-                    responseLower.includes('booked') ||
-                    responseLower.includes('set for') ||
-                    responseLower.includes('moved') ||
-                    responseLower.includes('rescheduled') ||
-                    responseLower.includes('scheduled') ||
-                    responseLower.includes('created')
-                )) ||
-                // Pattern 2: "i've scheduled/booked/moved"
-                (responseLower.includes("i've") && (
-                    responseLower.includes('scheduled') ||
-                    responseLower.includes('booked') ||
-                    responseLower.includes('moved') ||
-                    responseLower.includes('rescheduled')
-                )) ||
-                // Pattern 3: "done" + specific booking language
-                (responseLower.includes('done') && (
-                    responseLower.includes('scheduled') ||
-                    responseLower.includes('rescheduled') ||
-                    responseLower.includes('moved') ||
-                    responseLower.includes('your booking') ||
-                    responseLower.includes('your cleaning')
-                ))
-            );
+            const { isHallucinating: claimsBooking } = Guardrails.detectHallucination(aiResponse, allToolCalls);
             
             // If booking tool was called but FAILED, and AI claims success, override response
             if (bookingToolFailed && claimsBooking) {
@@ -481,82 +458,31 @@ When customer has an existing booking and wants to CHANGE the date/time:
                 tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'
             );
             
-            // ALSO check if customer appears to have selected a slot but no booking was made
-            const messageLower = messageText.toLowerCase().trim();
-            const looksLikeSlotSelection = (
-                /^[1-4]$/.test(messageLower) || // Just "1", "2", "3", "4"
-                messageLower === 'tomorrow' ||
-                messageLower === 'today' ||
-                messageLower.includes('morning') ||
-                messageLower.includes('afternoon') ||
-                messageLower === 'yes' ||
-                messageLower === 'ok' ||
-                messageLower === 'sure' ||
-                messageLower === 'sounds good' ||
-                messageLower.startsWith('first') ||
-                messageLower.startsWith('second') ||
-                /^option\s*[1-4]$/i.test(messageLower)
-            );
-            
             // Check if previous response (from history) showed available slots
             const lastAssistantMsg = history.filter(h => h.role === 'assistant').pop()?.content?.toLowerCase() || '';
-            const wasShowingSlots = lastAssistantMsg.includes('available') || 
-                                   lastAssistantMsg.includes('1️⃣') ||
-                                   lastAssistantMsg.includes('9am') ||
-                                   lastAssistantMsg.includes('morning') ||
-                                   lastAssistantMsg.includes('afternoon');
             
-            // If customer selected a slot but we didn't book, force retry
-            if (looksLikeSlotSelection && wasShowingSlots && !actuallyCalledBookingTool && !claimsBooking) {
-                console.log(`   ⚠️ SLOT SELECTION DETECTED but no createBooking called! Message: "${messageText}"`);
-                console.log(`   🔄 Forcing createBooking retry...`);
-                
-                const slotRetryResult = await generateText({
-                    model: openai('gpt-4o-mini'),
-                    system: systemPrompt + `\n\nSYSTEM ALERT: The customer just selected a time slot by replying "${messageText}". 
-                    You MUST call createBooking NOW. Do not ask for confirmation - they already confirmed by selecting.
-                    Extract the slot details from the conversation and call createBooking IMMEDIATELY.`,
-                    messages: [
-                        ...history.slice(-10),
-                        { role: 'user', content: messageText },
-                    ],
-                    tools: receptionistTools,
-                    toolChoice: 'required',
-                });
-                
-                const slotRetryToolCalls = slotRetryResult.steps.flatMap(step => step.toolCalls || []);
-                if (slotRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
-                    console.log(`   ✅ Slot selection retry successful! createBooking called.`);
-                    aiResponse = slotRetryResult.text || aiResponse;
-                    allToolCalls.push(...slotRetryToolCalls);
-                    slotRetryResult.steps.forEach(step => result.steps.push(step));
-                }
-            }
-            
-            // SAFETY CHECK 4: Detect reschedule request that didn't call rescheduleBooking
-            const looksLikeRescheduleRequest = (
-                // Pattern: "X instead" (afternoon instead, morning instead)
-                (messageLower.includes('instead')) ||
-                // Pattern: "change to/my X"
-                (messageLower.includes('change') && (messageLower.includes('to') || messageLower.includes('time') || messageLower.includes('date') || messageLower.includes('my'))) ||
-                // Pattern: "move to/it"
-                (messageLower.includes('move') && (messageLower.includes('to') || messageLower.includes('it'))) ||
-                // Pattern: "switch to"
-                (messageLower.includes('switch')) ||
-                // Pattern: "make it X"
-                (messageLower.includes('make it')) ||
-                // Pattern: "reschedule" (not as question)
-                (messageLower.includes('reschedule') && !messageLower.includes('?')) ||
-                // Pattern: "can't make morning/afternoon"
-                (messageLower.includes("can't make") || messageLower.includes("cant make")) ||
-                // Pattern: "X doesn't work"
-                (messageLower.includes("doesn't work") || messageLower.includes("doesnt work")) ||
-                // Pattern: just "afternoon please" or "morning please" (after showing booking)
-                ((messageLower.includes('afternoon') || messageLower.includes('morning')) && messageLower.includes('please'))
-            );
+            // Use Guardrails for detection
+            const looksLikeSlotSelection = Guardrails.looksLikeSlotSelection(messageText, lastAssistantMsg);
+            let looksLikeRescheduleRequest = Guardrails.looksLikeReschedule(messageText);
+
             const calledRescheduleBooking = allToolCalls.some(tc => tc.toolName === 'rescheduleBooking');
             const hasExistingBooking = customerContext?.id || lastAssistantMsg.includes('booking') || lastAssistantMsg.includes('scheduled') || lastAssistantMsg.includes('appointment');
             
+            // Helper for retry logic
+            const messageLower = messageText.toLowerCase().trim();
+
+            // "Smart" Check: If regex missed it but context suggests it (e.g. other languages), verify intent
+            if (!looksLikeRescheduleRequest && hasExistingBooking && allToolCalls.length === 0 && messageText.length < 100) {
+                // Only run smart check if we think we might have missed something
+                const intent = await Guardrails.validateIntent(messageText, history);
+                if (intent === 'reschedule') {
+                    console.log(`   🧠 Guardrails Smart Check detected reschedule intent!`);
+                    looksLikeRescheduleRequest = true;
+                }
+            }
+
+            // RESCHEDULE CHECK - Run BEFORE slot selection!
+            // If customer wants to reschedule and we didn't call rescheduleBooking, handle it first
             if (looksLikeRescheduleRequest && hasExistingBooking && !calledRescheduleBooking) {
                 console.log(`   ⚠️ RESCHEDULE REQUEST DETECTED but rescheduleBooking not called! Message: "${messageText}"`);
                 console.log(`   🔄 Forcing rescheduleBooking retry...`);
@@ -584,23 +510,35 @@ When customer has an existing booking and wants to CHANGE the date/time:
                 const wantsMorning = messageLower.includes('morning') && !messageLower.includes("can't") && !messageLower.includes("cant");
                 
                 // Use the CURRENT booking date unless user specifies a different day
-                // This fixes the bug where "morning instead" would incorrectly use tomorrow
                 let targetDate = currentBooking?.slot_date || todayDate;
                 const specifiedDayInMessage = messageLower.includes('tomorrow') || messageLower.includes('today') || 
                     /monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(messageLower);
                 
                 if (specifiedDayInMessage || !currentBooking) {
-                    // User specified a day, or no booking found - default to tomorrow
+                    // User specified a day, or no booking found - calculate the target date
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
                     targetDate = tomorrow.toISOString().split('T')[0];
+                    
+                    // Check for specific day names
+                    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                    for (const day of dayNames) {
+                        if (messageLower.includes(day)) {
+                            const todayObj = new Date();
+                            const todayDay = todayObj.getDay();
+                            const targetDay = dayNames.indexOf(day);
+                            let daysUntil = targetDay - todayDay;
+                            if (daysUntil <= 0) daysUntil += 7;
+                            todayObj.setDate(todayObj.getDate() + daysUntil);
+                            targetDate = todayObj.toISOString().split('T')[0];
+                            break;
+                        }
+                    }
                 }
                 
                 // If user says "X instead", they want to flip the current window
-                // Otherwise use what they specified or default to afternoon
                 let targetWindow: string;
                 if (messageLower.includes('instead') && currentBooking) {
-                    // User wants to flip window
                     if (wantsAfternoon) targetWindow = 'afternoon';
                     else if (wantsMorning) targetWindow = 'morning';
                     else targetWindow = currentBooking.slot_time === 'morning' ? 'afternoon' : 'morning';
@@ -648,8 +586,33 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                     }
                     
                     allToolCalls.push(...rescheduleRetryToolCalls);
-                    // Don't push steps since they have different tool types
-                    // The tool results are still captured in allToolCalls
+                }
+            }
+            
+            // If customer selected a slot but we didn't book (and this ISN'T a reschedule request), force booking retry
+            else if (looksLikeSlotSelection && !actuallyCalledBookingTool && !claimsBooking) {
+                console.log(`   ⚠️ SLOT SELECTION DETECTED but no createBooking called! Message: "${messageText}"`);
+                console.log(`   🔄 Forcing createBooking retry...`);
+                
+                const slotRetryResult = await generateText({
+                    model: openai('gpt-4o-mini'),
+                    system: systemPrompt + `\n\nSYSTEM ALERT: The customer just selected a time slot by replying "${messageText}". 
+                    You MUST call createBooking NOW. Do not ask for confirmation - they already confirmed by selecting.
+                    Extract the slot details from the conversation and call createBooking IMMEDIATELY.`,
+                    messages: [
+                        ...history.slice(-10),
+                        { role: 'user', content: messageText },
+                    ],
+                    tools: receptionistTools,
+                    toolChoice: 'required',
+                });
+                
+                const slotRetryToolCalls = slotRetryResult.steps.flatMap(step => step.toolCalls || []);
+                if (slotRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
+                    console.log(`   ✅ Slot selection retry successful! createBooking called.`);
+                    aiResponse = slotRetryResult.text || aiResponse;
+                    allToolCalls.push(...slotRetryToolCalls);
+                    slotRetryResult.steps.forEach(step => result.steps.push(step));
                 }
             }
             

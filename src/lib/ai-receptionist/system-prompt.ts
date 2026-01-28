@@ -26,6 +26,7 @@ export interface CustomerContext {
     lastServiceDate?: string;
     lastServiceType?: string;
     address?: string;
+    status?: string; // Current status: booking_in_progress, reminder_sent, etc.
 }
 
 /**
@@ -48,18 +49,19 @@ export function generateSystemPrompt(
         return `- ${d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}`;
     }).join('\n');
 
+    const isMidBooking = customer?.status === 'booking_in_progress';
     const customerSection = customer?.isReturning ? `
 CURRENT CUSTOMER:
 - Customer ID: ${customer.id || 'Unknown'}
 - Name: ${customer.name || 'Unknown'}
-- Phone: (use the phone from the incoming message)
+- Status: ${isMidBooking ? '🔄 MID-BOOKING FLOW (from reminder)' : 'Returning customer'}
 - Warranty Status: ${customer.warrantyActive ? `✅ Active until ${customer.warrantyEndDate}` : '❌ Expired or None'}
 - Last Service: ${customer.lastServiceDate || 'Unknown'} (${customer.lastServiceType || 'Unknown'})
 - Address on File: ${customer.address || 'None'}
+${isMidBooking ? '\n⚠️ IMPORTANT: This customer is responding to a reminder. They are MID-BOOKING. Do NOT show the welcome menu. Continue collecting booking details (units → address → slots → book).' : ''}
 ` : `
 CURRENT CUSTOMER:
 - New customer (first interaction)
-- Phone: (use the phone from the incoming message)
 `;
 
     return `You are the friendly AI Receptionist for **${business.name}**.
@@ -124,7 +126,10 @@ CONVERSATION RULES:
    - After activateWarranty succeeds, ask for feedback rating (see Rule 6)
    
    RETURNING CUSTOMER PATH (when customer context shows IS returning):
-   - Welcome back with warranty status
+   - ⚠️ FIRST CHECK: If customer status is "MID-BOOKING FLOW", do NOT show welcome menu!
+     * They already said yes to a reminder. Continue the booking flow.
+     * If they just gave you a number (like "1"), that's the number of units!
+   - Otherwise (normal returning customer): Welcome back with warranty status
    - Show menu: 1️⃣ Book Cleaning 2️⃣ Report Issue 3️⃣ Check Prices
 
 2. BOOKING FLOW:

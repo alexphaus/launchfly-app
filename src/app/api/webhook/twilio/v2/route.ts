@@ -712,7 +712,7 @@ CALL createBooking NOW with these parameters. Do NOT ask questions.`,
                             console.log(`   ✅ createBooking SUCCESS in retry!`);
                             aiResponse = bookingRetryResult.text || `Your booking has been confirmed! ✅\n\n📅 ${bookingOutput.slotLabel || 'Your selected slot'}\n📍 ${bookingOutput.address || 'Address confirmed'}\n💰 ${bookingOutput.estimate || 'Price confirmed'}\n\nThe technician will WhatsApp you 30 minutes before arrival. Anything else I can help with?`;
                             allToolCalls.push(...bookingRetryToolCalls);
-                            bookingRetryResult.steps.forEach(step => result.steps.push(step));
+                            // Note: Don't push steps since they have different tool types - results already captured
                         } else {
                             console.log(`   ❌ createBooking FAILED in retry: ${bookingOutput?.error}`);
                             aiResponse = `I apologize, I had trouble completing your booking. ${bookingOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;

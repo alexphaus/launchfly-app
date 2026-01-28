@@ -1,168 +1,167 @@
+// src/lib/ai-receptionist/guardrails.ts
+// Safety nets for AI behavior - Detect hallucinations and classify intent
+
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
+import type { ToolCall, ConversationMessage } from './types';
 
 /**
- * AI Receptionist Guardrails
+ * Guardrails provide safety checks for the AI Receptionist
  * 
- * This module provides "Safety Nets" to catch cases where the main AI 
- * fails to call tools despite obvious user intent.
- * 
- * Strategies:
- * 1. Regex Patterns: Fast, zero-cost, handles common English phrasing
- * 2. AI Classifier: Robust, handles all languages, slightly slower (fallback)
- * 3. Hallucination Detection: Checks if AI says "Done" without doing anything
+ * 1. Hallucination Detection - Catch when AI claims success without calling tools
+ * 2. Intent Classification - Understand user intent (works in any language)
+ * 3. Slot Selection Detection - Know when user is confirming a booking slot
  */
-
-export interface StartGuardrailInput {
-    message: string;
-    history: any[];
-    businessId: string;
-    customerPhone: string;
-}
-
 export class Guardrails {
     
     /**
-     * Detect if the main AI claimed to perform an action but didn't call the tool.
-     * @param response The text response from the AI
-     * @param toolCalls The list of tool calls actually made
+     * Detect if AI claimed to perform an action without calling the tool
      */
-    static detectHallucination(response: string, toolCalls: any[]): { isHallucinating: boolean; type?: 'booking' | 'reschedule' | 'cancel' } {
-        const responseLower = response.toLowerCase();
-        const hasBookingTools = toolCalls.some(tc => 
-            ['createBooking', 'rescheduleBooking', 'cancelBooking'].includes(tc.toolName)
+    static detectHallucination(
+        response: string, 
+        toolCalls: ToolCall[]
+    ): { isHallucinating: boolean; type?: 'booking' | 'reschedule' | 'cancel' } {
+        
+        // If booking tools were called, not hallucinating
+        const bookingTools = ['createBooking', 'rescheduleBooking', 'cancelBooking'];
+        if (toolCalls.some(tc => bookingTools.includes(tc.toolName))) {
+            return { isHallucinating: false };
+        }
+        
+        const lower = response.toLowerCase();
+        
+        // Check for booking confirmation language
+        const claimsBooked = (
+            (lower.includes('booking') && (
+                lower.includes('confirmed') ||
+                lower.includes('received') ||
+                lower.includes('created') ||
+                lower.includes('scheduled')
+            )) ||
+            (lower.includes("i've") && (
+                lower.includes('booked') ||
+                lower.includes('scheduled') ||
+                lower.includes('reserved')
+            )) ||
+            (lower.includes('done') && lower.includes('booking'))
         );
-
-        if (hasBookingTools) return { isHallucinating: false };
-
-        // Check for "Action Confirmed" language without tools
-        const claimsBooking = (
-            // "I have booked..."
-            (responseLower.includes("i've") || responseLower.includes("i have")) && 
-            (responseLower.includes('booked') || responseLower.includes('scheduled') || responseLower.includes('reserved'))
-        ) || (
-            // "Booking confirmed..."
-            responseLower.includes('confirmed') && 
-            (responseLower.includes('booking') || responseLower.includes('appointment'))
-        ) || (
-            // "Done! Your booking..."
-            responseLower.includes('done') && 
-            (responseLower.includes('booking') || responseLower.includes('appointment') || responseLower.includes('time'))
+        
+        if (claimsBooked) {
+            return { isHallucinating: true, type: 'booking' };
+        }
+        
+        // Check for reschedule confirmation language
+        const claimsRescheduled = (
+            lower.includes('rescheduled') ||
+            lower.includes('moved your') ||
+            lower.includes('changed your') ||
+            (lower.includes('new time') && lower.includes('set'))
         );
-
-        if (claimsBooking) return { isHallucinating: true, type: 'booking' };
-
-        const claimsReschedule = (
-            responseLower.includes('moved') || 
-            responseLower.includes('rescheduled') || 
-            responseLower.includes('changed your') ||
-            (responseLower.includes('new time') && responseLower.includes('is set'))
-        );
-
-        if (claimsReschedule) return { isHallucinating: true, type: 'reschedule' };
-
+        
+        if (claimsRescheduled) {
+            return { isHallucinating: true, type: 'reschedule' };
+        }
+        
         return { isHallucinating: false };
     }
-
+    
     /**
-     * Check if a message looks like a reschedule request using patterns.
-     * This is the "Fast Path" for common English phrasing.
+     * Fast check if message looks like a reschedule request (English patterns)
      */
     static looksLikeReschedule(message: string): boolean {
         const lower = message.toLowerCase().trim();
         
-        // 1. Direct keywords
+        // Direct keywords
         if (lower.includes('reschedule')) return true;
-        
-        // 2. "Instead" pattern (strong signal)
         if (lower.includes('instead')) return true;
+        if (lower.startsWith('actually')) return true;
         
-        // 3. Change/Move verbs
+        // Change/move verbs with targets
         if ((lower.includes('change') || lower.includes('move') || lower.includes('switch')) && 
-            (lower.includes('time') || lower.includes('date') || lower.includes('to') || lower.includes('it') || lower.includes('slot'))) {
+            (lower.includes('to') || lower.includes('time') || lower.includes('date') || lower.includes('it'))) {
             return true;
         }
-
-        // 4. "Can it be X?" (Polite request)
+        
+        // Polite requests
         if (lower.startsWith('can it be') || lower.startsWith('could it be')) {
             return true;
         }
         
-        // 5. "Actually X" (Correction)
-        if (lower.startsWith('actually')) return true;
-
-        // 6. Negatives about current slot
+        // Negatives about current slot
         if (lower.includes("can't make") || lower.includes("cannot make") || lower.includes("won't be able")) {
             return true;
         }
         
-        // 7. "Doesn't work"
         if (lower.includes("doesn't work") || lower.includes("does not work")) {
             return true;
         }
-
+        
         return false;
     }
-
+    
     /**
-     * Check if a message looks like a slot selection (1, 2, "morning").
+     * Check if message looks like a slot selection
      */
     static looksLikeSlotSelection(message: string, lastBotMessage: string): boolean {
         const lower = message.toLowerCase().trim();
+        const botLower = lastBotMessage.toLowerCase();
         
-        // Context check: Did we just show slots?
-        const showedSlots = lastBotMessage.toLowerCase().includes('available') || 
-                           lastBotMessage.includes('1️⃣') || 
-                           lastBotMessage.includes('morning') || 
-                           lastBotMessage.includes('afternoon');
-
+        // Context: Did bot just show slots?
+        const showedSlots = (
+            botLower.includes('available') ||
+            botLower.includes('1️⃣') ||
+            botLower.includes('slot') ||
+            (botLower.includes('morning') && botLower.includes('afternoon'))
+        );
+        
         if (!showedSlots) return false;
-
-        // Pattern matching
+        
+        // Pattern matching for selection
         return (
-            /^[1-4]$/.test(lower) || // "1", "2"
-            /^option\s*[1-4]$/.test(lower) ||
+            /^[1-4]$/.test(lower) ||
+            /^option\s*[1-4]$/i.test(lower) ||
             lower === 'morning' || lower === 'afternoon' ||
             lower === 'tomorrow' || lower === 'today' ||
             lower.startsWith('first') || lower.startsWith('second') ||
-            lower === 'yes' || lower === 'ok' || lower === 'sure' // Often users just say "ok" to the first date shown
+            lower === 'yes' || lower === 'ok' || lower === 'sure' || lower === 'okay'
         );
     }
-
+    
     /**
-     * The "Smart Check": Uses a lightweight AI call to classify intent.
-     * Use this when no tools were called but we suspect the user wanted something.
-     * Handles ALL languages.
+     * AI-powered intent classifier (handles any language)
+     * Use sparingly - adds latency
      */
-    static async validateIntent(message: string, history: any[]): Promise<'reschedule' | 'booking' | 'other'> {
+    static async validateIntent(
+        message: string, 
+        history: ConversationMessage[]
+    ): Promise<'reschedule' | 'booking' | 'cancel' | 'other'> {
         try {
-            // Take the last few messages for context
-            const recentHistory = history.slice(-3);
-            
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
-                system: `You are an Intent Classifier for an aircon service bot.
-                Analyze the USER MESSAGE and classify their intent into exactly one category:
+                system: `Classify the user's intent into ONE category:
                 
-                1. "reschedule": User wants to move/change an existing booking. (e.g. "Can we do tomorrow?", "Change to 2pm", "Tukar tarikh", "Mover la fecha")
-                2. "booking": User is selecting a time slot or confirming a new booking. (e.g. "Morning", "1", "Yes", "Slot 2")
-                3. "other": Anything else (questions, greetings, cancellations, complaints).
-                
-                Output ONLY the category name.`,
+reschedule - User wants to change/move an existing booking date or time
+booking - User is selecting a slot or confirming a new booking  
+cancel - User wants to cancel/delete their booking
+other - Anything else
+
+Output ONLY the category name, nothing else.`,
                 messages: [
-                    ...recentHistory,
+                    ...history.slice(-3),
                     { role: 'user', content: message }
                 ],
             });
-
+            
             const intent = result.text.trim().toLowerCase();
+            
             if (intent.includes('reschedule')) return 'reschedule';
             if (intent.includes('booking')) return 'booking';
+            if (intent.includes('cancel')) return 'cancel';
             return 'other';
-
+            
         } catch (e) {
-            console.error('Guardrails AI check failed:', e);
-            return 'other'; // Fail safe
+            console.error('Guardrails intent check failed:', e);
+            return 'other';
         }
     }
-}
+

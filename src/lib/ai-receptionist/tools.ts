@@ -91,7 +91,7 @@ const rescheduleBookingSchema = z.object({
     bookingId: z.string().optional().describe('The booking UUID to reschedule (if known)'),
     customerPhone: z.string().optional().describe('Customer phone number (if bookingId not known)'),
     businessId: z.string().optional().describe('Business ID (required if using customerPhone)'),
-    newDate: z.string().describe('New date in YYYY-MM-DD format'),
+    newDate: z.string().optional().describe('New date in YYYY-MM-DD format. OPTIONAL: If omitted, keeps the current date (useful for "change time to morning" requests).'),
     newWindow: z.enum(['morning', 'afternoon']).describe('New time window'),
 });
 
@@ -834,6 +834,21 @@ export const receptionistTools = {
 
             if (!bookingId) {
                 return { success: false, error: 'Need bookingId or customerPhone+businessId to reschedule' };
+            }
+
+            // FIX: If newDate is missing (e.g. "change to morning"), fetch existing date
+            if (!newDate) {
+                const { data: currentBooking, error: fetchErr } = await supabase
+                    .from('bookings')
+                    .select('slot_date')
+                    .eq('id', bookingId)
+                    .single();
+                
+                if (fetchErr || !currentBooking) {
+                    return { success: false, error: 'Could not fetch existing booking date' };
+                }
+                newDate = currentBooking.slot_date;
+                console.log(`   🗓️ Date preserved from existing booking: ${newDate}`);
             }
 
             // Check availability for the new slot

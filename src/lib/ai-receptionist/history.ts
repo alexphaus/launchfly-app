@@ -27,12 +27,6 @@ export interface ConversationMessage {
 /**
  * Get recent conversation history for a phone number
  * Returns messages in the format expected by Vercel AI SDK
- * 
- * COMPATIBILITY NOTE: Mapped to 'conversation_history' table (V2 schema)
- * Mappings: 
- * - sender: 'customer' -> role: 'user'
- * - sender: 'bot' -> role: 'assistant'
- * - message -> content
  */
 export async function getConversationHistory(phone: string, businessId?: string): Promise<Message[]> {
     const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
@@ -42,9 +36,9 @@ export async function getConversationHistory(phone: string, businessId?: string)
 
     // FIX: Order by DESCENDING to get the *latest* messages, then reverse them
     const query = supabase
-        .from('conversation_history')
-        .select('sender, message, created_at') // V2 columns
-        .or(`customer_phone.eq.${phoneNormalized},customer_phone.eq.+${phoneNormalized}`)
+        .from('chat_history')
+        .select('role, content, created_at')
+        .eq('phone', phoneNormalized)
         .gte('created_at', cutoffTime.toISOString())
         .order('created_at', { ascending: false }) // Get NEWEST first
         .limit(MAX_HISTORY_LENGTH);
@@ -63,10 +57,10 @@ export async function getConversationHistory(phone: string, businessId?: string)
     // Reverse to put back in chronological order (oldest -> newest) for the AI
     const chronologicalMessages = messages.reverse();
 
-    // Convert to CoreMessage format with mapping
+    // Convert to CoreMessage format
     return chronologicalMessages.map(msg => ({
-        role: msg.sender === 'customer' ? 'user' : 'assistant',
-        content: msg.message,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
     }));
 }
 
@@ -80,18 +74,16 @@ export async function saveMessage(
     businessId?: string,
     toolCalls?: object[],
 ): Promise<void> {
-    // V2: Stores standard normalized phone (usually +123...)
-    // Ensure we store it consistently
-    const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone.replace(/^whatsapp:/, '')}`;
+    const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
 
     const { error } = await supabase
-        .from('conversation_history')
+        .from('chat_history')
         .insert({
-            customer_phone: phoneWithPlus,
+            phone: phoneNormalized,
             business_id: businessId,
-            sender: role === 'user' ? 'customer' : 'bot',
-            message: content,
-            // tool_calls not supported in V2 schema yet, ignoring
+            role,
+            content,
+            tool_calls: toolCalls ? JSON.stringify(toolCalls) : null,
         });
 
     if (error) {
@@ -104,34 +96,30 @@ export async function saveMessage(
  * Useful when starting a completely new flow
  */
 export async function clearHistory(phone: string, businessId?: string): Promise<void> {
-    // V2 implementation
-    // Generally we don't clear history in the DB, just ignore old ones
-    // But for completeness:
-    /*
-    const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone.replace(/^whatsapp:/, '')}`;
+    const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
+
     const query = supabase
-        .from('conversation_history')
+        .from('chat_history')
         .delete()
-        .eq('customer_phone', phoneWithPlus);
+        .eq('phone', phoneNormalized);
 
     if (businessId) {
         query.eq('business_id', businessId);
     }
 
     await query;
-    */
 }
 
 /**
  * Get the last business ID a customer interacted with
  */
 export async function getLastBusinessId(phone: string): Promise<string | null> {
-    const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone.replace(/^whatsapp:/, '')}`;
+    const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
 
     const { data } = await supabase
-        .from('conversation_history')
+        .from('chat_history')
         .select('business_id')
-        .eq('customer_phone', phoneWithPlus)
+        .eq('phone', phoneNormalized)
         .not('business_id', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)

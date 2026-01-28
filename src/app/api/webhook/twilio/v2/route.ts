@@ -657,37 +657,95 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                 console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking/reschedule but did NOT call tools!`);
                 console.error(`   ⚠️ Response was: ${aiResponse.substring(0, 300)}`);
 
-                // RETRY MECHANISM: Force the AI to call the tool
+                // Check if this looks like a new booking (has address info) or a reschedule
+                const historyText = history.map(h => h.content).join(' ').toLowerCase();
+                const hasAddressInConversation = historyText.includes('makati') || historyText.includes('manila') || 
+                    historyText.includes('ave') || historyText.includes('street') || historyText.includes('unit') ||
+                    historyText.includes('blk') || historyText.includes('lot') || /\d+\s+\w+\s+(?:street|st|ave|avenue)/i.test(historyText);
+                const hasDateInConversation = historyText.includes('friday') || historyText.includes('morning') || 
+                    historyText.includes('afternoon') || historyText.includes('tomorrow') || historyText.includes('today');
+
+                // RETRY MECHANISM: Force the AI to call the correct tool
                 console.log(`   🔄 Retrying with strict tool enforcement...`);
+                console.log(`   📍 Has address: ${hasAddressInConversation}, Has date: ${hasDateInConversation}`);
                 
-                const retryResult = await generateText({
-                    model: openai('gpt-4o-mini'),
-                    system: systemPrompt + `\n\nSYSTEM ALERT: You just claimed to have booked/rescheduled an appointment but YOU DID NOT CALL THE DATABASE TOOL. 
-                    You are HALLUCINATING. 
-                    STOP LYING. 
-                    Call createBooking or rescheduleBooking IMMEDIATELY with the details from the conversation.`,
-                    messages: [
-                        ...history.slice(-20), // Reduce context to focus on immediate task
-                        { role: 'user', content: messageText },
-                    ],
-                    tools: receptionistTools,
-                    toolChoice: 'required', // FORCE tool usage
-                });
-                
-                // If retry succeeded in calling tool, use its response instead
-                const retryToolCalls = retryResult.steps.flatMap(step => step.toolCalls || []);
-                if (retryToolCalls.length > 0) {
-                    console.log(`   ✅ Retry successful! Tools called: ${retryToolCalls.map(t => t.toolName).join(', ')}`);
-                    aiResponse = retryResult.text || aiResponse;
-                    // Merge tool calls for notification handling below
-                    allToolCalls.push(...retryToolCalls);
-                    // Also merge tool results for the notification logic
-                    retryResult.steps.forEach(step => {
-                        result.steps.push(step);
+                // If we have both address and date info, this is likely a new booking that should be forced
+                if (hasAddressInConversation && hasDateInConversation) {
+                    console.log(`   🎯 Forcing createBooking with specific tool choice...`);
+                    
+                    const bookingRetryResult = await generateText({
+                        model: openai('gpt-4o-mini'),
+                        system: `You are a booking assistant. Your ONLY job is to call createBooking NOW.
+
+Extract from the conversation:
+- Customer name: "${customerContext?.name || 'Customer'}"
+- Customer phone: "${customerPhone}"
+- Business ID: "${businessId}"
+- Customer ID: "${customerContext?.id || ''}"
+- Address: (find in conversation - look for street/ave/makati etc)
+- Date: (find in conversation - Friday = 2026-01-31, etc)
+- Window: "morning" or "afternoon" (from conversation)
+- Service type: "Aircon Cleaning (1 unit)" or similar
+- Estimate: 120 or the amount from conversation
+
+CALL createBooking NOW with these parameters. Do NOT ask questions.`,
+                        messages: [
+                            ...history.slice(-15),
+                            { role: 'user', content: messageText },
+                        ],
+                        tools: {
+                            createBooking: receptionistTools.createBooking,
+                        },
+                        toolChoice: { type: 'tool', toolName: 'createBooking' },
                     });
+                    
+                    const bookingRetryToolCalls = bookingRetryResult.steps.flatMap(step => step.toolCalls || []);
+                    const bookingRetryResults = bookingRetryResult.steps.flatMap(step => step.toolResults || []);
+                    
+                    if (bookingRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
+                        console.log(`   ✅ Booking retry called createBooking!`);
+                        
+                        const bookingResult = bookingRetryResults.find(tr => (tr as any).toolName === 'createBooking');
+                        const bookingOutput = (bookingResult as any)?.output ?? (bookingResult as any)?.result;
+                        
+                        if (bookingOutput?.success) {
+                            console.log(`   ✅ createBooking SUCCESS in retry!`);
+                            aiResponse = bookingRetryResult.text || `Your booking has been confirmed! ✅\n\n📅 ${bookingOutput.slotLabel || 'Your selected slot'}\n📍 ${bookingOutput.address || 'Address confirmed'}\n💰 ${bookingOutput.estimate || 'Price confirmed'}\n\nThe technician will WhatsApp you 30 minutes before arrival. Anything else I can help with?`;
+                            allToolCalls.push(...bookingRetryToolCalls);
+                            bookingRetryResult.steps.forEach(step => result.steps.push(step));
+                        } else {
+                            console.log(`   ❌ createBooking FAILED in retry: ${bookingOutput?.error}`);
+                            aiResponse = `I apologize, I had trouble completing your booking. ${bookingOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;
+                        }
+                    }
                 } else {
-                    console.error(`   ❌ Retry failed to call tool. Converting response to error.`);
-                    aiResponse = "I apologize, I'm having trouble accessing the booking calendar right now. Please try again or reply 'HUMAN' to speak with the owner.";
+                    // Generic retry with all tools
+                    const retryResult = await generateText({
+                        model: openai('gpt-4o-mini'),
+                        system: systemPrompt + `\n\nSYSTEM ALERT: You just claimed to have booked/rescheduled an appointment but YOU DID NOT CALL THE DATABASE TOOL. 
+                        You are HALLUCINATING. 
+                        STOP LYING. 
+                        Call createBooking or rescheduleBooking IMMEDIATELY with the details from the conversation.`,
+                        messages: [
+                            ...history.slice(-20),
+                            { role: 'user', content: messageText },
+                        ],
+                        tools: receptionistTools,
+                        toolChoice: 'required',
+                    });
+                    
+                    const retryToolCalls = retryResult.steps.flatMap(step => step.toolCalls || []);
+                    if (retryToolCalls.length > 0) {
+                        console.log(`   ✅ Retry successful! Tools called: ${retryToolCalls.map(t => t.toolName).join(', ')}`);
+                        aiResponse = retryResult.text || aiResponse;
+                        allToolCalls.push(...retryToolCalls);
+                        retryResult.steps.forEach(step => {
+                            result.steps.push(step);
+                        });
+                    } else {
+                        console.error(`   ❌ Retry failed to call tool. Converting response to error.`);
+                        aiResponse = "I apologize, I'm having trouble accessing the booking calendar right now. Please try again or reply 'HUMAN' to speak with the owner.";
+                    }
                 }
             }
 

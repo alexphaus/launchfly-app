@@ -866,6 +866,11 @@ export const receptionistTools = {
                 }
             }
 
+            // Safety check - newDate must be defined at this point
+            if (!newDate) {
+                return { success: false, error: 'Could not determine new date for rescheduling' };
+            }
+
             const newDateObj = new Date(newDate);
             const newDayLabel = newDateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
             const windowLabel = newWindow === 'morning' ? 'Morning (9am - 12pm window)' : 'Afternoon (1pm - 5pm window)';

@@ -409,15 +409,55 @@ export const receptionistTools = {
             
             console.log('   ✅ Customer saved/updated:', customer?.id);
 
+            // ============================================================
+            // CREATE SERVICE RECORD (for Smart Nag reminders)
+            // ============================================================
+            // This populates the service_records table that the cron job queries
+            const serviceIntervalDays = 180; // 6 months for cleaning
+            const nextServiceDue = new Date(now);
+            nextServiceDue.setDate(nextServiceDue.getDate() + serviceIntervalDays);
+
+            const { data: serviceRecord, error: srError } = await supabase
+                .from('service_records')
+                .insert({
+                    business_id: businessId,
+                    customer_id: customer?.id,
+                    service_type: serviceType || 'cleaning',
+                    service_name: `${(serviceType || 'cleaning').charAt(0).toUpperCase() + (serviceType || 'cleaning').slice(1)} Service`,
+                    units_serviced: 1,
+                    warranty_days: warrantyDays,
+                    warranty_expires_at: warrantyEndDate.toISOString(),
+                    service_interval_days: serviceIntervalDays,
+                    next_service_due_at: nextServiceDue.toISOString(),
+                    registered_via: 'sticker_scan',
+                    registered_by: 'customer',
+                    service_date: now.toISOString(),
+                })
+                .select()
+                .single();
+
+            if (srError) {
+                console.error('   ⚠️ Failed to create service_record (non-fatal):', srError.message);
+            } else {
+                console.log('   ✅ Service record created:', serviceRecord?.id);
+                console.log('   📅 Next reminder due:', nextServiceDue.toISOString().split('T')[0]);
+            }
+
             const endDateFormatted = warrantyEndDate.toLocaleDateString('en-GB', { 
+                day: 'numeric', month: 'short', year: 'numeric' 
+            });
+
+            const nextDueFormatted = nextServiceDue.toLocaleDateString('en-GB', { 
                 day: 'numeric', month: 'short', year: 'numeric' 
             });
 
             return {
                 success: true,
                 customerId: customer?.id,
+                serviceRecordId: serviceRecord?.id,
                 warrantyEndDate: endDateFormatted,
-                message: `Warranty activated until ${endDateFormatted}`,
+                nextServiceDue: nextDueFormatted,
+                message: `Warranty activated until ${endDateFormatted}. Automatic reminder scheduled for ${nextDueFormatted}.`,
             };
         },
     }),

@@ -132,6 +132,70 @@ export async function POST(request: NextRequest) {
                     lastServiceType: customer.notes?.includes('Service:') ? customer.notes.split('Service:')[1]?.split('.')[0]?.trim() : undefined,
                     address: customer.address,
                 };
+                
+                // ============================================================
+                // 🔔 SMART NAG: Handle "YES" response to 6-month reminder
+                // ============================================================
+                // When customer replies "yes/ok/book/etc" after receiving reminder
+                const customerStatus = customer.status;
+                const isReminderResponse = customerStatus === 'reminder_sent' || customerStatus === 'reengaged';
+                const isConfirmation = /^(yes|ok|okay|yep|yeah|book|sure|hi|hello|interested|1)$/i.test(messageText.trim());
+                
+                if (isReminderResponse && isConfirmation) {
+                    console.log('🔔 Hot lead! Customer responding to Smart Nag reminder');
+                    
+                    const customerName = customer.first_name || customer.name?.split(' ')[0] || 'Boss';
+                    const businessName = business?.name || 'Business';
+                    const niche = (business?.business_data as { niche?: string })?.niche || 'Service';
+                    
+                    // Get their last service for context
+                    const { data: lastService } = await supabase
+                        .from('service_records')
+                        .select('service_name, appliance_type, next_service_due_at')
+                        .eq('customer_id', customer.id)
+                        .order('service_date', { ascending: false })
+                        .limit(1)
+                        .single();
+                    
+                    const serviceName = lastService?.service_name || niche;
+                    
+                    // Send warm booking prompt
+                    if (twilioClient && fromNumber) {
+                        await twilioClient.messages.create({
+                            from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                            to: `whatsapp:${customerPhone}`,
+                            body: `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`
+                        });
+                    }
+                    
+                    // Update status to booking flow
+                    await supabase.from('customers').update({
+                        status: 'sticker_units',
+                        notes: (customer.notes || '') + `\n[REMINDER_CONVERTED: ${new Date().toISOString()}]`
+                    }).eq('id', customer.id);
+                    
+                    // 🔔 NOTIFY OWNER - Customer converting from reminder!
+                    const ownerPhone = business?.whatsapp_number || business?.phone_number;
+                    if (ownerPhone && twilioClient && fromNumber) {
+                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                body: `🔔 *HOT LEAD!*\n\n${customerName} (${customerPhone}) responded to your reminder and wants to book!\n\nThey're in the booking flow now. 🎯`
+                            });
+                            console.log(`📢 Notified owner ${cleanOwnerPhone} about hot lead`);
+                        } catch (notifyErr) {
+                            console.error('Failed to notify owner:', notifyErr);
+                        }
+                    }
+                    
+                    console.log(`   ⏱️ V2 processed in ${Date.now() - startTime}ms (reminder conversion)`);
+                    return new NextResponse(
+                        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                        { headers: { 'Content-Type': 'text/xml' } }
+                    );
+                }
             } else {
                 customerContext = { isReturning: false, warrantyActive: false };
             }

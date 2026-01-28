@@ -249,6 +249,86 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         }
     };
 
+    // Complete a booking and create service record (for Smart Nag reminders)
+    const completeBooking = async (booking) => {
+        if (!confirm('Mark this job as completed?')) return;
+        
+        try {
+            // 1. Update booking status
+            await supabase.from('bookings').update({ status: 'completed' }).eq('id', booking.id);
+            
+            // 2. Get customer ID (try to find by phone)
+            let customerId = booking.customer_id;
+            if (!customerId && booking.customer_phone) {
+                const { data: customer } = await supabase
+                    .from('customers')
+                    .select('id')
+                    .eq('business_id', business.id)
+                    .eq('phone', booking.customer_phone)
+                    .single();
+                customerId = customer?.id;
+            }
+            
+            // 3. Create service record for Smart Nag reminders (6-month cycle)
+            if (customerId) {
+                const now = new Date();
+                const warrantyDays = 30;
+                const serviceIntervalDays = 180; // 6 months
+                const warrantyExpiresAt = new Date(now);
+                warrantyExpiresAt.setDate(warrantyExpiresAt.getDate() + warrantyDays);
+                const nextServiceDueAt = new Date(now);
+                nextServiceDueAt.setDate(nextServiceDueAt.getDate() + serviceIntervalDays);
+                
+                // Parse service type from booking
+                let serviceType = 'cleaning';
+                const serviceNote = (booking.service_type || booking.notes || '').toLowerCase();
+                if (serviceNote.includes('repair') || serviceNote.includes('fix') || serviceNote.includes('leak')) {
+                    serviceType = 'repair';
+                } else if (serviceNote.includes('install')) {
+                    serviceType = 'installation';
+                }
+                
+                const { error: srError } = await supabase.from('service_records').insert({
+                    business_id: business.id,
+                    customer_id: customerId,
+                    service_type: serviceType,
+                    service_name: booking.service_type || `${niche} Service`,
+                    units_serviced: 1,
+                    address: booking.customer_address,
+                    warranty_days: warrantyDays,
+                    warranty_expires_at: warrantyExpiresAt.toISOString(),
+                    service_interval_days: serviceIntervalDays,
+                    next_service_due_at: serviceType === 'repair' ? null : nextServiceDueAt.toISOString(),
+                    registered_via: 'booking_complete',
+                    registered_by: 'technician',
+                    service_date: now.toISOString(),
+                });
+                
+                if (srError) {
+                    console.error('Failed to create service record:', srError);
+                } else {
+                    console.log('✅ Service record created - customer will get reminder in 6 months');
+                }
+                
+                // 4. Update customer record
+                await supabase.from('customers').update({
+                    last_service_date: now.toISOString(),
+                    next_reminder_due: serviceType === 'repair' ? null : nextServiceDueAt.toISOString(),
+                    is_repeat_customer: true,
+                    status: 'completed',
+                }).eq('id', customerId);
+            }
+            
+            // 5. Update UI
+            setBookings(prev => prev.filter(b => b.id !== booking.id));
+            setStats(prev => ({ ...prev, booked: Math.max(0, prev.booked - 1) }));
+            
+        } catch (err) {
+            console.error('Error completing booking:', err);
+            alert('Failed to complete booking');
+        }
+    };
+
     // Archive job (remove from feed)
     const archiveJob = async (leadId) => {
         if (!confirm('Remove this job from the live feed? (It will be archived)')) return;
@@ -704,12 +784,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                                 <ChevronRight className="w-3.5 h-3.5" /> Map
                                             </button>
                                             <button
-                                                onClick={async () => {
-                                                    if (!confirm('Mark this job as completed?')) return;
-                                                    await supabase.from('bookings').update({ status: 'completed' }).eq('id', booking.id);
-                                                    setBookings(prev => prev.filter(b => b.id !== booking.id));
-                                                    setStats(prev => ({ ...prev, booked: Math.max(0, prev.booked - 1) }));
-                                                }}
+                                                onClick={() => completeBooking(booking)}
                                                 className="flex items-center justify-center gap-1 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs hover:bg-slate-200 transition-colors"
                                             >
                                                 <CheckCircle className="w-3.5 h-3.5" /> Done

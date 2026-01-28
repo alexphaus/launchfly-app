@@ -480,14 +480,54 @@ When customer has an existing booking and wants to CHANGE the date/time:
                 console.log(`   ⚠️ RESCHEDULE REQUEST DETECTED but rescheduleBooking not called! Message: "${messageText}"`);
                 console.log(`   🔄 Forcing rescheduleBooking retry...`);
                 
+                // FIRST: Get the current booking to preserve its date if user only changes window
+                const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+                const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+                const todayDate = new Date().toISOString().split('T')[0];
+                
+                const { data: currentBooking } = await supabase
+                    .from('bookings')
+                    .select('id, slot_date, slot_time')
+                    .eq('business_id', businessId)
+                    .or(`customer_phone.eq.${phoneWithPlus},customer_phone.eq.${phoneWithoutPlus}`)
+                    .in('status', ['pending', 'confirmed'])
+                    .gte('slot_date', todayDate)
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                
+                console.log(`   📋 Current booking found:`, currentBooking ? `${currentBooking.slot_date} ${currentBooking.slot_time}` : 'none');
+                
                 // Determine the new window from the message
                 const wantsAfternoon = messageLower.includes('afternoon');
                 const wantsMorning = messageLower.includes('morning') && !messageLower.includes("can't") && !messageLower.includes("cant");
-                const today = new Date();
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
-                const targetWindow = wantsAfternoon ? 'afternoon' : (wantsMorning ? 'morning' : 'afternoon');
+                
+                // Use the CURRENT booking date unless user specifies a different day
+                // This fixes the bug where "morning instead" would incorrectly use tomorrow
+                let targetDate = currentBooking?.slot_date || todayDate;
+                const specifiedDayInMessage = messageLower.includes('tomorrow') || messageLower.includes('today') || 
+                    /monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(messageLower);
+                
+                if (specifiedDayInMessage || !currentBooking) {
+                    // User specified a day, or no booking found - default to tomorrow
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    targetDate = tomorrow.toISOString().split('T')[0];
+                }
+                
+                // If user says "X instead", they want to flip the current window
+                // Otherwise use what they specified or default to afternoon
+                let targetWindow: string;
+                if (messageLower.includes('instead') && currentBooking) {
+                    // User wants to flip window
+                    if (wantsAfternoon) targetWindow = 'afternoon';
+                    else if (wantsMorning) targetWindow = 'morning';
+                    else targetWindow = currentBooking.slot_time === 'morning' ? 'afternoon' : 'morning';
+                } else {
+                    targetWindow = wantsAfternoon ? 'afternoon' : (wantsMorning ? 'morning' : 'afternoon');
+                }
+                
+                console.log(`   🎯 Reschedule target: ${targetDate} ${targetWindow}`);
                 
                 const rescheduleRetryResult = await generateText({
                     model: openai('gpt-4o-mini'),
@@ -496,7 +536,7 @@ When customer has an existing booking and wants to CHANGE the date/time:
 CALL rescheduleBooking with EXACTLY these values:
 - customerPhone: "${customerPhone}"
 - businessId: "${businessId}"  
-- newDate: "${tomorrowStr}"
+- newDate: "${targetDate}"
 - newWindow: "${targetWindow}"
 
 Do NOT use bookingId - leave it empty and the system will find it.

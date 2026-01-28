@@ -197,16 +197,23 @@ export async function POST(request: NextRequest) {
                     await saveMessage(customerPhone, 'assistant', `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`, businessId);
                     
                     // 🔔 NOTIFY OWNER - Customer converting from reminder!
+                    // Uses WhatsApp Utility Template (outside 24h window safe)
                     const ownerPhone = business?.whatsapp_number || business?.phone_number;
                     if (ownerPhone && twilioClient && fromNumber) {
                         const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        const HOT_LEAD_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_HOT_LEAD || 'HX065c2eed9f9dd38b6aaa60ef5e06bd41';
+                        
                         try {
                             await twilioClient.messages.create({
                                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                                 to: `whatsapp:${cleanOwnerPhone}`,
-                                body: `🔔 *HOT LEAD!*\n\n${customerName} (${customerPhone}) responded to your reminder and wants to book!\n\nThey're in the booking flow now. 🎯`
+                                contentSid: HOT_LEAD_TEMPLATE_SID,
+                                contentVariables: JSON.stringify({
+                                    '1': customerName,
+                                    '2': customerPhone,
+                                }),
                             });
-                            console.log(`📢 Notified owner ${cleanOwnerPhone} about hot lead`);
+                            console.log(`📢 Notified owner ${cleanOwnerPhone} about hot lead (template)`);
                         } catch (notifyErr) {
                             console.error('Failed to notify owner:', notifyErr);
                         }

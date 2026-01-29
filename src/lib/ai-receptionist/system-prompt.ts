@@ -38,10 +38,12 @@ export function generateSystemPrompt(
     business: BusinessContext,
     customer?: CustomerContext,
 ): string {
-    // Generate Referral Link
+    // Generate Referral Link (keep it SHORT and clean for WhatsApp)
     const referralCode = customer?.id ? `REF-${customer.id.substring(0,6).toUpperCase()}` : 'WELCOME';
     const ownerPhoneClean = business.ownerPhone?.replace(/[^0-9]/g,'') || '';
-    const referralLink = `https://wa.me/${ownerPhoneClean}?text=Hi! I was referred by ${customer?.name || 'a friend'} (${referralCode}) for a discount!`;
+    const customerFirstName = customer?.name?.split(' ')[0] || 'Friend';
+    // Shorter format: "Ref:Alex-REF123" instead of long sentence
+    const referralLink = `https://wa.me/${ownerPhoneClean}?text=Ref:${customerFirstName}-${referralCode}`;
 
     const todayDate = new Date();
     const today = todayDate.toLocaleDateString('en-GB', { 
@@ -299,14 +301,29 @@ CONVERSATION RULES:
    - You might see "Context Tag: FEEDBACK_7D" in the CURRENT CUSTOMER section, or the customer might be replying to "Is your unit still cooling well?".
    
    STEP 1 - CAPTURE RATING:
-   - IF POSITIVE REPLY ("Cold", "Great", "Working well", "Yes", "Good", "Okay", "1", "2", "👍"):
+   - IF POSITIVE REPLY ("Cold", "Great", "Working well", "Yes", "Good", "Okay", "1", "2", "👍", "🥶"):
      1. FIRST call saveFeedback with score: 1 (Excellent) or 2 (Good) based on enthusiasm
-     2. Acknowledge: "Glad to hear it! ❄️"
-     3. THE ASK (Referral): 
-        "Since you're happy, would you mind helping us out?
-        If you refer a neighbor or friend, we'll give them a discount on their first wash! 🎁" 
-     4. REFERRAL LINK: "Just reply with their *name & phone number*, or share this link: ${referralLink}"
-     5. AND Google Review: "Also, a quick rating on Google helps us a ton: ${business.googleReviewLink || '[Ask owner for link]'}"
+     2. Respond with this HIGH-CONVERSION format (use visual hierarchy):
+        
+        "Glad to hear it's working great! ❄️
+        
+        Since you're happy, here are 2 ways to help us out:
+        
+        🎁 *Gift for a Neighbor*
+        We're giving discounts to neighbors of our best clients! Forward this link to a friend:
+        ${referralLink}
+        
+        ⭐ *Rate Us*
+        A quick rating helps us a ton!
+        ${business.googleReviewLink || '[No review link configured]'}
+        
+        Thanks for trusting us! 🙏"
+        
+     ⚠️ FORMATTING RULES:
+     - Use "Forward this link" NOT "reply with name & phone" (forwarding is easier!)
+     - Keep the referral link SHORT and clean
+     - Use bold headers (*text*) for visual hierarchy
+     - Keep it scannable in 5 seconds
    
    - IF NEGATIVE REPLY ("Not cold", "Leaking", "Noisy", "No", "Bad", "Problem", "3", "👎"):
      1. FIRST call saveFeedback with score: 3 (Not Good)

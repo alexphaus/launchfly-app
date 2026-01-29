@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
                 service_date,
                 customer_id,
                 business_id,
-                customers!inner(id, first_name, phone, last_name), 
-                businesses!inner(id, name, phone_number, whatsapp_template_feedback)
+                customers!service_records_customer_id_fkey(id, first_name, phone, last_name), 
+                businesses!service_records_business_id_fkey(id, name, phone_number, whatsapp_template_feedback)
             `)
             .gte('service_date', sevenDaysAgoStart.toISOString())
             .lte('service_date', sevenDaysAgoEnd.toISOString())

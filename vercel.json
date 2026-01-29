@@ -11,10 +11,6 @@
     {
       "path": "/api/cron/service-reminders",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/feedback-trigger",
-      "schedule": "0 2 * * *"
     }
   ]
 }

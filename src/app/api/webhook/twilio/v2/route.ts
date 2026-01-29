@@ -140,25 +140,6 @@ export async function POST(request: NextRequest) {
                 const warrantyActive = warrantyEndDate && 
                     new Date(warrantyEndDate) > new Date();
                 
-                // Get business's Google Review link
-                const googleReviewLink = (business?.business_data as { googleReviewLink?: string })?.googleReviewLink;
-                
-                // Generate referral link if customer has an ID (for feedback responses)
-                let referralLink: string | undefined;
-                if (customer.id && businessId && (customer.status === 'feedback_requested' || customer.last_outbound_type === 'FEEDBACK_7D')) {
-                    try {
-                        const { getOrCreateReferral } = await import('@/lib/referral-system');
-                        const referralResult = await getOrCreateReferral({
-                            customerId: customer.id,
-                            businessId,
-                            discountPercent: 10,
-                        });
-                        referralLink = referralResult?.referralLink;
-                    } catch (e) {
-                        console.warn('Could not generate referral link:', e);
-                    }
-                }
-                
                 customerContext = {
                     id: customer.id,
                     name: customer.name || customer.first_name,
@@ -169,10 +150,6 @@ export async function POST(request: NextRequest) {
                     lastServiceType: customer.notes?.includes('Service:') ? customer.notes.split('Service:')[1]?.split('.')[0]?.trim() : undefined,
                     address: customer.address,
                     status: customer.status, // Pass status so system prompt knows if mid-booking
-                    lastOutboundType: customer.last_outbound_type, // Context: FEEDBACK_7D, REMINDER_6M, etc.
-                    lastServiceRecordId: customer.last_service_record_id,
-                    referralLink, // Pre-generated for feedback responses
-                    googleReviewLink,
                 };
                 
                 // ============================================================

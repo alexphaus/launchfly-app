@@ -95,6 +95,20 @@ const rescheduleBookingSchema = z.object({
     newWindow: z.enum(['morning', 'afternoon']).describe('New time window'),
 });
 
+const saveFeedbackSchema = z.object({
+    customerId: z.string().describe('Customer UUID'),
+    businessId: z.string().describe('Business UUID'),
+    score: z.number().min(1).max(5).describe('Feedback score 1-5 (1=Excellent, 2=Good, 3=Not Good)'),
+    feedbackText: z.string().optional().describe('Optional feedback text from customer'),
+});
+
+const saveReferralSchema = z.object({
+    businessId: z.string().describe('Business UUID'),
+    referrerId: z.string().describe('Customer UUID of person giving the referral'),
+    refereeName: z.string().describe('Name of the friend being referred'),
+    refereePhone: z.string().describe('Phone number of the friend being referred'),
+});
+
 // Type inference from schemas
 type LookupCustomerInput = z.infer<typeof lookupCustomerSchema>;
 type GetBusinessConfigInput = z.infer<typeof getBusinessConfigSchema>;
@@ -108,6 +122,8 @@ type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 type GetCustomerBookingsInput = z.infer<typeof getCustomerBookingsSchema>;
 type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
+type SaveFeedbackInput = z.infer<typeof saveFeedbackSchema>;
+type SaveReferralInput = z.infer<typeof saveReferralSchema>;
 
 export const receptionistTools = {
     /**
@@ -899,6 +915,140 @@ export const receptionistTools = {
                 newSlotLabel,
                 bookingId,
                 customerName: updatedBooking?.customer_name,
+            };
+        },
+    }),
+
+    /**
+     * Save customer feedback after 7-day follow-up
+     */
+    saveFeedback: tool({
+        description: 'Save customer feedback after the 7-day follow-up. Call this when customer rates the service (1=Excellent, 2=Good, 3=Not Good). This clears the FEEDBACK_7D context.',
+        inputSchema: saveFeedbackSchema,
+        execute: async (input: SaveFeedbackInput) => {
+            const { customerId, businessId, score, feedbackText } = input;
+            
+            console.log('   ⭐ saveFeedback called:', { customerId, score, feedbackText });
+            
+            // Map score to status: 1-2 = positive, 3+ = negative
+            const feedbackStatus = score <= 2 ? 'positive' : 'negative';
+            
+            // Find the most recent service record for this customer
+            const { data: serviceRecord, error: findError } = await supabase
+                .from('service_records')
+                .select('id')
+                .eq('customer_id', customerId)
+                .eq('business_id', businessId)
+                .order('service_date', { ascending: false })
+                .limit(1)
+                .single();
+            
+            if (findError || !serviceRecord) {
+                console.warn('   ⚠️ No service record found for feedback');
+                // Still clear the context even if no record found
+                await supabase
+                    .from('customers')
+                    .update({ last_interaction_context: null })
+                    .eq('id', customerId);
+                return { success: false, error: 'No recent service record found' };
+            }
+            
+            // Update service record with feedback
+            const { error: updateError } = await supabase
+                .from('service_records')
+                .update({
+                    feedback_score: score,
+                    feedback_status: feedbackStatus,
+                    feedback_text: feedbackText || null,
+                    feedback_received_at: new Date().toISOString(),
+                })
+                .eq('id', serviceRecord.id);
+            
+            if (updateError) {
+                return { success: false, error: updateError.message };
+            }
+            
+            // Clear the feedback context so AI doesn't keep asking
+            await supabase
+                .from('customers')
+                .update({ last_interaction_context: null })
+                .eq('id', customerId);
+            
+            return {
+                success: true,
+                feedbackStatus,
+                message: feedbackStatus === 'positive' 
+                    ? 'Great feedback recorded! Now ask for referral/review.'
+                    : 'Negative feedback recorded. Escalate to owner.',
+            };
+        },
+    }),
+
+    /**
+     * Save a referral when customer provides friend's details
+     */
+    saveReferral: tool({
+        description: 'Save a referral when customer provides a friend\'s name and phone number. Creates a trackable referral record.',
+        inputSchema: saveReferralSchema,
+        execute: async (input: SaveReferralInput) => {
+            const { businessId, referrerId, refereeName, refereePhone } = input;
+            
+            console.log('   🎁 saveReferral called:', { businessId, referrerId, refereeName, refereePhone });
+            
+            const phoneWithPlus = refereePhone.startsWith('+') ? refereePhone : `+${refereePhone}`;
+            
+            // Generate unique referral code and token
+            const referralCode = `REF-${referrerId.substring(0, 6).toUpperCase()}`;
+            const referralToken = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+            
+            // Check if this referee was already referred
+            const { data: existing } = await supabase
+                .from('referrals')
+                .select('id')
+                .eq('business_id', businessId)
+                .eq('referee_phone', phoneWithPlus)
+                .single();
+            
+            if (existing) {
+                return { success: false, error: 'This phone number has already been referred.' };
+            }
+            
+            // Create referral record
+            const { data: referral, error } = await supabase
+                .from('referrals')
+                .insert({
+                    business_id: businessId,
+                    referrer_id: referrerId,
+                    referral_code: referralCode,
+                    referral_token: referralToken,
+                    referee_name: refereeName,
+                    referee_phone: phoneWithPlus,
+                    status: 'pending',
+                    referral_message_sent_at: new Date().toISOString(),
+                })
+                .select()
+                .single();
+            
+            if (error) {
+                console.error('   ❌ Failed to save referral:', error);
+                return { success: false, error: error.message };
+            }
+            
+            // Mark referral_asked_at on the service record
+            await supabase
+                .from('service_records')
+                .update({ referral_asked_at: new Date().toISOString() })
+                .eq('customer_id', referrerId)
+                .eq('business_id', businessId)
+                .order('service_date', { ascending: false })
+                .limit(1);
+            
+            return {
+                success: true,
+                referralCode,
+                refereeName,
+                refereePhone: phoneWithPlus,
+                message: `Referral saved! ${refereeName} (${phoneWithPlus}) has been added.`,
             };
         },
     }),

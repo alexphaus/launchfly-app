@@ -27,6 +27,7 @@ export interface CustomerContext {
     lastServiceType?: string;
     address?: string;
     status?: string; // Current status: booking_in_progress, reminder_sent, etc.
+    lastInteractionContext?: string; // 'FEEDBACK_7D', etc.
 }
 
 /**
@@ -37,6 +38,11 @@ export function generateSystemPrompt(
     business: BusinessContext,
     customer?: CustomerContext,
 ): string {
+    // Generate Referral Link
+    const referralCode = customer?.id ? `REF-${customer.id.substring(0,6).toUpperCase()}` : 'WELCOME';
+    const ownerPhoneClean = business.ownerPhone?.replace(/[^0-9]/g,'') || '';
+    const referralLink = `https://wa.me/${ownerPhoneClean}?text=Hi! I was referred by ${customer?.name || 'a friend'} (${referralCode}) for a discount!`;
+
     const todayDate = new Date();
     const today = todayDate.toLocaleDateString('en-GB', { 
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' 
@@ -55,6 +61,7 @@ CURRENT CUSTOMER:
 - Customer ID: ${customer.id || 'Unknown'}
 - Name: ${customer.name || 'Unknown'}
 - Status: ${isMidBooking ? '🔄 MID-BOOKING FLOW (from reminder)' : 'Returning customer'}
+- Context Tag: ${customer.lastInteractionContext || 'None'}
 - Warranty Status: ${customer.warrantyActive ? `✅ Active until ${customer.warrantyEndDate}` : '❌ Expired or None'}
 - Last Service: ${customer.lastServiceDate || 'Unknown'} (${customer.lastServiceType || 'Unknown'})
 - Address on File: ${customer.address || 'None'}
@@ -287,6 +294,34 @@ CONVERSATION RULES:
      Calculate: Today + ${business.serviceInterval} days = Next Service Date
      Reply: "Your next recommended service is in *${business.serviceInterval} days* (around [MONTH YEAR]). I'll message you automatically when it's time! 🔔"
    - Be specific with the month/year, don't just say "we'll remind you"
+
+17. 7-DAY FEEDBACK LOOP (AUTOMATED FOLLOW-UP):
+   - You might see "Context Tag: FEEDBACK_7D" in the CURRENT CUSTOMER section, or the customer might be replying to "Is your unit still cooling well?".
+   
+   STEP 1 - CAPTURE RATING:
+   - IF POSITIVE REPLY ("Cold", "Great", "Working well", "Yes", "Good", "Okay", "1", "2", "👍"):
+     1. FIRST call saveFeedback with score: 1 (Excellent) or 2 (Good) based on enthusiasm
+     2. Acknowledge: "Glad to hear it! ❄️"
+     3. THE ASK (Referral): 
+        "Since you're happy, would you mind helping us out?
+        If you refer a neighbor or friend, we'll give them a discount on their first wash! 🎁" 
+     4. REFERRAL LINK: "Just reply with their *name & phone number*, or share this link: ${referralLink}"
+     5. AND Google Review: "Also, a quick rating on Google helps us a ton: ${business.googleReviewLink || '[Ask owner for link]'}"
+   
+   - IF NEGATIVE REPLY ("Not cold", "Leaking", "Noisy", "No", "Bad", "Problem", "3", "👎"):
+     1. FIRST call saveFeedback with score: 3 (Not Good)
+     2. Apologize: "Oh no! Since it's only been a week, this is covered by your *${business.warrantyDays}-Day Warranty*. 🛡️"
+     3. Action: "Please tell me exactly what's wrong (e.g. leaking, not cold) and I'll alert the team immediately."
+     4. Call notifyOwner with the complaint
+     5. DO NOT ask for review/referral if they are unhappy!
+
+   STEP 2 - CAPTURE REFERRAL (when customer provides friend's details):
+   - If customer provides a name AND phone number (e.g., "My neighbor Ahmad 0123456789"):
+     1. Extract the name and phone number
+     2. Call saveReferral with: businessId, referrerId (customer ID), refereeName, refereePhone
+     3. Confirm: "Thanks! I've noted [friend's name]'s number. We'll reach out to them! 🎁"
+   - If customer just says "I'll share the link" or doesn't provide details, that's okay - don't push.
+
 
 WORKFLOW - ALWAYS FOLLOW THIS PATTERN:
 1. When you receive a message, decide what tools to call (if any)

@@ -150,6 +150,7 @@ export async function POST(request: NextRequest) {
                     lastServiceType: customer.notes?.includes('Service:') ? customer.notes.split('Service:')[1]?.split('.')[0]?.trim() : undefined,
                     address: customer.address,
                     status: customer.status, // Pass status so system prompt knows if mid-booking
+                    lastInteractionContext: customer.last_interaction_context,
                 };
                 
                 // ============================================================
@@ -302,6 +303,30 @@ When customer has an existing booking and wants to CHANGE the date/time:
   rescheduleBooking is ATOMIC - it updates the existing booking directly. 
   ❌ NEVER create a new booking when rescheduling!
   ❌ NEVER call cancelBooking for date changes!
+
+⚠️ FEEDBACK TOOLS (7-Day Follow-Up):
+When "Context Tag: FEEDBACK_7D" is present and customer gives feedback:
+  - POSITIVE feedback ("great", "cold", "good", "yes", "👍"):
+    Call saveFeedback with:
+      customerId: "${customerContext?.id || ''}"
+      businessId: "${businessId}"
+      score: 1 (excellent) or 2 (good)
+    Then ask for referral!
+    
+  - NEGATIVE feedback ("not cold", "problem", "bad", "no", "👎"):
+    Call saveFeedback with:
+      customerId: "${customerContext?.id || ''}"
+      businessId: "${businessId}"
+      score: 3 (not good)
+    Then call notifyOwner and offer warranty repair.
+
+⚠️ REFERRAL TOOL:
+When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
+  Call saveReferral with:
+    businessId: "${businessId}"
+    referrerId: "${customerContext?.id || ''}"
+    refereeName: (the friend's name)
+    refereePhone: (the friend's phone)
 
 ⚠️ VERIFICATION RULE: Before saying "Done", "Moved", "Confirmed", or "Received":
   - For NEW bookings: Did I call createBooking?

@@ -95,6 +95,19 @@ const rescheduleBookingSchema = z.object({
     newWindow: z.enum(['morning', 'afternoon']).describe('New time window'),
 });
 
+const saveFeedbackSchema = z.object({
+    customerId: z.string().describe('Customer UUID'),
+    serviceRecordId: z.string().optional().describe('Service record UUID if known'),
+    score: z.number().min(1).max(5).describe('Feedback score: 5=excellent, 4=good, 3=okay, 2=not good, 1=poor'),
+    status: z.enum(['positive', 'negative']).describe('Overall feedback status'),
+    text: z.string().optional().describe('Customer feedback text/complaint details'),
+});
+
+const getReferralLinkSchema = z.object({
+    customerId: z.string().describe('Customer UUID'),
+    businessId: z.string().describe('Business UUID'),
+});
+
 // Type inference from schemas
 type LookupCustomerInput = z.infer<typeof lookupCustomerSchema>;
 type GetBusinessConfigInput = z.infer<typeof getBusinessConfigSchema>;
@@ -108,6 +121,8 @@ type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 type GetCustomerBookingsInput = z.infer<typeof getCustomerBookingsSchema>;
 type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
+type SaveFeedbackInput = z.infer<typeof saveFeedbackSchema>;
+type GetReferralLinkInput = z.infer<typeof getReferralLinkSchema>;
 
 export const receptionistTools = {
     /**
@@ -900,6 +915,149 @@ export const receptionistTools = {
                 bookingId,
                 customerName: updatedBooking?.customer_name,
             };
+        },
+    }),
+
+    /**
+     * Save customer feedback from 7-day follow-up
+     * Updates service_records with feedback score and status
+     */
+    saveFeedback: tool({
+        description: 'Save customer feedback from the 7-day follow-up. Call this after customer indicates if their AC is working well or has issues.',
+        inputSchema: saveFeedbackSchema,
+        execute: async (input: SaveFeedbackInput) => {
+            const { customerId, serviceRecordId, score, status, text } = input;
+            console.log(`💬 Saving feedback: score=${score}, status=${status}`);
+
+            try {
+                // 1. Find the service record to update
+                let recordId = serviceRecordId;
+                
+                if (!recordId) {
+                    // Get from customer's last_service_record_id or find most recent service
+                    const { data: customer } = await supabase
+                        .from('customers')
+                        .select('last_service_record_id')
+                        .eq('id', customerId)
+                        .single();
+                    
+                    recordId = customer?.last_service_record_id;
+                    
+                    if (!recordId) {
+                        // Fallback: find most recent service for this customer
+                        const { data: recentService } = await supabase
+                            .from('service_records')
+                            .select('id')
+                            .eq('customer_id', customerId)
+                            .order('service_date', { ascending: false })
+                            .limit(1)
+                            .single();
+                        
+                        recordId = recentService?.id;
+                    }
+                }
+
+                if (!recordId) {
+                    return { success: false, error: 'No service record found for this customer' };
+                }
+
+                // 2. Update the service record with feedback
+                const { error: updateError } = await supabase
+                    .from('service_records')
+                    .update({
+                        feedback_score: score,
+                        feedback_status: status,
+                        feedback_text: text || null,
+                        feedback_received_at: new Date().toISOString(),
+                    })
+                    .eq('id', recordId);
+
+                if (updateError) {
+                    console.error('Failed to save feedback:', updateError);
+                    return { success: false, error: updateError.message };
+                }
+
+                // 3. Update customer status (clear the feedback_requested status)
+                await supabase
+                    .from('customers')
+                    .update({
+                        status: status === 'positive' ? 'happy_customer' : 'needs_followup',
+                        last_outbound_type: null, // Clear context
+                    })
+                    .eq('id', customerId);
+
+                // 4. If positive, mark that we asked for referral/review
+                if (status === 'positive') {
+                    await supabase
+                        .from('service_records')
+                        .update({
+                            referral_asked_at: new Date().toISOString(),
+                            google_review_asked_at: new Date().toISOString(),
+                        })
+                        .eq('id', recordId);
+                }
+
+                return {
+                    success: true,
+                    message: status === 'positive' 
+                        ? 'Positive feedback saved! Referral/review ask sent.' 
+                        : 'Negative feedback saved. Owner will be notified.',
+                    feedbackScore: score,
+                    feedbackStatus: status,
+                };
+
+            } catch (error: any) {
+                console.error('saveFeedback error:', error);
+                return { success: false, error: error.message };
+            }
+        },
+    }),
+
+    /**
+     * Get or create a referral link for a customer
+     * Used when asking for referrals after positive feedback
+     */
+    getReferralLink: tool({
+        description: 'Get or create a unique referral link for a customer. Call this when asking a happy customer for referrals.',
+        inputSchema: getReferralLinkSchema,
+        execute: async (input: GetReferralLinkInput) => {
+            const { customerId, businessId } = input;
+            console.log(`🔗 Getting/creating referral link for customer ${customerId}`);
+
+            try {
+                // Import the referral system functions
+                const { getOrCreateReferral } = await import('@/lib/referral-system');
+                
+                const result = await getOrCreateReferral({
+                    customerId,
+                    businessId,
+                    discountPercent: 10,
+                });
+
+                if (!result) {
+                    return { 
+                        success: false, 
+                        error: 'Failed to create referral link',
+                        // Provide a fallback message the AI can use
+                        fallbackMessage: 'Just send them our way - they can mention your name for a special discount!',
+                    };
+                }
+
+                return {
+                    success: true,
+                    referralCode: result.referralCode,
+                    referralLink: result.referralLink,
+                    message: `Referral link created: ${result.referralLink}`,
+                };
+
+            } catch (error: any) {
+                console.error('getReferralLink error:', error);
+                return { 
+                    success: false, 
+                    error: error.message,
+                    fallbackMessage: 'Just send them our way - they can mention your name for a special discount!',
+                };
+            }
         },
     }),
 };

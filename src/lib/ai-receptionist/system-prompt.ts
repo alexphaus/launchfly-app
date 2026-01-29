@@ -26,7 +26,11 @@ export interface CustomerContext {
     lastServiceDate?: string;
     lastServiceType?: string;
     address?: string;
-    status?: string; // Current status: booking_in_progress, reminder_sent, etc.
+    status?: string; // Current status: booking_in_progress, reminder_sent, feedback_requested, etc.
+    lastOutboundType?: string; // Context: FEEDBACK_7D, REMINDER_6M, REFERRAL_ASK
+    lastServiceRecordId?: string; // The service we're asking about
+    referralLink?: string; // Pre-generated referral link for this customer
+    googleReviewLink?: string; // Business's Google review link
 }
 
 /**
@@ -50,15 +54,20 @@ export function generateSystemPrompt(
     }).join('\n');
 
     const isMidBooking = customer?.status === 'booking_in_progress';
+    const isFeedbackResponse = customer?.status === 'feedback_requested' || customer?.lastOutboundType === 'FEEDBACK_7D';
+    
     const customerSection = customer?.isReturning ? `
 CURRENT CUSTOMER:
 - Customer ID: ${customer.id || 'Unknown'}
 - Name: ${customer.name || 'Unknown'}
-- Status: ${isMidBooking ? '🔄 MID-BOOKING FLOW (from reminder)' : 'Returning customer'}
+- Status: ${isFeedbackResponse ? '💬 RESPONDING TO 7-DAY FEEDBACK REQUEST' : isMidBooking ? '🔄 MID-BOOKING FLOW (from reminder)' : 'Returning customer'}
 - Warranty Status: ${customer.warrantyActive ? `✅ Active until ${customer.warrantyEndDate}` : '❌ Expired or None'}
 - Last Service: ${customer.lastServiceDate || 'Unknown'} (${customer.lastServiceType || 'Unknown'})
 - Address on File: ${customer.address || 'None'}
+${customer.referralLink ? `- Referral Link: ${customer.referralLink}` : ''}
+${customer.googleReviewLink ? `- Google Review Link: ${customer.googleReviewLink}` : ''}
 ${isMidBooking ? '\n⚠️ IMPORTANT: This customer is responding to a reminder. They are MID-BOOKING. Do NOT show the welcome menu. Continue collecting booking details (units → address → slots → book).' : ''}
+${isFeedbackResponse ? `\n⚠️ IMPORTANT: This customer is responding to a 7-DAY FEEDBACK REQUEST. They were asked "Is your AC still cooling well?". Interpret their message as feedback (see Rule 17 below).` : ''}
 ` : `
 CURRENT CUSTOMER:
 - New customer (first interaction)
@@ -287,6 +296,33 @@ CONVERSATION RULES:
      Calculate: Today + ${business.serviceInterval} days = Next Service Date
      Reply: "Your next recommended service is in *${business.serviceInterval} days* (around [MONTH YEAR]). I'll message you automatically when it's time! 🔔"
    - Be specific with the month/year, don't just say "we'll remind you"
+
+17. 7-DAY FEEDBACK LOOP (THE REPUTATION ENGINE):
+   ⚠️ CONTEXT: If customer status shows "RESPONDING TO 7-DAY FEEDBACK REQUEST", they were asked:
+   "Is your AC still cooling well? Reply 1) Great ✅ 2) Not good ❌"
+   
+   Interpret their reply as FEEDBACK about service quality, not a new inquiry.
+   
+   IF POSITIVE ("1", "Great", "Yes", "Good", "Working", "Cold", "Nice", "Thanks", "Okay", "Fine"):
+     1. Acknowledge warmly: "So glad to hear it's working well! ❄️"
+     2. THE REFERRAL ASK (THE VIRAL MOMENT):
+        "If you have friends or neighbors who need aircon service, we'd love to take care of them too!"
+        ${customer?.referralLink ? `\n        "Share this link: ${customer.referralLink}\n        They get 10% off, and you earn 10% off your next service! 🎁"` : '"Just send them our way - they can mention your name for a special discount! 🎁"'}
+     3. THE GOOGLE REVIEW ASK (Honest, not forced):
+        ${customer?.googleReviewLink ? `"Also, if you have 20 seconds, an honest review helps other homeowners find us:\n        👉 ${customer.googleReviewLink}"` : '"If you have a moment, an honest Google review helps other homeowners find us! 🙏"'}
+     4. Call saveFeedback(score: 5, status: 'positive') to record the feedback
+   
+   IF NEGATIVE ("2", "No", "Not good", "Still hot", "Leaking", "Problem", "Issue", "Not cold"):
+     1. Apologize immediately: "I'm sorry to hear that! 😔 Let me help."
+     2. Ask for details: "What's the issue? (Not cold / Leaking / Noisy / Other)"
+     3. After they describe: 
+        - Call notifyOwner with the complaint
+        - Reassure them: "I've alerted ${business.ownerName || 'the team'}. Since it's been less than ${business.warrantyDays} days, this is covered by your warranty. We'll fix it FREE of charge."
+     4. Call saveFeedback(score: 2, status: 'negative', text: [their complaint])
+   
+   IF AMBIGUOUS ("hi", random message, unrelated question):
+     - Ask clarifying question: "Hi! I was just checking - how is your AC cooling after our service last week? 😊"
+     - Guide them: "Reply 1 if it's working great, or 2 if there's an issue."
 
 WORKFLOW - ALWAYS FOLLOW THIS PATTERN:
 1. When you receive a message, decide what tools to call (if any)

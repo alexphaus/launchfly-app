@@ -77,6 +77,34 @@ const LAUNCHFLY_BOT_NUMBER = '13203627874'; // Without + prefix
 // Utility = Post-purchase updates, appointment reminders, account alerts
 
 /**
+ * WhatsApp Utility: 7-Day Feedback Request
+ * Category: UTILITY (Post-purchase quality check)
+ * Cost: ₱0.17 (super cheap!)
+ * 
+ * Sent 7 days after service to check quality and ask for referrals if happy.
+ * Template must be approved in Twilio Console with this exact format:
+ * "Hi {{1}}, it's {{2}}! It's been a week since our service. Is your unit still cooling well? ❄️ Reply: 1) Great ✅ 2) Not good ❌"
+ */
+export const WA_UTILITY_FEEDBACK_7D: ReminderTemplate = {
+    id: 'wa_utility_feedback_7d',
+    name: 'WhatsApp 7-Day Feedback (Utility)',
+    channel: 'whatsapp_utility',
+    category: 'utility',
+    templateSid: process.env.TWILIO_TEMPLATE_FEEDBACK_7D || '', // Set in env
+    triggerDays: -7, // 7 days after service (negative = "after")
+    sequence: 0, // Runs before any service reminders
+    getMessage: (r) => {
+        // Fallback plain text if template fails
+        return `Hi ${r.customerName}, it's ${r.businessName}! 👋\n\nIt's been a week since our service. Is your unit still cooling well? ❄️\n\nReply:\n1️⃣ Great ✅\n2️⃣ Not good ❌`;
+    },
+    getTemplateVariables: (r) => ({
+        '1': r.customerName,
+        '2': r.businessName,
+    }),
+    costEstimate: TWILIO_COSTS.WHATSAPP_UTILITY,
+};
+
+/**
  * WhatsApp Utility: Service Due Reminder
  * Category: UTILITY (Post-purchase update for registered warranty)
  * Cost: ₱0.17 (19x cheaper than SMS!)

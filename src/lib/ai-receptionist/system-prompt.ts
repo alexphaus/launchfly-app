@@ -41,9 +41,10 @@ export function generateSystemPrompt(
     // Generate Referral Link (keep it SHORT and clean for WhatsApp)
     const referralCode = customer?.id ? `REF-${customer.id.substring(0,6).toUpperCase()}` : 'WELCOME';
     const ownerPhoneClean = business.ownerPhone?.replace(/[^0-9]/g,'') || '';
+    const botPhone = process.env.TWILIO_WHATSAPP_NUMBER?.replace(/[^0-9]/g, '') || ownerPhoneClean;
     const customerFirstName = customer?.name?.split(' ')[0] || 'Friend';
     // Shorter format: "Ref:Alex-REF123" instead of long sentence
-    const referralLink = `https://wa.me/${ownerPhoneClean}?text=Ref:${customerFirstName}-${referralCode}`;
+    const referralLink = `https://wa.me/${botPhone}?text=Ref:${customerFirstName}-${referralCode}`;
 
     const todayDate = new Date();
     const today = todayDate.toLocaleDateString('en-GB', { 
@@ -318,7 +319,7 @@ CONVERSATION RULES:
         
         ⭐ *Rate Us*
         A quick rating helps us a ton!
-        ${business.googleReviewLink || '[No review link configured]'}
+        ${business.googleReviewLink || 'https://search.google.com/local/writereview?placeid=Placeholder'}
         
         Thanks for trusting us! 🙏"
         

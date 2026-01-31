@@ -477,10 +477,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     };
 
     // Download QR - Maintenance Record Sticker Design
-    // QR now links to Launchfly bot (Twilio WhatsApp) with business context for smart booking
+    // CONCEPT: "The Silver Badge" (Premium & Trustworthy)
     const downloadQR = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
-        // +1 (320) 362-7874 is the production Launchfly bot number
         const launchflyBotNumber = '13203627874';
         
         // Include business ID in trigger message so bot knows which business context to use
@@ -493,131 +492,170 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        // New Layout: Wide Sticker (Approx 2:1)
-        const width = 2400;
-        const height = 1200;
+        // Landscape orientation 2.25:1 ratio (Business Card / Sticker size)
+        const width = 1800;
+        const height = 800;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
-        // Colors
-        const navyBlue = '#0F3057'; // Deep Blue for Left Panel
-        const rightBg = '#F3F4F6';  // Light Grey for Content Panel
-        const textBlack = '#111827';
-        const textGrey = '#6B7280';
-        const textBlue = '#0070DE';
+        // --- COLORS ---
+        const navyBlue = '#102A56'; // Deep Corporate Navy
+        const silverStart = '#E8E8E8'; // Matte Silver
+        const silverEnd = '#F8F8F8';   // Lighter Highlight
+        const textBlack = '#111111';
+        const textDarkGrey = '#4A4A4A';
+        const accentBlue = '#102A56'; // Same as Navy to match brand
         const brandWhite = '#FFFFFF';
-        const whatsappGreen = '#25D366';
 
-        // 1. Backgrounds
-        // Right Panel (Content)
-        ctx.fillStyle = rightBg;
-        ctx.fillRect(0, 0, width, height);
-
-        // Left Panel (Brand) - 32% Width
-        const leftWidth = width * 0.32;
-        ctx.fillStyle = navyBlue;
-        ctx.fillRect(0, 0, leftWidth, height);
-
-        // --- LEFT PANEL CONTENT (Brand) ---
-        ctx.textAlign = 'center';
-        ctx.fillStyle = brandWhite;
-
-        // Business Name
-        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
-        ctx.font = 'bold 70px "Inter", "Arial Black", sans-serif';
-        
-        // Simple word wrap for long business names
-        const words = bizName.split(' ');
-        if (ctx.measureText(bizName).width > leftWidth - 80 && words.length > 1) {
-            const mid = Math.ceil(words.length / 2);
-            ctx.fillText(words.slice(0, mid).join(' '), leftWidth / 2, 150);
-            ctx.fillText(words.slice(mid).join(' '), leftWidth / 2, 230);
-        } else {
-            ctx.fillText(bizName, leftWidth / 2, 180);
-        }
-
-        // Shield Logo (Custom Drawing)
-        ctx.save();
-        const shieldY = height / 2 - 20;
-        ctx.translate(leftWidth / 2, shieldY);
-        const shieldScale = 2.5; 
-        ctx.scale(shieldScale, shieldScale);
-        
-        ctx.strokeStyle = brandWhite;
-        ctx.lineWidth = 6;
-        ctx.lineJoin = 'round';
+        // 1. CLIP ROUNDED CORNERS
+        const radius = 40;
         ctx.beginPath();
-        // Shield shape
-        ctx.moveTo(0, -50); 
-        ctx.quadraticCurveTo(50, -50, 60, -20);
-        ctx.lineTo(60, 10);
-        ctx.bezierCurveTo(60, 60, 0, 90, 0, 90);
-        ctx.bezierCurveTo(0, 90, -60, 60, -60, 10);
-        ctx.lineTo(-60, -20);
-        ctx.quadraticCurveTo(-50, -50, 0, -50);
+        ctx.roundRect(0, 0, width, height, radius);
+        ctx.clip(); 
+
+        // 2. BACKGROUNDS
+        // Split point: Left 30% Blue, Right 70% Silver
+        const splitX = 540; // 30% of 1800
+
+        // Right Loop: Silver Gradient
+        const grad = ctx.createLinearGradient(splitX, 0, width, height);
+        grad.addColorStop(0, silverStart);
+        grad.addColorStop(0.5, silverEnd); // diagonal sheen
+        grad.addColorStop(1, silverStart);
+        ctx.fillStyle = grad;
+        ctx.fillRect(splitX, 0, width - splitX, height);
+
+        // Left Loop: Navy Blue
+        ctx.fillStyle = navyBlue;
+        ctx.fillRect(0, 0, splitX, height);
+
+        // --- LEFT SIDE CONTENT (Navy Block) ---
+        const leftCenterX = splitX / 2;
+
+        // A. Business Name
+        ctx.fillStyle = brandWhite;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        // Dynamic sizing for name
+        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
+        let nameFontSize = 55;
+        if (bizName.length > 15) nameFontSize = 45;
+        if (bizName.length > 25) nameFontSize = 35;
+        ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
+        
+        // Wrap text logic: Print max 2 lines
+        const nameY = 160;
+        const words = bizName.split(' ');
+        let line = '';
+        let lines = [];
+        for(let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > splitX - 60 && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+        // Draw lines centered
+        let currentNameY = lines.length > 1 ? nameY - (lines.length * nameFontSize/2) : nameY;
+        lines.forEach((l) => {
+           ctx.fillText(l.trim(), leftCenterX, currentNameY); 
+           currentNameY += (nameFontSize * 1.2);
+        });
+
+        // B. Shield Icon 
+        const shieldY = height / 2 + 20;
+        const shieldScale = 3.0; // Scale up path
+        ctx.strokeStyle = brandWhite;
+        ctx.lineWidth = 10; // Bold stroke
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        
+        ctx.save();
+        ctx.translate(leftCenterX, shieldY);
+        ctx.scale(shieldScale, shieldScale);
+        ctx.beginPath();
+        // Simple shield path centered at 0,0 locally
+        // Dimensions approx 60x70
+        ctx.moveTo(-30, -35); // top left
+        ctx.lineTo(30, -35);  // top right
+        ctx.bezierCurveTo(30, 0, 0, 45, 0, 45); // bottom tip
+        ctx.bezierCurveTo(0, 45, -30, 0, -30, -35);
+        ctx.closePath();
         ctx.stroke();
 
-        // Checkmark inside shield
-        ctx.lineWidth = 8;
-        ctx.lineCap = 'round';
+        // Checkmark inside (Thick wite)
         ctx.beginPath();
-        ctx.moveTo(-20, 5);
-        ctx.lineTo(-5, 25);
-        ctx.lineTo(25, -15);
+        ctx.moveTo(-15, -5);
+        ctx.lineTo(-5, 10);
+        ctx.lineTo(20, -15);
         ctx.stroke();
         ctx.restore();
 
-        // Phone Section
-        const phone = business?.phone || '+1 555-0123';
-        const bottomY = height - 120;
+        // C. Phone Number
+        const phoneY = height - 80;
+        const safePhone = business?.phone || '+1 555-0123';
         
-        ctx.font = '500 45px "Inter", "Arial", sans-serif';
-        ctx.fillText('WhatsApp:', leftWidth / 2, bottomY - 70);
-        
-        ctx.font = 'bold 60px "Inter", "Arial", sans-serif';
-        ctx.fillText(phone, leftWidth / 2, bottomY);
+        ctx.fillStyle = brandWhite;
+        ctx.font = '500 36px "Inter", "Arial", sans-serif';
+        // "WhatsApp:" label small above
+        ctx.fillText('WhatsApp:', leftCenterX, phoneY - 55);
+        ctx.font = '700 42px "Inter", "Arial", sans-serif';
+        ctx.fillText(safePhone, leftCenterX, phoneY);
 
+        // --- RIGHT SIDE CONTENT (Silver Area) ---
+        const rightPad = 80; 
+        const contentX = splitX + rightPad;
+        const qrSize = 480;
+        // Check fit
+        // const textWidthAvailable = (width - splitX) - qrSize - (rightPad * 2);
 
-        // --- RIGHT PANEL CONTENT ---
         ctx.textAlign = 'left';
-        const contentStart = leftWidth + 120; // Margin from blue panel
+        
+        // D. Top Label "SERVICE & WARRANTY RECORD"
+        ctx.fillStyle = textDarkGrey;
+        ctx.textBaseline = 'top';
+        ctx.font = '700 40px "Inter", "Arial", sans-serif';
+        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 80);
 
-        // Header: SERVICE & WARRANTY RECORD
-        ctx.fillStyle = textGrey;
-        ctx.font = 'bold 50px "Inter", "Arial", sans-serif';
-        ctx.fillText('SERVICE & WARRANTY RECORD', contentStart, 150);
-
-        // Main Text Stack
-        // "SCAN TO ACTIVATE WARRANTY"
+        // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
+        // Stacked
+        const mainY = 160;
         ctx.fillStyle = textBlack;
-        ctx.font = '900 130px "Inter", "Arial Black", sans-serif';
-        const lineHeight = 135;
-        let mainTextY = 340;
+        ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
+        const lineHeight = 105;
+        
+        ctx.fillText('SCAN TO', contentX, mainY);
+        ctx.fillText('ACTIVATE', contentX, mainY + lineHeight);
+        ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
 
-        ctx.fillText('SCAN TO', contentStart, mainTextY);
-        ctx.fillText('ACTIVATE', contentStart, mainTextY + lineHeight);
-        ctx.fillText('WARRANTY', contentStart, mainTextY + (lineHeight * 2));
-
-        // Subtitle: & Get Next Service Reminder
-        ctx.fillStyle = textBlue;
-        ctx.font = 'bold 65px "Inter", "Arial", sans-serif';
-        const subtitleY = mainTextY + (lineHeight * 2) + 120;
-        ctx.fillText('& Get Next', contentStart, subtitleY);
-        ctx.fillText('Service Reminder', contentStart, subtitleY + 80);
-
+        // F. Subtext "& Get Next Service Reminder"
+        const subY = mainY + (lineHeight * 3) + 30;
+        ctx.fillStyle = accentBlue;
+        ctx.font = '700 50px "Inter", "Arial", sans-serif';
+        ctx.fillText('& Get Next', contentX, subY);
+        ctx.fillText('Service Reminder', contentX, subY + 65);
 
         // --- QR CODE AREA ---
-        const qrSize = 750;
-        const qrX = width - qrSize - 100;
+        const qrX = width - qrSize - 80; // 80px margin from right
         const qrY = (height - qrSize) / 2;
 
         try {
+            // Generate QR - Silver background needs transparent or white?
+            // User asked for "High contrast black on silver".
+            // If library puts transparent, it will be silver background.
+            // If library puts white, it will be a white box.
+            // Let's try transparent (light: #00000000) for the integrated look.
+            
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
-                margin: 0, 
+                margin: 0,
                 errorCorrectionLevel: 'H',
-                color: { dark: '#000000', light: '#00000000' } // Transparent bg
+                color: { dark: '#000000', light: '#00000000' }
             });
 
             const qrImg = new Image();
@@ -626,20 +664,20 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
             // WhatsApp Icon Overlay in center of QR
-            const iconSize = qrSize * 0.22; 
+            const iconSize = qrSize * 0.20; 
             const iconX = qrX + qrSize / 2;
             const iconY = qrY + qrSize / 2;
 
-            // White Circle Background
+            // White circle background for icon
             ctx.beginPath();
-            ctx.arc(iconX, iconY, iconSize / 2 + 15, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
+            ctx.arc(iconX, iconY, iconSize / 2 + 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
             ctx.fill();
 
-            // Green WhatsApp Circle
-            const greenCircleRadius = iconSize / 2;
+            // Green WhatsApp circle
+            const whatsappGreen = '#25D366';
             ctx.beginPath();
-            ctx.arc(iconX, iconY, greenCircleRadius, 0, Math.PI * 2);
+            ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
             ctx.fillStyle = whatsappGreen;
             ctx.fill();
 
@@ -650,14 +688,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.translate(iconX, iconY);
             ctx.scale(s / 24, s / 24);
             ctx.translate(-12, -12);
-            // Filled phone icon path
             const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
             ctx.fill(phonePath);
             ctx.restore();
 
             // Download
             const link = document.createElement('a');
-            const safeName = (business?.name || 'Business').replace(/\s+/g, '_');
+            const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
             link.download = `${safeName}_Warranty_Sticker.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);

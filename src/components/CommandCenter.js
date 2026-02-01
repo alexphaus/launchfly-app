@@ -657,7 +657,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
 
         // F. Subtext "& Get Next Service Reminder"
-        const subY = mainY + (lineHeight * 3) + 15;
+        const subY = mainY + (lineHeight * 3) + 27;
         ctx.fillStyle = accentBlue;
         ctx.font = '700 50px "Inter", "Arial", sans-serif';
         ctx.fillText('& Get Next', contentX, subY);

@@ -568,33 +568,28 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
            currentNameY += (nameFontSize * 1.2);
         });
 
-        // B. Shield Icon 
-        const shieldY = height / 2 + 20;
-        const shieldScale = 3.0; // Scale up path
+        // B. Shield Icon (Center) - Professional SVG Path
+        const shieldSize = 280;
+        const shieldY = height / 2;
+        
+        ctx.save();
+        ctx.translate(leftCenterX - shieldSize / 2, shieldY - shieldSize / 2);
+        ctx.scale(shieldSize / 24, shieldSize / 24); // Scale to SVG viewbox 24
+        
+        // Shield Outline
+        ctx.lineWidth = 1.5;
         ctx.strokeStyle = brandWhite;
-        ctx.lineWidth = 10; // Bold stroke
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         
-        ctx.save();
-        ctx.translate(leftCenterX, shieldY);
-        ctx.scale(shieldScale, shieldScale);
-        ctx.beginPath();
-        // Simple shield path centered at 0,0 locally
-        // Dimensions approx 60x70
-        ctx.moveTo(-30, -35); // top left
-        ctx.lineTo(30, -35);  // top right
-        ctx.bezierCurveTo(30, 0, 0, 45, 0, 45); // bottom tip
-        ctx.bezierCurveTo(0, 45, -30, 0, -30, -35);
-        ctx.closePath();
-        ctx.stroke();
-
-        // Checkmark inside (Thick wite)
-        ctx.beginPath();
-        ctx.moveTo(-15, -5);
-        ctx.lineTo(-5, 10);
-        ctx.lineTo(20, -15);
-        ctx.stroke();
+        // Custom Shield Path (professional badge shape)
+        const shieldPath = new Path2D("M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z");
+        ctx.stroke(shieldPath);
+        
+        // Checkmark inside
+        const checkPath = new Path2D("M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
+        ctx.fillStyle = brandWhite;
+        ctx.fill(checkPath);
         ctx.restore();
 
         // C. Phone Number

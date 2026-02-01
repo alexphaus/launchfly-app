@@ -59,6 +59,23 @@ export async function POST(request: NextRequest) {
         console.log(`\n🤖 V2 Incoming: ${customerPhone}`);
         console.log(`   Message: ${messageText.substring(0, 100)}...`);
 
+        // 🎯 DEMO TRIGGER - Alert Alex when prospects try the demo link
+        const isDemoTrigger = messageText.trim().toUpperCase() === 'DEMO';
+        if (isDemoTrigger && twilioClient && fromNumber) {
+            console.log(`   🎯 DEMO TRIGGER from prospect: ${customerPhone}`);
+            const alexPhone = '+639627459049';
+            try {
+                await twilioClient.messages.create({
+                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    to: `whatsapp:${alexPhone}`,
+                    body: `🎯 DEMO Alert!\n\nA prospect is trying your bot!\n📱 ${customerPhone}\n⏰ ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}\n\nThey sent: "${messageText}"`
+                });
+                console.log(`   📢 Notified Alex about demo prospect`);
+            } catch (notifyErr) {
+                console.error('Failed to notify about demo:', notifyErr);
+            }
+        }
+
         // 2. Extract business ID from [BIZ:uuid] or (Ref: uuid/subdomain) if present
         const bizMatch = messageText.match(/\[BIZ:([a-f0-9-]+)\]/i);
         const refMatch = messageText.match(/\(Ref:\s*([a-zA-Z0-9-]+)\)/i);

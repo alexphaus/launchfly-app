@@ -1048,7 +1048,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                             <QrCode className="w-5 h-5 text-slate-700" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-sm text-slate-900">Van Sticker QR</h3>
+                            <h3 className="font-bold text-sm text-slate-900">Unit Sticker QR</h3>
                             <p className="text-xs text-slate-500">Get more offline leads</p>
                         </div>
                     </div>

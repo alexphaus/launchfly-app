@@ -599,7 +599,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
         // C. Phone Number
         const phoneY = height - 45;
-        const safePhone = business?.phone || '+1 555-0123';
+        // Priority: whatsapp_number > phone_number > business_data.phone > fallback
+        const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
         
         ctx.fillStyle = brandWhite;
         ctx.font = '500 36px "Inter", "Arial", sans-serif';

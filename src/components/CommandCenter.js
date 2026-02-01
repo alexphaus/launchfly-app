@@ -634,21 +634,20 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // --- RIGHT SIDE CONTENT (Silver Area) ---
         const rightPad = 80; 
         const contentX = splitX + rightPad;
-        const qrSize = 480;
-        // Check fit
-        // const textWidthAvailable = (width - splitX) - qrSize - (rightPad * 2);
-
+        const qrSize = 420; // Reduced from 480 to give text more room
+        
         ctx.textAlign = 'left';
         
         // D. Top Label "SERVICE & WARRANTY RECORD"
-        ctx.fillStyle = textDarkGrey;
+        // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
+        ctx.fillStyle = navyBlue; 
         ctx.textBaseline = 'top';
-        ctx.font = '700 40px "Inter", "Arial", sans-serif';
-        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 65);
+        ctx.font = '700 38px "Inter", "Arial", sans-serif'; // Slightly smaller to ensure fit
+        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 95); // Shifted down for centering
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
-        const mainY = 135;
+        const mainY = 175; // Shifted down +40px
         ctx.fillStyle = textBlack;
         ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
         const lineHeight = 100;
@@ -658,14 +657,14 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
 
         // F. Subtext "& Get Next Service Reminder"
-        const subY = mainY + (lineHeight * 3) + 20;
+        const subY = mainY + (lineHeight * 3) + 25;
         ctx.fillStyle = accentBlue;
         ctx.font = '700 50px "Inter", "Arial", sans-serif';
         ctx.fillText('& Get Next', contentX, subY);
         ctx.fillText('Service Reminder', contentX, subY + 65);
 
         // --- QR CODE AREA ---
-        const qrX = width - qrSize - 80; // 80px margin from right
+        const qrX = width - qrSize - 100; // Increased margin slightly
         const qrY = (height - qrSize) / 2;
 
         try {

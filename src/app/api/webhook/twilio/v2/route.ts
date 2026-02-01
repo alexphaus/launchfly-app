@@ -59,9 +59,27 @@ export async function POST(request: NextRequest) {
         console.log(`\n🤖 V2 Incoming: ${customerPhone}`);
         console.log(`   Message: ${messageText.substring(0, 100)}...`);
 
-        // 2. Extract business ID from [BIZ:uuid] if present
+        // 2. Extract business ID from [BIZ:uuid] or (Ref: uuid/subdomain) if present
         const bizMatch = messageText.match(/\[BIZ:([a-f0-9-]+)\]/i);
+        const refMatch = messageText.match(/\(Ref:\s*([a-zA-Z0-9-]+)\)/i);
         let businessId = bizMatch ? bizMatch[1] : null;
+        let businessSubdomain = (!businessId && refMatch) ? refMatch[1] : null;
+        
+        // If ref is a subdomain (not UUID format), look up the business ID
+        if (businessSubdomain && !/^[a-f0-9-]{36}$/i.test(businessSubdomain)) {
+            const { data: bizBySubdomain } = await supabase
+                .from('businesses')
+                .select('id')
+                .eq('subdomain', businessSubdomain.toLowerCase())
+                .single();
+            if (bizBySubdomain) {
+                businessId = bizBySubdomain.id;
+                console.log(`   🔗 Resolved subdomain '${businessSubdomain}' to business ID: ${businessId}`);
+            }
+        } else if (refMatch && !businessId) {
+            // Ref contains a UUID directly
+            businessId = refMatch[1];
+        }
 
         // If no business ID in message, try to get from recent history
         if (!businessId) {

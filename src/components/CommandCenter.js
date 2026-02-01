@@ -482,11 +482,10 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Launchfly Bot WhatsApp number - the central AI receptionist
         const launchflyBotNumber = '13203627874';
         
-        // Include business ID in trigger message so bot knows which business context to use
-        const businessId = business?.id;
-        const stickerTrigger = businessId 
-            ? `Hi, I scanned the Service Sticker [BIZ:${businessId}]`
-            : "Hi, I scanned the Service Sticker";
+        // Include business ref in trigger message so bot knows which business context to use
+        // Use subdomain if available (shorter), otherwise fall back to UUID
+        const businessRef = business?.subdomain || business?.id;
+        const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
         
         // Primary: Launchfly bot with business context
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;

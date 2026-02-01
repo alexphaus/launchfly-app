@@ -518,13 +518,14 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Split point: Left 30% Blue, Right 70% Silver
         const splitX = 540; // 30% of 1800
 
-        // Right Loop: Silver Gradient
-        const grad = ctx.createLinearGradient(splitX, 0, width, height);
-        grad.addColorStop(0, silverStart);
-        grad.addColorStop(0.5, silverEnd); // diagonal sheen
-        grad.addColorStop(1, silverStart);
-        ctx.fillStyle = grad;
-        ctx.fillRect(splitX, 0, width - splitX, height);
+        // Right Loop: Silver Gradient 
+        // [MODIFIED FOR PRINT] LEAVE TRANSPARENT so the Silver Foil material shines through
+        // const grad = ctx.createLinearGradient(splitX, 0, width, height);
+        // grad.addColorStop(0, silverStart);
+        // grad.addColorStop(0.5, silverEnd); // diagonal sheen
+        // grad.addColorStop(1, silverStart);
+        // ctx.fillStyle = grad;
+        // ctx.fillRect(splitX, 0, width - splitX, height);
 
         // Left Loop: Navy Blue
         ctx.fillStyle = navyBlue;

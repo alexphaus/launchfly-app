@@ -569,7 +569,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         });
 
         // B. Shield Icon (Center) - Professional SVG Path
-        const shieldSize = 280;
+        const shieldSize = 240;
         const shieldY = height / 2;
         
         ctx.save();
@@ -582,7 +582,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.translate(-12, -pathCenterY); 
         
         // Shield Outline
-        ctx.lineWidth = 1.8; // Slightly thicker for print clarity
+        ctx.lineWidth = 2.0; // Slightly thicker for print clarity at smaller scale
         ctx.strokeStyle = brandWhite;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';

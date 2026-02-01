@@ -65,16 +65,55 @@ export async function POST(request: NextRequest) {
         let businessId = bizMatch ? bizMatch[1] : null;
         let businessSubdomain = (!businessId && refMatch) ? refMatch[1] : null;
         
+        // 🏷️ STICKER SCAN DETECTION - Track when someone scans the warranty QR sticker
+        const isStickerScan = messageText.toLowerCase().includes('activate') && 
+                             messageText.toLowerCase().includes('warranty') &&
+                             refMatch !== null;
+        
         // If ref is a subdomain (not UUID format), look up the business ID
         if (businessSubdomain && !/^[a-f0-9-]{36}$/i.test(businessSubdomain)) {
             const { data: bizBySubdomain } = await supabase
                 .from('businesses')
-                .select('id')
+                .select('id, name, whatsapp_number, phone_number')
                 .eq('subdomain', businessSubdomain.toLowerCase())
                 .single();
             if (bizBySubdomain) {
                 businessId = bizBySubdomain.id;
                 console.log(`   🔗 Resolved subdomain '${businessSubdomain}' to business ID: ${businessId}`);
+                
+                // 📊 LOG STICKER SCAN for analytics
+                if (isStickerScan) {
+                    console.log(`   🏷️ STICKER SCAN DETECTED! Business: ${bizBySubdomain.name}, Customer: ${customerPhone}`);
+                    
+                    // Log to database for tracking
+                    await supabase.from('sticker_scans').insert({
+                        business_id: businessId,
+                        customer_phone: customerPhone,
+                        source: 'warranty_sticker',
+                        scanned_at: new Date().toISOString()
+                    }).then(() => {
+                        console.log(`   📊 Sticker scan logged to database`);
+                    }).catch((err) => {
+                        // Table might not exist yet - that's ok, just log
+                        console.log(`   ⚠️ Could not log sticker scan (table may not exist): ${err.message}`);
+                    });
+                    
+                    // 🔔 NOTIFY OWNER - Someone scanned their sticker!
+                    const ownerPhone = bizBySubdomain.whatsapp_number || bizBySubdomain.phone_number;
+                    if (ownerPhone && twilioClient && fromNumber) {
+                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                body: `🏷️ Sticker Scan Alert!\n\nSomeone just scanned your warranty sticker!\n📱 ${customerPhone}\n\nThey're activating their warranty now. The AI will handle it automatically.`
+                            });
+                            console.log(`   📢 Notified owner ${cleanOwnerPhone} about sticker scan`);
+                        } catch (notifyErr) {
+                            console.error('Failed to notify owner about sticker scan:', notifyErr);
+                        }
+                    }
+                }
             }
         } else if (refMatch && !businessId) {
             // Ref contains a UUID directly

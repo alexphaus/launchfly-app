@@ -492,9 +492,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        // Landscape orientation 2.5:1 ratio (Premium Sticker size)
+        // Landscape orientation ~2.8:1 ratio (Sleek bumper sticker size)
         const width = 1800;
-        const height = 700;
+        const height = 640;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -546,7 +546,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
         
         // Wrap text logic: Print max 2 lines
-        const nameY = 130;
+        const nameY = 115;
         const words = bizName.split(' ');
         let line = '';
         let lines = [];
@@ -598,7 +598,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.restore();
 
         // C. Phone Number
-        const phoneY = height - 50;
+        const phoneY = height - 45;
         const safePhone = business?.phone || '+1 555-0123';
         
         ctx.fillStyle = brandWhite;
@@ -634,7 +634,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // --- RIGHT SIDE CONTENT (Silver Area) ---
         const rightPad = 80; 
         const contentX = splitX + rightPad;
-        const qrSize = 420; // Reduced from 480 to give text more room
+        const qrSize = 400; // Adjusted for sleek height
         
         ctx.textAlign = 'left';
         
@@ -642,12 +642,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
         ctx.fillStyle = navyBlue; 
         ctx.textBaseline = 'top';
-        ctx.font = '700 38px "Inter", "Arial", sans-serif'; // Slightly smaller to ensure fit
-        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 95); // Shifted down for centering
+        ctx.font = '700 38px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 65); // Moved up
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
-        const mainY = 175; // Shifted down +40px
+        const mainY = 135; // Moved up
         ctx.fillStyle = textBlack;
         ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
         const lineHeight = 100;
@@ -657,7 +657,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
 
         // F. Subtext "& Get Next Service Reminder"
-        const subY = mainY + (lineHeight * 3) + 25;
+        const subY = mainY + (lineHeight * 3) + 15;
         ctx.fillStyle = accentBlue;
         ctx.font = '700 50px "Inter", "Arial", sans-serif';
         ctx.fillText('& Get Next', contentX, subY);

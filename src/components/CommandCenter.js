@@ -598,8 +598,31 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         ctx.fillStyle = brandWhite;
         ctx.font = '500 36px "Inter", "Arial", sans-serif';
-        // "WhatsApp:" label small above
-        ctx.fillText('WhatsApp:', leftCenterX, phoneY - 55);
+
+        // "WhatsApp:" label with Icon
+        const labelText = 'WhatsApp:';
+        const iconSizeSmall = 32;
+        const gap = 12;
+        const textWidth = ctx.measureText(labelText).width;
+        const totalWidth = iconSizeSmall + gap + textWidth;
+        
+        // Calculate starting X to center the whole group
+        const startX = leftCenterX - (totalWidth / 2);
+        
+        // Draw Icon
+        ctx.save();
+        // Align icon vertically with text. Text is baseline 'bottom' at (phoneY - 55).
+        ctx.translate(startX, phoneY - 55 - iconSizeSmall + 4); 
+        ctx.scale(iconSizeSmall / 24, iconSizeSmall / 24);
+        const phoneIconPath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+        ctx.fill(phoneIconPath);
+        ctx.restore();
+
+        // Draw Text
+        ctx.textAlign = 'left'; 
+        ctx.fillText(labelText, startX + iconSizeSmall + gap, phoneY - 55);
+        ctx.textAlign = 'center'; // Restore
+
         ctx.font = '700 42px "Inter", "Arial", sans-serif';
         ctx.fillText(safePhone, leftCenterX, phoneY);
 

@@ -677,7 +677,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
                 margin: 0,
-                errorCorrectionLevel: 'H',
+                errorCorrectionLevel: 'M', // Standard level for fewer, larger dots (better for print)
                 color: { dark: '#000000', light: '#00000000' }
             });
 

@@ -86,17 +86,21 @@ export async function POST(request: NextRequest) {
                     console.log(`   🏷️ STICKER SCAN DETECTED! Business: ${bizBySubdomain.name}, Customer: ${customerPhone}`);
                     
                     // Log to database for tracking
-                    await supabase.from('sticker_scans').insert({
-                        business_id: businessId,
-                        customer_phone: customerPhone,
-                        source: 'warranty_sticker',
-                        scanned_at: new Date().toISOString()
-                    }).then(() => {
-                        console.log(`   📊 Sticker scan logged to database`);
-                    }).catch((err) => {
-                        // Table might not exist yet - that's ok, just log
-                        console.log(`   ⚠️ Could not log sticker scan (table may not exist): ${err.message}`);
-                    });
+                    try {
+                        const { error: scanError } = await supabase.from('sticker_scans').insert({
+                            business_id: businessId,
+                            customer_phone: customerPhone,
+                            source: 'warranty_sticker',
+                            scanned_at: new Date().toISOString()
+                        });
+                        if (scanError) {
+                            console.log(`   ⚠️ Could not log sticker scan (table may not exist): ${scanError.message}`);
+                        } else {
+                            console.log(`   📊 Sticker scan logged to database`);
+                        }
+                    } catch (err) {
+                        console.log(`   ⚠️ Sticker scan logging error: ${err}`);
+                    }
                     
                     // 🔔 NOTIFY OWNER - Someone scanned their sticker!
                     const ownerPhone = bizBySubdomain.whatsapp_number || bizBySubdomain.phone_number;

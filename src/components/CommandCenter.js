@@ -484,13 +484,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         // Include business ID in trigger message so bot knows which business context to use
         const businessId = business?.id;
-        // OPTION 1: "The Human Approach" - Higher conversion, friendly
         const stickerTrigger = businessId 
-            ? `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessId})`
-            : "Hi! I want to activate my 30-Day Warranty. 🛡️";
+            ? `Hi, I scanned the Service Sticker [BIZ:${businessId}]`
+            : "Hi, I scanned the Service Sticker";
         
         // Primary: Launchfly bot with business context
-        // Use encodeURIComponent to ensure newlines (%0A) work correctly
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
@@ -640,12 +638,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         ctx.textAlign = 'left';
         
-        // D. Top Label "OFFICIAL 30-DAY WARRANTY" (Stronger Header)
+        // D. Top Label "SERVICE & WARRANTY RECORD"
         // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
         ctx.fillStyle = navyBlue; 
         ctx.textBaseline = 'top';
-        ctx.font = '800 38px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('OFFICIAL 30-DAY WARRANTY', contentX, 65);
+        ctx.font = '700 38px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 65); // Moved up
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
@@ -717,11 +715,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.fill(phonePath);
             ctx.restore();
 
-            // "No App Needed" Text under QR
-            ctx.font = '700 24px "Inter", "Arial", sans-serif';
-            ctx.fillStyle = navyBlue;
+            // "No app needed" text below QR
             ctx.textAlign = 'center';
-            ctx.fillText('No App Needed', iconX, qrY + qrSize + 35);
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = textDarkGrey;
+            ctx.font = '600 28px "Inter", "Arial", sans-serif';
+            ctx.fillText('No App Needed', qrX + qrSize / 2, qrY + qrSize + 15);
 
             // Download
             const link = document.createElement('a');

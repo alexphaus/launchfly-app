@@ -62,21 +62,51 @@ export async function POST(request: NextRequest) {
         console.log(`\n🤖 V2 Incoming: ${customerPhone}`);
         console.log(`   Message: ${messageText.substring(0, 100)}...`);
 
-        // 🎯 DEMO TRIGGER - Alert Alex when prospects try the demo link
+        // 🎯 DEMO FAST-PATH - Optimized experience for prospects
+        // Skips all DB lookups and sends instant response
         const isDemoTrigger = messageText.trim().toUpperCase() === 'DEMO';
         if (isDemoTrigger && twilioClient && fromNumber) {
-            console.log(`   🎯 DEMO TRIGGER from prospect: ${customerPhone}`);
+            console.log(`   🎯 DEMO FAST-PATH activated for: ${customerPhone}`);
+            
+            // Use a real demo business for full functionality
+            const DEMO_BUSINESS_ID = 'e8fc5a62-19df-473f-b275-d159e563050e'; // Relano Airconditioning
+            
+            // Fire and forget: Alert Alex (don't wait for it)
             const alexPhone = '+639627459049';
-            try {
-                await twilioClient.messages.create({
-                    from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                    to: `whatsapp:${alexPhone}`,
-                    body: `🎯 DEMO Alert!\n\nA prospect is trying your bot!\n📱 ${customerPhone}\n⏰ ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}\n\nThey sent: "${messageText}"`
-                });
-                console.log(`   📢 Notified Alex about demo prospect`);
-            } catch (notifyErr) {
-                console.error('Failed to notify about demo:', notifyErr);
-            }
+            twilioClient.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: `whatsapp:${alexPhone}`,
+                body: `🎯 DEMO Alert!\n\nA prospect is trying your bot!\n📱 ${customerPhone}\n⏰ ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`
+            }).catch((e: Error) => console.log('Demo alert failed:', e.message));
+            
+            // INSTANT response - no AI call, no DB lookup
+            const demoWelcome = `Hey! 👋 Welcome to the AI Receptionist demo!
+
+I'm an AI that handles customer inquiries 24/7 for service businesses.
+
+*Try me out - pretend you're a customer:*
+• "I need aircon cleaning"
+• "How much for 2 units?"
+• "Book me for tomorrow morning"
+• "My aircon not cold" (I handle complaints too!)
+
+Or ask me anything! I can check availability, give quotes, and book jobs automatically. 🤖`;
+
+            await twilioClient.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: from,
+                body: demoWelcome,
+            });
+            
+            // Save to history with demo business ID so follow-up messages have context
+            await saveMessage(customerPhone, 'user', messageText, DEMO_BUSINESS_ID);
+            await saveMessage(customerPhone, 'assistant', demoWelcome, DEMO_BUSINESS_ID);
+            
+            console.log(`   ⚡ DEMO response sent in ${Date.now() - startTime}ms (fast-path)`);
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
         }
 
         // 2. Extract business ID from [BIZ:uuid] or (Ref: uuid/subdomain) if present

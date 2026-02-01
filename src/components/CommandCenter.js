@@ -492,9 +492,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        // Landscape orientation ~2.77:1 ratio (Premium Sticker size)
+        // Landscape orientation 2.5:1 ratio (Premium Sticker size)
         const width = 1800;
-        const height = 650;
+        const height = 700;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -546,7 +546,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
         
         // Wrap text logic: Print max 2 lines
-        const nameY = 120;
+        const nameY = 130;
         const words = bizName.split(' ');
         let line = '';
         let lines = [];
@@ -569,8 +569,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         });
 
         // B. Shield Icon (Center) - Professional SVG Path
-        const shieldSize = 240;
-        const shieldY = height / 2 + 10;
+        const shieldSize = 280;
+        const shieldY = height / 2;
         
         ctx.save();
         ctx.translate(leftCenterX - shieldSize / 2, shieldY - shieldSize / 2);
@@ -593,7 +593,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.restore();
 
         // C. Phone Number
-        const phoneY = height - 60;
+        const phoneY = height - 50;
         const safePhone = business?.phone || '+1 555-0123';
         
         ctx.fillStyle = brandWhite;
@@ -639,13 +639,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillStyle = textDarkGrey;
         ctx.textBaseline = 'top';
         ctx.font = '700 40px "Inter", "Arial", sans-serif';
-        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 60);
+        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 65);
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
-        const mainY = 130;
+        const mainY = 135;
         ctx.fillStyle = textBlack;
-        ctx.font = '900 90px "Inter", "Arial Black", sans-serif';
+        ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
         const lineHeight = 100;
         
         ctx.fillText('SCAN TO', contentX, mainY);
@@ -653,7 +653,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
 
         // F. Subtext "& Get Next Service Reminder"
-        const subY = mainY + (lineHeight * 3) + 30;
+        const subY = mainY + (lineHeight * 3) + 20;
         ctx.fillStyle = accentBlue;
         ctx.font = '700 50px "Inter", "Arial", sans-serif';
         ctx.fillText('& Get Next', contentX, subY);

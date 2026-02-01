@@ -642,8 +642,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
         ctx.fillStyle = navyBlue; 
         ctx.textBaseline = 'top';
-        ctx.font = '700 38px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 65); // Moved up
+        ctx.font = '800 42px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('OFFICIAL 30-DAY WARRANTY', contentX, 65); // Moved up
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
@@ -719,8 +719,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             ctx.fillStyle = textDarkGrey;
-            ctx.font = '600 28px "Inter", "Arial", sans-serif';
-            ctx.fillText('No App Needed', qrX + qrSize / 2, qrY + qrSize + 15);
+            ctx.font = '600 34px "Inter", "Arial", sans-serif';
+            ctx.fillText('No App Needed', qrX + qrSize / 2, qrY + qrSize + 25);
 
             // Download
             const link = document.createElement('a');

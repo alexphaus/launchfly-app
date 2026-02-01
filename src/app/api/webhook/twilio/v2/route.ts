@@ -15,6 +15,9 @@ import { getConversationHistory, saveMessage, getLastBusinessId } from '../../..
 import { sendTypingIndicator, sendJobConfirmed, sendJobCard } from '../../../../../lib/whatsapp-push';
 import { Guardrails } from '@/lib/ai-receptionist/guardrails';
 
+export const maxDuration = 60; // Allow up to 60s processing (prevents timeouts on cold starts)
+export const dynamic = 'force-dynamic'; // Ensure dynamic execution
+
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
@@ -32,13 +35,10 @@ const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
 export async function POST(request: NextRequest) {
     const startTime = Date.now();
-    const timings: Record<string, number> = {};
-    const mark = (label: string) => { timings[label] = Date.now() - startTime; };
     
     try {
         // 1. Parse incoming WhatsApp message
         const formData = await request.formData();
-        mark('parse_form');
         const from = formData.get('From') as string;
         const body = formData.get('Body') as string;
         const messageSid = formData.get('MessageSid') as string; // For typing indicator
@@ -97,36 +97,45 @@ export async function POST(request: NextRequest) {
                 .select('id, name, whatsapp_number, phone_number')
                 .eq('subdomain', businessSubdomain.toLowerCase())
                 .single();
-            mark('subdomain_lookup');
             if (bizBySubdomain) {
                 businessId = bizBySubdomain.id;
                 console.log(`   🔗 Resolved subdomain '${businessSubdomain}' to business ID: ${businessId}`);
                 
-                // 📊 LOG STICKER SCAN - Fire and forget (don't await)
+                // 📊 LOG STICKER SCAN for analytics
                 if (isStickerScan) {
                     console.log(`   🏷️ STICKER SCAN DETECTED! Business: ${bizBySubdomain.name}, Customer: ${customerPhone}`);
                     
-                    // Log to database - fire and forget for speed
-                    supabase.from('sticker_scans').insert({
-                        business_id: businessId,
-                        customer_phone: customerPhone,
-                        source: 'warranty_sticker',
-                        scanned_at: new Date().toISOString()
-                    }).then(({ error }) => {
-                        if (error) console.log(`   ⚠️ Sticker scan log error: ${error.message}`);
-                        else console.log(`   📊 Sticker scan logged`);
-                    });
+                    // Log to database for tracking
+                    try {
+                        const { error: scanError } = await supabase.from('sticker_scans').insert({
+                            business_id: businessId,
+                            customer_phone: customerPhone,
+                            source: 'warranty_sticker',
+                            scanned_at: new Date().toISOString()
+                        });
+                        if (scanError) {
+                            console.log(`   ⚠️ Could not log sticker scan (table may not exist): ${scanError.message}`);
+                        } else {
+                            console.log(`   📊 Sticker scan logged to database`);
+                        }
+                    } catch (err) {
+                        console.log(`   ⚠️ Sticker scan logging error: ${err}`);
+                    }
                     
-                    // 🔔 NOTIFY OWNER - Fire and forget (don't block response)
+                    // 🔔 NOTIFY OWNER - Someone scanned their sticker!
                     const ownerPhone = bizBySubdomain.whatsapp_number || bizBySubdomain.phone_number;
                     if (ownerPhone && twilioClient && fromNumber) {
                         const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
-                        twilioClient.messages.create({
-                            from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                            to: `whatsapp:${cleanOwnerPhone}`,
-                            body: `🏷️ Sticker Scan Alert!\n\nSomeone just scanned your warranty sticker!\n📱 ${customerPhone}\n\nThey're activating their warranty now. The AI will handle it automatically.`
-                        }).then(() => console.log(`   📢 Notified owner about sticker scan`))
-                          .catch(e => console.error('Sticker notify error:', e));
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                body: `🏷️ Sticker Scan Alert!\n\nSomeone just scanned your warranty sticker!\n📱 ${customerPhone}\n\nThey're activating their warranty now. The AI will handle it automatically.`
+                            });
+                            console.log(`   📢 Notified owner ${cleanOwnerPhone} about sticker scan`);
+                        } catch (notifyErr) {
+                            console.error('Failed to notify owner about sticker scan:', notifyErr);
+                        }
                     }
                 }
             }
@@ -160,38 +169,6 @@ export async function POST(request: NextRequest) {
                 console.log(`   📱 Found customer's business_id from DB: ${businessId}`);
             }
         }
-        mark('resolve_business');
-
-        // ============================================================
-        // 🚀 FAST PATH: First-time warranty activation
-        // Instead of waiting for full AI processing (15-30s), send immediate response
-        // This provides instant feedback while context is built in background
-        // ============================================================
-        const isFirstWarrantyMessage = isStickerScan && messageText.toLowerCase().includes('activate') && 
-                                       messageText.toLowerCase().includes('warranty');
-        
-        if (isFirstWarrantyMessage && businessId && twilioClient && fromNumber) {
-            console.log(`   🚀 FAST PATH: First warranty activation message detected`);
-            
-            // Send immediate response - no AI needed for this templated reply
-            const fastResponse = `Hi there! 👋 Welcome!\n\nI see you want to activate your 30-day warranty. 🛡️\n\nMay I have your *name* please?`;
-            
-            await twilioClient.messages.create({
-                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                to: from,
-                body: fastResponse,
-            });
-            
-            // Save to history in background (don't await)
-            saveMessage(customerPhone, 'user', messageText, businessId).catch(e => console.error('Save user msg error:', e));
-            saveMessage(customerPhone, 'assistant', fastResponse, businessId).catch(e => console.error('Save assistant msg error:', e));
-            
-            console.log(`   ⚡ FAST PATH complete in ${Date.now() - startTime}ms`);
-            return new NextResponse(
-                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
-                { headers: { 'Content-Type': 'text/xml' } }
-            );
-        }
 
         // 3. Build context for the AI - PARALLEL FETCHING for speed (Gap 3 fix)
         let businessContext: BusinessContext | null = null;
@@ -216,7 +193,6 @@ export async function POST(request: NextRequest) {
                 // Get conversation history
                 getConversationHistory(customerPhone, businessId),
             ]);
-            mark('parallel_fetch');
 
             const business = businessResult.data;
             const customer = customerResult.data;
@@ -268,59 +244,64 @@ export async function POST(request: NextRequest) {
                 
                 if (isReminderResponse && isConfirmation) {
                     console.log('🔔 Hot lead! Customer responding to Smart Nag reminder');
-                    mark('smart_nag_detected');
                     
                     const customerName = customer.first_name || customer.name?.split(' ')[0] || 'Boss';
+                    const businessName = business?.name || 'Business';
                     const niche = (business?.business_data as { niche?: string })?.niche || 'Service';
                     
-                    // Use niche directly - skip the last service query for speed!
-                    // The service name from last service record rarely differs from niche anyway
-                    const serviceName = niche;
+                    // Get their last service for context
+                    const { data: lastService } = await supabase
+                        .from('service_records')
+                        .select('service_name, appliance_type, next_service_due_at')
+                        .eq('customer_id', customer.id)
+                        .order('service_date', { ascending: false })
+                        .limit(1)
+                        .single();
                     
-                    // Send warm booking prompt IMMEDIATELY
-                    const warmResponse = `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`;
+                    const serviceName = lastService?.service_name || niche;
                     
+                    // Send warm booking prompt
                     if (twilioClient && fromNumber) {
                         await twilioClient.messages.create({
                             from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                             to: `whatsapp:${customerPhone}`,
-                            body: warmResponse
+                            body: `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`
                         });
                     }
-                    mark('smart_nag_sent');
                     
-                    // Do DB updates in parallel, fire-and-forget style
-                    Promise.all([
-                        // Update status to booking flow
-                        supabase.from('customers').update({
-                            status: 'booking_in_progress',
-                            notes: (customer.notes || '') + `\n[REMINDER_CONVERTED: ${new Date().toISOString()}]`
-                        }).eq('id', customer.id),
-                        // Save message to history
-                        saveMessage(customerPhone, 'user', messageText, businessId),
-                        saveMessage(customerPhone, 'assistant', warmResponse, businessId),
-                    ]).catch(e => console.error('Smart nag DB update error:', e));
+                    // Update status to booking flow AND save context to history
+                    await supabase.from('customers').update({
+                        status: 'booking_in_progress', // Use clear status that V2 won't override
+                        notes: (customer.notes || '') + `\n[REMINDER_CONVERTED: ${new Date().toISOString()}]`
+                    }).eq('id', customer.id);
                     
-                    // 🔔 NOTIFY OWNER - Fire and forget (don't block response)
+                    // Save the AI response to history so next message has context
+                    await saveMessage(customerPhone, 'assistant', `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`, businessId);
+                    
+                    // 🔔 NOTIFY OWNER - Customer converting from reminder!
+                    // Uses WhatsApp Utility Template (outside 24h window safe)
                     const ownerPhone = business?.whatsapp_number || business?.phone_number;
                     if (ownerPhone && twilioClient && fromNumber) {
                         const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
                         const HOT_LEAD_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_HOT_LEAD || 'HX065c2eed9f9dd38b6aaa60ef5e06bd41';
                         
-                        twilioClient.messages.create({
-                            from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                            to: `whatsapp:${cleanOwnerPhone}`,
-                            contentSid: HOT_LEAD_TEMPLATE_SID,
-                            contentVariables: JSON.stringify({
-                                '1': customerName,
-                                '2': customerPhone,
-                            }),
-                        }).then(() => console.log(`📢 Notified owner about hot lead`))
-                          .catch(e => console.error('Hot lead notify error:', e));
+                        try {
+                            await twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwnerPhone}`,
+                                contentSid: HOT_LEAD_TEMPLATE_SID,
+                                contentVariables: JSON.stringify({
+                                    '1': customerName,
+                                    '2': customerPhone,
+                                }),
+                            });
+                            console.log(`📢 Notified owner ${cleanOwnerPhone} about hot lead (template)`);
+                        } catch (notifyErr) {
+                            console.error('Failed to notify owner:', notifyErr);
+                        }
                     }
                     
                     console.log(`   ⏱️ V2 processed in ${Date.now() - startTime}ms (reminder conversion)`);
-                    console.log(`   ⏱️ Timings:`, timings);
                     return new NextResponse(
                         '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                         { headers: { 'Content-Type': 'text/xml' } }
@@ -330,8 +311,10 @@ export async function POST(request: NextRequest) {
                 customerContext = { isReturning: false, warrantyActive: false };
             }
 
-            // Save incoming message to history (can run after parallel fetch)
-            await saveMessage(customerPhone, 'user', messageText, businessId);
+            // Save incoming message to history (Fire and forget, but track the promise)
+            // We don't need to await this before calling AI, as we pass messageText explicitly
+            const saveMessagePromise = saveMessage(customerPhone, 'user', messageText, businessId)
+                .catch(err => console.error('Error saving user message:', err));
 
             // Now build the prompt and call AI with history from parallel fetch
             const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
@@ -441,7 +424,6 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
             
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
             console.log(`   📋 Business ID for tools: ${businessId}`);
-            mark('pre_ai_call');
             
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
@@ -469,7 +451,6 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                 },
             });
 
-            mark('ai_complete');
             let aiResponse = result.text || '';
             const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
             
@@ -549,7 +530,6 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
             }
             
             console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
-            console.log(`   ⏱️ Timings:`, timings);
             if (allToolCalls.length > 0) {
                 console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
             }
@@ -967,6 +947,10 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                 });
                 console.log(`   📤 Sent response to customer`);
             }
+
+            // Ensure user message is saved before saving assistant response (to maintain order in DB if timestamps are close)
+            // Although we fired it earlier, we must ensure it completes so the Vercel function doesn't kill it
+            if (saveMessagePromise) await saveMessagePromise;
 
             // Save AI response to history
             await saveMessage(

@@ -573,11 +573,16 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const shieldY = height / 2;
         
         ctx.save();
-        ctx.translate(leftCenterX - shieldSize / 2, shieldY - shieldSize / 2);
-        ctx.scale(shieldSize / 24, shieldSize / 24); // Scale to SVG viewbox 24
+        // Centering logic: The Shield path specifically goes from y=2 to y=25 (material icon style)
+        // We translate to the absolute center of the left section first.
+        ctx.translate(leftCenterX, shieldY); 
+        ctx.scale(shieldSize / 24, shieldSize / 24);
+        // Then we offset to center the 24x24 box AND account for the y=2 top margin in the path
+        const pathCenterY = 13.5; // (2 + 25) / 2
+        ctx.translate(-12, -pathCenterY); 
         
         // Shield Outline
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.8; // Slightly thicker for print clarity
         ctx.strokeStyle = brandWhite;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';

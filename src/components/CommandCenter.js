@@ -546,7 +546,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
         
         // Wrap text logic: Print max 2 lines
-        const nameY = 115;
+        const nameY = 135;
         const words = bizName.split(' ');
         let line = '';
         let lines = [];

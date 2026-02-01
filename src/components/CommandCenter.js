@@ -484,11 +484,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         // Include business ID in trigger message so bot knows which business context to use
         const businessId = business?.id;
+        // OPTION 1: "The Human Approach" - Higher conversion, friendly
         const stickerTrigger = businessId 
-            ? `Hi, I scanned the Service Sticker [BIZ:${businessId}]`
-            : "Hi, I scanned the Service Sticker";
+            ? `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessId})`
+            : "Hi! I want to activate my 30-Day Warranty. 🛡️";
         
         // Primary: Launchfly bot with business context
+        // Use encodeURIComponent to ensure newlines (%0A) work correctly
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
@@ -638,12 +640,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         ctx.textAlign = 'left';
         
-        // D. Top Label "SERVICE & WARRANTY RECORD"
+        // D. Top Label "OFFICIAL 30-DAY WARRANTY" (Stronger Header)
         // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
         ctx.fillStyle = navyBlue; 
         ctx.textBaseline = 'top';
-        ctx.font = '700 38px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('SERVICE & WARRANTY RECORD', contentX, 65); // Moved up
+        ctx.font = '800 38px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('OFFICIAL 30-DAY WARRANTY', contentX, 65);
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
@@ -714,6 +716,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
             ctx.fill(phonePath);
             ctx.restore();
+
+            // "No App Needed" Text under QR
+            ctx.font = '700 24px "Inter", "Arial", sans-serif';
+            ctx.fillStyle = navyBlue;
+            ctx.textAlign = 'center';
+            ctx.fillText('No App Needed', iconX, qrY + qrSize + 35);
 
             // Download
             const link = document.createElement('a');

@@ -153,20 +153,21 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     }
                     
                     // 🔔 NOTIFY OWNER - Someone scanned their sticker!
-                    const ownerPhone = bizBySubdomain.whatsapp_number || bizBySubdomain.phone_number;
-                    if (ownerPhone && twilioClient && fromNumber) {
-                        const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
-                        try {
-                            await twilioClient.messages.create({
-                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
-                                to: `whatsapp:${cleanOwnerPhone}`,
-                                body: `🏷️ Sticker Scan Alert!\n\nSomeone just scanned your warranty sticker!\n📱 ${customerPhone}\n\nThey're activating their warranty now. The AI will handle it automatically.`
-                            });
-                            console.log(`   📢 Notified owner ${cleanOwnerPhone} about sticker scan`);
-                        } catch (notifyErr) {
-                            console.error('Failed to notify owner about sticker scan:', notifyErr);
-                        }
-                    }
+                    // DISABLED: Too noisy for owners, AI handles it automatically
+                    // const ownerPhone = bizBySubdomain.whatsapp_number || bizBySubdomain.phone_number;
+                    // if (ownerPhone && twilioClient && fromNumber) {
+                    //     const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
+                    //     try {
+                    //         await twilioClient.messages.create({
+                    //             from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                    //             to: `whatsapp:${cleanOwnerPhone}`,
+                    //             body: `🏷️ Sticker Scan Alert!\n\nSomeone just scanned your warranty sticker!\n📱 ${customerPhone}\n\nThey're activating their warranty now. The AI will handle it automatically.`
+                    //         });
+                    //         console.log(`   📢 Notified owner ${cleanOwnerPhone} about sticker scan`);
+                    //     } catch (notifyErr) {
+                    //         console.error('Failed to notify owner about sticker scan:', notifyErr);
+                    //     }
+                    // }
                 }
             }
         } else if (refMatch && !businessId) {

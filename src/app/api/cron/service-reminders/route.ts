@@ -236,6 +236,7 @@ export async function GET(request: NextRequest) {
                     await supabase.from('customers')
                         .update({ 
                             status: 'reminder_sent',
+                            last_interaction_context: 'REMINDER_6M', // Tag for V2 context awareness
                             notes: (service.customer_notes || '') + `\n[SMART_NAG_SENT: ${new Date().toISOString()}] Service: ${service.service_name || 'General Service'}`
                         })
                         .eq('id', service.customer_id);

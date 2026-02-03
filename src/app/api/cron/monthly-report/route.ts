@@ -156,7 +156,6 @@ export async function GET(request: NextRequest) {
         console.log(`   Duration: ${Date.now() - startTime}ms`);
 
         return NextResponse.json({
-            success: true,
             ...results,
             duration: Date.now() - startTime,
         });

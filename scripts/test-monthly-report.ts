@@ -135,12 +135,33 @@ async function test() {
     console.log('\n📤 Sending...');
 
     try {
-        const msg = await twilioClient.messages.create({
-            from: formattedFrom,
-            to: `whatsapp:${cleanPhone}`,
-            body: message,
-        });
-        console.log('✅ Sent! Message SID:', msg.sid);
+        const templateSid = process.env.TWILIO_TEMPLATE_MONTHLY_REPORT;
+
+        if (templateSid) {
+            console.log(`ℹ️  Using Template: ${templateSid}`);
+            const msg = await twilioClient.messages.create({
+                from: formattedFrom,
+                to: `whatsapp:${cleanPhone}`,
+                contentSid: templateSid,
+                contentVariables: JSON.stringify({
+                    '1': monthName,
+                    '2': String(stats.customersCapured),
+                    '3': String(stats.warrantiesActivated),
+                    '4': String(stats.remindersSent),
+                    '5': String(stats.bookingsCreated),
+                    '6': `${currency} ${estimatedRevenue.toLocaleString()}`,
+                }),
+            });
+            console.log('✅ Sent via TEMPLATE! Message SID:', msg.sid);
+        } else {
+            console.log('ℹ️  Using Body (Legacy/24h window)');
+            const msg = await twilioClient.messages.create({
+                from: formattedFrom,
+                to: `whatsapp:${cleanPhone}`,
+                body: message,
+            });
+            console.log('✅ Sent via BODY! Message SID:', msg.sid);
+        }
     } catch (e: any) {
         console.error('❌ Failed:', e.message);
     }

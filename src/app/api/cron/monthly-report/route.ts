@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
                 }
 
                 // Send via WhatsApp using approved template
-                const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
+                const cleanPhone = formatToE164(ownerPhone);
                 const formattedFrom = TWILIO_FROM.startsWith('whatsapp:') ? TWILIO_FROM : `whatsapp:${TWILIO_FROM}`;
 
                 const templateSid = process.env.TWILIO_TEMPLATE_MONTHLY_REPORT;
@@ -234,7 +234,7 @@ async function getMonthlyStats(
             .from('customer_feedback')
             .select('id', { count: 'exact' })
             .eq('business_id', businessId)
-            .lte('rating', 2) // 1 = Excellent, 2 = Good
+            .gte('rating', 4) // 4 or 5 stars = Good
             .gte('created_at', start)
             .lte('created_at', end),
         
@@ -254,15 +254,13 @@ async function getMonthlyStats(
     const bookingsCreated = bookingsResult.count || 0;
 
     // Calculate estimated revenue:
-    // - Each warranty activation = potential repeat customer = ~1.5x cleaning price
-    // - Each reminder sent that converts (assume 30%) = cleaning price
-    // - Each booking = cleaning price
-    // - Each review = word of mouth value (~0.5x cleaning price)
+    // - Each bookings created = real revenue (100%)
+    // - Each warranty activation = future value (conservative 50%)
+    // - Each reminder sent = conversion chance (conservative 10%)
     const estimatedRevenue = Math.round(
-        (warrantiesActivated * cleaningPrice * 1.5) +
-        (remindersSent * 0.3 * cleaningPrice) +
         (bookingsCreated * cleaningPrice) +
-        (reviewsSecured * cleaningPrice * 0.5)
+        (warrantiesActivated * cleaningPrice * 0.5) +
+        (remindersSent * 0.1 * cleaningPrice)
     );
 
     return {
@@ -316,6 +314,23 @@ function buildMonthlyReport(
     lines.push(`No action needed. Just keep sticking! 🫡`);
 
     return lines.join('\n');
+}
+
+function formatToE164(phone: string): string {
+    // Remove all non-digits
+    let clean = phone.replace(/\D/g, '');
+    
+    // If it starts with '09' (Philippines local), replace 0 with 63
+    if (clean.startsWith('09') && clean.length === 11) {
+        clean = '63' + clean.substring(1);
+    }
+    
+    // If it doesn't start with country code (assuming PH default if 10 digits), add 63
+    if (clean.length === 10 && !clean.startsWith('63')) {
+        clean = '63' + clean;
+    }
+
+    return `+${clean}`;
 }
 
 // Also support POST for manual testing

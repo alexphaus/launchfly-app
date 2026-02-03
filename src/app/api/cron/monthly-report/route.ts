@@ -116,18 +116,36 @@ export async function GET(request: NextRequest) {
                     continue;
                 }
 
-                // Build the message
-                const message = buildMonthlyReport(business.name, monthName, stats, currency);
-
-                // Send via WhatsApp
+                // Send via WhatsApp using approved template
                 const cleanPhone = ownerPhone.replace(/[^\d+]/g, '');
                 const formattedFrom = TWILIO_FROM.startsWith('whatsapp:') ? TWILIO_FROM : `whatsapp:${TWILIO_FROM}`;
 
-                await twilioClient.messages.create({
-                    from: formattedFrom,
-                    to: `whatsapp:${cleanPhone}`,
-                    body: message,
-                });
+                const templateSid = process.env.TWILIO_TEMPLATE_MONTHLY_REPORT;
+                
+                if (templateSid) {
+                    // Use approved template to bypass 24h window
+                    await twilioClient.messages.create({
+                        from: formattedFrom,
+                        to: `whatsapp:${cleanPhone}`,
+                        contentSid: templateSid,
+                        contentVariables: JSON.stringify({
+                            '1': monthName,
+                            '2': String(stats.customersCapured),
+                            '3': String(stats.warrantiesActivated),
+                            '4': String(stats.remindersSent),
+                            '5': String(stats.bookingsCreated),
+                            '6': `${currency} ${stats.estimatedRevenue.toLocaleString()}`,
+                        }),
+                    });
+                } else {
+                    // Fallback to body (only works within 24h window)
+                    const message = buildMonthlyReport(business.name, monthName, stats, currency);
+                    await twilioClient.messages.create({
+                        from: formattedFrom,
+                        to: `whatsapp:${cleanPhone}`,
+                        body: message,
+                    });
+                }
 
                 console.log(`✅ Sent report to ${business.name} (${cleanPhone})`);
                 results.sent++;

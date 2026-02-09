@@ -62,6 +62,48 @@ export async function POST(request: NextRequest) {
         console.log(`\n🤖 V2 Incoming: ${customerPhone}`);
         console.log(`   Message: ${messageText.substring(0, 100)}...`);
 
+        // 🎯 BRANDED DEMO - "DEMO: BusinessName" format for sales presentations
+        // Shows prospects the sticker scan experience with their brand name
+        const brandedDemoMatch = messageText.match(/^DEMO:\s*(.+)$/i);
+        if (brandedDemoMatch && twilioClient && fromNumber) {
+            const brandName = brandedDemoMatch[1].trim();
+            console.log(`   🎯 BRANDED DEMO activated for: ${customerPhone}, Brand: "${brandName}"`);
+            
+            // Use DANS as backend but display custom brand name
+            const DEMO_BUSINESS_ID = '525b6e62-efb4-4c85-aee0-da47eedbdcc4'; // DANS. AIRCON TEAM
+            
+            // Fire and forget: Alert Alex (don't wait for it)
+            const alexPhone = '+639627459049';
+            twilioClient.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: `whatsapp:${alexPhone}`,
+                body: `🎯 BRANDED DEMO!\n\nProspect trying: "${brandName}"\n📱 ${customerPhone}\n⏰ ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`
+            }).catch((e: Error) => console.log('Demo alert failed:', e.message));
+            
+            // Simulate sticker scan welcome - this is what their customers would see!
+            const brandedWelcome = `Welcome to *${brandName}*! 👋
+
+To activate your *30-Day Service Warranty*, please reply with your *Full Name*.
+
+_(This is what your customer sees after scanning the sticker. Their phone number is already captured automatically! 📱)_`;
+
+            await twilioClient.messages.create({
+                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                to: from,
+                body: brandedWelcome,
+            });
+            
+            // Save to history with demo context so AI knows this is branded demo mode
+            await saveMessage(customerPhone, 'user', `[BRANDED_DEMO:${brandName}] Customer scanning sticker`, DEMO_BUSINESS_ID);
+            await saveMessage(customerPhone, 'assistant', brandedWelcome, DEMO_BUSINESS_ID);
+            
+            console.log(`   ⚡ BRANDED DEMO response sent in ${Date.now() - startTime}ms`);
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
         // 🎯 DEMO FAST-PATH - Optimized experience for prospects
         // Skips all DB lookups and sends instant response
         const isDemoTrigger = messageText.trim().toUpperCase() === 'DEMO';

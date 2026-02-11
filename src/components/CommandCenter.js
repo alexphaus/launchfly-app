@@ -10,6 +10,7 @@ import {
     Zap, TrendingUp, Users, ChevronRight, Download
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
+import RevenuePulse from './RevenuePulse';
 
 export default function CommandCenter({ business, initialLeads = [], initialBookings = [], initialStats = {} }) {
     const [leads, setLeads] = useState(initialLeads);
@@ -779,6 +780,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                         <p className="text-2xl font-bold text-blue-400">{stats.booked}</p>
                     </div>
                 </div>
+            </div>
+
+            {/* Revenue Pulse — Money Left on the Table */}
+            <div className="px-5 pt-5">
+                <RevenuePulse business={business} />
             </div>
 
             {/* Live Job Feed - Shows both upcoming bookings and leads */}

@@ -313,45 +313,67 @@ export async function POST(req: Request) {
                 if (client && fromNumber) {
                     const whatsappFrom = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
                     
-                    // WATERFALL: Try freeform first (free if within 24h), then template
                     let sent = false;
                     
-                    try {
-                        // Try freeform first (works within 24h window - FREE)
-                        await client.messages.create({
-                            from: whatsappFrom,
-                            to: recipient,
-                            body: personalizedMessage
-                        });
-                        sentViaFreeform++;
-                        sent = true;
-                    } catch (freeformErr: any) {
-                        // Freeform failed - try template fallback for ANY Twilio error
-                        // Common codes: 63016 (outside window), 63007 (freeform not allowed), 21610 (unsubscribed)
-                        console.log(`⚠️ Freeform failed for ${lead.phone} (code: ${freeformErr.code}, msg: ${freeformErr.message}). Trying template...`);
-                        
-                        if (PROMO_TEMPLATE_SID) {
-                            try {
-                                await client.messages.create({
-                                    from: whatsappFrom,
-                                    to: recipient,
-                                    contentSid: PROMO_TEMPLATE_SID,
-                                    contentVariables: JSON.stringify({
-                                        '1': customerName,
-                                        '2': businessName,
-                                        '3': niche.toLowerCase(),
-                                    }),
-                                });
-                                sentViaTemplate++;
-                                sent = true;
-                                console.log(`✅ Template sent to ${lead.phone}`);
-                            } catch (templateErr: any) {
-                                console.error(`❌ Template also failed for ${lead.phone}: code=${templateErr.code} msg=${templateErr.message}`);
-                                errors.push(`${lead.phone}: template failed (${templateErr.code})`);
+                    // For cold segments (imported, cold_leads), ALWAYS use template — never freeform
+                    const forceTemplate = segment === 'imported' || segment === 'cold_leads';
+
+                    if (forceTemplate && PROMO_TEMPLATE_SID) {
+                        // DIRECT TEMPLATE: Skip freeform entirely for cold contacts
+                        try {
+                            await client.messages.create({
+                                from: whatsappFrom,
+                                to: recipient,
+                                contentSid: PROMO_TEMPLATE_SID,
+                                contentVariables: JSON.stringify({
+                                    '1': customerName,
+                                    '2': businessName,
+                                    '3': niche.toLowerCase(),
+                                }),
+                            });
+                            sentViaTemplate++;
+                            sent = true;
+                            console.log(`✅ Template sent to ${lead.phone} (forced for ${segment})`);
+                        } catch (templateErr: any) {
+                            console.error(`❌ Template failed for ${lead.phone}: code=${templateErr.code} msg=${templateErr.message}`);
+                            errors.push(`${lead.phone}: template failed (${templateErr.code})`);
+                        }
+                    } else {
+                        // WATERFALL: Try freeform first (free if within 24h), then template fallback
+                        try {
+                            await client.messages.create({
+                                from: whatsappFrom,
+                                to: recipient,
+                                body: personalizedMessage
+                            });
+                            sentViaFreeform++;
+                            sent = true;
+                        } catch (freeformErr: any) {
+                            console.log(`⚠️ Freeform failed for ${lead.phone} (code: ${freeformErr.code}). Trying template...`);
+                            
+                            if (PROMO_TEMPLATE_SID) {
+                                try {
+                                    await client.messages.create({
+                                        from: whatsappFrom,
+                                        to: recipient,
+                                        contentSid: PROMO_TEMPLATE_SID,
+                                        contentVariables: JSON.stringify({
+                                            '1': customerName,
+                                            '2': businessName,
+                                            '3': niche.toLowerCase(),
+                                        }),
+                                    });
+                                    sentViaTemplate++;
+                                    sent = true;
+                                    console.log(`✅ Template sent to ${lead.phone}`);
+                                } catch (templateErr: any) {
+                                    console.error(`❌ Template also failed for ${lead.phone}: code=${templateErr.code} msg=${templateErr.message}`);
+                                    errors.push(`${lead.phone}: template failed (${templateErr.code})`);
+                                }
+                            } else {
+                                console.error('❌ No TWILIO_TEMPLATE_PROMO configured');
+                                errors.push(`${lead.phone}: no template configured`);
                             }
-                        } else {
-                            console.error('❌ No TWILIO_TEMPLATE_PROMO configured');
-                            errors.push(`${lead.phone}: no template configured`);
                         }
                     }
 

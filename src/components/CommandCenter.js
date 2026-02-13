@@ -1267,10 +1267,14 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                     </div>
                                 </div>
 
-                                {/* Message Template */}
+                                {/* Message Template Selection */}
                                 <div className="mb-4">
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Message</label>
-                                    <div className="flex flex-wrap gap-2 mb-2">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                                        Message {(selectedSegment === 'imported' || selectedSegment === 'cold_leads') && '(Template)'}
+                                    </label>
+                                    
+                                    {/* Template Selection Pills */}
+                                    <div className="flex flex-wrap gap-2 mb-3">
                                         {blastTemplates.map(t => (
                                             <button
                                                 key={t.id}
@@ -1288,13 +1292,60 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                             </button>
                                         ))}
                                     </div>
-                                    <textarea
-                                        value={customMessage}
-                                        onChange={(e) => setCustomMessage(e.target.value)}
-                                        placeholder="Or write custom message..."
-                                        className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none"
-                                        rows={2}
-                                    />
+
+                                    {/* Preview Box: Smart switching between Custom/Freeform and Twilio Template */}
+                                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
+                                        {/* Header */}
+                                        <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200">
+                                            <span className="text-xs font-bold text-slate-500 uppercase">Preview</span>
+                                            {(selectedSegment === 'imported' || selectedSegment === 'cold_leads') ? (
+                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                                    WhatsApp Template
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                                                    Freeform Message
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Content Preview */}
+                                        <div className="text-slate-700 whitespace-pre-wrap font-sans">
+                                            {(selectedSegment === 'imported' || selectedSegment === 'cold_leads') ? (
+                                                /* COLD LEADS: Show Twilio Template Preview */
+                                                <div className="space-y-2">
+                                                    <p>Hi {'{Name}'}!</p>
+                                                    <p>🎉 Special offer from *{businessName}*:</p>
+                                                    <p>Book your {niche ? niche.toLowerCase() : 'service'} service this week and get *10% OFF*!</p>
+                                                    <p>Limited slots available. Reply *YES* to claim your discount.</p>
+                                                    <p className="text-[10px] text-slate-400 italic mt-2 border-t pt-1">
+                                                        * Sent as pre-approved WhatsApp template because contact is outside 24h window
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                /* WARM LEADS: Show Selected Pill / Custom Text */
+                                                customMessage || (blastTemplates.find(t => t.id === selectedTemplate)?.name === '10% Off Promo' 
+                                                    ? `🔥 ${niche} Promo! 10% OFF this week only. Reply "BOOK" to claim your slot! - ${businessName}`
+                                                    : blastTemplates.find(t => t.id === selectedTemplate)?.name === 'We Miss You'
+                                                    ? `Hi {Name}! 👋 It's been a while since your last ${niche?.toLowerCase()} service. Ready to book again? Reply "YES" - ${businessName}`
+                                                    : blastTemplates.find(t => t.id === selectedTemplate)?.name === 'Service Reminder'
+                                                    ? `Hi {Name}! 🔧 Your ${niche?.toLowerCase()} is due for service. Book now to keep it running smoothly! Reply "BOOK" - ${businessName}`
+                                                    : `(Select a template above)`
+                                                )
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Textarea only visible for Warm leads where custom text is possible */}
+                                    {!(selectedSegment === 'imported' || selectedSegment === 'cold_leads') && (
+                                        <textarea
+                                            value={customMessage}
+                                            onChange={(e) => setCustomMessage(e.target.value)}
+                                            placeholder="Or write custom message..."
+                                            className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none mt-3"
+                                            rows={2}
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Cost Summary */}

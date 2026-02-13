@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 // Twilio setup
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_PHONE_NUMBER;
 
 // Template SIDs for outside 24-hour window
 const PROMO_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_PROMO || '';
@@ -278,6 +278,8 @@ export async function POST(req: Request) {
         let sentViaFreeform = 0;
         const errors: string[] = [];
 
+        console.log(`📣 Blast starting: ${leads.length} leads, segment=${segment}, client=${!!client}, from=${fromNumber}, templateSID=${PROMO_TEMPLATE_SID ? 'set' : 'MISSING'}`);
+
         for (const lead of leads) {
             if (!lead.phone) continue;
 
@@ -324,12 +326,12 @@ export async function POST(req: Request) {
                         sentViaFreeform++;
                         sent = true;
                     } catch (freeformErr: any) {
-                        // If freeform fails (outside 24h), try template
-                        if (freeformErr.code === 63016 || freeformErr.message?.includes('outside the allowed window')) {
-                            console.log(`⏰ Outside 24h window for ${lead.phone}, trying template...`);
-                            
-                            if (PROMO_TEMPLATE_SID) {
-                                // Use Marketing template (₱2.50)
+                        // Freeform failed - try template fallback for ANY Twilio error
+                        // Common codes: 63016 (outside window), 63007 (freeform not allowed), 21610 (unsubscribed)
+                        console.log(`⚠️ Freeform failed for ${lead.phone} (code: ${freeformErr.code}, msg: ${freeformErr.message}). Trying template...`);
+                        
+                        if (PROMO_TEMPLATE_SID) {
+                            try {
                                 await client.messages.create({
                                     from: whatsappFrom,
                                     to: recipient,
@@ -342,11 +344,14 @@ export async function POST(req: Request) {
                                 });
                                 sentViaTemplate++;
                                 sent = true;
-                            } else {
-                                throw new Error('No template configured for outside 24h window');
+                                console.log(`✅ Template sent to ${lead.phone}`);
+                            } catch (templateErr: any) {
+                                console.error(`❌ Template also failed for ${lead.phone}: code=${templateErr.code} msg=${templateErr.message}`);
+                                errors.push(`${lead.phone}: template failed (${templateErr.code})`);
                             }
                         } else {
-                            throw freeformErr;
+                            console.error('❌ No TWILIO_TEMPLATE_PROMO configured');
+                            errors.push(`${lead.phone}: no template configured`);
                         }
                     }
 
@@ -365,8 +370,8 @@ export async function POST(req: Request) {
                     }
 
                 } else {
-                    // Mock mode
-                    console.log(`[MOCK BLAST] To: ${recipient}\nMessage: ${personalizedMessage}`);
+                    // Mock mode - Twilio not configured
+                    console.warn(`⚠️ MOCK MODE: client=${!!client}, fromNumber=${fromNumber}. Message NOT actually sent to ${recipient}`);
                     sentCount++;
                     sentViaFreeform++;
                 }

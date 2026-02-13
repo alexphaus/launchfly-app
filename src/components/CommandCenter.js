@@ -521,316 +521,166 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         }
     };
 
-    // Download QR - "Factory Service Record" Sticker Design
-    // CONCEPT: "The Silver Edition" — Looks like an OEM factory sticker (Samsung/Daikin style)
-    // Psychology: Customers never peel off "official" stickers. Technicians look like authorized service centers.
+    // Download QR - Maintenance Record Sticker Design
+    // CONCEPT: "The Silver Badge" (Premium & Trustworthy)
     const downloadQR = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
         const launchflyBotNumber = '13203627874';
         
         // Include business ref in trigger message so bot knows which business context to use
+        // Use subdomain if available (shorter), otherwise fall back to UUID
         const businessRef = business?.subdomain || business?.id;
-        const stickerTrigger = `Hi! I want to activate my Service Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
+        const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
         
+        // Primary: Launchfly bot with business context
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        // Landscape orientation — sized like a premium service label
+        // Landscape orientation ~2.8:1 ratio (Sleek bumper sticker size)
         const width = 1800;
-        const height = 700;
+        const height = 640;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
-        // --- COLORS (Industrial / OEM Factory Palette) ---
-        const navyDark = '#0D1B2A';     // Deep authoritative navy
-        const navyMid = '#1B2A4A';      // Mid navy for accents
-        const silverLight = '#F0F0F0';  // Clean matte silver
-        const silverMid = '#D8D8D8';    // Silver border tones
-        const silverDark = '#B0B0B0';   // Darker silver for subtle elements
+        // --- COLORS ---
+        const navyBlue = '#102A56'; // Deep Corporate Navy
+        const silverStart = '#E8E8E8'; // Matte Silver
+        const silverEnd = '#F8F8F8';   // Lighter Highlight
         const textBlack = '#111111';
-        const textDarkGrey = '#3A3A3A';
-        const warningRed = '#CC2222';   // Authority red for "DO NOT REMOVE"
-        const successGreen = '#1A8A3F'; // Checkmark green (muted, professional)
+        const textDarkGrey = '#4A4A4A';
+        const accentBlue = '#102A56'; // Same as Navy to match brand
         const brandWhite = '#FFFFFF';
 
-        // ============================================
-        // 1. CLIP ROUNDED CORNERS (Subtle, like OEM labels)
-        // ============================================
-        const radius = 24;
+        // 1. CLIP ROUNDED CORNERS
+        const radius = 30; // Slightly tighter radius for industrial look
         ctx.beginPath();
         ctx.roundRect(0, 0, width, height, radius);
-        ctx.clip();
+        ctx.clip(); 
 
-        // ============================================
-        // 2. FULL SILVER/WHITE BACKGROUND (Industrial look)
-        // ============================================
-        // Subtle diagonal metallic gradient — mimics brushed aluminum
-        const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-        bgGrad.addColorStop(0, '#E8E8E8');
-        bgGrad.addColorStop(0.3, '#F4F4F4');
-        bgGrad.addColorStop(0.5, '#FAFAFA');  // Highlight band
-        bgGrad.addColorStop(0.7, '#F2F2F2');
-        bgGrad.addColorStop(1, '#E6E6E6');
-        ctx.fillStyle = bgGrad;
+        // 2. BACKGROUND (Clean White / Industrial Silver)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Optional: Silver subtle gradient overlay to look "Metallic" but keep high contrast
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, '#FFFFFF');
+        grad.addColorStop(0.5, '#F5F5F5'); // Very subtle silver
+        grad.addColorStop(1, '#FFFFFF');
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, width, height);
 
-        // Subtle border (like factory sticker edge)
-        ctx.strokeStyle = silverDark;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.roundRect(2, 2, width - 4, height - 4, radius - 1);
-        ctx.stroke();
+        // Industrial Border stroke
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#E5E7EB'; 
+        ctx.strokeRect(4, 4, width - 8, height - 8);
 
-        // ============================================
-        // 3. TOP BAR — "OFFICIAL SERVICE RECORD" (Authority strip)
-        // ============================================
-        const topBarH = 62;
-        ctx.fillStyle = navyDark;
-        ctx.fillRect(0, 0, width, topBarH);
+        // --- LEFT SIDE CONTENT ---
+        const leftMargin = 100;
+        let currentY = 110;
 
-        // Left: "OFFICIAL SERVICE RECORD"
-        ctx.fillStyle = brandWhite;
+        // A. Header: "OFFICIAL SERVICE RECORD"
+        ctx.fillStyle = '#4B5563'; // Cool Grey (600)
+        ctx.font = '700 40px "Inter", "Arial", sans-serif';
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.font = '700 28px "Inter", "Helvetica Neue", "Arial", sans-serif';
-        ctx.letterSpacing = '3px';
-        ctx.fillText('OFFICIAL SERVICE RECORD', 40, topBarH / 2);
+        ctx.fillText('OFFICIAL SERVICE RECORD', leftMargin, currentY);
 
-        // Right: Serial/Reference badge
-        ctx.textAlign = 'right';
-        ctx.font = '500 22px "Inter", "Courier New", monospace';
-        ctx.fillStyle = '#8899BB';
-        const refCode = (businessRef || 'REF').toString().substring(0, 12).toUpperCase();
-        ctx.fillText(`REF: ${refCode}`, width - 40, topBarH / 2);
+        // B. Main Status: "WARRANTY ACTIVE"
+        currentY += 130;
+        ctx.font = '900 110px "Inter", "Arial Black", sans-serif'; // Heavier font
+        ctx.fillStyle = '#111111'; // Pure Black
+        ctx.fillText('WARRANTY', leftMargin, currentY);
+        
+        const line2Y = currentY + 115;
+        ctx.fillText('ACTIVE', leftMargin, line2Y);
 
-        // ============================================
-        // 4. BOTTOM BAR — "WARRANTY SEAL · DO NOT REMOVE"
-        // ============================================
-        const bottomBarH = 52;
-        const bottomBarY = height - bottomBarH;
-        ctx.fillStyle = navyDark;
-        ctx.fillRect(0, bottomBarY, width, bottomBarH);
-
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = '700 24px "Inter", "Arial", sans-serif';
-        ctx.fillStyle = warningRed;
-        ctx.fillText('⚠  WARRANTY SEAL — DO NOT REMOVE  ⚠', width / 2, bottomBarY + bottomBarH / 2);
-
-        // ============================================
-        // 5. LEFT SECTION — Business Identity (Authorized Partner)
-        // ============================================
-        const contentTop = topBarH + 30;
-        const contentBottom = bottomBarY - 20;
-        const leftWidth = 520;
-        const leftCenterX = leftWidth / 2;
-
-        // "AUTHORIZED SERVICE PARTNER" label
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = navyMid;
-        ctx.font = '800 24px "Inter", "Arial", sans-serif';
-        ctx.fillText('AUTHORIZED SERVICE PARTNER', leftCenterX, contentTop);
-
-        // Thin rule line
-        ctx.strokeStyle = silverDark;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(40, contentTop + 38);
-        ctx.lineTo(leftWidth - 40, contentTop + 38);
-        ctx.stroke();
-
-        // Business Name (dynamic sizing)
-        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
-        let nameFontSize = 48;
-        if (bizName.length > 14) nameFontSize = 40;
-        if (bizName.length > 22) nameFontSize = 32;
-        if (bizName.length > 30) nameFontSize = 26;
-        ctx.fillStyle = textBlack;
-        ctx.font = `900 ${nameFontSize}px "Inter", "Arial Black", sans-serif`;
-
-        // Wrap text: max 2 lines
-        const nameStartY = contentTop + 55;
-        const words = bizName.split(' ');
-        let line = '';
-        let nameLines = [];
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            if (ctx.measureText(testLine).width > leftWidth - 60 && n > 0) {
-                nameLines.push(line.trim());
-                line = words[n] + ' ';
-            } else {
-                line = testLine;
-            }
-        }
-        nameLines.push(line.trim());
-
-        let nameDrawY = nameStartY;
-        nameLines.slice(0, 2).forEach((l) => {
-            ctx.fillText(l, leftCenterX, nameDrawY);
-            nameDrawY += nameFontSize * 1.25;
-        });
-
-        // ── Shield + "WARRANTY ACTIVE" Badge ──
-        const badgeY = nameDrawY + 20;
-        const badgeCenterY = badgeY + 55;
-
-        // Shield icon (smaller, inline with text)
-        const shieldScale = 4.5;
+        // Checkmark Icon (Industrial Green)
+        const checkX = leftMargin + ctx.measureText('ACTIVE').width + 50;
+        const checkY = line2Y - 85; 
+        const checkSize = 100;
+        
         ctx.save();
-        ctx.translate(leftCenterX - 130, badgeCenterY);
-        ctx.scale(shieldScale, shieldScale);
-        ctx.translate(-12, -12);
-        // Filled shield
-        ctx.fillStyle = successGreen;
-        const shieldPath = new Path2D("M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z");
-        ctx.fill(shieldPath);
-        // White checkmark inside
-        ctx.fillStyle = brandWhite;
-        const checkPath = new Path2D("M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
-        ctx.fill(checkPath);
+        ctx.translate(checkX, checkY);
+        ctx.scale(checkSize/24, checkSize/24);
+        // Solid circle check for authority
+        const checkCircle = new Path2D("M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z");
+        ctx.fillStyle = '#16A34A'; // Green-600
+        ctx.fill(checkCircle);
         ctx.restore();
 
-        // "WARRANTY ACTIVE" text next to shield
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = successGreen;
-        ctx.font = '900 44px "Inter", "Arial Black", sans-serif';
-        ctx.fillText('WARRANTY', leftCenterX - 70, badgeCenterY - 14);
-        ctx.fillText('ACTIVE', leftCenterX - 70, badgeCenterY + 32);
+        // C. "AUTHORIZED SERVICE PARTNER"
+        currentY = line2Y + 140; 
+        ctx.fillStyle = navyBlue; // Use the brand navy for authority
+        ctx.font = '800 45px "Inter", "Arial", sans-serif';
+        ctx.fillText('AUTHORIZED SERVICE PARTNER', leftMargin, currentY);
 
-        // ── 24H Service Hotline ──
-        const phoneY = contentBottom - 30;
-        const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
+        // D. Business Name (Smaller, discrete)
+        currentY += 60;
+        const bizName = (business?.name || 'CoolTech Services').toUpperCase();
+        ctx.font = '600 35px "Inter", "Arial", sans-serif';
+        ctx.fillStyle = '#6B7280'; // Grey-500
+        ctx.fillText(bizName, leftMargin, currentY);
 
-        // Hotline label
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillStyle = textDarkGrey;
-        ctx.font = '600 22px "Inter", "Arial", sans-serif';
-        ctx.fillText('24H SERVICE HOTLINE', leftCenterX, phoneY - 42);
+        // E. Hotline at Bottom
+        const phoneY = height - 70;
+        // Priority: whatsapp_number > phone_number > business_data.phone > fallback
+        const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+1 555-0123';
+        
+        ctx.font = '700 42px "Inter", "Arial", sans-serif';
+        ctx.fillStyle = '#111111';
+        ctx.fillText(`24H Service Hotline: ${safePhone}`, leftMargin, phoneY);
 
-        // Phone number (bold, prominent)
-        ctx.fillStyle = navyDark;
-        ctx.font = '800 36px "Inter", "Arial", sans-serif';
-        ctx.fillText(safePhone, leftCenterX, phoneY);
-
-        // ============================================
-        // 6. CENTER DIVIDER LINE (Factory sticker style)
-        // ============================================
-        const dividerX = leftWidth + 15;
-        ctx.strokeStyle = silverDark;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 6]); // Dashed = "cut here" industrial feel
-        ctx.beginPath();
-        ctx.moveTo(dividerX, topBarH + 15);
-        ctx.lineTo(dividerX, bottomBarY - 15);
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset
-
-        // ============================================
-        // 7. CENTER SECTION — Main CTA Text
-        // ============================================
-        const centerX = dividerX + 40;
-        const centerWidth = 680;
-        const centerMidX = centerX + centerWidth / 2;
-
-        // "SERVICE WARRANTY & LOG" header
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = navyMid;
-        ctx.font = '800 30px "Inter", "Arial", sans-serif';
-        ctx.fillText('SERVICE WARRANTY & LOG', centerMidX, contentTop + 5);
-
-        // Main CTA: "SCAN TO ACTIVATE & LOG SERVICE"
-        const ctaY = contentTop + 60;
-        ctx.fillStyle = textBlack;
-        ctx.font = '900 72px "Inter", "Arial Black", sans-serif';
-        ctx.fillText('SCAN TO', centerMidX, ctaY);
-        ctx.fillText('ACTIVATE', centerMidX, ctaY + 78);
-
-        ctx.font = '900 52px "Inter", "Arial Black", sans-serif';
-        ctx.fillStyle = navyMid;
-        ctx.fillText('& LOG SERVICE', centerMidX, ctaY + 165);
-
-        // Sub-instruction
-        const instrY = ctaY + 245;
-        ctx.fillStyle = textDarkGrey;
-        ctx.font = '600 28px "Inter", "Arial", sans-serif';
-        ctx.fillText('Verify Warranty · Book Next Service', centerMidX, instrY);
-
-        // "24/7 SUPPORT" pill badge
-        const pillY = instrY + 48;
-        const pillText = '24/7 SUPPORT';
-        ctx.font = '800 26px "Inter", "Arial", sans-serif';
-        const pillW = ctx.measureText(pillText).width + 50;
-        const pillH = 42;
-        const pillX = centerMidX - pillW / 2;
-
-        // Pill background
-        ctx.fillStyle = navyDark;
-        ctx.beginPath();
-        ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
-        ctx.fill();
-
-        // Pill text
-        ctx.fillStyle = brandWhite;
-        ctx.textBaseline = 'middle';
-        ctx.fillText(pillText, centerMidX, pillY + pillH / 2);
-
-        // ============================================
-        // 8. RIGHT SECTION — QR Code
-        // ============================================
-        const qrSize = 370;
-        const qrAreaX = width - qrSize - 80;
-        const qrY = topBarH + (contentBottom - topBarH - qrSize) / 2 - 15;
+        // --- RIGHT SIDE CONTENT (QR) ---
+        const qrSize = 420;
+        const qrX = width - qrSize - 120; // Right margin
+        const qrY = (height - qrSize) / 2 + 20; // Vertically centered approx
 
         try {
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
-                margin: 1,
-                errorCorrectionLevel: 'H', // High correction for logo overlay
-                color: { dark: '#0D1B2A', light: '#00000000' } // Navy dots on transparent (silver shows through)
+                margin: 0,
+                errorCorrectionLevel: 'M',
+                color: { dark: '#000000', light: '#00000000' }
             });
 
             const qrImg = new Image();
             qrImg.src = qrDataUrl;
             await new Promise((resolve) => { qrImg.onload = resolve; });
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-            // Subtle QR background box (slightly lighter than sticker bg)
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.beginPath();
-            ctx.roundRect(qrAreaX - 15, qrY - 15, qrSize + 30, qrSize + 30, 16);
-            ctx.fill();
-            ctx.strokeStyle = silverDark;
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.roundRect(qrAreaX - 15, qrY - 15, qrSize + 30, qrSize + 30, 16);
-            ctx.stroke();
+            // "24/7 SUPPORT" Tag above QR
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#102A56'; // Navy
+            ctx.font = '800 36px "Inter", "Arial", sans-serif';
+            ctx.fillText('24/7 SUPPORT', qrX + qrSize/2, qrY - 40);
 
-            ctx.drawImage(qrImg, qrAreaX, qrY, qrSize, qrSize);
-
-            // WhatsApp Icon Overlay in center of QR
-            const iconSize = qrSize * 0.18;
-            const iconX = qrAreaX + qrSize / 2;
+            // Instructions Below QR
+            ctx.fillStyle = '#111111';
+            ctx.font = '600 30px "Inter", "Arial", sans-serif';
+            ctx.fillText('Scan to Verify Warranty', qrX + qrSize/2, qrY + qrSize + 45);
+            ctx.fillText('& Book Service', qrX + qrSize/2, qrY + qrSize + 85);
+            
+            // Icon Overlay in QR Center (Optional - White Background)
+            const iconSize = qrSize * 0.18; 
+            const iconX = qrX + qrSize / 2;
             const iconY = qrY + qrSize / 2;
 
-            // White circle background
+            // White clean circle 
             ctx.beginPath();
-            ctx.arc(iconX, iconY, iconSize / 2 + 10, 0, Math.PI * 2);
-            ctx.fillStyle = brandWhite;
+            ctx.arc(iconX, iconY, iconSize / 2 + 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
             ctx.fill();
 
+            // WhatsApp/Support Icon
             // Green WhatsApp circle
             ctx.beginPath();
             ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
             ctx.fillStyle = '#25D366';
             ctx.fill();
 
-            // Phone icon (white)
-            const s = iconSize * 0.55;
-            ctx.fillStyle = brandWhite;
+            // Phone Icon Path (white)
+            const s = iconSize * 0.6;
+            ctx.fillStyle = '#ffffff';
             ctx.save();
             ctx.translate(iconX, iconY);
             ctx.scale(s / 24, s / 24);
@@ -839,23 +689,16 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.fill(phonePath);
             ctx.restore();
 
-            // "BOOK NEXT SERVICE" below QR
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillStyle = navyDark;
-            ctx.font = '700 26px "Inter", "Arial", sans-serif';
-            ctx.fillText('BOOK NEXT SERVICE ▸', qrAreaX + qrSize / 2, qrY + qrSize + 22);
-
             // Download
             const link = document.createElement('a');
             const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
-            link.download = `${safeName}_Service_Record_Sticker.png`;
+            link.download = `${safeName}_Warranty_Sticker.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         } catch (err) {
-            console.error('Error creating service record sticker:', err);
+            console.error('Error creating maintenance sticker:', err);
             alert('Failed to generate sticker. Please try again.');
         }
     };
@@ -1177,8 +1020,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                             <QrCode className="w-5 h-5 text-slate-700" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-sm text-slate-900">Service Record Sticker</h3>
-                            <p className="text-xs text-slate-500">Factory-style warranty label</p>
+                            <h3 className="font-bold text-sm text-slate-900">Unit Sticker QR</h3>
+                            <p className="text-xs text-slate-500">Get more offline leads</p>
                         </div>
                     </div>
                     <button

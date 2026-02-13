@@ -145,6 +145,7 @@ export async function POST(req: Request) {
             .map(c => ({
                 business_id: businessId,
                 phone: c.phone,
+                email: `${c.phone.replace(/\+/g, '')}@imported.local`,
                 name: c.name || null,
                 first_name: c.name?.split(' ')[0] || null,
                 status: 'imported',

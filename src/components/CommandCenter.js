@@ -521,10 +521,270 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         }
     };
 
+    // Download QR - Maintenance Record Sticker Design
+    // CONCEPT: "The Silver Badge" (Premium & Trustworthy)
+    const downloadQR = async () => {
+        // Launchfly Bot WhatsApp number - the central AI receptionist
+        const launchflyBotNumber = '13203627874';
+        
+        // Include business ref in trigger message so bot knows which business context to use
+        // Use subdomain if available (shorter), otherwise fall back to UUID
+        const businessRef = business?.subdomain || business?.id;
+        const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
+        
+        // Primary: Launchfly bot with business context
+        const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
+
+        const canvas = document.createElement('canvas');
+        // Landscape orientation ~2.8:1 ratio (Sleek bumper sticker size)
+        const width = 1800;
+        const height = 640;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // --- COLORS ---
+        const navyBlue = '#102A56'; // Deep Corporate Navy
+        const silverStart = '#E8E8E8'; // Matte Silver
+        const silverEnd = '#F8F8F8';   // Lighter Highlight
+        const textBlack = '#111111';
+        const textDarkGrey = '#4A4A4A';
+        const accentBlue = '#102A56'; // Same as Navy to match brand
+        const brandWhite = '#FFFFFF';
+
+        // 1. CLIP ROUNDED CORNERS
+        const radius = 40;
+        ctx.beginPath();
+        ctx.roundRect(0, 0, width, height, radius);
+        ctx.clip(); 
+
+        // 2. BACKGROUNDS
+        // Split point: Left 30% Blue, Right 70% Silver
+        const splitX = 540; // 30% of 1800
+
+        // Right Loop: Silver Gradient 
+        // [MODIFIED FOR PRINT] LEAVE TRANSPARENT so the Silver Foil material shines through
+        // const grad = ctx.createLinearGradient(splitX, 0, width, height);
+        // grad.addColorStop(0, silverStart);
+        // grad.addColorStop(0.5, silverEnd); // diagonal sheen
+        // grad.addColorStop(1, silverStart);
+        // ctx.fillStyle = grad;
+        // ctx.fillRect(splitX, 0, width - splitX, height);
+
+        // Left Loop: Navy Blue
+        ctx.fillStyle = navyBlue;
+        ctx.fillRect(0, 0, splitX, height);
+
+        // --- LEFT SIDE CONTENT (Navy Block) ---
+        const leftCenterX = splitX / 2;
+
+        // A. Business Name
+        ctx.fillStyle = brandWhite;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        // Dynamic sizing for name
+        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
+        let nameFontSize = 55;
+        if (bizName.length > 15) nameFontSize = 45;
+        if (bizName.length > 25) nameFontSize = 35;
+        ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
+        
+        // Wrap text logic: Print max 2 lines
+        const nameY = 135;
+        const words = bizName.split(' ');
+        let line = '';
+        let lines = [];
+        for(let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > splitX - 60 && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+        // Draw lines centered
+        let currentNameY = lines.length > 1 ? nameY - (lines.length * nameFontSize/2) : nameY;
+        lines.forEach((l) => {
+           ctx.fillText(l.trim(), leftCenterX, currentNameY); 
+           currentNameY += (nameFontSize * 1.2);
+        });
+
+        // B. Shield Icon (Center) - Professional SVG Path
+        const shieldSize = 240;
+        const shieldY = height / 2;
+        
+        ctx.save();
+        // Centering logic: The Shield path specifically goes from y=2 to y=25 (material icon style)
+        // We translate to the absolute center of the left section first.
+        ctx.translate(leftCenterX, shieldY); 
+        ctx.scale(shieldSize / 24, shieldSize / 24);
+        // Then we offset to center the 24x24 box AND account for the y=2 top margin in the path
+        const pathCenterY = 13.5; // (2 + 25) / 2
+        ctx.translate(-12, -pathCenterY); 
+        
+        // Shield Outline
+        ctx.lineWidth = 2.0; // Slightly thicker for print clarity at smaller scale
+        ctx.strokeStyle = brandWhite;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        
+        // Custom Shield Path (professional badge shape)
+        const shieldPath = new Path2D("M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z");
+        ctx.stroke(shieldPath);
+        
+        // Checkmark inside
+        const checkPath = new Path2D("M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
+        ctx.fillStyle = brandWhite;
+        ctx.fill(checkPath);
+        ctx.restore();
+
+        // C. Phone Number
+        const phoneY = height - 45;
+        // Priority: whatsapp_number > phone_number > business_data.phone > fallback
+        const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
+        
+        ctx.fillStyle = brandWhite;
+        ctx.font = '500 36px "Inter", "Arial", sans-serif';
+
+        // "WhatsApp:" label with Icon
+        const labelText = 'WhatsApp:';
+        const iconSizeSmall = 32;
+        const gap = 12;
+        const textWidth = ctx.measureText(labelText).width;
+        const totalWidth = iconSizeSmall + gap + textWidth;
+        
+        // Calculate starting X to center the whole group
+        const startX = leftCenterX - (totalWidth / 2);
+        
+        // Draw Icon
+        ctx.save();
+        // Align icon vertically with text. Text is baseline 'bottom' at (phoneY - 55).
+        ctx.translate(startX, phoneY - 55 - iconSizeSmall - 5); 
+        ctx.scale(iconSizeSmall / 24, iconSizeSmall / 24);
+        const phoneIconPath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+        ctx.fill(phoneIconPath);
+        ctx.restore();
+
+        // Draw Text
+        ctx.textAlign = 'left'; 
+        ctx.fillText(labelText, startX + iconSizeSmall + gap, phoneY - 55);
+        ctx.textAlign = 'center'; // Restore
+
+        ctx.font = '700 42px "Inter", "Arial", sans-serif';
+        ctx.fillText(safePhone, leftCenterX, phoneY);
+
+        // --- RIGHT SIDE CONTENT (Silver Area) ---
+        const rightPad = 80; 
+        const contentX = splitX + rightPad;
+        const qrSize = 400; // Adjusted for sleek height
+        
+        ctx.textAlign = 'left';
+        
+        // D. Top Label "SERVICE & WARRANTY RECORD"
+        // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
+        ctx.fillStyle = navyBlue; 
+        ctx.textBaseline = 'top';
+        ctx.font = '800 42px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('OFFICIAL 30-DAY WARRANTY', contentX, 65); // Moved up
+
+        // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
+        // Stacked
+        const mainY = 135; // Moved up
+        ctx.fillStyle = textBlack;
+        ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
+        const lineHeight = 100;
+        
+        ctx.fillText('SCAN TO', contentX, mainY);
+        ctx.fillText('ACTIVATE', contentX, mainY + lineHeight);
+        ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
+
+        // F. Subtext "& Get Next Service Reminder"
+        const subY = mainY + (lineHeight * 3) + 27;
+        ctx.fillStyle = accentBlue;
+        ctx.font = '700 50px "Inter", "Arial", sans-serif';
+        ctx.fillText('& Get Next', contentX, subY);
+        ctx.fillText('Service Reminder', contentX, subY + 65);
+
+        // --- QR CODE AREA ---
+        const qrX = width - qrSize - 100; // Increased margin slightly
+        const qrY = (height - qrSize) / 2;
+
+        try {
+            // Generate QR - Silver background needs transparent or white?
+            // User asked for "High contrast black on silver".
+            // If library puts transparent, it will be silver background.
+            // If library puts white, it will be a white box.
+            // Let's try transparent (light: #00000000) for the integrated look.
+            
+            const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
+                width: qrSize,
+                margin: 0,
+                errorCorrectionLevel: 'M', // Standard level for fewer, larger dots (better for print)
+                color: { dark: '#000000', light: '#00000000' }
+            });
+
+            const qrImg = new Image();
+            qrImg.src = qrDataUrl;
+            await new Promise((resolve) => { qrImg.onload = resolve; });
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            // WhatsApp Icon Overlay in center of QR
+            const iconSize = qrSize * 0.20; 
+            const iconX = qrX + qrSize / 2;
+            const iconY = qrY + qrSize / 2;
+
+            // White circle background for icon
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize / 2 + 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
+
+            // Green WhatsApp circle
+            const whatsappGreen = '#25D366';
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = whatsappGreen;
+            ctx.fill();
+
+            // Phone Icon Path (white)
+            const s = iconSize * 0.6;
+            ctx.fillStyle = '#ffffff';
+            ctx.save();
+            ctx.translate(iconX, iconY);
+            ctx.scale(s / 24, s / 24);
+            ctx.translate(-12, -12);
+            const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+            ctx.fill(phonePath);
+            ctx.restore();
+
+            // "No app needed" text below QR
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = textDarkGrey;
+            ctx.font = '600 34px "Inter", "Arial", sans-serif';
+            ctx.fillText('No App Needed', qrX + qrSize / 2, qrY + qrSize + 25);
+
+            // Download
+            const link = document.createElement('a');
+            const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
+            link.download = `${safeName}_Warranty_Sticker.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            console.error('Error creating maintenance sticker:', err);
+            alert('Failed to generate sticker. Please try again.');
+        }
+    };
+
     // Download QR - "Factory Service Record" Sticker Design
     // CONCEPT: "The Silver Edition" — Looks like an OEM factory sticker (Samsung/Daikin style)
     // Psychology: Customers never peel off "official" stickers. Technicians look like authorized service centers.
-    const downloadQR = async () => {
+    const downloadQR2 = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
         const launchflyBotNumber = '13203627874';
         

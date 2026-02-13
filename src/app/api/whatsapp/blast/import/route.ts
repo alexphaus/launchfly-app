@@ -179,8 +179,8 @@ export async function POST(req: Request) {
                 await supabase
                     .from('customers')
                     .update({
-                        tags: supabase.rpc ? undefined : [importTag, 'reactivation'], // Append if possible
-                        notes: supabase.rpc ? undefined : `[RE-IMPORTED ${new Date().toISOString()}] ${batchLabel}`,
+                        tags: [importTag, 'reactivation'],
+                        notes: `[RE-IMPORTED ${new Date().toISOString()}] ${batchLabel}`,
                     })
                     .eq('business_id', businessId)
                     .eq('phone', contact.phone);

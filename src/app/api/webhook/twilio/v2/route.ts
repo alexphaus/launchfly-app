@@ -423,7 +423,7 @@ When calling notifyOwner (for complaints/human request/escalation), use:
   window: "morning" or "afternoon"
   serviceType: (e.g., "Aircon Cleaning (1 unit)")
   estimateAmount: (the price as a number, e.g., 120)
-  currency: "RM"
+  currency: "${businessContext?.currency || 'RM'}"
 
 ⚠️ SLOT SELECTION TRIGGERS:
 The customer has CONFIRMED when they reply with ANY of these:

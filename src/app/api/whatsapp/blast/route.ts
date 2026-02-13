@@ -188,13 +188,15 @@ export async function POST(req: Request) {
 
             case 'imported':
                 // Database Reactivation: externally imported contacts
+                // Exclude already booked/completed contacts to avoid re-blasting
                 const { data: importedLeads } = await supabase
                     .from('customers')
                     .select('id, phone, name, first_name, status, notes, blast_optout')
                     .eq('business_id', businessId)
                     .eq('source', 'reactivation_import')
                     .not('phone', 'is', null)
-                    .neq('blast_optout', true);
+                    .neq('blast_optout', true)
+                    .not('status', 'in', '("booked","completed","booking_in_progress")');
                 leads = importedLeads || [];
                 break;
 
@@ -525,7 +527,7 @@ export async function GET(req: Request) {
                 .lte('next_service_due_at', thirtyDaysFromNow.toISOString())
                 .gte('next_service_due_at', new Date().toISOString()),
             
-            // Imported contacts (Database Reactivation)
+            // Imported contacts (Database Reactivation) — exclude already booked
             supabase
                 .from('customers')
                 .select('id', { count: 'exact', head: true })
@@ -533,6 +535,7 @@ export async function GET(req: Request) {
                 .eq('source', 'reactivation_import')
                 .not('phone', 'is', null)
                 .neq('blast_optout', true)
+                .not('status', 'in', '("booked","completed","booking_in_progress")')
         ]);
 
         return NextResponse.json({

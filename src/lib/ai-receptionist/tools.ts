@@ -553,7 +553,8 @@ export const receptionistTools = {
             }
 
             // Update customer status AND notes for dashboard visibility
-            if (customerId) {
+            // Use validCustomerId (UUID-checked) and fallback to phone lookup
+            if (validCustomerId) {
                 await supabase
                     .from('customers')
                     .update({ 
@@ -561,7 +562,18 @@ export const receptionistTools = {
                         address,
                         notes: `📅 SELECTED SLOT: ${dayLabel} ${windowLabel}\n📍 ADDRESS: ${address}\n🛠️ Service: ${serviceType}\n💰 Estimate: ${currency} ${estimateAmount}`,
                     })
-                    .eq('id', customerId);
+                    .eq('id', validCustomerId);
+            } else if (customerPhone) {
+                // Fallback: update by phone if customerId was invalid/missing
+                await supabase
+                    .from('customers')
+                    .update({ 
+                        status: 'booked',
+                        address,
+                        notes: `📅 SELECTED SLOT: ${dayLabel} ${windowLabel}\n📍 ADDRESS: ${address}\n🛠️ Service: ${serviceType}\n💰 Estimate: ${currency} ${estimateAmount}`,
+                    })
+                    .eq('phone', customerPhone)
+                    .eq('business_id', businessId);
             }
 
             return {

@@ -39,6 +39,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const [customMessage, setCustomMessage] = useState('');
     const [loadingSegments, setLoadingSegments] = useState(false);
 
+    // Import contacts states (Database Reactivation)
+    const [blastTab, setBlastTab] = useState('blast'); // 'blast' | 'import'
+    const [importText, setImportText] = useState('');
+    const [importLabel, setImportLabel] = useState('');
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState(null);
+
     // Arrival Window settings state - "Blue Collar Scheduling"
     // Wider windows that work better for technicians with unpredictable schedules
     const defaultSlots = [
@@ -474,6 +481,43 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             console.error('Failed to fetch segments:', err);
         } finally {
             setLoadingSegments(false);
+        }
+    };
+
+    // Import contacts for Database Reactivation
+    const importContacts = async () => {
+        if (!importText.trim()) {
+            alert('Paste phone numbers first (one per line)');
+            return;
+        }
+        setImporting(true);
+        setImportResult(null);
+        try {
+            const res = await fetch('/api/whatsapp/blast/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    businessId: business.id,
+                    contacts: importText,
+                    label: importLabel || undefined
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setImportResult(data);
+                // Refresh segments to show new imported count
+                fetchBlastSegments();
+                // Clear input
+                setImportText('');
+                setImportLabel('');
+            } else {
+                alert('❌ ' + (data.error || 'Import failed'));
+            }
+        } catch (err) {
+            console.error('Import error:', err);
+            alert('❌ Error importing contacts');
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -1134,8 +1178,32 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     <div className="bg-white rounded-2xl max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-bold text-lg">📣 Smart Blast</h3>
-                            <button onClick={() => setShowBlastModal(false)}>
+                            <button onClick={() => { setShowBlastModal(false); setBlastTab('blast'); setImportResult(null); }}>
                                 <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Tab Switcher: Blast vs Import */}
+                        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 mb-4">
+                            <button
+                                onClick={() => setBlastTab('blast')}
+                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                                    blastTab === 'blast'
+                                        ? 'bg-white shadow text-blue-600'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                📣 Send Blast
+                            </button>
+                            <button
+                                onClick={() => setBlastTab('import')}
+                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                                    blastTab === 'import'
+                                        ? 'bg-white shadow text-green-600'
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                📥 Import List
                             </button>
                         </div>
 
@@ -1153,6 +1221,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                             </div>
                         </div>
 
+                        {/* === BLAST TAB === */}
+                        {blastTab === 'blast' && (
+                        <>
                         {loadingSegments ? (
                             <div className="text-center py-8">
                                 <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
@@ -1297,6 +1368,90 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                     {sendingBlast ? 'Sending...' : `Send Blast (${currency}${oldLeadsCount * COST_PER_MESSAGE} cost)`}
                                 </button>
                             </>
+                        )}
+                        </>
+                        )}
+
+                        {/* === IMPORT TAB === */}
+                        {blastTab === 'import' && (
+                            <div>
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
+                                    <p className="text-sm font-medium text-green-800 mb-1">📥 Database Reactivation</p>
+                                    <p className="text-xs text-green-600">
+                                        Paste your client&apos;s old customer list. We&apos;ll import them and you can blast a promo to win them back.
+                                    </p>
+                                </div>
+
+                                {/* Import Label */}
+                                <div className="mb-3">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">List Label (optional)</label>
+                                    <input
+                                        type="text"
+                                        value={importLabel}
+                                        onChange={(e) => setImportLabel(e.target.value)}
+                                        placeholder="e.g. Old customers from Excel"
+                                        className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
+                                    />
+                                </div>
+
+                                {/* Phone List Input */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Phone Numbers</label>
+                                    <textarea
+                                        value={importText}
+                                        onChange={(e) => setImportText(e.target.value)}
+                                        placeholder={`Paste phone numbers, one per line:\n09171234567\n09181234567, Juan\n+639191234567 - Maria`}
+                                        className="w-full p-3 border border-slate-200 rounded-lg text-sm font-mono resize-none"
+                                        rows={6}
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {importText.trim() ? `${importText.trim().split('\n').filter(l => l.trim()).length} lines detected` : 'Supports: 09xx, +63xx, +60xx formats'}
+                                    </p>
+                                </div>
+
+                                {/* Import Result */}
+                                {importResult && (
+                                    <div className={`p-3 rounded-lg mb-4 text-sm ${
+                                        importResult.error 
+                                            ? 'bg-red-50 border border-red-200 text-red-700'
+                                            : 'bg-green-50 border border-green-200 text-green-700'
+                                    }`}>
+                                        {importResult.error ? (
+                                            <p>❌ {importResult.error}</p>
+                                        ) : (
+                                            <div>
+                                                <p className="font-medium mb-1">✅ Import Complete!</p>
+                                                <p>📥 {importResult.imported} new contacts added</p>
+                                                {importResult.duplicates > 0 && (
+                                                    <p>⏭️ {importResult.duplicates} already existed</p>
+                                                )}
+                                                {importResult.invalid > 0 && (
+                                                    <p>⚠️ {importResult.invalid} invalid numbers skipped</p>
+                                                )}
+                                                <p className="mt-2 text-xs text-green-600">
+                                                    Switch to &quot;Send Blast&quot; tab → select &quot;Imported Contacts&quot; segment to blast them!
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Import Button */}
+                                <button
+                                    onClick={importContacts}
+                                    disabled={importing || !importText.trim()}
+                                    className="w-full py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 transition-all"
+                                >
+                                    {importing ? (
+                                        <span className="flex items-center justify-center gap-2">
+                                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                            Importing...
+                                        </span>
+                                    ) : (
+                                        `📥 Import Contacts`
+                                    )}
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

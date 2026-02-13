@@ -25,6 +25,7 @@ export type BlastSegment =
     | 'quoted_not_booked'   // Got quote but didn't book (highest conversion!)
     | 'past_customers'      // Have service history
     | 'service_due_soon'    // Service due within 30 days (Forever Customer Engine)
+    | 'imported'            // Database Reactivation: imported external contacts
     | 'custom';             // Custom selection
 
 // Message templates
@@ -183,6 +184,18 @@ export async function POST(req: Request) {
                     }
                     leads = Array.from(customerMap.values());
                 }
+                break;
+
+            case 'imported':
+                // Database Reactivation: externally imported contacts
+                const { data: importedLeads } = await supabase
+                    .from('customers')
+                    .select('id, phone, name, first_name, status, notes, blast_optout')
+                    .eq('business_id', businessId)
+                    .eq('source', 'reactivation_import')
+                    .not('phone', 'is', null)
+                    .neq('blast_optout', true);
+                leads = importedLeads || [];
                 break;
 
             case 'all_old_leads':
@@ -440,7 +453,7 @@ export async function GET(req: Request) {
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
         // Count each segment
-        const [allOld, cold, quoted, pastService, dueSoon] = await Promise.all([
+        const [allOld, cold, quoted, pastService, dueSoon, imported] = await Promise.all([
             // All old leads
             supabase
                 .from('customers')
@@ -483,7 +496,16 @@ export async function GET(req: Request) {
                 .select('customer_id', { count: 'exact', head: true })
                 .eq('business_id', businessId)
                 .lte('next_service_due_at', thirtyDaysFromNow.toISOString())
-                .gte('next_service_due_at', new Date().toISOString())
+                .gte('next_service_due_at', new Date().toISOString()),
+            
+            // Imported contacts (Database Reactivation)
+            supabase
+                .from('customers')
+                .select('id', { count: 'exact', head: true })
+                .eq('business_id', businessId)
+                .eq('source', 'reactivation_import')
+                .not('phone', 'is', null)
+                .neq('blast_optout', true)
         ]);
 
         return NextResponse.json({
@@ -519,6 +541,13 @@ export async function GET(req: Request) {
                     count: dueSoon.count || 0,
                     icon: '🔧',
                     recommended: true
+                },
+                imported: {
+                    name: 'Imported Contacts',
+                    description: 'Database reactivation — imported phone list',
+                    count: imported.count || 0,
+                    icon: '📥',
+                    recommended: true
                 }
             },
             templates: Object.entries(MESSAGE_TEMPLATES).map(([id, t]) => ({
@@ -541,7 +570,8 @@ function getSegmentName(segment: string): string {
         quoted_not_booked: 'Quoted Not Booked',
         past_customers: 'Past Customers',
         service_due_soon: 'Service Due Soon',
-        custom: 'Custom Selection'
+        custom: 'Custom Selection',
+        imported: 'Imported Contacts'
     };
     return names[segment] || segment;
 }

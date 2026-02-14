@@ -845,8 +845,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
 
         // --- QR CODE AREA ---
-        // Adjusted for new compact height
-        const qrSizeAdjusted = 340; 
+        // Adjusted for new compact height (Increased by ~5%, 340 -> 357)
+        const qrSizeAdjusted = 357; 
         const qrX = width - qrSizeAdjusted - 60; 
         const qrY = (height - qrSizeAdjusted) / 2; 
 

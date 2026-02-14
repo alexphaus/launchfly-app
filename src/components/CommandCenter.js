@@ -543,8 +543,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        // Landscape orientation ~2.8:1 ratio (Sleek bumper sticker size)
-        const width = 1800;
+        // Landscape orientation
+        // Reduced left side width (1800 -> 1680) to shrink the branding area
+        const width = 1680;
         // Reduced height by another 10% (580 -> ~525)
         const height = 525;
         canvas.width = width;
@@ -568,7 +569,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
         // 2. BACKGROUNDS
         // "Ice Cold" Professional Background
-        const splitX = 660; 
+        // Reduced splitX (660 -> 540) to shrink left side
+        const splitX = 540; 
 
         // Base White
         ctx.fillStyle = brandWhite;

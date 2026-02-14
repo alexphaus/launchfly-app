@@ -547,7 +547,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Reduced left side width (1800 -> 1680) to shrink the branding area
         const width = 1680;
         // Reduced height by another 10% (580 -> ~525)
-        const height = 550;
+        const height = 575;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -631,7 +631,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const topLimit = 100; 
         const bottomLimit = height - 100;
         const availableH = bottomLimit - topLimit;
-        const centerY = topLimit + availableH / 2;
+        // Shift up slightly (-40px) as requested
+        const centerY = (topLimit + availableH / 2) - 20; 
 
         // Overlap amount: User wants text overlapping bottom of logo
         const overlap = 45; 

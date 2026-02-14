@@ -2120,64 +2120,6 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     </button>
                 </div>
 
-                {/* QR Download - Warranty Active */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                            <QrCode className="w-5 h-5 text-green-700" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-sm text-slate-900">Warranty Active Sticker</h3>
-                            <p className="text-xs text-slate-500">Official Warranty Label</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={downloadQR3}
-                        className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                        Download
-                    </button>
-                </div>
-
-                {/* Block Today - Emergency Brake */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-100 rounded-lg">
-                            <Calendar className="w-5 h-5 text-red-600" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-sm text-slate-900">Block Today</h3>
-                            <p className="text-xs text-slate-500">Mark as fully booked</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={async () => {
-                            if (!confirm('Block all remaining slots for today?')) return;
-                            try {
-                                const res = await fetch('/api/slots/available', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        businessId: business.id,
-                                        action: 'block_day',
-                                        notes: 'Blocked via Command Center'
-                                    })
-                                });
-                                if (res.ok) {
-                                    alert('✅ Today marked as fully booked!');
-                                } else {
-                                    alert('Failed to block day');
-                                }
-                            } catch (e) {
-                                alert('Error blocking day');
-                            }
-                        }}
-                        className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                        Block
-                    </button>
-                </div>
-
                 {/* Quote Page Link */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-3">

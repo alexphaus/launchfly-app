@@ -1037,9 +1037,29 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
 
         try {
+            // Draw White Background Card for QR
+            ctx.fillStyle = '#FFFFFF';
+            const qrBgPadding = 20;
+            const qrBgSize = qrSizeAdjusted + (qrBgPadding * 2);
+            const qrBgX = qrX - qrBgPadding;
+            const qrBgY = qrY - qrBgPadding;
+            
+            ctx.beginPath();
+            ctx.roundRect(qrBgX, qrBgY, qrBgSize, qrBgSize, 24);
+            ctx.fill();
+            
+            // Subtle shadow for the card
+            ctx.shadowColor = "rgba(0, 0, 0, 0.05)";
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 4;
+            ctx.fill();
+            ctx.shadowColor = "transparent"; // Reset
+
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSizeAdjusted,
-                margin: 0,
+                // Add margin in QR generation so modules don't hit the edge if we didn't have padding
+                margin: 0, 
                 errorCorrectionLevel: 'M',
                 color: { dark: '#111111', light: '#00000000' }
             });

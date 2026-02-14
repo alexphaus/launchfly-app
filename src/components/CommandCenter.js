@@ -546,8 +546,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Landscape orientation
         // Reduced left side width (1800 -> 1680) to shrink the branding area
         const width = 1680;
-        // Increased height by 5% (525 -> ~550)
-        const height = 600;
+        // Reduced height by another 10% (580 -> ~525)
+        const height = 525;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');

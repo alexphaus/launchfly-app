@@ -922,11 +922,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const ctaTextW = ctx.measureText(ctaText).width;
         // Start right after the text "warranty"
         const arrowStartX = contentX + ctaTextW + 15; 
-        const arrowStartY = ctaY - 15; // Mid-height of text
+        const arrowStartY = ctaY - 25; // Mid-height of text
         
         // Target: Left side of QR, slighty below middle
-        const arrowEndX = qrX - 25;
-        const arrowEndY = qrY + qrSizeAdjusted - 120; // Higher up than before
+        const arrowEndX = qrX - 15;
+        const arrowEndY = qrY + qrSizeAdjusted - 80; // Higher up than before
         
         ctx.save();
         ctx.beginPath();

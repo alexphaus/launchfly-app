@@ -566,94 +566,141 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.clip(); 
 
         // 2. BACKGROUNDS
-        // Split point: Left 30% Blue, Right 70% Silver
-        const splitX = 540; // 30% of 1800
+        // All white background
+        const splitX = 540; // 30% of 1800 (layout split point)
 
-        // Right Loop: Silver Gradient 
-        // [MODIFIED FOR PRINT] LEAVE TRANSPARENT so the Silver Foil material shines through
-        // const grad = ctx.createLinearGradient(splitX, 0, width, height);
-        // grad.addColorStop(0, silverStart);
-        // grad.addColorStop(0.5, silverEnd); // diagonal sheen
-        // grad.addColorStop(1, silverStart);
-        // ctx.fillStyle = grad;
-        // ctx.fillRect(splitX, 0, width - splitX, height);
+        ctx.fillStyle = brandWhite;
+        ctx.fillRect(0, 0, width, height);
+        
+        // Vertical Divider line between Left and Right sections
+        ctx.strokeStyle = '#E2E8F0'; // Light Slate Grey
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(splitX, 30);
+        ctx.lineTo(splitX, height - 30);
+        ctx.stroke();
 
-        // Left Loop: Navy Blue
-        ctx.fillStyle = navyBlue;
-        ctx.fillRect(0, 0, splitX, height);
+        // Optional light border
+        ctx.strokeStyle = '#E2E8F0';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, width - 2, height - 2);
 
         // --- LEFT SIDE CONTENT (Navy Block) ---
         const leftCenterX = splitX / 2;
 
         // A. Business Name
-        ctx.fillStyle = brandWhite;
+        ctx.fillStyle = textBlack;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         // Dynamic sizing for name
         const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
         let nameFontSize = 55;
-        if (bizName.length > 15) nameFontSize = 45;
-        if (bizName.length > 25) nameFontSize = 35;
-        ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
+        // Adjust for length but maintain readability
+        if (bizName.length > 15) nameFontSize = 48;
+        if (bizName.length > 25) nameFontSize = 38;
+        ctx.font = `800 ${nameFontSize}px "Inter", "Arial Black", sans-serif`;
         
-        // Wrap text logic: Print max 2 lines
+        // Wrap text logic: 
+        // Break long names more aggressively to balance the aesthetic
+        // If > 2 words, try to split evenly
         const nameY = 135;
         const words = bizName.split(' ');
-        let line = '';
         let lines = [];
-        for(let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > splitX - 60 && n > 0) {
-                lines.push(line);
-                line = words[n] + ' ';
-            } else {
-                line = testLine;
+        
+        if (words.length > 2 && bizName.length > 15) {
+             const mid = Math.ceil(words.length / 2);
+             lines.push(words.slice(0, mid).join(' '));
+             lines.push(words.slice(mid).join(' '));
+        } else {
+            // Standard wrap
+            let line = '';
+            for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > splitX - 60 && n > 0) {
+                    lines.push(line);
+                    line = words[n] + ' ';
+                } else {
+                    line = testLine;
+                }
             }
+            lines.push(line);
         }
-        lines.push(line);
+
         // Draw lines centered
         let currentNameY = lines.length > 1 ? nameY - (lines.length * nameFontSize/2) : nameY;
         lines.forEach((l) => {
            ctx.fillText(l.trim(), leftCenterX, currentNameY); 
-           currentNameY += (nameFontSize * 1.2);
+           currentNameY += (nameFontSize * 1.15);
         });
 
-        // B. Shield Icon (Center) - Professional SVG Path
-        const shieldSize = 240;
-        const shieldY = height / 2;
+        // B. Business Logo (Center) - replaces shield icon
+        const logoAreaSize = 240;
+        const logoAreaY = height / 2;
         
-        ctx.save();
-        // Centering logic: The Shield path specifically goes from y=2 to y=25 (material icon style)
-        // We translate to the absolute center of the left section first.
-        ctx.translate(leftCenterX, shieldY); 
-        ctx.scale(shieldSize / 24, shieldSize / 24);
-        // Then we offset to center the 24x24 box AND account for the y=2 top margin in the path
-        const pathCenterY = 13.5; // (2 + 25) / 2
-        ctx.translate(-12, -pathCenterY); 
-        
-        // Shield Outline
-        ctx.lineWidth = 2.0; // Slightly thicker for print clarity at smaller scale
-        ctx.strokeStyle = brandWhite;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        
-        // Custom Shield Path (professional badge shape)
-        const shieldPath = new Path2D("M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z");
-        ctx.stroke(shieldPath);
-        
-        // Checkmark inside
-        const checkPath = new Path2D("M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
-        ctx.fillStyle = brandWhite;
-        ctx.fill(checkPath);
-        ctx.restore();
+        const imagesQR1 = businessData.images || businessData.prospectImages || [];
+        const logoImgQR1 = imagesQR1.find(img => img.type === 'logo');
+        const logoUrlQR1 = logoImgQR1?.url || null;
+
+        if (logoUrlQR1) {
+            try {
+                const logoEl = new Image();
+                logoEl.crossOrigin = 'anonymous';
+                logoEl.src = logoUrlQR1;
+                await new Promise((resolve, reject) => {
+                    logoEl.onload = resolve;
+                    logoEl.onerror = reject;
+                    setTimeout(reject, 3000);
+                });
+
+                const aspect = logoEl.width / logoEl.height;
+                let drawW, drawH;
+                if (aspect >= 1) {
+                    drawW = logoAreaSize;
+                    drawH = drawW / aspect;
+                } else {
+                    drawH = logoAreaSize;
+                    drawW = drawH * aspect;
+                }
+                const logoDrawX = leftCenterX - drawW / 2;
+                const logoDrawY = logoAreaY - drawH / 2;
+                
+                // Draw subtle shadow/border behind logo to make it pop on white
+                ctx.save();
+                ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 4;
+                // Draw white backing circle/rect to ensure transparency doesn't look weird?
+                // Actually user specifically asked for "thin grey border around the logo circle"
+                // Assuming logo is roughly circular, we can draw a circle border behind/around it.
+                // Or just a rect border. Let's do a circular border accent if it's square-ish?
+                // Safest is a subtle shadow drop.
+                ctx.drawImage(logoEl, logoDrawX, logoDrawY, drawW, drawH);
+                ctx.restore();
+                
+                // Add thin grey border ring around it (assuming circular logo)
+                // If not circular, this might look odd, but user specifically asked for "around logo circle"
+                // implying their logo is circular.
+                ctx.beginPath();
+                // Use max dimension for circle radius
+                const r = Math.max(drawW, drawH) / 2;
+                ctx.arc(leftCenterX, logoAreaY, r + 2, 0, Math.PI * 2);
+                ctx.strokeStyle = '#E2E8F0'; // Slate 200
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+            } catch (e) {
+                console.warn('Logo failed to load for sticker:', e);
+            }
+        }
 
         // C. Phone Number
         const phoneY = height - 45;
         // Priority: whatsapp_number > phone_number > business_data.phone > fallback
         const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
         
-        ctx.fillStyle = brandWhite;
+        ctx.fillStyle = textBlack;
         ctx.font = '500 38px "Inter", "Arial", sans-serif';
 
         // "WhatsApp:" label with Icon
@@ -668,7 +715,6 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         // Draw Icon
         ctx.save();
-        // Align icon vertically with text. Text is baseline 'bottom' at (phoneY - 55).
         ctx.translate(startX, phoneY - 55 - iconSizeSmall - 5); 
         ctx.scale(iconSizeSmall / 24, iconSizeSmall / 24);
         const phoneIconPath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
@@ -691,8 +737,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textAlign = 'left';
         
         // D. Top Label "SERVICE & WARRANTY RECORD"
-        // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
-        ctx.fillStyle = navyBlue; 
+        // [PRINT FIX] Use Red for authority
+        ctx.fillStyle = '#DC2626'; // Deep Red
         ctx.textBaseline = 'top';
         ctx.font = '800 42px "Inter", "Arial", sans-serif'; 
         ctx.fillText('WARRANTY SEAL: DO NOT REMOVE', contentX, 65); // Moved up

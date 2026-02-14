@@ -547,7 +547,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Reduced left side width (1800 -> 1680) to shrink the branding area
         const width = 1680;
         // Reduced height by another 10% (580 -> ~525)
-        const height = 525;
+        const height = 550;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -724,11 +724,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textBaseline = 'top';
         ctx.fillStyle = '#334155'; // Slate 700
         ctx.font = '800 32px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('OFFICIAL SERVICE PARTNER', contentX, 30); // Compact top
+        ctx.fillText('OFFICIAL SERVICE PARTNER', contentX, 40); // Compact top
 
         // F. RED HEADER BLOCK: "NEXT SERVICE DUE"
         // Tighter vertical spacing
-        const widgetY = 75; 
+        const widgetY = 100; 
         const widgetW = 580; 
         const widgetH = 200; // Slightly shorter
         const headerH = 65; 
@@ -807,7 +807,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
 
         // G. "DATE CLEANED:" Link (Below Widget)
-        const dateCleanedY = widgetY + widgetH + 32;
+        const dateCleanedY = widgetY + widgetH + 70;
         ctx.fillStyle = textBlack; 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
@@ -848,7 +848,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Adjusted for new compact height
         const qrSizeAdjusted = 340; 
         const qrX = width - qrSizeAdjusted - 60; 
-        const qrY = (height - qrSizeAdjusted) / 2 - 10; 
+        const qrY = (height - qrSizeAdjusted) / 2; 
 
         try {
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {

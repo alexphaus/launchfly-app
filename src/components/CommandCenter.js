@@ -904,18 +904,96 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.font = '800 38px "Inter", "Arial", sans-serif';
         ctx.fillText('Scan to activate', contentX, ctaLine1Y);
         
-        // Line 2: "FREE 30-day warranty >"
+        // Line 2: "FREE 30-day warranty"
         ctx.fillStyle = '#DC2626'; // Red 600
         ctx.font = '900 46px "Inter", "Arial Black", sans-serif';
-        // Add arrow symbol instead of just text >
-        ctx.fillText('FREE 30-day warranty ►', contentX, ctaY);
-
-
+        const ctaText = 'FREE 30-day warranty'; // Removed ►
+        ctx.fillText(ctaText, contentX, ctaY);
+        
         // --- QR CODE AREA ---
         // Adjusted for new compact height (Increased by ~5%, 340 -> 357)
         const qrSizeAdjusted = 357; 
         const qrX = width - qrSizeAdjusted - 60; 
         const qrY = (height - qrSizeAdjusted) / 2; 
+
+        // --- DASHED ARROW TO QR ---
+        // More dramatic "Loop" curve
+        
+        const ctaTextW = ctx.measureText(ctaText).width;
+        // Start right after the text "warranty"
+        const arrowStartX = contentX + ctaTextW + 15; 
+        const arrowStartY = ctaY - 15; // Mid-height of text
+        
+        // Target: Left side of QR, slighty below middle
+        const arrowEndX = qrX - 25;
+        const arrowEndY = qrY + qrSizeAdjusted - 120; // Higher up than before
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = '#DC2626';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.setLineDash([12, 8]); 
+        
+        // Create a loop-the-loop curve (Cycloidish)
+        // 1. Go UP and RIGHT from text
+        // 2. Loop BACK (left) and UP
+        // 3. Curve RIGHT and DOWN into QR
+        
+        // A simple cubic bezier can't do a full loop, so we'll use a strong S-curve 
+        // that goes HIGH to mimic the "flight path" look in the attachment
+        
+        const cp1x = arrowStartX + 40;
+        const cp1y = arrowStartY - 100; // Go WAY up first
+        
+        const cp2x = arrowEndX - 120;
+        const cp2y = arrowEndY + 80;  // Come from below/right logic? No, let's just arc it.
+        
+        // Let's try a defined 3-point curve for better control or just strong bezier
+        // Start -> Control High/Right -> Control Low/Left -> End? No.
+        
+        // Let's do a large upward arc that swoops down.
+        // Start: (Text End)
+        // CP1: (Midway X, High Y)
+        // CP2: (Close to QR X, Low Y?)
+        
+        // Update: User wants "Curve pointing more straight to the qr forming like s"
+        // and "Start there" (after text).
+        
+        // New Control Points for "S" Shape
+        // 1. Start moving Right
+        // 2. Curve Down
+        // 3. Curve Up/Right into QR? 
+        // Or "Loop" style: Up -> Right -> Down -> target
+        
+        // Trying a "Ski Jump" S-curve
+        const jumpCP1X = arrowStartX + 120;
+        const jumpCP1Y = arrowStartY - 80; // Up and Right
+        
+        const jumpCP2X = arrowEndX - 100;
+        const jumpCP2Y = arrowEndY + 80;   // Down and Left (creates tension)
+        
+        ctx.moveTo(arrowStartX, arrowStartY);
+        ctx.bezierCurveTo(jumpCP1X, jumpCP1Y, jumpCP2X, jumpCP2Y, arrowEndX, arrowEndY);
+        ctx.stroke();
+        
+        // Arrow Head
+        ctx.setLineDash([]); 
+        ctx.translate(arrowEndX, arrowEndY);
+        // Angle needs to match the incoming tangent from jumpCP2
+        // Approximate vector from CP2 to End: (100, -80) -> pointing UP-RIGHT
+        const angle = Math.atan2(arrowEndY - jumpCP2Y, arrowEndX - jumpCP2X);
+        ctx.rotate(angle); 
+        
+        ctx.fillStyle = '#DC2626';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);       
+        ctx.lineTo(-24, -12);   
+        ctx.lineTo(-24, 12);    
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
 
         try {
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {

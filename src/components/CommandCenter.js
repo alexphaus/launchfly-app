@@ -857,16 +857,16 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.font = '500 50px "Courier New", monospace'; 
         
         // Shift '/' to the right since calendar is on the left
-        const dateAreaStart = contentX + 110;
+        const dateAreaStart = contentX + 80;
         const dateAreaW = widgetW - 110;
         const dateCenter = dateAreaStart + dateAreaW/2;
         
         ctx.fillStyle = '#94A3B8'; // Slate 400
-        ctx.fillText('/         /', dateCenter, bodyCenterY);
+        ctx.fillText('/     /', dateCenter, bodyCenterY);
 
 
         // G. "DATE CLEANED:" Link (Below Widget)
-        const dateCleanedY = widgetY + widgetH + 75;
+        const dateCleanedY = widgetY + widgetH + 80;
         ctx.fillStyle = textBlack; 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';

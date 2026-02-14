@@ -568,32 +568,77 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.clip(); 
 
         // 2. BACKGROUNDS
-        // "Ice Cold" Professional Background
-        // Reduced splitX (660 -> 540) to shrink left side
+        // "Ice Cold" Premium Frost Background
+        // Mimics the texture of frozen glass or ice crystals
+        
         const splitX = 540; 
 
-        // Base White
-        ctx.fillStyle = brandWhite;
+        // A. Deep Ice Base
+        const iceBase = ctx.createLinearGradient(0, 0, width, height);
+        iceBase.addColorStop(0, '#E0F2FE');   // Light Sky Blue (Top Left)
+        iceBase.addColorStop(0.5, '#F0F9FF'); // Very Pale Blue (Center)
+        iceBase.addColorStop(1, '#E0F2FE');   // Light Sky Blue (Bottom Right)
+        ctx.fillStyle = iceBase;
+        ctx.fillRect(0, 0, width, height);
+
+        // B. Crystal/Frost Texture Simulation
+        // Draw jagged "shards" to differentiate from plain gradient
+        ctx.save();
+        const drawShard = (x, y, size, color, alpha) => {
+            ctx.fillStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + size * (Math.random() - 0.5), y - size * Math.random());
+            ctx.lineTo(x + size, y + size * 0.2);
+            ctx.lineTo(x + size * 0.5, y + size);
+            ctx.lineTo(x - size * 0.2, y + size * 0.8);
+            ctx.closePath();
+            ctx.fill();
+        };
+
+        // Draw multiple layers of "frost"
+        // 1. White highlights (Ice highlights)
+        for(let i=0; i<40; i++) {
+            drawShard(
+                Math.random() * width, 
+                Math.random() * height, 
+                150 + Math.random() * 200, 
+                '#FFFFFF', 
+                0.15 // Subtle
+            );
+        }
+        
+        // 2. Blue shadows (Ice depth)
+        for(let i=0; i<20; i++) {
+            drawShard(
+                Math.random() * width, 
+                Math.random() * height, 
+                100 + Math.random() * 150, 
+                '#BAE6FD', // Blue-200
+                0.08 
+            );
+        }
+        ctx.restore();
+
+        // C. Clean Overlay (to ensure text readability)
+        // Light wash over the center to soften the shards
+        const overlay = ctx.createRadialGradient(width/2, height/2, 100, width/2, height/2, width);
+        overlay.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+        overlay.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+        ctx.fillStyle = overlay;
         ctx.fillRect(0, 0, width, height);
         
-        // Subtle "Tech/Ice" Gradient for premium feel (Very light blue-grey to white)
-        const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-        bgGrad.addColorStop(0, '#F1F5F9'); // Slate 100
-        bgGrad.addColorStop(0.5, '#FFFFFF');
-        bgGrad.addColorStop(1, '#F8FAFC'); // Slate 50
-        ctx.fillStyle = bgGrad;
-        ctx.fillRect(0, 0, width, height);
-        
-        // Vertical Divider
+        // Vertical Divider (Subtle Blue-Grey)
         ctx.strokeStyle = '#CBD5E1'; // Slate 300
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1; // Thinner
         ctx.beginPath();
         ctx.moveTo(splitX, 40);
         ctx.lineTo(splitX, height - 40);
         ctx.stroke();
 
-        // Optional Outer Border
-        ctx.strokeStyle = '#E2E8F0';
+        // Optional Outer Border (Icy Blue)
+        ctx.strokeStyle = '#BAE6FD'; // Blue 200
         ctx.lineWidth = 2;
         ctx.strokeRect(1, 1, width - 2, height - 2);
 

@@ -700,7 +700,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const bottomLimit = height - 100;
         const availableH = bottomLimit - topLimit;
         // Shift up slightly (-40px) as requested
-        const centerY = (topLimit + availableH / 2) - 20; 
+        const centerY = (topLimit + availableH / 2); 
 
         // Overlap amount: User wants text overlapping bottom of logo
         const overlap = 45; 

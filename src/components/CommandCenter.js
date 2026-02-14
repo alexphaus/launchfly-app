@@ -935,7 +935,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textBaseline = 'bottom';
         
         // Line 1: "Scan to activate"
-        const ctaLine1Y = ctaY - 60;
+        const ctaLine1Y = ctaY - 55;
         ctx.fillStyle = '#0f172a'; // Slate 900 / Navy
         ctx.font = '800 40px "Inter", "Arial", sans-serif';
         ctx.fillText('Scan to activate', contentX, ctaLine1Y);
@@ -1099,7 +1099,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.textBaseline = 'top';
             ctx.fillStyle = textBlack; 
             ctx.font = '800 28px "Inter", "Arial", sans-serif'; 
-            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted/2, qrY + qrSizeAdjusted + 35);
+            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted/2, qrY + qrSizeAdjusted + 44);
 
             // Download
             const link = document.createElement('a');

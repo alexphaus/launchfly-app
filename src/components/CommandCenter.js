@@ -880,6 +880,14 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.moveTo(lineStart, dateCleanedY);
         ctx.lineTo(contentX + widgetW, dateCleanedY);
         ctx.stroke();
+        
+        // Add Slashes for Date Input
+        const lineLength = (contentX + widgetW) - lineStart;
+        const lineCenter = lineStart + lineLength / 2;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#CBD5E1'; // Light grey like placeholder
+        ctx.font = '500 34px "Courier New", monospace';
+        ctx.fillText('/    /', lineCenter, dateCleanedY - 8);
 
         // H. CTA TEXT (Bottom Left) - Replaces Button Pill
         // "Scan to activate" (Navy Blue)

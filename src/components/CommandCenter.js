@@ -901,7 +901,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Line 1: "Scan to activate"
         const ctaLine1Y = ctaY - 60;
         ctx.fillStyle = '#0f172a'; // Slate 900 / Navy
-        ctx.font = '800 38px "Inter", "Arial", sans-serif';
+        ctx.font = '800 40px "Inter", "Arial", sans-serif';
         ctx.fillText('Scan to activate', contentX, ctaLine1Y);
         
         // Line 2: "FREE 30-day warranty"

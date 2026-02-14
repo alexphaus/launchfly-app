@@ -543,14 +543,26 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        // Landscape orientation
-        // Reduced left side width (1800 -> 1680) to shrink the branding area
+        
+        // High-resolution rendering: 2x scale for crisp quality
+        const scaleFactor = 2;
+        
+        // Logical dimensions (layout)
         const width = 1680;
-        // Reduced height by another 10% (580 -> ~525)
         const height = 575;
-        canvas.width = width;
-        canvas.height = height;
+        
+        // Physical canvas size (2x for retina/high-DPI)
+        canvas.width = width * scaleFactor;
+        canvas.height = height * scaleFactor;
+        
         const ctx = canvas.getContext('2d');
+        
+        // Scale context to match - all subsequent drawing operations use logical coordinates
+        ctx.scale(scaleFactor, scaleFactor);
+        
+        // Enable high-quality rendering
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
 
         // --- COLORS ---
         const navyBlue = '#515151'; // Deep Corporate Navy

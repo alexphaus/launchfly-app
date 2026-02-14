@@ -808,7 +808,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
 
         // --- RIGHT SIDE CONTENT (Action Widget) ---
-        const rightPad = 70; 
+        const rightPad = 65; 
         const contentX = splitX + rightPad;
         const qrSize = 340; // Reduced for new height
         // Available width for text content before hitting QR
@@ -961,7 +961,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const arrowStartY = ctaY - 25; // Mid-height of text
         
         // Target: Left side of QR, slighty below middle
-        const arrowEndX = qrX - 15;
+        const arrowEndX = qrX - 27;
         const arrowEndY = qrY + qrSizeAdjusted - 80; // Higher up than before
         
         ctx.save();

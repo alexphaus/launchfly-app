@@ -1099,7 +1099,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.textBaseline = 'top';
             ctx.fillStyle = textBlack; 
             ctx.font = '800 28px "Inter", "Arial", sans-serif'; 
-            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted/2, qrY + qrSizeAdjusted + 20);
+            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted/2, qrY + qrSizeAdjusted + 35);
 
             // Download
             const link = document.createElement('a');

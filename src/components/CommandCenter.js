@@ -537,7 +537,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Include business ref in trigger message so bot knows which business context to use
         // Use subdomain if available (shorter), otherwise fall back to UUID
         const businessRef = business?.subdomain || business?.id;
-        const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
+        const stickerTrigger = `Hi! I'd like to book my next service. 🔧\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
         
         // Primary: Launchfly bot with business context
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
@@ -741,9 +741,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillStyle = '#DC2626'; // Deep Red
         ctx.textBaseline = 'top';
         ctx.font = '800 42px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('WARRANTY SEAL: DO NOT REMOVE', contentX, 65); // Moved up
+        ctx.fillText('SERVICE RECORD: DO NOT REMOVE', contentX, 65); // Moved up
 
-        // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
+        // E. Main Headline "SCAN TO BOOK CLEANING"
         // Stacked
         const mainY = 135; // Moved up
         ctx.fillStyle = textBlack;
@@ -751,15 +751,15 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const lineHeight = 100;
         
         ctx.fillText('SCAN TO', contentX, mainY);
-        ctx.fillText('ACTIVATE &', contentX, mainY + lineHeight);
-        ctx.fillText('LOG SERVICE', contentX, mainY + (lineHeight * 2));
+        ctx.fillText('BOOK YOUR', contentX, mainY + lineHeight);
+        ctx.fillText('NEXT SERVICE', contentX, mainY + (lineHeight * 2));
 
-        // F. Subtext "& Get Next Service Reminder"
+        // F. Subtext
         const subY = mainY + (lineHeight * 3) + 27;
         ctx.fillStyle = accentBlue;
         ctx.font = '700 50px "Inter", "Arial", sans-serif';
-        ctx.fillText('Verify Warranty', contentX, subY);
-        ctx.fillText('& Book Service', contentX, subY + 65);
+        ctx.fillText('Service History', contentX, subY);
+        ctx.fillText('& Easy Rebooking', contentX, subY + 65);
 
         // --- QR CODE AREA ---
         const qrX = width - qrSize - 100; // Increased margin slightly
@@ -818,12 +818,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.textBaseline = 'top';
             ctx.fillStyle = textDarkGrey;
             ctx.font = '600 34px "Inter", "Arial", sans-serif';
-            ctx.fillText('24/7 SUPPORT', qrX + qrSize / 2, qrY + qrSize + 25);
+            ctx.fillText('BOOK ONLINE 24/7', qrX + qrSize / 2, qrY + qrSize + 25);
 
             // Download
             const link = document.createElement('a');
             const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
-            link.download = `${safeName}_Warranty_Sticker.png`;
+            link.download = `${safeName}_Service_Sticker.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
@@ -1181,25 +1181,25 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         // Include business ref in trigger message
         const businessRef = business?.subdomain || business?.id;
-        const stickerTrigger = `Hi! I want to activate my Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
+        const stickerTrigger = `Hi! I'd like to book my next service. 🔧\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
         
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
         // Landscape orientation
         const width = 1800;
-        // Reduced height by ~10% (640 -> 580)
-        const height = 580;
+        const height = 640;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
 
         // --- COLORS ---
-        const navyBlue = '#0F172A';     // Deep Slate/Navy (Text)
-        const activeGreen = '#22C55E';  // Bright Green (Checkmark, Phone)
+        const navyBlue = '#0F172A';     // Deep Slate/Navy
+        const accentGreen = '#22C55E';  // Green accent
         const textBlack = '#111111';
         const textGray = '#64748B';     // Slate-500
         const brandWhite = '#FFFFFF';
+        const warningRed = '#DC2626';   // Official red
 
         // 1. ROUNDED CORNERS CLIP
         const radius = 30;
@@ -1211,16 +1211,16 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillStyle = brandWhite;
         ctx.fillRect(0, 0, width, height);
         
-        // Optional: Very light grey border
+        // Light border
         ctx.strokeStyle = '#E2E8F0';
         ctx.lineWidth = 2;
         ctx.strokeRect(1, 1, width-2, height-2);
 
-        // --- LEFT SECTION ---
-        const leftMargin = 80;
-        const topMargin = 70;
+        // --- LAYOUT ---
+        const leftMargin = 60;
+        const topMargin = 50;
 
-        // Pre-load logo so we know if we need to shift text
+        // Pre-load logo
         const images = businessData.images || businessData.prospectImages || [];
         const logoImage = images.find(img => img.type === 'logo');
         const logoUrl = logoImage?.url || null;
@@ -1242,123 +1242,143 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             }
         }
 
-        // Calculate logo size (match HEIGHT of WARRANTY ACTIVE title block)
-        const titleBlockH = 245; // WARRANTY (130) + gap (115) = ACTIVE bottom
-        let logoDrawW = 0;
-        let logoPadding = 0;
+        // ============================================
+        // LEFT SECTION: Branding + Dates + Contact
+        // ============================================
+        const contentLeft = leftMargin;
+        const leftWidth = 1050; // ~58% of canvas for left content
 
-        if (logoLoadedImg) {
-            const aspect = logoLoadedImg.width / logoLoadedImg.height;
-            const drawH = titleBlockH;
-            const drawW = drawH * aspect;
-            logoDrawW = Math.min(drawW, 260); // Cap max width
-            logoPadding = logoDrawW + 30; // Space between logo and text
-        }
-
-        const textLeft = leftMargin + logoPadding; // Shift text right if logo present
-        
-        // A. "OFFICIAL SERVICE RECORD"
+        // ROW 1: "OFFICIAL SERVICE PARTNER" header
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillStyle = textGray;
-        ctx.font = '700 36px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('OFFICIAL SERVICE RECORD', textLeft, topMargin);
+        ctx.font = '700 30px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('OFFICIAL SERVICE PARTNER', contentLeft, topMargin);
 
-        // B. "WARRANTY" (Huge, Black)
-        const warrantyY = topMargin + 60;
-        ctx.fillStyle = textBlack;
-        ctx.font = '900 130px "Inter", "Arial Black", sans-serif';
-        ctx.fillText('WARRANTY', textLeft, warrantyY);
+        // ROW 2: Logo + Business Name (side by side)
+        const brandY = topMargin + 50;
+        const bizName = (business?.name || 'YOUR BUSINESS NAME').toUpperCase();
+        let nameSize = 62;
+        if (bizName.length > 20) nameSize = 52;
+        if (bizName.length > 30) nameSize = 42;
 
-        // C. "ACTIVE" + Checkmark
-        const activeY = warrantyY + 115;
-        ctx.fillStyle = textBlack;
-        ctx.fillText('ACTIVE', textLeft, activeY);
-        
-        // Measure "ACTIVE" to place checkmark
-        const activeWidth = ctx.measureText('ACTIVE').width;
-        
-        // Checkmark Icon (Green Circle with white check)
-        const checkSize = 90;
-        const checkX = textLeft + activeWidth + 45;
-        const checkY = activeY + 60; 
-        
-        // Green Circle
-        ctx.beginPath();
-        ctx.arc(checkX, checkY, checkSize / 2, 0, Math.PI * 2);
-        ctx.fillStyle = activeGreen;
-        ctx.fill();
-        
-        // White Checkmark
-        ctx.strokeStyle = brandWhite;
-        ctx.lineWidth = 10;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(checkX - 18, checkY + 4);
-        ctx.lineTo(checkX - 4, checkY + 18);
-        ctx.lineTo(checkX + 22, checkY - 18);
-        ctx.stroke();
+        let textStartX = contentLeft;
 
-        // Draw logo to the left of WARRANTY ACTIVE, sized to match title height
         if (logoLoadedImg) {
+            const logoH = 85;
             const aspect = logoLoadedImg.width / logoLoadedImg.height;
-            let drawH = titleBlockH;
-            let drawW = drawH * aspect;
-            if (drawW > 260) { drawW = 260; drawH = drawW / aspect; }
-            const logoX = leftMargin;
-            const logoY = warrantyY + (titleBlockH - drawH) / 2; // Vertically center with title
-            ctx.drawImage(logoLoadedImg, logoX, logoY, drawW, drawH);
+            let logoW = logoH * aspect;
+            if (logoW > 120) { logoW = 120; }
+            const logoDrawH = logoW / aspect;
+
+            // Drop shadow
+            ctx.save();
+            ctx.shadowColor = "rgba(0, 0, 0, 0.12)";
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 3;
+            ctx.drawImage(logoLoadedImg, contentLeft, brandY, logoW, logoDrawH);
+            ctx.restore();
+
+            textStartX = contentLeft + logoW + 20;
         }
 
-        // D. "AUTHORIZED SERVICE PARTNER"
-        // Slightly reordered per user request, but still below Active
-        const partnerY = activeY + 140; 
-        ctx.fillStyle = navyBlue;
-        ctx.font = '800 38px "Inter", "Arial", sans-serif';
-        ctx.fillText('AUTHORIZED SERVICE PARTNER', textLeft, partnerY);
-
-        // E. Business Name (logo is now next to WARRANTY ACTIVE)
-        const bizNameY = partnerY + 50;
-        const bizName = (business?.name || 'YOUR BUSINESS NAME').toUpperCase();
-        let nameSize = 58;
-        if (bizName.length > 20) nameSize = 48;
-        if (bizName.length > 30) nameSize = 38;
-
-        ctx.fillStyle = '#334155';
+        ctx.fillStyle = textBlack;
         ctx.font = `900 ${nameSize}px "Inter", "Arial Black", sans-serif`;
-        ctx.fillText(bizName, textLeft, bizNameY);
+        ctx.fillText(bizName, textStartX, brandY);
 
-        // F. Hotline - Pushed to absolute bottom left
-        const hotlineY = height - 70; // Adjusted for new height
+        // ROW 3: Phone number (large, readable)
         const formatPhone = (p) => {
              if (!p) return '';
              return p.startsWith('+') ? p : `+${p}`;
         };
         const displayPhone = formatPhone(business?.whatsapp_number || business?.phone_number || businessData?.phone || '639627459049');
         
-        ctx.fillStyle = textBlack;
-        ctx.font = '800 44px "Inter", "Arial", sans-serif';
-        ctx.fillText(displayPhone, textLeft, hotlineY);
+        const phoneY = brandY + nameSize + 15;
+        ctx.fillStyle = navyBlue;
+        ctx.font = '700 40px "Inter", "Arial", sans-serif';
+        ctx.fillText(displayPhone, contentLeft, phoneY);
 
-        // --- RIGHT SECTION ---
-        // QR Code Area
-        const qrSize = 380; // Scaled down for height
-        const qrX = width - qrSize - 100; // Increased right margin
-        // Center vertically relative to whole canvas
-        const qrY = (height - qrSize) / 2 + 15; // Shifted down slightly
+        // ============================================
+        // ROW 4: DATE FIELDS (The key revenue driver)
+        // Writeable matte boxes for permanent marker
+        // ============================================
+        const dateBoxY = phoneY + 65;
+        const boxH = 75;
+        const boxW = 460;
+        const dateGap = 40;
 
-        // Top Right Label: "24/7 SUPPORT"
-        // Positioned relative to QR top
-        const trY = qrY - 50;
-        const trX = qrX + (qrSize / 2); // Center over QR
+        // --- Date Cleaned Box ---
+        ctx.fillStyle = navyBlue;
+        ctx.font = '700 26px "Inter", "Arial", sans-serif';
+        ctx.fillText('DATE SERVICED:', contentLeft, dateBoxY);
+
+        const fieldY = dateBoxY + 32;
+        // Draw matte white box with border
+        ctx.fillStyle = '#F8FAFC'; // Very light grey (matte look for marker writing)
+        ctx.strokeStyle = '#CBD5E1'; // Slate-300 border
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(contentLeft, fieldY, boxW, boxH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        // Placeholder date format inside
+        ctx.fillStyle = '#CBD5E1';
+        ctx.font = '400 36px "Inter", "Arial", sans-serif';
+        ctx.fillText('__ / __ / ____', contentLeft + 20, fieldY + 22);
+
+        // --- Next Service Due Box ---
+        const nextBoxX = contentLeft + boxW + dateGap;
+        ctx.fillStyle = warningRed;
+        ctx.font = '800 26px "Inter", "Arial", sans-serif';
+        ctx.fillText('NEXT SERVICE DUE:', nextBoxX, dateBoxY);
+
+        ctx.fillStyle = '#FEF2F2'; // Very light red tint (urgency hint)
+        ctx.strokeStyle = warningRed;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect(nextBoxX, fieldY, boxW, boxH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        // Placeholder
+        ctx.fillStyle = '#FECACA';
+        ctx.font = '400 36px "Inter", "Arial", sans-serif';
+        ctx.fillText('__ / __ / ____', nextBoxX + 20, fieldY + 22);
+
+        // ROW 5: Footer tagline
+        const footerY = fieldY + boxH + 25;
+        ctx.fillStyle = textGray;
+        ctx.font = '600 26px "Inter", "Arial", sans-serif';
+        ctx.fillText('Quality Service Guaranteed  •  Do Not Remove', contentLeft, footerY);
+
+        // ============================================
+        // RIGHT SECTION: QR Code
+        // ============================================
+        const qrSize = 380;
+        const qrX = width - qrSize - 80;
+        const qrCenterX = qrX + qrSize / 2;
+
+        // "BOOK ONLINE 24/7" label above QR
+        const labelY = topMargin;
         ctx.textAlign = 'center';
         ctx.fillStyle = navyBlue;
-        ctx.font = '800 36px "Inter", "Arial", sans-serif';
-        ctx.fillText('24/7 SUPPORT', trX, trY);
+        ctx.font = '800 34px "Inter", "Arial", sans-serif';
+        ctx.fillText('BOOK ONLINE 24/7', qrCenterX, labelY);
+
+        // Vertical divider
+        const divX = qrX - 40;
+        ctx.strokeStyle = '#E2E8F0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(divX, 30);
+        ctx.lineTo(divX, height - 30);
+        ctx.stroke();
+
+        // QR Code
+        const qrY = labelY + 50;
 
         try {
-            // Generate QR
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
                 margin: 1,
@@ -1371,7 +1391,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             await new Promise((resolve) => { qrImg.onload = resolve; });
             ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-            // Icon Overlay (Phone Green)
+            // WhatsApp icon overlay in center of QR
             const iconSize = qrSize * 0.22;
             const iconX = qrX + qrSize / 2;
             const iconY = qrY + qrSize / 2;
@@ -1385,39 +1405,38 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             // Green circle
             ctx.beginPath();
             ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
-            ctx.fillStyle = activeGreen;
+            ctx.fillStyle = accentGreen;
             ctx.fill();
 
-            // Phone Icon
+            // Phone icon (white)
             const s = iconSize * 0.55;
             ctx.fillStyle = brandWhite;
             ctx.save();
             ctx.translate(iconX, iconY);
             ctx.scale(s / 24, s / 24);
             ctx.translate(-12, -12);
-            // Simple Phone Path
             const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
             ctx.fill(phonePath);
             ctx.restore();
 
-            // Bottom Text: "Scan to Verify Warranty & Book Service"
-            const bottomTextY = qrY + qrSize + 20;
-            ctx.fillStyle = textBlack;
-            ctx.font = '600 24px "Inter", "Arial", sans-serif';
-            ctx.fillText('SCAN TO ACTIVATE WARRANTY', trX, bottomTextY);
-            //ctx.fillText('& Book Service', trX, bottomTextY + 32);
+            // Bottom text under QR
+            const bottomTextY = qrY + qrSize + 15;
+            ctx.fillStyle = navyBlue;
+            ctx.font = '700 26px "Inter", "Arial", sans-serif';
+            ctx.fillText('Scan to Book', qrCenterX, bottomTextY);
+            ctx.fillText('Next Service', qrCenterX, bottomTextY + 32);
 
             // Download
             const link = document.createElement('a');
             const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
-            link.download = `${safeName}_Warranty_Active.png`;
+            link.download = `${safeName}_Service_Sticker.png`;
             link.href = canvas.toDataURL('image/png');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
         } catch (err) {
-            console.error('Error creating warranty active sticker:', err);
+            console.error('Error creating service sticker:', err);
             alert('Failed to generate sticker.');
         }
     };

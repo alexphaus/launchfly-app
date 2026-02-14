@@ -544,7 +544,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const ctx = canvas.getContext('2d');
 
         // --- COLORS ---
-        const navyBlue = '#102A56'; // Deep Corporate Navy
+        const navyBlue = '#515151'; // Deep Corporate Navy
         const silverStart = '#E8E8E8'; // Matte Silver
         const silverEnd = '#F8F8F8';   // Lighter Highlight
         const textBlack = '#111111';
@@ -647,7 +647,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
         
         ctx.fillStyle = brandWhite;
-        ctx.font = '500 36px "Inter", "Arial", sans-serif';
+        ctx.font = '500 38px "Inter", "Arial", sans-serif';
 
         // "WhatsApp:" label with Icon
         const labelText = 'WhatsApp:';
@@ -688,7 +688,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillStyle = navyBlue; 
         ctx.textBaseline = 'top';
         ctx.font = '800 42px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('OFFICIAL 30-DAY WARRANTY', contentX, 65); // Moved up
+        ctx.fillText('WARRANTY SEAL: DO NOT REMOVE', contentX, 65); // Moved up
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
         // Stacked
@@ -698,15 +698,15 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const lineHeight = 100;
         
         ctx.fillText('SCAN TO', contentX, mainY);
-        ctx.fillText('ACTIVATE', contentX, mainY + lineHeight);
-        ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
+        ctx.fillText('ACTIVATE &', contentX, mainY + lineHeight);
+        ctx.fillText('LOG SERVICE', contentX, mainY + (lineHeight * 2));
 
         // F. Subtext "& Get Next Service Reminder"
         const subY = mainY + (lineHeight * 3) + 27;
         ctx.fillStyle = accentBlue;
         ctx.font = '700 50px "Inter", "Arial", sans-serif';
-        ctx.fillText('& Get Next', contentX, subY);
-        ctx.fillText('Service Reminder', contentX, subY + 65);
+        ctx.fillText('Verify Warranty', contentX, subY);
+        ctx.fillText('& Book Service', contentX, subY + 65);
 
         // --- QR CODE AREA ---
         const qrX = width - qrSize - 100; // Increased margin slightly
@@ -765,7 +765,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.textBaseline = 'top';
             ctx.fillStyle = textDarkGrey;
             ctx.font = '600 34px "Inter", "Arial", sans-serif';
-            ctx.fillText('No App Needed', qrX + qrSize / 2, qrY + qrSize + 25);
+            ctx.fillText('24/7 SUPPORT', qrX + qrSize / 2, qrY + qrSize + 25);
 
             // Download
             const link = document.createElement('a');

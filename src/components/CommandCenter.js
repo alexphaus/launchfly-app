@@ -618,7 +618,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const displayPhone = safePhone.startsWith('+') ? safePhone : `+${safePhone}`;
         
         ctx.fillStyle = textBlack;
-        ctx.font = '800 46px "Inter", "Arial", sans-serif';
+        ctx.font = '600 45px "Inter", "Arial", sans-serif';
         // Add letter spacing to make it wider like the example
         ctx.fillText(displayPhone, leftCenterX, phoneY);
 

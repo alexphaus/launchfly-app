@@ -631,11 +631,31 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         ctx.fillStyle = textBlack;
         ctx.font = '600 45px "Inter", "Arial", sans-serif';
-        // Add letter spacing to make it wider like the example
-        ctx.fillText(displayPhone, leftCenterX, phoneY);
+        const phoneTextWidth = ctx.measureText(displayPhone).width;
+        const phoneIconSize = 34; // Slightly smaller than text height
+        const phoneGap = 15;
+        const totalPhoneWidth = phoneIconSize + phoneGap + phoneTextWidth;
+        
+        // Calculate starting X to center the group
+        const groupStartX = leftCenterX - totalPhoneWidth / 2;
+        
+        // Draw Phone Icon
+        ctx.save();
+        const iconY = phoneY - 42; // Center vertically relative to text cap height
+        ctx.translate(groupStartX, iconY);
+        const iconScale = phoneIconSize / 24;
+        ctx.scale(iconScale, iconScale);
+        ctx.fillStyle = textBlack;
+        // Simple filled phone handset
+        const phoneIconPath = new Path2D("M6.62 10.79c1.44 2.83 3.76 5.15 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z");
+        ctx.fill(phoneIconPath);
+        ctx.restore();
 
-        // B. Dynamic Logo Section & C. Business Name (Centered Group)
-        // Calculate available vertical space for the Logo+Name group
+        // Draw Phone Text
+        ctx.textAlign = 'left'; // Switch to left align for precise placement
+        ctx.fillText(displayPhone, groupStartX + phoneIconSize + phoneGap, phoneY);
+
+        // B. Dynamic Logo Section & C. Business Name (Centered Group) (unchanged below)
         // Top limit: "MAINTAINED BY" (y=40) + approx 40px height -> y=80
         // Bottom limit: Phone Number (y=height-35) - approx 50px height -> y=height-85
         // Total available height ~ 360px (525 - 85 - 80)
@@ -767,7 +787,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
         // F. RED HEADER BLOCK: "NEXT SERVICE DUE"
         // Tighter vertical spacing
-        const widgetY = 100; 
+        const widgetY = 115; 
         const widgetW = 580; 
         const widgetH = 200; // Slightly shorter
         const headerH = 65; 
@@ -846,7 +866,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
 
         // G. "DATE CLEANED:" Link (Below Widget)
-        const dateCleanedY = widgetY + widgetH + 70;
+        const dateCleanedY = widgetY + widgetH + 75;
         ctx.fillStyle = textBlack; 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
@@ -871,7 +891,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textBaseline = 'bottom';
         
         // Line 1: "Scan to activate"
-        const ctaLine1Y = ctaY - 45;
+        const ctaLine1Y = ctaY - 60;
         ctx.fillStyle = '#0f172a'; // Slate 900 / Navy
         ctx.font = '800 38px "Inter", "Arial", sans-serif';
         ctx.fillText('Scan to activate', contentX, ctaLine1Y);
@@ -880,7 +900,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillStyle = '#DC2626'; // Red 600
         ctx.font = '900 46px "Inter", "Arial Black", sans-serif';
         // Add arrow symbol instead of just text >
-        ctx.fillText('FREE 30-day warranty ►', contentX, ctaY + 8);
+        ctx.fillText('FREE 30-day warranty ►', contentX, ctaY);
 
 
         // --- QR CODE AREA ---

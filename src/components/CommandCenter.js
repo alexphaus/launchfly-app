@@ -545,7 +545,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const canvas = document.createElement('canvas');
         // Landscape orientation ~2.8:1 ratio (Sleek bumper sticker size)
         const width = 1800;
-        const height = 640;
+        // Reduced height by another 10% (580 -> ~525)
+        const height = 525;
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -699,7 +700,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         });
 
         // D. Phone (Big & Bold)
-        const phoneY = height - 55;
+        // Adjusted Y for new height
+        const phoneY = height - 40;
         const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
         const displayPhone = safePhone.startsWith('+') ? safePhone : `+${safePhone}`;
         
@@ -711,141 +713,144 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // --- RIGHT SIDE CONTENT (Action Widget) ---
         const rightPad = 70; 
         const contentX = splitX + rightPad;
-        const qrSize = 380; 
+        const qrSize = 340; // Reduced for new height
         // Available width for text content before hitting QR
         const availableTextW = (width - qrSize - 60) - contentX - 20;
 
         // E. "OFFICIAL SERVICE PARTNER"
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillStyle = '#475569'; // Slate 600
-        ctx.font = '800 30px "Inter", "Arial", sans-serif'; 
-        ctx.fillText('OFFICIAL SERVICE PARTNER', contentX, 45);
+        ctx.fillStyle = '#334155'; // Slate 700
+        ctx.font = '800 32px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('OFFICIAL SERVICE PARTNER', contentX, 30); // Compact top
 
         // F. RED HEADER BLOCK: "NEXT SERVICE DUE"
-        // This is the main "Widget"
-        const widgetY = 110;
-        const widgetW = 560; // Fixed width for the sticker layout
-        const widgetH = 210;
-        const headerH = 75; // Height of the red part
+        // Tighter vertical spacing
+        const widgetY = 75; 
+        const widgetW = 580; 
+        const widgetH = 200; // Slightly shorter
+        const headerH = 65; 
 
-        // 1. Red Header Rounded Top
-        ctx.fillStyle = '#DC2626'; // Red 600
-        ctx.beginPath();
-        ctx.roundRect(contentX, widgetY, widgetW, widgetH, 20);
-        ctx.fill();
-
-        // 2. White Body (Bottom Part)
+        // 1. Draw Container Body (White with Red Border)
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        // Draw rect over bottom part, but keep bottom rounded corners
-        // Easy way: round rect full white, then draw red top header
-        // Let's redo:
+        // Slightly less rounded, more boxy like screenshot
+        ctx.roundRect(contentX, widgetY, widgetW, widgetH, 12);
+        ctx.fill();
         
-        // Full Container (White with Red Border)
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.roundRect(contentX, widgetY, widgetW, widgetH, 16);
-        ctx.fill();
-        // Red Border
-        ctx.strokeStyle = '#DC2626'; 
-        ctx.lineWidth = 6;
+        // Thick Red Border
+        ctx.strokeStyle = '#DC2626'; // Red 600
+        ctx.lineWidth = 12; // Thicker border
         ctx.stroke();
 
-        // Header Fill (Red)
+        // 2. Header Fill (Red) - Overwrites top border to be solid
         ctx.fillStyle = '#DC2626';
         ctx.beginPath();
-        ctx.roundRect(contentX, widgetY, widgetW, headerH, [12, 12, 0, 0]); // Top corners only
+        ctx.roundRect(contentX, widgetY, widgetW, headerH, [8, 8, 0, 0]); // Top corners only
         ctx.fill();
 
         // Header Text "NEXT SERVICE DUE"
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = '800 42px "Inter", "Arial", sans-serif';
+        ctx.font = '900 46px "Inter", "Arial Black", sans-serif'; // Slightly smaller font
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
+        // Add subtle shadow to text for "punched out" look
+        ctx.shadowColor = "rgba(0,0,0,0.2)";
+        ctx.shadowBlur = 4;
         ctx.fillText('NEXT SERVICE DUE', contentX + widgetW/2, widgetY + headerH/2 + 2);
+        ctx.shadowColor = "transparent"; // Reset
 
-        // Calendar Icon (Left of text)
-        // Simple shape or path
-        const calSize = 36;
-        const calX = contentX + 45;
-        const calY = widgetY + headerH/2;
+        // 3. Calendar Icon (Inside the White Body on Left)
+        const bodyCenterY = widgetY + headerH + (widgetH - headerH)/2;
+        
         ctx.save();
+        const calSize = 70; // Adjusted size
+        const calX = contentX + 50; 
+        const calY = bodyCenterY;
+        
         ctx.translate(calX, calY);
-        ctx.fillStyle = '#FFFFFF';
-        // Simple Calendar Path
+        // Calendar Path (Red Color)
+        ctx.fillStyle = '#DC2626'; // Match border color
         const calPath = new Path2D("M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z");
-        ctx.scale(1.5, 1.5);
-        ctx.translate(-12, -12); // Center path
+        // Center the path (original is 24x24)
+        const scale = calSize / 24;
+        ctx.scale(scale, scale);
+        ctx.translate(-12, -12); 
         ctx.fill(calPath);
+        
+        // Draw grid inside calendar (white) to look like dates
+        ctx.fillStyle = '#FFFFFF';
+        // Small rectangles for dates
+        ctx.fillRect(7, 12, 2, 2);
+        ctx.fillRect(11, 12, 2, 2);
+        ctx.fillRect(15, 12, 2, 2);
+        ctx.fillRect(7, 16, 2, 2);
+        ctx.fillRect(11, 16, 2, 2);
+        ctx.fillRect(15, 16, 2, 2);
         ctx.restore();
 
-
-        // Writeable Area (Inside the white box)
+        // 4. Writeable Area Placeholders
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#CBD5E1'; // Light grey placeholder
+        ctx.fillStyle = '#CBD5E1'; // Light grey
         ctx.font = '500 50px "Courier New", monospace'; 
-        const bodyCenterY = widgetY + headerH + (widgetH - headerH)/2;
-        // Placeholder Lines
-        // ___ / ___ / ___
-        // Actually better is just blank space with small dividers
+        
+        // Shift '/' to the right since calendar is on the left
+        const dateAreaStart = contentX + 110;
+        const dateAreaW = widgetW - 110;
+        const dateCenter = dateAreaStart + dateAreaW/2;
+        
         ctx.fillStyle = '#94A3B8'; // Slate 400
-        ctx.fillText('/         /', contentX + widgetW/2, bodyCenterY);
+        ctx.fillText('/         /', dateCenter, bodyCenterY);
 
-        // G. "DATE CLEANED:" Link
-        const dateCleanedY = widgetY + widgetH + 30;
+
+        // G. "DATE CLEANED:" Link (Below Widget)
+        const dateCleanedY = widgetY + widgetH + 32;
         ctx.fillStyle = textBlack; 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.font = '700 32px "Inter", "Arial", sans-serif'; 
+        ctx.font = '700 34px "Inter", "Arial", sans-serif'; 
         ctx.fillText('DATE CLEANED:', contentX, dateCleanedY);
         // Underline
         ctx.strokeStyle = '#94A3B8';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2; // Thicker line
         ctx.beginPath();
-        ctx.moveTo(contentX + 270, dateCleanedY);
+        const lineStart = contentX + 300; 
+        ctx.moveTo(lineStart, dateCleanedY);
         ctx.lineTo(contentX + widgetW, dateCleanedY);
         ctx.stroke();
 
-        // H. CTA BUTTON (Bottom Left - Red Pill)
-        // "Scan to activate FREE 30-day warranty >"
-        const btnY = height - 85;
-        const btnH = 65;
-        const btnW = widgetW; // Match widget width
+        // H. CTA TEXT (Bottom Left) - Replaces Button Pill
+        // "Scan to activate" (Navy Blue)
+        // "FREE 30-day warranty >" (Red, Bold)
         
-        // Gradient Button (Deep Red -> Bright Red)
-        const btnGrad = ctx.createLinearGradient(contentX, 0, contentX + btnW, 0);
-        btnGrad.addColorStop(0, '#B91C1C'); // Red 700
-        btnGrad.addColorStop(1, '#DC2626'); // Red 600
-        ctx.fillStyle = btnGrad;
+        const ctaY = height - 35; // Tighter bottom margin
         
-        ctx.beginPath();
-        ctx.roundRect(contentX, btnY, btnW, btnH, 32); // Pill shape
-        ctx.fill();
-        
-        // Button Text
-        ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
+        ctx.textBaseline = 'bottom';
         
-        // "Scan to activate" (Thin)
-        ctx.font = '500 28px "Inter", "Arial", sans-serif';
-        ctx.fillText('Scan to activate', contentX + 25, btnY + btnH/2);
+        // Line 1: "Scan to activate"
+        const ctaLine1Y = ctaY - 45;
+        ctx.fillStyle = '#0f172a'; // Slate 900 / Navy
+        ctx.font = '800 38px "Inter", "Arial", sans-serif';
+        ctx.fillText('Scan to activate', contentX, ctaLine1Y);
         
-        // "FREE 30-day warranty >" (Bold)
-        ctx.font = '800 28px "Inter", "Arial", sans-serif';
-        const part1W = ctx.measureText('Scan to activate ').width;
-        ctx.fillText('FREE 30-day warranty ►', contentX + 25 + part1W, btnY + btnH/2);
+        // Line 2: "FREE 30-day warranty >"
+        ctx.fillStyle = '#DC2626'; // Red 600
+        ctx.font = '900 46px "Inter", "Arial Black", sans-serif';
+        // Add arrow symbol instead of just text >
+        ctx.fillText('FREE 30-day warranty ►', contentX, ctaY + 8);
 
 
         // --- QR CODE AREA ---
-        const qrX = width - qrSize - 60; 
-        const qrY = (height - qrSize) / 2 - 10; 
+        // Adjusted for new compact height
+        const qrSizeAdjusted = 340; 
+        const qrX = width - qrSizeAdjusted - 60; 
+        const qrY = (height - qrSizeAdjusted) / 2 - 10; 
 
         try {
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
-                width: qrSize,
+                width: qrSizeAdjusted,
                 margin: 0,
                 errorCorrectionLevel: 'M',
                 color: { dark: '#111111', light: '#00000000' }
@@ -854,12 +859,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             const qrImg = new Image();
             qrImg.src = qrDataUrl;
             await new Promise((resolve) => { qrImg.onload = resolve; });
-            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+            ctx.drawImage(qrImg, qrX, qrY, qrSizeAdjusted, qrSizeAdjusted);
 
             // WhatsApp Icon Overlay
-            const iconSize = qrSize * 0.20; 
-            const iconX = qrX + qrSize / 2;
-            const iconY = qrY + qrSize / 2;
+            const iconSize = qrSizeAdjusted * 0.20; 
+            const iconX = qrX + qrSizeAdjusted / 2;
+            const iconY = qrY + qrSizeAdjusted / 2;
 
             ctx.beginPath();
             ctx.arc(iconX, iconY, iconSize / 2 + 8, 0, Math.PI * 2);
@@ -881,11 +886,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.fill(phonePath);
             ctx.restore();
 
-            // Bottom Label for QR
+            // Bottom Label for QR - "SCAN TO BOOK"
             ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
             ctx.fillStyle = textBlack; 
-            ctx.font = '800 32px "Inter", "Arial", sans-serif'; 
-            ctx.fillText('SCAN TO BOOK', qrX + qrSize/2, qrY + qrSize + 40);
+            ctx.font = '800 28px "Inter", "Arial", sans-serif'; 
+            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted/2, qrY + qrSizeAdjusted + 20);
 
             // Download
             const link = document.createElement('a');

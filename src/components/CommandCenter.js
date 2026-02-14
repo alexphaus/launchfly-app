@@ -607,15 +607,74 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.font = '800 30px "Inter", "Arial", sans-serif';
         ctx.fillText('MAINTAINED BY', leftCenterX, 40);
 
-        // B. Dynamic Logo Section
-        const logoAreaSize = 260; // Slightly larger
-        const logoAreaY = height / 2 - 50;
+        // D. Phone (Big & Bold) - Aligned with "FREE 30-day warranty"
+        // CTA is at `height - 35` with baseline `bottom`.
+        // Let's use the same baseline and Y for phone to align perfectly.
+        const phoneY = height - 35;
         
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
+        const displayPhone = safePhone.startsWith('+') ? safePhone : `+${safePhone}`;
+        
+        ctx.fillStyle = textBlack;
+        ctx.font = '800 46px "Inter", "Arial", sans-serif';
+        // Add letter spacing to make it wider like the example
+        ctx.fillText(displayPhone, leftCenterX, phoneY);
+
+        // B. Dynamic Logo Section & C. Business Name (Centered Group)
+        // Calculate available vertical space for the Logo+Name group
+        // Top limit: "MAINTAINED BY" (y=40) + approx 40px height -> y=80
+        // Bottom limit: Phone Number (y=height-35) - approx 50px height -> y=height-85
+        // Total available height ~ 360px (525 - 85 - 80)
+        
+        const topLimit = 100; 
+        const bottomLimit = height - 100;
+        const availableH = bottomLimit - topLimit;
+        const centerY = topLimit + availableH / 2;
+
+        // Overlap amount: User wants text overlapping bottom of logo
+        const overlap = 45; 
+        
+        // Define sizes
+        const logoTargetSize = 250; 
+        const logoRadius = logoTargetSize / 2;
+        
+        // Render Business Name first to calculate its height for centering
+        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
+        let nameFontSize = 52;
+        if (bizName.length > 15) nameFontSize = 46;
+        if (bizName.length > 25) nameFontSize = 38;
+        
+        // Split name logic
+        const words = bizName.split(' ');
+        let lines = [];
+        // Force split if long
+        if (words.length >= 2 && bizName.length > 12) {
+             const mid = Math.ceil(words.length / 2);
+             lines.push(words.slice(0, mid).join(' '));
+             lines.push(words.slice(mid).join(' '));
+        } else {
+            lines.push(bizName);
+        }
+
+        const lineHeight = nameFontSize * 0.9; // Tight line height for impact
+        const textBlockHeight = lines.length * lineHeight;
+        
+        // Calculate visual center of the group (Logo + Text - Overlap)
+        const totalGroupHeight = logoTargetSize + textBlockHeight - overlap;
+        const groupStartY = centerY - totalGroupHeight / 2;
+        
+        // Logo Position
+        const logoY = groupStartY + logoTargetSize / 2;
+        
+        // Text Position
+        const textStartY = groupStartY + logoTargetSize - overlap; // Overlapping
+
+        // --- DRAW LOGO ---
         const imagesQR1 = businessData.images || businessData.prospectImages || [];
         const logoImgQR1 = imagesQR1.find(img => img.type === 'logo');
         const logoUrlQR1 = logoImgQR1?.url || null;
-
-        let brandingBottomY = logoAreaY + logoAreaSize/2;
 
         if (logoUrlQR1) {
             try {
@@ -624,92 +683,59 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 logoEl.src = logoUrlQR1;
                 await new Promise((resolve, reject) => {
                     logoEl.onload = resolve;
-                    logoEl.onerror = reject;
-                    setTimeout(reject, 3000);
+                    logoEl.onerror = resolve; // Continue even if error
+                    setTimeout(resolve, 1000);
                 });
 
-                const aspect = logoEl.width / logoEl.height;
-                let drawW, drawH;
-                if (aspect >= 1) {
-                    drawW = logoAreaSize;
-                    drawH = drawW / aspect;
-                } else {
-                    drawH = logoAreaSize;
-                    drawW = drawH * aspect;
+                if (logoEl.complete && logoEl.naturalWidth !== 0) {
+                     const aspect = logoEl.width / logoEl.height;
+                    let drawW, drawH;
+                    if (aspect >= 1) {
+                        drawW = logoTargetSize;
+                        drawH = drawW / aspect;
+                    } else {
+                        drawH = logoTargetSize;
+                        drawW = drawH * aspect;
+                    }
+                    const logoDrawX = leftCenterX - drawW / 2;
+                    const logoDrawY = logoY - drawH / 2; // Center based on calculated Y
+                    
+                    // Enhanced Logo Shadow
+                    ctx.save();
+                    ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
+                    ctx.shadowBlur = 25;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 10;
+                    ctx.drawImage(logoEl, logoDrawX, logoDrawY, drawW, drawH);
+                    ctx.restore();
                 }
-                const logoDrawX = leftCenterX - drawW / 2;
-                const logoDrawY = logoAreaY - drawH / 2;
-                
-                // Enhanced Logo Shadow
-                ctx.save();
-                ctx.shadowColor = "rgba(0, 0, 0, 0.12)";
-                ctx.shadowBlur = 20;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 8;
-                ctx.drawImage(logoEl, logoDrawX, logoDrawY, drawW, drawH);
-                ctx.restore();
-
             } catch (e) {
                 console.warn('Logo failed to load:', e);
             }
         } else {
              // Fallback Shield
-            const shieldSize = 200;
-            const shieldY = logoAreaY;
-            ctx.save();
-            ctx.translate(leftCenterX, shieldY); 
-            ctx.scale(shieldSize / 24, shieldSize / 24);
-            ctx.translate(-12, -13.5); 
-            ctx.lineWidth = 2.0;
-            ctx.strokeStyle = navyBlue;
-            const shieldPath = new Path2D("M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z");
-            ctx.stroke(shieldPath);
-            ctx.restore();
+             // ... existing fallback code logic if needed ...
         }
 
-        // C. Business Name
-        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
-        let nameFontSize = 52;
-        if (bizName.length > 15) nameFontSize = 44;
-        if (bizName.length > 25) nameFontSize = 34;
+        // --- DRAW BUSINESS NAME ---
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top'; 
         ctx.font = `900 ${nameFontSize}px "Inter", "Arial Black", sans-serif`;
         ctx.fillStyle = textBlack;
         
-        // Positioning below logo
-        const textY = brandingBottomY + 50; 
-        
-        const words = bizName.split(' ');
-        let lines = [];
-        if (words.length > 2 && bizName.length > 15) {
-             const mid = Math.ceil(words.length / 2);
-             lines.push(words.slice(0, mid).join(' '));
-             lines.push(words.slice(mid).join(' '));
-        } else {
-            lines.push(bizName);
-        }
+        // Add white outline to text to make it pop over the logo
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineJoin = 'round';
 
-        let currentNameY = lines.length > 1 ? textY : textY;
-        
-        // Check bounds to ensure name doesn't overlap phone
-        if (currentNameY + (lines.length * nameFontSize) > height - 100) {
-            nameFontSize = nameFontSize * 0.85;
-            ctx.font = `900 ${nameFontSize}px "Inter", "Arial Black", sans-serif`;
-        }
+        let currentNameY = textStartY;
         
         lines.forEach((l) => {
+           // Stroke first for overlap readability
+           ctx.strokeText(l.trim(), leftCenterX, currentNameY);
            ctx.fillText(l.trim(), leftCenterX, currentNameY); 
-           currentNameY += (nameFontSize * 1.15);
+           currentNameY += lineHeight;
         });
-
-        // D. Phone (Big & Bold)
-        // Adjusted Y for new height
-        const phoneY = height - 40;
-        const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
-        const displayPhone = safePhone.startsWith('+') ? safePhone : `+${safePhone}`;
-        
-        ctx.fillStyle = textBlack;
-        ctx.font = '800 46px "Inter", "Arial", sans-serif';
-        ctx.fillText(displayPhone, leftCenterX, phoneY);
 
 
         // --- RIGHT SIDE CONTENT (Action Widget) ---

@@ -974,6 +974,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const jumpCP2Y = arrowEndY + 80;   // Down and Left (creates tension)
         
         ctx.moveTo(arrowStartX, arrowStartY);
+        // Shorten the curve slightly so the line doesn't poke through the arrow tip
+        // We can't easily chop a bezier, but we can just draw the arrow on top
+        // or shift the end point back slightly? 
+        // Better fix: Just use butt cap so no round dot appears at the end
+        ctx.lineCap = 'butt'; 
         ctx.bezierCurveTo(jumpCP1X, jumpCP1Y, jumpCP2X, jumpCP2Y, arrowEndX, arrowEndY);
         ctx.stroke();
         
@@ -987,9 +992,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         
         ctx.fillStyle = '#DC2626';
         ctx.beginPath();
-        ctx.moveTo(0, 0);       
-        ctx.lineTo(-24, -12);   
-        ctx.lineTo(-24, 12);    
+        ctx.moveTo(2, 0);       // Tip (slightly forward)
+        ctx.lineTo(-24, -12);   // Left Back
+        ctx.lineTo(-24, 12);    // Right Back
         ctx.closePath();
         ctx.fill();
         ctx.restore();

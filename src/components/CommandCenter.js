@@ -2,12 +2,12 @@
 // Mobile-first Command Center Dashboard - "The WhatsApp OS for Service Pros"
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
     Settings, Snowflake, Wrench, MessageCircle, CheckCircle,
     Calendar, Megaphone, QrCode, Bot, Phone, Clock, X,
-    Zap, TrendingUp, Users, ChevronRight, Download
+    Zap, TrendingUp, Users, ChevronRight, Download, Upload, Trash2, Image as ImageIcon
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import RevenuePulse from './RevenuePulse';
@@ -58,6 +58,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const [maxPerWindow, setMaxPerWindow] = useState(
         business?.slot_settings?.max_per_window || 3
     );
+
+    // Logo upload state
+    const logoFileRef = useRef(null);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+    const existingImages = business?.business_data?.images || business?.business_data?.prospectImages || [];
+    const existingLogo = existingImages.find(img => img.type === 'logo');
+    const [currentLogoUrl, setCurrentLogoUrl] = useState(existingLogo?.url || null);
 
     // Wallet/Credits state
     const [blastCredits, setBlastCredits] = useState(business?.blast_credits || 0);
@@ -1120,6 +1127,343 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         }
     };
 
+    // Download QR - "Simple Warranty" Sticker Design
+    // CONCEPT: Clean, bold, 2-column layout. High contrast for readability.
+    const downloadQR3 = async () => {
+        // Launchfly Bot WhatsApp number
+        const launchflyBotNumber = '13203627874';
+        
+        // Include business ref in trigger message
+        const businessRef = business?.subdomain || business?.id;
+        const stickerTrigger = `Hi! I want to activate my Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
+        
+        const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
+
+        const canvas = document.createElement('canvas');
+        // Landscape orientation
+        const width = 1800;
+        // Reduced height by ~10% (640 -> 580)
+        const height = 580;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // --- COLORS ---
+        const navyBlue = '#0F172A';     // Deep Slate/Navy (Text)
+        const activeGreen = '#22C55E';  // Bright Green (Checkmark, Phone)
+        const textBlack = '#111111';
+        const textGray = '#64748B';     // Slate-500
+        const brandWhite = '#FFFFFF';
+
+        // 1. ROUNDED CORNERS CLIP
+        const radius = 30;
+        ctx.beginPath();
+        ctx.roundRect(0, 0, width, height, radius);
+        ctx.clip();
+
+        // 2. BACKGROUND (White)
+        ctx.fillStyle = brandWhite;
+        ctx.fillRect(0, 0, width, height);
+        
+        // Optional: Very light grey border
+        ctx.strokeStyle = '#E2E8F0';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, width-2, height-2);
+
+        // --- LEFT SECTION ---
+        const leftMargin = 80;
+        const topMargin = 70;
+
+        // Pre-load logo so we know if we need to shift text
+        const images = businessData.images || businessData.prospectImages || [];
+        const logoImage = images.find(img => img.type === 'logo');
+        const logoUrl = logoImage?.url || null;
+        let logoLoadedImg = null;
+
+        if (logoUrl) {
+            try {
+                const tmpImg = new Image();
+                tmpImg.crossOrigin = 'anonymous';
+                tmpImg.src = logoUrl;
+                await new Promise((resolve, reject) => {
+                    tmpImg.onload = resolve;
+                    tmpImg.onerror = reject;
+                    setTimeout(reject, 3000);
+                });
+                logoLoadedImg = tmpImg;
+            } catch (e) {
+                console.warn('Logo failed to load for sticker:', e);
+            }
+        }
+
+        // Calculate logo size (match HEIGHT of WARRANTY ACTIVE title block)
+        const titleBlockH = 245; // WARRANTY (130) + gap (115) = ACTIVE bottom
+        let logoDrawW = 0;
+        let logoPadding = 0;
+
+        if (logoLoadedImg) {
+            const aspect = logoLoadedImg.width / logoLoadedImg.height;
+            const drawH = titleBlockH;
+            const drawW = drawH * aspect;
+            logoDrawW = Math.min(drawW, 260); // Cap max width
+            logoPadding = logoDrawW + 30; // Space between logo and text
+        }
+
+        const textLeft = leftMargin + logoPadding; // Shift text right if logo present
+        
+        // A. "OFFICIAL SERVICE RECORD"
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = textGray;
+        ctx.font = '700 36px "Inter", "Arial", sans-serif'; 
+        ctx.fillText('OFFICIAL SERVICE RECORD', textLeft, topMargin);
+
+        // B. "WARRANTY" (Huge, Black)
+        const warrantyY = topMargin + 60;
+        ctx.fillStyle = textBlack;
+        ctx.font = '900 130px "Inter", "Arial Black", sans-serif';
+        ctx.fillText('WARRANTY', textLeft, warrantyY);
+
+        // C. "ACTIVE" + Checkmark
+        const activeY = warrantyY + 115;
+        ctx.fillStyle = textBlack;
+        ctx.fillText('ACTIVE', textLeft, activeY);
+        
+        // Measure "ACTIVE" to place checkmark
+        const activeWidth = ctx.measureText('ACTIVE').width;
+        
+        // Checkmark Icon (Green Circle with white check)
+        const checkSize = 90;
+        const checkX = textLeft + activeWidth + 45;
+        const checkY = activeY + 60; 
+        
+        // Green Circle
+        ctx.beginPath();
+        ctx.arc(checkX, checkY, checkSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = activeGreen;
+        ctx.fill();
+        
+        // White Checkmark
+        ctx.strokeStyle = brandWhite;
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(checkX - 18, checkY + 4);
+        ctx.lineTo(checkX - 4, checkY + 18);
+        ctx.lineTo(checkX + 22, checkY - 18);
+        ctx.stroke();
+
+        // Draw logo to the left of WARRANTY ACTIVE, sized to match title height
+        if (logoLoadedImg) {
+            const aspect = logoLoadedImg.width / logoLoadedImg.height;
+            let drawH = titleBlockH;
+            let drawW = drawH * aspect;
+            if (drawW > 260) { drawW = 260; drawH = drawW / aspect; }
+            const logoX = leftMargin;
+            const logoY = warrantyY + (titleBlockH - drawH) / 2; // Vertically center with title
+            ctx.drawImage(logoLoadedImg, logoX, logoY, drawW, drawH);
+        }
+
+        // D. "AUTHORIZED SERVICE PARTNER"
+        // Slightly reordered per user request, but still below Active
+        const partnerY = activeY + 140; 
+        ctx.fillStyle = navyBlue;
+        ctx.font = '800 38px "Inter", "Arial", sans-serif';
+        ctx.fillText('AUTHORIZED SERVICE PARTNER', textLeft, partnerY);
+
+        // E. Business Name (logo is now next to WARRANTY ACTIVE)
+        const bizNameY = partnerY + 50;
+        const bizName = (business?.name || 'YOUR BUSINESS NAME').toUpperCase();
+        let nameSize = 58;
+        if (bizName.length > 20) nameSize = 48;
+        if (bizName.length > 30) nameSize = 38;
+
+        ctx.fillStyle = '#334155';
+        ctx.font = `900 ${nameSize}px "Inter", "Arial Black", sans-serif`;
+        ctx.fillText(bizName, textLeft, bizNameY);
+
+        // F. Hotline - Pushed to absolute bottom left
+        const hotlineY = height - 70; // Adjusted for new height
+        const formatPhone = (p) => {
+             if (!p) return '';
+             return p.startsWith('+') ? p : `+${p}`;
+        };
+        const displayPhone = formatPhone(business?.whatsapp_number || business?.phone_number || businessData?.phone || '639627459049');
+        
+        ctx.fillStyle = textBlack;
+        ctx.font = '800 44px "Inter", "Arial", sans-serif';
+        ctx.fillText(displayPhone, textLeft, hotlineY);
+
+        // --- RIGHT SECTION ---
+        // QR Code Area
+        const qrSize = 380; // Scaled down for height
+        const qrX = width - qrSize - 100; // Increased right margin
+        // Center vertically relative to whole canvas
+        const qrY = (height - qrSize) / 2 + 15; // Shifted down slightly
+
+        // Top Right Label: "24/7 SUPPORT"
+        // Positioned relative to QR top
+        const trY = qrY - 50;
+        const trX = qrX + (qrSize / 2); // Center over QR
+        ctx.textAlign = 'center';
+        ctx.fillStyle = navyBlue;
+        ctx.font = '800 36px "Inter", "Arial", sans-serif';
+        ctx.fillText('24/7 SUPPORT', trX, trY);
+
+        try {
+            // Generate QR
+            const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
+                width: qrSize,
+                margin: 1,
+                errorCorrectionLevel: 'H',
+                color: { dark: '#000000', light: '#00000000' }
+            });
+
+            const qrImg = new Image();
+            qrImg.src = qrDataUrl;
+            await new Promise((resolve) => { qrImg.onload = resolve; });
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            // Icon Overlay (Phone Green)
+            const iconSize = qrSize * 0.22;
+            const iconX = qrX + qrSize / 2;
+            const iconY = qrY + qrSize / 2;
+
+            // White border circle
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize / 2 + 10, 0, Math.PI * 2);
+            ctx.fillStyle = brandWhite;
+            ctx.fill();
+
+            // Green circle
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = activeGreen;
+            ctx.fill();
+
+            // Phone Icon
+            const s = iconSize * 0.55;
+            ctx.fillStyle = brandWhite;
+            ctx.save();
+            ctx.translate(iconX, iconY);
+            ctx.scale(s / 24, s / 24);
+            ctx.translate(-12, -12);
+            // Simple Phone Path
+            const phonePath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+            ctx.fill(phonePath);
+            ctx.restore();
+
+            // Bottom Text: "Scan to Verify Warranty & Book Service"
+            const bottomTextY = qrY + qrSize + 20;
+            ctx.fillStyle = textBlack;
+            ctx.font = '600 24px "Inter", "Arial", sans-serif';
+            ctx.fillText('SCAN TO ACTIVATE WARRANTY', trX, bottomTextY);
+            //ctx.fillText('& Book Service', trX, bottomTextY + 32);
+
+            // Download
+            const link = document.createElement('a');
+            const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
+            link.download = `${safeName}_Warranty_Active.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (err) {
+            console.error('Error creating warranty active sticker:', err);
+            alert('Failed to generate sticker.');
+        }
+    };
+
+    // Upload logo handler
+    const handleLogoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Image must be under 5MB');
+            return;
+        }
+
+        setUploadingLogo(true);
+        try {
+            // 1. Upload to Supabase storage via the existing API
+            const formData = new FormData();
+            formData.append('files', file);
+            const uploadRes = await fetch('/api/sales/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const uploadData = await uploadRes.json();
+            if (!uploadRes.ok) throw new Error(uploadData.error || 'Upload failed');
+
+            const newLogoUrl = uploadData.images[0]?.url;
+            if (!newLogoUrl) throw new Error('No URL returned');
+
+            // 2. Update business_data: replace or add logo entry in images array
+            const currentData = business?.business_data || {};
+            const currentImages = currentData.images || currentData.prospectImages || [];
+            // Remove old logo entries
+            const filtered = currentImages.filter(img => img.type !== 'logo');
+            // Add new logo
+            filtered.push({ url: newLogoUrl, type: 'logo', name: file.name });
+
+            // Save to correct field (images or prospectImages)
+            const imageField = currentData.images ? 'images' : 'prospectImages';
+            const updatedData = { ...currentData, [imageField]: filtered };
+
+            const { error } = await supabase
+                .from('businesses')
+                .update({ business_data: updatedData })
+                .eq('id', business.id);
+
+            if (error) throw error;
+
+            setCurrentLogoUrl(newLogoUrl);
+            // Update the in-memory business object too
+            if (business.business_data) {
+                business.business_data[imageField] = filtered;
+            }
+            alert('✅ Logo uploaded successfully!');
+        } catch (err) {
+            console.error('Logo upload error:', err);
+            alert('❌ Failed to upload logo: ' + err.message);
+        } finally {
+            setUploadingLogo(false);
+            if (logoFileRef.current) logoFileRef.current.value = '';
+        }
+    };
+
+    // Remove logo handler
+    const handleRemoveLogo = async () => {
+        if (!confirm('Remove business logo?')) return;
+        try {
+            const currentData = business?.business_data || {};
+            const currentImages = currentData.images || currentData.prospectImages || [];
+            const filtered = currentImages.filter(img => img.type !== 'logo');
+            const imageField = currentData.images ? 'images' : 'prospectImages';
+            const updatedData = { ...currentData, [imageField]: filtered };
+
+            const { error } = await supabase
+                .from('businesses')
+                .update({ business_data: updatedData })
+                .eq('id', business.id);
+
+            if (error) throw error;
+            setCurrentLogoUrl(null);
+            if (business.business_data) {
+                business.business_data[imageField] = filtered;
+            }
+        } catch (err) {
+            console.error('Remove logo error:', err);
+            alert('Failed to remove logo');
+        }
+    };
+
     // Count old leads for blast
     const oldLeadsCount = leads.filter(l => {
         const hoursSince = (Date.now() - new Date(l.created_at)) / (1000 * 60 * 60);
@@ -1444,6 +1788,25 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     <button
                         onClick={downloadQR}
                         className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
+                    >
+                        Download
+                    </button>
+                </div>
+
+                {/* QR Download - Warranty Active */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                            <QrCode className="w-5 h-5 text-green-700" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-sm text-slate-900">Warranty Active Sticker</h3>
+                            <p className="text-xs text-slate-500">Official Warranty Label</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={downloadQR3}
+                        className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
                     >
                         Download
                     </button>
@@ -1885,6 +2248,66 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                 </div>
                                 <ChevronRight className="w-5 h-5 text-blue-400" />
                             </button>
+
+                            {/* Logo Upload Section */}
+                            <div className="border-t pt-4 mt-2">
+                                <p className="text-xs font-bold text-slate-500 uppercase mb-3">Business Logo</p>
+                                {currentLogoUrl ? (
+                                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                                        <img
+                                            src={currentLogoUrl}
+                                            alt="Business logo"
+                                            className="w-14 h-14 object-contain rounded-lg border border-slate-200 bg-white"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-slate-700 truncate">Logo uploaded</p>
+                                            <p className="text-xs text-green-600">✓ Will appear on stickers</p>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => logoFileRef.current?.click()}
+                                                className="p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+                                                title="Replace logo"
+                                            >
+                                                <Upload className="w-4 h-4 text-slate-500" />
+                                            </button>
+                                            <button
+                                                onClick={handleRemoveLogo}
+                                                className="p-2 bg-white rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+                                                title="Remove logo"
+                                            >
+                                                <Trash2 className="w-4 h-4 text-red-500" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => logoFileRef.current?.click()}
+                                        disabled={uploadingLogo}
+                                        className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                                    >
+                                        {uploadingLogo ? (
+                                            <>
+                                                <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                                                <span className="text-sm text-slate-500">Uploading...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ImageIcon className="w-5 h-5 text-slate-400" />
+                                                <span className="text-sm font-medium text-slate-600">Upload Logo</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                                <input
+                                    ref={logoFileRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleLogoUpload}
+                                    className="hidden"
+                                />
+                                <p className="text-xs text-slate-400 mt-2">PNG or JPG, max 5MB. Appears on warranty stickers.</p>
+                            </div>
                         </div>
                     </div>
                 </div>

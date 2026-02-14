@@ -615,7 +615,19 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
-        const displayPhone = safePhone.startsWith('+') ? safePhone : `+${safePhone}`;
+        
+        // Normalize: Remove non-digits, keep leading +
+        let raw = safePhone.replace(/[^0-9+]/g, '');
+        
+        // Smart Local Format: Replace known country codes (+63, +61, +60, etc) with '0'
+        // Matches + followed by 2 digits for stripped target countries
+        let displayPhone = raw.replace(/^\+(\d{2})/, '0');
+        
+        // Formatting: Group digits for readability (e.g. 0917 123 4567)
+        if (displayPhone.length > 8) {
+           // 4-3-4 pattern common in these regions or just chunks
+           displayPhone = displayPhone.replace(/(\d{4})(\d{3})?(\d{4})?/, '$1 $2 $3').trim();
+        }
         
         ctx.fillStyle = textBlack;
         ctx.font = '600 45px "Inter", "Arial", sans-serif';

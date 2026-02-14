@@ -528,9 +528,308 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         }
     };
 
-    // Download QR - Maintenance Record Sticker Design
-    // CONCEPT: "The Silver Badge" (Premium & Trustworthy)
+    // ==========================================
+    // NEW SILVER/BLUE METALLIC DESIGN (Active)
+    // ==========================================
     const downloadQR = async () => {
+        // Launchfly Bot WhatsApp number - the central AI receptionist
+        const launchflyBotNumber = '13203627874';
+        
+        // Include business ref in trigger message so bot knows which business context to use
+        // Use subdomain if available (shorter), otherwise fall back to UUID
+        const businessRef = business?.subdomain || business?.id;
+        const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
+        
+        // Primary: Launchfly bot with business context
+        const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
+
+        const canvas = document.createElement('canvas');
+        // Landscape orientation ~2.8:1 ratio (Sleek bumper sticker size)
+        const width = 1800;
+        const height = 640;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // --- COLORS ---
+        const navyBlue = '#0B3B68';     // Deep Navy Header
+        const lightBlueEnd = '#dbeafe'; // Light Blue Gradient End
+        const lightBlueStart = '#eff6ff'; // Light Blue Gradient Start
+        const silverStart = '#F8FAFC';  // Silver Light
+        const silverEnd = '#CBD5E1';    // Silver Shadow
+        const textBlack = '#0F172A';
+        const brandRed = '#DC2626';     // Call to action Red
+        const white = '#FFFFFF';
+
+        // 1. CLIP ROUNDED CORNERS
+        const radius = 25;
+        ctx.beginPath();
+        ctx.roundRect(0, 0, width, height, radius);
+        ctx.clip(); 
+
+        const splitX = 620;
+
+        // --- LEFT PANEL (Silver Identity) ---
+        const gradSilver = ctx.createLinearGradient(0, 0, splitX, height);
+        gradSilver.addColorStop(0, '#FFFFFF');
+        gradSilver.addColorStop(1, '#E2E8F0'); // Slate-200
+        ctx.fillStyle = gradSilver;
+        ctx.fillRect(0, 0, splitX, height);
+
+        // --- RIGHT PANEL (Blue Action) ---
+        // Light Blue Body
+        const gradBlue = ctx.createLinearGradient(splitX, 0, width, height);
+        gradBlue.addColorStop(0, lightBlueStart);
+        gradBlue.addColorStop(1, lightBlueEnd);
+        ctx.fillStyle = gradBlue;
+        ctx.fillRect(splitX, 0, width - splitX, height);
+
+        // --- RIGHT HEADER BAR (Metallic Curve Effect) ---
+        const headerHeight = 100;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(splitX, 0);
+        ctx.lineTo(width, 0);
+        ctx.lineTo(width, headerHeight);
+        ctx.lineTo(splitX + 50, headerHeight);
+        // Create swoosh curve at start of header
+        ctx.quadraticCurveTo(splitX, headerHeight, splitX, 0); 
+        ctx.closePath();
+        
+        const headerGrad = ctx.createLinearGradient(splitX, 0, width, 0);
+        headerGrad.addColorStop(0, '#1e3a8a'); // Dark Navy
+        headerGrad.addColorStop(0.5, '#2563eb'); // Brighter Blue
+        headerGrad.addColorStop(1, '#1e3a8a');
+        ctx.fillStyle = headerGrad;
+        ctx.fill();
+
+        // Silver Accent Line under header
+        ctx.strokeStyle = '#94a3b8'; // Silver
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+
+        // --- LEFT CONTENT ---
+        const leftCenterX = splitX / 2;
+
+        // "MAINTAINED BY"
+        ctx.fillStyle = '#64748B';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.font = '700 28px "Inter", "Arial", sans-serif';
+        ctx.fillText('MAINTAINED BY', leftCenterX, 30);
+
+        // LOGO
+        const logoSize = 260;
+        const logoY = height / 2 - 50;
+        const images = businessData.images || businessData.prospectImages || [];
+        const logoObj = images.find(img => img.type === 'logo');
+        const logoUrl = logoObj?.url;
+
+        if (logoUrl) {
+            try {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = logoUrl;
+                await new Promise((r) => { img.onload = r; setTimeout(r, 2000); });
+                
+                // Draw centered proportional
+                const aspect = img.width / img.height;
+                let dw, dh;
+                if (aspect >= 1) { dw = logoSize; dh = dw / aspect; }
+                else { dh = logoSize; dw = dh * aspect; }
+                
+                // Shadow for 3D effect
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.2)';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetY = 5;
+                ctx.drawImage(img, leftCenterX - dw/2, logoY - dh/2, dw, dh);
+                ctx.restore();
+            } catch (e) {
+                console.warn('Logo load fail', e);
+            }
+        }
+
+        // BUSINESS NAME
+        const nameY = logoY + logoSize/2 + 40;
+        const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
+        
+        ctx.fillStyle = '#0f172a'; // Slate-900
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Auto-scale font
+        let fontSize = 48;
+        ctx.font = `900 ${fontSize}px "Inter", "Arial Black", sans-serif`;
+        if (ctx.measureText(bizName).width > splitX - 40) fontSize = 36;
+        ctx.font = `900 ${fontSize}px "Inter", "Arial Black", sans-serif`;
+        
+        // Wrap/Split functionality
+        const words = bizName.split(' ');
+        if (words.length > 2) {
+             const mid = Math.ceil(words.length/2);
+             const l1 = words.slice(0, mid).join(' ');
+             const l2 = words.slice(mid).join(' ');
+             ctx.fillText(l1, leftCenterX, nameY);
+             ctx.fillText(l2, leftCenterX, nameY + fontSize + 10);
+        } else {
+             ctx.fillText(bizName, leftCenterX, nameY);
+        }
+
+        // PHONE NUMBER
+        const phoneY = height - 50;
+        const phone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
+        ctx.fillStyle = '#000000';
+        ctx.font = '800 48px "Inter", "Arial", sans-serif';
+        ctx.fillText(phone, leftCenterX, phoneY);
+
+
+        // --- RIGHT CONTENT ---
+        const rightPad = 60;
+        const contentX = splitX + rightPad;
+        
+        // Header Text
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '700 32px "Inter", "Arial", sans-serif';
+        ctx.letterSpacing = '1px';
+        ctx.fillText('OFFICIAL SERVICE PARTNER', contentX, headerHeight / 2);
+
+        // "NEXT SERVICE DUE:"
+        const nextY = 170;
+        ctx.fillStyle = navyBlue;
+        ctx.font = '900 60px "Inter", "Arial Black", sans-serif';
+        ctx.letterSpacing = '0px';
+        ctx.fillText('NEXT SERVICE DUE:', contentX, nextY);
+
+        // WHITE BOX
+        const boxY = nextY + 30;
+        const boxW = 580;
+        const boxH = 130;
+        
+        // Box Shadow/Bevel
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.1)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetY = 2;
+        ctx.fillRect(contentX, boxY, boxW, boxH);
+        ctx.shadowColor = 'transparent';
+        
+        // Border
+        ctx.strokeStyle = '#cbd5e1'; 
+        ctx.lineWidth = 3;
+        ctx.strokeRect(contentX, boxY, boxW, boxH);
+
+        // Date Slashes
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '300 40px "Arial", sans-serif';
+        ctx.fillText('/', contentX + boxW * 0.33, boxY + 80);
+        ctx.fillText('/', contentX + boxW * 0.66, boxY + 80);
+
+        // "DATE CLEANED" Line
+        const cleanedY = boxY + boxH + 50;
+        ctx.fillStyle = '#334155';
+        ctx.font = '700 32px "Inter", "Arial", sans-serif';
+        ctx.fillText('DATE CLEANED:', contentX, cleanedY);
+        
+        ctx.beginPath();
+        ctx.moveTo(contentX + 260, cleanedY + 5);
+        ctx.lineTo(contentX + 580, cleanedY + 5);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#94a3b8';
+        ctx.stroke();
+
+        // FOOTER CTA text
+        const footerY = height - 100;
+        ctx.fillStyle = navyBlue;
+        ctx.font = '700 42px "Inter", "Arial", sans-serif';
+        ctx.fillText('Scan to activate', contentX, footerY);
+
+        ctx.fillStyle = brandRed;
+        ctx.font = '900 52px "Inter", "Arial Black", sans-serif';
+        ctx.fillText('FREE 30-day warranty ➤', contentX, footerY + 55);
+
+
+        // --- QR CODE (Far Right) ---
+        const qrSize = 380;
+        const qrOuterW = qrSize + 40;
+        const qrOuterH = height - 120; // almost full height
+        // White rounded card behind QR
+        const qrCardX = width - qrOuterW - 30;
+        const qrCardY = 30 + headerHeight/2; // Starts a bit down
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.roundRect(qrCardX, 80, qrOuterW, height - 110, 20);
+        ctx.fill();
+
+        // QR Code proper
+        const qrX = qrCardX + 20;
+        const qrY = 100; // Top padding inside card
+
+        try {
+            const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
+                width: qrSize,
+                margin: 1,
+                errorCorrectionLevel: 'M',
+                color: { dark: '#000000', light: '#00000000' }
+            });
+            const qrImg = new Image();
+            qrImg.src = qrDataUrl;
+            await new Promise(r => qrImg.onload = r);
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            // WhatsApp Icon
+            const iconSize = 70;
+            const iconX = qrX + qrSize/2;
+            const iconY = qrY + qrSize/2;
+            
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize/2 + 5, 0, Math.PI*2);
+            ctx.fillStyle = '#FFF';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, iconSize/2, 0, Math.PI*2);
+            ctx.fillStyle = '#25D366';
+            ctx.fill();
+
+            // Phone Path
+            ctx.save();
+            ctx.translate(iconX, iconY);
+            ctx.scale(iconSize*0.6/24, iconSize*0.6/24);
+            ctx.translate(-12,-12);
+            ctx.fillStyle='#FFF';
+            const p = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
+            ctx.fill(p);
+            ctx.restore();
+
+            // QR Footer Text
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#000';
+            ctx.font = '700 24px "Inter", "Arial", sans-serif';
+            ctx.fillText('SCAN TO BOOK &', qrX + qrSize/2, qrY + qrSize + 30);
+            ctx.fillText('ACTIVATE WARRANTY', qrX + qrSize/2, qrY + qrSize + 55);
+
+        } catch (e) {
+            console.error('QR', e);
+        }
+
+        // Export
+        const link = document.createElement('a');
+        const safeName = (business?.name || 'Business').replace(/[^a-z0-9]/gi, '_');
+        link.download = `${safeName}_Premium_Sticker.png`;
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // Download QR - Maintenance Record Sticker Design
+    // CONCEPT: "The Silver/Blue Metallic Badge" (OLD VERSION)
+    const downloadQR_Old = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
         const launchflyBotNumber = '13203627874';
         

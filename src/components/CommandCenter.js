@@ -1021,28 +1021,35 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const jumpCP2X = arrowEndX - 100;
         const jumpCP2Y = arrowEndY + 80;   // Down and Left (creates tension)
         
+        // Calculate shortened endpoint to prevent dashed line from overlapping arrowhead
+        // Get the direction vector from CP2 to End
+        const dx = arrowEndX - jumpCP2X;
+        const dy = arrowEndY - jumpCP2Y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const unitX = dx / length;
+        const unitY = dy / length;
+        
+        // Pull back by ~15 pixels to create clean separation
+        const shortenedEndX = arrowEndX - (unitX * 15);
+        const shortenedEndY = arrowEndY - (unitY * 15);
+        
         ctx.moveTo(arrowStartX, arrowStartY);
-        // Shorten the curve slightly so the line doesn't poke through the arrow tip
-        // We can't easily chop a bezier, but we can just draw the arrow on top
-        // or shift the end point back slightly? 
-        // Better fix: Just use butt cap so no round dot appears at the end
         ctx.lineCap = 'butt'; 
-        ctx.bezierCurveTo(jumpCP1X, jumpCP1Y, jumpCP2X, jumpCP2Y, arrowEndX, arrowEndY);
+        ctx.bezierCurveTo(jumpCP1X, jumpCP1Y, jumpCP2X, jumpCP2Y, shortenedEndX, shortenedEndY);
         ctx.stroke();
         
-        // Arrow Head
+        // Arrow Head (drawn at full endpoint for sharp tip)
         ctx.setLineDash([]); 
         ctx.translate(arrowEndX, arrowEndY);
         // Angle needs to match the incoming tangent from jumpCP2
-        // Approximate vector from CP2 to End: (100, -80) -> pointing UP-RIGHT
         const angle = Math.atan2(arrowEndY - jumpCP2Y, arrowEndX - jumpCP2X);
         ctx.rotate(angle); 
         
         ctx.fillStyle = '#DC2626';
         ctx.beginPath();
-        ctx.moveTo(2, 0);       // Tip (slightly forward)
-        ctx.lineTo(-24, -12);   // Left Back
-        ctx.lineTo(-24, 12);    // Right Back
+        ctx.moveTo(0, 0);       // Sharp tip at center
+        ctx.lineTo(-24, -12);   
+        ctx.lineTo(-24, 12);    
         ctx.closePath();
         ctx.fill();
         ctx.restore();

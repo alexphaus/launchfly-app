@@ -715,7 +715,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const centerY = (topLimit + availableH / 2); 
 
         // Overlap amount: User wants text overlapping bottom of logo
-        const overlap = 45; 
+        const overlap = 30; 
         
         // Define sizes
         const logoTargetSize = 250; 

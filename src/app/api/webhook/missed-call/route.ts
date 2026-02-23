@@ -31,27 +31,37 @@ async function lookupBusiness(opts: {
     ownerPhone?: string; // the "To" number — the tech's line that was called
 }): Promise<{ id: string; name: string; niche: string | null } | null> {
     if (opts.businessId) {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('businesses')
-            .select('id, name, niche')
+            .select('id, name, business_data')
             .eq('id', opts.businessId)
             .single();
-        return data;
+        if (error) {
+            console.error('[missed-call] lookupBusiness by id error:', error.message);
+            return null;
+        }
+        if (!data) return null;
+        return { id: data.id, name: data.name, niche: (data as any).business_data?.niche ?? null };
     }
 
     if (opts.ownerPhone) {
         const clean = opts.ownerPhone.replace(/\D/g, '');
         const withPlus = `+${clean}`;
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('businesses')
-            .select('id, name, niche')
+            .select('id, name, business_data')
             .or(
                 `whatsapp_number.eq.${withPlus},whatsapp_number.eq.${clean},` +
                 `phone_number.eq.${withPlus},phone_number.eq.${clean}`
             )
             .limit(1)
             .single();
-        return data;
+        if (error) {
+            console.error('[missed-call] lookupBusiness by phone error:', error.message);
+            return null;
+        }
+        if (!data) return null;
+        return { id: data.id, name: data.name, niche: (data as any).business_data?.niche ?? null };
     }
 
     return null;

@@ -22,6 +22,7 @@ const twilioClient = twilio(
     process.env.TWILIO_AUTH_TOKEN
 );
 const FROM_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || '+13203627874';
+const MISSED_CALL_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_MISSEDCALL_FOLLOWUP || '';
 
 // ─────────────────────────────────────────────
 // Helper: resolve business from phone or id
@@ -185,17 +186,35 @@ export async function POST(req: NextRequest) {
             leadId = newLead!.id;
         }
 
-        // ── Send WhatsApp instantly ──
-        const message = buildMessage(business.name, business.niche);
+        // ── Send WhatsApp instantly (using approved template to bypass 24h window) ──
         const toWhatsApp   = `whatsapp:${callerPhone}`;
         const fromWhatsApp = `whatsapp:${FROM_NUMBER}`;
 
         try {
-            await twilioClient.messages.create({
-                from: fromWhatsApp,
-                to:   toWhatsApp,
-                body: message,
-            });
+            if (MISSED_CALL_TEMPLATE_SID) {
+                // Use Twilio Content Template — works outside 24h window
+                // Template: "Hi! 👋 Sorry we missed your call — we're likely on a job right now.
+                //  This is {{1}} — how can we help you? ..."
+                // Quick replies: Get a Quote | Book a Service | Just a Question
+                await twilioClient.messages.create({
+                    from: fromWhatsApp,
+                    to:   toWhatsApp,
+                    contentSid: MISSED_CALL_TEMPLATE_SID,
+                    contentVariables: JSON.stringify({
+                        '1': business.name,
+                    }),
+                });
+                console.log('[missed-call] ✅ Template WhatsApp sent to %s (template: %s)', callerPhone, MISSED_CALL_TEMPLATE_SID);
+            } else {
+                // Fallback: freeform message (only works if customer messaged within 24h)
+                const message = buildMessage(business.name, business.niche);
+                await twilioClient.messages.create({
+                    from: fromWhatsApp,
+                    to:   toWhatsApp,
+                    body: message,
+                });
+                console.log('[missed-call] ✅ Freeform WhatsApp sent to %s', callerPhone);
+            }
 
             // Log activity for the dashboard
             await supabase.from('ai_activities').insert({

@@ -153,9 +153,19 @@ function quickPatternMatch(
         return { intent: 'PRICE_OBJECTION', confidence: 0.8, entities: {} };
     }
 
-    // Quote request patterns (Filipino + English)
-    if (/hm po|how much|price|quote|estimate|magkano/i.test(text)) {
+    // Quote request patterns (Filipino + English + quick reply buttons)
+    if (/hm po|how much|price|quote|estimate|magkano|get a quote/i.test(text)) {
         return { intent: 'QUOTE_REQUEST', confidence: 0.9, entities: {} };
+    }
+
+    // Booking intent (includes quick reply "Book a Service")
+    if (/^book a service$/i.test(text)) {
+        return { intent: 'QUOTE_REQUEST', confidence: 0.9, entities: { service_type: 'booking' } };
+    }
+
+    // FAQ intent (includes quick reply "Just a Question")
+    if (/^just a question$/i.test(text)) {
+        return { intent: 'FAQ', confidence: 0.9, entities: {} };
     }
 
     // Confirmation (includes "BOOK" for discount claims)

@@ -102,12 +102,15 @@ export async function POST(req: NextRequest) {
 
         // ── Parse body (JSON or Twilio form-encoded) ──
         if (contentType.includes('application/json')) {
-            // Mobile automation tool (Tasker, n8n, Make, etc.)
+            // Supports: MacroDroid, n8n, Retell AI (wraps in `args`), or flat JSON
             const body = await req.json();
-            fromPhone   = body.fromPhone   || body.from_phone   || body.caller      || '';
-            ownerPhone  = body.ownerPhone  || body.to_phone     || body.businessPhone || '';
-            businessId  = body.businessId  || body.business_id  || '';
-            callStatus  = 'no-answer'; // automation only fires on a miss
+            // Retell AI sends { args: { businessId, fromPhone }, call_id, ... }
+            const args = body.args || body;
+            fromPhone   = args.fromPhone   || args.from_phone   || args.caller      || args.user_number || '';
+            ownerPhone  = args.ownerPhone  || args.to_phone     || args.businessPhone || '';
+            businessId  = args.businessId  || args.business_id  || '';
+            callStatus  = 'no-answer'; // automation / Retell only fires on intent
+            console.log('[missed-call] JSON payload:', JSON.stringify(body).substring(0, 500));
         } else {
             // Twilio Voice StatusCallback (application/x-www-form-urlencoded)
             const form  = await req.formData();

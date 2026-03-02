@@ -102,15 +102,33 @@ export async function POST(req: NextRequest) {
 
         // ── Parse body (JSON or Twilio form-encoded) ──
         if (contentType.includes('application/json')) {
-            // Supports: MacroDroid, n8n, Retell AI (wraps in `args`), or flat JSON
+            // Mobile automation (Tasker, MacroDroid) or Retell AI Tool Webhook
             const body = await req.json();
-            // Retell AI sends { args: { businessId, fromPhone }, call_id, ... }
-            const args = body.args || body;
-            fromPhone   = args.fromPhone   || args.from_phone   || args.caller      || args.user_number || '';
-            ownerPhone  = args.ownerPhone  || args.to_phone     || args.businessPhone || '';
-            businessId  = args.businessId  || args.business_id  || '';
-            callStatus  = 'no-answer'; // automation / Retell only fires on intent
-            console.log('[missed-call] JSON payload:', JSON.stringify(body).substring(0, 500));
+            
+            // Retell sends 3 possible shapes:
+            //   1. Real call:  { args: { businessId, fromPhone } }
+            //   2. Test panel: { type:"object", properties: { businessId: {const:"..."}, fromPhone: {const:"..."} } }
+            //   3. Flat JSON:  { businessId, fromPhone }
+            let payload: any;
+            if (body.args) {
+                // Retell real call — args wrapper
+                payload = body.args;
+            } else if (body.properties && body.type === 'object') {
+                // Retell test panel sends the raw schema — extract const values
+                payload = Object.fromEntries(
+                    Object.entries(body.properties as Record<string, any>).map(
+                        ([key, val]: [string, any]) => [key, val?.const ?? val?.default ?? '']
+                    )
+                );
+            } else {
+                // Flat JSON (MacroDroid / n8n / curl)
+                payload = body;
+            }
+
+            fromPhone   = payload.fromPhone   || payload.from_phone   || payload.caller      || '';
+            ownerPhone  = payload.ownerPhone  || payload.to_phone     || payload.businessPhone || '';
+            businessId  = payload.businessId  || payload.business_id  || '';
+            callStatus  = 'no-answer';
         } else {
             // Twilio Voice StatusCallback (application/x-www-form-urlencoded)
             const form  = await req.formData();
@@ -125,9 +143,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ skip: true, callStatus });
         }
 
-        if (!fromPhone) {
-            return NextResponse.json({ error: 'fromPhone is required' }, { status: 400 });
+        if (!fromPhone || fromPhone.includes('{{')) {
+            return NextResponse.json({ error: 'fromPhone is required (use Retell dynamic variables or provide a real phone number)' }, { status: 400 });
         }
+
+        // Strip unresolved template markers from businessId too
+        if (businessId.includes('{{')) businessId = '';
 
         const callerPhone  = normalisePhone(fromPhone);
         const ownerPhoneN  = ownerPhone ? normalisePhone(ownerPhone) : '';

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS quote_leads (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
+ 
 -- Unique constraint: prevent duplicate leads per phone + job_type combo
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quote_leads_phone_job
   ON quote_leads (phone, job_type)

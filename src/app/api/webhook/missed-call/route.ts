@@ -251,6 +251,23 @@ export async function POST(req: NextRequest) {
             });
 
             console.log('[missed-call] ✅ WhatsApp sent to %s for business %s', callerPhone, business.id);
+
+            // ── Alert owner on WhatsApp ──
+            const OWNER_PHONE = 'whatsapp:+639627459049';
+            try {
+                await twilioClient.messages.create({
+                    from: fromWhatsApp,
+                    to:   OWNER_PHONE,
+                    body: `📞 *MISSED CALL AUTO-REPLY SENT*\n\n` +
+                          `Prospect: ${callerPhone}\n` +
+                          `Business: ${business.name}\n` +
+                          `Template sent ✅\n\n` +
+                          `👉 https://wa.me/${callerPhone.replace('+', '')}`,
+                });
+                console.log('[missed-call] 🔔 Owner alert sent to +639627459049');
+            } catch (alertErr: any) {
+                console.error('[missed-call] Owner alert failed:', alertErr?.message);
+            }
         } catch (waErr: any) {
             // WhatsApp send failed (e.g. caller has no WA) — lead is still saved
             console.error('[missed-call] WhatsApp send failed:', waErr?.message);

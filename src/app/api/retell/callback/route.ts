@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       const msgCtx = buildMessageContext(typedLead, biz);
 
       // Use the Day 4 (step 3) missed-call text template
-      const voiceStep = SEQUENCE_STEPS[3]; // Step 3 = Day 4 Retell Voice
+      const voiceStep = SEQUENCE_STEPS[2]; // Step 2 = Day 4 Retell Voice
       const missedCallMsg = voiceStep.buildMessage(msgCtx);
 
       // Send the missed-call text immediately (in production, could add 2-min delay via QStash)

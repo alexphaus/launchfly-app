@@ -412,7 +412,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         pauseSequenceOnReply,
                         snoozeSequence,
                         parseSnoozeDuration,
-                        detectBreakupChoice,
+                        detectBreakupIntent,
                         INTENT_PATTERNS,
                     } = await import('@/lib/quote-followup/sequence');
 
@@ -445,6 +445,8 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     }
 
                     // ── Check for STOP/opt-out triggers ──────────────────────
+                    // Note: Twilio handles STOP at the carrier level automatically.
+                    // We just mark the DB so the sequence engine doesn't keep scheduling.
                     if (INTENT_PATTERNS.stop.test(messageText)) {
                         await supabase.from('quote_leads').update({
                             status: 'Lost',
@@ -452,8 +454,6 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                             sequence_paused: true,
                         }).eq('id', activeQuoteLead.id);
 
-                        const stopReply = `No problem at all, ${activeQuoteLead.name.split(' ')[0]}. I've removed you from our follow-up list. If you ever need us in the future, just reach out. Take care! 👋`;
-                        await sendWhatsApp(phoneWithPlus, stopReply);
                         console.log(`   🛑 Prospect opted out, lead marked Lost`);
 
                         return new NextResponse(
@@ -462,23 +462,23 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         );
                     }
 
-                    // ── Check for Day 14 breakup A/B/C reply ─────────────────
-                    const breakupChoice = detectBreakupChoice(messageText);
-                    if (breakupChoice && activeQuoteLead.sequence_step >= 6) {
+                    // ── Check for Day 14 breakup reply (natural language) ────
+                    const breakupIntent = detectBreakupIntent(messageText);
+                    if (breakupIntent && activeQuoteLead.sequence_step >= 5) {
                         await supabase.from('quote_leads').update({
-                            breakup_reply: breakupChoice,
+                            breakup_reply: breakupIntent,
                         }).eq('id', activeQuoteLead.id);
 
                         let breakupReply = '';
-                        if (breakupChoice === 'A') {
+                        if (breakupIntent === 'timing') {
                             // Timing isn't right → snooze for 30 days
                             await snoozeSequence(activeQuoteLead.id, 30);
                             breakupReply = `Totally understand, ${activeQuoteLead.name.split(' ')[0]}! Timing is everything. I'll check back in about a month to see if things have changed. Just reply here anytime if you want to pick it back up sooner. 👍`;
-                        } else if (breakupChoice === 'B') {
+                        } else if (breakupIntent === 'lost') {
                             // Went with someone else → mark lost
-                            await supabase.from('quote_leads').update({ status: 'Lost' }).eq('id', activeQuoteLead.id);
+                            await supabase.from('quote_leads').update({ status: 'Lost', sequence_completed: true }).eq('id', activeQuoteLead.id);
                             breakupReply = `Appreciate you letting us know! Hope the project turns out great. If you ever need anything in the future, this thread is always open. 🙏`;
-                        } else if (breakupChoice === 'C') {
+                        } else if (breakupIntent === 'thinking') {
                             // Still thinking → snooze for 7 days
                             await snoozeSequence(activeQuoteLead.id, 7);
                             breakupReply = `No rush at all! I'll check back in about a week. In the meantime, reply here anytime with questions. 😊`;
@@ -493,19 +493,19 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         // Notify contractor about the feedback
                         if (qOwnerPhone && twilioClient && fromNumber) {
                             const feedbackMap: Record<string, string> = {
-                                A: 'timing not right yet',
-                                B: 'went with someone else',
-                                C: 'still thinking about it',
+                                timing: 'timing not right yet',
+                                lost: 'went with someone else',
+                                thinking: 'still thinking about it',
                             };
                             const cleanOwner = qOwnerPhone.replace(/[^\d+]/g, '');
                             twilioClient.messages.create({
                                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                                 to: `whatsapp:${cleanOwner}`,
-                                body: `📊 Quote Follow-Up Update\n\n${activeQuoteLead.name} replied to the break-up message:\n→ "${feedbackMap[breakupChoice]}"\n\nJob: ${activeQuoteLead.job_type} (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()})`,
+                                body: `📊 Quote Follow-Up Update\n\n${activeQuoteLead.name} replied to the break-up message:\n→ "${feedbackMap[breakupIntent]}"\n\nJob: ${activeQuoteLead.job_type} (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()})`,
                             }).catch((e: Error) => console.warn('Breakup notification failed:', e.message));
                         }
 
-                        console.log(`   📊 Breakup choice: ${breakupChoice} for lead ${activeQuoteLead.id}`);
+                        console.log(`   📊 Breakup intent: ${breakupIntent} for lead ${activeQuoteLead.id}`);
                         return new NextResponse(
                             '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                             { headers: { 'Content-Type': 'text/xml' } }

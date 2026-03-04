@@ -9,12 +9,11 @@
 // Step │ Day │ Time (local)   │ Channel        │ Purpose
 // ─────┼─────┼────────────────┼────────────────┼───────────────────────────
 //   0  │  0  │ +60s           │ WhatsApp       │ Receipt confirmation
-//   1  │  1  │ 7:00 PM        │ WhatsApp       │ "Reply anytime" thread keeper
-//   2  │  2  │ 4:30 PM        │ WhatsApp       │ Value-add / credibility
-//   3  │  4  │ 10:30 AM       │ Retell Voice   │ Human-sounding differentiator
-//   4  │  7  │ 9:00 AM        │ WhatsApp       │ Scheduling constraint urgency
-//   5  │ 10  │ 2:00 PM        │ WhatsApp       │ Social proof drop
-//   6  │ 14  │ 3:00 PM        │ WhatsApp       │ Break-up + multiple choice
+//   1  │  2  │ 4:30 PM        │ WhatsApp       │ Value-add / credibility
+//   2  │  4  │ 10:30 AM       │ Retell Voice   │ Human-sounding differentiator
+//   3  │  7  │ 9:00 AM        │ WhatsApp       │ Scheduling constraint urgency
+//   4  │ 10  │ 2:00 PM        │ WhatsApp       │ Financing / friction removal
+//   5  │ 14  │ 3:00 PM        │ WhatsApp       │ Professional break-up
 //
 // Critical Rules:
 // 1. Stop on Reply – sequence pauses instantly when prospect replies
@@ -22,6 +21,7 @@
 // 3. Weekend Routing – delays to Monday 9 AM if lands on weekend
 // 4. Handoff Protocol – high intent → alert contractor
 // 5. Snooze Button – "not ready yet" → pause for N days
+// 6. STOP at carrier level – Twilio handles opt-out, we just mark DB
 
 import type { QuoteLead } from './types';
 
@@ -89,26 +89,12 @@ export const SEQUENCE_STEPS: SequenceStep[] = [
       `Hi ${ctx.firstName}, it's the team at *${ctx.businessName}*. ` +
       `${ctx.ownerName} just sent over the estimate for your ${ctx.jobType} project. ` +
       `Just shooting you a quick text so you have a direct line to us if any questions pop up while you look it over. ` +
-      `Did it come through? 📋\n\n` +
-      `_(Reply STOP to opt out of texts)_`,
+      `Did it come through? 📋`,
   },
 
-  // ─── Step 1: Day 1 — Evening Thread Keeper (7:00 PM local) ────────────
+  // ─── Step 1: Day 2 — Value-Add / Credibility (4:30 PM local) ──────────
   {
     step: 1,
-    dayOffset: 1,
-    targetHour: 19,
-    targetMinute: 0,
-    channel: 'whatsapp',
-    purpose: '"Reply anytime" passive thread keeper',
-    buildMessage: (ctx) =>
-      `Hey ${ctx.firstName}, just a reminder — you can reply here anytime with questions on the estimate. ` +
-      `No need to call the office. ${ctx.ownerName} will see it directly. 👍`,
-  },
-
-  // ─── Step 2: Day 2 — Value-Add / Credibility (4:30 PM local) ──────────
-  {
-    step: 2,
     dayOffset: 2,
     targetHour: 16,
     targetMinute: 30,
@@ -117,14 +103,14 @@ export const SEQUENCE_STEPS: SequenceStep[] = [
     buildMessage: (ctx) =>
       `Hey ${ctx.firstName}, hope you're having a good week! ` +
       `While you're reviewing the estimate, I wanted to mention — ` +
-      `we just finished a similar ${ctx.jobType.toLowerCase()} project nearby and the client was thrilled with the result. ` +
-      `Happy to share details if you're curious about the quality of work. ` +
+      `${ctx.ownerName} offers a written workmanship guarantee on every ${ctx.jobType.toLowerCase()} project we do. ` +
+      `Happy to share details if you're curious. ` +
       `Any questions so far? 🏠`,
   },
 
-  // ─── Step 3: Day 4 — Retell AI Voice Call (10:30 AM local) ─────────────
+  // ─── Step 2: Day 4 — Retell AI Voice Call (10:30 AM local) ─────────────
   {
-    step: 3,
+    step: 2,
     dayOffset: 4,
     targetHour: 10,
     targetMinute: 30,
@@ -142,9 +128,9 @@ export const SEQUENCE_STEPS: SequenceStep[] = [
       `Feel free to text us back at this number — it's the fastest way to reach us. Talk soon!`,
   },
 
-  // ─── Step 4: Day 7 — Scheduling Constraint Urgency (9:00 AM local) ────
+  // ─── Step 3: Day 7 — Scheduling Constraint Urgency (9:00 AM local) ────
   {
-    step: 4,
+    step: 3,
     dayOffset: 7,
     targetHour: 9,
     targetMinute: 0,
@@ -156,36 +142,32 @@ export const SEQUENCE_STEPS: SequenceStep[] = [
       `If you're looking to get this project done soon, let me know so I can hold a spot for you before the calendar fills up. 📅`,
   },
 
-  // ─── Step 5: Day 10 — Social Proof Drop (2:00 PM local) ───────────────
+  // ─── Step 4: Day 10 — Financing / Friction Removal (2:00 PM local) ────
   {
-    step: 5,
+    step: 4,
     dayOffset: 10,
     targetHour: 14,
     targetMinute: 0,
     channel: 'whatsapp',
-    purpose: 'Social proof + proximity relevance',
+    purpose: 'Financing / friction removal',
     buildMessage: (ctx) =>
-      `Hey ${ctx.firstName}, we just wrapped up a ${ctx.jobType.toLowerCase()} project nearby — happy client, turned out amazing. 🎉 ` +
-      `Still have your project in mind if the timing works out for you. ` +
-      `Just reply here if you'd like to chat about it!`,
+      `Hey ${ctx.firstName}, ${ctx.ownerName} wanted me to quickly check in. ` +
+      `A lot of our clients use our financing option to break up the cost — makes a ${ctx.quoteAmount} project a lot easier to budget. ` +
+      `Would it be helpful if I sent over the details so you can preview the monthly payment options? (No hard credit pull) 💰`,
   },
 
-  // ─── Step 6: Day 14 — Professional Break-Up + Multiple Choice (3 PM) ──
+  // ─── Step 5: Day 14 — Professional Break-Up (3:00 PM local) ───────────
   {
-    step: 6,
+    step: 5,
     dayOffset: 14,
     targetHour: 15,
     targetMinute: 0,
     channel: 'whatsapp',
-    purpose: 'Break-up + multiple choice reply (highest reply rate)',
+    purpose: 'Professional break-up (open-ended, highest reply rate)',
     buildMessage: (ctx) =>
-      `Hey ${ctx.firstName}, haven't heard back so I'll go ahead and archive your estimate so I stop bugging you. 😊\n\n` +
-      `Before I do — just curious:\n` +
-      `*A)* Timing isn't right yet\n` +
-      `*B)* Went with someone else\n` +
-      `*C)* Still thinking about it\n\n` +
-      `No worries either way, just helps us improve! ` +
-      `If you decide to pick this back up, just reply to this thread and we can easily reactivate it. Take care! 🙏`,
+      `Hey ${ctx.firstName}, I haven't heard back so I'll go ahead and archive your estimate so we stop bugging you! 😊 ` +
+      `Just so I can update ${ctx.ownerName}'s file — did the timing just not work out, or did you guys end up going with another company? ` +
+      `No worries either way, just helps us out! 🙏`,
   },
 ];
 
@@ -574,14 +556,40 @@ export async function resumeSequence(leadId: string): Promise<void> {
  * Detect if a reply to the Day 14 break-up message is an A/B/C choice.
  * Returns the choice letter or null.
  */
-export function detectBreakupChoice(message: string): 'A' | 'B' | 'C' | null {
-  const trimmed = message.trim().toUpperCase();
-  if (/^A\)?\.?\s|^TIMING|^NOT\s+READY|^LATER/i.test(trimmed)) return 'A';
-  if (/^B\)?\.?\s|^WENT\s+WITH|^SOMEONE\s+ELSE|^ALREADY\s+BOOKED/i.test(trimmed)) return 'B';
-  if (/^C\)?\.?\s|^STILL\s+THINK|^MAYBE|^CONSIDERING/i.test(trimmed)) return 'C';
-  if (trimmed === 'A') return 'A';
-  if (trimmed === 'B') return 'B';
-  if (trimmed === 'C') return 'C';
+/**
+ * Detect the intent behind a reply to the Day 14 break-up message.
+ * Now parses natural language instead of A/B/C letter choices.
+ *
+ * Returns:
+ *   'timing'    → Not ready yet / bad timing (snooze 30 days)
+ *   'lost'      → Went with competitor (mark lost)
+ *   'thinking'  → Still considering (snooze 7 days)
+ *   null        → Couldn't classify — fall through to AI negotiation
+ */
+export function detectBreakupIntent(message: string): 'timing' | 'lost' | 'thinking' | null {
+  const lower = message.trim().toLowerCase();
+
+  // ── Lost: went with someone else ──────────────────────────────────────
+  if (/went with (someone|another|a different)|found (someone|another)|hired (someone|another)|chose (someone|another)|picked (someone|another)|already (booked|got|signed|hired)|using (another|a different)|other (company|contractor|guy|team)/i.test(lower)) {
+    return 'lost';
+  }
+
+  // ── Timing: not the right time ────────────────────────────────────────
+  if (/timing|not (the )?right time|not ready|maybe (later|next)|down the (road|line)|few months|next (year|spring|summer|fall|winter|quarter)|hold off|put (it |this )?on hold|budget|can'?t (afford|swing)|too expensive right now|waiting (on|for) (funds|money|insurance|approval)/i.test(lower)) {
+    return 'timing';
+  }
+
+  // ── Still thinking: on the fence ──────────────────────────────────────
+  if (/still (thinking|deciding|considering|looking|comparing|mulling)|haven'?t decided|on the fence|weighing|not sure yet|need (more )?time|thinking about it|might (still )?do it|probably will|leaning toward/i.test(lower)) {
+    return 'thinking';
+  }
+
+  // Legacy A/B/C support (in case some people still reply that way)
+  const trimmedUpper = message.trim().toUpperCase();
+  if (trimmedUpper === 'A') return 'timing';
+  if (trimmedUpper === 'B') return 'lost';
+  if (trimmedUpper === 'C') return 'thinking';
+
   return null;
 }
 

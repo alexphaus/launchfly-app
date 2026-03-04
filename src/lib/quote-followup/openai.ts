@@ -46,7 +46,8 @@ Rules:
 
 export interface NegotiationResult {
   reply: string;
-  intent: 'continue' | 'deposit' | 'escalate' | 'lost';
+  intent: 'continue' | 'deposit' | 'escalate' | 'lost' | 'snooze';
+  snoozeDays?: number;
 }
 
 /**
@@ -97,14 +98,22 @@ export async function negotiate(opts: {
   // Detect intent from the user's latest message
   const lower = opts.latestMessage.toLowerCase();
   let intent: NegotiationResult['intent'] = 'continue';
+  let snoozeDays: number | undefined;
 
-  if (/\b(deposit|pay|book|let'?s do it|ready to start|sign me up)\b/.test(lower)) {
+  if (/\b(deposit|pay|book|let'?s do it|ready to start|sign me up|ready to book|how do we start|when can you start|let'?s go|move forward|i'?m in)\b/.test(lower)) {
     intent = 'deposit';
-  } else if (/\b(speak to|call me|talk to someone|manager|owner)\b/.test(lower)) {
+  } else if (/\b(speak to|call me|talk to someone|manager|owner|can .+ call)\b/.test(lower)) {
     intent = 'escalate';
-  } else if (/\b(not interested|no thanks|pass|cancel|too expensive|never mind)\b/.test(lower)) {
+  } else if (/\b(not interested|no thanks|pass|cancel|never mind|went with someone|already booked|stop texting|remove me)\b/.test(lower)) {
     intent = 'lost';
+  } else if (/\b(not ready|give (?:me|us) (?:a |some )?(?:time|week|month)|come back|check back|need (?:more )?time|maybe later|waiting on|other quotes?|other bids?)\b/.test(lower)) {
+    intent = 'snooze';
+    // Parse duration from message
+    if (/month/i.test(lower)) snoozeDays = 30;
+    else if (/two weeks|2 weeks|couple.?weeks/i.test(lower)) snoozeDays = 14;
+    else if (/week/i.test(lower)) snoozeDays = 7;
+    else snoozeDays = 7; // Default snooze
   }
 
-  return { reply, intent };
+  return { reply, intent, snoozeDays };
 }

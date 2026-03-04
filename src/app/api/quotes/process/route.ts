@@ -1,10 +1,15 @@
 // src/app/api/quotes/process/route.ts
-// ─── Cron / QStash handler: processes leads whose next_action_time has passed ───
-// Wire this up as a Vercel Cron (every 15 min) OR as a QStash callback target.
+// ─── Cron / QStash handler: executes sequence steps for leads whose next_action_time has passed ───
+// Wire as Vercel Cron (every 15 min) AND/OR QStash callback target.
+//
+// The 14-Day Revenue Recovery Sequence:
+//   Step 0 (Day 0)  → fired inline by quotes/new (within 60s)
+//   Steps 1-6       → fired by this cron/QStash handler
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/quote-followup/supabase';
 import type { QuoteLead } from '@/lib/quote-followup/types';
+import { processSequenceStep } from '@/lib/quote-followup/sequence';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // allow up to 60 s on Vercel Pro
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
-    const result = await processLead(lead as QuoteLead);
+    const result = await processSequenceStep(lead as QuoteLead);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error('[quotes/process] POST error:', err);
@@ -36,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ── GET: Called by Vercel Cron — sweeps all overdue leads ───────────────
+// ── GET: Called by Vercel Cron — sweeps all leads with overdue next_action_time ──
 export async function GET(req: NextRequest) {
   // Optional: verify Vercel cron secret
   const authHeader = req.headers.get('authorization');
@@ -49,11 +54,18 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase();
     const now = new Date().toISOString();
 
+    // Fetch leads that:
+    // 1. Have a next_action_time in the past
+    // 2. Are NOT paused (OR their paused_until has expired)
+    // 3. Have NOT completed the sequence
+    // 4. Are not in a terminal status
     const { data: leads, error } = await supabase
       .from('quote_leads')
       .select('*')
-      .in('status', ['Open', 'Called'])
       .lte('next_action_time', now)
+      .eq('sequence_completed', false)
+      .eq('sequence_paused', false)
+      .not('status', 'in', '("Booked","Lost","Archived")')
       .order('next_action_time', { ascending: true })
       .limit(20);
 
@@ -62,10 +74,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'DB error' }, { status: 500 });
     }
 
-    const results: Array<{ id: string; action: string }> = [];
-    for (const lead of (leads ?? []) as QuoteLead[]) {
-      const result = await processLead(lead);
-      results.push({ id: lead.id, ...result });
+    // Also check for snoozed leads whose paused_until has expired
+    const { data: snoozedLeads } = await supabase
+      .from('quote_leads')
+      .select('*')
+      .eq('sequence_paused', true)
+      .lte('paused_until', now)
+      .not('status', 'in', '("Booked","Lost","Archived")')
+      .limit(10);
+
+    const allLeads = [...(leads ?? []), ...(snoozedLeads ?? [])] as QuoteLead[];
+
+    const results: Array<{ id: string; action: string; step?: number }> = [];
+    for (const lead of allLeads) {
+      try {
+        const result = await processSequenceStep(lead);
+        results.push({ id: lead.id, ...result });
+      } catch (stepErr) {
+        console.error(`[quotes/process] Error processing lead ${lead.id}:`, stepErr);
+        results.push({ id: lead.id, action: 'error' });
+      }
     }
 
     return NextResponse.json({ ok: true, processed: results.length, results });
@@ -73,43 +101,4 @@ export async function GET(req: NextRequest) {
     console.error('[quotes/process] GET error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// ── Core routing logic ──────────────────────────────────────────────────
-async function processLead(lead: QuoteLead): Promise<{ action: string }> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
-
-  if (lead.status === 'Open') {
-    // Trigger voice call via internal Retell route
-    try {
-      const res = await fetch(`${appUrl}/api/retell/call`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: lead.id }),
-      });
-      if (!res.ok) throw new Error(`Retell call route returned ${res.status}`);
-      return { action: 'retell_call_initiated' };
-    } catch (err) {
-      console.error('[process] Failed to initiate Retell call for', lead.id, err);
-      return { action: 'retell_call_failed' };
-    }
-  }
-
-  if (lead.status === 'Called') {
-    // Call was attempted but no booking — transition to WhatsApp
-    try {
-      const res = await fetch(`${appUrl}/api/retell/fallback-whatsapp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: lead.id }),
-      });
-      if (!res.ok) throw new Error(`Fallback route returned ${res.status}`);
-      return { action: 'whatsapp_fallback_sent' };
-    } catch (err) {
-      console.error('[process] Fallback WhatsApp failed for', lead.id, err);
-      return { action: 'whatsapp_fallback_failed' };
-    }
-  }
-
-  return { action: 'no_action' };
 }

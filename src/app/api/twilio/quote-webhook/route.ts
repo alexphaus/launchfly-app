@@ -60,6 +60,12 @@ export async function POST(req: NextRequest) {
         .eq('id', typedLead.id);
     }
 
+    // ── STOP ON REPLY: Pause automated sequence ──────────────────────────
+    await supabase.from('quote_leads').update({
+      sequence_paused: true,
+      last_reply_at: new Date().toISOString(),
+    }).eq('id', typedLead.id);
+
     // ── Load chat history ────────────────────────────────────────────────
     const { data: historyRows } = await supabase
       .from('quote_chat_history')
@@ -134,6 +140,7 @@ export async function POST(req: NextRequest) {
         .update({
           status: 'Booked',
           stripe_payment_link: depositLink,
+          sequence_completed: true,
         })
         .eq('id', typedLead.id);
     } else if (result.intent === 'escalate') {
@@ -153,7 +160,15 @@ export async function POST(req: NextRequest) {
     } else if (result.intent === 'lost') {
       await supabase
         .from('quote_leads')
-        .update({ status: 'Lost' })
+        .update({ status: 'Lost', sequence_completed: true })
+        .eq('id', typedLead.id);
+    } else if (result.intent === 'snooze') {
+      // Snooze: pause sequence for N days
+      const days = result.snoozeDays || 7;
+      const resumeAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      await supabase
+        .from('quote_leads')
+        .update({ sequence_paused: true, paused_until: resumeAt })
         .eq('id', typedLead.id);
     }
 

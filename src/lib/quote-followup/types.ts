@@ -3,11 +3,12 @@
 
 /** Lead lifecycle states */
 export type LeadStatus =
-  | 'Open'            // Quote received, waiting 48h
+  | 'Open'            // Quote received, in active sequence
   | 'Called'           // Retell voice call attempted
-  | 'WhatsApp_Nurture' // Moved to WhatsApp negotiation
+  | 'WhatsApp_Nurture' // Moved to WhatsApp negotiation (reply received)
   | 'Booked'          // Deposit paid / job booked
-  | 'Lost';           // Lead did not convert
+  | 'Lost'            // Lead did not convert
+  | 'Archived';       // Sequence completed, moved to long-term nurture
 
 /** Inbound webhook payload from quoting tool */
 export interface NewQuotePayload {
@@ -19,6 +20,7 @@ export interface NewQuotePayload {
   business_id?: string;   // FK to businesses table (preferred)
   email?: string;
   currency?: string;      // e.g. "USD", "RM" (default: USD)
+  timezone?: string;      // e.g. "America/New_York" (default: America/New_York)
 }
 
 /** Row shape returned from / written to `quote_leads` */
@@ -40,6 +42,15 @@ export interface QuoteLead {
   retell_call_id: string | null;
   attempts: number;
   currency: string;           // USD, RM, etc.
+  source: string;             // webhook, bcc_email, manual
+  // ── 14-Day Sequence Fields ──
+  sequence_step: number;       // 0-6, current step in the sequence
+  sequence_paused: boolean;    // true when prospect replied (Stop on Reply)
+  paused_until: string | null; // ISO-8601, snooze resume time
+  timezone: string;            // IANA timezone for send-window enforcement
+  last_reply_at: string | null;// ISO-8601, last time prospect replied
+  sequence_completed: boolean; // true after Day 14 break-up sent
+  breakup_reply: string | null;// A/B/C choice from Day 14
   created_at: string;
   updated_at: string;
 }

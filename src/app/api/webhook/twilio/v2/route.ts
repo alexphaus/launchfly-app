@@ -388,27 +388,41 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
 
             // ============================================================
             // 💰 QUOTE FOLLOW-UP ROUTING
-            // If this phone has an active quote lead in WhatsApp_Nurture/Called
+            // If this phone has an active quote lead in an active sequence
             // status, route to the negotiation engine instead of the receptionist.
+            // Implements: Stop on Reply, Snooze, Breakup Choice, Handoff Protocol.
             // ============================================================
             try {
                 const { data: activeQuoteLead } = await supabase
                     .from('quote_leads')
-                    .select('id, name, phone, quote_amount, job_type, status, business_id, currency, contractor_id, stripe_payment_link')
+                    .select('id, name, phone, quote_amount, job_type, status, business_id, currency, contractor_id, stripe_payment_link, sequence_step, sequence_paused, sequence_completed')
                     .eq('phone', phoneWithPlus)
-                    .in('status', ['WhatsApp_Nurture', 'Called'])
+                    .not('status', 'in', '("Booked","Lost","Archived")')
                     .order('created_at', { ascending: false })
                     .limit(1)
                     .maybeSingle();
 
                 if (activeQuoteLead) {
-                    console.log(`   💰 Quote lead detected: ${activeQuoteLead.id} (${activeQuoteLead.status}) — routing to negotiation engine`);
+                    console.log(`   💰 Quote lead detected: ${activeQuoteLead.id} (status: ${activeQuoteLead.status}, step: ${activeQuoteLead.sequence_step}) — routing to negotiation engine`);
 
-                    // Lazy-import the negotiation engine to avoid loading it for every message
+                    // Lazy imports
                     const { negotiate } = await import('@/lib/quote-followup/openai');
                     const { sendWhatsApp } = await import('@/lib/quote-followup/whatsapp');
+                    const {
+                        pauseSequenceOnReply,
+                        snoozeSequence,
+                        parseSnoozeDuration,
+                        detectBreakupChoice,
+                        INTENT_PATTERNS,
+                    } = await import('@/lib/quote-followup/sequence');
 
-                    // Load business context for the quote lead (may differ from receptionist business)
+                    // ── STOP ON REPLY: Pause the automated sequence immediately ──
+                    if (!activeQuoteLead.sequence_paused && !activeQuoteLead.sequence_completed) {
+                        await pauseSequenceOnReply(activeQuoteLead.id);
+                        console.log(`   ⏸️ Sequence paused for lead ${activeQuoteLead.id} — prospect replied`);
+                    }
+
+                    // Load business context
                     let qBizName: string | undefined;
                     let qOwnerName: string | undefined;
                     let qOwnerPhone: string | undefined;
@@ -430,13 +444,140 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         }
                     }
 
-                    // If lead was in Called status but replying via WhatsApp, promote to nurture
-                    if (activeQuoteLead.status === 'Called') {
-                        await supabase
-                            .from('quote_leads')
-                            .update({ status: 'WhatsApp_Nurture' })
-                            .eq('id', activeQuoteLead.id);
+                    // ── Check for STOP/opt-out triggers ──────────────────────
+                    if (INTENT_PATTERNS.stop.test(messageText)) {
+                        await supabase.from('quote_leads').update({
+                            status: 'Lost',
+                            sequence_completed: true,
+                            sequence_paused: true,
+                        }).eq('id', activeQuoteLead.id);
+
+                        const stopReply = `No problem at all, ${activeQuoteLead.name.split(' ')[0]}. I've removed you from our follow-up list. If you ever need us in the future, just reach out. Take care! 👋`;
+                        await sendWhatsApp(phoneWithPlus, stopReply);
+                        console.log(`   🛑 Prospect opted out, lead marked Lost`);
+
+                        return new NextResponse(
+                            '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                            { headers: { 'Content-Type': 'text/xml' } }
+                        );
                     }
+
+                    // ── Check for Day 14 breakup A/B/C reply ─────────────────
+                    const breakupChoice = detectBreakupChoice(messageText);
+                    if (breakupChoice && activeQuoteLead.sequence_step >= 6) {
+                        await supabase.from('quote_leads').update({
+                            breakup_reply: breakupChoice,
+                        }).eq('id', activeQuoteLead.id);
+
+                        let breakupReply = '';
+                        if (breakupChoice === 'A') {
+                            // Timing isn't right → snooze for 30 days
+                            await snoozeSequence(activeQuoteLead.id, 30);
+                            breakupReply = `Totally understand, ${activeQuoteLead.name.split(' ')[0]}! Timing is everything. I'll check back in about a month to see if things have changed. Just reply here anytime if you want to pick it back up sooner. 👍`;
+                        } else if (breakupChoice === 'B') {
+                            // Went with someone else → mark lost
+                            await supabase.from('quote_leads').update({ status: 'Lost' }).eq('id', activeQuoteLead.id);
+                            breakupReply = `Appreciate you letting us know! Hope the project turns out great. If you ever need anything in the future, this thread is always open. 🙏`;
+                        } else if (breakupChoice === 'C') {
+                            // Still thinking → snooze for 7 days
+                            await snoozeSequence(activeQuoteLead.id, 7);
+                            breakupReply = `No rush at all! I'll check back in about a week. In the meantime, reply here anytime with questions. 😊`;
+                        }
+
+                        await sendWhatsApp(phoneWithPlus, breakupReply);
+                        await supabase.from('quote_chat_history').insert([
+                            { lead_id: activeQuoteLead.id, role: 'user', content: messageText },
+                            { lead_id: activeQuoteLead.id, role: 'assistant', content: breakupReply },
+                        ]);
+
+                        // Notify contractor about the feedback
+                        if (qOwnerPhone && twilioClient && fromNumber) {
+                            const feedbackMap: Record<string, string> = {
+                                A: 'timing not right yet',
+                                B: 'went with someone else',
+                                C: 'still thinking about it',
+                            };
+                            const cleanOwner = qOwnerPhone.replace(/[^\d+]/g, '');
+                            twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwner}`,
+                                body: `📊 Quote Follow-Up Update\n\n${activeQuoteLead.name} replied to the break-up message:\n→ "${feedbackMap[breakupChoice]}"\n\nJob: ${activeQuoteLead.job_type} (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()})`,
+                            }).catch((e: Error) => console.warn('Breakup notification failed:', e.message));
+                        }
+
+                        console.log(`   📊 Breakup choice: ${breakupChoice} for lead ${activeQuoteLead.id}`);
+                        return new NextResponse(
+                            '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                            { headers: { 'Content-Type': 'text/xml' } }
+                        );
+                    }
+
+                    // ── Check for HIGH INTENT triggers → Handoff Protocol ───
+                    if (INTENT_PATTERNS.highIntent.test(messageText)) {
+                        console.log(`   🔥 HIGH INTENT detected! Alerting contractor.`);
+
+                        // Alert contractor immediately
+                        if (qOwnerPhone && twilioClient && fromNumber) {
+                            const cleanOwner = qOwnerPhone.replace(/[^\d+]/g, '');
+                            twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwner}`,
+                                body: `🔥 HOT LEAD!\n\n${activeQuoteLead.name} (${activeQuoteLead.phone}) just said: "${messageText.substring(0, 100)}"\n\nJob: ${activeQuoteLead.job_type} (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()})\n\n⚡ Reply to them NOW or they'll go cold!`,
+                            }).catch((e: Error) => console.warn('Hot lead notification failed:', e.message));
+                        }
+
+                        // Still let the AI respond with deposit link
+                        // (falls through to negotiation below)
+                    }
+
+                    // ── Check for COMPETITOR triggers ────────────────────────
+                    if (INTENT_PATTERNS.competitor.test(messageText)) {
+                        await supabase.from('quote_leads').update({ status: 'Lost' }).eq('id', activeQuoteLead.id);
+
+                        const compReply = `Appreciate you letting us know! We hope the project turns out great. If you ever need us for a future project, just reply to this thread — we're always here. Take care! 🙏`;
+                        await sendWhatsApp(phoneWithPlus, compReply);
+                        await supabase.from('quote_chat_history').insert([
+                            { lead_id: activeQuoteLead.id, role: 'user', content: messageText },
+                            { lead_id: activeQuoteLead.id, role: 'assistant', content: compReply },
+                        ]);
+
+                        if (qOwnerPhone && twilioClient && fromNumber) {
+                            const cleanOwner = qOwnerPhone.replace(/[^\d+]/g, '');
+                            twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwner}`,
+                                body: `📉 Lost to Competitor\n\n${activeQuoteLead.name} went with someone else.\nJob: ${activeQuoteLead.job_type} (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()})`,
+                            }).catch((e: Error) => console.warn('Competitor notification failed:', e.message));
+                        }
+
+                        console.log(`   📉 Competitor trigger — lead marked Lost`);
+                        return new NextResponse(
+                            '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                            { headers: { 'Content-Type': 'text/xml' } }
+                        );
+                    }
+
+                    // ── Check for SNOOZE triggers → "Not Ready Yet" ─────────
+                    if (INTENT_PATTERNS.snooze.test(messageText)) {
+                        const snoozeDays = parseSnoozeDuration(messageText);
+                        await snoozeSequence(activeQuoteLead.id, snoozeDays);
+
+                        const snoozeReply = `No problem at all, ${activeQuoteLead.name.split(' ')[0]}! I'll check back in about ${snoozeDays === 7 ? 'a week' : snoozeDays === 14 ? 'two weeks' : snoozeDays === 30 ? 'a month' : `${snoozeDays} days`}. ` +
+                            `In the meantime, this thread is always open if anything comes up. 👍`;
+                        await sendWhatsApp(phoneWithPlus, snoozeReply);
+                        await supabase.from('quote_chat_history').insert([
+                            { lead_id: activeQuoteLead.id, role: 'user', content: messageText },
+                            { lead_id: activeQuoteLead.id, role: 'assistant', content: snoozeReply },
+                        ]);
+
+                        console.log(`   💤 Snooze triggered: ${snoozeDays} days for lead ${activeQuoteLead.id}`);
+                        return new NextResponse(
+                            '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                            { headers: { 'Content-Type': 'text/xml' } }
+                        );
+                    }
+
+                    // ── Standard negotiation flow ────────────────────────────
 
                     // Load chat history
                     const { data: historyRows } = await supabase
@@ -468,7 +609,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
 
                     let replyText = result.reply;
 
-                    // Handle intents
+                    // Handle intents from AI
                     if (result.intent === 'deposit') {
                         const { createDepositLink } = await import('@/lib/quote-followup/stripe-link');
                         const depositLink =
@@ -486,7 +627,18 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         await supabase.from('quote_leads').update({
                             status: 'Booked',
                             stripe_payment_link: depositLink,
+                            sequence_completed: true,
                         }).eq('id', activeQuoteLead.id);
+
+                        // Alert contractor
+                        if (qOwnerPhone && twilioClient && fromNumber) {
+                            const cleanOwner = qOwnerPhone.replace(/[^\d+]/g, '');
+                            twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwner}`,
+                                body: `🎉 BOOKED!\n\n${activeQuoteLead.name} just accepted the ${activeQuoteLead.job_type} quote (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()})!\n\nDeposit link sent. 💰`,
+                            }).catch((e: Error) => console.warn('Booking notification failed:', e.message));
+                        }
                     } else if (result.intent === 'escalate') {
                         // Notify contractor
                         if (qOwnerPhone && twilioClient && fromNumber) {
@@ -499,7 +651,13 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         }
                         replyText += "\n\nI've flagged this — someone from the team will call you shortly.";
                     } else if (result.intent === 'lost') {
-                        await supabase.from('quote_leads').update({ status: 'Lost' }).eq('id', activeQuoteLead.id);
+                        await supabase.from('quote_leads').update({
+                            status: 'Lost',
+                            sequence_completed: true,
+                        }).eq('id', activeQuoteLead.id);
+                    } else if (result.intent === 'snooze') {
+                        const days = result.snoozeDays || 7;
+                        await snoozeSequence(activeQuoteLead.id, days);
                     }
 
                     // Save assistant reply

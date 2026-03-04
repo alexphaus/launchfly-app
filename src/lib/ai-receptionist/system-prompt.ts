@@ -83,6 +83,36 @@ const NICHE_DEFAULTS: Record<string, ServiceLabels> = {
         feedbackPositiveExample: 'looks great',
         feedbackNegativeExample: 'not clean enough',
     },
+    'home renovation': {
+        primaryService: 'Renovation',
+        secondaryService: 'Repair / Handyman',
+        quantityQuestion: 'Can you describe the project? (e.g., kitchen remodel, bathroom reno, new deck)',
+        unitLabel: 'project',
+        primaryMenuLabel: 'Get a Quote 📋',
+        secondaryMenuLabel: 'Repair / Handyman 🔨',
+        feedbackPositiveExample: 'looks amazing',
+        feedbackNegativeExample: 'not finished properly',
+    },
+    'roofing': {
+        primaryService: 'Roof Replacement',
+        secondaryService: 'Roof Repair',
+        quantityQuestion: 'What type of roofing work do you need? (replacement, repair, inspection)',
+        unitLabel: 'job',
+        primaryMenuLabel: 'Roof Replacement 🏠',
+        secondaryMenuLabel: 'Leak / Storm Damage 🌧️',
+        feedbackPositiveExample: 'no more leaks',
+        feedbackNegativeExample: 'still leaking',
+    },
+    'general contractor': {
+        primaryService: 'Construction',
+        secondaryService: 'Renovation',
+        quantityQuestion: 'What kind of project are you looking at?',
+        unitLabel: 'project',
+        primaryMenuLabel: 'New Project 🏗️',
+        secondaryMenuLabel: 'Renovation / Addition 🏠',
+        feedbackPositiveExample: 'looks great',
+        feedbackNegativeExample: 'issues with the work',
+    },
 };
 
 const DEFAULT_LABELS: ServiceLabels = {

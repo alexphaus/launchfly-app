@@ -67,10 +67,13 @@ export async function POST(req: NextRequest) {
         jobType: typedLead.job_type,
       });
 
+      const cur = typedLead.currency || 'USD';
+      const sym = cur === 'RM' ? 'RM' : '$';
+
       const msg = [
         `Hi ${typedLead.name}! 👋`,
         ``,
-        `This is a follow-up on your ${typedLead.job_type} quote for $${typedLead.quote_amount.toLocaleString()}.`,
+        `This is a follow-up on your ${typedLead.job_type} quote for ${sym}${typedLead.quote_amount.toLocaleString()}.`,
         unanswered
           ? `We tried to reach you by phone but couldn't get through.`
           : `Our team wanted to make sure you have everything you need.`,

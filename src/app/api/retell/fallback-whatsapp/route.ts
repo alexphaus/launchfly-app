@@ -44,10 +44,13 @@ export async function POST(req: NextRequest) {
       jobType: typedLead.job_type,
     });
 
+    const cur = typedLead.currency || 'USD';
+    const sym = cur === 'RM' ? 'RM' : '$';
+
     const msg = [
       `Hey ${typedLead.name}! 👋`,
       ``,
-      `Just following up on your ${typedLead.job_type} quote ($${typedLead.quote_amount.toLocaleString()}).`,
+      `Just following up on your ${typedLead.job_type} quote (${sym}${typedLead.quote_amount.toLocaleString()}).`,
       `We'd love to get you on the schedule!`,
       ``,
       `Ready to move forward? Here's a secure deposit link:`,

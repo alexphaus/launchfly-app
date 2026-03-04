@@ -49,6 +49,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Load business context for dynamic voice agent ────────────────────
+    let bizName = 'the team';
+    let ownerName = '';
+    let leadCurrency = typedLead.currency || 'USD';
+    const currSymbol = leadCurrency === 'RM' ? 'RM' : '$';
+
+    if (typedLead.business_id) {
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('name, business_data')
+        .eq('id', typedLead.business_id)
+        .single();
+      if (biz) {
+        bizName = biz.name || bizName;
+        const cfg = (biz.business_data || {}) as Record<string, unknown>;
+        ownerName = (cfg.ownerName as string) || '';
+      }
+    }
+
     // ── Build Retell payload ─────────────────────────────────────────────
     const payload: RetellCreateCallPayload = {
       from_number: retellFromNumber,
@@ -56,9 +75,12 @@ export async function POST(req: NextRequest) {
       agent_id: retellAgentId,
       retell_llm_dynamic_variables: {
         customer_name: typedLead.name,
-        quote_amount: typedLead.quote_amount.toString(),
+        quote_amount: `${currSymbol}${typedLead.quote_amount.toLocaleString()}`,
         job_type: typedLead.job_type,
         lead_id: typedLead.id,
+        business_name: bizName,
+        contractor_name: ownerName,
+        currency_symbol: currSymbol,
       },
       metadata: {
         lead_id: typedLead.id,

@@ -386,6 +386,143 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 customerContext = { isReturning: false, warrantyActive: false };
             }
 
+            // ============================================================
+            // 💰 QUOTE FOLLOW-UP ROUTING
+            // If this phone has an active quote lead in WhatsApp_Nurture/Called
+            // status, route to the negotiation engine instead of the receptionist.
+            // ============================================================
+            try {
+                const { data: activeQuoteLead } = await supabase
+                    .from('quote_leads')
+                    .select('id, name, phone, quote_amount, job_type, status, business_id, currency, contractor_id, stripe_payment_link')
+                    .eq('phone', phoneWithPlus)
+                    .in('status', ['WhatsApp_Nurture', 'Called'])
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (activeQuoteLead) {
+                    console.log(`   💰 Quote lead detected: ${activeQuoteLead.id} (${activeQuoteLead.status}) — routing to negotiation engine`);
+
+                    // Lazy-import the negotiation engine to avoid loading it for every message
+                    const { negotiate } = await import('@/lib/quote-followup/openai');
+                    const { sendWhatsApp } = await import('@/lib/quote-followup/whatsapp');
+
+                    // Load business context for the quote lead (may differ from receptionist business)
+                    let qBizName: string | undefined;
+                    let qOwnerName: string | undefined;
+                    let qOwnerPhone: string | undefined;
+                    let qNiche: string | undefined;
+                    const qCurrency = activeQuoteLead.currency || 'USD';
+
+                    if (activeQuoteLead.business_id) {
+                        const { data: qBiz } = await supabase
+                            .from('businesses')
+                            .select('name, whatsapp_number, phone_number, business_data')
+                            .eq('id', activeQuoteLead.business_id)
+                            .single();
+                        if (qBiz) {
+                            qBizName = qBiz.name;
+                            qOwnerPhone = qBiz.whatsapp_number || qBiz.phone_number;
+                            const cfg = (qBiz.business_data || {}) as Record<string, unknown>;
+                            qOwnerName = cfg.ownerName as string | undefined;
+                            qNiche = cfg.niche as string | undefined;
+                        }
+                    }
+
+                    // If lead was in Called status but replying via WhatsApp, promote to nurture
+                    if (activeQuoteLead.status === 'Called') {
+                        await supabase
+                            .from('quote_leads')
+                            .update({ status: 'WhatsApp_Nurture' })
+                            .eq('id', activeQuoteLead.id);
+                    }
+
+                    // Load chat history
+                    const { data: historyRows } = await supabase
+                        .from('quote_chat_history')
+                        .select('*')
+                        .eq('lead_id', activeQuoteLead.id)
+                        .order('created_at', { ascending: true })
+                        .limit(30);
+
+                    // Save user message
+                    await supabase.from('quote_chat_history').insert({
+                        lead_id: activeQuoteLead.id,
+                        role: 'user',
+                        content: messageText,
+                    });
+
+                    // Run negotiation
+                    const result = await negotiate({
+                        customerName: activeQuoteLead.name,
+                        quoteAmount: activeQuoteLead.quote_amount,
+                        jobType: activeQuoteLead.job_type,
+                        history: (historyRows ?? []) as import('@/lib/quote-followup/types').ChatMessage[],
+                        latestMessage: messageText,
+                        contractorName: qOwnerName,
+                        businessName: qBizName,
+                        niche: qNiche,
+                        currency: qCurrency,
+                    });
+
+                    let replyText = result.reply;
+
+                    // Handle intents
+                    if (result.intent === 'deposit') {
+                        const { createDepositLink } = await import('@/lib/quote-followup/stripe-link');
+                        const depositLink =
+                            activeQuoteLead.stripe_payment_link ||
+                            await createDepositLink({
+                                leadId: activeQuoteLead.id,
+                                customerName: activeQuoteLead.name,
+                                amountCents: Math.round(activeQuoteLead.quote_amount * 0.1 * 100),
+                                jobType: activeQuoteLead.job_type,
+                                currency: qCurrency,
+                            });
+
+                        replyText += `\n\nHere's your secure deposit link:\n${depositLink}`;
+
+                        await supabase.from('quote_leads').update({
+                            status: 'Booked',
+                            stripe_payment_link: depositLink,
+                        }).eq('id', activeQuoteLead.id);
+                    } else if (result.intent === 'escalate') {
+                        // Notify contractor
+                        if (qOwnerPhone && twilioClient && fromNumber) {
+                            const cleanOwner = qOwnerPhone.replace(/[^\d+]/g, '');
+                            twilioClient.messages.create({
+                                from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
+                                to: `whatsapp:${cleanOwner}`,
+                                body: `🚨 Quote Escalation!\n\n${activeQuoteLead.name} (${activeQuoteLead.phone}) wants to talk to you about their ${activeQuoteLead.job_type} quote (${qCurrency}${activeQuoteLead.quote_amount.toLocaleString()}).`,
+                            }).catch((e: Error) => console.warn('Contractor escalation notify failed:', e.message));
+                        }
+                        replyText += "\n\nI've flagged this — someone from the team will call you shortly.";
+                    } else if (result.intent === 'lost') {
+                        await supabase.from('quote_leads').update({ status: 'Lost' }).eq('id', activeQuoteLead.id);
+                    }
+
+                    // Save assistant reply
+                    await supabase.from('quote_chat_history').insert({
+                        lead_id: activeQuoteLead.id,
+                        role: 'assistant',
+                        content: replyText,
+                    });
+
+                    // Send WhatsApp reply
+                    await sendWhatsApp(phoneWithPlus, replyText);
+
+                    console.log(`   💰 Quote negotiation reply sent (intent: ${result.intent}) in ${Date.now() - startTime}ms`);
+                    return new NextResponse(
+                        '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                        { headers: { 'Content-Type': 'text/xml' } }
+                    );
+                }
+            } catch (quoteRouteErr) {
+                // Non-fatal — fall through to normal receptionist flow
+                console.warn('[v2] Quote-lead routing error (falling through):', quoteRouteErr);
+            }
+
             // Save incoming message to history (Fire and forget, but track the promise)
             // We don't need to await this before calling AI, as we pass messageText explicitly
             const saveMessagePromise = saveMessage(customerPhone, 'user', messageText, businessId)

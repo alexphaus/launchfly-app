@@ -77,6 +77,29 @@ export async function POST(req: NextRequest) {
       content: inbound.Body,
     });
 
+    // ── Load business context for dynamic prompt ─────────────────────────
+    let contractorName: string | undefined;
+    let businessName: string | undefined;
+    let niche: string | undefined;
+    let ownerPhone: string | undefined;
+    const leadCurrency = typedLead.currency || 'USD';
+
+    if (typedLead.business_id) {
+      const supabaseForBiz = getSupabase();
+      const { data: biz } = await supabaseForBiz
+        .from('businesses')
+        .select('name, whatsapp_number, phone_number, business_data')
+        .eq('id', typedLead.business_id)
+        .single();
+      if (biz) {
+        businessName = biz.name;
+        ownerPhone = biz.whatsapp_number || biz.phone_number;
+        const cfg = (biz.business_data || {}) as Record<string, unknown>;
+        contractorName = cfg.ownerName as string | undefined;
+        niche = cfg.niche as string | undefined;
+      }
+    }
+
     // ── Run OpenAI negotiation ───────────────────────────────────────────
     const result = await negotiate({
       customerName: typedLead.name,
@@ -84,6 +107,10 @@ export async function POST(req: NextRequest) {
       jobType: typedLead.job_type,
       history,
       latestMessage: inbound.Body,
+      contractorName,
+      businessName,
+      niche,
+      currency: leadCurrency,
     });
 
     let replyText = result.reply;
@@ -110,7 +137,18 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', typedLead.id);
     } else if (result.intent === 'escalate') {
-      // TODO: Notify contractor via push/SMS
+      // Notify contractor via WhatsApp
+      if (ownerPhone) {
+        try {
+          const sym = leadCurrency === 'RM' ? 'RM' : '$';
+          await sendWhatsApp(
+            ownerPhone,
+            `🚨 Quote Escalation!\n\n${typedLead.name} (${typedLead.phone}) wants to talk about their ${typedLead.job_type} quote (${sym}${typedLead.quote_amount.toLocaleString()}).\n\nPlease call them back ASAP.`
+          );
+        } catch (notifyErr) {
+          console.warn('[quote-webhook] Contractor notification failed:', notifyErr);
+        }
+      }
       replyText += "\n\nI've flagged this — someone from the team will call you shortly.";
     } else if (result.intent === 'lost') {
       await supabase

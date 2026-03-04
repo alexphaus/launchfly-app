@@ -18,8 +18,13 @@ export async function createDepositLink(opts: {
   customerName: string;
   amountCents: number; // deposit amount in cents
   jobType: string;
+  currency?: string;   // ISO currency code, default 'usd'
 }): Promise<string> {
   const stripe = getStripeClient();
+
+  // Map display currencies to Stripe ISO codes
+  const currencyMap: Record<string, string> = { RM: 'myr', USD: 'usd', SGD: 'sgd', AUD: 'aud', GBP: 'gbp', PHP: 'php' };
+  const stripeCurrency = currencyMap[(opts.currency || 'USD').toUpperCase()] || 'usd';
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
@@ -27,7 +32,7 @@ export async function createDepositLink(opts: {
     line_items: [
       {
         price_data: {
-          currency: 'usd',
+          currency: stripeCurrency,
           unit_amount: opts.amountCents,
           product_data: {
             name: `Deposit — ${opts.jobType}`,

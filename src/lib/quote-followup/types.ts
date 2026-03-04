@@ -15,8 +15,10 @@ export interface NewQuotePayload {
   phone: string;          // E.164 format, e.g. "+1234567890"
   quote_amount: number;
   job_type: string;
-  contractor_id?: string; // optional multi-tenant key
+  contractor_id?: string; // optional multi-tenant key (legacy)
+  business_id?: string;   // FK to businesses table (preferred)
   email?: string;
+  currency?: string;      // e.g. "USD", "RM" (default: USD)
 }
 
 /** Row shape returned from / written to `quote_leads` */
@@ -28,6 +30,7 @@ export interface QuoteLead {
   quote_amount: number;
   job_type: string;
   contractor_id: string | null;
+  business_id: string | null;   // FK to businesses table
   status: LeadStatus;
   call_sid: string | null;    // Retell call id
   call_outcome: string | null;
@@ -36,6 +39,7 @@ export interface QuoteLead {
   next_action_time: string;   // ISO-8601
   retell_call_id: string | null;
   attempts: number;
+  currency: string;           // USD, RM, etc.
   created_at: string;
   updated_at: string;
 }

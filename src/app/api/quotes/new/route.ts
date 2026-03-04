@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, phone, quote_amount, job_type, contractor_id, email } = body;
+    const { name, phone, quote_amount, job_type, contractor_id, business_id, email, currency } = body;
 
     // Normalise phone to E.164 (strip spaces/dashes)
     const normalisedPhone = phone.replace(/[\s\-()]/g, '');
@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
         quote_amount,
         job_type,
         contractor_id: contractor_id ?? null,
+        business_id: business_id ?? null,
+        currency: currency ?? 'USD',
         status: 'Open',
         next_action_time: nextActionTime,
         attempts: 0,

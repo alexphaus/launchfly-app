@@ -127,10 +127,10 @@ _(This is what your customer sees after scanning the sticker. Their phone number
 I'm an AI that handles customer inquiries 24/7 for service businesses.
 
 *Try me out - pretend you're a customer:*
-• "I need aircon cleaning"
+• "I need a service"
 • "How much for 2 units?"
 • "Book me for tomorrow morning"
-• "My aircon not cold" (I handle complaints too!)
+• "I have a complaint" (I handle complaints too!)
 
 Or ask me anything! I can check availability, give quotes, and book jobs automatically. 🤖`;
 
@@ -275,7 +275,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 businessContext = {
                     id: business.id,
                     name: business.name,
-                    niche: config.niche || 'Aircon Service',
+                    niche: config.niche || 'General Service',
                     currency: config.currency || 'RM',
                     cleaningPrice: config.cleaningPrice || 120,
                     repairInspectionFee: config.repairInspectionFee || 80,
@@ -285,6 +285,8 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     ownerPhone: business.whatsapp_number || business.phone_number,
                     operatingHours: config.operatingHours || '9am - 5pm',
                     googleReviewLink: config.googleReviewLink,
+                    serviceLabels: config.serviceLabels || undefined,  // Per-niche vocabulary (falls back to niche defaults)
+                    customRules: config.customRules || undefined,      // Business-specific rules
                 };
             }
 
@@ -421,7 +423,7 @@ When calling notifyOwner (for complaints/human request/escalation), use:
   address: (the address they provided in conversation)
   date: (YYYY-MM-DD from the selected slot)
   window: "morning" or "afternoon"
-  serviceType: (e.g., "Aircon Cleaning (1 unit)")
+  serviceType: (e.g., "${businessContext?.niche || 'Service'} (1 ${(businessContext as any)?.serviceLabels?.unitLabel || 'unit'})")
   estimateAmount: (the price as a number, e.g., 120)
   currency: "${businessContext?.currency || 'RM'}"
 
@@ -841,7 +843,7 @@ Your ONLY job is to call createBooking with ALL the details from conversation hi
 REQUIRED: Look through the conversation to find:
 - The selected DATE (e.g., "2026-01-30" or "Friday")
 - The selected WINDOW ("morning" or "afternoon")
-- The SERVICE TYPE (e.g., "Aircon Cleaning")
+- The SERVICE TYPE (e.g., "${businessContext?.niche || 'Service'} - ${(businessContext as any)?.serviceLabels?.primaryService || 'Cleaning'}")
 - The PRICE ESTIMATE (e.g., 120)
 
 Then call createBooking with:
@@ -854,7 +856,7 @@ Then call createBooking with:
 - window: "morning" or "afternoon"
 - serviceType: (from conversation)
 - estimateAmount: (number from conversation)
-- currency: "RM"
+- currency: "${businessContext?.currency || 'RM'}"
 
 DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                         messages: [

@@ -51,7 +51,7 @@ const createBookingSchema = z.object({
     address: z.string().describe('Service address'),
     date: z.string().describe('Booking date YYYY-MM-DD'),
     window: z.enum(['morning', 'afternoon']).describe('Time window'),
-    serviceType: z.string().describe('e.g., "Aircon Cleaning (2 units)"'),
+    serviceType: z.string().describe('e.g., "Cleaning (2 units)" or "Plumbing Repair (1 job)"'),
     estimateAmount: z.number().describe('Estimated price'),
     currency: z.string().optional().describe('Currency code, default RM'),
 });
@@ -194,7 +194,7 @@ export const receptionistTools = {
                 found: true,
                 id: business.id,
                 name: business.name,
-                niche: config.niche || 'Aircon Service',
+                niche: config.niche || 'General Service',
                 currency: config.currency || 'RM',
                 cleaningPrice: config.cleaningPrice || 120,
                 repairInspectionFee: config.repairInspectionFee || 80,

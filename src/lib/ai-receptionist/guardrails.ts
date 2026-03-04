@@ -141,7 +141,7 @@ export class Guardrails {
             
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
-                system: `You are an Intent Classifier for an aircon service bot.
+                system: `You are an Intent Classifier for a service business bot.
                 Analyze the USER MESSAGE and classify their intent into exactly one category:
                 
                 1. "reschedule": User wants to move/change an existing booking. (e.g. "Can we do tomorrow?", "Change to 2pm", "Tukar tarikh", "Mover la fecha")

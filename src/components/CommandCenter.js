@@ -39,6 +39,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const [customMessage, setCustomMessage] = useState('');
     const [loadingSegments, setLoadingSegments] = useState(false);
 
+    // AI Sales Assistant wizard states
+    const [deployStep, setDeployStep] = useState(1);
+    const [selectedGoal, setSelectedGoal] = useState(null);
+    const [selectedPlaybook, setSelectedPlaybook] = useState(null);
+
     // Import contacts states (Database Reactivation)
     const [blastTab, setBlastTab] = useState('blast'); // 'blast' | 'import'
     const [importText, setImportText] = useState('');
@@ -267,11 +272,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     // Complete a booking and create service record (for Smart Nag reminders)
     const completeBooking = async (booking) => {
         if (!confirm('Mark this job as completed?')) return;
-        
+
         try {
             // 1. Update booking status
             await supabase.from('bookings').update({ status: 'completed' }).eq('id', booking.id);
-            
+
             // 2. Get customer ID (try to find by phone)
             let customerId = booking.customer_id;
             if (!customerId && booking.customer_phone) {
@@ -283,7 +288,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     .single();
                 customerId = customer?.id;
             }
-            
+
             // 3. Create service record for Smart Nag reminders (6-month cycle)
             if (customerId) {
                 const now = new Date();
@@ -293,7 +298,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 warrantyExpiresAt.setDate(warrantyExpiresAt.getDate() + warrantyDays);
                 const nextServiceDueAt = new Date(now);
                 nextServiceDueAt.setDate(nextServiceDueAt.getDate() + serviceIntervalDays);
-                
+
                 // Parse service type from booking
                 let serviceType = 'cleaning';
                 const serviceNote = (booking.service_type || booking.notes || '').toLowerCase();
@@ -302,7 +307,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 } else if (serviceNote.includes('install')) {
                     serviceType = 'installation';
                 }
-                
+
                 const { error: srError } = await supabase.from('service_records').insert({
                     business_id: business.id,
                     customer_id: customerId,
@@ -318,13 +323,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     registered_by: 'technician',
                     service_date: now.toISOString(),
                 });
-                
+
                 if (srError) {
                     console.error('Failed to create service record:', srError);
                 } else {
                     console.log('✅ Service record created - customer will get reminder in 6 months');
                 }
-                
+
                 // 4. Update customer record
                 await supabase.from('customers').update({
                     last_service_date: now.toISOString(),
@@ -333,11 +338,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     status: 'completed',
                 }).eq('id', customerId);
             }
-            
+
             // 5. Update UI
             setBookings(prev => prev.filter(b => b.id !== booking.id));
             setStats(prev => ({ ...prev, booked: Math.max(0, prev.booked - 1) }));
-            
+
         } catch (err) {
             console.error('Error completing booking:', err);
             alert('Failed to complete booking');
@@ -533,33 +538,33 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const downloadQR = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
         const launchflyBotNumber = '13203627874';
-        
+
         // Include business ref in trigger message so bot knows which business context to use
         // Use subdomain if available (shorter), otherwise fall back to UUID
         const businessRef = business?.subdomain || business?.id;
         const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
-        
+
         // Primary: Launchfly bot with business context
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
         const canvas = document.createElement('canvas');
-        
+
         // High-resolution rendering: 2x scale for crisp quality
         const scaleFactor = 2;
-        
+
         // Logical dimensions (layout)
         const width = 1680;
         const height = 575;
-        
+
         // Physical canvas size (2x for retina/high-DPI)
         canvas.width = width * scaleFactor;
         canvas.height = height * scaleFactor;
-        
+
         const ctx = canvas.getContext('2d');
-        
+
         // Scale context to match - all subsequent drawing operations use logical coordinates
         ctx.scale(scaleFactor, scaleFactor);
-        
+
         // Enable high-quality rendering
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
@@ -577,13 +582,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const radius = 40;
         ctx.beginPath();
         ctx.roundRect(0, 0, width, height, radius);
-        ctx.clip(); 
+        ctx.clip();
 
         // 2. BACKGROUNDS
         // "Ice Cold" Professional Background
         // Reduced splitX (660 -> 540) to shrink left side
-        const splitX = 540; 
-        
+        const splitX = 540;
+
         // Base: Cool Ice White
         const bgGrad = ctx.createLinearGradient(0, 0, width, height);
         bgGrad.addColorStop(0, '#E0F2FE'); // Top Left: Very Light Sky Blue (Ice)
@@ -592,46 +597,46 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         bgGrad.addColorStop(1, '#E0F2FE'); // Bottom Right: Very Light Sky Blue
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, width, height);
-        
+
         // --- FROST / ICE CRYSTAL TEXTURE ---
         // Generates random geometric shards to mimic ice crystals on a window
         ctx.save();
         ctx.globalCompositeOperation = 'overlay'; // Blend mode for subtle texture
-        
+
         const numShards = 180;
         for (let i = 0; i < numShards; i++) {
             ctx.beginPath();
             const x = Math.random() * width;
             const y = Math.random() * height;
-            const size = Math.random() * 200 + 50; 
+            const size = Math.random() * 200 + 50;
             const angle = Math.random() * Math.PI * 2;
-            
+
             // Draw diverse shard shapes (triangles/polygons)
             ctx.moveTo(x, y);
             ctx.lineTo(x + Math.cos(angle) * size, y + Math.sin(angle) * size);
             ctx.lineTo(x + Math.cos(angle + 0.5) * (size * 0.4), y + Math.sin(angle + 0.5) * (size * 0.4));
             ctx.closePath();
-            
+
             // Randomly pick between slight white frost or slight blue shadow
             if (Math.random() > 0.5) {
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.25)'; // White frost highlight
             } else {
-                 ctx.fillStyle = 'rgba(186, 230, 253, 0.15)'; // Blue ice shadow
+                ctx.fillStyle = 'rgba(186, 230, 253, 0.15)'; // Blue ice shadow
             }
             ctx.fill();
-            
+
             // Add occasional "scratch" lines for details
             if (i % 5 === 0) {
-                 ctx.beginPath();
-                 ctx.moveTo(x, y);
-                 ctx.lineTo(x + Math.cos(angle) * (size * 1.5), y + Math.sin(angle) * (size * 1.5));
-                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                 ctx.lineWidth = 1;
-                 ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + Math.cos(angle) * (size * 1.5), y + Math.sin(angle) * (size * 1.5));
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
             }
         }
         ctx.restore();
-        
+
         // Vertical Divider
         ctx.strokeStyle = '#CBD5E1'; // Slate 300
         ctx.lineWidth = 2;
@@ -659,34 +664,34 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // CTA is at `height - 35` with baseline `bottom`.
         // Let's use the same baseline and Y for phone to align perfectly.
         const phoneY = height - 35;
-        
+
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
-        
+
         // Normalize: Remove non-digits, keep leading +
         let raw = safePhone.replace(/[^0-9+]/g, '');
-        
+
         // Smart Local Format: Replace known country codes (+63, +61, +60, etc) with '0'
         // Matches + followed by 2 digits for stripped target countries
         let displayPhone = raw.replace(/^\+(\d{2})/, '0');
-        
+
         // Formatting: Group digits for readability (e.g. 0917 123 4567)
         if (displayPhone.length > 8) {
-           // 4-3-4 pattern common in these regions or just chunks
-           displayPhone = displayPhone.replace(/(\d{4})(\d{3})?(\d{4})?/, '$1 $2 $3').trim();
+            // 4-3-4 pattern common in these regions or just chunks
+            displayPhone = displayPhone.replace(/(\d{4})(\d{3})?(\d{4})?/, '$1 $2 $3').trim();
         }
-        
+
         ctx.fillStyle = textBlack;
         ctx.font = '600 45px "Inter", "Arial", sans-serif';
         const phoneTextWidth = ctx.measureText(displayPhone).width;
         const phoneIconSize = 34; // Slightly smaller than text height
         const phoneGap = 15;
         const totalPhoneWidth = phoneIconSize + phoneGap + phoneTextWidth;
-        
+
         // Calculate starting X to center the group
         const groupStartX = leftCenterX - totalPhoneWidth / 2;
-        
+
         // Draw Phone Icon
         ctx.save();
         const iconY = phoneY - 42; // Center vertically relative to text cap height
@@ -707,48 +712,48 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Top limit: "MAINTAINED BY" (y=40) + approx 40px height -> y=80
         // Bottom limit: Phone Number (y=height-35) - approx 50px height -> y=height-85
         // Total available height ~ 360px (525 - 85 - 80)
-        
-        const topLimit = 100; 
+
+        const topLimit = 100;
         const bottomLimit = height - 100;
         const availableH = bottomLimit - topLimit;
         // Shift up slightly (-40px) as requested
-        const centerY = (topLimit + availableH / 2); 
+        const centerY = (topLimit + availableH / 2);
 
         // Overlap amount: User wants text overlapping bottom of logo
-        const overlap = 30; 
-        
+        const overlap = 30;
+
         // Define sizes
-        const logoTargetSize = 250; 
+        const logoTargetSize = 250;
         const logoRadius = logoTargetSize / 2;
-        
+
         // Render Business Name first to calculate its height for centering
         const bizName = (business?.name || 'COOLTECH SERVICES').toUpperCase();
         let nameFontSize = 52;
         if (bizName.length > 15) nameFontSize = 46;
         if (bizName.length > 25) nameFontSize = 38;
-        
+
         // Split name logic
         const words = bizName.split(' ');
         let lines = [];
         // Force split if long
         if (words.length >= 2 && bizName.length > 12) {
-             const mid = Math.ceil(words.length / 2);
-             lines.push(words.slice(0, mid).join(' '));
-             lines.push(words.slice(mid).join(' '));
+            const mid = Math.ceil(words.length / 2);
+            lines.push(words.slice(0, mid).join(' '));
+            lines.push(words.slice(mid).join(' '));
         } else {
             lines.push(bizName);
         }
 
         const lineHeight = nameFontSize * 0.9; // Tight line height for impact
         const textBlockHeight = lines.length * lineHeight;
-        
+
         // Calculate visual center of the group (Logo + Text - Overlap)
         const totalGroupHeight = logoTargetSize + textBlockHeight - overlap;
         const groupStartY = centerY - totalGroupHeight / 2;
-        
+
         // Logo Position
         const logoY = groupStartY + logoTargetSize / 2;
-        
+
         // Text Position
         const textStartY = groupStartY + logoTargetSize - overlap; // Overlapping
 
@@ -769,7 +774,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 });
 
                 if (logoEl.complete && logoEl.naturalWidth !== 0) {
-                     const aspect = logoEl.width / logoEl.height;
+                    const aspect = logoEl.width / logoEl.height;
                     let drawW, drawH;
                     if (aspect >= 1) {
                         drawW = logoTargetSize;
@@ -780,7 +785,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     }
                     const logoDrawX = leftCenterX - drawW / 2;
                     const logoDrawY = logoY - drawH / 2; // Center based on calculated Y
-                    
+
                     // Enhanced Logo Shadow
                     ctx.save();
                     ctx.shadowColor = "rgba(0, 0, 0, 0.15)";
@@ -794,33 +799,33 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 console.warn('Logo failed to load:', e);
             }
         } else {
-             // Fallback Shield
-             // ... existing fallback code logic if needed ...
+            // Fallback Shield
+            // ... existing fallback code logic if needed ...
         }
 
         // --- DRAW BUSINESS NAME ---
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'top'; 
+        ctx.textBaseline = 'top';
         ctx.font = `900 ${nameFontSize}px "Inter", "Arial Black", sans-serif`;
         ctx.fillStyle = textBlack;
-        
+
         // Add white outline to text to make it pop over the logo
         ctx.lineWidth = 4;
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineJoin = 'round';
 
         let currentNameY = textStartY;
-        
+
         lines.forEach((l) => {
-           // Stroke first for overlap readability
-           ctx.strokeText(l.trim(), leftCenterX, currentNameY);
-           ctx.fillText(l.trim(), leftCenterX, currentNameY); 
-           currentNameY += lineHeight;
+            // Stroke first for overlap readability
+            ctx.strokeText(l.trim(), leftCenterX, currentNameY);
+            ctx.fillText(l.trim(), leftCenterX, currentNameY);
+            currentNameY += lineHeight;
         });
 
 
         // --- RIGHT SIDE CONTENT (Action Widget) ---
-        const rightPad = 65; 
+        const rightPad = 65;
         const contentX = splitX + rightPad;
         const qrSize = 340; // Reduced for new height
         // Available width for text content before hitting QR
@@ -830,15 +835,15 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillStyle = '#334155'; // Slate 700
-        ctx.font = '800 32px "Inter", "Arial", sans-serif'; 
+        ctx.font = '800 32px "Inter", "Arial", sans-serif';
         ctx.fillText('OFFICIAL SERVICE PARTNER', contentX, 40); // Compact top
 
         // F. RED HEADER BLOCK: "NEXT SERVICE DUE"
         // Tighter vertical spacing
-        const widgetY = 115; 
-        const widgetW = 580; 
+        const widgetY = 115;
+        const widgetW = 580;
         const widgetH = 200; // Slightly shorter
-        const headerH = 65; 
+        const headerH = 65;
 
         // 1. Draw Container Body (White with Red Border)
         ctx.fillStyle = '#FFFFFF';
@@ -846,7 +851,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Slightly less rounded, more boxy like screenshot
         ctx.roundRect(contentX, widgetY, widgetW, widgetH, 12);
         ctx.fill();
-        
+
         // Thick Red Border
         ctx.strokeStyle = '#DC2626'; // Red 600
         ctx.lineWidth = 12; // Thicker border
@@ -866,17 +871,17 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Add subtle shadow to text for "punched out" look
         ctx.shadowColor = "rgba(0,0,0,0.2)";
         ctx.shadowBlur = 4;
-        ctx.fillText('NEXT SERVICE DUE', contentX + widgetW/2, widgetY + headerH/2 + 2);
+        ctx.fillText('NEXT SERVICE DUE', contentX + widgetW / 2, widgetY + headerH / 2 + 2);
         ctx.shadowColor = "transparent"; // Reset
 
         // 3. Calendar Icon (Inside the White Body on Left)
-        const bodyCenterY = widgetY + headerH + (widgetH - headerH)/2;
-        
+        const bodyCenterY = widgetY + headerH + (widgetH - headerH) / 2;
+
         ctx.save();
         const calSize = 70; // Adjusted size
-        const calX = contentX + 50; 
+        const calX = contentX + 50;
         const calY = bodyCenterY;
-        
+
         ctx.translate(calX, calY);
         // Calendar Path (Red Color)
         ctx.fillStyle = '#DC2626'; // Match border color
@@ -884,9 +889,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // Center the path (original is 24x24)
         const scale = calSize / 24;
         ctx.scale(scale, scale);
-        ctx.translate(-12, -12); 
+        ctx.translate(-12, -12);
         ctx.fill(calPath);
-        
+
         // Draw grid inside calendar (white) to look like dates
         ctx.fillStyle = '#FFFFFF';
         // Small rectangles for dates
@@ -902,33 +907,33 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#CBD5E1'; // Light grey
-        ctx.font = '500 50px "Courier New", monospace'; 
-        
+        ctx.font = '500 50px "Courier New", monospace';
+
         // Shift '/' to the right since calendar is on the left
         const dateAreaStart = contentX + 80;
         const dateAreaW = widgetW - 110;
-        const dateCenter = dateAreaStart + dateAreaW/2;
-        
+        const dateCenter = dateAreaStart + dateAreaW / 2;
+
         ctx.fillStyle = '#94A3B8'; // Slate 400
         ctx.fillText('/     /', dateCenter, bodyCenterY);
 
 
         // G. "DATE CLEANED:" Link (Below Widget)
         const dateCleanedY = widgetY + widgetH + 80;
-        ctx.fillStyle = textBlack; 
+        ctx.fillStyle = textBlack;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.font = '700 34px "Inter", "Arial", sans-serif'; 
+        ctx.font = '700 34px "Inter", "Arial", sans-serif';
         ctx.fillText('DATE CLEANED:', contentX, dateCleanedY);
         // Underline
         ctx.strokeStyle = '#94A3B8';
         ctx.lineWidth = 2; // Thicker line
         ctx.beginPath();
-        const lineStart = contentX + 300; 
+        const lineStart = contentX + 300;
         ctx.moveTo(lineStart, dateCleanedY);
         ctx.lineTo(contentX + widgetW, dateCleanedY);
         ctx.stroke();
-        
+
         // Add Slashes for Date Input
         const lineLength = (contentX + widgetW) - lineStart;
         const lineCenter = lineStart + lineLength / 2;
@@ -940,87 +945,87 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         // H. CTA TEXT (Bottom Left) - Replaces Button Pill
         // "Scan to activate" (Navy Blue)
         // "FREE 30-day warranty >" (Red, Bold)
-        
+
         const ctaY = height - 35; // Tighter bottom margin
-        
+
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
-        
+
         // Line 1: "Scan to activate"
         const ctaLine1Y = ctaY - 55;
         ctx.fillStyle = '#0f172a'; // Slate 900 / Navy
         ctx.font = '800 40px "Inter", "Arial", sans-serif';
         ctx.fillText('Scan to activate', contentX, ctaLine1Y);
-        
+
         // Line 2: "FREE 30-day warranty"
         ctx.fillStyle = '#DC2626'; // Red 600
         ctx.font = '900 46px "Inter", "Arial Black", sans-serif';
         const ctaText = 'FREE 30-day warranty'; // Removed ►
         ctx.fillText(ctaText, contentX, ctaY);
-        
+
         // --- QR CODE AREA ---
         // Adjusted for new compact height (Increased by ~5%, 340 -> 357)
-        const qrSizeAdjusted = 357; 
-        const qrX = width - qrSizeAdjusted - 60; 
-        const qrY = (height - qrSizeAdjusted) / 2; 
+        const qrSizeAdjusted = 357;
+        const qrX = width - qrSizeAdjusted - 60;
+        const qrY = (height - qrSizeAdjusted) / 2;
 
         // --- DASHED ARROW TO QR ---
         // More dramatic "Loop" curve
-        
+
         const ctaTextW = ctx.measureText(ctaText).width;
         // Start right after the text "warranty"
-        const arrowStartX = contentX + ctaTextW + 15; 
+        const arrowStartX = contentX + ctaTextW + 15;
         const arrowStartY = ctaY - 25; // Mid-height of text
-        
+
         // Target: Left side of QR, slighty below middle
         const arrowEndX = qrX - 27;
         const arrowEndY = qrY + qrSizeAdjusted - 80; // Higher up than before
-        
+
         ctx.save();
         ctx.beginPath();
         ctx.strokeStyle = '#DC2626';
         ctx.lineWidth = 5;
         ctx.lineCap = 'round';
-        ctx.setLineDash([12, 8]); 
-        
+        ctx.setLineDash([12, 8]);
+
         // Create a loop-the-loop curve (Cycloidish)
         // 1. Go UP and RIGHT from text
         // 2. Loop BACK (left) and UP
         // 3. Curve RIGHT and DOWN into QR
-        
+
         // A simple cubic bezier can't do a full loop, so we'll use a strong S-curve 
         // that goes HIGH to mimic the "flight path" look in the attachment
-        
+
         const cp1x = arrowStartX + 40;
         const cp1y = arrowStartY - 100; // Go WAY up first
-        
+
         const cp2x = arrowEndX - 120;
         const cp2y = arrowEndY + 80;  // Come from below/right logic? No, let's just arc it.
-        
+
         // Let's try a defined 3-point curve for better control or just strong bezier
         // Start -> Control High/Right -> Control Low/Left -> End? No.
-        
+
         // Let's do a large upward arc that swoops down.
         // Start: (Text End)
         // CP1: (Midway X, High Y)
         // CP2: (Close to QR X, Low Y?)
-        
+
         // Update: User wants "Curve pointing more straight to the qr forming like s"
         // and "Start there" (after text).
-        
+
         // New Control Points for "S" Shape
         // 1. Start moving Right
         // 2. Curve Down
         // 3. Curve Up/Right into QR? 
         // Or "Loop" style: Up -> Right -> Down -> target
-        
+
         // Trying a "Ski Jump" S-curve
         const jumpCP1X = arrowStartX + 120;
         const jumpCP1Y = arrowStartY - 80; // Up and Right
-        
+
         const jumpCP2X = arrowEndX - 100;
         const jumpCP2Y = arrowEndY + 80;   // Down and Left (creates tension)
-        
+
         // Calculate shortened endpoint to prevent dashed line from overlapping arrowhead
         // Get the direction vector from CP2 to End
         const dx = arrowEndX - jumpCP2X;
@@ -1028,28 +1033,28 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const length = Math.sqrt(dx * dx + dy * dy);
         const unitX = dx / length;
         const unitY = dy / length;
-        
+
         // Pull back by ~15 pixels to create clean separation
         const shortenedEndX = arrowEndX - (unitX * 15);
         const shortenedEndY = arrowEndY - (unitY * 15);
-        
+
         ctx.moveTo(arrowStartX, arrowStartY);
-        ctx.lineCap = 'butt'; 
+        ctx.lineCap = 'butt';
         ctx.bezierCurveTo(jumpCP1X, jumpCP1Y, jumpCP2X, jumpCP2Y, shortenedEndX, shortenedEndY);
         ctx.stroke();
-        
+
         // Arrow Head (drawn at full endpoint for sharp tip)
-        ctx.setLineDash([]); 
+        ctx.setLineDash([]);
         ctx.translate(arrowEndX, arrowEndY);
         // Angle needs to match the incoming tangent from jumpCP2
         const angle = Math.atan2(arrowEndY - jumpCP2Y, arrowEndX - jumpCP2X);
-        ctx.rotate(angle); 
-        
+        ctx.rotate(angle);
+
         ctx.fillStyle = '#DC2626';
         ctx.beginPath();
         ctx.moveTo(0, 0);       // Sharp tip at center
-        ctx.lineTo(-24, -12);   
-        ctx.lineTo(-24, 12);    
+        ctx.lineTo(-24, -12);
+        ctx.lineTo(-24, 12);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
@@ -1062,11 +1067,11 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             const qrBgSize = qrSizeAdjusted + (qrBgPadding * 2);
             const qrBgX = qrX - qrBgPadding;
             const qrBgY = qrY - qrBgPadding;
-            
+
             ctx.beginPath();
             ctx.roundRect(qrBgX, qrBgY, qrBgSize, qrBgSize, 24);
             ctx.fill();
-            
+
             // Subtle shadow for the card
             ctx.shadowColor = "rgba(0, 0, 0, 0.05)";
             ctx.shadowBlur = 15;
@@ -1078,7 +1083,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSizeAdjusted,
                 // Add margin in QR generation so modules don't hit the edge if we didn't have padding
-                margin: 0, 
+                margin: 0,
                 errorCorrectionLevel: 'M',
                 color: { dark: '#111111', light: '#00000000' }
             });
@@ -1089,7 +1094,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.drawImage(qrImg, qrX, qrY, qrSizeAdjusted, qrSizeAdjusted);
 
             // WhatsApp Icon Overlay
-            const iconSize = qrSizeAdjusted * 0.20; 
+            const iconSize = qrSizeAdjusted * 0.20;
             const iconX = qrX + qrSizeAdjusted / 2;
             const iconY = qrY + qrSizeAdjusted / 2;
 
@@ -1116,9 +1121,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             // Bottom Label for QR - "SCAN TO BOOK"
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.fillStyle = textBlack; 
-            ctx.font = '800 28px "Inter", "Arial", sans-serif'; 
-            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted/2, qrY + qrSizeAdjusted + 44);
+            ctx.fillStyle = textBlack;
+            ctx.font = '800 28px "Inter", "Arial", sans-serif';
+            ctx.fillText('SCAN TO BOOK', qrX + qrSizeAdjusted / 2, qrY + qrSizeAdjusted + 44);
 
             // Download
             const link = document.createElement('a');
@@ -1139,12 +1144,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const downloadQR_silver = async () => {
         // Launchfly Bot WhatsApp number - the central AI receptionist
         const launchflyBotNumber = '13203627874';
-        
+
         // Include business ref in trigger message so bot knows which business context to use
         // Use subdomain if available (shorter), otherwise fall back to UUID
         const businessRef = business?.subdomain || business?.id;
         const stickerTrigger = `Hi! I want to activate my 30-Day Warranty. 🛡️\n\n(Ref: ${businessRef || 'UNKNOWN'})`;
-        
+
         // Primary: Launchfly bot with business context
         const qrUrl = `https://wa.me/${launchflyBotNumber}?text=${encodeURIComponent(stickerTrigger)}`;
 
@@ -1169,7 +1174,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const radius = 40;
         ctx.beginPath();
         ctx.roundRect(0, 0, width, height, radius);
-        ctx.clip(); 
+        ctx.clip();
 
         // 2. BACKGROUNDS
         // Split point: Left 30% Blue, Right 70% Silver
@@ -1201,13 +1206,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         if (bizName.length > 15) nameFontSize = 45;
         if (bizName.length > 25) nameFontSize = 35;
         ctx.font = `700 ${nameFontSize}px "Inter", "Arial", sans-serif`;
-        
+
         // Wrap text logic: Print max 2 lines
         const nameY = 135;
         const words = bizName.split(' ');
         let line = '';
         let lines = [];
-        for(let n = 0; n < words.length; n++) {
+        for (let n = 0; n < words.length; n++) {
             const testLine = line + words[n] + ' ';
             const metrics = ctx.measureText(testLine);
             if (metrics.width > splitX - 60 && n > 0) {
@@ -1219,35 +1224,35 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         }
         lines.push(line);
         // Draw lines centered
-        let currentNameY = lines.length > 1 ? nameY - (lines.length * nameFontSize/2) : nameY;
+        let currentNameY = lines.length > 1 ? nameY - (lines.length * nameFontSize / 2) : nameY;
         lines.forEach((l) => {
-           ctx.fillText(l.trim(), leftCenterX, currentNameY); 
-           currentNameY += (nameFontSize * 1.2);
+            ctx.fillText(l.trim(), leftCenterX, currentNameY);
+            currentNameY += (nameFontSize * 1.2);
         });
 
         // B. Shield Icon (Center) - Professional SVG Path
         const shieldSize = 240;
         const shieldY = height / 2;
-        
+
         ctx.save();
         // Centering logic: The Shield path specifically goes from y=2 to y=25 (material icon style)
         // We translate to the absolute center of the left section first.
-        ctx.translate(leftCenterX, shieldY); 
+        ctx.translate(leftCenterX, shieldY);
         ctx.scale(shieldSize / 24, shieldSize / 24);
         // Then we offset to center the 24x24 box AND account for the y=2 top margin in the path
         const pathCenterY = 13.5; // (2 + 25) / 2
-        ctx.translate(-12, -pathCenterY); 
-        
+        ctx.translate(-12, -pathCenterY);
+
         // Shield Outline
         ctx.lineWidth = 2.0; // Slightly thicker for print clarity at smaller scale
         ctx.strokeStyle = brandWhite;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        
+
         // Custom Shield Path (professional badge shape)
         const shieldPath = new Path2D("M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z");
         ctx.stroke(shieldPath);
-        
+
         // Checkmark inside
         const checkPath = new Path2D("M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
         ctx.fillStyle = brandWhite;
@@ -1258,7 +1263,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const phoneY = height - 45;
         // Priority: whatsapp_number > phone_number > business_data.phone > fallback
         const safePhone = business?.whatsapp_number || business?.phone_number || businessData?.phone || '+13203627874';
-        
+
         ctx.fillStyle = brandWhite;
         ctx.font = '500 36px "Inter", "Arial", sans-serif';
 
@@ -1268,21 +1273,21 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         const gap = 12;
         const textWidth = ctx.measureText(labelText).width;
         const totalWidth = iconSizeSmall + gap + textWidth;
-        
+
         // Calculate starting X to center the whole group
         const startX = leftCenterX - (totalWidth / 2);
-        
+
         // Draw Icon
         ctx.save();
         // Align icon vertically with text. Text is baseline 'bottom' at (phoneY - 55).
-        ctx.translate(startX, phoneY - 55 - iconSizeSmall - 5); 
+        ctx.translate(startX, phoneY - 55 - iconSizeSmall - 5);
         ctx.scale(iconSizeSmall / 24, iconSizeSmall / 24);
         const phoneIconPath = new Path2D("M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z");
         ctx.fill(phoneIconPath);
         ctx.restore();
 
         // Draw Text
-        ctx.textAlign = 'left'; 
+        ctx.textAlign = 'left';
         ctx.fillText(labelText, startX + iconSizeSmall + gap, phoneY - 55);
         ctx.textAlign = 'center'; // Restore
 
@@ -1290,17 +1295,17 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillText(safePhone, leftCenterX, phoneY);
 
         // --- RIGHT SIDE CONTENT (Silver Area) ---
-        const rightPad = 80; 
+        const rightPad = 80;
         const contentX = splitX + rightPad;
         const qrSize = 400; // Adjusted for sleek height
-        
+
         ctx.textAlign = 'left';
-        
+
         // D. Top Label "SERVICE & WARRANTY RECORD"
         // [PRINT FIX] Use Navy instead of Grey for high contrast on Silver Foil
-        ctx.fillStyle = navyBlue; 
+        ctx.fillStyle = navyBlue;
         ctx.textBaseline = 'top';
-        ctx.font = '800 42px "Inter", "Arial", sans-serif'; 
+        ctx.font = '800 42px "Inter", "Arial", sans-serif';
         ctx.fillText('OFFICIAL 30-DAY WARRANTY', contentX, 65); // Moved up
 
         // E. Main Headline "SCAN TO ACTIVATE WARRANTY"
@@ -1309,7 +1314,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         ctx.fillStyle = textBlack;
         ctx.font = '900 95px "Inter", "Arial Black", sans-serif';
         const lineHeight = 100;
-        
+
         ctx.fillText('SCAN TO', contentX, mainY);
         ctx.fillText('ACTIVATE', contentX, mainY + lineHeight);
         ctx.fillText('WARRANTY', contentX, mainY + (lineHeight * 2));
@@ -1331,7 +1336,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             // If library puts transparent, it will be silver background.
             // If library puts white, it will be a white box.
             // Let's try transparent (light: #00000000) for the integrated look.
-            
+
             const qrDataUrl = await QRCodeLib.toDataURL(qrUrl, {
                 width: qrSize,
                 margin: 0,
@@ -1345,7 +1350,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
             // WhatsApp Icon Overlay in center of QR
-            const iconSize = qrSize * 0.20; 
+            const iconSize = qrSize * 0.20;
             const iconX = qrX + qrSize / 2;
             const iconY = qrY + qrSize / 2;
 
@@ -1546,7 +1551,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                 const isToday = booking.slot_date === new Date().toISOString().split('T')[0];
                                 const isTomorrow = booking.slot_date === new Date(Date.now() + 86400000).toISOString().split('T')[0];
                                 const dateLabel = isToday ? '🔴 TODAY' : isTomorrow ? '🟡 TOMORROW' : booking.slot_label?.split(' ').slice(0, 3).join(' ');
-                                
+
                                 return (
                                     <div
                                         key={booking.id}
@@ -1642,10 +1647,10 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     leads.slice(0, 10).map((lead) => {
                         const { service, estimate } = parseLeadDetails(lead);
                         const status = getStatusBadge(lead);
-                        
+
                         // Check if this lead has an active booking
-                        const hasActiveBooking = bookings.some(b => 
-                            b.customer_phone === lead.phone && 
+                        const hasActiveBooking = bookings.some(b =>
+                            b.customer_phone === lead.phone &&
                             (b.status === 'pending' || b.status === 'confirmed')
                         );
 
@@ -1659,7 +1664,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                         {status.text}
                                     </div>
                                 )}
-                                
+
                                 {hasActiveBooking && (
                                     <div className="absolute top-0 right-0 bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
                                         ✅ HAS BOOKING
@@ -1771,24 +1776,25 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             <div className="px-5 pb-5">
                 <h2 className="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">Quick Actions</h2>
 
-                {/* Blast Promo Card - Smart Segments */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 rounded-xl shadow-lg text-white mb-4 relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 bg-white/10 w-24 h-24 rounded-full blur-2xl"></div>
+                {/* AI Sales Assistant Card */}
+                <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-5 rounded-xl shadow-lg text-white mb-4 relative overflow-hidden">
+                    <div className="absolute -right-6 -top-6 bg-white/10 w-28 h-28 rounded-full blur-2xl"></div>
+                    <div className="absolute -left-4 -bottom-4 bg-white/5 w-20 h-20 rounded-full blur-xl"></div>
 
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-white/20 rounded-lg backdrop-blur">
-                            <Megaphone className="w-5 h-5 text-white" />
+                            <Bot className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="font-bold">Smart Blast</h3>
+                        <h3 className="font-bold">AI Sales Assistant</h3>
                     </div>
-                    <p className="text-sm text-blue-100 mb-4">
-                        Target specific leads with personalized messages
+                    <p className="text-sm text-emerald-100 mb-4">
+                        Put your follow-ups on autopilot. Choose an audience, and let the AI follow up until they book.
                     </p>
                     <button
-                        onClick={() => { setShowBlastModal(true); fetchBlastSegments(); }}
-                        className="w-full py-2 bg-white text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-50 transition-colors"
+                        onClick={() => { setShowBlastModal(true); setDeployStep(1); setSelectedGoal(null); setSelectedPlaybook(null); fetchBlastSegments(); }}
+                        className="w-full py-2.5 bg-white text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
                     >
-                        Choose Audience & Message
+                        <Zap className="w-4 h-4" /> Deploy AI Assistant
                     </button>
                 </div>
 
@@ -1834,264 +1840,297 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 </div>
             </div>
 
-            {/* Blast Modal - Enhanced with Segments */}
+            {/* AI Sales Assistant Modal — 3-Step Wizard */}
             {showBlastModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-lg">📣 Smart Blast</h3>
-                            <button onClick={() => { setShowBlastModal(false); setBlastTab('blast'); setImportResult(null); }}>
+                            <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-emerald-100 rounded-lg">
+                                    <Bot className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <h3 className="font-bold text-lg">AI Sales Assistant</h3>
+                            </div>
+                            <button onClick={() => { setShowBlastModal(false); setBlastTab('blast'); setImportResult(null); setDeployStep(1); }}>
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        {/* Tab Switcher: Blast vs Import */}
-                        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 mb-4">
-                            <button
-                                onClick={() => setBlastTab('blast')}
-                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-                                    blastTab === 'blast'
-                                        ? 'bg-white shadow text-blue-600'
-                                        : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                            >
-                                📣 Send Blast
-                            </button>
-                            <button
-                                onClick={() => setBlastTab('import')}
-                                className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-                                    blastTab === 'import'
-                                        ? 'bg-white shadow text-green-600'
-                                        : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                            >
-                                📥 Import List
-                            </button>
+                        {/* Progress Dots */}
+                        <div className="flex items-center justify-center gap-2 mb-5">
+                            {[1, 2, 3].map(step => (
+                                <div key={step} className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${deployStep === step
+                                            ? 'bg-emerald-600 text-white scale-110 shadow-lg shadow-emerald-200'
+                                            : deployStep > step
+                                                ? 'bg-emerald-100 text-emerald-600'
+                                                : 'bg-slate-100 text-slate-400'
+                                        }`}>
+                                        {deployStep > step ? '✓' : step}
+                                    </div>
+                                    {step < 3 && (
+                                        <div className={`w-8 h-0.5 rounded transition-colors duration-300 ${deployStep > step ? 'bg-emerald-400' : 'bg-slate-200'
+                                            }`} />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-center mb-4">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                                {deployStep === 1 ? 'Step 1: Target Audience' : deployStep === 2 ? 'Step 2: AI Goal' : 'Step 3: Follow-Up Playbook'}
+                            </p>
                         </div>
 
-                        {/* Wallet Balance */}
-                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 rounded-xl mb-4">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <p className="text-xs text-blue-100">Wallet</p>
-                                    <p className="text-xl font-bold">{currency}{blastCredits.toFixed(0)}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-xs text-blue-100">Per message</p>
-                                    <p className="text-lg font-semibold">{currency}{COST_PER_MESSAGE}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* === BLAST TAB === */}
-                        {blastTab === 'blast' && (
-                        <>
-                        {loadingSegments ? (
-                            <div className="text-center py-8">
-                                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                                <p className="text-sm text-slate-500">Loading segments...</p>
-                            </div>
-                        ) : blastSegments ? (
-                            <>
-                                {/* Segment Selection */}
-                                <div className="mb-4">
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Target Audience</label>
+                        {/* ───── STEP 1: AUDIENCE ───── */}
+                        {deployStep === 1 && (
+                            <div>
+                                {loadingSegments ? (
+                                    <div className="text-center py-8">
+                                        <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                                        <p className="text-sm text-slate-500">Loading audiences...</p>
+                                    </div>
+                                ) : blastSegments ? (
                                     <div className="space-y-2">
                                         {Object.entries(blastSegments).map(([key, seg]) => (
                                             <button
                                                 key={key}
                                                 onClick={() => setSelectedSegment(key)}
-                                                className={`w-full p-3 rounded-lg border text-left transition-all ${
-                                                    selectedSegment === key 
-                                                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
-                                                        : 'border-slate-200 hover:border-slate-300'
-                                                }`}
+                                                className={`w-full p-3.5 rounded-xl border-2 text-left transition-all ${selectedSegment === key
+                                                        ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                    }`}
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-lg">{seg.icon}</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xl">{seg.icon}</span>
                                                         <div>
-                                                            <p className="font-medium text-sm">{seg.name}</p>
+                                                            <p className="font-semibold text-sm text-slate-900">{seg.name}</p>
                                                             <p className="text-xs text-slate-500">{seg.description}</p>
                                                         </div>
                                                     </div>
                                                     <div className="text-right">
-                                                        <span className={`text-lg font-bold ${seg.count > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                                                        <span className={`text-lg font-bold ${seg.count > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                                                             {seg.count}
                                                         </span>
                                                         {seg.recommended && (
-                                                            <span className="block text-[10px] text-green-600 font-medium">⭐ Best</span>
+                                                            <span className="block text-[10px] text-amber-600 font-medium">⭐ Best</span>
                                                         )}
                                                     </div>
                                                 </div>
                                             </button>
                                         ))}
                                     </div>
-                                </div>
+                                ) : (
+                                    <p className="text-sm text-slate-500 text-center py-8">Failed to load audiences. Try again.</p>
+                                )}
 
-                                {/* Message Template Selection */}
-                                <div className="mb-4">
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
-                                        Message {(selectedSegment === 'imported' || selectedSegment === 'cold_leads') && '(Template)'}
-                                    </label>
-                                    
-                                    {/* Template Selection Pills */}
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {blastTemplates.map(t => (
-                                            <button
-                                                key={t.id}
-                                                onClick={() => {
-                                                    setSelectedTemplate(t.id);
-                                                    setCustomMessage('');
-                                                }}
-                                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                                                    selectedTemplate === t.id && !customMessage
-                                                        ? 'bg-blue-600 text-white'
-                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                {/* Import link */}
+                                <button
+                                    onClick={() => setBlastTab('import')}
+                                    className="mt-3 w-full text-xs text-slate-400 hover:text-emerald-600 transition-colors"
+                                >
+                                    📥 Or import a contact list first
+                                </button>
+
+                                {/* Next Button */}
+                                <button
+                                    onClick={() => setDeployStep(2)}
+                                    disabled={!blastSegments || !blastSegments[selectedSegment] || blastSegments[selectedSegment].count === 0}
+                                    className="w-full mt-4 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    Next: Choose AI Goal <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* ───── STEP 2: AI GOAL ───── */}
+                        {deployStep === 2 && (
+                            <div>
+                                <div className="space-y-2">
+                                    {[
+                                        { id: 'book_call', icon: '📞', title: 'Book a Decision Call', desc: 'Best for: Quoted, Not Booked', color: 'blue' },
+                                        { id: 'reactivate', icon: '💬', title: 'Reactivate & Get a Reply', desc: 'Best for: Ghosted Leads', color: 'amber' },
+                                        { id: 'upsell', icon: '🔧', title: 'Upsell / Book Maintenance', desc: 'Best for: Past Customers', color: 'purple' },
+                                    ].map(goal => (
+                                        <button
+                                            key={goal.id}
+                                            onClick={() => setSelectedGoal(goal.id)}
+                                            className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedGoal === goal.id
+                                                    ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                                 }`}
-                                            >
-                                                {t.icon} {t.name}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* Preview Box: Smart switching between Custom/Freeform and Twilio Template */}
-                                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
-                                        {/* Header */}
-                                        <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200">
-                                            <span className="text-xs font-bold text-slate-500 uppercase">Preview</span>
-                                            {(selectedSegment === 'imported' || selectedSegment === 'cold_leads') ? (
-                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                                                    WhatsApp Template
-                                                </span>
-                                            ) : (
-                                                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                                                    Freeform Message
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Content Preview */}
-                                        <div className="text-slate-700 whitespace-pre-wrap font-sans">
-                                            {(selectedSegment === 'imported' || selectedSegment === 'cold_leads') ? (
-                                                /* COLD LEADS: Show Twilio Template Preview */
-                                                <div className="space-y-2">
-                                                    <p>Hi {'{Name}'}!</p>
-                                                    <p>🎉 Special offer from *{businessName}*:</p>
-                                                    <p>Book your {niche ? niche.toLowerCase() : 'service'} service this week and get *10% OFF*!</p>
-                                                    <p>Limited slots available. Reply *YES* to claim your discount.</p>
-                                                    <p className="text-[10px] text-slate-400 italic mt-2 border-t pt-1">
-                                                        * Sent as pre-approved WhatsApp template because contact is outside 24h window
-                                                    </p>
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl mt-0.5">{goal.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-slate-900">{goal.title}</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5">{goal.desc}</p>
                                                 </div>
-                                            ) : (
-                                                /* WARM LEADS: Show Selected Pill / Custom Text */
-                                                customMessage || (blastTemplates.find(t => t.id === selectedTemplate)?.name === '10% Off Promo' 
-                                                    ? `🔥 ${niche} Promo! 10% OFF this week only. Reply "BOOK" to claim your slot! - ${businessName}`
-                                                    : blastTemplates.find(t => t.id === selectedTemplate)?.name === 'We Miss You'
-                                                    ? `Hi {Name}! 👋 It's been a while since your last ${niche?.toLowerCase()} service. Ready to book again? Reply "YES" - ${businessName}`
-                                                    : blastTemplates.find(t => t.id === selectedTemplate)?.name === 'Service Reminder'
-                                                    ? `Hi {Name}! 🔧 Your ${niche?.toLowerCase()} is due for service. Book now to keep it running smoothly! Reply "BOOK" - ${businessName}`
-                                                    : `(Select a template above)`
-                                                )
+                                            </div>
+                                            {selectedGoal === goal.id && (
+                                                <div className="mt-2 ml-9 text-xs text-emerald-600 font-medium">✓ Selected</div>
                                             )}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Textarea only visible for Warm leads where custom text is possible */}
-                                    {!(selectedSegment === 'imported' || selectedSegment === 'cold_leads') && (
-                                        <textarea
-                                            value={customMessage}
-                                            onChange={(e) => setCustomMessage(e.target.value)}
-                                            placeholder="Or write custom message..."
-                                            className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none mt-3"
-                                            rows={2}
-                                        />
-                                    )}
+                                        </button>
+                                    ))}
                                 </div>
 
-                                {/* Cost Summary */}
-                                {blastSegments[selectedSegment] && (
-                                    <div className="bg-slate-50 p-3 rounded-lg text-sm mb-4">
+                                {/* Navigation */}
+                                <div className="flex gap-2 mt-4">
+                                    <button
+                                        onClick={() => setDeployStep(1)}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={() => setDeployStep(3)}
+                                        disabled={!selectedGoal}
+                                        className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        Next <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ───── STEP 3: PLAYBOOK ───── */}
+                        {deployStep === 3 && (
+                            <div>
+                                <div className="space-y-2">
+                                    {[
+                                        {
+                                            id: 'aggressive',
+                                            icon: '🔥',
+                                            title: 'Aggressive',
+                                            desc: 'High-intent leads',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 3', channel: 'AI Voice Call', icon: '📞' },
+                                                { day: 'Day 5', channel: 'SMS Breakup', icon: '📱' },
+                                            ]
+                                        },
+                                        {
+                                            id: 'soft_touch',
+                                            icon: '🕊️',
+                                            title: 'Soft Touch',
+                                            desc: 'Warm but cautious leads',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'Email', icon: '✉️' },
+                                                { day: 'Day 3', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 7', channel: 'Email', icon: '✉️' },
+                                            ]
+                                        },
+                                        {
+                                            id: 'text_only',
+                                            icon: '💬',
+                                            title: 'Text Only',
+                                            desc: 'Low-friction approach',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 2', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 4', channel: 'SMS', icon: '📱' },
+                                            ]
+                                        },
+                                    ].map(playbook => (
+                                        <button
+                                            key={playbook.id}
+                                            onClick={() => setSelectedPlaybook(playbook.id)}
+                                            className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlaybook === playbook.id
+                                                    ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="text-xl">{playbook.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-slate-900">{playbook.title}</p>
+                                                    <p className="text-xs text-slate-500">{playbook.desc}</p>
+                                                </div>
+                                            </div>
+                                            {/* Sequence Timeline */}
+                                            <div className="flex items-center gap-1 ml-8">
+                                                {playbook.steps.map((s, i) => (
+                                                    <React.Fragment key={i}>
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-sm">{s.icon}</span>
+                                                            <span className="text-[10px] text-slate-400 mt-0.5">{s.day}</span>
+                                                        </div>
+                                                        {i < playbook.steps.length - 1 && (
+                                                            <div className="w-6 h-px bg-slate-300 mt-[-6px]" />
+                                                        )}
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Wallet + Cost Summary */}
+                                {blastSegments && blastSegments[selectedSegment] && (
+                                    <div className="mt-4 bg-slate-50 p-3 rounded-xl text-sm">
                                         <div className="flex justify-between mb-1">
-                                            <span className="text-slate-500">Recipients</span>
-                                            <span className="font-medium">{blastSegments[selectedSegment].count} leads</span>
+                                            <span className="text-slate-500">Audience</span>
+                                            <span className="font-medium">{blastSegments[selectedSegment].name} ({blastSegments[selectedSegment].count})</span>
                                         </div>
                                         <div className="flex justify-between mb-1">
-                                            <span className="text-slate-500">Cost</span>
+                                            <span className="text-slate-500">Cost (first touch)</span>
                                             <span className="font-medium">{currency}{blastSegments[selectedSegment].count * COST_PER_MESSAGE}</span>
                                         </div>
                                         <div className="border-t pt-2 flex justify-between">
-                                            <span className="text-slate-500">Remaining</span>
-                                            <span className={`font-bold ${
-                                                blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE 
-                                                    ? 'text-green-600' 
+                                            <span className="text-slate-500">Wallet</span>
+                                            <span className={`font-bold ${blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE
+                                                    ? 'text-green-600'
                                                     : 'text-red-600'
-                                            }`}>
-                                                {currency}{(blastCredits - blastSegments[selectedSegment].count * COST_PER_MESSAGE).toFixed(0)}
+                                                }`}>
+                                                {currency}{blastCredits.toFixed(0)}
                                             </span>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Send Button */}
-                                {blastSegments[selectedSegment]?.count > 0 ? (
-                                    blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE ? (
+                                {/* Navigation + Deploy */}
+                                <div className="flex gap-2 mt-4">
+                                    <button
+                                        onClick={() => setDeployStep(2)}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        ← Back
+                                    </button>
+                                    {blastSegments && blastSegments[selectedSegment] && blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE ? (
                                         <button
                                             onClick={sendBlast}
-                                            disabled={sendingBlast}
-                                            className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl disabled:opacity-50"
+                                            disabled={sendingBlast || !selectedPlaybook}
+                                            className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
                                         >
-                                            {sendingBlast ? 'Sending...' : `Send to ${blastSegments[selectedSegment].count} Leads`}
+                                            {sendingBlast ? (
+                                                <span className="flex items-center gap-2">
+                                                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                                    Deploying...
+                                                </span>
+                                            ) : (
+                                                <><Zap className="w-4 h-4" /> Deploy</>
+                                            )}
                                         </button>
                                     ) : (
-                                        <div className="space-y-2">
-                                            <button disabled className="w-full py-3 bg-gray-300 text-gray-500 font-bold rounded-xl cursor-not-allowed">
-                                                Insufficient Credits
-                                            </button>
-                                            <button
-                                                onClick={() => { setShowBlastModal(false); setShowTopUpModal(true); }}
-                                                className="w-full py-3 bg-green-600 text-white font-bold rounded-xl"
-                                            >
-                                                💳 Top Up Wallet
-                                            </button>
-                                        </div>
-                                    )
-                                ) : (
-                                    <div className="text-center py-3 text-slate-500 text-sm">
-                                        No leads in this segment
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            /* Fallback to old UI if segments fail to load */
-                            <>
-                                <p className="text-sm text-slate-600 mb-3">
-                                    Send WhatsApp promo to <strong>{oldLeadsCount} leads</strong> who haven&apos;t booked in 3+ days.
-                                </p>
-                                <div className="bg-green-50 border border-green-100 p-3 rounded-lg text-sm mb-4">
-                                    <p className="text-xs text-green-600 font-medium mb-1">📱 Message Preview</p>
-                                    🔥 {niche} Promo! 10% OFF this week only. Reply &quot;BOOK&quot; to claim your slot! - {businessName}
+                                        <button
+                                            onClick={() => { setShowBlastModal(false); setShowTopUpModal(true); }}
+                                            className="flex-1 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors"
+                                        >
+                                            💳 Top Up
+                                        </button>
+                                    )}
                                 </div>
-                                <button
-                                    onClick={sendBlast}
-                                    disabled={sendingBlast || oldLeadsCount === 0}
-                                    className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl disabled:opacity-50"
-                                >
-                                    {sendingBlast ? 'Sending...' : `Send Blast (${currency}${oldLeadsCount * COST_PER_MESSAGE} cost)`}
-                                </button>
-                            </>
-                        )}
-                        </>
+                            </div>
                         )}
 
-                        {/* === IMPORT TAB === */}
+                        {/* === IMPORT TAB (accessible from Step 1) === */}
                         {blastTab === 'import' && (
                             <div>
                                 <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
                                     <p className="text-sm font-medium text-green-800 mb-1">📥 Database Reactivation</p>
                                     <p className="text-xs text-green-600">
-                                        Paste your client&apos;s old customer list. We&apos;ll import them and you can blast a promo to win them back.
+                                        Paste your client&apos;s old customer list. We&apos;ll import them and you can deploy the AI to win them back.
                                     </p>
                                 </div>
 
@@ -2124,11 +2163,10 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
                                 {/* Import Result */}
                                 {importResult && (
-                                    <div className={`p-3 rounded-lg mb-4 text-sm ${
-                                        importResult.error 
+                                    <div className={`p-3 rounded-lg mb-4 text-sm ${importResult.error
                                             ? 'bg-red-50 border border-red-200 text-red-700'
                                             : 'bg-green-50 border border-green-200 text-green-700'
-                                    }`}>
+                                        }`}>
                                         {importResult.error ? (
                                             <p>❌ {importResult.error}</p>
                                         ) : (
@@ -2141,29 +2179,34 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                                 {importResult.invalid > 0 && (
                                                     <p>⚠️ {importResult.invalid} invalid numbers skipped</p>
                                                 )}
-                                                <p className="mt-2 text-xs text-green-600">
-                                                    Switch to &quot;Send Blast&quot; tab → select &quot;Imported Contacts&quot; segment to blast them!
-                                                </p>
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                {/* Import Button */}
-                                <button
-                                    onClick={importContacts}
-                                    disabled={importing || !importText.trim()}
-                                    className="w-full py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 transition-all"
-                                >
-                                    {importing ? (
-                                        <span className="flex items-center justify-center gap-2">
-                                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                            Importing...
-                                        </span>
-                                    ) : (
-                                        `📥 Import Contacts`
-                                    )}
-                                </button>
+                                {/* Import / Back Buttons */}
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setBlastTab('blast')}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={importContacts}
+                                        disabled={importing || !importText.trim()}
+                                        className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 transition-all"
+                                    >
+                                        {importing ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                                Importing...
+                                            </span>
+                                        ) : (
+                                            '📥 Import'
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -2382,9 +2425,9 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                     const { error } = await supabase
                                         .from('businesses')
                                         .update({
-                                            slot_settings: { 
-                                                slots: slotSettings, 
-                                                days_ahead: 4, 
+                                            slot_settings: {
+                                                slots: slotSettings,
+                                                days_ahead: 4,
                                                 morning_buffer: 2,
                                                 afternoon_buffer: 2,
                                                 max_per_window: maxPerWindow

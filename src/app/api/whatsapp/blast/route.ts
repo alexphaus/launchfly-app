@@ -19,12 +19,11 @@ if (accountSid && authToken) {
 }
 
 // Segment types
-export type BlastSegment = 
+export type BlastSegment =
     | 'all_old_leads'      // Original: leads not booked, older than 3 days
-    | 'cold_leads'          // Never responded
     | 'quoted_not_booked'   // Got quote but didn't book (highest conversion!)
     | 'past_customers'      // Have service history
-    | 'service_due_soon'    // Service due within 30 days (Forever Customer Engine)
+    | 'missed_call'         // Missed call leads
     | 'imported'            // Database Reactivation: imported external contacts
     | 'custom';             // Custom selection
 
@@ -37,31 +36,31 @@ export const MESSAGE_TEMPLATES: Record<string, {
     promo_10off: {
         name: '10% Off Promo',
         icon: '🔥',
-        template: (niche: string, businessName: string) => 
+        template: (niche: string, businessName: string) =>
             `🔥 ${niche} Promo! 10% OFF this week only. Reply "BOOK" to claim your slot! - ${businessName}`
     },
     miss_you: {
         name: 'We Miss You',
         icon: '👋',
-        template: (niche: string, businessName: string, customerName?: string) => 
+        template: (niche: string, businessName: string, customerName?: string) =>
             `Hi${customerName ? ` ${customerName}` : ''}! 👋 It's been a while since your last ${niche.toLowerCase()} service. Ready to book again? Reply "YES" - ${businessName}`
     },
     service_reminder: {
         name: 'Service Reminder',
         icon: '🔧',
-        template: (niche: string, businessName: string, customerName?: string, dueInfo?: string) => 
+        template: (niche: string, businessName: string, customerName?: string, dueInfo?: string) =>
             `Hi${customerName ? ` ${customerName}` : ''}! 🔧 Your ${niche.toLowerCase()} is ${dueInfo || 'due for service'}. Book now to keep it running smoothly! Reply "BOOK" - ${businessName}`
     },
     seasonal: {
         name: 'Seasonal Special',
         icon: '🎉',
-        template: (niche: string, businessName: string) => 
+        template: (niche: string, businessName: string) =>
             `🎉 SPECIAL OFFER! Get your ${niche.toLowerCase()} serviced before the rush. Limited slots this month! Reply "BOOK" - ${businessName}`
     },
     follow_up: {
         name: 'Quote Follow-up',
         icon: '💬',
-        template: (niche: string, businessName: string, customerName?: string) => 
+        template: (niche: string, businessName: string, customerName?: string) =>
             `Hi${customerName ? ` ${customerName}` : ''}! 💬 Still need that ${niche.toLowerCase()} service? I can hold a slot for you today. Reply "YES" to confirm! - ${businessName}`
     }
 };
@@ -69,8 +68,8 @@ export const MESSAGE_TEMPLATES: Record<string, {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { 
-            businessId, 
+        const {
+            businessId,
             message,          // Custom message (overrides template)
             templateId,       // Template key from MESSAGE_TEMPLATES
             segment = 'all_old_leads',  // Target segment
@@ -105,18 +104,6 @@ export async function POST(req: Request) {
         threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
         switch (segment) {
-            case 'cold_leads':
-                // Leads who never responded (status still 'new' or 'sticker_menu')
-                const { data: coldLeads } = await supabase
-                    .from('customers')
-                    .select('id, phone, name, first_name, status, notes, blast_optout')
-                    .eq('business_id', businessId)
-                    .in('status', ['new', 'sticker_menu', 'menu'])
-                    .lt('created_at', threeDaysAgo.toISOString())
-                    .not('phone', 'is', null)
-                    .neq('blast_optout', true);
-                leads = coldLeads || [];
-                break;
 
             case 'quoted_not_booked':
                 // Leads who got a quote but didn't book (HIGHEST CONVERSION!)
@@ -136,7 +123,7 @@ export async function POST(req: Request) {
                     .from('service_records')
                     .select('customer_id')
                     .eq('business_id', businessId);
-                
+
                 if (serviceRecords && serviceRecords.length > 0) {
                     const customerIds = [...new Set(serviceRecords.map(r => r.customer_id))];
                     const { data: pastCustomers } = await supabase
@@ -149,41 +136,17 @@ export async function POST(req: Request) {
                 }
                 break;
 
-            case 'service_due_soon':
-                // Forever Customer Engine: service due within 30 days
-                const thirtyDaysFromNow = new Date();
-                thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-                
-                const { data: dueRecords } = await supabase
-                    .from('service_records')
-                    .select(`
-                        customer_id,
-                        next_service_due_at,
-                        service_name,
-                        customers!inner (id, phone, name, first_name, blast_optout)
-                    `)
+            case 'missed_call':
+                // Leads from missed calls
+                const { data: missedCallLeads } = await supabase
+                    .from('customers')
+                    .select('id, phone, name, first_name, status, notes, blast_optout')
                     .eq('business_id', businessId)
-                    .lte('next_service_due_at', thirtyDaysFromNow.toISOString())
-                    .gte('next_service_due_at', new Date().toISOString());
-                
-                if (dueRecords) {
-                    // Deduplicate by customer and enrich with due info
-                    const customerMap = new Map();
-                    for (const record of dueRecords) {
-                        const customer = (record as any).customers;
-                        if (customer && customer.phone && customer.blast_optout !== true) {
-                            const daysUntilDue = Math.ceil(
-                                (new Date(record.next_service_due_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-                            );
-                            customerMap.set(customer.id, {
-                                ...customer,
-                                dueInfo: daysUntilDue <= 0 ? 'overdue' : `due in ${daysUntilDue} days`,
-                                serviceName: record.service_name
-                            });
-                        }
-                    }
-                    leads = Array.from(customerMap.values());
-                }
+                    .eq('source', 'missed_call')
+                    .not('phone', 'is', null)
+                    .neq('blast_optout', true)
+                    .not('status', 'in', '("booked","completed")');
+                leads = missedCallLeads || [];
                 break;
 
             case 'imported':
@@ -217,9 +180,9 @@ export async function POST(req: Request) {
         }
 
         if (!leads || leads.length === 0) {
-            return NextResponse.json({ 
+            return NextResponse.json({
                 success: true,
-                message: 'No leads in this segment', 
+                message: 'No leads in this segment',
                 sent: 0,
                 segment,
                 segmentName: getSegmentName(segment)
@@ -314,11 +277,11 @@ export async function POST(req: Request) {
             try {
                 if (client && fromNumber) {
                     const whatsappFrom = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`;
-                    
+
                     let sent = false;
-                    
-                    // For cold segments (imported, cold_leads), ALWAYS use template — never freeform
-                    const forceTemplate = segment === 'imported' || segment === 'cold_leads';
+
+                    // For cold segments (imported, missed_call), ALWAYS use template — never freeform
+                    const forceTemplate = segment === 'imported' || segment === 'missed_call';
 
                     if (forceTemplate && PROMO_TEMPLATE_SID) {
                         // DIRECT TEMPLATE: Skip freeform entirely for cold contacts
@@ -352,7 +315,7 @@ export async function POST(req: Request) {
                             sent = true;
                         } catch (freeformErr: any) {
                             console.log(`⚠️ Freeform failed for ${lead.phone} (code: ${freeformErr.code}). Trying template...`);
-                            
+
                             if (PROMO_TEMPLATE_SID) {
                                 try {
                                     await client.messages.create({
@@ -381,12 +344,12 @@ export async function POST(req: Request) {
 
                     if (sent) {
                         sentCount++;
-                        
+
                         // Update customer
                         await supabase
                             .from('customers')
                             .update({
-                                status: segment === 'service_due_soon' ? 'reminder_sent' : 'reengaged',
+                                status: 'reengaged',
                                 last_blast_at: new Date().toISOString(),
                                 notes: `${lead.notes || ''}\n[BLAST:${segment} ${new Date().toISOString()}]: ${templateId || 'custom'}`
                             })
@@ -414,7 +377,7 @@ export async function POST(req: Request) {
         const freeformCost = 0; // Session messages are free
         const templateCost = sentViaTemplate * 2.50; // Marketing template cost
         const actualCost = freeformCost + templateCost;
-        
+
         if (sentCount > 0 && actualCost > 0) {
             const newCredits = currentCredits - actualCost;
             const newUsed = (business.blast_credits_used || 0) + actualCost;
@@ -478,11 +441,9 @@ export async function GET(req: Request) {
 
         const threeDaysAgo = new Date();
         threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
         // Count each segment
-        const [allOld, cold, quoted, pastService, dueSoon, imported] = await Promise.all([
+        const [allOld, quoted, pastService, missedCall, imported] = await Promise.all([
             // All old leads
             supabase
                 .from('customers')
@@ -493,17 +454,7 @@ export async function GET(req: Request) {
                 .lt('created_at', threeDaysAgo.toISOString())
                 .not('phone', 'is', null)
                 .neq('blast_optout', true),
-            
-            // Cold leads
-            supabase
-                .from('customers')
-                .select('id', { count: 'exact', head: true })
-                .eq('business_id', businessId)
-                .in('status', ['new', 'sticker_menu', 'menu'])
-                .lt('created_at', threeDaysAgo.toISOString())
-                .not('phone', 'is', null)
-                .neq('blast_optout', true),
-            
+
             // Quoted not booked
             supabase
                 .from('customers')
@@ -512,21 +463,23 @@ export async function GET(req: Request) {
                 .in('status', ['quoted', 'pricing_shown', 'pending_booking', 'awaiting_confirmation'])
                 .not('phone', 'is', null)
                 .neq('blast_optout', true),
-            
+
             // Past customers (with service records)
             supabase
                 .from('service_records')
                 .select('customer_id', { count: 'exact', head: true })
                 .eq('business_id', businessId),
-            
-            // Service due soon
+
+            // Missed call leads
             supabase
-                .from('service_records')
-                .select('customer_id', { count: 'exact', head: true })
+                .from('customers')
+                .select('id', { count: 'exact', head: true })
                 .eq('business_id', businessId)
-                .lte('next_service_due_at', thirtyDaysFromNow.toISOString())
-                .gte('next_service_due_at', new Date().toISOString()),
-            
+                .eq('source', 'missed_call')
+                .not('phone', 'is', null)
+                .neq('blast_optout', true)
+                .not('status', 'in', '("booked","completed")'),
+
             // Imported contacts (Database Reactivation) — exclude already booked
             supabase
                 .from('customers')
@@ -546,12 +499,6 @@ export async function GET(req: Request) {
                     count: allOld.count || 0,
                     icon: '📋'
                 },
-                cold_leads: {
-                    name: 'Cold Leads',
-                    description: 'Never responded to messages',
-                    count: cold.count || 0,
-                    icon: '❄️'
-                },
                 quoted_not_booked: {
                     name: 'Quoted, Not Booked',
                     description: 'Got pricing but didn\'t book (high intent!)',
@@ -559,18 +506,18 @@ export async function GET(req: Request) {
                     icon: '🎯',
                     recommended: true
                 },
+                missed_call: {
+                    name: 'Missed Calls',
+                    description: 'Called but didn\'t get through',
+                    count: missedCall.count || 0,
+                    icon: '📞',
+                    recommended: true
+                },
                 past_customers: {
                     name: 'Past Customers',
                     description: 'Previous service history',
                     count: pastService.count || 0,
                     icon: '⭐'
-                },
-                service_due_soon: {
-                    name: 'Service Due Soon',
-                    description: 'Service needed within 30 days',
-                    count: dueSoon.count || 0,
-                    icon: '🔧',
-                    recommended: true
                 },
                 imported: {
                     name: 'Imported Contacts',
@@ -596,10 +543,9 @@ export async function GET(req: Request) {
 function getSegmentName(segment: string): string {
     const names: Record<string, string> = {
         all_old_leads: 'All Old Leads',
-        cold_leads: 'Cold Leads',
         quoted_not_booked: 'Quoted Not Booked',
+        missed_call: 'Missed Calls',
         past_customers: 'Past Customers',
-        service_due_soon: 'Service Due Soon',
         custom: 'Custom Selection',
         imported: 'Imported Contacts'
     };

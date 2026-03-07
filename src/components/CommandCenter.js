@@ -25,7 +25,6 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     const [showSlotSettingsModal, setShowSlotSettingsModal] = useState(false);
-    const [isRevenuePulseOpen, setIsRevenuePulseOpen] = useState(false);
     const [selectedLead, setSelectedLead] = useState(null);
     const [scheduleDate, setScheduleDate] = useState('tomorrow');
     const [scheduleTime, setScheduleTime] = useState('morning');
@@ -1520,15 +1519,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                         <p className="text-[10px] text-slate-400 uppercase font-bold">Active Quotes</p>
                         <p className="text-2xl font-bold text-white">{stats.activeQuotes}</p>
                     </div>
-                    <button
-                        onClick={() => setIsRevenuePulseOpen(true)}
-                        className="bg-slate-800 p-3 rounded-xl border border-slate-700 text-left hover:bg-slate-700 transition-colors cursor-pointer"
-                    >
+                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
                         <p className="text-[10px] text-slate-400 uppercase font-bold">Pipeline</p>
                         <p className="text-2xl font-bold text-green-400">
                             {currency}{stats.pipeline >= 1000 ? `${(stats.pipeline / 1000).toFixed(0)}k` : stats.pipeline}
                         </p>
-                    </button>
+                    </div>
                     <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
                         <p className="text-[10px] text-slate-400 uppercase font-bold">Booked</p>
                         <p className="text-2xl font-bold text-blue-400">{stats.booked}</p>
@@ -1536,195 +1532,142 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 </div>
             </div>
 
-            {/* Revenue Pulse Modal */}
-            <RevenuePulse
-                business={business}
-                isOpen={isRevenuePulseOpen}
-                onClose={() => setIsRevenuePulseOpen(false)}
-            />
+            {/* Revenue Pulse — Money Left on the Table */}
+            <div className="px-5 pt-5">
+                <RevenuePulse business={business} />
+            </div>
 
-            {/* Smart Customer List — merged jobs + leads, priority sorted */}
+            {/* Live Job Feed - Shows both upcoming bookings and leads */}
             <div className="p-5">
-                <h2 className="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">👥 Customers</h2>
+                {/* Upcoming Bookings Section */}
+                {bookings.filter(b => b.status === 'pending' || b.status === 'confirmed').length > 0 && (
+                    <>
+                        <h2 className="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">📅 Upcoming Jobs</h2>
+                        {bookings
+                            .filter(b => b.status === 'pending' || b.status === 'confirmed')
+                            .sort((a, b) => new Date(a.slot_date) - new Date(b.slot_date))
+                            .slice(0, 5)
+                            .map((booking) => {
+                                const isToday = booking.slot_date === new Date().toISOString().split('T')[0];
+                                const isTomorrow = booking.slot_date === new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                                const dateLabel = isToday ? '🔴 TODAY' : isTomorrow ? '🟡 TOMORROW' : booking.slot_label?.split(' ').slice(0, 3).join(' ');
 
-                {(() => {
-                    // Build unified list: bookings become type='booking', leads become type='lead'
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-                    const activeBookings = bookings
-                        .filter(b => b.status === 'pending' || b.status === 'confirmed')
-                        .map(b => ({
-                            type: 'booking',
-                            data: b,
-                            id: `booking-${b.id}`,
-                            isToday: b.slot_date === todayStr,
-                            isTomorrow: b.slot_date === tomorrowStr,
-                            priority: b.slot_date === todayStr ? 1 : b.slot_date === tomorrowStr ? 3 : 6,
-                            sortDate: new Date(b.slot_date),
-                        }));
-
-                    const leadItems = leads.map(l => {
-                        const createdAt = new Date(l.created_at);
-                        const hoursSince = (Date.now() - createdAt) / (1000 * 60 * 60);
-                        const status = l.status || 'new';
-
-                        let priority = 8;
-                        if (hoursSince < 1) priority = 2;                                          // 🔥 Hot — just came in
-                        else if (status === 'booked' || status === 'confirmed') priority = 7;       // ✅ Booked
-                        else if (hoursSince >= 24) priority = 4;                                    // 🔴 Follow up needed
-                        else if (hoursSince >= 1 && hoursSince < 24) priority = 5;                  // 🟡 Waiting
-
-                        return {
-                            type: 'lead',
-                            data: l,
-                            id: `lead-${l.id}`,
-                            priority,
-                            sortDate: createdAt,
-                        };
-                    });
-
-                    const allItems = [...activeBookings, ...leadItems]
-                        .sort((a, b) => {
-                            if (a.priority !== b.priority) return a.priority - b.priority;
-                            return b.sortDate - a.sortDate; // newest first within same priority
-                        })
-                        .slice(0, 15);
-
-                    if (allItems.length === 0) {
-                        return (
-                            <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
-                                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Users className="w-8 h-8 text-slate-400" />
-                                </div>
-                                <h3 className="font-bold text-slate-700 mb-2">No customers yet</h3>
-                                <p className="text-sm text-slate-500">Share your quote page to start getting leads!</p>
-                                <button
-                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/q/${business.id}`)}
-                                    className="mt-4 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg text-sm"
-                                >
-                                    Copy Quote Link
-                                </button>
-                            </div>
-                        );
-                    }
-
-                    return allItems.map((item) => {
-                        // ═══════════════════════════════════════
-                        // BOOKING CARD
-                        // ═══════════════════════════════════════
-                        if (item.type === 'booking') {
-                            const booking = item.data;
-                            const { isToday, isTomorrow } = item;
-                            const dateLabel = isToday ? '🔴 TODAY' : isTomorrow ? '🟡 TOMORROW' : booking.slot_label?.split(' ').slice(0, 3).join(' ');
-
-                            return (
-                                <div
-                                    key={item.id}
-                                    className={`bg-white p-4 rounded-xl shadow-sm border mb-3 relative overflow-hidden ${isToday ? 'border-red-300 bg-red-50' : isTomorrow ? 'border-yellow-300 bg-yellow-50' : 'border-slate-200'}`}
-                                >
-                                    {/* Type + Status Badge */}
-                                    <div className="flex items-center gap-1.5 absolute top-0 right-0">
-                                        <span className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-bl-lg">📅 JOB</span>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-bl-lg ${booking.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                            {booking.status === 'confirmed' ? '✅' : '⏳'}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex items-start gap-4">
-                                        <div className={`p-3 rounded-lg ${isToday ? 'bg-red-100 text-red-600' : isTomorrow ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}>
-                                            {getServiceIcon(booking.notes)}
+                                return (
+                                    <div
+                                        key={booking.id}
+                                        className={`bg-white p-4 rounded-xl shadow-sm border mb-4 relative overflow-hidden ${isToday ? 'border-red-300 bg-red-50' : isTomorrow ? 'border-yellow-300 bg-yellow-50' : 'border-slate-200'}`}
+                                    >
+                                        {/* Status Badge */}
+                                        <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-1 rounded-bl-lg ${booking.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                            {booking.status === 'confirmed' ? '✅ CONFIRMED' : '⏳ PENDING'}
                                         </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-bold text-slate-900">{booking.notes?.replace('Service: ', '') || niche}</h3>
-                                            <p className="text-xs text-slate-500 mt-1">
-                                                {booking.customer_name || 'Customer'} • {booking.customer_phone || 'No phone'}
-                                            </p>
 
-                                            {/* Booking Details */}
-                                            <div className="mt-2 text-sm bg-white/70 p-2 rounded border border-slate-100">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <Clock className="w-3.5 h-3.5 text-blue-600" />
-                                                    <span className={`font-bold ${isToday ? 'text-red-700' : 'text-blue-900'}`}>
-                                                        {dateLabel} • {booking.slot_time === 'morning' ? '9am-12pm' : '1pm-5pm'}
-                                                    </span>
+                                        <div className="flex items-start gap-4">
+                                            <div className={`p-3 rounded-lg ${isToday ? 'bg-red-100 text-red-600' : isTomorrow ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                {getServiceIcon(booking.notes)}
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="font-bold text-slate-900">{booking.notes?.replace('Service: ', '') || niche}</h3>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    {booking.customer_name || 'Customer'} • {booking.customer_phone || 'No phone'}
+                                                </p>
+
+                                                {/* Booking Details */}
+                                                <div className="mt-2 text-sm bg-white/70 p-2 rounded border border-slate-100">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <Clock className="w-3.5 h-3.5 text-blue-600" />
+                                                        <span className={`font-bold ${isToday ? 'text-red-700' : 'text-blue-900'}`}>
+                                                            {dateLabel} • {booking.slot_time === 'morning' ? '9am-12pm' : '1pm-5pm'}
+                                                        </span>
+                                                    </div>
+                                                    {booking.customer_address && (
+                                                        <div className="flex items-start gap-2">
+                                                            <div className="mt-0.5"><div className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div></div></div>
+                                                            <span className="text-slate-600 leading-tight">{booking.customer_address}</span>
+                                                        </div>
+                                                    )}
+                                                    {booking.estimate && (
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <TrendingUp className="w-3.5 h-3.5 text-green-600" />
+                                                            <span className="font-bold text-green-700">{booking.estimate}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {booking.customer_address && (
-                                                    <div className="flex items-start gap-2">
-                                                        <div className="mt-0.5"><div className="w-3.5 h-3.5 rounded-full bg-red-100 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div></div></div>
-                                                        <span className="text-slate-600 leading-tight">{booking.customer_address}</span>
-                                                    </div>
-                                                )}
-                                                {booking.estimate && (
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <TrendingUp className="w-3.5 h-3.5 text-green-600" />
-                                                        <span className="font-bold text-green-700">{booking.estimate}</span>
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Actions */}
-                                    <div className="grid grid-cols-3 gap-2 mt-4">
-                                        <button
-                                            onClick={() => openWhatsApp(booking.customer_phone, booking.customer_name)}
-                                            className="flex items-center justify-center gap-1 py-2 bg-green-500 text-white rounded-lg font-bold text-xs hover:bg-green-600 transition-colors"
-                                        >
-                                            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const addr = encodeURIComponent(booking.customer_address || '');
-                                                window.open(`https://www.google.com/maps/search/${addr}`, '_blank');
-                                            }}
-                                            className="flex items-center justify-center gap-1 py-2 bg-blue-500 text-white rounded-lg font-bold text-xs hover:bg-blue-600 transition-colors"
-                                        >
-                                            <ChevronRight className="w-3.5 h-3.5" /> Map
-                                        </button>
-                                        <button
-                                            onClick={() => completeBooking(booking)}
-                                            className="flex items-center justify-center gap-1 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs hover:bg-slate-200 transition-colors"
-                                        >
-                                            <CheckCircle className="w-3.5 h-3.5" /> Done
-                                        </button>
+                                        {/* Actions */}
+                                        <div className="grid grid-cols-3 gap-2 mt-4">
+                                            <button
+                                                onClick={() => openWhatsApp(booking.customer_phone, booking.customer_name)}
+                                                className="flex items-center justify-center gap-1 py-2 bg-green-500 text-white rounded-lg font-bold text-xs hover:bg-green-600 transition-colors"
+                                            >
+                                                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const addr = encodeURIComponent(booking.customer_address || '');
+                                                    window.open(`https://www.google.com/maps/search/${addr}`, '_blank');
+                                                }}
+                                                className="flex items-center justify-center gap-1 py-2 bg-blue-500 text-white rounded-lg font-bold text-xs hover:bg-blue-600 transition-colors"
+                                            >
+                                                <ChevronRight className="w-3.5 h-3.5" /> Map
+                                            </button>
+                                            <button
+                                                onClick={() => completeBooking(booking)}
+                                                className="flex items-center justify-center gap-1 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs hover:bg-slate-200 transition-colors"
+                                            >
+                                                <CheckCircle className="w-3.5 h-3.5" /> Done
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        }
+                                );
+                            })}
+                    </>
+                )}
 
-                        // ═══════════════════════════════════════
-                        // LEAD CARD
-                        // ═══════════════════════════════════════
-                        const lead = item.data;
+                {/* Leads Section */}
+                <h2 className="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">👥 Leads & Customers</h2>
+
+                {leads.length === 0 ? (
+                    <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 text-center">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Users className="w-8 h-8 text-slate-400" />
+                        </div>
+                        <h3 className="font-bold text-slate-700 mb-2">No leads yet</h3>
+                        <p className="text-sm text-slate-500">Share your quote page to start getting leads!</p>
+                        <button
+                            onClick={() => navigator.clipboard.writeText(`${window.location.origin}/q/${business.id}`)}
+                            className="mt-4 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg text-sm"
+                        >
+                            Copy Quote Link
+                        </button>
+                    </div>
+                ) : (
+                    leads.slice(0, 10).map((lead) => {
                         const { service, estimate } = parseLeadDetails(lead);
                         const status = getStatusBadge(lead);
 
+                        // Check if this lead has an active booking
                         const hasActiveBooking = bookings.some(b =>
                             b.customer_phone === lead.phone &&
                             (b.status === 'pending' || b.status === 'confirmed')
                         );
 
-                        // Priority tag label
-                        const priorityTag = item.priority === 2
-                            ? { text: '🔥 HOT', bg: 'bg-red-50 text-red-600' }
-                            : item.priority === 4
-                                ? { text: '🔴 FOLLOW UP', bg: 'bg-red-50 text-red-600' }
-                                : item.priority === 5
-                                    ? { text: '🟡 WAITING', bg: 'bg-yellow-50 text-yellow-700' }
-                                    : null;
-
                         return (
                             <div
-                                key={item.id}
-                                className={`bg-white p-4 rounded-xl shadow-sm border mb-3 relative overflow-hidden ${item.priority === 2 ? 'border-red-200' : 'border-slate-200'
-                                    }`}
+                                key={lead.id}
+                                className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-4 relative overflow-hidden"
                             >
-                                {/* Status corner badge */}
-                                {(priorityTag || hasActiveBooking) && (
-                                    <div className={`absolute top-0 right-0 text-[10px] font-bold px-2 py-1 rounded-bl-lg ${hasActiveBooking ? 'bg-green-100 text-green-700' : priorityTag?.bg
-                                        }`}>
-                                        {hasActiveBooking ? '✅ BOOKED' : priorityTag?.text}
+                                {status.isWaiting && (
+                                    <div className="absolute top-0 right-0 bg-yellow-100 text-yellow-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                                        {status.text}
+                                    </div>
+                                )}
+
+                                {hasActiveBooking && (
+                                    <div className="absolute top-0 right-0 bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-bl-lg">
+                                        ✅ HAS BOOKING
                                     </div>
                                 )}
 
@@ -1736,15 +1679,16 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                         <h3 className="font-bold text-slate-900">{service}</h3>
                                         <p className="text-xs text-slate-500 mt-1">
                                             {lead.name || 'Customer'} • {lead.phone || 'No phone'}
-                                            {item.priority <= 2 && <span className="ml-1 text-red-500 font-semibold">• {timeAgo(lead.created_at)}</span>}
                                         </p>
 
                                         {/* Display Booking Details if available */}
                                         {(lead.status === 'booked' || lead.status === 'confirmed') && lead.notes ? (
                                             <div className="mt-2 text-sm bg-slate-50 p-2 rounded border border-slate-100">
                                                 {(() => {
+                                                    // Get LAST valid slot from notes (in case of multiple changes)
                                                     const slotParts = lead.notes ? lead.notes.split('📅 SELECTED SLOT: ') : [];
                                                     const slot = (slotParts.length > 1) ? slotParts.pop().split('\n')[0] : null;
+
                                                     const addrMatch = lead.notes ? lead.notes.match(/📍 ADDRESS: ([^\n]+)/) : null;
                                                     const addr = addrMatch ? addrMatch[1] : null;
 
@@ -1774,7 +1718,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
 
                                 {/* Bot activity */}
                                 {lead.email_sequence_day && lead.email_sequence_day > 1 && (
-                                    <div className="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex items-center gap-2">
+                                    <div className="mt-4 bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center gap-2">
                                         <Bot className="w-4 h-4 text-slate-400" />
                                         <p className="text-xs text-slate-600">
                                             <span className="font-bold">Bot:</span> Sent follow-up #{lead.email_sequence_day - 1}
@@ -1782,8 +1726,8 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                     </div>
                                 )}
 
-                                {/* Status badge for non-tagged items */}
-                                {!priorityTag && !hasActiveBooking && (
+                                {/* Status badge for non-waiting */}
+                                {!status.isWaiting && !hasActiveBooking && (
                                     <div className="mt-3 flex gap-2">
                                         <span className={`px-2 py-1 text-[10px] font-bold rounded ${status.color}`}>
                                             {status.text}
@@ -1806,26 +1750,26 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                                         >
                                             <CheckCircle className="w-4 h-4" /> Archive
                                         </button>
-                                    ) : item.priority <= 5 ? (
-                                        <button
-                                            onClick={() => openScheduleModal(lead)}
-                                            className="flex items-center justify-center gap-2 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors"
-                                        >
-                                            <Calendar className="w-4 h-4" /> Schedule
-                                        </button>
-                                    ) : (
+                                    ) : status.isWaiting ? (
                                         <button
                                             onClick={() => markAsBooked(lead.id)}
                                             className="flex items-center justify-center gap-2 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors"
                                         >
                                             <CheckCircle className="w-4 h-4" /> Booked
                                         </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => openScheduleModal(lead)}
+                                            className="flex items-center justify-center gap-2 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors"
+                                        >
+                                            <Calendar className="w-4 h-4" /> Schedule
+                                        </button>
                                     )}
                                 </div>
                             </div>
                         );
-                    });
-                })()}
+                    })
+                )}
             </div>
 
             {/* Quick Actions */}

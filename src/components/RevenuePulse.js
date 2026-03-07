@@ -9,10 +9,11 @@ import {
     ChevronRight, X, Zap, RefreshCw, DollarSign, Activity
 } from 'lucide-react';
 
-export default function RevenuePulse({ business, onOpenWhatsApp, isOpen, onClose }) {
+export default function RevenuePulse({ business, onOpenWhatsApp }) {
     const [pulse, setPulse] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [expanded, setExpanded] = useState(false);
     const [dismissedLeaks, setDismissedLeaks] = useState(new Set());
     const [actionedLeaks, setActionedLeaks] = useState(new Set());
     const [lastRefresh, setLastRefresh] = useState(null);
@@ -99,14 +100,17 @@ export default function RevenuePulse({ business, onOpenWhatsApp, isOpen, onClose
         expired_warranty: 'bg-purple-100 text-purple-600',
     };
 
-    if (!isOpen) return null;
-
     if (loading && !pulse) {
         return (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                <div className="bg-white p-6 rounded-2xl flex items-center justify-center shadow-xl">
-                    <div className="w-8 h-8 border-4 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4 animate-pulse">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-slate-200 rounded-xl"></div>
+                    <div className="flex-1">
+                        <div className="h-4 bg-slate-200 rounded w-32 mb-1"></div>
+                        <div className="h-3 bg-slate-100 rounded w-48"></div>
+                    </div>
                 </div>
+                <div className="h-20 bg-slate-100 rounded-xl"></div>
             </div>
         );
     }
@@ -117,7 +121,87 @@ export default function RevenuePulse({ business, onOpenWhatsApp, isOpen, onClose
     const visibleLeaks = pulse.leaks.filter(l => !dismissedLeaks.has(l.id));
     const hasLeaks = pulse.totalLeakage > 0;
 
-    // --- MODAL VIEW ---
+    // --- COLLAPSED VIEW (Always visible) ---
+    if (!expanded) {
+        return (
+            <div className="mb-4">
+                <button
+                    onClick={() => setExpanded(true)}
+                    className="w-full text-left"
+                >
+                    <div className={`relative overflow-hidden rounded-2xl border shadow-sm transition-all hover:shadow-md ${hasLeaks
+                            ? 'bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 border-red-200'
+                            : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+                        }`}>
+                        {/* Decorative pulse animation for leaks */}
+                        {hasLeaks && (
+                            <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-red-100 animate-ping opacity-20"></div>
+                        )}
+
+                        <div className="p-4 relative">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <div className={`p-2 rounded-xl ${hasLeaks ? 'bg-red-100' : 'bg-green-100'}`}>
+                                        <Activity className={`w-5 h-5 ${hasLeaks ? 'text-red-600' : 'text-green-600'}`} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-sm text-slate-900">Revenue Pulse</h3>
+                                        <p className="text-[10px] text-slate-500">
+                                            {hasLeaks ? 'Money on the table' : 'Looking good!'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Health Score Mini */}
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ring-2 ${health.ring} ${health.bg}`}>
+                                        <span className="text-white text-xs font-bold">{pulse.healthScore}</span>
+                                    </div>
+                                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                                </div>
+                            </div>
+
+                            {hasLeaks ? (
+                                <div className="flex items-center justify-between bg-white/60 backdrop-blur rounded-xl p-3 border border-red-100">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Money Left on Table</p>
+                                        <p className="text-2xl font-black text-slate-900">
+                                            {formatCurrency(pulse.totalLeakage)}
+                                        </p>
+                                    </div>
+                                    <div className="text-right space-y-1">
+                                        {pulse.leakSummary.coldLeads.count > 0 && (
+                                            <p className="text-[10px] text-slate-600">
+                                                🔥 {pulse.leakSummary.coldLeads.count} unanswered
+                                            </p>
+                                        )}
+                                        {pulse.leakSummary.serviceDue.count > 0 && (
+                                            <p className="text-[10px] text-slate-600">
+                                                🔧 {pulse.leakSummary.serviceDue.count} overdue service
+                                            </p>
+                                        )}
+                                        {pulse.leakSummary.overdueFollowups.count > 0 && (
+                                            <p className="text-[10px] text-slate-600">
+                                                ⏰ {pulse.leakSummary.overdueFollowups.count} need follow-up
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-white/60 backdrop-blur rounded-xl p-3 border border-green-100 text-center">
+                                    <p className="text-sm font-medium text-green-700">
+                                        All caught up! No revenue leaks detected.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </button>
+            </div>
+        );
+    }
+
+    // --- EXPANDED VIEW ---
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
             <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto animate-slide-up">
@@ -146,7 +230,7 @@ export default function RevenuePulse({ business, onOpenWhatsApp, isOpen, onClose
                                 <RefreshCw className={`w-4 h-4 text-white/70 ${loading ? 'animate-spin' : ''}`} />
                             </button>
                             <button
-                                onClick={onClose}
+                                onClick={() => setExpanded(false)}
                                 className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
                             >
                                 <X className="w-4 h-4 text-white/70" />
@@ -365,7 +449,7 @@ export default function RevenuePulse({ business, onOpenWhatsApp, isOpen, onClose
                             Revenue Pulse updates every 10 minutes
                         </p>
                         <button
-                            onClick={onClose}
+                            onClick={() => setExpanded(false)}
                             className="mt-3 w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors"
                         >
                             Got It — Back to Dashboard

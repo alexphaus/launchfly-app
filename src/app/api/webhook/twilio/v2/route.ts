@@ -158,7 +158,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
         // ============================================================
         const { data: activeDemoSession } = await supabase
             .from('demo_sessions')
-            .select('id, step')
+            .select('*')
             .eq('phone', customerPhone)
             .not('step', 'in', '("completed","timeout")')
             .order('created_at', { ascending: false })

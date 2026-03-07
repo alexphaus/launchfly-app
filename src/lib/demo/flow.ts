@@ -84,37 +84,26 @@ async function sendText(to: string, body: string): Promise<string> {
     to: toWhatsApp(to),
     body,
   });
+  console.log(`[demo/flow] Sent to ${to}: "${body.substring(0, 60)}..." (${msg.sid})`);
   return msg.sid;
 }
 
 /**
- * Send an interactive WhatsApp message using Twilio Content API.
- * The `contentSid` must be a pre-approved template with quick-reply buttons.
- *
- * For session messages (within 24h window), we use free-form with
- * `persistentAction` links that render as tappable buttons on WhatsApp.
+ * Send a message with numbered text options.
+ * Twilio's persistentAction `reply:` does NOT render quick-reply buttons
+ * on WhatsApp. The most reliable pattern is plain text with numbered choices.
  */
-async function sendInteractiveButtons(
+async function sendWithOptions(
   to: string,
   body: string,
-  buttons: string[],
+  options: string[],
 ): Promise<string> {
-  // Use Twilio's native interactive message format for WhatsApp
-  // This sends quick-reply style buttons within the session window
-  const client = getTwilioClient();
+  const optionLines = options
+    .map((opt, i) => `*${i + 1}.* ${opt}`)
+    .join('\n');
 
-  // Twilio WhatsApp supports interactive messages via the messaging API
-  // We use persistentAction for URL buttons or body + quick replies
-  const msg = await client.messages.create({
-    from: getWhatsAppFrom(),
-    to: toWhatsApp(to),
-    body,
-    // Quick-reply buttons via Twilio's WhatsApp interactive format
-    // These are rendered as tappable button chips below the message
-    persistentAction: buttons.map((btn) => `reply:${btn}`),
-  });
-
-  return msg.sid;
+  const fullBody = `${body}\n\n${optionLines}\n\n_Reply with a number to continue._`;
+  return sendText(to, fullBody);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -128,11 +117,10 @@ async function sendInteractiveButtons(
 export async function sendStep1(session: DemoSession): Promise<void> {
   const name = session.owner_name.split(' ')[0] || session.owner_name;
 
-  await sendInteractiveButtons(
+  await sendText(
     session.phone,
     `Hey ${name} 👋 Sarah here. Your 30-sec demo is ready — ` +
-    `tap below to see what your homeowners receive after a quote.`,
-    ['▶ Start Demo'],
+    `reply *START* to see what your homeowners receive after a quote.`,
   );
 }
 
@@ -147,7 +135,7 @@ export async function sendStep2(session: DemoSession): Promise<void> {
   // Small delay to feel real (1.5s simulated typing)
   await sleep(1500);
 
-  await sendInteractiveButtons(
+  await sendWithOptions(
     session.phone,
     `💬 _Imagine this lands on your customer's phone:_\n\n` +
     `"Hi ${name}! This is Sarah following up on the estimate ` +
@@ -164,7 +152,7 @@ export async function sendStep2(session: DemoSession): Promise<void> {
 export async function sendStep3a(session: DemoSession): Promise<void> {
   await sleep(1200);
 
-  await sendInteractiveButtons(
+  await sendWithOptions(
     session.phone,
     `"Totally get it — big investment! A lot of our clients use ` +
     `12-month financing that brings it down to about $250/mo.\n\n` +
@@ -201,7 +189,7 @@ export async function sendStep3b(session: DemoSession): Promise<void> {
 
   await sleep(2000);
 
-  await sendInteractiveButtons(
+  await sendWithOptions(
     session.phone,
     `👆 That just happened automatically.\n\n` +
     `While you were reading that, the bot handled a pricing objection ` +
@@ -254,10 +242,9 @@ export async function sendStep4_HowMuch(session: DemoSession): Promise<string> {
 export async function sendFallback(session: DemoSession): Promise<void> {
   const name = session.owner_name.split(' ')[0] || session.owner_name;
 
-  await sendInteractiveButtons(
+  await sendText(
     session.phone,
-    `Still there ${name}? Saved your demo — tap to pick up where you left off 👇`,
-    ['Resume Demo'],
+    `Still there ${name}? Your demo is saved — reply *START* to pick up where you left off 👇`,
   );
 }
 
@@ -313,38 +300,45 @@ async function getOrCreateStripeLink(session: DemoSession): Promise<string> {
 /**
  * Process an inbound message from the contractor during the demo.
  * Returns the new step name after processing.
+ *
+ * Accepts both numbered replies ("1", "2", "3") and keyword replies.
  */
 export async function handleDemoReply(
   session: DemoSession,
   message: string,
 ): Promise<string> {
   const lower = message.trim().toLowerCase();
+  const num = message.trim(); // raw number check
+
+  console.log(`[demo/flow] handleDemoReply step=${session.step} msg="${lower}"`);
 
   switch (session.step) {
-    // ── Waiting for "Start Demo" tap ────────────────────────────────────
+    // ── Waiting for "Start" reply ───────────────────────────────────────
     case 'step1_sent': {
-      if (lower.includes('start demo') || lower.includes('resume demo') || lower.includes('start') || lower.includes('resume') || lower.includes('demo')) {
+      if (lower.includes('start') || lower.includes('resume') || lower.includes('demo') || lower.includes('go') || lower.includes('yes') || num === '1') {
         await sendStep2(session);
         return 'step2_sent';
       }
       // Unknown reply at step 1 — nudge them
-      await sendText(session.phone, `Tap the "▶ Start Demo" button below to see it in action! 👇`);
+      await sendText(session.phone, `Reply *START* to see the demo in action! 👇`);
       return 'step1_sent';
     }
 
-    // ── Homeowner simulation — 3 button choices ─────────────────────────
+    // ── Homeowner simulation — 3 numbered choices ───────────────────────
     case 'step2_sent': {
-      if (lower.includes('price') || lower.includes('too high') || lower.includes('expensive')) {
+      // 1 = Looks good, let's book
+      if (num === '1' || lower.includes('book') || lower.includes('looks good') || lower.includes('let\'s book') || lower.includes('schedule')) {
+        await sendStep3b(session);
+        return 'step3b_sent';
+      }
+      // 2 = Price is too high
+      if (num === '2' || lower.includes('price') || lower.includes('too high') || lower.includes('expensive')) {
         await sendStep3a(session);
         return 'step3a_sent';
       }
-      if (lower.includes('still thinking') || lower.includes('thinking') || lower.includes('not sure')) {
+      // 3 = Still thinking
+      if (num === '3' || lower.includes('still thinking') || lower.includes('thinking') || lower.includes('not sure')) {
         await sendStillThinking(session);
-        return 'step3b_sent';
-      }
-      if (lower.includes('book') || lower.includes('looks good') || lower.includes('let\'s book') || lower.includes('schedule')) {
-        // Skip to fourth wall break
-        await sendStep3b(session);
         return 'step3b_sent';
       }
       // Freeform reply — treat as engagement, show fourth wall break
@@ -354,8 +348,8 @@ export async function handleDemoReply(
 
     // ── Price objection demo — financing or book a call ─────────────────
     case 'step3a_sent': {
-      if (lower.includes('financing') || lower.includes('send') || lower.includes('info')) {
-        // Show a fake financing link, then fourth wall break
+      // 1 = Send financing info
+      if (num === '1' || lower.includes('financing') || lower.includes('send') || lower.includes('info')) {
         await sendText(session.phone,
           `"Here's the financing application — takes about 60 seconds, ` +
           `no hard credit pull:\n\nhttps://financing-demo.example.com\n\n` +
@@ -364,18 +358,20 @@ export async function handleDemoReply(
         await sendStep3b(session);
         return 'step3b_sent';
       }
-      // "Book a call" or any other reply → fourth wall break
+      // 2 = Book a call, or any other reply → fourth wall break
       await sendStep3b(session);
       return 'step3b_sent';
     }
 
     // ── Fourth wall break — start today or how much ─────────────────────
     case 'step3b_sent': {
-      if (lower.includes('start today') || lower.includes('150') || lower.includes('let\'s do it') || lower.includes('sign up') || lower.includes('yes') || lower.includes('ready')) {
+      // 1 = Start today
+      if (num === '1' || lower.includes('start today') || lower.includes('150') || lower.includes('let\'s do it') || lower.includes('sign up') || lower.includes('yes') || lower.includes('ready')) {
         await sendStep4_StartToday(session);
         return 'completed';
       }
-      if (lower.includes('how much') || lower.includes('price') || lower.includes('cost') || lower.includes('pricing')) {
+      // 2 = How much is it?
+      if (num === '2' || lower.includes('how much') || lower.includes('price') || lower.includes('cost') || lower.includes('pricing')) {
         await sendStep4_HowMuch(session);
         return 'step4_sent';
       }
@@ -386,7 +382,7 @@ export async function handleDemoReply(
 
     // ── Final close — they already saw price ────────────────────────────
     case 'step4_sent': {
-      if (lower.includes('start') || lower.includes('sign') || lower.includes('yes') || lower.includes('let\'s') || lower.includes('do it') || lower.includes('ready')) {
+      if (lower.includes('start') || lower.includes('sign') || lower.includes('yes') || lower.includes('let\'s') || lower.includes('do it') || lower.includes('ready') || num === '1') {
         await sendStep4_StartToday(session);
         return 'completed';
       }
@@ -399,6 +395,7 @@ export async function handleDemoReply(
     }
 
     default:
+      console.warn(`[demo/flow] Unknown step: ${session.step}`);
       return session.step;
   }
 }

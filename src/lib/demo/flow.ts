@@ -61,8 +61,8 @@ function getTwilioClient() {
 }
 
 function getWhatsAppFrom(): string {
-  const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!from) throw new Error('Missing TWILIO_WHATSAPP_FROM');
+  const from = process.env.TWILIO_WHATSAPP_FROM || process.env.TWILIO_WHATSAPP_NUMBER;
+  if (!from) throw new Error('Missing TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_NUMBER');
   return from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
 }
 

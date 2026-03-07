@@ -35,7 +35,7 @@ const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
 export async function POST(request: NextRequest) {
     const startTime = Date.now();
-    
+
     try {
         // 1. Parse incoming WhatsApp message
         const formData = await request.formData();
@@ -46,12 +46,12 @@ export async function POST(request: NextRequest) {
         const longitude = formData.get('Longitude') as string | null;
 
         const customerPhone = from.replace('whatsapp:', '');
-        
+
         // 🚀 Send typing indicator IMMEDIATELY to show bot is responding
         // This makes the customer see "typing..." while AI processes
         console.log(`   💬 Sending typing indicator for MessageSid: ${messageSid}`);
         sendTypingIndicator(messageSid).catch((e) => console.warn('Typing indicator error:', e));
-        
+
         let messageText = body?.trim() || '';
 
         // Handle location pins
@@ -68,10 +68,10 @@ export async function POST(request: NextRequest) {
         if (brandedDemoMatch && twilioClient && fromNumber) {
             const brandName = brandedDemoMatch[1].trim();
             console.log(`   🎯 BRANDED DEMO activated for: ${customerPhone}, Brand: "${brandName}"`);
-            
+
             // Use DANS as backend but display custom brand name
             const DEMO_BUSINESS_ID = '525b6e62-efb4-4c85-aee0-da47eedbdcc4'; // DANS. AIRCON TEAM
-            
+
             // Fire and forget: Alert Alex (don't wait for it)
             const alexPhone = '+639627459049';
             twilioClient.messages.create({
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
                 to: `whatsapp:${alexPhone}`,
                 body: `🎯 BRANDED DEMO!\n\nProspect trying: "${brandName}"\n📱 ${customerPhone}\n⏰ ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`
             }).catch((e: Error) => console.log('Demo alert failed:', e.message));
-            
+
             // Simulate sticker scan welcome - this is what their customers would see!
             const brandedWelcome = `Welcome to *${brandName}*! 👋
 
@@ -92,11 +92,11 @@ _(This is what your customer sees after scanning the sticker. Their phone number
                 to: from,
                 body: brandedWelcome,
             });
-            
+
             // Save to history with demo context so AI knows this is branded demo mode
             await saveMessage(customerPhone, 'user', `[BRANDED_DEMO:${brandName}] Customer scanning sticker`, DEMO_BUSINESS_ID);
             await saveMessage(customerPhone, 'assistant', brandedWelcome, DEMO_BUSINESS_ID);
-            
+
             console.log(`   ⚡ BRANDED DEMO response sent in ${Date.now() - startTime}ms`);
             return new NextResponse(
                 '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
@@ -109,10 +109,10 @@ _(This is what your customer sees after scanning the sticker. Their phone number
         const isDemoTrigger = messageText.trim().toUpperCase() === 'DEMO';
         if (isDemoTrigger && twilioClient && fromNumber) {
             console.log(`   🎯 DEMO FAST-PATH activated for: ${customerPhone}`);
-            
+
             // Use a real demo business for full functionality
             const DEMO_BUSINESS_ID = 'e8fc5a62-19df-473f-b275-d159e563050e'; // Relano Airconditioning
-            
+
             // Fire and forget: Alert Alex (don't wait for it)
             const alexPhone = '+639627459049';
             twilioClient.messages.create({
@@ -120,7 +120,7 @@ _(This is what your customer sees after scanning the sticker. Their phone number
                 to: `whatsapp:${alexPhone}`,
                 body: `🎯 DEMO Alert!\n\nA prospect is trying your bot!\n📱 ${customerPhone}\n⏰ ${new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}`
             }).catch((e: Error) => console.log('Demo alert failed:', e.message));
-            
+
             // INSTANT response - no AI call, no DB lookup
             const demoWelcome = `Hey! 👋 Welcome to the AI Receptionist demo!
 
@@ -139,12 +139,64 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 to: from,
                 body: demoWelcome,
             });
-            
+
             // Save to history with demo business ID so follow-up messages have context
             await saveMessage(customerPhone, 'user', messageText, DEMO_BUSINESS_ID);
             await saveMessage(customerPhone, 'assistant', demoWelcome, DEMO_BUSINESS_ID);
-            
+
             console.log(`   ⚡ DEMO response sent in ${Date.now() - startTime}ms (fast-path)`);
+            return new NextResponse(
+                '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+                { headers: { 'Content-Type': 'text/xml' } }
+            );
+        }
+
+        // ============================================================
+        // 🎯 INTERACTIVE SALES DEMO ROUTING
+        // If this phone is currently going through the Interactive WhatsApp Sales Demo,
+        // route replies to the demo webhook instead of the AI receptionist.
+        // ============================================================
+        const { data: activeDemoSession } = await supabase
+            .from('demo_sessions')
+            .select('id, step')
+            .eq('phone', customerPhone)
+            .not('step', 'in', '("completed","timeout")')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (activeDemoSession) {
+            console.log(`   🎯 Interactive Demo reply detected for session ${activeDemoSession.id} (step: ${activeDemoSession.step})`);
+
+            // Lazy import to keep the main route fast
+            const { handleDemoReply } = await import('@/lib/demo/flow');
+
+            // Extract button payload if available
+            const buttonPayload = formData.get('ButtonPayload') as string | null;
+            const message = buttonPayload || messageText;
+
+            // Process the reply through the demo flow engine
+            const newStep = await handleDemoReply(activeDemoSession as any, message);
+
+            // Update the session state
+            const update: Record<string, unknown> = {
+                step: newStep,
+                updated_at: new Date().toISOString(),
+            };
+
+            if (newStep === 'completed') {
+                update.completed_at = new Date().toISOString();
+                update.outcome = 'converted';
+            }
+
+            await supabase
+                .from('demo_sessions')
+                .update(update)
+                .eq('id', activeDemoSession.id);
+
+            console.log(`   🎯 Demo flow advanced: ${activeDemoSession.step} → ${newStep}`);
+
+            // Return empty TwiML because the flow engine handles sending replies via API
             return new NextResponse(
                 '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                 { headers: { 'Content-Type': 'text/xml' } }
@@ -156,12 +208,12 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
         const refMatch = messageText.match(/\(Ref:\s*([a-zA-Z0-9-]+)\)/i);
         let businessId = bizMatch ? bizMatch[1] : null;
         let businessSubdomain = (!businessId && refMatch) ? refMatch[1] : null;
-        
+
         // 🏷️ STICKER SCAN DETECTION - Track when someone scans the warranty QR sticker
-        const isStickerScan = messageText.toLowerCase().includes('activate') && 
-                             messageText.toLowerCase().includes('warranty') &&
-                             refMatch !== null;
-        
+        const isStickerScan = messageText.toLowerCase().includes('activate') &&
+            messageText.toLowerCase().includes('warranty') &&
+            refMatch !== null;
+
         // If ref is a subdomain (not UUID format), look up the business ID
         if (businessSubdomain && !/^[a-f0-9-]{36}$/i.test(businessSubdomain)) {
             const { data: bizBySubdomain } = await supabase
@@ -172,11 +224,11 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
             if (bizBySubdomain) {
                 businessId = bizBySubdomain.id;
                 console.log(`   🔗 Resolved subdomain '${businessSubdomain}' to business ID: ${businessId}`);
-                
+
                 // 📊 LOG STICKER SCAN for analytics
                 if (isStickerScan) {
                     console.log(`   🏷️ STICKER SCAN DETECTED! Business: ${bizBySubdomain.name}, Customer: ${customerPhone}`);
-                    
+
                     // Log to database for tracking
                     try {
                         const { error: scanError } = await supabase.from('sticker_scans').insert({
@@ -193,7 +245,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     } catch (err) {
                         console.log(`   ⚠️ Sticker scan logging error: ${err}`);
                     }
-                    
+
                     // 🔔 NOTIFY OWNER - Someone scanned their sticker!
                     // DISABLED: Too noisy for owners, AI handles it automatically
                     // const ownerPhone = bizBySubdomain.whatsapp_number || bizBySubdomain.phone_number;
@@ -236,7 +288,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .single();
-            
+
             if (existingCustomer?.business_id) {
                 businessId = existingCustomer.business_id;
                 console.log(`   📱 Found customer's business_id from DB: ${businessId}`);
@@ -293,9 +345,9 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
             if (customer) {
                 // Note: warranty is stored in next_reminder_due field (schema doesn't have warranty_end_date)
                 const warrantyEndDate = customer.next_reminder_due;
-                const warrantyActive = warrantyEndDate && 
+                const warrantyActive = warrantyEndDate &&
                     new Date(warrantyEndDate) > new Date();
-                
+
                 customerContext = {
                     id: customer.id,
                     name: customer.name || customer.first_name,
@@ -308,7 +360,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     status: customer.status, // Pass status so system prompt knows if mid-booking
                     lastInteractionContext: customer.last_interaction_context,
                 };
-                
+
                 // ============================================================
                 // 🔔 SMART NAG: Handle "YES" response to 6-month reminder
                 // ============================================================
@@ -316,14 +368,14 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 const customerStatus = customer.status;
                 const isReminderResponse = customerStatus === 'reminder_sent' || customerStatus === 'reengaged';
                 const isConfirmation = /^(yes|ok|okay|yep|yeah|book|sure|hi|hello|interested|1)$/i.test(messageText.trim());
-                
+
                 if (isReminderResponse && isConfirmation) {
                     console.log('🔔 Hot lead! Customer responding to Smart Nag reminder');
-                    
+
                     const customerName = customer.first_name || customer.name?.split(' ')[0] || 'Boss';
                     const businessName = business?.name || 'Business';
                     const niche = (business?.business_data as { niche?: string })?.niche || 'Service';
-                    
+
                     // Get their last service for context
                     const { data: lastService } = await supabase
                         .from('service_records')
@@ -332,9 +384,9 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                         .order('service_date', { ascending: false })
                         .limit(1)
                         .single();
-                    
+
                     const serviceName = lastService?.service_name || niche;
-                    
+
                     // Send warm booking prompt
                     if (twilioClient && fromNumber) {
                         await twilioClient.messages.create({
@@ -343,23 +395,23 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                             body: `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`
                         });
                     }
-                    
+
                     // Update status to booking flow AND save context to history
                     await supabase.from('customers').update({
                         status: 'booking_in_progress', // Use clear status that V2 won't override
                         notes: (customer.notes || '') + `\n[REMINDER_CONVERTED: ${new Date().toISOString()}]`
                     }).eq('id', customer.id);
-                    
+
                     // Save the AI response to history so next message has context
                     await saveMessage(customerPhone, 'assistant', `Great ${customerName}! 🎉 Welcome back!\n\nLet's book your ${serviceName.toLowerCase()} service.\n\nHow many units need servicing?`, businessId);
-                    
+
                     // 🔔 NOTIFY OWNER - Customer converting from reminder!
                     // Uses WhatsApp Utility Template (outside 24h window safe)
                     const ownerPhone = business?.whatsapp_number || business?.phone_number;
                     if (ownerPhone && twilioClient && fromNumber) {
                         const cleanOwnerPhone = ownerPhone.replace(/[^\d+]/g, '');
                         const HOT_LEAD_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_HOT_LEAD || 'HX065c2eed9f9dd38b6aaa60ef5e06bd41';
-                        
+
                         try {
                             await twilioClient.messages.create({
                                 from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -375,7 +427,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                             console.error('Failed to notify owner:', notifyErr);
                         }
                     }
-                    
+
                     console.log(`   ⏱️ V2 processed in ${Date.now() - startTime}ms (reminder conversion)`);
                     return new NextResponse(
                         '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
@@ -688,7 +740,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
 
             // Now build the prompt and call AI with history from parallel fetch
             const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
-            
+
             // Add context about current customer phone for tools - be very explicit!
             const contextMessage = `
 [SYSTEM CONTEXT - USE THESE VALUES WHEN CALLING TOOLS]
@@ -791,10 +843,10 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
 ❌ NEVER say "I've moved your booking" without calling rescheduleBooking first!
 ❌ Do NOT ask "Shall I book it?" - when they select a slot, JUST BOOK IT!
 `;
-            
+
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
             console.log(`   📋 Business ID for tools: ${businessId}`);
-            
+
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
                 system: systemPrompt + `\n\n${contextMessage}`,
@@ -808,31 +860,31 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                 toolChoice: 'auto', // Ensure tools can be called
                 onStepFinish: async ({ toolCalls, toolResults }) => {
                     if (toolCalls && toolCalls.length > 0) {
-                       console.log(`   🔧 Tool calls:`, toolCalls.map(t => t.toolName).join(', '));
-                       // Log the arguments being passed
-                       toolCalls.forEach(tc => {
-                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                           console.log(`   📥 ${tc.toolName} args:`, JSON.stringify((tc as any).args || {}));
-                       });
+                        console.log(`   🔧 Tool calls:`, toolCalls.map(t => t.toolName).join(', '));
+                        // Log the arguments being passed
+                        toolCalls.forEach(tc => {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            console.log(`   📥 ${tc.toolName} args:`, JSON.stringify((tc as any).args || {}));
+                        });
                     }
                     if (toolResults && toolResults.length > 0) {
-                       console.log(`   📤 Tool results received:`, toolResults.length);
+                        console.log(`   📤 Tool results received:`, toolResults.length);
                     }
                 },
             });
 
             let aiResponse = result.text || '';
             const allToolCalls = result.steps.flatMap(step => step.toolCalls || []);
-            
+
             // Check if response is just a filler message (e.g. "I'll check that...")
             // We look for phrases indicating a pause or future action without results
             const isFiller = aiResponse && aiResponse.length < 200 && (
-                aiResponse.toLowerCase().includes('moment') || 
+                aiResponse.toLowerCase().includes('moment') ||
                 aiResponse.toLowerCase().includes('checking') ||
                 aiResponse.toLowerCase().includes('bear with me') ||
                 aiResponse.toLowerCase().includes('hold on')
             );
-            
+
             // Special handling for notifyOwner - AI often forgets to respond after calling it
             const calledNotifyOwner = allToolCalls.some(tc => tc.toolName === 'notifyOwner');
             if (calledNotifyOwner && (!aiResponse || aiResponse.length < 20)) {
@@ -840,12 +892,12 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                 const ownerName = businessContext?.ownerName || 'the owner';
                 aiResponse = `I've notified ${ownerName} about your request - they'll reach out to you shortly. 🙏 Is there anything else I can help with in the meantime?`;
             }
-            
+
             // Handle empty response OR filler response after tool calls
             // This ensures we don't just send "I'll check..." and stop, but actually send the slots
             if ((!aiResponse || isFiller) && allToolCalls.length > 0) {
                 console.log(`   ⚠️ AI called tools but response was empty or filler ("${aiResponse || ''}"), forcing continuation...`);
-                
+
                 // Extract tool results from steps - Vercel AI SDK structure
                 const toolResultsSummary = result.steps
                     .flatMap(step => step.toolResults || [])
@@ -861,9 +913,9 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                         return `Tool ${toolResult.toolName || 'tool'}: ${resultStr}`;
                     })
                     .join('\n');
-                
+
                 console.log(`   📋 Full toolResultsSummary:`, toolResultsSummary.substring(0, 300));
-                
+
                 // If we found tool results, generate the real answer
                 if (toolResultsSummary && !toolResultsSummary.includes('{}')) {
                     const continuationResult = await generateText({
@@ -872,20 +924,20 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                         messages: [
                             ...history,
                             { role: 'user', content: messageText },
-                            { 
-                                role: 'assistant', 
-                                content: `I have executed the tools. Here are the results:\n${toolResultsSummary}\n\nBased on this, the final response to the customer is:` 
+                            {
+                                role: 'assistant',
+                                content: `I have executed the tools. Here are the results:\n${toolResultsSummary}\n\nBased on this, the final response to the customer is:`
                             },
                         ],
                     });
-                    
+
                     if (continuationResult.text && continuationResult.text.trim()) {
-                         aiResponse = continuationResult.text;
-                         console.log(`   🔄 Continuation response generated: ${aiResponse.substring(0, 50)}...`);
+                        aiResponse = continuationResult.text;
+                        console.log(`   🔄 Continuation response generated: ${aiResponse.substring(0, 50)}...`);
                     } else {
-                         // Fallback if continuation also fails
-                         aiResponse = "Hi! How can I help you today?";
-                         console.log(`   ⚠️ Continuation failed, using fallback response`);
+                        // Fallback if continuation also fails
+                        aiResponse = "Hi! How can I help you today?";
+                        console.log(`   ⚠️ Continuation failed, using fallback response`);
                     }
                 } else {
                     // No tool results found, use fallback
@@ -893,17 +945,17 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                     console.log(`   ⚠️ No tool results found, using fallback response`);
                 }
             }
-            
+
             // Final safety check before logging
             if (!aiResponse) {
                 aiResponse = "Hi! How can I help you today?";
             }
-            
+
             console.log(`   ✅ AI Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
             if (allToolCalls.length > 0) {
                 console.log(`   🔧 Total tools used: ${allToolCalls.map(t => t.toolName).join(', ')}`);
             }
-            
+
             // SAFETY CHECK 1: Check if any booking/reschedule tool FAILED
             let bookingToolFailed = false;
             let bookingToolError = '';
@@ -913,7 +965,7 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                     const tr = toolResult as any;
                     const res = tr.output ?? tr.result;
                     const toolName = tr.toolName;
-                    
+
                     if ((toolName === 'createBooking' || toolName === 'rescheduleBooking') && res?.success === false) {
                         bookingToolFailed = true;
                         bookingToolError = res.error || 'Unknown error';
@@ -921,38 +973,37 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                     }
                 }
             }
-            
+
             // SAFETY CHECK 2: Detect if AI claims to have booked without actually calling createBooking or rescheduleBooking
             const { isHallucinating: claimsBooking } = Guardrails.detectHallucination(aiResponse, allToolCalls);
-            
+
             // If booking tool was called but FAILED, and AI claims success, override response
             if (bookingToolFailed && claimsBooking) {
                 console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed success but booking tool FAILED!`);
                 console.error(`   ⚠️ Error was: ${bookingToolError}`);
                 console.error(`   ⚠️ AI response was: ${aiResponse.substring(0, 300)}`);
-                
+
                 // Override with honest error message
-                aiResponse = `It seems there was an issue while trying to ${
-                    allToolCalls.some(tc => tc.toolName === 'rescheduleBooking') ? 'reschedule' : 'complete'
-                } your booking. ${bookingToolError.includes('not found') ? 
-                    'Would you like me to create a new booking for you instead?' : 
-                    'Please try again or reply "HUMAN" to speak with the owner.'}`;
+                aiResponse = `It seems there was an issue while trying to ${allToolCalls.some(tc => tc.toolName === 'rescheduleBooking') ? 'reschedule' : 'complete'
+                    } your booking. ${bookingToolError.includes('not found') ?
+                        'Would you like me to create a new booking for you instead?' :
+                        'Please try again or reply "HUMAN" to speak with the owner.'}`;
             }
-            
-            const actuallyCalledBookingTool = allToolCalls.some(tc => 
+
+            const actuallyCalledBookingTool = allToolCalls.some(tc =>
                 tc.toolName === 'createBooking' || tc.toolName === 'rescheduleBooking'
             );
-            
+
             // Check if previous response (from history) showed available slots
             const lastAssistantMsg = history.filter(h => h.role === 'assistant').pop()?.content?.toLowerCase() || '';
-            
+
             // Use Guardrails for detection
             const looksLikeSlotSelection = Guardrails.looksLikeSlotSelection(messageText, lastAssistantMsg);
             let looksLikeRescheduleRequest = Guardrails.looksLikeReschedule(messageText);
 
             const calledRescheduleBooking = allToolCalls.some(tc => tc.toolName === 'rescheduleBooking');
             const hasExistingBooking = customerContext?.id || lastAssistantMsg.includes('booking') || lastAssistantMsg.includes('scheduled') || lastAssistantMsg.includes('appointment');
-            
+
             // Helper for retry logic
             const messageLower = messageText.toLowerCase().trim();
 
@@ -971,12 +1022,12 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
             if (looksLikeRescheduleRequest && hasExistingBooking && !calledRescheduleBooking) {
                 console.log(`   ⚠️ RESCHEDULE REQUEST DETECTED but rescheduleBooking not called! Message: "${messageText}"`);
                 console.log(`   🔄 Forcing rescheduleBooking retry...`);
-                
+
                 // FIRST: Get the current booking to preserve its date if user only changes window
                 const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
                 const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
                 const todayDate = new Date().toISOString().split('T')[0];
-                
+
                 const { data: currentBooking } = await supabase
                     .from('bookings')
                     .select('id, slot_date, slot_time')
@@ -987,24 +1038,24 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                     .order('updated_at', { ascending: false })
                     .limit(1)
                     .single();
-                
+
                 console.log(`   📋 Current booking found:`, currentBooking ? `${currentBooking.slot_date} ${currentBooking.slot_time}` : 'none');
-                
+
                 // Determine the new window from the message
                 const wantsAfternoon = messageLower.includes('afternoon');
                 const wantsMorning = messageLower.includes('morning') && !messageLower.includes("can't") && !messageLower.includes("cant");
-                
+
                 // Use the CURRENT booking date unless user specifies a different day
                 let targetDate = currentBooking?.slot_date || todayDate;
-                const specifiedDayInMessage = messageLower.includes('tomorrow') || messageLower.includes('today') || 
+                const specifiedDayInMessage = messageLower.includes('tomorrow') || messageLower.includes('today') ||
                     /monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(messageLower);
-                
+
                 if (specifiedDayInMessage || !currentBooking) {
                     // User specified a day, or no booking found - calculate the target date
                     const tomorrow = new Date();
                     tomorrow.setDate(tomorrow.getDate() + 1);
                     targetDate = tomorrow.toISOString().split('T')[0];
-                    
+
                     // Check for specific day names
                     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
                     for (const day of dayNames) {
@@ -1020,7 +1071,7 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                         }
                     }
                 }
-                
+
                 // If user says "X instead", they want to flip the current window
                 let targetWindow: string;
                 if (messageLower.includes('instead') && currentBooking) {
@@ -1030,9 +1081,9 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                 } else {
                     targetWindow = wantsAfternoon ? 'afternoon' : (wantsMorning ? 'morning' : 'afternoon');
                 }
-                
+
                 console.log(`   🎯 Reschedule target: ${targetDate} ${targetWindow}`);
-                
+
                 const rescheduleRetryResult = await generateText({
                     model: openai('gpt-4o-mini'),
                     system: `You are a booking assistant. Your ONLY job right now is to call rescheduleBooking.
@@ -1053,32 +1104,32 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                     },
                     toolChoice: { type: 'tool', toolName: 'rescheduleBooking' },
                 });
-                
+
                 const rescheduleRetryToolCalls = rescheduleRetryResult.steps.flatMap(step => step.toolCalls || []);
                 const rescheduleRetryResults = rescheduleRetryResult.steps.flatMap(step => step.toolResults || []);
-                
+
                 if (rescheduleRetryToolCalls.some(tc => tc.toolName === 'rescheduleBooking')) {
                     console.log(`   ✅ Reschedule retry successful! rescheduleBooking called.`);
-                    
+
                     // Check if it actually succeeded
                     const rescheduleResult = rescheduleRetryResults.find(tr => (tr as any).toolName === 'rescheduleBooking');
                     const rescheduleOutput = (rescheduleResult as any)?.output ?? (rescheduleResult as any)?.result;
-                    
+
                     if (rescheduleOutput?.success) {
                         aiResponse = `Done! ✅ Your booking has been rescheduled to **${rescheduleOutput.newSlotLabel || targetWindow}**.\n\nThe technician will WhatsApp you 30 minutes before arrival. Anything else I can help with?`;
                     } else {
                         aiResponse = `I apologize, I had trouble rescheduling your booking. ${rescheduleOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;
                     }
-                    
+
                     allToolCalls.push(...rescheduleRetryToolCalls);
                 }
             }
-            
+
             // If customer selected a slot but we didn't book (and this ISN'T a reschedule request), force booking retry
             else if (looksLikeSlotSelection && !actuallyCalledBookingTool && !claimsBooking) {
                 console.log(`   ⚠️ SLOT SELECTION DETECTED but no createBooking called! Message: "${messageText}"`);
                 console.log(`   🔄 Forcing createBooking retry...`);
-                
+
                 const slotRetryResult = await generateText({
                     model: openai('gpt-4o-mini'),
                     system: systemPrompt + `\n\nSYSTEM ALERT: The customer just selected a time slot by replying "${messageText}". 
@@ -1091,7 +1142,7 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                     tools: receptionistTools,
                     toolChoice: 'required',
                 });
-                
+
                 const slotRetryToolCalls = slotRetryResult.steps.flatMap(step => step.toolCalls || []);
                 if (slotRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
                     console.log(`   ✅ Slot selection retry successful! createBooking called.`);
@@ -1100,7 +1151,7 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                     slotRetryResult.steps.forEach(step => result.steps.push(step));
                 }
             }
-            
+
             if (claimsBooking && !actuallyCalledBookingTool) {
                 console.error(`   ⚠️⚠️⚠️ CRITICAL: AI claimed booking/reschedule but did NOT call tools!`);
                 console.error(`   ⚠️ Response was: ${aiResponse.substring(0, 300)}`);
@@ -1124,11 +1175,11 @@ Do NOT call any other tool. ONLY call rescheduleBooking.`,
                 // RETRY MECHANISM: Force the AI to call the tool
                 console.log(`   🔄 Retrying with strict tool enforcement...`);
                 console.log(`   📍 Looks like address provided: ${looksLikeAddress}`);
-                
+
                 // If address was just provided, force createBooking specifically
                 if (looksLikeAddress) {
                     console.log(`   🔄 Forcing createBooking with address...`);
-                    
+
                     const bookingRetryResult = await generateText({
                         model: openai('gpt-4o-mini'),
                         system: `You are a booking assistant. The customer just provided their ADDRESS: "${messageText}"
@@ -1163,24 +1214,24 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                         },
                         toolChoice: { type: 'tool', toolName: 'createBooking' },
                     });
-                    
+
                     const bookingRetryToolCalls = bookingRetryResult.steps.flatMap(step => step.toolCalls || []);
                     const bookingRetryResults = bookingRetryResult.steps.flatMap(step => step.toolResults || []);
-                    
+
                     if (bookingRetryToolCalls.some(tc => tc.toolName === 'createBooking')) {
                         console.log(`   ✅ createBooking retry successful!`);
-                        
+
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const bookingResult = bookingRetryResults.find(tr => (tr as any).toolName === 'createBooking');
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const bookingOutput = (bookingResult as any)?.output ?? (bookingResult as any)?.result;
-                        
+
                         if (bookingOutput?.success) {
                             aiResponse = `Done! ✅ Your booking is confirmed!\n\n📅 ${bookingOutput.slotLabel || 'Your selected time'}\n📍 ${messageText}\n💰 ${bookingOutput.estimate || 'RM 120'}\n\nThe technician will WhatsApp you 30 minutes before arrival. 🔧`;
                         } else {
                             aiResponse = `I apologize, I had trouble creating your booking. ${bookingOutput?.error || 'Please try again or reply "HUMAN" to speak with the owner.'}`;
                         }
-                        
+
                         allToolCalls.push(...bookingRetryToolCalls);
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         bookingRetryResult.steps.forEach(step => result.steps.push(step as any));
@@ -1200,7 +1251,7 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                         tools: receptionistTools,
                         toolChoice: 'required',
                     });
-                    
+
                     const retryToolCalls = retryResult.steps.flatMap(step => step.toolCalls || []);
                     if (retryToolCalls.length > 0) {
                         console.log(`   ✅ Retry successful! Tools called: ${retryToolCalls.map(t => t.toolName).join(', ')}`);
@@ -1222,9 +1273,9 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                     // Vercel AI SDK uses 'output' not 'result'
                     const res = tr.output ?? tr.result;
                     const toolName = tr.toolName;
-                    
+
                     console.log(`   🔔 Checking tool result for notifications: ${toolName}`, res?.success ? 'success' : res?.error || 'no status');
-                    
+
                     // 1. Handle notifyOwner (plain text alerts for complaints/escalations)
                     if (res?.action === 'notify_owner' && res?.phone) {
                         if (twilioClient && fromNumber) {
@@ -1240,11 +1291,11 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                             }
                         }
                     }
-                    
+
                     // 2. Handle createBooking → Send JOB CONFIRMED template to owner
                     if (toolName === 'createBooking' && res?.success) {
                         const ownerPhone = res.ownerPhone;
-                        
+
                         if (ownerPhone) {
                             try {
                                 await sendJobConfirmed(ownerPhone, {
@@ -1275,9 +1326,9 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                                     to: `whatsapp:${ownerPhone}`,
                                     body: `🔴 *JOB CANCELLED*\n\n` +
-                                          `👤 ${res.customerName || 'Customer'}\n` +
-                                          `🗓️ Slot: ${res.slotLabel || 'Unknown slot'}\n` +
-                                          `⚠️ Please check dashboard.`
+                                        `👤 ${res.customerName || 'Customer'}\n` +
+                                        `🗓️ Slot: ${res.slotLabel || 'Unknown slot'}\n` +
+                                        `⚠️ Please check dashboard.`
                                 });
                                 console.log(`   📤 Notified owner of CANCELLATION: ${ownerPhone}`);
                             } catch (e) {
@@ -1295,9 +1346,9 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
                                     to: `whatsapp:${ownerPhone}`,
                                     body: `🔄 *JOB RESCHEDULED*\n\n` +
-                                          `👤 ${res.customerName || 'Customer'}\n` +
-                                          `🗓️ NEW: ${res.newSlotLabel || 'New slot'}\n` +
-                                          `⚠️ Please check dashboard.`
+                                        `👤 ${res.customerName || 'Customer'}\n` +
+                                        `🗓️ NEW: ${res.newSlotLabel || 'New slot'}\n` +
+                                        `⚠️ Please check dashboard.`
                                 });
                                 console.log(`   📤 Notified owner of RESCHEDULE: ${ownerPhone}`);
                             } catch (e) {
@@ -1324,9 +1375,9 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
 
             // Save AI response to history
             await saveMessage(
-                customerPhone, 
-                'assistant', 
-                aiResponse, 
+                customerPhone,
+                'assistant',
+                aiResponse,
                 businessId,
                 allToolCalls.length > 0 ? allToolCalls : undefined
             );
@@ -1340,11 +1391,11 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
         // No business ID found - simplified flow (ask to scan sticker)
         const history = await getConversationHistory(customerPhone);
         await saveMessage(customerPhone, 'user', messageText);
-        
+
         const fallbackPrompt = `You are a helpful assistant. A customer has messaged but we couldn't identify which business they're contacting. Ask them to scan their service sticker or provide more details about which business they're trying to reach.`;
 
         console.log(`   🧠 No business ID - calling AI with fallback prompt...`);
-        
+
         const result = await generateText({
             model: openai('gpt-4o-mini'),
             system: fallbackPrompt,
@@ -1355,7 +1406,7 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
         });
 
         const aiResponse = result.text || "Hi! To help you, please scan the service sticker on your aircon unit. This will connect me to your technician's system. 📱";
-        
+
         console.log(`   ✅ Fallback Response (${Date.now() - startTime}ms): ${aiResponse.substring(0, 100)}...`);
 
         // Send response to customer
@@ -1378,12 +1429,12 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
 
     } catch (error) {
         console.error('❌ V2 Webhook Error:', error);
-        
+
         // Try to send a friendly error message
         try {
             const formData = await request.formData();
             const from = formData.get('From') as string;
-            
+
             if (twilioClient && fromNumber && from) {
                 await twilioClient.messages.create({
                     from: fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`,
@@ -1404,8 +1455,8 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
 
 // Health check endpoint
 export async function GET() {
-    return NextResponse.json({ 
-        status: 'ok', 
+    return NextResponse.json({
+        status: 'ok',
         version: 'v2-agentic',
         description: 'AI Receptionist with LLM Function Calling',
     });

@@ -245,10 +245,24 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone || !templateSid) return { ok: false, detail: 'Missing phone or template SID' };
       const twilio = (await import('twilio')).default;
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+      // Build contentVariables from comma-separated config string
+      // e.g. "{businessName}, {firstName}" → { "1": "Acme Corp", "2": "John" }
+      const contentVariables: Record<string, string> = {};
+      if (cfg.contentVars) {
+        const parts = (cfg.contentVars as string).split(',').map(s => s.trim());
+        parts.forEach((tmpl, i) => {
+          contentVariables[String(i + 1)] = fillVars(tmpl, ctx);
+        });
+      }
+
       await client.messages.create({
         from: process.env.TWILIO_WHATSAPP_FROM!,
         to: `whatsapp:${ctx.phone}`,
         contentSid: templateSid,
+        ...(Object.keys(contentVariables).length > 0
+          ? { contentVariables: JSON.stringify(contentVariables) }
+          : {}),
       });
       return { ok: true, detail: `Template ${templateSid} sent to ${ctx.phone}` };
     }

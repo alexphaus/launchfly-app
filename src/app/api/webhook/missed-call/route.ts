@@ -1,28 +1,20 @@
 // /api/webhook/missed-call/route.ts
-// Missed Call → Instant WhatsApp Lead Capture
+// Missed Call → Lead Capture → Automation Engine
 //
 // Triggered by TWO sources:
 //   1. Mobile automation (Tasker / n8n / Android Automate) — JSON POST
 //   2. Twilio Voice StatusCallback (no-answer / busy / failed) — form-encoded POST
 //
 // Flow:
-//   Missed call detected → look up business → save lead → WhatsApp in ~5 seconds
+//   Missed call detected → look up business → save lead → fire automation rules
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import twilio from 'twilio';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
 );
-
-const twilioClient = twilio(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-);
-const FROM_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || '+13203627874';
-const MISSED_CALL_TEMPLATE_SID = process.env.TWILIO_TEMPLATE_MISSEDCALL_FOLLOWUP || '';
 
 // ─────────────────────────────────────────────
 // Helper: resolve business from phone or id
@@ -74,18 +66,6 @@ async function lookupBusiness(opts: {
 function normalisePhone(raw: string): string {
     const digits = raw.replace(/\D/g, '');
     return digits.startsWith('+') ? raw : `+${digits}`;
-}
-
-// ─────────────────────────────────────────────
-// Helper: build the WhatsApp message text
-// ─────────────────────────────────────────────
-function buildMessage(businessName: string, niche: string | null): string {
-    const service = niche?.toLowerCase() || 'service';
-    return (
-        `Hey! Sorry I missed your call — I'm on a job right now 🔧\n\n` +
-        `I'm ${businessName}. What do you need help with, and what's your location? ` +
-        `I'll get back to you shortly! 👍`
-    );
 }
 
 // ─────────────────────────────────────────────
@@ -210,76 +190,34 @@ export async function POST(req: NextRequest) {
             leadId = newLead!.id;
         }
 
-        // ── Send WhatsApp instantly (using approved template to bypass 24h window) ──
-        const toWhatsApp   = `whatsapp:${callerPhone}`;
-        const fromWhatsApp = `whatsapp:${FROM_NUMBER}`;
+        // ── Fire automation rules (handles WhatsApp, templates, owner alerts, etc.) ──
+        await supabase.from('ai_activities').insert({
+            business_id: business.id,
+            type: 'missed_call_followup',
+            icon: '📞',
+            message: `Missed call from ${callerPhone} — automation triggered`,
+            details: `Lead saved, automation rules fired`,
+            metadata: { leadId, callerPhone },
+        });
 
-        try {
-            if (MISSED_CALL_TEMPLATE_SID) {
-                // Use Twilio Content Template — works outside 24h window
-                // Template: "Hi! 👋 Sorry we missed your call — we're likely on a job right now.
-                //  This is {{1}} — how can we help you? ..."
-                // Quick replies: Get a Quote | Book a Service | Just a Question
-                await twilioClient.messages.create({
-                    from: fromWhatsApp,
-                    to:   toWhatsApp,
-                    contentSid: MISSED_CALL_TEMPLATE_SID,
-                    contentVariables: JSON.stringify({
-                        '1': business.name,
-                    }),
-                });
-                console.log('[missed-call] ✅ Template WhatsApp sent to %s (template: %s)', callerPhone, MISSED_CALL_TEMPLATE_SID);
-            } else {
-                // Fallback: freeform message (only works if customer messaged within 24h)
-                const message = buildMessage(business.name, business.niche);
-                await twilioClient.messages.create({
-                    from: fromWhatsApp,
-                    to:   toWhatsApp,
-                    body: message,
-                });
-                console.log('[missed-call] ✅ Freeform WhatsApp sent to %s', callerPhone);
-            }
+        const { fireEvent } = await import('@/lib/automations/executor');
+        const automationResult = await fireEvent({
+            businessId: business.id,
+            event: 'missed_call',
+            phone: callerPhone,
+            customerName: existing?.name || 'Missed Call',
+            metadata: { leadId, source: 'missed_call_webhook', businessName: business.name },
+        });
 
-            // Log activity for the dashboard
-            await supabase.from('ai_activities').insert({
-                business_id: business.id,
-                type: 'missed_call_followup',
-                icon: '📞',
-                message: `Auto-replied to missed call from ${callerPhone}`,
-                details: `Lead saved & WhatsApp sent in <5s`,
-                metadata: { leadId, callerPhone },
-            });
+        console.log('[missed-call] ✅ Lead %s saved, %d automation rules fired for %s', leadId, automationResult.fired, callerPhone);
 
-            console.log('[missed-call] ✅ WhatsApp sent to %s for business %s', callerPhone, business.id);
-
-            // ── Alert owner on WhatsApp ──
-            const OWNER_PHONE = 'whatsapp:+639627459049';
-            try {
-                await twilioClient.messages.create({
-                    from: fromWhatsApp,
-                    to:   OWNER_PHONE,
-                    body: `📞 *MISSED CALL AUTO-REPLY SENT*\n\n` +
-                          `Prospect: ${callerPhone}\n` +
-                          `Business: ${business.name}\n` +
-                          `Template sent ✅\n\n` +
-                          `👉 https://wa.me/${callerPhone.replace('+', '')}`,
-                });
-                console.log('[missed-call] 🔔 Owner alert sent to +639627459049');
-            } catch (alertErr: any) {
-                console.error('[missed-call] Owner alert failed:', alertErr?.message);
-            }
-        } catch (waErr: any) {
-            // WhatsApp send failed (e.g. caller has no WA) — lead is still saved
-            console.error('[missed-call] WhatsApp send failed:', waErr?.message);
-            return NextResponse.json({
-                success: false,
-                leadSaved: true,
-                leadId,
-                error: 'WhatsApp delivery failed — lead still saved',
-            });
-        }
-
-        return NextResponse.json({ success: true, leadId, callerPhone, businessId: business.id });
+        return NextResponse.json({
+            success: true,
+            leadId,
+            callerPhone,
+            businessId: business.id,
+            automations: { fired: automationResult.fired, results: automationResult.results },
+        });
 
     } catch (err: any) {
         console.error('[missed-call] Unhandled error:', err);

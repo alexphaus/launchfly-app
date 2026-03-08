@@ -65,7 +65,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
-  { id: 'send_template', label: 'Send Template', icon: '📝', configFields: ['templateSid'] },
+  { id: 'send_template', label: 'Send Template', icon: '📝', configFields: ['templateSid', 'contentVars'] },
   { id: 'start_sequence', label: 'Start Legacy Sequence', icon: '🔄', configFields: [] },
 ];
 
@@ -1149,13 +1149,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                       />
                                     )}
                                     {actionDef?.configFields?.includes('templateSid') && (
-                                      <input
-                                        type="text"
-                                        value={action.config?.templateSid || ''}
-                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'templateSid', e.target.value)}
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
-                                        placeholder="HX... (Twilio Content SID)"
-                                      />
+                                      <div className="space-y-1.5">
+                                        <input
+                                          type="text"
+                                          value={action.config?.templateSid || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'templateSid', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                          placeholder="HX... (Twilio Content SID)"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={action.config?.contentVars || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'contentVars', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder='Variables: {businessName}, {firstName} (comma-separated)'
+                                        />
+                                        <p className="text-[10px] text-slate-400">
+                                          Template variables map to {'{{1}}'}, {'{{2}}'}, etc. in order. Supports {'{ }'} placeholders.
+                                        </p>
+                                      </div>
                                     )}
                                   </div>
                                 </div>

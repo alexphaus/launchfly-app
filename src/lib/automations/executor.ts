@@ -60,6 +60,7 @@ export const AVAILABLE_EVENTS = [
   { id: 'payment_received', label: 'Payment Received', icon: '💰', desc: 'Stripe payment succeeds' },
   { id: 'sequence_completed', label: 'Sequence Completed', icon: '✅', desc: 'Follow-up sequence finishes all steps' },
   { id: 'customer_replied', label: 'Customer Replied to Sequence', icon: '💬', desc: 'Prospect replies during follow-up sequence' },
+  { id: 'quote_sent', label: 'Quote / Email Sent', icon: '📧', desc: 'A quote or email was sent to a prospect' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡', desc: 'POST from Zapier, Make, or any external tool' },
 ] as const;
 
@@ -73,6 +74,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'call_webhook', label: 'Call External Webhook', icon: '🌐', desc: 'POST data to an external URL', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', desc: 'Set customer status in database', configFields: ['status'] },
   { id: 'send_template', label: 'Send WhatsApp Template', icon: '📝', desc: 'Send a pre-approved WhatsApp template', configFields: ['templateSid'] },
+  { id: 'delay', label: 'Wait / Delay', icon: '⏳', desc: 'Pause the workflow for a set number of hours', configFields: ['delayHours'] },
 ] as const;
 
 // ─── Template Filling ────────────────────────────────────────────────────
@@ -289,18 +291,97 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
   const results: { ok: boolean; detail: string }[] = [];
 
   for (const rule of matchingRules) {
-    for (const action of rule.actions) {
-      try {
-        const result = await dispatchAction(action, ctx);
-        results.push(result);
-        console.log(`[automation] ${ctx.event} → ${action.type}: ${result.detail}`);
-      } catch (err) {
-        const detail = `Error executing ${action.type}: ${err instanceof Error ? err.message : String(err)}`;
-        results.push({ ok: false, detail });
-        console.error(`[automation] ${detail}`);
-      }
-    }
+    await executeActions(rule.actions, 0, ctx, results);
   }
 
   return { fired: matchingRules.length, results };
+}
+
+// ─── Sequential Action Executor (handles delays) ────────────────────────
+
+/**
+ * Execute actions starting from `startIndex`. When a `delay` action is hit,
+ * schedule the remaining actions via QStash and stop.
+ */
+export async function executeActions(
+  actions: Action[],
+  startIndex: number,
+  ctx: EventContext,
+  results: { ok: boolean; detail: string }[],
+): Promise<void> {
+  for (let i = startIndex; i < actions.length; i++) {
+    const action = actions[i];
+
+    if (action.type === 'delay') {
+      const hours = Number(action.config?.delayHours) || 1;
+      const delaySeconds = Math.max(60, Math.round(hours * 3600));
+      const remaining = actions.slice(i + 1);
+
+      if (remaining.length === 0) {
+        results.push({ ok: true, detail: `Delay ${hours}h — no further actions` });
+        return;
+      }
+
+      // Schedule remaining actions via QStash
+      const scheduled = await scheduleResume(remaining, ctx, delaySeconds);
+      results.push({ ok: scheduled, detail: `Delay ${hours}h → ${remaining.length} actions scheduled` });
+      return; // Stop processing — QStash will resume later
+    }
+
+    try {
+      const result = await dispatchAction(action, ctx);
+      results.push(result);
+      console.log(`[automation] ${ctx.event} → ${action.type}: ${result.detail}`);
+    } catch (err) {
+      const detail = `Error executing ${action.type}: ${err instanceof Error ? err.message : String(err)}`;
+      results.push({ ok: false, detail });
+      console.error(`[automation] ${detail}`);
+    }
+  }
+}
+
+// ─── QStash Delay Scheduler ─────────────────────────────────────────────
+
+async function scheduleResume(
+  remainingActions: Action[],
+  ctx: EventContext,
+  delaySeconds: number,
+): Promise<boolean> {
+  const qstashToken = process.env.QSTASH_TOKEN;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+
+  if (!qstashToken) {
+    console.warn('[automation] No QSTASH_TOKEN — cannot schedule delay. Skipping remaining actions.');
+    return false;
+  }
+
+  try {
+    const targetUrl = `${appUrl}/api/assistants/trigger/resume`;
+    await fetch('https://qstash.upstash.io/v2/publish/' + encodeURIComponent(targetUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${qstashToken}`,
+        'Content-Type': 'application/json',
+        'Upstash-Delay': `${delaySeconds}s`,
+        'Upstash-Retries': '2',
+      },
+      body: JSON.stringify({
+        actions: remainingActions,
+        ctx: {
+          businessId: ctx.businessId,
+          event: ctx.event,
+          phone: ctx.phone,
+          customerName: ctx.customerName,
+          message: ctx.message,
+          amount: ctx.amount,
+          metadata: ctx.metadata,
+        },
+      }),
+    });
+    console.log(`[automation] Scheduled ${remainingActions.length} actions after ${delaySeconds}s delay`);
+    return true;
+  } catch (err) {
+    console.error('[automation] QStash schedule failed:', err);
+    return false;
+  }
 }

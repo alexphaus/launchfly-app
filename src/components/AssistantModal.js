@@ -13,9 +13,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  X, Bot, Brain, Activity, Radio,
+  X, Bot, Brain, Activity,
   ChevronDown, ChevronUp, Plus, Trash2, Save,
-  Clock, Check, RefreshCw, Zap, Globe, Copy,
+  Check, RefreshCw, Zap, Globe, Copy,
   Eye, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
@@ -52,6 +52,7 @@ const AUTOMATION_EVENTS = [
   { id: 'booking_created', label: 'Booking Created', icon: '📅' },
   { id: 'booking_cancelled', label: 'Booking Cancelled', icon: '❌' },
   { id: 'payment_received', label: 'Payment Received', icon: '💰' },
+  { id: 'quote_sent', label: 'Quote / Email Sent', icon: '📧' },
   { id: 'sequence_completed', label: 'Sequence Completed', icon: '✅' },
   { id: 'customer_replied', label: 'Customer Replied', icon: '↩️' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
@@ -59,18 +60,13 @@ const AUTOMATION_EVENTS = [
 
 const AUTOMATION_ACTIONS = [
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
-  { id: 'start_sequence', label: 'Start Follow-up Sequence', icon: '🔄', configFields: [] },
+  { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: [] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
-];
-
-const CHANNELS = [
-  { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
-  { id: 'retell_voice', label: 'AI Voice Call', icon: '📞' },
-  { id: 'sms', label: 'SMS', icon: '📱' },
-  { id: 'email', label: 'Email', icon: '✉️' },
+  { id: 'send_template', label: 'Send Template', icon: '📝', configFields: ['templateSid'] },
+  { id: 'start_sequence', label: 'Start Legacy Sequence', icon: '🔄', configFields: [] },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -277,37 +273,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     }
   };
 
-  // ── Sequence step helpers ──────────────────────────────────────────────
-  const addSequenceStep = () => {
-    const steps = [...config.sequence_steps];
-    const lastStep = steps[steps.length - 1];
-    const newDay = lastStep ? lastStep.dayOffset + 3 : 0;
-    steps.push({
-      step: steps.length,
-      dayOffset: newDay,
-      hour: 10,
-      minute: 0,
-      channel: 'whatsapp',
-      message: '',
-      voicemail: '',
-    });
-    setConfig({ ...config, sequence_steps: steps });
-  };
-
-  const updateSequenceStep = (index, field, value) => {
-    const steps = [...config.sequence_steps];
-    steps[index] = { ...steps[index], [field]: value };
-    // Re-index step numbers
-    steps.forEach((s, i) => { s.step = i; });
-    setConfig({ ...config, sequence_steps: steps });
-  };
-
-  const removeSequenceStep = (index) => {
-    const steps = config.sequence_steps.filter((_, i) => i !== index);
-    steps.forEach((s, i) => { s.step = i; });
-    setConfig({ ...config, sequence_steps: steps });
-  };
-
   // ── Knowledge base helpers ─────────────────────────────────────────────
   const addKBItem = (section) => {
     const kb = { ...config.knowledge_base };
@@ -355,9 +320,13 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const addRule = () => {
     setRules([...getRules(), {
       id: `rule_${Date.now()}`,
-      event: 'inbound_whatsapp',
+      event: 'quote_sent',
       conditions: [],
-      actions: [{ type: 'notify_owner', config: { message: '🔔 New event from {customerName}' } }],
+      actions: [
+        { type: 'send_whatsapp', config: { message: 'Hey {firstName}, just sent you an estimate for {businessName}. Let me know if you have questions!' } },
+        { type: 'delay', config: { delayHours: 48 } },
+        { type: 'send_whatsapp', config: { message: 'Hi {firstName}, wanted to follow up on the quote. Ready to get started?' } },
+      ],
       enabled: true,
     }]);
   };
@@ -535,7 +504,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
           {[
             { id: 'brain', label: 'Brain', Icon: Brain },
             { id: 'activity', label: 'Activity', Icon: Activity },
-            { id: 'sequence', label: 'Sequence', Icon: Clock },
             { id: 'triggers', label: 'Automations', Icon: Zap },
           ].map(tab => (
             <button
@@ -976,149 +944,12 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                 </div>
               )}
 
-              {/* ═══ SEQUENCE TAB ═══ */}
-              {activeTab === 'sequence' && (
-                <div className="space-y-4">
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                    <p className="text-xs text-emerald-700">
-                      <strong>Follow-up sequence</strong> — Define the automated messages your AI sends after a quote/lead comes in.
-                      Each step fires at the specified day and time in the prospect&apos;s timezone.
-                    </p>
-                  </div>
-
-                  {/* Timeline */}
-                  {config.sequence_steps.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500 mb-3">No follow-up sequence configured yet.</p>
-                      <button
-                        onClick={addSequenceStep}
-                        className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-                      >
-                        <Plus className="w-4 h-4 inline mr-1" /> Add First Step
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {config.sequence_steps.map((step, i) => (
-                        <div key={i} className="relative">
-                          {/* Timeline connector */}
-                          {i < config.sequence_steps.length - 1 && (
-                            <div className="absolute left-5 top-16 bottom-0 w-px bg-slate-200 -mb-3" />
-                          )}
-
-                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-                            {/* Step header */}
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                                  step.channel === 'retell_voice' ? 'bg-blue-100 text-blue-600'
-                                    : step.channel === 'sms' ? 'bg-purple-100 text-purple-600'
-                                    : step.channel === 'email' ? 'bg-amber-100 text-amber-600'
-                                    : 'bg-emerald-100 text-emerald-600'
-                                }`}>
-                                  {CHANNELS.find(c => c.id === step.channel)?.icon || '💬'}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-900">
-                                    {step.dayOffset === 0 ? 'Immediately' : `Day ${step.dayOffset}`}
-                                  </p>
-                                  <p className="text-[11px] text-slate-500">
-                                    {step.hour === -1 ? 'Within 60s' : `${step.hour}:${String(step.minute).padStart(2,'0')} local time`}
-                                  </p>
-                                </div>
-                              </div>
-                              <button onClick={() => removeSequenceStep(i)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Step fields */}
-                            <div className="space-y-2">
-                              <div className="flex gap-2">
-                                <div className="flex-1">
-                                  <label className="text-[10px] text-slate-400 font-medium">Day</label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={step.dayOffset}
-                                    onChange={e => updateSequenceStep(i, 'dayOffset', parseInt(e.target.value) || 0)}
-                                    className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none"
-                                  />
-                                </div>
-                                <div className="flex-1">
-                                  <label className="text-[10px] text-slate-400 font-medium">Hour</label>
-                                  <input
-                                    type="number"
-                                    min="-1"
-                                    max="23"
-                                    value={step.hour}
-                                    onChange={e => { const v = parseInt(e.target.value); updateSequenceStep(i, 'hour', isNaN(v) ? -1 : v); }}
-                                    className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none"
-                                  />
-                                </div>
-                                <div className="flex-1">
-                                  <label className="text-[10px] text-slate-400 font-medium">Channel</label>
-                                  <select
-                                    value={step.channel}
-                                    onChange={e => updateSequenceStep(i, 'channel', e.target.value)}
-                                    className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none bg-white"
-                                  >
-                                    {CHANNELS.map(ch => (
-                                      <option key={ch.id} value={ch.id}>{ch.icon} {ch.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                              <div>
-                                <label className="text-[10px] text-slate-400 font-medium">Message</label>
-                                <textarea
-                                  value={step.message}
-                                  onChange={e => updateSequenceStep(i, 'message', e.target.value)}
-                                  className="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:border-emerald-500 outline-none"
-                                  rows={3}
-                                  placeholder="Hey {firstName}, just following up on the estimate..."
-                                />
-                                <p className="text-[10px] text-slate-400 mt-0.5">
-                                  Variables: {'{firstName}'} {'{ownerName}'} {'{businessName}'} {'{jobType}'} {'{quoteAmount}'}
-                                </p>
-                              </div>
-                              {step.channel === 'retell_voice' && (
-                                <div>
-                                  <label className="text-[10px] text-slate-400 font-medium">Voicemail Script</label>
-                                  <textarea
-                                    value={step.voicemail || ''}
-                                    onChange={e => updateSequenceStep(i, 'voicemail', e.target.value)}
-                                    className="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:border-emerald-500 outline-none"
-                                    rows={2}
-                                    placeholder="Hey {firstName}, this is a follow-up from..."
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Add step button */}
-                      <button
-                        onClick={addSequenceStep}
-                        className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-sm font-medium text-slate-500 hover:border-emerald-500 hover:text-emerald-600 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" /> Add Step
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ═══ TRIGGERS TAB ═══ */}
+              {/* ═══ AUTOMATIONS TAB ═══ */}
               {activeTab === 'triggers' && (
                 <div className="space-y-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                     <p className="text-xs text-blue-700">
-                      <strong>Automations</strong> — When something happens, trigger an action.
-                      Like Zapier, but built into your AI assistant.
+                      <strong>Automations</strong> — Build workflows with delays. Example: Quote Sent → Wait 48h → WhatsApp → Wait 24h → Call.
                     </p>
                   </div>
 
@@ -1244,56 +1075,89 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                           <Plus className="w-3 h-3" /> Add condition
                         </button>
 
-                        {/* THEN actions */}
+                        {/* THEN actions (sequential workflow) */}
                         <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Then</label>
-                          <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Then (runs in order)</label>
+                          <div className="space-y-1">
                             {(rule.actions || []).map((action, actIdx) => {
                               const actionDef = AUTOMATION_ACTIONS.find(a => a.id === action.type);
+                              const isDelay = action.type === 'delay';
                               return (
-                                <div key={actIdx} className="bg-slate-50 rounded-lg p-2.5 space-y-2">
-                                  <div className="flex items-center gap-1.5">
-                                    <select
-                                      value={action.type}
-                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'type', e.target.value)}
-                                      className="flex-1 p-2 border border-slate-200 rounded-lg text-xs bg-white"
-                                    >
-                                      {AUTOMATION_ACTIONS.map(act => (
-                                        <option key={act.id} value={act.id}>{act.icon} {act.label}</option>
-                                      ))}
-                                    </select>
-                                    <button onClick={() => removeActionFromRule(ruleIdx, actIdx)} className="p-1 hover:bg-red-50 rounded">
-                                      <X className="w-3 h-3 text-red-400" />
-                                    </button>
+                                <div key={actIdx}>
+                                  {/* Timeline connector */}
+                                  {actIdx > 0 && (
+                                    <div className="flex items-center justify-center py-0.5">
+                                      <div className="w-px h-3 bg-slate-300" />
+                                    </div>
+                                  )}
+                                  <div className={`rounded-lg p-2.5 space-y-2 ${isDelay ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
+                                    <div className="flex items-center gap-1.5">
+                                      {isDelay && <span className="text-sm">⏳</span>}
+                                      <select
+                                        value={action.type}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'type', e.target.value)}
+                                        className="flex-1 p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                      >
+                                        {AUTOMATION_ACTIONS.map(act => (
+                                          <option key={act.id} value={act.id}>{act.icon} {act.label}</option>
+                                        ))}
+                                      </select>
+                                      <button onClick={() => removeActionFromRule(ruleIdx, actIdx)} className="p-1 hover:bg-red-50 rounded">
+                                        <X className="w-3 h-3 text-red-400" />
+                                      </button>
+                                    </div>
+                                    {/* Config fields */}
+                                    {actionDef?.configFields?.includes('delayHours') && (
+                                      <div className="flex items-center gap-2">
+                                        <label className="text-[10px] text-amber-600 font-bold whitespace-nowrap">Wait</label>
+                                        <input
+                                          type="number"
+                                          min="0.5"
+                                          step="0.5"
+                                          value={action.config?.delayHours || 24}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'delayHours', parseFloat(e.target.value) || 1)}
+                                          className="w-20 p-2 border border-amber-300 rounded-lg text-xs text-center bg-white"
+                                        />
+                                        <span className="text-[10px] text-amber-600 font-medium">hours</span>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('message') && (
+                                      <textarea
+                                        value={action.config?.message || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'message', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                        rows={2}
+                                        placeholder="Message... use {firstName}, {businessName}, {quoteAmount}"
+                                      />
+                                    )}
+                                    {actionDef?.configFields?.includes('url') && (
+                                      <input
+                                        type="url"
+                                        value={action.config?.url || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'url', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                        placeholder="https://hooks.zapier.com/..."
+                                      />
+                                    )}
+                                    {actionDef?.configFields?.includes('status') && (
+                                      <input
+                                        type="text"
+                                        value={action.config?.status || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'status', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                        placeholder="e.g. hot_lead, vip, inactive"
+                                      />
+                                    )}
+                                    {actionDef?.configFields?.includes('templateSid') && (
+                                      <input
+                                        type="text"
+                                        value={action.config?.templateSid || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'templateSid', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                        placeholder="HX... (Twilio Content SID)"
+                                      />
+                                    )}
                                   </div>
-                                  {/* Config fields */}
-                                  {actionDef?.configFields?.includes('message') && (
-                                    <textarea
-                                      value={action.config?.message || ''}
-                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'message', e.target.value)}
-                                      className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
-                                      rows={2}
-                                      placeholder="Message... use {firstName}, {businessName}, {quoteAmount}"
-                                    />
-                                  )}
-                                  {actionDef?.configFields?.includes('url') && (
-                                    <input
-                                      type="url"
-                                      value={action.config?.url || ''}
-                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'url', e.target.value)}
-                                      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
-                                      placeholder="https://hooks.zapier.com/..."
-                                    />
-                                  )}
-                                  {actionDef?.configFields?.includes('status') && (
-                                    <input
-                                      type="text"
-                                      value={action.config?.status || ''}
-                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'status', e.target.value)}
-                                      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
-                                      placeholder="e.g. hot_lead, vip, inactive"
-                                    />
-                                  )}
                                 </div>
                               );
                             })}
@@ -1302,7 +1166,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                             onClick={() => addActionToRule(ruleIdx)}
                             className="mt-1.5 text-[11px] text-emerald-600 font-medium hover:text-emerald-700 flex items-center gap-1"
                           >
-                            <Plus className="w-3 h-3" /> Add action
+                            <Plus className="w-3 h-3" /> Add step
                           </button>
                         </div>
                       </div>

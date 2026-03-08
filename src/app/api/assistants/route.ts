@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
 
 interface AssistantPayload {
   businessId: string;
+  assistantId?: string;  // Target a specific assistant (prevents race conditions)
   name?: string;
   tone?: string;
   goal?: string;
@@ -129,13 +130,25 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Check if an assistant already exists
-    const { data: existing } = await supabase
-      .from('assistants')
-      .select('id')
-      .eq('business_id', body.businessId)
-      .eq('active', true)
-      .maybeSingle();
+    // Find the specific assistant to update (by ID if provided, otherwise active)
+    let existing: { id: string } | null = null;
+    if (body.assistantId) {
+      const { data } = await supabase
+        .from('assistants')
+        .select('id')
+        .eq('id', body.assistantId)
+        .eq('business_id', body.businessId)
+        .maybeSingle();
+      existing = data;
+    } else {
+      const { data } = await supabase
+        .from('assistants')
+        .select('id')
+        .eq('business_id', body.businessId)
+        .eq('active', true)
+        .maybeSingle();
+      existing = data;
+    }
 
     const payload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),

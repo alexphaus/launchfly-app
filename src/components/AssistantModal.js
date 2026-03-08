@@ -99,28 +99,35 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [switching, setSwitching] = useState(false);
 
   // ── Load assistant config ──────────────────────────────────────────────
+  // Apply assistant data to local config state
+  const applyAssistantData = useCallback((assistant) => {
+    if (!assistant) return;
+    setCurrentAssistantId(assistant.id);
+    setConfig({
+      name: assistant.name || 'AI Sales Assistant',
+      tone: assistant.tone || 'friendly',
+      goal: assistant.goal || 'book_consultation',
+      system_prompt: assistant.system_prompt,
+      custom_rules: assistant.custom_rules || [],
+      knowledge_base: assistant.knowledge_base || { pricing: [], faq: [], objections: [] },
+      tools_enabled: assistant.tools_enabled || [],
+      sequence_steps: assistant.sequence_steps || [],
+      trigger_config: assistant.trigger_config || {},
+    });
+    setPromptMode(assistant.system_prompt ? 'custom' : 'auto');
+  }, []);
+
   const loadAssistant = useCallback(async () => {
     if (!business?.id) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/assistants?businessId=${business.id}`);
+      const res = await fetch(`/api/assistants?businessId=${business.id}`, { cache: 'no-store' });
       const data = await res.json();
 
       if (data.assistant) {
-        setCurrentAssistantId(data.assistant.id);
-        setConfig({
-          name: data.assistant.name || 'AI Sales Assistant',
-          tone: data.assistant.tone || 'friendly',
-          goal: data.assistant.goal || 'book_consultation',
-          system_prompt: data.assistant.system_prompt,
-          custom_rules: data.assistant.custom_rules || [],
-          knowledge_base: data.assistant.knowledge_base || { pricing: [], faq: [], objections: [] },
-          tools_enabled: data.assistant.tools_enabled || [],
-          sequence_steps: data.assistant.sequence_steps || [],
-          trigger_config: data.assistant.trigger_config || {},
-        });
-        setPromptMode(data.assistant.system_prompt ? 'custom' : 'auto');
+        applyAssistantData(data.assistant);
       } else if (data.defaults) {
+        setCurrentAssistantId(null);
         setConfig(data.defaults);
         setPromptMode('auto');
       }
@@ -129,12 +136,12 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     } finally {
       setLoading(false);
     }
-  }, [business?.id]);
+  }, [business?.id, applyAssistantData]);
 
   const loadAssistantList = useCallback(async () => {
     if (!business?.id) return;
     try {
-      const res = await fetch(`/api/assistants?businessId=${business.id}&list=true`);
+      const res = await fetch(`/api/assistants?businessId=${business.id}&list=true`, { cache: 'no-store' });
       const data = await res.json();
       setAssistantList(data.assistants || []);
     } catch (err) {
@@ -145,42 +152,50 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const switchAssistant = async (assistantId) => {
     if (!business?.id || switching) return;
     setSwitching(true);
+    setShowSwitcher(false);
+    setLoading(true);
     try {
       const res = await fetch('/api/assistants', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessId: business.id, assistantId }),
       });
-      if (res.ok) {
-        setShowSwitcher(false);
-        await loadAssistant();
-        await Promise.all([loadAssistantList(), loadActivity()]);
+      const data = await res.json();
+      if (res.ok && data.assistant) {
+        applyAssistantData(data.assistant);
+        loadAssistantList();
+        loadActivity();
       }
     } catch (err) {
       console.error('Failed to switch assistant:', err);
     } finally {
       setSwitching(false);
+      setLoading(false);
     }
   };
 
   const createNewAssistant = async () => {
     if (!business?.id || switching) return;
     setSwitching(true);
+    setShowSwitcher(false);
+    setLoading(true);
     try {
       const res = await fetch('/api/assistants', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ businessId: business.id, createNew: true }),
       });
-      if (res.ok) {
-        setShowSwitcher(false);
-        await loadAssistant();
-        await Promise.all([loadAssistantList(), loadActivity()]);
+      const data = await res.json();
+      if (res.ok && data.assistant) {
+        applyAssistantData(data.assistant);
+        loadAssistantList();
+        loadActivity();
       }
     } catch (err) {
       console.error('Failed to create assistant:', err);
     } finally {
       setSwitching(false);
+      setLoading(false);
     }
   };
 
@@ -188,7 +203,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     if (!business?.id) return;
     setLoadingActivity(true);
     try {
-      const res = await fetch(`/api/assistants/activity?businessId=${business.id}`);
+      const res = await fetch(`/api/assistants/activity?businessId=${business.id}`, { cache: 'no-store' });
       const data = await res.json();
       setActivityLog(data.activities || []);
     } catch (err) {
@@ -217,14 +232,17 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId: business.id,
+          assistantId: currentAssistantId,
           ...config,
           system_prompt: promptMode === 'custom' ? config.system_prompt : null,
         }),
       });
+      const data = await res.json();
 
-      if (res.ok) {
+      if (res.ok && data.assistant) {
+        applyAssistantData(data.assistant);
         setSaveStatus('saved');
-        loadAssistantList(); // refresh dropdown with new name/tone/goal
+        loadAssistantList();
         setTimeout(() => setSaveStatus(null), 2000);
       } else {
         setSaveStatus('error');

@@ -55,6 +55,75 @@ export interface MessageContext {
   niche: string;
 }
 
+/**
+ * Fill a message template string with context values.
+ * Supports: {customerName}, {firstName}, {ownerName}, {businessName},
+ *           {jobType}, {quoteAmount}, {currencySymbol}, {niche}
+ */
+function fillTemplate(template: string, ctx: MessageContext): string {
+  return template
+    .replace(/\{customerName\}/g, ctx.customerName)
+    .replace(/\{firstName\}/g, ctx.firstName)
+    .replace(/\{ownerName\}/g, ctx.ownerName)
+    .replace(/\{businessName\}/g, ctx.businessName)
+    .replace(/\{jobType\}/g, ctx.jobType)
+    .replace(/\{quoteAmount\}/g, ctx.quoteAmount)
+    .replace(/\{currencySymbol\}/g, ctx.currencySymbol)
+    .replace(/\{niche\}/g, ctx.niche);
+}
+
+/** DB-stored step shape (from assistants.sequence_steps JSONB) */
+interface DBSequenceStep {
+  step: number;
+  dayOffset: number;
+  hour: number;
+  minute: number;
+  channel: string;
+  message: string;
+  voicemail?: string;
+}
+
+/** Convert DB-stored steps into runtime SequenceStep objects */
+function dbStepsToSequenceSteps(dbSteps: DBSequenceStep[]): SequenceStep[] {
+  return dbSteps.map((s, i) => ({
+    step: i,
+    dayOffset: s.dayOffset,
+    targetHour: s.hour,
+    targetMinute: s.minute,
+    channel: (s.channel === 'retell_voice' ? 'retell_voice' : 'whatsapp') as SequenceChannel,
+    purpose: `Step ${i} (custom)`,
+    buildMessage: (ctx: MessageContext) => fillTemplate(s.message, ctx),
+    buildVoicemail: s.voicemail ? (ctx: MessageContext) => fillTemplate(s.voicemail!, ctx) : undefined,
+  }));
+}
+
+/**
+ * Resolve the sequence steps for a lead: if the business has custom steps
+ * configured in the assistants table, use those. Otherwise fall back to
+ * the hardcoded SEQUENCE_STEPS.
+ */
+async function resolveSequenceSteps(businessId: string | null): Promise<SequenceStep[]> {
+  if (!businessId) return SEQUENCE_STEPS;
+  try {
+    const supabase = getSupabase();
+    const { data: assistant } = await supabase
+      .from('assistants')
+      .select('sequence_steps')
+      .eq('business_id', businessId)
+      .eq('active', true)
+      .maybeSingle();
+
+    const dbSteps = assistant?.sequence_steps as DBSequenceStep[] | null;
+    if (dbSteps && Array.isArray(dbSteps) && dbSteps.length > 0) {
+      console.log(`[sequence] Using ${dbSteps.length} custom steps from assistant config`);
+      return dbStepsToSequenceSteps(dbSteps);
+    }
+  } catch (err) {
+    console.error('[sequence] Error loading assistant sequence_steps, using defaults:', err);
+  }
+  return SEQUENCE_STEPS;
+}
+
 export function buildMessageContext(
   lead: QuoteLead,
   biz?: { name?: string; ownerName?: string; niche?: string },
@@ -385,7 +454,10 @@ export async function processSequenceStep(lead: QuoteLead): Promise<ProcessResul
     return { action: 'terminal_status' };
   }
 
-  const currentStep = SEQUENCE_STEPS[lead.sequence_step];
+  // Resolve steps: custom from assistant config, or hardcoded defaults
+  const steps = await resolveSequenceSteps(lead.business_id);
+
+  const currentStep = steps[lead.sequence_step];
   if (!currentStep) {
     // All steps exhausted
     await supabase.from('quote_leads').update({
@@ -445,7 +517,7 @@ export async function processSequenceStep(lead: QuoteLead): Promise<ProcessResul
 
   // ── Advance to next step ─────────────────────────────────────────────
   const nextStepIndex = lead.sequence_step + 1;
-  const nextStep = SEQUENCE_STEPS[nextStepIndex];
+  const nextStep = steps[nextStepIndex];
 
   let nextActionTime: string;
   if (nextStep) {

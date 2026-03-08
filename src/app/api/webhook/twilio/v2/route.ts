@@ -755,7 +755,15 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 console.log('   🤖 Using custom system prompt from assistants table');
             } else {
                 // Auto-generate from business context (default)
-                systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
+                // Pass tone + goal from assistant config to shape the prompt
+                systemPrompt = generateSystemPrompt(
+                    businessContext!,
+                    customerContext || undefined,
+                    {
+                        tone: (assistant?.tone as string) || undefined,
+                        goal: (assistant?.goal as string) || undefined,
+                    },
+                );
             }
 
             // Append assistant knowledge base if available
@@ -890,6 +898,33 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
             console.log(`   🧠 Calling AI with ${history.length} history messages...`);
             console.log(`   📋 Business ID for tools: ${businessId}`);
 
+            // ── Filter tools by assistant config ─────────────────────────────
+            const TOOL_GROUPS: Record<string, string[]> = {
+                book_calendar: ['createBooking', 'rescheduleBooking', 'cancelBooking', 'getCustomerBookings', 'getAvailableSlots'],
+                lookup_customer: ['lookupCustomer', 'updateCustomer'],
+                transfer_to_human: ['notifyOwner'],
+                send_checkout_link: ['calculatePrice'],
+            };
+            const CORE_TOOLS = ['getBusinessConfig', 'checkAvailability', 'activateWarranty', 'saveFeedback', 'saveReferral'];
+
+            const enabledToolKeys = new Set(CORE_TOOLS);
+            const toolsConfig = assistant?.tools_enabled as string[] | undefined;
+            if (toolsConfig?.length) {
+                for (const featureId of toolsConfig) {
+                    const group = TOOL_GROUPS[featureId];
+                    if (group) group.forEach(k => enabledToolKeys.add(k));
+                    else enabledToolKeys.add(featureId); // direct key match (future-proof)
+                }
+            } else {
+                // No config = all tools enabled (backward compat)
+                Object.keys(receptionistTools).forEach(k => enabledToolKeys.add(k));
+            }
+
+            const filteredTools = Object.fromEntries(
+                Object.entries(receptionistTools).filter(([k]) => enabledToolKeys.has(k))
+            ) as typeof receptionistTools;
+            console.log(`   🔧 Tools enabled: ${Object.keys(filteredTools).join(', ')}`);
+
             const result = await generateText({
                 model: openai('gpt-4o-mini'),
                 system: systemPrompt + `\n\n${contextMessage}`,
@@ -897,7 +932,7 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                     ...history,
                     { role: 'user', content: messageText },
                 ],
-                tools: receptionistTools,
+                tools: filteredTools,
                 // @ts-ignore - maxSteps is available in AI SDK 3.1+ but type def might be lagging
                 maxSteps: 5,
                 toolChoice: 'auto', // Ensure tools can be called

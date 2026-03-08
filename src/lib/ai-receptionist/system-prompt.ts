@@ -146,6 +146,22 @@ export interface CustomerContext {
     lastInteractionContext?: string; // 'FEEDBACK_7D', etc.
 }
 
+// ── Tone & Goal Descriptors ──────────────────────────────────────────────
+
+const TONE_INSTRUCTIONS: Record<string, string> = {
+    friendly: 'You are warm, approachable, and use a conversational style with occasional emojis. Make customers feel welcome.',
+    professional: 'You are polished and corporate. Use proper grammar, no slang, minimal emojis. Maintain business tone at all times.',
+    casual: 'You talk like a friend. Use casual language, contractions, and emojis freely. Keep it chill and relatable.',
+    direct: 'You are concise and straight to the point. No fluff, no filler. Get to the action quickly.',
+};
+
+const GOAL_INSTRUCTIONS: Record<string, string> = {
+    book_consultation: 'Your PRIMARY goal is to get the customer to book a consultation, site visit, or call. Guide every conversation toward scheduling an appointment.',
+    close_sale: 'Your PRIMARY goal is to close the sale. Push toward checkout/payment. Overcome objections, offer financing, create urgency.',
+    collect_review: 'Your PRIMARY goal is to get happy customers to leave a review. After confirming satisfaction, ask them to rate and review the business.',
+    reactivate: 'Your PRIMARY goal is to re-engage old leads who went silent. Be warm, acknowledge the gap, and offer a fresh reason to come back.',
+};
+
 /**
  * Generate the system prompt for the AI Receptionist
  * This is the "personality" and "knowledge" of the bot
@@ -153,6 +169,7 @@ export interface CustomerContext {
 export function generateSystemPrompt(
     business: BusinessContext,
     customer?: CustomerContext,
+    assistantConfig?: { tone?: string; goal?: string },
 ): string {
     // Generate Referral Link (keep it SHORT and clean for WhatsApp)
     const referralCode = customer?.id ? `REF-${customer.id.substring(0,6).toUpperCase()}` : 'WELCOME';
@@ -193,17 +210,25 @@ CURRENT CUSTOMER:
 - New customer (first interaction)
 `;
 
-    return `You are the friendly AI Receptionist for **${business.name}**.
+    // ── Resolve tone & goal ─────────────────────────────────────────────
+    const tone = assistantConfig?.tone || 'friendly';
+    const goal = assistantConfig?.goal || 'book_consultation';
+    const toneInstruction = TONE_INSTRUCTIONS[tone] || TONE_INSTRUCTIONS.friendly;
+    const goalInstruction = GOAL_INSTRUCTIONS[goal] || GOAL_INSTRUCTIONS.book_consultation;
+
+    return `You are the AI Receptionist for **${business.name}**.
 Today is ${today}.
 
 UPCOMING DATES CHEAT SHEET (Use these for relative dates like "next Wednesday"):
 ${next7Days}
 
 YOUR ROLE:
-You help customers book ${business.niche} services and manage their warranties.
-You are helpful, concise, and use emojis sparingly to be friendly.
+You help customers with ${business.niche} services and manage their warranties.
 You communicate via WhatsApp - keep messages SHORT (under 200 words).
-You are also a SALESMAN - gently upsell when appropriate.
+
+TONE: ${toneInstruction}
+
+GOAL: ${goalInstruction}
 
 BUSINESS INFO:
 - Business ID: ${business.id}

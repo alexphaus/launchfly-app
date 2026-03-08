@@ -206,7 +206,8 @@ export async function POST(req: NextRequest) {
             event: 'missed_call',
             phone: callerPhone,
             customerName: existing?.name || 'Missed Call',
-            metadata: { leadId, source: 'missed_call_webhook', businessName: business.name },
+            businessName: business.name,
+            metadata: { leadId, source: 'missed_call_webhook' },
         });
 
         console.log('[missed-call] ✅ Lead %s saved, %d automation rules fired for %s', leadId, automationResult.fired, callerPhone);

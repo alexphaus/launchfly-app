@@ -294,6 +294,19 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
 export async function fireEvent(ctx: EventContext): Promise<{ fired: number; results: { ok: boolean; detail: string }[] }> {
   const supabase = getSupabase();
 
+  // Enrich context: auto-resolve businessName + firstName if not provided
+  if (!ctx.businessName && ctx.businessId) {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('name')
+      .eq('id', ctx.businessId)
+      .single();
+    if (biz?.name) ctx.businessName = biz.name;
+  }
+  if (!ctx.firstName && ctx.customerName) {
+    ctx.firstName = ctx.customerName.split(' ')[0];
+  }
+
   const { data: assistant } = await supabase
     .from('assistants')
     .select('trigger_config')

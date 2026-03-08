@@ -13,10 +13,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  X, Bot, Brain, BookOpen, Zap, Radio,
+  X, Bot, Brain, BookOpen, Radio,
   ChevronDown, ChevronUp, Plus, Trash2, Save,
-  Phone, MessageCircle, Mail, Clock, Check,
-  Pencil, Eye, ToggleLeft, ToggleRight,
+  Clock, Check,
+  Eye, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────
@@ -722,7 +722,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                     min="-1"
                                     max="23"
                                     value={step.hour}
-                                    onChange={e => updateSequenceStep(i, 'hour', parseInt(e.target.value))}
+                                    onChange={e => { const v = parseInt(e.target.value); updateSequenceStep(i, 'hour', isNaN(v) ? -1 : v); }}
                                     className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:border-emerald-500 outline-none"
                                   />
                                 </div>

@@ -323,7 +323,7 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     .select('system_prompt, knowledge_base, tools_enabled, custom_rules, tone, goal')
                     .eq('business_id', businessId)
                     .eq('active', true)
-                    .single(),
+                    .maybeSingle(),
             ]);
 
             const business = businessResult.data;

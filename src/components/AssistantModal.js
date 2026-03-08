@@ -13,9 +13,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  X, Bot, Brain, BookOpen, Radio,
+  X, Bot, Brain, Activity, Radio,
   ChevronDown, ChevronUp, Plus, Trash2, Save,
-  Clock, Check,
+  Clock, Check, RefreshCw,
   Eye, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
@@ -51,6 +51,21 @@ const CHANNELS = [
   { id: 'email', label: 'Email', icon: '✉️' },
 ];
 
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
 // ─── Component ───────────────────────────────────────────────────────────
 
 export default function AssistantModal({ isOpen, onClose, business }) {
@@ -74,6 +89,8 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
   const [promptMode, setPromptMode] = useState('auto'); // 'auto' | 'custom'
   const [expandedSection, setExpandedSection] = useState(null);
+  const [activityLog, setActivityLog] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
 
   // ── Load assistant config ──────────────────────────────────────────────
   const loadAssistant = useCallback(async () => {
@@ -107,9 +124,26 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     }
   }, [business?.id]);
 
+  const loadActivity = useCallback(async () => {
+    if (!business?.id) return;
+    setLoadingActivity(true);
+    try {
+      const res = await fetch(`/api/assistants/activity?businessId=${business.id}`);
+      const data = await res.json();
+      setActivityLog(data.activities || []);
+    } catch (err) {
+      console.error('Failed to load activity:', err);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, [business?.id]);
+
   useEffect(() => {
-    if (isOpen) loadAssistant();
-  }, [isOpen, loadAssistant]);
+    if (isOpen) {
+      loadAssistant();
+      loadActivity();
+    }
+  }, [isOpen, loadAssistant, loadActivity]);
 
   // ── Save assistant config ──────────────────────────────────────────────
   const saveAssistant = async () => {
@@ -259,7 +293,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         <div className="flex border-b border-slate-100 px-2 shrink-0">
           {[
             { id: 'brain', label: 'Brain', Icon: Brain },
-            { id: 'knowledge', label: 'Knowledge', Icon: BookOpen },
+            { id: 'activity', label: 'Activity', Icon: Activity },
             { id: 'sequence', label: 'Sequence', Icon: Clock },
             { id: 'triggers', label: 'Triggers', Icon: Radio },
           ].map(tab => (
@@ -447,43 +481,14 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     )}
                   </div>
 
-                  {/* Tools */}
+                  {/* Knowledge Base */}
                   <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                      Tools Enabled
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">
+                      Knowledge Base
                     </label>
-                    <div className="space-y-1.5">
-                      {AVAILABLE_TOOLS.map(tool => (
-                        <button
-                          key={tool.id}
-                          onClick={() => toggleTool(tool.id)}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
-                            config.tools_enabled.includes(tool.id)
-                              ? 'border-emerald-200 bg-emerald-50'
-                              : 'border-slate-200 bg-slate-50 opacity-60'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span>{tool.emoji}</span>
-                            <div className="text-left">
-                              <p className="text-sm font-medium text-slate-900">{tool.label}</p>
-                              <p className="text-[11px] text-slate-500">{tool.desc}</p>
-                            </div>
-                          </div>
-                          {config.tools_enabled.includes(tool.id)
-                            ? <ToggleRight className="w-5 h-5 text-emerald-600" />
-                            : <ToggleLeft className="w-5 h-5 text-slate-400" />
-                          }
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* ═══ KNOWLEDGE TAB ═══ */}
-              {activeTab === 'knowledge' && (
-                <div className="space-y-5">
+                    <div className="space-y-4">
+
                   {/* Pricing */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -642,6 +647,91 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       </div>
                     )}
                   </div>
+
+                    </div>
+                  </div>
+
+                  {/* Tools */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                      Tools Enabled
+                    </label>
+                    <div className="space-y-1.5">
+                      {AVAILABLE_TOOLS.map(tool => (
+                        <button
+                          key={tool.id}
+                          onClick={() => toggleTool(tool.id)}
+                          className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                            config.tools_enabled.includes(tool.id)
+                              ? 'border-emerald-200 bg-emerald-50'
+                              : 'border-slate-200 bg-slate-50 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span>{tool.emoji}</span>
+                            <div className="text-left">
+                              <p className="text-sm font-medium text-slate-900">{tool.label}</p>
+                              <p className="text-[11px] text-slate-500">{tool.desc}</p>
+                            </div>
+                          </div>
+                          {config.tools_enabled.includes(tool.id)
+                            ? <ToggleRight className="w-5 h-5 text-emerald-600" />
+                            : <ToggleLeft className="w-5 h-5 text-slate-400" />
+                          }
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ═══ ACTIVITY TAB ═══ */}
+              {activeTab === 'activity' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500">Conversations, calls &amp; bookings</p>
+                    <button
+                      onClick={loadActivity}
+                      disabled={loadingActivity}
+                      className="text-xs text-emerald-600 font-medium hover:text-emerald-700 flex items-center gap-1"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${loadingActivity ? 'animate-spin' : ''}`} /> Refresh
+                    </button>
+                  </div>
+
+                  {loadingActivity && activityLog.length === 0 ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="animate-spin w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full" />
+                    </div>
+                  ) : activityLog.length === 0 ? (
+                    <div className="text-center py-10">
+                      <Activity className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                      <p className="text-sm text-slate-400">No activity yet.</p>
+                      <p className="text-xs text-slate-300 mt-1">WhatsApp chats, calls, and bookings will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {activityLog.map((evt, i) => (
+                        <div key={evt.id || i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
+                            evt.type === 'conversation' ? 'bg-emerald-100'
+                              : evt.type === 'call' ? 'bg-blue-100'
+                              : evt.type === 'booking' ? 'bg-amber-100'
+                              : 'bg-purple-100'
+                          }`}>
+                            {evt.icon || '⚡'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 leading-snug">{evt.title}</p>
+                            {evt.detail && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{evt.detail}</p>}
+                          </div>
+                          <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0 mt-1">
+                            {formatTimeAgo(evt.created_at)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

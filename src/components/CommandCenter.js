@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import QRCodeLib from 'qrcode';
 import RevenuePulse from './RevenuePulse';
+import AssistantModal from './AssistantModal';
 
 export default function CommandCenter({ business, initialLeads = [], initialBookings = [], initialStats = {} }) {
     const [leads, setLeads] = useState(initialLeads);
@@ -20,6 +21,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
         pipeline: initialStats.pipeline || 0,
         booked: initialStats.booked || 0,
     });
+    const [showBlastModal, setShowBlastModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [showTopUpModal, setShowTopUpModal] = useState(false);
@@ -42,27 +44,7 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
     const [deployStep, setDeployStep] = useState(1);
     const [selectedGoal, setSelectedGoal] = useState(null);
     const [selectedPlaybook, setSelectedPlaybook] = useState(null);
-
-    // Employee Hub states
-    const [showAssistantHub, setShowAssistantHub] = useState(false);
-    const [hubTab, setHubTab] = useState('playbooks'); // 'playbooks' | 'brain' | 'activity'
-    const [savingBrain, setSavingBrain] = useState(false);
-    const [devMode, setDevMode] = useState(false);
-    const [activityLog, setActivityLog] = useState([]);
-    const [loadingActivity, setLoadingActivity] = useState(false);
-
-    // Brain form state (loaded from business_data)
-    const [brainData, setBrainData] = useState({
-        ownerName: '',
-        niche: '',
-        services: '',
-        operatingHours: '',
-        pricingRules: '',
-        faqs: '',
-        personality: 'professional',
-        customRules: '',
-        systemPrompt: '',
-    });
+    const [showAssistantModal, setShowAssistantModal] = useState(false);
 
     // Import contacts states (Database Reactivation)
     const [blastTab, setBlastTab] = useState('blast'); // 'blast' | 'import'
@@ -480,12 +462,12 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     setBlastCredits(data.remainingCredits);
                 }
                 alert(`✅ Blast sent to ${data.sent} ${data.segmentName || 'leads'}! Cost: ${currency}${data.cost}`);
-                setShowAssistantHub(false);
+                setShowBlastModal(false);
                 setCustomMessage('');
             } else if (response.status === 402) {
                 // Insufficient credits
                 alert(`❌ Insufficient credits. Need ${currency}${data.required}, have ${currency}${data.available}`);
-                setShowAssistantHub(false);
+                setShowBlastModal(false);
                 setShowTopUpModal(true);
             } else {
                 alert('❌ Failed to send blast: ' + (data.error || 'Unknown error'));
@@ -550,121 +532,6 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
             alert('❌ Error importing contacts');
         } finally {
             setImporting(false);
-        }
-    };
-
-    // Load Brain data from business_data
-    const loadBrainData = () => {
-        const d = business?.business_data || {};
-        const rules = Array.isArray(d.customRules) ? d.customRules.join('\n') : (d.customRules || '');
-        const svc = Array.isArray(d.services) ? d.services.map(s => typeof s === 'string' ? s : s.name).join(', ') : (d.services || '');
-        const faqs = d.notes || '';
-        // Build a synthetic pricing string from known fields
-        const priceParts = [];
-        if (d.cleaningPrice) priceParts.push(`Standard service: ${currency}${d.cleaningPrice}`);
-        if (d.repairInspectionFee) priceParts.push(`Inspection fee: ${currency}${d.repairInspectionFee}`);
-        if (d.warrantyDays) priceParts.push(`Warranty: ${d.warrantyDays} days`);
-        setBrainData({
-            ownerName: d.ownerName || d.owner_name || '',
-            niche: d.niche || '',
-            services: svc,
-            operatingHours: d.operatingHours || d.operating_hours || '',
-            pricingRules: priceParts.join('\n') || '',
-            faqs: faqs,
-            personality: d.personality || 'professional',
-            customRules: rules,
-            systemPrompt: d.systemPrompt || '',
-        });
-    };
-
-    // Save Brain data to business_data
-    const saveBrainData = async () => {
-        if (!business?.id) return;
-        setSavingBrain(true);
-        try {
-            const existing = business?.business_data || {};
-            const updated = {
-                ...existing,
-                ownerName: brainData.ownerName,
-                niche: brainData.niche,
-                operatingHours: brainData.operatingHours,
-                notes: brainData.faqs,
-                personality: brainData.personality,
-                customRules: brainData.customRules.split('\n').filter(r => r.trim()),
-            };
-            if (brainData.systemPrompt) updated.systemPrompt = brainData.systemPrompt;
-            await supabase
-                .from('businesses')
-                .update({ business_data: updated })
-                .eq('id', business.id);
-            alert('✅ AI Brain updated!');
-        } catch (err) {
-            console.error('Save brain error:', err);
-            alert('❌ Error saving');
-        } finally {
-            setSavingBrain(false);
-        }
-    };
-
-    // Fetch Activity Log
-    const fetchActivityLog = async () => {
-        if (!business?.id) return;
-        setLoadingActivity(true);
-        try {
-            const { data: chatRows } = await supabase
-                .from('quote_chat_history')
-                .select('id, lead_id, role, content, created_at')
-                .order('created_at', { ascending: false })
-                .limit(30);
-
-            const { data: quoteLeadRows } = await supabase
-                .from('quote_leads')
-                .select('id, name, phone, status, sequence_step, sequence_paused, created_at, updated_at')
-                .order('updated_at', { ascending: false })
-                .limit(20);
-
-            // Build a unified activity feed
-            const activities = [];
-
-            // Add sequence events from quote_leads
-            (quoteLeadRows || []).forEach(lead => {
-                const stepLabels = ['📋 Confirmation sent', '🏠 Value-add sent', '📞 AI Voice Call', '📅 Urgency sent', '💰 Financing sent', '👋 Break-up sent'];
-                const step = lead.sequence_step || 0;
-                let action = stepLabels[Math.min(step, stepLabels.length - 1)] || `Step ${step}`;
-                let icon = '🤖';
-                if (lead.status === 'Booked') { action = '💰 Booked!'; icon = '🎉'; }
-                else if (lead.status === 'Lost') { action = '❌ Lost'; icon = '🔴'; }
-                else if (lead.sequence_paused) { action = '⏸️ Paused — Prospect replied'; icon = '💬'; }
-                activities.push({
-                    id: 'lead-' + lead.id,
-                    icon,
-                    action,
-                    name: lead.name,
-                    phone: lead.phone,
-                    status: lead.status,
-                    time: lead.updated_at || lead.created_at,
-                });
-            });
-
-            // Add recent chat messages
-            (chatRows || []).forEach(msg => {
-                activities.push({
-                    id: 'chat-' + msg.id,
-                    icon: msg.role === 'assistant' ? '🤖' : '👤',
-                    action: msg.role === 'assistant' ? 'AI sent message' : 'Customer replied',
-                    name: '',
-                    content: msg.content?.substring(0, 80) + (msg.content?.length > 80 ? '...' : ''),
-                    time: msg.created_at,
-                });
-            });
-
-            // Sort by time, newest first
-            activities.sort((a, b) => new Date(b.time) - new Date(a.time));
-            setActivityLog(activities.slice(0, 30));
-        } catch (err) {
-            console.error('Activity fetch error:', err);
-        } finally {
-            setLoadingActivity(false);
         }
     };
 
@@ -1920,20 +1787,25 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                         <div className="p-2 bg-white/20 rounded-lg backdrop-blur">
                             <Bot className="w-5 h-5 text-white" />
                         </div>
-                        <div>
-                            <h3 className="font-bold">AI Sales Assistant</h3>
-                            <p className="text-[11px] text-emerald-200 font-medium">Your 24/7 Employee</p>
-                        </div>
+                        <h3 className="font-bold">AI Sales Assistant</h3>
                     </div>
                     <p className="text-sm text-emerald-100 mb-4">
-                        Manage your AI employee — deploy playbooks, train its brain, and watch it work in real time.
+                        Put your follow-ups on autopilot. Choose an audience, and let the AI follow up until they book.
                     </p>
-                    <button
-                        onClick={() => { setShowAssistantHub(true); setHubTab('playbooks'); loadBrainData(); fetchBlastSegments(); }}
-                        className="w-full py-2.5 bg-white text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <Bot className="w-4 h-4" /> Open Assistant Hub
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => { setShowBlastModal(true); setDeployStep(1); setSelectedGoal(null); setSelectedPlaybook(null); fetchBlastSegments(); }}
+                            className="flex-1 py-2.5 bg-white text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Zap className="w-4 h-4" /> Deploy
+                        </button>
+                        <button
+                            onClick={() => setShowAssistantModal(true)}
+                            className="flex-1 py-2.5 bg-white/20 text-white font-bold rounded-lg text-sm hover:bg-white/30 transition-colors flex items-center justify-center gap-2 backdrop-blur"
+                        >
+                            <Settings className="w-4 h-4" /> Configure
+                        </button>
+                    </div>
                 </div>
 
                 {/* QR Download */}
@@ -1978,474 +1850,375 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                 </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* AI SALES ASSISTANT — EMPLOYEE HUB (3-Tab Modal)              */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {showAssistantHub && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
-                    <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden">
-                        {/* ── Hub Header ──────────────────────────────────── */}
-                        <div className="px-5 pt-5 pb-3 border-b border-slate-100 shrink-0">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg shadow-emerald-200">
-                                        <Bot className="w-5 h-5 text-white" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg leading-tight">AI Sales Assistant</h3>
-                                        <p className="text-xs text-slate-400">Your 24/7 Employee</p>
-                                    </div>
+            {/* AI Sales Assistant Modal — 3-Step Wizard */}
+            {showBlastModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-emerald-100 rounded-lg">
+                                    <Bot className="w-4 h-4 text-emerald-600" />
                                 </div>
-                                <button onClick={() => setShowAssistantHub(false)} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
-                                    <X className="w-5 h-5 text-slate-400" />
-                                </button>
+                                <h3 className="font-bold text-lg">AI Sales Assistant</h3>
                             </div>
-
-                            {/* ── Tab Bar ────────────────────────────────── */}
-                            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                                {[
-                                    { id: 'playbooks', label: 'Playbooks', icon: '🚀' },
-                                    { id: 'brain', label: 'Brain', icon: '🧠' },
-                                    { id: 'activity', label: 'Activity', icon: '📊' },
-                                ].map(tab => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => {
-                                            setHubTab(tab.id);
-                                            if (tab.id === 'activity') fetchActivityLog();
-                                            if (tab.id === 'brain') loadBrainData();
-                                        }}
-                                        className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                                            hubTab === tab.id
-                                                ? 'bg-white text-slate-900 shadow-sm'
-                                                : 'text-slate-500 hover:text-slate-700'
-                                        }`}
-                                    >
-                                        <span>{tab.icon}</span> {tab.label}
-                                    </button>
-                                ))}
-                            </div>
+                            <button onClick={() => { setShowBlastModal(false); setBlastTab('blast'); setImportResult(null); setDeployStep(1); }}>
+                                <X className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        {/* ── Tab Content (scrollable) ───────────────────── */}
-                        <div className="flex-1 overflow-y-auto p-5">
+                        {/* Progress Dots */}
+                        <div className="flex items-center justify-center gap-2 mb-5">
+                            {[1, 2, 3].map(step => (
+                                <div key={step} className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${deployStep === step
+                                        ? 'bg-emerald-600 text-white scale-110 shadow-lg shadow-emerald-200'
+                                        : deployStep > step
+                                            ? 'bg-emerald-100 text-emerald-600'
+                                            : 'bg-slate-100 text-slate-400'
+                                        }`}>
+                                        {deployStep > step ? '✓' : step}
+                                    </div>
+                                    {step < 3 && (
+                                        <div className={`w-8 h-0.5 rounded transition-colors duration-300 ${deployStep > step ? 'bg-emerald-400' : 'bg-slate-200'
+                                            }`} />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-center mb-4">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                                {deployStep === 1 ? 'Step 1: Target Audience' : deployStep === 2 ? 'Step 2: AI Goal' : 'Step 3: Follow-Up Playbook'}
+                            </p>
+                        </div>
 
-                            {/* ═══ PLAYBOOKS TAB ═══════════════════════════ */}
-                            {hubTab === 'playbooks' && (
-                                <div>
-                                    {/* Progress Dots */}
-                                    <div className="flex items-center justify-center gap-2 mb-4">
-                                        {[1, 2, 3].map(step => (
-                                            <div key={step} className="flex items-center gap-2">
-                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${deployStep === step
-                                                    ? 'bg-emerald-600 text-white scale-110 shadow-lg shadow-emerald-200'
-                                                    : deployStep > step
-                                                        ? 'bg-emerald-100 text-emerald-600'
-                                                        : 'bg-slate-100 text-slate-400'
-                                                    }`}>
-                                                    {deployStep > step ? '✓' : step}
+                        {/* ───── STEP 1: AUDIENCE ───── */}
+                        {deployStep === 1 && (
+                            <div>
+                                {loadingSegments ? (
+                                    <div className="text-center py-8">
+                                        <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                                        <p className="text-sm text-slate-500">Loading audiences...</p>
+                                    </div>
+                                ) : blastSegments ? (
+                                    <div className="space-y-2">
+                                        {Object.entries(blastSegments).map(([key, seg]) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => setSelectedSegment(key)}
+                                                className={`w-full p-3.5 rounded-xl border-2 text-left transition-all ${selectedSegment === key
+                                                    ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xl">{seg.icon}</span>
+                                                        <div>
+                                                            <p className="font-semibold text-sm text-slate-900">{seg.name}</p>
+                                                            <p className="text-xs text-slate-500">{seg.description}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`text-lg font-bold ${seg.count > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                                            {seg.count}
+                                                        </span>
+                                                        {seg.recommended && (
+                                                            <span className="block text-[10px] text-amber-600 font-medium">⭐ Best</span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                {step < 3 && (
-                                                    <div className={`w-6 h-0.5 rounded transition-colors duration-300 ${deployStep > step ? 'bg-emerald-400' : 'bg-slate-200'}`} />
-                                                )}
-                                            </div>
+                                            </button>
                                         ))}
                                     </div>
-                                    <p className="text-center text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-4">
-                                        {deployStep === 1 ? 'Step 1: Target Audience' : deployStep === 2 ? 'Step 2: AI Goal' : 'Step 3: Follow-Up Playbook'}
-                                    </p>
+                                ) : (
+                                    <p className="text-sm text-slate-500 text-center py-8">Failed to load audiences. Try again.</p>
+                                )}
 
-                                    {/* ───── STEP 1: AUDIENCE ───── */}
-                                    {deployStep === 1 && (
-                                        <div>
-                                            {loadingSegments ? (
-                                                <div className="text-center py-8">
-                                                    <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                                                    <p className="text-sm text-slate-500">Loading audiences...</p>
+                                {/* Import link */}
+                                <button
+                                    onClick={() => setBlastTab('import')}
+                                    className="mt-3 w-full text-xs text-slate-400 hover:text-emerald-600 transition-colors"
+                                >
+                                    📥 Or import a contact list first
+                                </button>
+
+                                {/* Next Button */}
+                                <button
+                                    onClick={() => setDeployStep(2)}
+                                    disabled={!blastSegments || !blastSegments[selectedSegment] || blastSegments[selectedSegment].count === 0}
+                                    className="w-full mt-4 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    Next: Choose AI Goal <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* ───── STEP 2: AI GOAL ───── */}
+                        {deployStep === 2 && (
+                            <div>
+                                <div className="space-y-2">
+                                    {[
+                                        { id: 'book_call', icon: '📞', title: 'Book a Decision Call', desc: 'Best for: Quoted, Not Booked', color: 'blue' },
+                                        { id: 'reactivate', icon: '💬', title: 'Reactivate & Get a Reply', desc: 'Best for: Ghosted Leads', color: 'amber' },
+                                        { id: 'upsell', icon: '🔧', title: 'Upsell / Book Maintenance', desc: 'Best for: Past Customers', color: 'purple' },
+                                    ].map(goal => (
+                                        <button
+                                            key={goal.id}
+                                            onClick={() => setSelectedGoal(goal.id)}
+                                            className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedGoal === goal.id
+                                                ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl mt-0.5">{goal.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-slate-900">{goal.title}</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5">{goal.desc}</p>
                                                 </div>
-                                            ) : blastSegments ? (
-                                                <div className="space-y-2">
-                                                    {Object.entries(blastSegments).map(([key, seg]) => (
-                                                        <button
-                                                            key={key}
-                                                            onClick={() => setSelectedSegment(key)}
-                                                            className={`w-full p-3 rounded-xl border-2 text-left transition-all ${selectedSegment === key
-                                                                ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                                                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                                                }`}
-                                                        >
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="text-xl">{seg.icon}</span>
-                                                                    <div>
-                                                                        <p className="font-semibold text-sm text-slate-900">{seg.name}</p>
-                                                                        <p className="text-xs text-slate-500">{seg.description}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <span className={`text-lg font-bold ${seg.count > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{seg.count}</span>
-                                                                    {seg.recommended && <span className="block text-[10px] text-amber-600 font-medium">⭐ Best</span>}
-                                                                </div>
-                                                            </div>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-sm text-slate-500 text-center py-8">Failed to load audiences. Try again.</p>
+                                            </div>
+                                            {selectedGoal === goal.id && (
+                                                <div className="mt-2 ml-9 text-xs text-emerald-600 font-medium">✓ Selected</div>
                                             )}
+                                        </button>
+                                    ))}
+                                </div>
 
-                                            <button onClick={() => setBlastTab('import')} className="mt-3 w-full text-xs text-slate-400 hover:text-emerald-600 transition-colors">
-                                                📥 Or import a contact list first
-                                            </button>
+                                {/* Navigation */}
+                                <div className="flex gap-2 mt-4">
+                                    <button
+                                        onClick={() => setDeployStep(1)}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={() => setDeployStep(3)}
+                                        disabled={!selectedGoal}
+                                        className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        Next <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
-                                            <button
-                                                onClick={() => setDeployStep(2)}
-                                                disabled={!blastSegments || !blastSegments[selectedSegment] || blastSegments[selectedSegment].count === 0}
-                                                className="w-full mt-4 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                Next: Choose AI Goal <ChevronRight className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {/* ───── STEP 2: AI GOAL ───── */}
-                                    {deployStep === 2 && (
-                                        <div>
-                                            <div className="space-y-2">
-                                                {[
-                                                    { id: 'book_call', icon: '📞', title: 'Book a Decision Call', desc: 'Best for: Quoted, Not Booked' },
-                                                    { id: 'reactivate', icon: '💬', title: 'Reactivate & Get a Reply', desc: 'Best for: Ghosted Leads' },
-                                                    { id: 'upsell', icon: '🔧', title: 'Upsell / Book Maintenance', desc: 'Best for: Past Customers' },
-                                                ].map(goal => (
-                                                    <button
-                                                        key={goal.id}
-                                                        onClick={() => setSelectedGoal(goal.id)}
-                                                        className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedGoal === goal.id
-                                                            ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-start gap-3">
-                                                            <span className="text-2xl mt-0.5">{goal.icon}</span>
-                                                            <div>
-                                                                <p className="font-semibold text-sm text-slate-900">{goal.title}</p>
-                                                                <p className="text-xs text-slate-500 mt-0.5">{goal.desc}</p>
-                                                            </div>
-                                                        </div>
-                                                        {selectedGoal === goal.id && <div className="mt-2 ml-9 text-xs text-emerald-600 font-medium">✓ Selected</div>}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="flex gap-2 mt-4">
-                                                <button onClick={() => setDeployStep(1)} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors">← Back</button>
-                                                <button
-                                                    onClick={() => setDeployStep(3)}
-                                                    disabled={!selectedGoal}
-                                                    className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
-                                                >
-                                                    Next <ChevronRight className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* ───── STEP 3: PLAYBOOK ───── */}
-                                    {deployStep === 3 && (
-                                        <div>
-                                            <div className="space-y-2">
-                                                {[
-                                                    {
-                                                        id: 'aggressive', icon: '🔥', title: 'Aggressive', desc: 'High-intent leads',
-                                                        steps: [{ day: 'Day 0', channel: 'WhatsApp', icon: '💬' }, { day: 'Day 4', channel: 'AI Call', icon: '📞' }, { day: 'Day 7', channel: 'WhatsApp', icon: '💬' }, { day: 'Day 14', channel: 'Break-up', icon: '👋' }],
-                                                    },
-                                                    {
-                                                        id: 'soft_touch', icon: '🕊️', title: 'Soft Touch', desc: 'Warm but cautious',
-                                                        steps: [{ day: 'Day 0', channel: 'WhatsApp', icon: '💬' }, { day: 'Day 3', channel: 'Email', icon: '✉️' }, { day: 'Day 7', channel: 'WhatsApp', icon: '💬' }],
-                                                    },
-                                                    {
-                                                        id: 'text_only', icon: '💬', title: 'Text Only', desc: 'Low-friction approach',
-                                                        steps: [{ day: 'Day 0', channel: 'WhatsApp', icon: '💬' }, { day: 'Day 2', channel: 'WhatsApp', icon: '💬' }, { day: 'Day 7', channel: 'SMS', icon: '📱' }],
-                                                    },
-                                                ].map(playbook => (
-                                                    <button
-                                                        key={playbook.id}
-                                                        onClick={() => setSelectedPlaybook(playbook.id)}
-                                                        className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlaybook === playbook.id
-                                                            ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                                                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <span className="text-xl">{playbook.icon}</span>
-                                                            <div>
-                                                                <p className="font-semibold text-sm text-slate-900">{playbook.title}</p>
-                                                                <p className="text-xs text-slate-500">{playbook.desc}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-1 ml-8">
-                                                            {playbook.steps.map((s, i) => (
-                                                                <React.Fragment key={i}>
-                                                                    <div className="flex flex-col items-center">
-                                                                        <span className="text-sm">{s.icon}</span>
-                                                                        <span className="text-[10px] text-slate-400 mt-0.5">{s.day}</span>
-                                                                    </div>
-                                                                    {i < playbook.steps.length - 1 && <div className="w-4 h-px bg-slate-300 mt-[-6px]" />}
-                                                                </React.Fragment>
-                                                            ))}
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-
-                                            {/* Wallet + Cost Summary */}
-                                            {blastSegments && blastSegments[selectedSegment] && (
-                                                <div className="mt-4 bg-slate-50 p-3 rounded-xl text-sm">
-                                                    <div className="flex justify-between mb-1">
-                                                        <span className="text-slate-500">Audience</span>
-                                                        <span className="font-medium">{blastSegments[selectedSegment].name} ({blastSegments[selectedSegment].count})</span>
-                                                    </div>
-                                                    <div className="flex justify-between mb-1">
-                                                        <span className="text-slate-500">Cost (first touch)</span>
-                                                        <span className="font-medium">{currency}{blastSegments[selectedSegment].count * COST_PER_MESSAGE}</span>
-                                                    </div>
-                                                    <div className="border-t pt-2 flex justify-between">
-                                                        <span className="text-slate-500">Wallet</span>
-                                                        <span className={`font-bold ${blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {currency}{blastCredits.toFixed(0)}
-                                                        </span>
-                                                    </div>
+                        {/* ───── STEP 3: PLAYBOOK ───── */}
+                        {deployStep === 3 && (
+                            <div>
+                                <div className="space-y-2">
+                                    {[
+                                        {
+                                            id: 'aggressive',
+                                            icon: '🔥',
+                                            title: 'Aggressive',
+                                            desc: 'High-intent leads',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 3', channel: 'AI Voice Call', icon: '📞' },
+                                                { day: 'Day 5', channel: 'SMS Breakup', icon: '📱' },
+                                            ]
+                                        },
+                                        {
+                                            id: 'soft_touch',
+                                            icon: '🕊️',
+                                            title: 'Soft Touch',
+                                            desc: 'Warm but cautious leads',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'Email', icon: '✉️' },
+                                                { day: 'Day 3', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 7', channel: 'Email', icon: '✉️' },
+                                            ]
+                                        },
+                                        {
+                                            id: 'text_only',
+                                            icon: '💬',
+                                            title: 'Text Only',
+                                            desc: 'Low-friction approach',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 2', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 4', channel: 'SMS', icon: '📱' },
+                                            ]
+                                        },
+                                    ].map(playbook => (
+                                        <button
+                                            key={playbook.id}
+                                            onClick={() => setSelectedPlaybook(playbook.id)}
+                                            className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlaybook === playbook.id
+                                                ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="text-xl">{playbook.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-slate-900">{playbook.title}</p>
+                                                    <p className="text-xs text-slate-500">{playbook.desc}</p>
                                                 </div>
-                                            )}
-
-                                            {/* Navigation + Deploy */}
-                                            <div className="flex gap-2 mt-4">
-                                                <button onClick={() => setDeployStep(2)} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors">← Back</button>
-                                                {blastSegments && blastSegments[selectedSegment] && blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE ? (
-                                                    <button
-                                                        onClick={sendBlast}
-                                                        disabled={sendingBlast || !selectedPlaybook}
-                                                        className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                                                    >
-                                                        {sendingBlast ? (
-                                                            <span className="flex items-center gap-2">
-                                                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                                                Deploying...
-                                                            </span>
-                                                        ) : (
-                                                            <><Zap className="w-4 h-4" /> Deploy</>
+                                            </div>
+                                            {/* Sequence Timeline */}
+                                            <div className="flex items-center gap-1 ml-8">
+                                                {playbook.steps.map((s, i) => (
+                                                    <React.Fragment key={i}>
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-sm">{s.icon}</span>
+                                                            <span className="text-[10px] text-slate-400 mt-0.5">{s.day}</span>
+                                                        </div>
+                                                        {i < playbook.steps.length - 1 && (
+                                                            <div className="w-6 h-px bg-slate-300 mt-[-6px]" />
                                                         )}
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => { setShowAssistantHub(false); setShowTopUpModal(true); }}
-                                                        className="flex-1 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors"
-                                                    >
-                                                        💳 Top Up
-                                                    </button>
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Wallet + Cost Summary */}
+                                {blastSegments && blastSegments[selectedSegment] && (
+                                    <div className="mt-4 bg-slate-50 p-3 rounded-xl text-sm">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-slate-500">Audience</span>
+                                            <span className="font-medium">{blastSegments[selectedSegment].name} ({blastSegments[selectedSegment].count})</span>
+                                        </div>
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-slate-500">Cost (first touch)</span>
+                                            <span className="font-medium">{currency}{blastSegments[selectedSegment].count * COST_PER_MESSAGE}</span>
+                                        </div>
+                                        <div className="border-t pt-2 flex justify-between">
+                                            <span className="text-slate-500">Wallet</span>
+                                            <span className={`font-bold ${blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE
+                                                ? 'text-green-600'
+                                                : 'text-red-600'
+                                                }`}>
+                                                {currency}{blastCredits.toFixed(0)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Navigation + Deploy */}
+                                <div className="flex gap-2 mt-4">
+                                    <button
+                                        onClick={() => setDeployStep(2)}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        ← Back
+                                    </button>
+                                    {blastSegments && blastSegments[selectedSegment] && blastCredits >= blastSegments[selectedSegment].count * COST_PER_MESSAGE ? (
+                                        <button
+                                            onClick={sendBlast}
+                                            disabled={sendingBlast || !selectedPlaybook}
+                                            className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            {sendingBlast ? (
+                                                <span className="flex items-center gap-2">
+                                                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                                    Deploying...
+                                                </span>
+                                            ) : (
+                                                <><Zap className="w-4 h-4" /> Deploy</>
+                                            )}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => { setShowBlastModal(false); setShowTopUpModal(true); }}
+                                            className="flex-1 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors"
+                                        >
+                                            💳 Top Up
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* === IMPORT TAB (accessible from Step 1) === */}
+                        {blastTab === 'import' && (
+                            <div>
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
+                                    <p className="text-sm font-medium text-green-800 mb-1">📥 Database Reactivation</p>
+                                    <p className="text-xs text-green-600">
+                                        Paste your client&apos;s old customer list. We&apos;ll import them and you can deploy the AI to win them back.
+                                    </p>
+                                </div>
+
+                                {/* Import Label */}
+                                <div className="mb-3">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">List Label (optional)</label>
+                                    <input
+                                        type="text"
+                                        value={importLabel}
+                                        onChange={(e) => setImportLabel(e.target.value)}
+                                        placeholder="e.g. Old customers from Excel"
+                                        className="w-full p-2.5 border border-slate-200 rounded-lg text-sm"
+                                    />
+                                </div>
+
+                                {/* Phone List Input */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Phone Numbers</label>
+                                    <textarea
+                                        value={importText}
+                                        onChange={(e) => setImportText(e.target.value)}
+                                        placeholder={`Paste phone numbers, one per line:\n09171234567\n09181234567, Juan\n+639191234567 - Maria`}
+                                        className="w-full p-3 border border-slate-200 rounded-lg text-sm font-mono resize-none"
+                                        rows={6}
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {importText.trim() ? `${importText.trim().split('\n').filter(l => l.trim()).length} lines detected` : 'Supports: 09xx, +63xx, +60xx formats'}
+                                    </p>
+                                </div>
+
+                                {/* Import Result */}
+                                {importResult && (
+                                    <div className={`p-3 rounded-lg mb-4 text-sm ${importResult.error
+                                        ? 'bg-red-50 border border-red-200 text-red-700'
+                                        : 'bg-green-50 border border-green-200 text-green-700'
+                                        }`}>
+                                        {importResult.error ? (
+                                            <p>❌ {importResult.error}</p>
+                                        ) : (
+                                            <div>
+                                                <p className="font-medium mb-1">✅ Import Complete!</p>
+                                                <p>📥 {importResult.imported} new contacts added</p>
+                                                {importResult.duplicates > 0 && (
+                                                    <p>⏭️ {importResult.duplicates} already existed</p>
+                                                )}
+                                                {importResult.invalid > 0 && (
+                                                    <p>⚠️ {importResult.invalid} invalid numbers skipped</p>
                                                 )}
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {/* === IMPORT SUB-VIEW === */}
-                                    {blastTab === 'import' && (
-                                        <div className="mt-4 border-t pt-4">
-                                            <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
-                                                <p className="text-sm font-medium text-green-800 mb-1">📥 Database Reactivation</p>
-                                                <p className="text-xs text-green-600">Paste your old customer list. We&apos;ll import them so you can deploy the AI.</p>
-                                            </div>
-                                            <div className="mb-3">
-                                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">List Label</label>
-                                                <input type="text" value={importLabel} onChange={(e) => setImportLabel(e.target.value)} placeholder="e.g. Old customers from Excel" className="w-full p-2.5 border border-slate-200 rounded-lg text-sm" />
-                                            </div>
-                                            <div className="mb-4">
-                                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Phone Numbers</label>
-                                                <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={`Paste phone numbers, one per line:\n09171234567\n+639191234567 - Maria`} className="w-full p-3 border border-slate-200 rounded-lg text-sm font-mono resize-none" rows={5} />
-                                                <p className="text-xs text-slate-400 mt-1">{importText.trim() ? `${importText.trim().split('\n').filter(l => l.trim()).length} lines detected` : 'One per line'}</p>
-                                            </div>
-                                            {importResult && (
-                                                <div className={`p-3 rounded-lg mb-4 text-sm ${importResult.error ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700'}`}>
-                                                    {importResult.error ? <p>❌ {importResult.error}</p> : (
-                                                        <div>
-                                                            <p className="font-medium mb-1">✅ Import Complete!</p>
-                                                            <p>📥 {importResult.imported} new contacts added</p>
-                                                            {importResult.duplicates > 0 && <p>⏭️ {importResult.duplicates} already existed</p>}
-                                                            {importResult.invalid > 0 && <p>⚠️ {importResult.invalid} invalid numbers skipped</p>}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setBlastTab('blast')} className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors">← Back</button>
-                                                <button onClick={importContacts} disabled={importing || !importText.trim()} className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 transition-all">
-                                                    {importing ? <span className="flex items-center justify-center gap-2"><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div> Importing...</span> : '📥 Import'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* ═══ BRAIN TAB ═══════════════════════════════ */}
-                            {hubTab === 'brain' && (
-                                <div className="space-y-4">
-                                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-3">
-                                        <p className="text-sm font-medium text-purple-800">🧠 AI Knowledge Base</p>
-                                        <p className="text-xs text-purple-600 mt-0.5">What your AI knows about your business. Updates here apply to all playbooks and conversations instantly.</p>
-                                    </div>
-
-                                    {/* Quick inputs */}
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1.5 block">Owner / Contact Name</label>
-                                        <input type="text" value={brainData.ownerName} onChange={(e) => setBrainData(p => ({ ...p, ownerName: e.target.value }))} placeholder="e.g. Marcus" className="w-full p-2.5 border border-slate-200 rounded-lg text-sm" />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1.5 block">Business Niche</label>
-                                        <select value={brainData.niche} onChange={(e) => setBrainData(p => ({ ...p, niche: e.target.value }))} className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-white">
-                                            <option value="">Select niche...</option>
-                                            {['aircon', 'plumbing', 'pest_control', 'electrical', 'cleaning', 'home_renovation', 'roofing', 'general_contractor', 'hvac', 'landscaping', 'painting', 'flooring'].map(n => (
-                                                <option key={n} value={n}>{n.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1.5 block">Operating Hours</label>
-                                        <input type="text" value={brainData.operatingHours} onChange={(e) => setBrainData(p => ({ ...p, operatingHours: e.target.value }))} placeholder="e.g. Mon-Fri 9am-6pm" className="w-full p-2.5 border border-slate-200 rounded-lg text-sm" />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1.5 block">Pricing Rules</label>
-                                        <textarea value={brainData.pricingRules} onChange={(e) => setBrainData(p => ({ ...p, pricingRules: e.target.value }))} placeholder={`e.g.\nStandard service: $150\nInspection fee: $50\nWarranty: 90 days`} className="w-full p-2.5 border border-slate-200 rounded-lg text-sm resize-none" rows={3} />
-                                        <p className="text-[11px] text-slate-400 mt-1">The AI will reference these when customers ask about pricing.</p>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1.5 block">FAQs / Notes for AI</label>
-                                        <textarea value={brainData.faqs} onChange={(e) => setBrainData(p => ({ ...p, faqs: e.target.value }))} placeholder="Add common questions and answers, special policies, anything the AI should know..." className="w-full p-2.5 border border-slate-200 rounded-lg text-sm resize-none" rows={3} />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1.5 block">AI Personality</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {[
-                                                { id: 'professional', label: '🏢 Professional' },
-                                                { id: 'casual', label: '😎 Casual' },
-                                                { id: 'enthusiastic', label: '🔥 Enthusiastic' },
-                                            ].map(p => (
-                                                <button
-                                                    key={p.id}
-                                                    onClick={() => setBrainData(prev => ({ ...prev, personality: p.id }))}
-                                                    className={`py-2.5 px-2 rounded-xl border-2 text-xs font-bold transition-all ${brainData.personality === p.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
-                                                >
-                                                    {p.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* ── Developer Mode Toggle ─────────── */}
-                                    <div className="border-t pt-4 mt-2">
-                                        <button
-                                            onClick={() => setDevMode(!devMode)}
-                                            className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-                                        >
-                                            <div className={`w-8 h-4 rounded-full transition-colors ${devMode ? 'bg-purple-500' : 'bg-slate-300'}`}>
-                                                <div className={`w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-transform mt-[1px] ${devMode ? 'translate-x-[17px]' : 'translate-x-[1px]'}`} />
-                                            </div>
-                                            Developer Mode
-                                        </button>
-
-                                        {devMode && (
-                                            <div className="mt-3 space-y-3">
-                                                <div>
-                                                    <label className="text-xs font-bold text-purple-500 uppercase mb-1.5 block">Custom Rules (one per line)</label>
-                                                    <textarea value={brainData.customRules} onChange={(e) => setBrainData(p => ({ ...p, customRules: e.target.value }))} placeholder={`e.g.\nAlways mention our 90-day warranty\nNever discuss competitor pricing\nOffer financing on jobs over $5,000`} className="w-full p-2.5 border border-purple-200 rounded-lg text-sm font-mono resize-none bg-purple-50" rows={4} />
-                                                    <p className="text-[11px] text-purple-400 mt-1">These rules are injected into the system prompt for every conversation.</p>
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs font-bold text-purple-500 uppercase mb-1.5 block">Raw System Prompt Override</label>
-                                                    <textarea value={brainData.systemPrompt} onChange={(e) => setBrainData(p => ({ ...p, systemPrompt: e.target.value }))} placeholder="Leave empty to use the auto-generated prompt. Only override if you know what you're doing." className="w-full p-2.5 border border-purple-200 rounded-lg text-xs font-mono resize-none bg-purple-50" rows={5} />
-                                                    <p className="text-[11px] text-red-400 mt-1">⚠️ Advanced: This overrides the entire system prompt. Leave blank for default behavior.</p>
-                                                </div>
-                                            </div>
                                         )}
                                     </div>
+                                )}
 
-                                    {/* Save Brain Button */}
+                                {/* Import / Back Buttons */}
+                                <div className="flex gap-2">
                                     <button
-                                        onClick={saveBrainData}
-                                        disabled={savingBrain}
-                                        className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                        onClick={() => setBlastTab('blast')}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
                                     >
-                                        {savingBrain ? (
-                                            <span className="flex items-center gap-2"><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div> Saving...</span>
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={importContacts}
+                                        disabled={importing || !importText.trim()}
+                                        className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 transition-all"
+                                    >
+                                        {importing ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                                Importing...
+                                            </span>
                                         ) : (
-                                            <>💾 Save AI Brain</>
+                                            '📥 Import'
                                         )}
                                     </button>
                                 </div>
-                            )}
-
-                            {/* ═══ ACTIVITY TAB ════════════════════════════ */}
-                            {hubTab === 'activity' && (
-                                <div>
-                                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-3 mb-4">
-                                        <p className="text-sm font-medium text-blue-800">📊 Live Activity Feed</p>
-                                        <p className="text-xs text-blue-600 mt-0.5">See exactly what your AI assistant is doing. No black box.</p>
-                                    </div>
-
-                                    {loadingActivity ? (
-                                        <div className="text-center py-8">
-                                            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                                            <p className="text-sm text-slate-500">Loading activity...</p>
-                                        </div>
-                                    ) : activityLog.length === 0 ? (
-                                        <div className="text-center py-10">
-                                            <div className="text-4xl mb-3">🤖</div>
-                                            <p className="text-sm font-medium text-slate-600">No activity yet</p>
-                                            <p className="text-xs text-slate-400 mt-1">Deploy a playbook and your AI will start working. You&apos;ll see every action here.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-1">
-                                            {activityLog.map((item) => (
-                                                <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors">
-                                                    <span className="text-lg mt-0.5 shrink-0">{item.icon}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="text-sm font-medium text-slate-800 truncate">{item.action}</p>
-                                                            {item.status && (
-                                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-                                                                    item.status === 'Booked' ? 'bg-green-100 text-green-700' :
-                                                                    item.status === 'Lost' ? 'bg-red-100 text-red-700' :
-                                                                    item.status === 'Called' ? 'bg-blue-100 text-blue-700' :
-                                                                    'bg-slate-100 text-slate-600'
-                                                                }`}>{item.status}</span>
-                                                            )}
-                                                        </div>
-                                                        {item.name && <p className="text-xs text-slate-500 truncate">{item.name}{item.phone ? ` · ${item.phone}` : ''}</p>}
-                                                        {item.content && <p className="text-xs text-slate-400 mt-0.5 truncate">{item.content}</p>}
-                                                        <p className="text-[10px] text-slate-300 mt-1">
-                                                            {new Date(item.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {new Date(item.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Refresh */}
-                                    <button
-                                        onClick={fetchActivityLog}
-                                        disabled={loadingActivity}
-                                        className="w-full mt-4 py-2.5 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors text-sm"
-                                    >
-                                        🔄 Refresh
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -2856,6 +2629,13 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     </div>
                 </div>
             )}
+
+            {/* AI Assistant Configuration Modal */}
+            <AssistantModal
+                isOpen={showAssistantModal}
+                onClose={() => setShowAssistantModal(false)}
+                business={business}
+            />
         </div>
     );
 }

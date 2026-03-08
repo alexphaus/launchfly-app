@@ -1,0 +1,231 @@
+
+            {/* AI Sales Assistant Modal — 3-Step Wizard */}
+            {showBlastModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-sm w-full p-5 max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-emerald-100 rounded-lg">
+                                    <Bot className="w-4 h-4 text-emerald-600" />
+                                </div>
+                                <h3 className="font-bold text-lg">AI Sales Assistant</h3>
+                            </div>
+                            <button onClick={() => { setShowBlastModal(false); setBlastTab('blast'); setImportResult(null); setDeployStep(1); }}>
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Progress Dots */}
+                        <div className="flex items-center justify-center gap-2 mb-5">
+                            {[1, 2, 3].map(step => (
+                                <div key={step} className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${deployStep === step
+                                        ? 'bg-emerald-600 text-white scale-110 shadow-lg shadow-emerald-200'
+                                        : deployStep > step
+                                            ? 'bg-emerald-100 text-emerald-600'
+                                            : 'bg-slate-100 text-slate-400'
+                                        }`}>
+                                        {deployStep > step ? '✓' : step}
+                                    </div>
+                                    {step < 3 && (
+                                        <div className={`w-8 h-0.5 rounded transition-colors duration-300 ${deployStep > step ? 'bg-emerald-400' : 'bg-slate-200'
+                                            }`} />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-center mb-4">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                                {deployStep === 1 ? 'Step 1: Target Audience' : deployStep === 2 ? 'Step 2: AI Goal' : 'Step 3: Follow-Up Playbook'}
+                            </p>
+                        </div>
+
+                        {/* ───── STEP 1: AUDIENCE ───── */}
+                        {deployStep === 1 && (
+                            <div>
+                                {loadingSegments ? (
+                                    <div className="text-center py-8">
+                                        <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                                        <p className="text-sm text-slate-500">Loading audiences...</p>
+                                    </div>
+                                ) : blastSegments ? (
+                                    <div className="space-y-2">
+                                        {Object.entries(blastSegments).map(([key, seg]) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => setSelectedSegment(key)}
+                                                className={`w-full p-3.5 rounded-xl border-2 text-left transition-all ${selectedSegment === key
+                                                    ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xl">{seg.icon}</span>
+                                                        <div>
+                                                            <p className="font-semibold text-sm text-slate-900">{seg.name}</p>
+                                                            <p className="text-xs text-slate-500">{seg.description}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`text-lg font-bold ${seg.count > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                                            {seg.count}
+                                                        </span>
+                                                        {seg.recommended && (
+                                                            <span className="block text-[10px] text-amber-600 font-medium">⭐ Best</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-slate-500 text-center py-8">Failed to load audiences. Try again.</p>
+                                )}
+
+                                {/* Import link */}
+                                <button
+                                    onClick={() => setBlastTab('import')}
+                                    className="mt-3 w-full text-xs text-slate-400 hover:text-emerald-600 transition-colors"
+                                >
+                                    📥 Or import a contact list first
+                                </button>
+
+                                {/* Next Button */}
+                                <button
+                                    onClick={() => setDeployStep(2)}
+                                    disabled={!blastSegments || !blastSegments[selectedSegment] || blastSegments[selectedSegment].count === 0}
+                                    className="w-full mt-4 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    Next: Choose AI Goal <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* ───── STEP 2: AI GOAL ───── */}
+                        {deployStep === 2 && (
+                            <div>
+                                <div className="space-y-2">
+                                    {[
+                                        { id: 'book_call', icon: '📞', title: 'Book a Decision Call', desc: 'Best for: Quoted, Not Booked', color: 'blue' },
+                                        { id: 'reactivate', icon: '💬', title: 'Reactivate & Get a Reply', desc: 'Best for: Ghosted Leads', color: 'amber' },
+                                        { id: 'upsell', icon: '🔧', title: 'Upsell / Book Maintenance', desc: 'Best for: Past Customers', color: 'purple' },
+                                    ].map(goal => (
+                                        <button
+                                            key={goal.id}
+                                            onClick={() => setSelectedGoal(goal.id)}
+                                            className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedGoal === goal.id
+                                                ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl mt-0.5">{goal.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-slate-900">{goal.title}</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5">{goal.desc}</p>
+                                                </div>
+                                            </div>
+                                            {selectedGoal === goal.id && (
+                                                <div className="mt-2 ml-9 text-xs text-emerald-600 font-medium">✓ Selected</div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Navigation */}
+                                <div className="flex gap-2 mt-4">
+                                    <button
+                                        onClick={() => setDeployStep(1)}
+                                        className="flex-1 py-3 border-2 border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={() => setDeployStep(3)}
+                                        disabled={!selectedGoal}
+                                        className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        Next <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ───── STEP 3: PLAYBOOK ───── */}
+                        {deployStep === 3 && (
+                            <div>
+                                <div className="space-y-2">
+                                    {[
+                                        {
+                                            id: 'aggressive',
+                                            icon: '🔥',
+                                            title: 'Aggressive',
+                                            desc: 'High-intent leads',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 3', channel: 'AI Voice Call', icon: '📞' },
+                                                { day: 'Day 5', channel: 'SMS Breakup', icon: '📱' },
+                                            ]
+                                        },
+                                        {
+                                            id: 'soft_touch',
+                                            icon: '🕊️',
+                                            title: 'Soft Touch',
+                                            desc: 'Warm but cautious leads',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'Email', icon: '✉️' },
+                                                { day: 'Day 3', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 7', channel: 'Email', icon: '✉️' },
+                                            ]
+                                        },
+                                        {
+                                            id: 'text_only',
+                                            icon: '💬',
+                                            title: 'Text Only',
+                                            desc: 'Low-friction approach',
+                                            steps: [
+                                                { day: 'Day 1', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 2', channel: 'WhatsApp', icon: '💬' },
+                                                { day: 'Day 4', channel: 'SMS', icon: '📱' },
+                                            ]
+                                        },
+                                    ].map(playbook => (
+                                        <button
+                                            key={playbook.id}
+                                            onClick={() => setSelectedPlaybook(playbook.id)}
+                                            className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlaybook === playbook.id
+                                                ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="text-xl">{playbook.icon}</span>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-slate-900">{playbook.title}</p>
+                                                    <p className="text-xs text-slate-500">{playbook.desc}</p>
+                                                </div>
+                                            </div>
+                                            {/* Sequence Timeline */}
+                                            <div className="flex items-center gap-1 ml-8">
+                                                {playbook.steps.map((s, i) => (
+                                                    <React.Fragment key={i}>
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-sm">{s.icon}</span>
+                                                            <span className="text-[10px] text-slate-400 mt-0.5">{s.day}</span>
+                                                        </div>
+                                                        {i < playbook.steps.length - 1 && (
+                                                            <div className="w-6 h-px bg-slate-300 mt-[-6px]" />
+                                                        )}
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Wallet + Cost Summary */}
+                                {blastSegments && blastSegments[selectedSegment] && (
+                                    <div className="mt-4 bg-slate-50 p-3 rounded-xl text-sm">
+                                        <div className="flex justify-between mb-1">

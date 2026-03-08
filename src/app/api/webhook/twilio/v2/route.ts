@@ -300,8 +300,8 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
         let customerContext: CustomerContext | null = null;
 
         if (businessId) {
-            // Run business, customer, and history queries in PARALLEL
-            const [businessResult, customerResult, history] = await Promise.all([
+            // Run business, customer, history, and assistant queries in PARALLEL
+            const [businessResult, customerResult, history, assistantResult] = await Promise.all([
                 // Fetch business config
                 supabase
                     .from('businesses')
@@ -317,6 +317,13 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                     .single(),
                 // Get conversation history
                 getConversationHistory(customerPhone, businessId),
+                // Fetch active assistant config (if exists)
+                supabase
+                    .from('assistants')
+                    .select('system_prompt, knowledge_base, tools_enabled, custom_rules, tone, goal')
+                    .eq('business_id', businessId)
+                    .eq('active', true)
+                    .single(),
             ]);
 
             const business = businessResult.data;
@@ -739,7 +746,43 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
                 .catch(err => console.error('Error saving user message:', err));
 
             // Now build the prompt and call AI with history from parallel fetch
-            const systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
+            const assistant = assistantResult?.data;
+            let systemPrompt: string;
+
+            if (assistant?.system_prompt) {
+                // Custom prompt from assistants table — use it directly
+                systemPrompt = assistant.system_prompt;
+                console.log('   🤖 Using custom system prompt from assistants table');
+            } else {
+                // Auto-generate from business context (default)
+                systemPrompt = generateSystemPrompt(businessContext!, customerContext || undefined);
+            }
+
+            // Append assistant knowledge base if available
+            if (assistant?.knowledge_base) {
+                const kb = assistant.knowledge_base as { pricing?: Array<{ service: string; price: string; unit: string }>; faq?: Array<{ q: string; a: string }>; objections?: Array<{ trigger: string; response: string }> };
+                const kbLines: string[] = [];
+                if (kb.pricing?.length) {
+                    kbLines.push('\n[PRICING KNOWLEDGE BASE]');
+                    kb.pricing.forEach(p => kbLines.push(`- ${p.service}: ${p.price} per ${p.unit}`));
+                }
+                if (kb.faq?.length) {
+                    kbLines.push('\n[FAQ KNOWLEDGE BASE]');
+                    kb.faq.forEach(f => kbLines.push(`Q: ${f.q}\nA: ${f.a}`));
+                }
+                if (kb.objections?.length) {
+                    kbLines.push('\n[OBJECTION HANDLING]');
+                    kb.objections.forEach(o => kbLines.push(`When customer says "${o.trigger}" → respond: ${o.response}`));
+                }
+                if (kbLines.length > 0) {
+                    systemPrompt += '\n' + kbLines.join('\n');
+                }
+            }
+
+            // Append assistant custom rules if available
+            if (assistant?.custom_rules?.length) {
+                systemPrompt += '\n\n[CUSTOM BUSINESS RULES]\n' + assistant.custom_rules.map((r: string) => `- ${r}`).join('\n');
+            }
 
             // Add context about current customer phone for tools - be very explicit!
             const contextMessage = `

@@ -269,8 +269,12 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         });
       }
 
+      const fromNum = process.env.TWILIO_WHATSAPP_FROM
+        || (process.env.TWILIO_WHATSAPP_NUMBER ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}` : '');
+      if (!fromNum) return { ok: false, detail: 'Missing TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_NUMBER' };
+
       await client.messages.create({
-        from: process.env.TWILIO_WHATSAPP_FROM!,
+        from: fromNum.startsWith('whatsapp:') ? fromNum : `whatsapp:${fromNum}`,
         to: `whatsapp:${ctx.phone}`,
         contentSid: templateSid,
         ...(Object.keys(contentVariables).length > 0

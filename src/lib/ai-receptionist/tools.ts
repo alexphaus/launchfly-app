@@ -590,6 +590,13 @@ export const receptionistTools = {
                 message: `Booking created explicitly from tool for ${dayLabel} ${windowLabel}`, // Explicit message
                 // This message guides the AI on what to tell the customer
                 customerMessage: `Booking request received! Technician will confirm and WhatsApp you 30 mins before arrival.`,
+                // Fire automation event (non-blocking)
+                _automation: (() => {
+                    import('@/lib/automations/executor').then(({ fireEvent }) =>
+                        fireEvent({ businessId, event: 'booking_created', phone: customerPhone, customerName, metadata: { bookingId: booking?.id, slotLabel: `${dayLabel} ${windowLabel}`, serviceType, estimate: `${currency} ${estimateAmount}` } })
+                    ).catch(() => {});
+                    return 'fired';
+                })(),
             };
         },
     }),
@@ -774,7 +781,7 @@ export const receptionistTools = {
             // First check if booking exists and is cancellable
             const { data: booking, error: fetchError } = await supabase
                 .from('bookings')
-                .select('id, status, slot_label, customer_name, customer_id')
+                .select('id, status, slot_label, customer_name, customer_id, business_id, customer_phone')
                 .eq('id', bookingId)
                 .single();
 
@@ -812,6 +819,11 @@ export const receptionistTools = {
             }
             
             console.log('   ✅ Booking cancelled:', bookingId);
+
+            // Fire automation event (non-blocking)
+            import('@/lib/automations/executor').then(({ fireEvent }) =>
+                fireEvent({ businessId: booking.business_id, event: 'booking_cancelled', phone: booking.customer_phone, customerName: booking.customer_name, metadata: { bookingId, slotLabel: booking.slot_label } })
+            ).catch(() => {});
 
             return {
                 success: true,

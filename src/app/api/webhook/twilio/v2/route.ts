@@ -1460,6 +1460,11 @@ DO NOT call getAvailableSlots. DO NOT ask questions. CALL createBooking NOW!`,
                 allToolCalls.length > 0 ? allToolCalls : undefined
             );
 
+            // Fire automation event (non-blocking)
+            import('@/lib/automations/executor').then(({ fireEvent }) =>
+                fireEvent({ businessId, event: 'inbound_whatsapp', phone: customerPhone, customerName: customerContext?.name, message: messageText })
+            ).catch(() => {});
+
             return new NextResponse(
                 '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
                 { headers: { 'Content-Type': 'text/xml' } }

@@ -15,7 +15,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   X, Bot, Brain, Activity, Radio,
   ChevronDown, ChevronUp, Plus, Trash2, Save,
-  Clock, Check, RefreshCw,
+  Clock, Check, RefreshCw, Zap, Globe, Copy,
   Eye, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 
@@ -42,6 +42,28 @@ const AVAILABLE_TOOLS = [
   { id: 'transfer_to_human', label: 'Transfer to Human', emoji: '🙋', desc: 'Escalate to the owner' },
   { id: 'send_financing_link', label: 'Send Financing Link', emoji: '🏦', desc: 'Financing application' },
   { id: 'lookup_customer', label: 'Lookup Customer', emoji: '🔍', desc: 'Check customer history' },
+];
+
+// ─── Automation Events & Actions ─────────────────────────────────────────
+
+const AUTOMATION_EVENTS = [
+  { id: 'inbound_whatsapp', label: 'WhatsApp Message Received', icon: '💬' },
+  { id: 'missed_call', label: 'Missed Call', icon: '📞' },
+  { id: 'booking_created', label: 'Booking Created', icon: '📅' },
+  { id: 'booking_cancelled', label: 'Booking Cancelled', icon: '❌' },
+  { id: 'payment_received', label: 'Payment Received', icon: '💰' },
+  { id: 'sequence_completed', label: 'Sequence Completed', icon: '✅' },
+  { id: 'customer_replied', label: 'Customer Replied', icon: '↩️' },
+  { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
+];
+
+const AUTOMATION_ACTIONS = [
+  { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
+  { id: 'start_sequence', label: 'Start Follow-up Sequence', icon: '🔄', configFields: [] },
+  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: [] },
+  { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
+  { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
+  { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
 ];
 
 const CHANNELS = [
@@ -320,12 +342,90 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     setConfig({ ...config, tools_enabled: tools });
   };
 
-  // ── Trigger toggle ─────────────────────────────────────────────────────
-  const toggleTrigger = (key) => {
+  // ── Automation rule helpers ─────────────────────────────────────────────
+  const getRules = () => config.trigger_config?.rules || [];
+
+  const setRules = (rules) => {
     setConfig({
       ...config,
-      trigger_config: { ...config.trigger_config, [key]: !config.trigger_config[key] },
+      trigger_config: { ...config.trigger_config, rules },
     });
+  };
+
+  const addRule = () => {
+    setRules([...getRules(), {
+      id: `rule_${Date.now()}`,
+      event: 'inbound_whatsapp',
+      conditions: [],
+      actions: [{ type: 'notify_owner', config: { message: '🔔 New event from {customerName}' } }],
+      enabled: true,
+    }]);
+  };
+
+  const updateRule = (index, field, value) => {
+    const rules = [...getRules()];
+    rules[index] = { ...rules[index], [field]: value };
+    setRules(rules);
+  };
+
+  const removeRule = (index) => {
+    setRules(getRules().filter((_, i) => i !== index));
+  };
+
+  const addActionToRule = (ruleIndex) => {
+    const rules = [...getRules()];
+    rules[ruleIndex] = {
+      ...rules[ruleIndex],
+      actions: [...rules[ruleIndex].actions, { type: 'send_whatsapp', config: { message: '' } }],
+    };
+    setRules(rules);
+  };
+
+  const updateActionInRule = (ruleIndex, actionIndex, field, value) => {
+    const rules = [...getRules()];
+    const actions = [...rules[ruleIndex].actions];
+    if (field === 'type') {
+      actions[actionIndex] = { type: value, config: {} };
+    } else {
+      actions[actionIndex] = { ...actions[actionIndex], config: { ...actions[actionIndex].config, [field]: value } };
+    }
+    rules[ruleIndex] = { ...rules[ruleIndex], actions };
+    setRules(rules);
+  };
+
+  const removeActionFromRule = (ruleIndex, actionIndex) => {
+    const rules = [...getRules()];
+    rules[ruleIndex] = {
+      ...rules[ruleIndex],
+      actions: rules[ruleIndex].actions.filter((_, i) => i !== actionIndex),
+    };
+    setRules(rules);
+  };
+
+  const addConditionToRule = (ruleIndex) => {
+    const rules = [...getRules()];
+    rules[ruleIndex] = {
+      ...rules[ruleIndex],
+      conditions: [...(rules[ruleIndex].conditions || []), { field: 'message', op: 'contains', value: '' }],
+    };
+    setRules(rules);
+  };
+
+  const updateConditionInRule = (ruleIndex, condIndex, field, value) => {
+    const rules = [...getRules()];
+    const conditions = [...(rules[ruleIndex].conditions || [])];
+    conditions[condIndex] = { ...conditions[condIndex], [field]: value };
+    rules[ruleIndex] = { ...rules[ruleIndex], conditions };
+    setRules(rules);
+  };
+
+  const removeConditionFromRule = (ruleIndex, condIndex) => {
+    const rules = [...getRules()];
+    rules[ruleIndex] = {
+      ...rules[ruleIndex],
+      conditions: (rules[ruleIndex].conditions || []).filter((_, i) => i !== condIndex),
+    };
+    setRules(rules);
   };
 
   // ── Custom rule helpers ────────────────────────────────────────────────
@@ -436,7 +536,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
             { id: 'brain', label: 'Brain', Icon: Brain },
             { id: 'activity', label: 'Activity', Icon: Activity },
             { id: 'sequence', label: 'Sequence', Icon: Clock },
-            { id: 'triggers', label: 'Triggers', Icon: Radio },
+            { id: 'triggers', label: 'Automations', Icon: Zap },
           ].map(tab => (
             <button
               key={tab.id}
@@ -1017,66 +1117,212 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                 <div className="space-y-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                     <p className="text-xs text-blue-700">
-                      <strong>Triggers</strong> — How your AI assistant gets activated.
-                      Enable the channels that make sense for your business.
+                      <strong>Automations</strong> — When something happens, trigger an action.
+                      Like Zapier, but built into your AI assistant.
                     </p>
                   </div>
 
-                  {[
-                    { key: 'whatsapp_webhook', icon: '💬', label: 'WhatsApp Inbound', desc: 'Respond when customers message your WhatsApp number' },
-                    { key: 'missed_call', icon: '📞', label: 'Missed Call Auto-Text', desc: 'Send a template when you miss a call' },
-                    { key: 'bcc_email', icon: '✉️', label: 'BCC Email Quotes', desc: 'Auto-follow-up when you BCC a quote email' },
-                    { key: 'csv_campaign', icon: '📤', label: 'CSV Campaign Upload', desc: 'Upload a contact list to trigger outbound calls/messages' },
-                    { key: 'zapier_webhook', icon: '⚡', label: 'Zapier / Make Webhook', desc: 'Trigger from external tools via webhook URL' },
-                  ].map(trigger => (
-                    <button
-                      key={trigger.key}
-                      onClick={() => toggleTrigger(trigger.key)}
-                      className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                        config.trigger_config[trigger.key]
-                          ? 'border-emerald-200 bg-emerald-50'
-                          : 'border-slate-200 bg-white'
+                  {/* Webhook URL */}
+                  <div className="bg-slate-50 p-3 rounded-xl">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Globe className="w-3 h-3" /> Webhook URL
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/assistants/trigger?businessId=${business?.id || ''}`}
+                        className="flex-1 p-2 border border-slate-200 rounded-lg text-[11px] font-mono bg-white"
+                      />
+                      <button
+                        onClick={() => {
+                          const url = `${window.location.origin}/api/assistants/trigger?businessId=${business?.id || ''}`;
+                          navigator.clipboard.writeText(url);
+                        }}
+                        className="px-3 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3" /> Copy
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      External tools can POST here to trigger automations
+                    </p>
+                  </div>
+
+                  {/* Rules */}
+                  {getRules().map((rule, ruleIdx) => (
+                    <div
+                      key={rule.id || ruleIdx}
+                      className={`border-2 rounded-xl overflow-hidden transition-all ${
+                        rule.enabled !== false ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-slate-50 opacity-70'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">{trigger.icon}</span>
-                        <div className="text-left">
-                          <p className="text-sm font-semibold text-slate-900">{trigger.label}</p>
-                          <p className="text-[11px] text-slate-500">{trigger.desc}</p>
+                      {/* Rule header */}
+                      <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Zap className="w-3.5 h-3.5 text-amber-500" />
+                          <span className="text-xs font-bold text-slate-700">Rule {ruleIdx + 1}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => updateRule(ruleIdx, 'enabled', rule.enabled === false)}
+                            className="p-1"
+                          >
+                            {rule.enabled !== false
+                              ? <ToggleRight className="w-5 h-5 text-emerald-500" />
+                              : <ToggleLeft className="w-5 h-5 text-slate-400" />
+                            }
+                          </button>
+                          <button onClick={() => removeRule(ruleIdx)} className="p-1 hover:bg-red-50 rounded">
+                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          </button>
                         </div>
                       </div>
-                      {config.trigger_config[trigger.key]
-                        ? <ToggleRight className="w-6 h-6 text-emerald-600 shrink-0" />
-                        : <ToggleLeft className="w-6 h-6 text-slate-400 shrink-0" />
-                      }
-                    </button>
+
+                      <div className="p-3 space-y-3">
+                        {/* WHEN */}
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">When</label>
+                          <select
+                            value={rule.event}
+                            onChange={e => updateRule(ruleIdx, 'event', e.target.value)}
+                            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-white"
+                          >
+                            {AUTOMATION_EVENTS.map(ev => (
+                              <option key={ev.id} value={ev.id}>{ev.icon} {ev.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* IF conditions */}
+                        {(rule.conditions || []).length > 0 && (
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">If</label>
+                            <div className="space-y-2">
+                              {(rule.conditions || []).map((cond, condIdx) => (
+                                <div key={condIdx} className="flex gap-1.5 items-center">
+                                  <input
+                                    type="text"
+                                    value={cond.field}
+                                    onChange={e => updateConditionInRule(ruleIdx, condIdx, 'field', e.target.value)}
+                                    className="w-24 p-2 border border-slate-200 rounded-lg text-xs"
+                                    placeholder="field"
+                                  />
+                                  <select
+                                    value={cond.op}
+                                    onChange={e => updateConditionInRule(ruleIdx, condIdx, 'op', e.target.value)}
+                                    className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                  >
+                                    <option value="contains">contains</option>
+                                    <option value="equals">equals</option>
+                                    <option value="gt">&gt;</option>
+                                    <option value="lt">&lt;</option>
+                                    <option value="exists">exists</option>
+                                    <option value="not_exists">not exists</option>
+                                  </select>
+                                  {!['exists', 'not_exists'].includes(cond.op) && (
+                                    <input
+                                      type="text"
+                                      value={cond.value || ''}
+                                      onChange={e => updateConditionInRule(ruleIdx, condIdx, 'value', e.target.value)}
+                                      className="flex-1 p-2 border border-slate-200 rounded-lg text-xs"
+                                      placeholder="value"
+                                    />
+                                  )}
+                                  <button onClick={() => removeConditionFromRule(ruleIdx, condIdx)} className="p-1 hover:bg-red-50 rounded">
+                                    <X className="w-3 h-3 text-red-400" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => addConditionToRule(ruleIdx)}
+                          className="text-[11px] text-blue-600 font-medium hover:text-blue-700 flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> Add condition
+                        </button>
+
+                        {/* THEN actions */}
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Then</label>
+                          <div className="space-y-2">
+                            {(rule.actions || []).map((action, actIdx) => {
+                              const actionDef = AUTOMATION_ACTIONS.find(a => a.id === action.type);
+                              return (
+                                <div key={actIdx} className="bg-slate-50 rounded-lg p-2.5 space-y-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <select
+                                      value={action.type}
+                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'type', e.target.value)}
+                                      className="flex-1 p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                    >
+                                      {AUTOMATION_ACTIONS.map(act => (
+                                        <option key={act.id} value={act.id}>{act.icon} {act.label}</option>
+                                      ))}
+                                    </select>
+                                    <button onClick={() => removeActionFromRule(ruleIdx, actIdx)} className="p-1 hover:bg-red-50 rounded">
+                                      <X className="w-3 h-3 text-red-400" />
+                                    </button>
+                                  </div>
+                                  {/* Config fields */}
+                                  {actionDef?.configFields?.includes('message') && (
+                                    <textarea
+                                      value={action.config?.message || ''}
+                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'message', e.target.value)}
+                                      className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                      rows={2}
+                                      placeholder="Message... use {firstName}, {businessName}, {quoteAmount}"
+                                    />
+                                  )}
+                                  {actionDef?.configFields?.includes('url') && (
+                                    <input
+                                      type="url"
+                                      value={action.config?.url || ''}
+                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'url', e.target.value)}
+                                      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                      placeholder="https://hooks.zapier.com/..."
+                                    />
+                                  )}
+                                  {actionDef?.configFields?.includes('status') && (
+                                    <input
+                                      type="text"
+                                      value={action.config?.status || ''}
+                                      onChange={e => updateActionInRule(ruleIdx, actIdx, 'status', e.target.value)}
+                                      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                      placeholder="e.g. hot_lead, vip, inactive"
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button
+                            onClick={() => addActionToRule(ruleIdx)}
+                            className="mt-1.5 text-[11px] text-emerald-600 font-medium hover:text-emerald-700 flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" /> Add action
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ))}
 
-                  {/* Webhook URL (if zapier enabled) */}
-                  {config.trigger_config.zapier_webhook && (
-                    <div className="bg-slate-50 p-3 rounded-xl">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                        Webhook URL
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          readOnly
-                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/quotes/new`}
-                          className="flex-1 p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white"
-                        />
-                        <button
-                          onClick={() => {
-                            const url = `${window.location.origin}/api/quotes/new`;
-                            navigator.clipboard.writeText(url);
-                          }}
-                          className="px-3 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-1.5">
-                        POST with JSON: {`{ "name", "phone", "quote_amount", "job_type", "business_id": "${business?.id || 'xxx'}" }`}
+                  {/* Add rule button */}
+                  <button
+                    onClick={addRule}
+                    className="w-full p-4 border-2 border-dashed border-slate-200 rounded-xl text-sm font-medium text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Zap className="w-4 h-4" /> Add Automation Rule
+                  </button>
+
+                  {/* Variables hint */}
+                  {getRules().length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Available Variables</p>
+                      <p className="text-[11px] text-amber-700 font-mono">
+                        {'{firstName}'} {'{customerName}'} {'{businessName}'} {'{phone}'} {'{event}'} {'{amount}'} {'{message}'}
                       </p>
                     </div>
                   )}

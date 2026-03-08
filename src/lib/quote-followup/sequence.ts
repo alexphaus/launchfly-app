@@ -464,6 +464,11 @@ export async function processSequenceStep(lead: QuoteLead): Promise<ProcessResul
       sequence_completed: true,
       status: 'Archived',
     }).eq('id', lead.id);
+
+    // Fire automation event
+    const { fireEvent } = await import('@/lib/automations/executor');
+    await fireEvent({ businessId: lead.business_id || '', event: 'sequence_completed', phone: lead.phone, customerName: lead.name, metadata: { leadId: lead.id, jobType: lead.job_type } }).catch(() => {});
+
     return { action: 'sequence_complete' };
   }
 
@@ -562,11 +567,22 @@ export async function processSequenceStep(lead: QuoteLead): Promise<ProcessResul
  */
 export async function pauseSequenceOnReply(leadId: string): Promise<void> {
   const supabase = getSupabase();
+
+  // Load lead for context before pausing
+  const { data: lead } = await supabase.from('quote_leads').select('phone, name, business_id, job_type').eq('id', leadId).maybeSingle();
+
   await supabase.from('quote_leads').update({
     sequence_paused: true,
     last_reply_at: new Date().toISOString(),
     status: 'WhatsApp_Nurture', // Transition to active negotiation
   }).eq('id', leadId);
+
+  // Fire automation event
+  if (lead?.business_id) {
+    const { fireEvent } = await import('@/lib/automations/executor');
+    await fireEvent({ businessId: lead.business_id, event: 'customer_replied', phone: lead.phone, customerName: lead.name, metadata: { leadId, jobType: lead.job_type } }).catch(() => {});
+  }
+
   console.log(`[sequence] Paused sequence for lead ${leadId} — prospect replied`);
 }
 

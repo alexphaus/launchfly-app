@@ -126,6 +126,21 @@ function evaluateConditions(conditions: Condition[], ctx: EventContext): boolean
   return true;
 }
 
+// ─── Twilio WhatsApp Helper ──────────────────────────────────────────────
+
+async function sendWhatsApp(to: string, body: string): Promise<void> {
+  const twilio = (await import('twilio')).default;
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  const from = process.env.TWILIO_WHATSAPP_FROM
+    || (process.env.TWILIO_WHATSAPP_NUMBER ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}` : '');
+  if (!from) throw new Error('Missing TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_NUMBER');
+  await client.messages.create({
+    from: from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
+    to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
+    body,
+  });
+}
+
 // ─── Action Dispatcher ───────────────────────────────────────────────────
 
 async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: boolean; detail: string }> {
@@ -134,7 +149,6 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
   switch (action.type) {
     case 'send_whatsapp': {
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
-      const { sendWhatsApp } = await import('@/lib/quote-followup/whatsapp');
       const msg = fillVars(cfg.message as string, ctx);
       await sendWhatsApp(ctx.phone, msg);
       return { ok: true, detail: `Sent WhatsApp to ${ctx.phone}` };
@@ -149,9 +163,8 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         .single();
       const ownerPhone = biz?.whatsapp_number || biz?.phone_number;
       if (!ownerPhone) return { ok: false, detail: 'No owner phone found' };
-      const { sendWhatsApp } = await import('@/lib/quote-followup/whatsapp');
-      const msg = fillVars((cfg.message as string) || '🔔 Automation alert: {event} from {customerName}', ctx);
-      await sendWhatsApp(ownerPhone, msg);
+      const notifyMsg = fillVars((cfg.message as string) || '🔔 Automation alert: {event} from {customerName}', ctx);
+      await sendWhatsApp(ownerPhone, notifyMsg);
       return { ok: true, detail: `Notified owner at ${ownerPhone}` };
     }
 

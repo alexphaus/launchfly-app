@@ -69,6 +69,48 @@ const AUTOMATION_ACTIONS = [
   { id: 'start_sequence', label: 'Start Legacy Sequence', icon: '🔄', configFields: [] },
 ];
 
+// ─── Default Actions per Event ───────────────────────────────────────────
+
+const DEFAULT_ACTIONS_BY_EVENT = {
+  missed_call: [
+    { type: 'send_template', config: { templateSid: '', contentVars: '{businessName}' } },
+    { type: 'notify_owner', config: { message: '📞 Missed call from {phone} — auto-reply sent ✅' } },
+  ],
+  inbound_whatsapp: [
+    { type: 'notify_owner', config: { message: '💬 New WhatsApp from {customerName}: {message}' } },
+  ],
+  booking_created: [
+    { type: 'notify_owner', config: { message: '📅 New booking from {customerName} ({phone})' } },
+    { type: 'update_status', config: { status: 'booked' } },
+  ],
+  booking_cancelled: [
+    { type: 'send_whatsapp', config: { message: 'Hey {firstName}, sorry to see you cancel. If you change your mind, just reply here and we\'ll get you rebooked! 🙏' } },
+    { type: 'notify_owner', config: { message: '❌ Booking cancelled by {customerName} ({phone})' } },
+  ],
+  payment_received: [
+    { type: 'send_whatsapp', config: { message: 'Thanks {firstName}! 🎉 Payment of ${amount} received. We\'ll be in touch with next steps!' } },
+    { type: 'notify_owner', config: { message: '💰 Payment ${amount} from {customerName}' } },
+  ],
+  quote_sent: [
+    { type: 'delay', config: { delayHours: 48 } },
+    { type: 'send_whatsapp', config: { message: 'Hey {firstName}, just following up on the estimate from {businessName}. Any questions? Happy to help! 👍' } },
+    { type: 'delay', config: { delayHours: 24 } },
+    { type: 'send_whatsapp', config: { message: 'Hi {firstName}, wanted to check in one more time. Ready to get started? 🚀' } },
+    { type: 'delay', config: { delayHours: 24 } },
+    { type: 'trigger_voice_call', config: {} },
+  ],
+  sequence_completed: [
+    { type: 'update_status', config: { status: 'sequence_done' } },
+    { type: 'notify_owner', config: { message: '✅ Sequence completed for {customerName} — no reply. Manual follow-up needed?' } },
+  ],
+  customer_replied: [
+    { type: 'notify_owner', config: { message: '↩️ {customerName} replied during sequence: {message}' } },
+  ],
+  external_webhook: [
+    { type: 'notify_owner', config: { message: '⚡ External event: {event} from {customerName}' } },
+  ],
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 function formatTimeAgo(dateStr) {
@@ -318,15 +360,13 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   };
 
   const addRule = () => {
+    const defaultEvent = 'missed_call';
+    const defaultActions = (DEFAULT_ACTIONS_BY_EVENT[defaultEvent] || []).map(a => ({ ...a, config: { ...a.config } }));
     setRules([...getRules(), {
       id: `rule_${Date.now()}`,
-      event: 'quote_sent',
+      event: defaultEvent,
       conditions: [],
-      actions: [
-        { type: 'send_whatsapp', config: { message: 'Hey {firstName}, just sent you an estimate for {businessName}. Let me know if you have questions!' } },
-        { type: 'delay', config: { delayHours: 48 } },
-        { type: 'send_whatsapp', config: { message: 'Hi {firstName}, wanted to follow up on the quote. Ready to get started?' } },
-      ],
+      actions: defaultActions,
       enabled: true,
     }]);
   };
@@ -1016,7 +1056,17 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">When</label>
                           <select
                             value={rule.event}
-                            onChange={e => updateRule(ruleIdx, 'event', e.target.value)}
+                            onChange={e => {
+                              const newEvent = e.target.value;
+                              const preset = DEFAULT_ACTIONS_BY_EVENT[newEvent];
+                              const rules = [...getRules()];
+                              rules[ruleIdx] = {
+                                ...rules[ruleIdx],
+                                event: newEvent,
+                                actions: preset ? preset.map(a => ({ ...a, config: { ...a.config } })) : rules[ruleIdx].actions,
+                              };
+                              setRules(rules);
+                            }}
                             className="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-white"
                           >
                             {AUTOMATION_EVENTS.map(ev => (

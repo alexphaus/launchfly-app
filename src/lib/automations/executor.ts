@@ -126,6 +126,25 @@ function evaluateConditions(conditions: Condition[], ctx: EventContext): boolean
   return true;
 }
 
+// ─── Chat History Helper ─────────────────────────────────────────────────
+// Save outbound messages to chat_history so the v2 webhook can trace the
+// business when the customer replies (getLastBusinessId looks here).
+
+async function saveToChatHistory(phone: string, businessId: string, content: string): Promise<void> {
+  try {
+    const supabase = getSupabase();
+    const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
+    await supabase.from('chat_history').insert({
+      phone: phoneNormalized,
+      business_id: businessId,
+      role: 'assistant',
+      content,
+    });
+  } catch (err) {
+    console.warn('[automation] Failed to save chat_history breadcrumb:', err);
+  }
+}
+
 // ─── Twilio WhatsApp Helper ──────────────────────────────────────────────
 
 async function sendWhatsApp(to: string, body: string): Promise<void> {
@@ -151,6 +170,8 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
       await sendWhatsApp(ctx.phone, msg);
+      // Save to chat_history so v2 webhook can trace business on customer reply
+      await saveToChatHistory(ctx.phone, ctx.businessId, msg);
       return { ok: true, detail: `Sent WhatsApp to ${ctx.phone}` };
     }
 
@@ -281,6 +302,8 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
           ? { contentVariables: JSON.stringify(contentVariables) }
           : {}),
       });
+      // Save to chat_history so v2 webhook can trace business on customer reply
+      await saveToChatHistory(ctx.phone, ctx.businessId, `[Template: ${templateSid}]`);
       return { ok: true, detail: `Template ${templateSid} sent to ${ctx.phone}` };
     }
 

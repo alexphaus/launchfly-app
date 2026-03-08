@@ -155,7 +155,9 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
         // 🎯 INTERACTIVE SALES DEMO ROUTING
         // If this phone is currently going through the Interactive WhatsApp Sales Demo,
         // route replies to the demo webhook instead of the AI receptionist.
+        // Auto-expire sessions older than 24 hours to prevent stale routing.
         // ============================================================
+        const DEMO_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
         const { data: activeDemoSession } = await supabase
             .from('demo_sessions')
             .select('*')
@@ -165,7 +167,16 @@ Or ask me anything! I can check availability, give quotes, and book jobs automat
             .limit(1)
             .maybeSingle();
 
+        // Auto-expire stale demo sessions
         if (activeDemoSession) {
+            const sessionAge = Date.now() - new Date(activeDemoSession.created_at).getTime();
+            if (sessionAge > DEMO_TTL_MS) {
+                console.log(`   🕐 Demo session ${activeDemoSession.id} expired (${Math.round(sessionAge / 3600000)}h old) — skipping`);
+                await supabase.from('demo_sessions').update({ step: 'timeout' }).eq('id', activeDemoSession.id);
+            }
+        }
+
+        if (activeDemoSession && (Date.now() - new Date(activeDemoSession.created_at).getTime()) <= DEMO_TTL_MS) {
             console.log(`   🎯 Interactive Demo reply detected for session ${activeDemoSession.id} (step: ${activeDemoSession.step})`);
 
             // Lazy import to keep the main route fast

@@ -3,8 +3,10 @@
 // CRUD API for the AI Assistant configuration
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// GET  /api/assistants?businessId=xxx  → Get the active assistant
-// POST /api/assistants                 → Create or update assistant config
+// GET  /api/assistants?businessId=xxx           → Get the active assistant
+// GET  /api/assistants?businessId=xxx&list=true  → List ALL assistants
+// POST /api/assistants                           → Create or update assistant config
+// PUT  /api/assistants                           → Switch active assistant or create new
 //
 // Uses Supabase service key (server-side only) — auth checked via businessId ownership.
 
@@ -32,6 +34,24 @@ export async function GET(req: NextRequest) {
     }
 
     const supabase = getSupabase();
+    const listAll = req.nextUrl.searchParams.get('list') === 'true';
+
+    if (listAll) {
+      // Return ALL assistants for the business (for the switcher dropdown)
+      const { data: assistants, error } = await supabase
+        .from('assistants')
+        .select('id, name, tone, goal, active, created_at')
+        .eq('business_id', businessId)
+        .order('active', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('[assistants] GET list error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ assistants: assistants || [] });
+    }
 
     const { data: assistant, error } = await supabase
       .from('assistants')
@@ -179,6 +199,101 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ assistant: result, ok: true });
   } catch (err) {
     console.error('[assistants] POST unexpected error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PUT — Switch active assistant or create a new one
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface SwitchPayload {
+  businessId: string;
+  assistantId?: string;   // switch to this existing assistant
+  createNew?: boolean;     // create a brand-new assistant and make it active
+  newName?: string;        // name for the new assistant
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const body = (await req.json()) as SwitchPayload;
+
+    if (!body.businessId) {
+      return NextResponse.json({ error: 'businessId required' }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+
+    if (body.createNew) {
+      // Deactivate all current assistants for this business
+      await supabase
+        .from('assistants')
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('business_id', body.businessId)
+        .eq('active', true);
+
+      // Create a new one
+      const { data: newAssistant, error } = await supabase
+        .from('assistants')
+        .insert({
+          business_id: body.businessId,
+          name: body.newName || 'New Assistant',
+          tone: 'friendly',
+          goal: 'book_consultation',
+          tools_enabled: ['send_checkout_link', 'book_calendar', 'send_template', 'transfer_to_human'],
+          trigger_config: { whatsapp_webhook: true, missed_call: true },
+          active: true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[assistants] PUT create error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ assistant: newAssistant, ok: true });
+    }
+
+    if (body.assistantId) {
+      // Verify the assistant belongs to this business
+      const { data: target } = await supabase
+        .from('assistants')
+        .select('id, business_id')
+        .eq('id', body.assistantId)
+        .eq('business_id', body.businessId)
+        .single();
+
+      if (!target) {
+        return NextResponse.json({ error: 'Assistant not found' }, { status: 404 });
+      }
+
+      // Deactivate all current assistants
+      await supabase
+        .from('assistants')
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('business_id', body.businessId)
+        .eq('active', true);
+
+      // Activate the chosen one
+      const { data: switched, error } = await supabase
+        .from('assistants')
+        .update({ active: true, updated_at: new Date().toISOString() })
+        .eq('id', body.assistantId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[assistants] PUT switch error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ assistant: switched, ok: true });
+    }
+
+    return NextResponse.json({ error: 'assistantId or createNew required' }, { status: 400 });
+  } catch (err) {
+    console.error('[assistants] PUT unexpected error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

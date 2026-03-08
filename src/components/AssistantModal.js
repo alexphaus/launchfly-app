@@ -92,6 +92,12 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [activityLog, setActivityLog] = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
+  // Assistant switcher state
+  const [showSwitcher, setShowSwitcher] = useState(false);
+  const [assistantList, setAssistantList] = useState([]);
+  const [currentAssistantId, setCurrentAssistantId] = useState(null);
+  const [switching, setSwitching] = useState(false);
+
   // ── Load assistant config ──────────────────────────────────────────────
   const loadAssistant = useCallback(async () => {
     if (!business?.id) return;
@@ -101,6 +107,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       const data = await res.json();
 
       if (data.assistant) {
+        setCurrentAssistantId(data.assistant.id);
         setConfig({
           name: data.assistant.name || 'AI Sales Assistant',
           tone: data.assistant.tone || 'friendly',
@@ -124,6 +131,59 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     }
   }, [business?.id]);
 
+  const loadAssistantList = useCallback(async () => {
+    if (!business?.id) return;
+    try {
+      const res = await fetch(`/api/assistants?businessId=${business.id}&list=true`);
+      const data = await res.json();
+      setAssistantList(data.assistants || []);
+    } catch (err) {
+      console.error('Failed to load assistant list:', err);
+    }
+  }, [business?.id]);
+
+  const switchAssistant = async (assistantId) => {
+    if (!business?.id || switching) return;
+    setSwitching(true);
+    try {
+      const res = await fetch('/api/assistants', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, assistantId }),
+      });
+      if (res.ok) {
+        setShowSwitcher(false);
+        await loadAssistant();
+        await Promise.all([loadAssistantList(), loadActivity()]);
+      }
+    } catch (err) {
+      console.error('Failed to switch assistant:', err);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const createNewAssistant = async () => {
+    if (!business?.id || switching) return;
+    setSwitching(true);
+    try {
+      const res = await fetch('/api/assistants', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, createNew: true }),
+      });
+      if (res.ok) {
+        setShowSwitcher(false);
+        await loadAssistant();
+        await Promise.all([loadAssistantList(), loadActivity()]);
+      }
+    } catch (err) {
+      console.error('Failed to create assistant:', err);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const loadActivity = useCallback(async () => {
     if (!business?.id) return;
     setLoadingActivity(true);
@@ -142,8 +202,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     if (isOpen) {
       loadAssistant();
       loadActivity();
+      loadAssistantList();
     }
-  }, [isOpen, loadAssistant, loadActivity]);
+  }, [isOpen, loadAssistant, loadActivity, loadAssistantList]);
 
   // ── Save assistant config ──────────────────────────────────────────────
   const saveAssistant = async () => {
@@ -163,6 +224,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
       if (res.ok) {
         setSaveStatus('saved');
+        loadAssistantList(); // refresh dropdown with new name/tone/goal
         setTimeout(() => setSaveStatus(null), 2000);
       } else {
         setSaveStatus('error');
@@ -273,16 +335,77 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
         {/* ── Header ────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 relative">
             <div className="p-2 bg-emerald-100 rounded-xl">
               <Bot className="w-5 h-5 text-emerald-600" />
             </div>
-            <div>
-              <h2 className="font-bold text-lg text-slate-900">{config.name}</h2>
-              <p className="text-xs text-slate-500">
-                {config.tone.charAt(0).toUpperCase() + config.tone.slice(1)} · {GOALS.find(g => g.id === config.goal)?.label || config.goal}
-              </p>
-            </div>
+            <button
+              onClick={() => setShowSwitcher(!showSwitcher)}
+              className="flex items-center gap-1.5 hover:bg-slate-50 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="font-bold text-lg text-slate-900 leading-tight">{config.name}</h2>
+                <p className="text-xs text-slate-500">
+                  {config.tone.charAt(0).toUpperCase() + config.tone.slice(1)} · {GOALS.find(g => g.id === config.goal)?.label || config.goal}
+                </p>
+              </div>
+              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showSwitcher ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* ── Switcher Dropdown ───────────────────────────────────── */}
+            {showSwitcher && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSwitcher(false)} />
+                <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Assistant</p>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {assistantList.map(a => (
+                      <button
+                        key={a.id}
+                        onClick={() => a.id !== currentAssistantId && switchAssistant(a.id)}
+                        disabled={switching}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                          a.id === currentAssistantId
+                            ? 'bg-emerald-50'
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                          a.id === currentAssistantId
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {TONES.find(t => t.id === a.tone)?.emoji || '🤖'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${
+                            a.id === currentAssistantId ? 'text-emerald-700' : 'text-slate-700'
+                          }`}>{a.name}</p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            {GOALS.find(g => g.id === a.goal)?.label || a.goal}
+                          </p>
+                        </div>
+                        {a.id === currentAssistantId && (
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={createNewAssistant}
+                    disabled={switching}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 border-t border-slate-100 text-left hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                      <Plus className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <p className="text-sm font-medium text-blue-600">Create New Assistant</p>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-400" />

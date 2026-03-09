@@ -56,6 +56,8 @@ const AUTOMATION_EVENTS = [
   { id: 'sequence_completed', label: 'Sequence Completed', icon: '✅' },
   { id: 'customer_replied', label: 'Customer Replied', icon: '↩️' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
+  { id: 'call_completed', label: 'Voice Call Completed', icon: '📱' },
+  { id: 'demo_completed', label: 'Demo Completed', icon: '🎬' },
 ];
 
 const AUTOMATION_ACTIONS = [
@@ -63,6 +65,8 @@ const AUTOMATION_ACTIONS = [
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: [] },
+  { id: 'create_lead', label: 'Create Lead', icon: '📋', configFields: ['jobType'] },
+  { id: 'start_demo', label: 'Start Demo Flow', icon: '🎬', configFields: [] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
@@ -109,6 +113,12 @@ const DEFAULT_ACTIONS_BY_EVENT = {
   ],
   external_webhook: [
     { type: 'notify_owner', config: { message: '⚡ External event: {event} from {customerName}' } },
+  ],
+  call_completed: [
+    { type: 'start_demo', config: {} },
+  ],
+  demo_completed: [
+    { type: 'notify_owner', config: { message: '🎬 Demo completed for {customerName} ({phone})' } },
   ],
 };
 

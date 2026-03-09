@@ -62,6 +62,8 @@ export const AVAILABLE_EVENTS = [
   { id: 'customer_replied', label: 'Customer Replied to Sequence', icon: '💬', desc: 'Prospect replies during follow-up sequence' },
   { id: 'quote_sent', label: 'Quote / Email Sent', icon: '📧', desc: 'A quote or email was sent to a prospect' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡', desc: 'POST from Zapier, Make, or any external tool' },
+  { id: 'call_completed', label: 'Voice Call Completed', icon: '📱', desc: 'Retell AI call ended — check outcome in metadata' },
+  { id: 'demo_completed', label: 'Demo Completed', icon: '🎬', desc: 'Interactive WhatsApp demo flow finished' },
 ] as const;
 
 // ─── Available Actions ───────────────────────────────────────────────────
@@ -75,6 +77,8 @@ export const AVAILABLE_ACTIONS = [
   { id: 'call_webhook', label: 'Call External Webhook', icon: '🌐', desc: 'POST data to an external URL', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', desc: 'Set customer status in database', configFields: ['status'] },
   { id: 'send_template', label: 'Send WhatsApp Template', icon: '📝', desc: 'Send a pre-approved WhatsApp template', configFields: ['templateSid'] },
+  { id: 'create_lead', label: 'Create Lead', icon: '📋', desc: 'Create a lead record (required before voice call)', configFields: ['jobType'] },
+  { id: 'start_demo', label: 'Start Demo Flow', icon: '🎬', desc: 'Start the interactive WhatsApp sales demo', configFields: [] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', desc: 'Pause the workflow for a set number of hours', configFields: ['delayHours'] },
 ] as const;
 
@@ -224,8 +228,72 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       return { ok: true, detail: `Sequence started for ${ctx.phone}` };
     }
 
+    case 'create_lead': {
+      if (!ctx.phone) return { ok: false, detail: 'Missing phone for lead creation' };
+      const supabase = getSupabase();
+      // Upsert: if lead exists for this phone+business, update; else create
+      const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      const { data: existing } = await supabase
+        .from('quote_leads')
+        .select('id')
+        .eq('phone', phoneNorm)
+        .eq('business_id', ctx.businessId)
+        .eq('status', 'Open')
+        .maybeSingle();
+      if (existing) return { ok: true, detail: `Lead already exists: ${existing.id}` };
+      const { data: newLead, error: insertErr } = await supabase
+        .from('quote_leads')
+        .insert({
+          business_id: ctx.businessId,
+          phone: phoneNorm,
+          name: ctx.customerName || 'Unknown',
+          job_type: (cfg.jobType as string) || (ctx.metadata?.job_type as string) || 'General Inquiry',
+          quote_amount: ctx.amount || 0,
+          status: 'Open',
+          source: (ctx.metadata?.source as string) || 'automation',
+          attempts: 0,
+        })
+        .select('id')
+        .single();
+      if (insertErr) return { ok: false, detail: `Failed to create lead: ${insertErr.message}` };
+      // Also upsert customer record
+      await supabase.from('customers').upsert({
+        business_id: ctx.businessId,
+        phone: phoneNorm,
+        name: ctx.customerName || 'Unknown',
+        email: (ctx.metadata?.email as string) || `${phoneNorm.replace(/\+/g, '')}@lead.placeholder`,
+        status: 'lead',
+        source: (ctx.metadata?.source as string) || 'automation',
+      }, { onConflict: 'business_id,email' });
+      return { ok: true, detail: `Lead created: ${newLead?.id}` };
+    }
+
+    case 'start_demo': {
+      if (!ctx.phone) return { ok: false, detail: 'Missing phone for demo' };
+      const supabase = getSupabase();
+      const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      // Create demo session
+      const { data: session, error: demoErr } = await supabase
+        .from('demo_sessions')
+        .insert({
+          phone: phoneNorm,
+          owner_name: ctx.customerName || 'there',
+          business_name: (ctx.metadata?.business_name as string) || null,
+          business_id: ctx.businessId,
+          step: 'step1_sent',
+        })
+        .select('*')
+        .single();
+      if (demoErr || !session) return { ok: false, detail: `Failed to create demo session: ${demoErr?.message}` };
+      // Send Step 1
+      const { sendStep1 } = await import('@/lib/demo/flow');
+      await sendStep1(session);
+      await saveToChatHistory(phoneNorm, ctx.businessId, '[Demo Step 1 sent]');
+      return { ok: true, detail: `Demo started for ${phoneNorm}` };
+    }
+
     case 'trigger_voice_call': {
-      // Look up or create a quote_lead, then hit Retell
+      // Look up the quote_lead, then hit Retell
       const supabase = getSupabase();
       const { data: lead } = await supabase
         .from('quote_leads')
@@ -235,7 +303,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!lead) return { ok: false, detail: 'No lead found for voice call' };
+      if (!lead) return { ok: false, detail: 'No lead found — add create_lead action before trigger_voice_call' };
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
       await fetch(`${appUrl}/api/retell/call`, {
         method: 'POST',

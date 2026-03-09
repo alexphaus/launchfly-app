@@ -13,7 +13,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getLastBusinessId } from '@/lib/ai-receptionist/history';
 import { fireEvent } from '@/lib/automations/executor';
-import { handleDemoReply, type DemoSession } from '@/lib/demo/flow';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -97,46 +96,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`   🏢 Business: ${businessId}`);
 
-    // 3. Check for active demo session (scripted flow takes priority)
-    const DEMO_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-    const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-    const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
-    const { data: demoSession } = await supabase
-      .from('demo_sessions')
-      .select('*')
-      .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
-      .not('step', 'in', '("completed","timeout")')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (demoSession) {
-      const age = Date.now() - new Date(demoSession.updated_at || demoSession.created_at).getTime();
-      if (age < DEMO_TTL_MS) {
-        console.log(`   🎬 Active demo session (step: ${demoSession.step}) — routing to demo flow`);
-        const newStep = await handleDemoReply(demoSession as DemoSession, messageText);
-        await supabase
-          .from('demo_sessions')
-          .update({ step: newStep, updated_at: new Date().toISOString() })
-          .eq('id', demoSession.id);
-        // If demo completed, fire event so automation rules can react
-        if (newStep === 'completed') {
-          await fireEvent({
-            businessId,
-            event: 'demo_completed',
-            phone: customerPhone,
-            customerName: demoSession.owner_name,
-            metadata: { outcome: 'converted', demo_session_id: demoSession.id },
-          });
-        }
-        console.log(`   ✅ V3 demo step: ${demoSession.step} → ${newStep} (${Date.now() - startTime}ms)`);
-        return new NextResponse(EMPTY_TWIML, { headers: twimlHeaders });
-      }
-      // Expired — mark as timeout
-      await supabase.from('demo_sessions').update({ step: 'timeout' }).eq('id', demoSession.id);
-    }
-
-    // 4. Fire automation event — all behavior is driven by rules
+    // 3. Fire automation event — all behavior is driven by rules
     const result = await fireEvent({
       businessId,
       event: 'inbound_whatsapp',

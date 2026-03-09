@@ -57,21 +57,17 @@ const AUTOMATION_EVENTS = [
   { id: 'customer_replied', label: 'Customer Replied', icon: '↩️' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱' },
-  { id: 'demo_completed', label: 'Demo Completed', icon: '🎬' },
 ];
 
 const AUTOMATION_ACTIONS = [
   { id: 'ai_response', label: 'AI Response', icon: '🤖', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
-  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: [] },
-  { id: 'create_lead', label: 'Create Lead', icon: '📋', configFields: ['jobType'] },
-  { id: 'start_demo', label: 'Start Demo Flow', icon: '🎬', configFields: [] },
+  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['jobType'] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
   { id: 'send_template', label: 'Send Template', icon: '📝', configFields: ['templateSid', 'contentVars'] },
-  { id: 'start_sequence', label: 'Start Legacy Sequence', icon: '🔄', configFields: [] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -115,10 +111,7 @@ const DEFAULT_ACTIONS_BY_EVENT = {
     { type: 'notify_owner', config: { message: '⚡ External event: {event} from {customerName}' } },
   ],
   call_completed: [
-    { type: 'start_demo', config: {} },
-  ],
-  demo_completed: [
-    { type: 'notify_owner', config: { message: '🎬 Demo completed for {customerName} ({phone})' } },
+    { type: 'send_whatsapp', config: { message: 'Hey {customerName} 👋 Just tried to call. I have something quick to show you — reply START when you\'re ready!' } },
   ],
 };
 

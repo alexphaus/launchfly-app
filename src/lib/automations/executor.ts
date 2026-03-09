@@ -496,7 +496,8 @@ async function scheduleResume(
 
   try {
     const targetUrl = `${appUrl}/api/assistants/trigger/resume`;
-    await fetch('https://qstash.upstash.io/v2/publish/' + encodeURIComponent(targetUrl), {
+    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${qstashToken}`,
@@ -518,6 +519,13 @@ async function scheduleResume(
         scheduledAt: new Date().toISOString(),
       }),
     });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`[automation] QStash error ${res.status}: ${errText}`);
+      return false;
+    }
+
     console.log(`[automation] Scheduled ${remainingActions.length} actions after ${delaySeconds}s delay`);
     return true;
   } catch (err) {

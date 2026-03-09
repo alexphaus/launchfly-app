@@ -73,7 +73,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'send_whatsapp', label: 'Send WhatsApp Message', icon: '💬', desc: 'Send a text message via WhatsApp', configFields: ['message'] },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', desc: 'Auto-creates lead, then triggers Retell AI voice call', configFields: ['retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Business Owner', icon: '🔔', desc: 'Send the owner a WhatsApp alert', configFields: ['message'] },
-  { id: 'call_webhook', label: 'Call External Webhook', icon: '🌐', desc: 'POST data to an external URL', configFields: ['url'] },
+  { id: 'call_webhook', label: 'Call External Webhook', icon: '🌐', desc: 'POST data to an external URL', configFields: ['url', 'webhookHeaders'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', desc: 'Set customer status in database', configFields: ['status'] },
   { id: 'send_template', label: 'Send WhatsApp Template', icon: '📝', desc: 'Send a pre-approved WhatsApp template', configFields: ['templateSid'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', desc: 'Pause the workflow for a set number of hours', configFields: ['delayHours'] },
@@ -334,9 +334,19 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       } catch {
         return { ok: false, detail: 'Invalid URL' };
       }
-      await fetch(url, {
+      // Parse optional custom headers: "Authorization=Bearer xxx, X-Api-Key=abc"
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (cfg.webhookHeaders && typeof cfg.webhookHeaders === 'string') {
+        for (const pair of (cfg.webhookHeaders as string).split(',')) {
+          const eqIdx = pair.indexOf('=');
+          if (eqIdx > 0) {
+            headers[pair.substring(0, eqIdx).trim()] = pair.substring(eqIdx + 1).trim();
+          }
+        }
+      }
+      const webhookRes = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           event: ctx.event,
           business_id: ctx.businessId,
@@ -348,7 +358,12 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
           timestamp: new Date().toISOString(),
         }),
       });
-      return { ok: true, detail: `Webhook called: ${url}` };
+      if (!webhookRes.ok) {
+        const errBody = await webhookRes.text().catch(() => '');
+        console.error(`[automation] Webhook ${url} returned ${webhookRes.status}: ${errBody.substring(0, 200)}`);
+        return { ok: false, detail: `Webhook returned ${webhookRes.status}` };
+      }
+      return { ok: true, detail: `Webhook ${webhookRes.status}: ${url}` };
     }
 
     case 'update_status': {

@@ -67,7 +67,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
-  { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
+  { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url', 'webhookHeaders'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
   { id: 'send_template', label: 'Send Template', icon: '📝', configFields: ['templateSid', 'contentVars'] },
   { id: 'send_email', label: 'Send Email', icon: '📧', configFields: ['emailSubject', 'emailBody'] },
@@ -1443,13 +1443,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                       />
                                     )}
                                     {actionDef?.configFields?.includes('url') && (
-                                      <input
-                                        type="url"
-                                        value={action.config?.url || ''}
-                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'url', e.target.value)}
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
-                                        placeholder="https://hooks.zapier.com/..."
-                                      />
+                                      <div className="space-y-1.5">
+                                        <input
+                                          type="url"
+                                          value={action.config?.url || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'url', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="https://hooks.zapier.com/..."
+                                        />
+                                        <input
+                                          type="text"
+                                          value={action.config?.webhookHeaders || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'webhookHeaders', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                          placeholder='Headers (optional): Authorization=Bearer xxx, X-Api-Key=abc'
+                                        />
+                                        <p className="text-[10px] text-slate-400">
+                                          Comma-separated key=value pairs. Response status is logged.
+                                        </p>
+                                      </div>
                                     )}
                                     {actionDef?.configFields?.includes('retellAgentId') && (
                                       <input

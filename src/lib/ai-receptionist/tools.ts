@@ -1076,6 +1076,52 @@ export const receptionistTools = {
             };
         },
     }),
+
+    /**
+     * Generate a Stripe checkout link for Launchfly $150/mo subscription
+     */
+    generateCheckoutLink: tool({
+        description: 'Generate a Stripe checkout link for a $150/month Launchfly subscription. Call this when a prospect agrees to sign up.',
+        inputSchema: z.object({
+            customerName: z.string().describe('Prospect name'),
+            customerPhone: z.string().describe('Prospect phone number'),
+            customerEmail: z.string().optional().describe('Prospect email if known'),
+        }),
+        execute: async (input: { customerName: string; customerPhone: string; customerEmail?: string }) => {
+            try {
+                const Stripe = (await import('stripe')).default;
+                const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+                const session = await stripe.checkout.sessions.create({
+                    mode: 'subscription',
+                    payment_method_types: ['card'],
+                    line_items: [{
+                        price_data: {
+                            currency: 'usd',
+                            recurring: { interval: 'month' },
+                            unit_amount: 15000, // $150.00
+                            product_data: {
+                                name: 'Launchfly — AI Quote Follow-Up',
+                                description: 'Automated WhatsApp follow-up for every quote you send. Cancel anytime.',
+                            },
+                        },
+                        quantity: 1,
+                    }],
+                    customer_email: input.customerEmail || undefined,
+                    metadata: {
+                        source: 'sarah_sales_bot',
+                        customer_name: input.customerName,
+                        customer_phone: input.customerPhone,
+                    },
+                    success_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai'}/onboarding/success`,
+                    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai'}/onboarding/cancel`,
+                });
+                return { success: true, checkoutUrl: session.url };
+            } catch (err: any) {
+                console.error('[generateCheckoutLink] Stripe error:', err);
+                return { success: false, error: err.message };
+            }
+        },
+    }),
 };
 
 // Export tool names for type safety

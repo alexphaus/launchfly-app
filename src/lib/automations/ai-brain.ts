@@ -166,7 +166,7 @@ const TOOL_GROUPS: Record<string, string[]> = {
   book_calendar: ['createBooking', 'rescheduleBooking', 'cancelBooking', 'getCustomerBookings', 'getAvailableSlots'],
   lookup_customer: ['lookupCustomer', 'updateCustomer'],
   transfer_to_human: ['notifyOwner'],
-  send_checkout_link: ['calculatePrice'],
+  send_checkout_link: ['calculatePrice', 'generateCheckoutLink'],
   warranty: ['activateWarranty', 'saveFeedback', 'saveReferral'],
 };
 

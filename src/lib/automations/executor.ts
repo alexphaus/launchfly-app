@@ -70,7 +70,7 @@ export const AVAILABLE_EVENTS = [
 export const AVAILABLE_ACTIONS = [
   { id: 'ai_response', label: 'AI Response', icon: '🤖', desc: 'Let the AI assistant respond to the customer using the configured persona, tools, and knowledge base', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp Message', icon: '💬', desc: 'Send a text message via WhatsApp', configFields: ['message'] },
-  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', desc: 'Auto-creates lead record, then triggers Retell AI voice call', configFields: ['jobType'] },
+  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', desc: 'Auto-creates lead, then triggers Retell AI voice call', configFields: ['retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Business Owner', icon: '🔔', desc: 'Send the owner a WhatsApp alert', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call External Webhook', icon: '🌐', desc: 'POST data to an external URL', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', desc: 'Set customer status in database', configFields: ['status'] },
@@ -248,13 +248,59 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       }
 
       if (!lead) return { ok: false, detail: 'Failed to resolve lead for voice call' };
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
-      await fetch(`${appUrl}/api/retell/call`, {
+
+      // Call Retell API directly
+      const retellApiKey = process.env.RETELL_API_KEY;
+      const retellFromNumber = process.env.RETELL_FROM_NUMBER;
+      const agentId = (cfg.retellAgentId as string) || process.env.RETELL_AGENT_ID || '';
+      if (!retellApiKey || !agentId || !retellFromNumber) {
+        return { ok: false, detail: 'Missing RETELL_API_KEY, agent ID, or RETELL_FROM_NUMBER' };
+      }
+
+      // Load business context for dynamic variables
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('name, business_data')
+        .eq('id', ctx.businessId)
+        .single();
+      const bizName = biz?.name || 'the team';
+      const bizConfig = (biz?.business_data || {}) as Record<string, unknown>;
+
+      const retellRes = await fetch('https://api.retellai.com/v2/create-phone-call', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: lead.id }),
+        headers: {
+          Authorization: `Bearer ${retellApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from_number: retellFromNumber,
+          to_number: phoneNorm,
+          agent_id: agentId,
+          retell_llm_dynamic_variables: {
+            customer_name: ctx.customerName || 'there',
+            business_name: bizName,
+            contractor_name: (bizConfig.ownerName as string) || '',
+            lead_id: lead.id,
+          },
+          metadata: { lead_id: lead.id, source: 'automation' },
+        }),
       });
-      return { ok: true, detail: `Voice call triggered for lead ${lead.id}` };
+
+      if (!retellRes.ok) {
+        const errBody = await retellRes.text();
+        return { ok: false, detail: `Retell API error ${retellRes.status}: ${errBody.substring(0, 200)}` };
+      }
+
+      const retellData = (await retellRes.json()) as { call_id?: string };
+
+      // Update lead status
+      await supabase.from('quote_leads').update({
+        status: 'Called',
+        retell_call_id: retellData.call_id ?? null,
+        attempts: 1,
+      }).eq('id', lead.id);
+
+      return { ok: true, detail: `Voice call triggered (agent: ${agentId.substring(0, 8)}..., lead: ${lead.id})` };
     }
 
     case 'call_webhook': {

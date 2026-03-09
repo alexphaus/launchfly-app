@@ -63,7 +63,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'ai_response', label: 'AI Response', icon: '🤖', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
-  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['jobType'] },
+  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
@@ -1191,6 +1191,24 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         onChange={e => updateActionInRule(ruleIdx, actIdx, 'url', e.target.value)}
                                         className="w-full p-2 border border-slate-200 rounded-lg text-xs"
                                         placeholder="https://hooks.zapier.com/..."
+                                      />
+                                    )}
+                                    {actionDef?.configFields?.includes('retellAgentId') && (
+                                      <input
+                                        type="text"
+                                        value={action.config?.retellAgentId || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'retellAgentId', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                        placeholder="Retell Agent ID (leave empty for default)"
+                                      />
+                                    )}
+                                    {actionDef?.configFields?.includes('jobType') && (
+                                      <input
+                                        type="text"
+                                        value={action.config?.jobType || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'jobType', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                        placeholder="Job type, e.g. Sales Prospect, Support"
                                       />
                                     )}
                                     {actionDef?.configFields?.includes('status') && (

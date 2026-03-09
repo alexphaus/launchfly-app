@@ -59,6 +59,7 @@ const AUTOMATION_EVENTS = [
 ];
 
 const AUTOMATION_ACTIONS = [
+  { id: 'ai_response', label: 'AI Response', icon: '🤖', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: [] },
@@ -77,7 +78,7 @@ const DEFAULT_ACTIONS_BY_EVENT = {
     { type: 'notify_owner', config: { message: '📞 Missed call from {phone} — auto-reply sent ✅' } },
   ],
   inbound_whatsapp: [
-    { type: 'notify_owner', config: { message: '💬 New WhatsApp from {customerName}: {message}' } },
+    { type: 'ai_response', config: {} },
   ],
   booking_created: [
     { type: 'notify_owner', config: { message: '📅 New booking from {customerName} ({phone})' } },

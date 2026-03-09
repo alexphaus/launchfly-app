@@ -67,6 +67,7 @@ export const AVAILABLE_EVENTS = [
 // ─── Available Actions ───────────────────────────────────────────────────
 
 export const AVAILABLE_ACTIONS = [
+  { id: 'ai_response', label: 'AI Response', icon: '🤖', desc: 'Let the AI assistant respond to the customer using the configured persona, tools, and knowledge base', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp Message', icon: '💬', desc: 'Send a text message via WhatsApp', configFields: ['message'] },
   { id: 'start_sequence', label: 'Start Follow-up Sequence', icon: '🔄', desc: 'Begin the AI follow-up sequence for this lead' },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', desc: 'Trigger a Retell AI voice call' },
@@ -166,6 +167,19 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
   const cfg = action.config || {};
 
   switch (action.type) {
+    case 'ai_response': {
+      if (!ctx.phone || !ctx.businessId) return { ok: false, detail: 'Missing phone or businessId' };
+      if (!ctx.message) return { ok: false, detail: 'No message to respond to' };
+      const { handleAIResponse } = await import('@/lib/automations/ai-brain');
+      const result = await handleAIResponse({
+        businessId: ctx.businessId,
+        phone: ctx.phone,
+        messageText: ctx.message,
+        messageSid: ctx.metadata?.messageSid as string | undefined,
+      });
+      return { ok: true, detail: `AI replied (${result.toolsCalled.length} tools: ${result.toolsCalled.join(', ') || 'none'})` };
+    }
+
     case 'send_whatsapp': {
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);

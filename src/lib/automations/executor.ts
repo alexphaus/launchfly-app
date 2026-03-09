@@ -515,6 +515,7 @@ async function scheduleResume(
           amount: ctx.amount,
           metadata: ctx.metadata,
         },
+        scheduledAt: new Date().toISOString(),
       }),
     });
     console.log(`[automation] Scheduled ${remainingActions.length} actions after ${delaySeconds}s delay`);

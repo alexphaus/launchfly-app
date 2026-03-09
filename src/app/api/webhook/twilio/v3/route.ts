@@ -132,7 +132,7 @@ function resolveBusinessIdFromMessage(text: string): string | null {
   return null;
 }
 
-/** Send a "scan your sticker" fallback when no business could be resolved */
+/** Generic fallback when no business could be resolved */
 async function sendFallbackReply(to: string) {
   try {
     const twilio = (await import('twilio')).default;
@@ -149,7 +149,7 @@ async function sendFallbackReply(to: string) {
     await client.messages.create({
       from: fromNum.startsWith('whatsapp:') ? fromNum : `whatsapp:${fromNum}`,
       to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-      body: "Hi! 👋 To connect you with the right business, please scan the service sticker on your unit or let me know which business you're trying to reach.",
+      body: "Hi! 👋 I couldn't identify which business you're trying to reach. Could you let me know the business name?",
     });
   } catch (e) {
     console.error('[v3] Fallback reply failed:', e);

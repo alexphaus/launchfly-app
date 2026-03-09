@@ -58,6 +58,7 @@ const AUTOMATION_EVENTS = [
   { id: 'customer_replied', label: 'Customer Replied', icon: '↩️' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱' },
+  { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕' },
 ];
 
 const AUTOMATION_ACTIONS = [
@@ -69,6 +70,10 @@ const AUTOMATION_ACTIONS = [
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
   { id: 'send_template', label: 'Send Template', icon: '📝', configFields: ['templateSid', 'contentVars'] },
+  { id: 'send_email', label: 'Send Email', icon: '📧', configFields: ['emailSubject', 'emailBody'] },
+  { id: 'send_sms', label: 'Send SMS', icon: '📱', configFields: ['message'] },
+  { id: 'add_tag', label: 'Add Tag', icon: '🏷️', configFields: ['tag'] },
+  { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', configFields: ['tag'] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -113,6 +118,10 @@ const DEFAULT_ACTIONS_BY_EVENT = {
   ],
   call_completed: [
     { type: 'send_whatsapp', config: { message: 'Hey {customerName} 👋 Just tried to call. I have something quick to show you — reply START when you\'re ready!' } },
+  ],
+  new_lead_created: [
+    { type: 'add_tag', config: { tag: 'new_lead' } },
+    { type: 'notify_owner', config: { message: '🆕 New lead: {customerName} ({phone})' } },
   ],
 };
 
@@ -1489,6 +1498,33 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                           Template variables map to {'{{1}}'}, {'{{2}}'}, etc. in order. Supports {'{ }'} placeholders.
                                         </p>
                                       </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('emailSubject') && (
+                                      <div className="space-y-1.5">
+                                        <input
+                                          type="text"
+                                          value={action.config?.emailSubject || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'emailSubject', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="Email subject... use {firstName}, {businessName}"
+                                        />
+                                        <textarea
+                                          value={action.config?.emailBody || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'emailBody', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                          rows={4}
+                                          placeholder="Email body... use {firstName}, {businessName}, {amount}. Line breaks become <br> in the email."
+                                        />
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('tag') && (
+                                      <input
+                                        type="text"
+                                        value={action.config?.tag || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'tag', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                        placeholder="e.g. hot_lead, vip, kitchen_remodel"
+                                      />
                                     )}
                                   </div>
                                 </div>

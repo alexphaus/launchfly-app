@@ -63,6 +63,7 @@ export const AVAILABLE_EVENTS = [
   { id: 'quote_sent', label: 'Quote / Email Sent', icon: '📧', desc: 'A quote or email was sent to a prospect' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡', desc: 'POST from Zapier, Make, or any external tool' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱', desc: 'Retell AI call ended — check outcome in metadata' },
+  { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕', desc: 'A new customer/lead record is created for the first time' },
 ] as const;
 
 // ─── Available Actions ───────────────────────────────────────────────────
@@ -76,6 +77,10 @@ export const AVAILABLE_ACTIONS = [
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', desc: 'Set customer status in database', configFields: ['status'] },
   { id: 'send_template', label: 'Send WhatsApp Template', icon: '📝', desc: 'Send a pre-approved WhatsApp template', configFields: ['templateSid'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', desc: 'Pause the workflow for a set number of hours', configFields: ['delayHours'] },
+  { id: 'send_email', label: 'Send Email', icon: '📧', desc: 'Send an email to the customer', configFields: ['emailSubject', 'emailBody'] },
+  { id: 'send_sms', label: 'Send SMS', icon: '📱', desc: 'Send a plain SMS text message (non-WhatsApp)', configFields: ['message'] },
+  { id: 'add_tag', label: 'Add Tag', icon: '🏷️', desc: 'Add a tag to the customer for segmentation', configFields: ['tag'] },
+  { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', desc: 'Remove a tag from the customer', configFields: ['tag'] },
 ] as const;
 
 // ─── Template Filling ────────────────────────────────────────────────────
@@ -245,6 +250,17 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
           status: 'lead',
           source: (ctx.metadata?.source as string) || 'automation',
         }, { onConflict: 'business_id,email' });
+
+        // Fire new_lead_created (non-blocking — avoid infinite loops by checking event)
+        if (ctx.event !== 'new_lead_created') {
+          fireEvent({
+            businessId: ctx.businessId,
+            event: 'new_lead_created',
+            phone: phoneNorm,
+            customerName: ctx.customerName,
+            metadata: { source: 'voice_call_auto' },
+          }).catch(err => console.warn('[automation] new_lead_created fire error:', err));
+        }
       }
 
       if (!lead) return { ok: false, detail: 'Failed to resolve lead for voice call' };
@@ -377,6 +393,102 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       // Save to chat_history so v2 webhook can trace business on customer reply
       await saveToChatHistory(ctx.phone, ctx.businessId, `[Template: ${templateSid}]`);
       return { ok: true, detail: `Template ${templateSid} sent to ${ctx.phone}` };
+    }
+
+    case 'send_email': {
+      const subject = cfg.emailSubject as string;
+      const body = cfg.emailBody as string;
+      if (!subject || !body) return { ok: false, detail: 'Missing email subject or body' };
+
+      // Resolve customer email from phone
+      const supabase = getSupabase();
+      let toEmail = cfg.emailTo as string | undefined;
+      if (!toEmail && ctx.phone) {
+        const phoneN = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+        const { data: cust } = await supabase
+          .from('customers')
+          .select('email')
+          .eq('business_id', ctx.businessId)
+          .or(`phone.eq.${phoneN},phone.eq.${phoneN.replace(/^\+/, '')}`)
+          .maybeSingle();
+        toEmail = cust?.email;
+      }
+      if (!toEmail || toEmail.endsWith('@lead.placeholder')) {
+        return { ok: false, detail: 'No valid email address for this customer' };
+      }
+
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.FROM_EMAIL || 'hello@launchfly.ai';
+      const filledSubject = fillVars(subject, ctx);
+      const filledBody = fillVars(body, ctx);
+
+      await resend.emails.send({
+        from: `${ctx.businessName || 'Launchfly'} <${fromEmail}>`,
+        to: toEmail,
+        subject: filledSubject,
+        html: filledBody.replace(/\n/g, '<br>'),
+      });
+      return { ok: true, detail: `Email sent to ${toEmail}: ${filledSubject}` };
+    }
+
+    case 'send_sms': {
+      if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
+      const smsMsg = fillVars(cfg.message as string, ctx);
+      const smsFrom = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_WHATSAPP_NUMBER;
+      if (!smsFrom) return { ok: false, detail: 'Missing TWILIO_SMS_NUMBER' };
+      const twilio = (await import('twilio')).default;
+      const smsClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const phoneForSms = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      await smsClient.messages.create({
+        from: smsFrom.replace(/^whatsapp:/, ''),
+        to: phoneForSms,
+        body: smsMsg,
+      });
+      return { ok: true, detail: `SMS sent to ${phoneForSms}` };
+    }
+
+    case 'add_tag': {
+      const tag = (cfg.tag as string)?.trim();
+      if (!ctx.phone || !tag) return { ok: false, detail: 'Missing phone or tag' };
+      const supabase = getSupabase();
+      const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      // Append tag to the tags array if not already present
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('id, tags')
+        .eq('business_id', ctx.businessId)
+        .or(`phone.eq.${phoneNorm},phone.eq.${phoneNorm.replace(/^\+/, '')}`)
+        .maybeSingle();
+      if (!cust) return { ok: false, detail: 'Customer not found' };
+      const currentTags: string[] = cust.tags || [];
+      if (currentTags.includes(tag)) return { ok: true, detail: `Tag "${tag}" already present` };
+      await supabase
+        .from('customers')
+        .update({ tags: [...currentTags, tag] })
+        .eq('id', cust.id);
+      return { ok: true, detail: `Tag "${tag}" added` };
+    }
+
+    case 'remove_tag': {
+      const tag = (cfg.tag as string)?.trim();
+      if (!ctx.phone || !tag) return { ok: false, detail: 'Missing phone or tag' };
+      const supabase = getSupabase();
+      const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('id, tags')
+        .eq('business_id', ctx.businessId)
+        .or(`phone.eq.${phoneNorm},phone.eq.${phoneNorm.replace(/^\+/, '')}`)
+        .maybeSingle();
+      if (!cust) return { ok: false, detail: 'Customer not found' };
+      const currentTags: string[] = cust.tags || [];
+      if (!currentTags.includes(tag)) return { ok: true, detail: `Tag "${tag}" not present` };
+      await supabase
+        .from('customers')
+        .update({ tags: currentTags.filter(t => t !== tag) })
+        .eq('id', cust.id);
+      return { ok: true, detail: `Tag "${tag}" removed` };
     }
 
     default:

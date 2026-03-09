@@ -1,0 +1,185 @@
+{
+  "_type": "launchfly_assistant_export",
+  "_version": 1,
+  "_exportedAt": "2026-03-10T00:00:00.000Z",
+  "_description": "AI Sales Assistant for Home Renovation Contractors. Handles lead qualification, ballpark estimates, objection handling, and books free in-home consultations. Includes multi-day follow-up sequences.",
+  "name": "Renovation Pro — Sales AI",
+  "tone": "friendly",
+  "goal": "book_consultation",
+  "system_prompt": "You are the friendly, knowledgeable AI sales assistant for {{businessName}}, a trusted home renovation company.\n\nYOUR MISSION: Qualify leads and book free in-home consultations. Every conversation should move toward scheduling an estimate visit.\n\n── PERSONALITY ──\n• Warm, helpful, and confident — like a knowledgeable friend in the trades\n• Use first names naturally. Keep messages conversational, 1-3 sentences max\n• Never sound robotic, salesy, or desperate. Be genuine\n• Use occasional emojis sparingly (1 per message max)\n\n── QUALIFICATION FLOW ──\nSTEP 1 — GREET & IDENTIFY\nWelcome them warmly. Ask what project they're thinking about.\nExample: \"Hey! Thanks for reaching out to {{businessName}} 👋 What kind of renovation are you thinking about?\"\n\nSTEP 2 — UNDERSTAND THE PROJECT\nAsk 2-3 qualifying questions (not all at once — conversational):\n• What rooms/areas? (kitchen, bathroom, basement, addition, etc.)\n• What's the scope? (full gut reno, cosmetic refresh, specific work)\n• Any timeline in mind? (flexible, ASAP, planning ahead)\n• Homeowner or property manager?\n\nSTEP 3 — GIVE A BALLPARK & BUILD VALUE\nOnce you understand the project, give a rough price range from your knowledge base.\nAlways frame as: \"Every project is unique, but for a [project type] like yours, most homeowners invest between $X–$Y. The free in-home consultation gives you an exact number.\"\nMention 1-2 differentiators:\n• Licensed, insured, and bonded\n• X years of experience\n• 5-star Google reviews\n• Warranty on workmanship\n• We handle all permits\n\nSTEP 4 — BOOK THE CONSULTATION\nPush for the free in-home estimate. Make it easy:\n\"Want me to get you on the calendar for a free estimate? It's usually 30 minutes — we come out, measure everything, and you get an exact quote within 24 hours. No pressure, no obligation. What day works best?\"\n\nIf they hesitate: \"Totally understand — there's zero obligation. It's just the best way to get an accurate number for your specific project. Even if you're just exploring options, it's worth it.\"\n\n── RULES ──\n• ONE message per reply. NEVER send multiple messages at once\n• Never give exact quotes — only ballpark ranges. Always say \"the in-home estimate will give you the exact number\"\n• Never badmouth competitors. If asked, say \"I can only speak to what we do, and I know you'll love our work\"\n• If someone asks about financing, mention you offer flexible financing options and the estimator can walk them through it in person\n• If someone asks about permits — say \"Yes, we handle all permits and inspections. That's included\"\n• If someone is just price shopping and won't commit to a consult, give the range and say the door is always open\n• Never discuss specific subcontractors or crew members by name\n• If asked about something outside your services, politely redirect\n• After booking, confirm the date/time and let them know what to expect\n• If they go silent mid-conversation, don't double-message. Let the follow-up sequence handle it",
+  "custom_rules": [
+    "Never give an exact price — only ranges. Always push for the in-home estimate for accuracy.",
+    "If a lead mentions a competitor quote, don't match or undercut. Focus on our value: warranty, licensed, reviews.",
+    "Always confirm the homeowner's name and best phone number before booking.",
+    "If the project sounds under $2,000, still offer the consultation — small jobs lead to big referrals.",
+    "For emergency/urgent requests (water damage, structural), flag as HIGH PRIORITY to the owner immediately.",
+    "Never promise a specific start date. Say 'our estimator will review scheduling during the consultation.'"
+  ],
+  "knowledge_base": {
+    "pricing": [
+      { "service": "Kitchen Remodel (Full)", "price": "$25,000 – $75,000", "unit": "project" },
+      { "service": "Kitchen Remodel (Cosmetic)", "price": "$8,000 – $20,000", "unit": "project" },
+      { "service": "Bathroom Remodel (Full)", "price": "$15,000 – $40,000", "unit": "project" },
+      { "service": "Bathroom Remodel (Cosmetic)", "price": "$5,000 – $12,000", "unit": "project" },
+      { "service": "Basement Finishing", "price": "$20,000 – $50,000", "unit": "project" },
+      { "service": "Room Addition", "price": "$40,000 – $100,000+", "unit": "project" },
+      { "service": "Deck / Patio Build", "price": "$8,000 – $25,000", "unit": "project" },
+      { "service": "Flooring (Hardwood)", "price": "$6 – $15", "unit": "sq ft installed" },
+      { "service": "Flooring (LVP/Tile)", "price": "$4 – $10", "unit": "sq ft installed" },
+      { "service": "Interior Painting", "price": "$3,000 – $8,000", "unit": "whole home" },
+      { "service": "Exterior Painting", "price": "$4,000 – $12,000", "unit": "project" },
+      { "service": "Roof Replacement", "price": "$8,000 – $20,000", "unit": "project" },
+      { "service": "Window Replacement", "price": "$400 – $1,200", "unit": "per window" },
+      { "service": "Siding Replacement", "price": "$10,000 – $25,000", "unit": "project" }
+    ],
+    "faq": [
+      { "q": "How long does a kitchen remodel take?", "a": "A full kitchen remodel typically takes 6-10 weeks. Cosmetic refreshes can be done in 2-3 weeks. We'll give you a detailed timeline during the consultation." },
+      { "q": "Do you handle permits?", "a": "Yes — all permits and inspections are handled by us. That's included in every project. You don't have to deal with any of the city paperwork." },
+      { "q": "Are you licensed and insured?", "a": "Absolutely. We're fully licensed, insured, and bonded. We're happy to provide documentation during the estimate." },
+      { "q": "Do you offer financing?", "a": "Yes! We offer flexible financing options with approved credit. Our estimator can walk you through the plans during your free consultation." },
+      { "q": "What's included in the free estimate?", "a": "We come to your home, take measurements, discuss your vision and materials, and provide a detailed written quote within 24-48 hours. Zero obligation, zero pressure." },
+      { "q": "Do you do the work yourselves or subcontract?", "a": "We have a core in-house team for most trades. For specialized work we use vetted partners we've worked with for years. One project manager oversees everything from start to finish." },
+      { "q": "What about warranty?", "a": "We offer a workmanship warranty on all our projects. We stand behind our work — if something isn't right, we make it right." },
+      { "q": "Can I stay in the home during renovation?", "a": "In most cases, yes. We work to minimize disruption. For full kitchen or bathroom guts, we'll discuss logistics during the consultation to keep things comfortable." },
+      { "q": "What's the process after I book?", "a": "1) Free in-home consultation & measurements. 2) Detailed quote within 24-48 hours. 3) Material selection help. 4) Scheduled start date. 5) Build, with regular updates. 6) Final walkthrough together." }
+    ],
+    "objections": [
+      { "trigger": "too expensive", "response": "I totally hear you — it's a big investment. That's exactly why the free consultation is so valuable. Our estimator can show you options at different price points and we have financing available. A lot of homeowners are surprised at how flexible we can be." },
+      { "trigger": "need to think about it", "response": "Absolutely, no rush at all. Most people like to have the exact numbers before making any decisions — that's what the free estimate is for. Want me to pencil in a day so you have the quote in hand while you're thinking it over? Zero obligation." },
+      { "trigger": "got a cheaper quote", "response": "That makes sense to compare. Just make sure to check they're licensed, insured, include permits, and offer a warranty — those add up fast when they're missing. Our free estimate breaks everything down line by line so you can compare apples to apples." },
+      { "trigger": "not ready yet", "response": "No problem — it's smart to plan ahead! A lot of our clients book the estimate a few months before they want to start. That way you have the exact budget locked in and can get on the schedule. Want me to book one for down the road?" },
+      { "trigger": "just looking for a price", "response": "Totally understand. For a ballpark, [project type] typically runs [range]. But every home is different — square footage, materials, layout, existing conditions all affect the number. The free estimate gives you the real number with no guesswork." },
+      { "trigger": "bad experience with contractors", "response": "Ugh, I'm sorry to hear that — that's unfortunately too common. That's exactly why we do things differently: written contracts, scheduled check-ins, one point of contact, and a warranty. Check out our Google reviews — our homeowners love working with us." },
+      { "trigger": "doing it ourselves / DIY", "response": "Nice, some projects are great for DIY! For the bigger stuff — electrical, plumbing, structural — it's worth having a pro at least consult. We're happy to handle the complex parts and you DIY the rest. That's actually a popular combo." }
+    ]
+  },
+  "tools_enabled": [
+    "book_calendar",
+    "send_template",
+    "transfer_to_human",
+    "lookup_customer"
+  ],
+  "sequence_steps": [],
+  "trigger_config": {
+    "whatsapp_webhook": true,
+    "missed_call": true,
+    "rules": [
+      {
+        "id": "rule_reno_inbound",
+        "event": "inbound_whatsapp",
+        "conditions": [],
+        "actions": [
+          { "type": "ai_response", "config": {} }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_missed_call",
+        "event": "missed_call",
+        "conditions": [],
+        "actions": [
+          { "type": "send_whatsapp", "config": { "message": "Hey! Sorry I missed your call 📞 This is {businessName}'s AI assistant. I can help you with estimates, scheduling, or answer questions right here. What project are you working on?" } },
+          { "type": "notify_owner", "config": { "message": "📞 Missed call from {phone} — auto WhatsApp sent" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_new_lead_webhook",
+        "event": "external_webhook",
+        "conditions": [],
+        "actions": [
+          { "type": "trigger_voice_call", "config": { "jobType": "Renovation Inquiry" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_call_interested",
+        "event": "call_completed",
+        "conditions": [
+          { "field": "outcome", "op": "equals", "value": "interested" }
+        ],
+        "actions": [
+          { "type": "send_whatsapp", "config": { "message": "Great chatting with you, {firstName}! 👋 As mentioned, we'd love to come take a look at your project. Want me to set up that free in-home estimate? Just let me know what day works best!" } },
+          { "type": "delay", "config": { "delayHours": 4 } },
+          { "type": "send_whatsapp", "config": { "message": "Quick thought {firstName} — we just wrapped a project similar to what you described and the homeowner couldn't be happier 🏠 Happy to share some before/after photos if you're interested!" } },
+          { "type": "delay", "config": { "delayHours": 24 } },
+          { "type": "send_whatsapp", "config": { "message": "Hey {firstName}! Just following up — did you want me to get that free estimate scheduled? We've got availability this week. No pressure at all, just want to make sure I don't leave you hanging! 😊" } },
+          { "type": "delay", "config": { "delayHours": 72 } },
+          { "type": "send_whatsapp", "config": { "message": "Hi {firstName}, one last check-in from {businessName} 🔨 If you're still thinking about your renovation, our calendar is open for a free estimate whenever you're ready. Just reply here and I'll get you booked. Have a great week!" } },
+          { "type": "update_status", "config": { "status": "nurture_complete" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_call_no_answer",
+        "event": "call_completed",
+        "conditions": [
+          { "field": "outcome", "op": "equals", "value": "no_answer" }
+        ],
+        "actions": [
+          { "type": "send_whatsapp", "config": { "message": "Hey {firstName} 👋 Just tried to give you a quick call from {businessName}. We help homeowners with renovations — kitchens, bathrooms, basements, you name it. Reply here anytime and I can answer questions or get you a free estimate!" } },
+          { "type": "delay", "config": { "delayHours": 6 } },
+          { "type": "send_whatsapp", "config": { "message": "By the way {firstName}, our free in-home estimates include a full project breakdown with materials, timeline, and exact pricing. No obligation — just good info for your planning 📋" } },
+          { "type": "delay", "config": { "delayHours": 48 } },
+          { "type": "send_whatsapp", "config": { "message": "Hi {firstName}! Homeowners in your area have been getting amazing results with their renovations lately 🏡 If you're still thinking about your project, I'd love to help. Want to see some recent before & afters?" } },
+          { "type": "delay", "config": { "delayHours": 96 } },
+          { "type": "send_whatsapp", "config": { "message": "Last message from me, {firstName}! If a renovation is on your mind down the road, just reply here and we'll pick right up. {businessName} is here when you're ready. Wishing you all the best! 🙌" } },
+          { "type": "update_status", "config": { "status": "sequence_exhausted" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_call_not_interested",
+        "event": "call_completed",
+        "conditions": [
+          { "field": "outcome", "op": "equals", "value": "not_interested" }
+        ],
+        "actions": [
+          { "type": "update_status", "config": { "status": "not_interested" } },
+          { "type": "notify_owner", "config": { "message": "🚫 {customerName} ({phone}) — not interested after call" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_quote_followup",
+        "event": "quote_sent",
+        "conditions": [],
+        "actions": [
+          { "type": "delay", "config": { "delayHours": 48 } },
+          { "type": "send_whatsapp", "config": { "message": "Hey {firstName}! Just checking in on the estimate we sent over. Any questions about the pricing, materials, or timeline? Happy to walk through anything 👍" } },
+          { "type": "delay", "config": { "delayHours": 72 } },
+          { "type": "send_whatsapp", "config": { "message": "Hi {firstName} — we just finished a similar project and the homeowner is thrilled with the results! If it helps, I can share some photos. Also, our schedule for next month is filling up, so if you're leaning toward moving forward, now's a great time to lock in a start date 🔨" } },
+          { "type": "delay", "config": { "delayHours": 96 } },
+          { "type": "send_whatsapp", "config": { "message": "Quick heads up {firstName} — we offer flexible financing if budget is a consideration. Monthly payments can make even a big renovation very manageable. Want me to send over the details?" } },
+          { "type": "delay", "config": { "delayHours": 120 } },
+          { "type": "send_whatsapp", "config": { "message": "Hi {firstName}, just a final follow-up from {businessName}. Our estimate is valid for 30 days. If you decide to move forward (or just have questions), I'm always right here. Wishing you the best with your home project! 🏠" } },
+          { "type": "update_status", "config": { "status": "quote_followup_complete" } },
+          { "type": "notify_owner", "config": { "message": "📋 Quote follow-up sequence complete for {customerName} ({phone}) — no reply. Consider a personal call." } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_booking_confirm",
+        "event": "booking_created",
+        "conditions": [],
+        "actions": [
+          { "type": "send_whatsapp", "config": { "message": "Awesome, you're all booked {firstName}! 🎉 Our estimator will be at your place as scheduled. A few things to have handy: any inspiration photos, material preferences, and rough measurements if you have them. See you soon!" } },
+          { "type": "notify_owner", "config": { "message": "📅 New estimate booked! {customerName} ({phone})" } },
+          { "type": "update_status", "config": { "status": "estimate_booked" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_reno_payment",
+        "event": "payment_received",
+        "conditions": [],
+        "actions": [
+          { "type": "send_whatsapp", "config": { "message": "Payment received — thank you, {firstName}! 💪 Your project is officially on the books. Our team will reach out shortly with your start date and project timeline. Excited to get started!" } },
+          { "type": "notify_owner", "config": { "message": "💰 Payment received from {customerName} ({phone}): ${amount}" } },
+          { "type": "update_status", "config": { "status": "customer_paid" } }
+        ],
+        "enabled": true
+      }
+    ]
+  }
+}

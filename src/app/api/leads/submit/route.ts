@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { sendLeadNotification, sendJobCard, sendQuoteConfirmation, sendSlotSuggester } from '@/lib/whatsapp-push';
 import { inngest, EVENTS } from '@/lib/inngest/client';
+import { fireEvent } from '@/lib/automations/executor';
 
 export async function POST(req: Request) {
     try {
@@ -141,6 +142,16 @@ export async function POST(req: Request) {
         } else {
             console.warn('⚠️ No owner phone found for business:', business.name);
         }
+
+        // Fire new_lead_created automation event
+        fireEvent({
+          businessId,
+          event: 'new_lead_created',
+          phone: formData.phone,
+          customerName: formData.name || 'Customer',
+          message: notes || '',
+          metadata: { source: 'web_form', type: formData.type },
+        }).catch(err => console.error('[leads/submit] new_lead_created event error:', err));
 
         return NextResponse.json({ success: true, leadId: customer.id });
     } catch (error) {

@@ -26,16 +26,26 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Retell sends: call_id, call_status, metadata, transcript, call_analysis, etc.
-    const callId = body.call_id as string;
-    const callStatus = body.call_status as string; // ended, error
-    const metadata = (body.metadata || {}) as Record<string, unknown>;
+    // Retell v2 webhook wraps payload in { event, call: {...} }
+    // Also handle legacy flat format just in case
+    const event = body.event as string | undefined;
+    const call = (body.call || body) as Record<string, unknown>;
+
+    // Only process call_ended or call_analyzed events (skip call_started)
+    if (event && event !== 'call_ended' && event !== 'call_analyzed') {
+      console.log(`[retell/webhook] Ignoring event: ${event}`);
+      return NextResponse.json({ ok: true, skipped: true, reason: `event=${event}` });
+    }
+
+    const callId = call.call_id as string;
+    const callStatus = (call.call_status as string) || 'ended';
+    const metadata = (call.metadata || {}) as Record<string, unknown>;
     const leadId = (metadata.lead_id as string) || '';
-    const analysis = (body.call_analysis || {}) as Record<string, unknown>;
+    const analysis = (call.call_analysis || {}) as Record<string, unknown>;
     const sentiment = (analysis.user_sentiment as string) || 'unknown';
     const summary = (analysis.call_summary as string) || '';
 
-    console.log(`[retell/webhook] Call ${callId} status=${callStatus} lead=${leadId} sentiment=${sentiment}`);
+    console.log(`[retell/webhook] event=${event || 'flat'} call=${callId} status=${callStatus} lead=${leadId} sentiment=${sentiment}`);
 
     if (!leadId) {
       console.warn('[retell/webhook] No lead_id in metadata — skipping');

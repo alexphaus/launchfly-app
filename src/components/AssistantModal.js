@@ -321,52 +321,62 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
   // ── Knowledge base helpers ─────────────────────────────────────────────
   const addKBItem = (section) => {
-    const kb = { ...config.knowledge_base };
-    if (section === 'pricing') {
-      kb.pricing = [...(kb.pricing || []), { service: '', price: '', unit: 'job' }];
-    } else if (section === 'faq') {
-      kb.faq = [...(kb.faq || []), { q: '', a: '' }];
-    } else if (section === 'objections') {
-      kb.objections = [...(kb.objections || []), { trigger: '', response: '' }];
-    }
-    setConfig({ ...config, knowledge_base: kb });
+    setConfig(prev => {
+      const kb = { ...prev.knowledge_base };
+      if (section === 'pricing') {
+        kb.pricing = [...(kb.pricing || []), { service: '', price: '', unit: 'job' }];
+      } else if (section === 'faq') {
+        kb.faq = [...(kb.faq || []), { q: '', a: '' }];
+      } else if (section === 'objections') {
+        kb.objections = [...(kb.objections || []), { trigger: '', response: '' }];
+      }
+      return { ...prev, knowledge_base: kb };
+    });
   };
 
   const updateKBItem = (section, index, field, value) => {
-    const kb = { ...config.knowledge_base };
-    kb[section] = [...kb[section]];
-    kb[section][index] = { ...kb[section][index], [field]: value };
-    setConfig({ ...config, knowledge_base: kb });
+    setConfig(prev => {
+      const kb = { ...prev.knowledge_base };
+      kb[section] = [...kb[section]];
+      kb[section][index] = { ...kb[section][index], [field]: value };
+      return { ...prev, knowledge_base: kb };
+    });
   };
 
   const removeKBItem = (section, index) => {
-    const kb = { ...config.knowledge_base };
-    kb[section] = kb[section].filter((_, i) => i !== index);
-    setConfig({ ...config, knowledge_base: kb });
+    setConfig(prev => {
+      const kb = { ...prev.knowledge_base };
+      kb[section] = kb[section].filter((_, i) => i !== index);
+      return { ...prev, knowledge_base: kb };
+    });
   };
 
   // ── Tool toggle ────────────────────────────────────────────────────────
   const toggleTool = (toolId) => {
-    const tools = config.tools_enabled.includes(toolId)
-      ? config.tools_enabled.filter(t => t !== toolId)
-      : [...config.tools_enabled, toolId];
-    setConfig({ ...config, tools_enabled: tools });
+    setConfig(prev => {
+      const tools = prev.tools_enabled.includes(toolId)
+        ? prev.tools_enabled.filter(t => t !== toolId)
+        : [...prev.tools_enabled, toolId];
+      return { ...prev, tools_enabled: tools };
+    });
   };
 
   // ── Automation rule helpers ─────────────────────────────────────────────
+  const getRulesFrom = (cfg) => cfg.trigger_config?.rules || [];
   const getRules = () => config.trigger_config?.rules || [];
 
-  const setRules = (rules) => {
-    setConfig({
-      ...config,
-      trigger_config: { ...config.trigger_config, rules },
+  const setRules = (updater) => {
+    setConfig(prev => {
+      const prevRules = getRulesFrom(prev);
+      const rules = typeof updater === 'function' ? updater(prevRules) : updater;
+      return { ...prev, trigger_config: { ...prev.trigger_config, rules } };
     });
   };
 
   const addRule = () => {
     const defaultEvent = 'missed_call';
     const defaultActions = (DEFAULT_ACTIONS_BY_EVENT[defaultEvent] || []).map(a => ({ ...a, config: { ...a.config } }));
-    setRules([...getRules(), {
+    setRules(prev => [...prev, {
       id: `rule_${Date.now()}`,
       event: defaultEvent,
       conditions: [],
@@ -376,84 +386,100 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   };
 
   const updateRule = (index, field, value) => {
-    const rules = [...getRules()];
-    rules[index] = { ...rules[index], [field]: value };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      rules[index] = { ...rules[index], [field]: value };
+      return rules;
+    });
   };
 
   const removeRule = (index) => {
-    setRules(getRules().filter((_, i) => i !== index));
+    setRules(prev => prev.filter((_, i) => i !== index));
   };
 
   const addActionToRule = (ruleIndex) => {
-    const rules = [...getRules()];
-    rules[ruleIndex] = {
-      ...rules[ruleIndex],
-      actions: [...rules[ruleIndex].actions, { type: 'send_whatsapp', config: { message: '' } }],
-    };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      rules[ruleIndex] = {
+        ...rules[ruleIndex],
+        actions: [...rules[ruleIndex].actions, { type: 'send_whatsapp', config: { message: '' } }],
+      };
+      return rules;
+    });
   };
 
   const updateActionInRule = (ruleIndex, actionIndex, field, value) => {
-    const rules = [...getRules()];
-    const actions = [...rules[ruleIndex].actions];
-    if (field === 'type') {
-      actions[actionIndex] = { type: value, config: {} };
-    } else {
-      actions[actionIndex] = { ...actions[actionIndex], config: { ...actions[actionIndex].config, [field]: value } };
-    }
-    rules[ruleIndex] = { ...rules[ruleIndex], actions };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      if (field === 'type') {
+        actions[actionIndex] = { type: value, config: {} };
+      } else {
+        actions[actionIndex] = { ...actions[actionIndex], config: { ...actions[actionIndex].config, [field]: value } };
+      }
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
+      return rules;
+    });
   };
 
   const removeActionFromRule = (ruleIndex, actionIndex) => {
-    const rules = [...getRules()];
-    rules[ruleIndex] = {
-      ...rules[ruleIndex],
-      actions: rules[ruleIndex].actions.filter((_, i) => i !== actionIndex),
-    };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      rules[ruleIndex] = {
+        ...rules[ruleIndex],
+        actions: rules[ruleIndex].actions.filter((_, i) => i !== actionIndex),
+      };
+      return rules;
+    });
   };
 
   const addConditionToRule = (ruleIndex) => {
-    const rules = [...getRules()];
-    rules[ruleIndex] = {
-      ...rules[ruleIndex],
-      conditions: [...(rules[ruleIndex].conditions || []), { field: 'message', op: 'contains', value: '' }],
-    };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      rules[ruleIndex] = {
+        ...rules[ruleIndex],
+        conditions: [...(rules[ruleIndex].conditions || []), { field: 'message', op: 'contains', value: '' }],
+      };
+      return rules;
+    });
   };
 
   const updateConditionInRule = (ruleIndex, condIndex, field, value) => {
-    const rules = [...getRules()];
-    const conditions = [...(rules[ruleIndex].conditions || [])];
-    conditions[condIndex] = { ...conditions[condIndex], [field]: value };
-    rules[ruleIndex] = { ...rules[ruleIndex], conditions };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      const conditions = [...(rules[ruleIndex].conditions || [])];
+      conditions[condIndex] = { ...conditions[condIndex], [field]: value };
+      rules[ruleIndex] = { ...rules[ruleIndex], conditions };
+      return rules;
+    });
   };
 
   const removeConditionFromRule = (ruleIndex, condIndex) => {
-    const rules = [...getRules()];
-    rules[ruleIndex] = {
-      ...rules[ruleIndex],
-      conditions: (rules[ruleIndex].conditions || []).filter((_, i) => i !== condIndex),
-    };
-    setRules(rules);
+    setRules(prev => {
+      const rules = [...prev];
+      rules[ruleIndex] = {
+        ...rules[ruleIndex],
+        conditions: (rules[ruleIndex].conditions || []).filter((_, i) => i !== condIndex),
+      };
+      return rules;
+    });
   };
 
   // ── Custom rule helpers ────────────────────────────────────────────────
   const addCustomRule = () => {
-    setConfig({ ...config, custom_rules: [...config.custom_rules, ''] });
+    setConfig(prev => ({ ...prev, custom_rules: [...prev.custom_rules, ''] }));
   };
 
   const updateCustomRule = (index, value) => {
-    const rules = [...config.custom_rules];
-    rules[index] = value;
-    setConfig({ ...config, custom_rules: rules });
+    setConfig(prev => {
+      const rules = [...prev.custom_rules];
+      rules[index] = value;
+      return { ...prev, custom_rules: rules };
+    });
   };
 
   const removeCustomRule = (index) => {
-    setConfig({ ...config, custom_rules: config.custom_rules.filter((_, i) => i !== index) });
+    setConfig(prev => ({ ...prev, custom_rules: prev.custom_rules.filter((_, i) => i !== index) }));
   };
 
   if (!isOpen) return null;
@@ -587,7 +613,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     <input
                       type="text"
                       value={config.name}
-                      onChange={e => setConfig({ ...config, name: e.target.value })}
+                      onChange={e => { const v = e.target.value; setConfig(prev => ({ ...prev, name: v })); }}
                       className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                       placeholder="AI Sales Assistant"
                     />
@@ -602,7 +628,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       {TONES.map(t => (
                         <button
                           key={t.id}
-                          onClick={() => setConfig({ ...config, tone: t.id })}
+                          onClick={() => setConfig(prev => ({ ...prev, tone: t.id }))}
                           className={`p-3 rounded-xl border-2 text-left transition-all ${
                             config.tone === t.id
                               ? 'border-emerald-500 bg-emerald-50'
@@ -628,7 +654,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       {GOALS.map(g => (
                         <button
                           key={g.id}
-                          onClick={() => setConfig({ ...config, goal: g.id })}
+                          onClick={() => setConfig(prev => ({ ...prev, goal: g.id }))}
                           className={`w-full p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${
                             config.goal === g.id
                               ? 'border-emerald-500 bg-emerald-50'
@@ -692,7 +718,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     ) : (
                       <textarea
                         value={config.system_prompt || ''}
-                        onChange={e => setConfig({ ...config, system_prompt: e.target.value })}
+                        onChange={e => { const v = e.target.value; setConfig(prev => ({ ...prev, system_prompt: v })); }}
                         className="w-full p-3 border border-slate-200 rounded-xl text-sm font-mono resize-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                         rows={8}
                         placeholder={`You are the sales assistant for ${businessName}.\nYour tone is: ${config.tone}.\nYour primary goal is to: ${GOALS.find(g => g.id === config.goal)?.label || config.goal}.\n\nHere are your approved pricing guidelines:\n- ...\n\nHere is your FAQ knowledge base:\n- ...`}

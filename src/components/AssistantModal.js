@@ -17,6 +17,7 @@ import {
   ChevronDown, ChevronUp, Plus, Trash2, Save,
   Check, RefreshCw, Zap, Globe, Copy,
   Eye, ToggleLeft, ToggleRight,
+  Download, Upload, CopyPlus, AlertTriangle,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────
@@ -161,6 +162,8 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [assistantList, setAssistantList] = useState([]);
   const [currentAssistantId, setCurrentAssistantId] = useState(null);
   const [switching, setSwitching] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // ── Load assistant config ──────────────────────────────────────────────
   // Apply assistant data to local config state
@@ -257,6 +260,161 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       }
     } catch (err) {
       console.error('Failed to create assistant:', err);
+    } finally {
+      setSwitching(false);
+      setLoading(false);
+    }
+  };
+
+  // ── Export current assistant ────────────────────────────────────────
+  const exportAssistant = () => {
+    const exportData = {
+      _type: 'launchfly_assistant_export',
+      _version: 1,
+      _exportedAt: new Date().toISOString(),
+      name: config.name,
+      tone: config.tone,
+      goal: config.goal,
+      system_prompt: config.system_prompt,
+      custom_rules: config.custom_rules,
+      knowledge_base: config.knowledge_base,
+      tools_enabled: config.tools_enabled,
+      sequence_steps: config.sequence_steps,
+      trigger_config: config.trigger_config,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${config.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}_assistant.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Import assistant from file ─────────────────────────────────────────
+  const importAssistant = async (file) => {
+    if (!business?.id || importing) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (data._type !== 'launchfly_assistant_export') {
+        alert('Invalid file — not a Launchfly assistant export.');
+        return;
+      }
+      // Create new assistant with imported data
+      const res = await fetch('/api/assistants', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, createNew: true, newName: data.name || 'Imported Assistant' }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.assistant) {
+        alert('Failed to create assistant for import.');
+        return;
+      }
+      // Update with full config
+      const updateRes = await fetch('/api/assistants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: business.id,
+          assistantId: result.assistant.id,
+          name: data.name || 'Imported Assistant',
+          tone: data.tone || 'friendly',
+          goal: data.goal || 'book_consultation',
+          system_prompt: data.system_prompt ?? null,
+          custom_rules: data.custom_rules || [],
+          knowledge_base: data.knowledge_base || { pricing: [], faq: [], objections: [] },
+          tools_enabled: data.tools_enabled || [],
+          sequence_steps: data.sequence_steps || [],
+          trigger_config: data.trigger_config || {},
+        }),
+      });
+      const updated = await updateRes.json();
+      if (updateRes.ok && updated.assistant) {
+        applyAssistantData(updated.assistant);
+        loadAssistantList();
+      }
+    } catch (err) {
+      console.error('Import failed:', err);
+      alert('Import failed — invalid JSON file.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // ── Duplicate current assistant ────────────────────────────────────────
+  const duplicateAssistant = async () => {
+    if (!business?.id || switching) return;
+    setSwitching(true);
+    setShowSwitcher(false);
+    setLoading(true);
+    try {
+      // Create new assistant
+      const res = await fetch('/api/assistants', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, createNew: true, newName: config.name + ' (Copy)' }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.assistant) return;
+      // Copy full config
+      const updateRes = await fetch('/api/assistants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: business.id,
+          assistantId: result.assistant.id,
+          name: config.name + ' (Copy)',
+          tone: config.tone,
+          goal: config.goal,
+          system_prompt: config.system_prompt,
+          custom_rules: config.custom_rules,
+          knowledge_base: config.knowledge_base,
+          tools_enabled: config.tools_enabled,
+          sequence_steps: config.sequence_steps,
+          trigger_config: config.trigger_config,
+        }),
+      });
+      const updated = await updateRes.json();
+      if (updateRes.ok && updated.assistant) {
+        applyAssistantData(updated.assistant);
+        loadAssistantList();
+        loadActivity();
+      }
+    } catch (err) {
+      console.error('Duplicate failed:', err);
+    } finally {
+      setSwitching(false);
+      setLoading(false);
+    }
+  };
+
+  // ── Delete current assistant ───────────────────────────────────────────
+  const deleteAssistant = async () => {
+    if (!business?.id || !currentAssistantId || switching) return;
+    setSwitching(true);
+    setConfirmDelete(false);
+    setShowSwitcher(false);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/assistants', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, assistantId: currentAssistantId }),
+      });
+      const result = await res.json();
+      if (res.ok && result.ok) {
+        // Reload — will pick up new active or show defaults
+        await loadAssistant();
+        await loadAssistantList();
+        loadActivity();
+      }
+    } catch (err) {
+      console.error('Delete failed:', err);
     } finally {
       setSwitching(false);
       setLoading(false);
@@ -560,6 +718,45 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
                     <p className="text-sm font-medium text-blue-600">Create New Assistant</p>
                   </button>
+
+                  {/* ── Manage actions ── */}
+                  <div className="border-t border-slate-100 px-2 py-2 grid grid-cols-2 gap-1">
+                    <button
+                      onClick={() => { setShowSwitcher(false); exportAssistant(); }}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Export
+                    </button>
+                    <label
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" /> Import
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) { setShowSwitcher(false); importAssistant(file); }
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => { setShowSwitcher(false); duplicateAssistant(); }}
+                      disabled={!currentAssistantId || switching}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                    >
+                      <CopyPlus className="w-3.5 h-3.5" /> Duplicate
+                    </button>
+                    <button
+                      onClick={() => { setShowSwitcher(false); setConfirmDelete(true); }}
+                      disabled={!currentAssistantId || switching}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -568,6 +765,32 @@ export default function AssistantModal({ isOpen, onClose, business }) {
             <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
+
+        {/* ── Delete Confirmation ────────────────────────────────────── */}
+        {confirmDelete && (
+          <div className="mx-5 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">
+                Delete <strong>{config.name}</strong>? This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 ml-6">
+              <button
+                onClick={deleteAssistant}
+                className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Tab Bar ───────────────────────────────────────────────────── */}
         <div className="flex border-b border-slate-100 px-2 shrink-0">

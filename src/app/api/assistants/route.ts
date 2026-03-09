@@ -310,3 +310,66 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DELETE — Delete an assistant
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { businessId, assistantId } = (await req.json()) as { businessId: string; assistantId: string };
+
+    if (!businessId || !assistantId) {
+      return NextResponse.json({ error: 'businessId and assistantId required' }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+
+    // Verify ownership
+    const { data: target } = await supabase
+      .from('assistants')
+      .select('id, active')
+      .eq('id', assistantId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (!target) {
+      return NextResponse.json({ error: 'Assistant not found' }, { status: 404 });
+    }
+
+    // Delete it
+    const { error } = await supabase
+      .from('assistants')
+      .delete()
+      .eq('id', assistantId)
+      .eq('business_id', businessId);
+
+    if (error) {
+      console.error('[assistants] DELETE error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // If the deleted one was active, activate the most recent remaining one
+    if (target.active) {
+      const { data: remaining } = await supabase
+        .from('assistants')
+        .select('id')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (remaining) {
+        await supabase
+          .from('assistants')
+          .update({ active: true, updated_at: new Date().toISOString() })
+          .eq('id', remaining.id);
+      }
+    }
+
+    return NextResponse.json({ ok: true, deletedId: assistantId, wasActive: target.active });
+  } catch (err) {
+    console.error('[assistants] DELETE unexpected error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

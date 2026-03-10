@@ -60,6 +60,7 @@ const AUTOMATION_EVENTS = [
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱' },
   { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕' },
+  { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶' },
 ];
 
 const AUTOMATION_ACTIONS = [
@@ -75,6 +76,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'send_sms', label: 'Send SMS', icon: '📱', configFields: ['message'] },
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', configFields: ['tag'] },
+  { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', configFields: [] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -123,6 +125,13 @@ const DEFAULT_ACTIONS_BY_EVENT = {
   new_lead_created: [
     { type: 'add_tag', config: { tag: 'new_lead' } },
     { type: 'notify_owner', config: { message: '🆕 New lead: {customerName} ({phone})' } },
+  ],
+  user_inactive: [
+    { type: 'ai_followup', config: {} },
+    { type: 'delay', config: { delayHours: 48 } },
+    { type: 'ai_followup', config: {} },
+    { type: 'delay', config: { delayHours: 72 } },
+    { type: 'ai_followup', config: {} },
   ],
 };
 

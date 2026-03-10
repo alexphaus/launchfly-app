@@ -64,6 +64,7 @@ export const AVAILABLE_EVENTS = [
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡', desc: 'POST from Zapier, Make, or any external tool' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱', desc: 'Retell AI call ended — check outcome in metadata' },
   { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕', desc: 'A new customer/lead record is created for the first time' },
+  { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶', desc: 'Customer hasn\'t replied after 24h — triggers smart AI follow-up' },
 ] as const;
 
 // ─── Available Actions ───────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'send_sms', label: 'Send SMS', icon: '📱', desc: 'Send a plain SMS text message (non-WhatsApp)', configFields: ['message'] },
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', desc: 'Add a tag to the customer for segmentation', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', desc: 'Remove a tag from the customer', configFields: ['tag'] },
+  { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', desc: 'AI reads the conversation history and generates a contextual follow-up message. Stops after 5 unanswered messages.', configFields: [] },
 ] as const;
 
 // ─── Template Filling ────────────────────────────────────────────────────
@@ -213,6 +215,19 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
   const cfg = action.config || {};
 
   switch (action.type) {
+    case 'ai_followup': {
+      if (!ctx.phone || !ctx.businessId) return { ok: false, detail: 'Missing phone or businessId' };
+      const followupChannel = (ctx.metadata?.channel as string) || 'whatsapp';
+      const { handleAIFollowup } = await import('@/lib/automations/ai-brain');
+      const followupResult = await handleAIFollowup({
+        businessId: ctx.businessId,
+        phone: ctx.phone,
+        channel: followupChannel,
+      });
+      if (followupResult.skipped) return { ok: true, detail: `Skipped: ${followupResult.skipReason}` };
+      return { ok: true, detail: `AI follow-up sent via ${followupChannel} (${followupResult.toolsCalled.length} tools)` };
+    }
+
     case 'ai_response': {
       if (!ctx.phone || !ctx.businessId) return { ok: false, detail: 'Missing phone or businessId' };
       if (!ctx.message) return { ok: false, detail: 'No message to respond to' };

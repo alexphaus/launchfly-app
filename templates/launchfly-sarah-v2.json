@@ -97,17 +97,8 @@
         ],
         "actions": [
           { "type": "add_tag", "config": { "tag": "call_interested" } },
-          { "type": "send_whatsapp", "config": { "message": "Great chatting, {firstName}! As promised, here's a quick taste of what your AI assistant would do 👇\n\nReply START to see a live demo on WhatsApp — takes 60 seconds." } },
-          { "type": "delay", "config": { "delayHours": 0.16 } },
-          { "type": "send_whatsapp", "config": { "message": "Quick thought {firstName} — while other contractors are playing phone tag, imagine YOUR leads getting instant replies 24/7. That's what we set up for you 🔥" } },
-          { "type": "delay", "config": { "delayHours": 4 } },
-          { "type": "send_whatsapp", "config": { "message": "Hey {firstName}, just a nudge — one of our roofers recovered a $22K job in his first week using this. Want me to run you through the demo? Just reply START 💪" } },
-          { "type": "delay", "config": { "delayHours": 24 } },
-          { "type": "send_whatsapp", "config": { "message": "Following up, {firstName} — we've got a few setup slots left this week. If you want your AI live by tomorrow, reply START and I'll walk you through it in 60 seconds. No pressure either way! 🙌" } },
-          { "type": "delay", "config": { "delayHours": 72 } },
-          { "type": "send_whatsapp", "config": { "message": "Last one from me, {firstName}! If you ever want to stop losing quotes to bad follow-up, just reply here and I'll pick right up. Launchfly isn't going anywhere 🚀\n\nWishing you a packed schedule! 🔨" } },
-          { "type": "add_tag", "config": { "tag": "nurture_complete" } },
-          { "type": "update_status", "config": { "status": "nurture_complete" } }
+          { "type": "send_whatsapp", "config": { "message": "Great chatting, {firstName}! As promised, here's a quick taste of what your AI assistant would do 👇\n\nReply START to see a live demo — takes 60 seconds." } },
+          { "type": "notify_owner", "config": { "message": "📞 {customerName} ({phone}) — interested after call! First message sent." } }
         ],
         "enabled": true
       },
@@ -119,15 +110,7 @@
         ],
         "actions": [
           { "type": "add_tag", "config": { "tag": "no_answer" } },
-          { "type": "send_whatsapp", "config": { "message": "Hey {firstName} 👋 Just tried to call from Launchfly. We help contractors close more quotes automatically — AI follows up with your leads so you don't have to.\n\nReply START to see a 60-second WhatsApp demo!" } },
-          { "type": "delay", "config": { "delayHours": 2 } },
-          { "type": "send_sms", "config": { "message": "Hi {firstName}, Sarah from Launchfly here. Tried calling — we help contractors close lost quotes with AI follow-up. $150/mo, no contract. Reply START on WhatsApp to see a demo!" } },
-          { "type": "delay", "config": { "delayHours": 24 } },
-          { "type": "send_whatsapp", "config": { "message": "Quick question {firstName} — how many quotes did you send out last month that never turned into jobs? For most contractors it's 30-50%. Our AI chases every single one 🎯\n\nReply START to see it in action." } },
-          { "type": "delay", "config": { "delayHours": 72 } },
-          { "type": "send_whatsapp", "config": { "message": "Last follow-up {firstName} — if you ever want an AI assistant handling your lead follow-up, just reply here. We're always around.\n\nHope business is booming! 💪" } },
-          { "type": "add_tag", "config": { "tag": "sequence_exhausted" } },
-          { "type": "update_status", "config": { "status": "sequence_exhausted" } }
+          { "type": "send_whatsapp", "config": { "message": "Hey {firstName} 👋 Just tried to call from Launchfly. We help contractors close more quotes automatically — AI follows up with your leads so you don't have to.\n\nReply START to see a 60-second demo!" } }
         ],
         "enabled": true
       },
@@ -141,6 +124,19 @@
           { "type": "add_tag", "config": { "tag": "not_interested" } },
           { "type": "update_status", "config": { "status": "not_interested" } },
           { "type": "notify_owner", "config": { "message": "🚫 {customerName} ({phone}) — not interested after call" } }
+        ],
+        "enabled": true
+      },
+      {
+        "id": "rule_lf_user_inactive",
+        "event": "user_inactive",
+        "conditions": [],
+        "actions": [
+          { "type": "ai_followup", "config": {} },
+          { "type": "delay", "config": { "delayHours": 48 } },
+          { "type": "ai_followup", "config": {} },
+          { "type": "delay", "config": { "delayHours": 72 } },
+          { "type": "ai_followup", "config": {} }
         ],
         "enabled": true
       },

@@ -9,7 +9,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-const ASSISTANT_ID = '5e953cfa-db33-4958-8af2-89c7eeb7a9dd';
+const ASSISTANT_ID = '6a9a084c-4ac4-4df0-a674-efe0ef3a5d7c';
 
 // Load the updated template
 const template = JSON.parse(readFileSync('templates/launchfly-sarah-v2.json', 'utf8'));
@@ -20,7 +20,7 @@ async function patch() {
     .from('assistants')
     .select('trigger_config, name')
     .eq('id', ASSISTANT_ID)
-    .single();
+    .maybeSingle();
 
   if (fetchErr) {
     console.error('Failed to fetch:', fetchErr.message);

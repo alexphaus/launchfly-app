@@ -398,6 +398,12 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
     else break;
   }
 
+  // ── Safety: abort if user just replied or if max reached ──
+  if (unansweredCount === 0) {
+    console.log(`   🛑 [ai-followup] ${phoneWithPlus} replied recently (${unansweredCount} unanswered) — skipping`);
+    return { reply: '', toolsCalled: [], skipped: true, skipReason: 'User replied recently' };
+  }
+  
   // ── Safety: stop after 5 unanswered follow-ups ──
   if (unansweredCount >= 5) {
     console.log(`   🛑 [ai-followup] ${phoneWithPlus} has ${unansweredCount} unanswered msgs — skipping`);
@@ -464,10 +470,10 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
 
   console.log(`   ✅ [ai-followup] Sent to ${phoneWithPlus} via ${channel} (${aiResponse.length} chars, ${unansweredCount + 1} total unanswered)`);
 
-  // ── Schedule ANOTHER inactivity check for the next cycle ──
-  scheduleInactivityCheck(businessId, phoneWithPlus, channel).catch(err =>
-    console.warn('[ai-followup] Failed to schedule next inactivity check:', err),
-  );
+  // We DO NOT schedule another inactivity check here.
+  // The visual Rule Engine (Launchfly UI) is now responsible for scheduling
+  // multi-step drip sequences using "Wait / Delay" blocks.
+  // Auto-looping here would cause exponential firing when combined with UI Wait blocks.
 
   return {
     reply: aiResponse,

@@ -72,6 +72,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
+    // ── Check if customer has an active WhatsApp conversation ──
+    // If not, default to SMS since they haven't messaged us on WhatsApp
+    const phoneNorm = lead.phone.replace(/^\+/, '');
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentWhatsApp } = await supabase
+      .from('chat_history')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', lead.business_id)
+      .eq('phone', phoneNorm)
+      .eq('role', 'user')
+      .gt('created_at', twentyFourHoursAgo);
+
+    const channel = (recentWhatsApp && recentWhatsApp > 0) ? 'whatsapp' : 'sms';
+    console.log(`[retell/webhook] Channel for ${lead.phone}: ${channel} (${recentWhatsApp || 0} recent msgs)`);
+
     // ── Fire call_completed event ──
     await fireEvent({
       businessId: lead.business_id,
@@ -84,6 +99,7 @@ export async function POST(req: NextRequest) {
         sentiment,
         summary,
         lead_id: leadId,
+        channel,
       },
     });
 

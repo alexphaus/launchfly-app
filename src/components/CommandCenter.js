@@ -1794,16 +1794,10 @@ export default function CommandCenter({ business, initialLeads = [], initialBook
                     </p>
                     <div className="flex gap-2">
                         <button
-                            onClick={() => { setShowBlastModal(true); setDeployStep(1); setSelectedGoal(null); setSelectedPlaybook(null); fetchBlastSegments(); }}
+                            onClick={() => setShowAssistantModal(true)}
                             className="flex-1 py-2.5 bg-white text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
                         >
                             <Zap className="w-4 h-4" /> Deploy
-                        </button>
-                        <button
-                            onClick={() => setShowAssistantModal(true)}
-                            className="flex-1 py-2.5 bg-white/20 text-white font-bold rounded-lg text-sm hover:bg-white/30 transition-colors flex items-center justify-center gap-2 backdrop-blur"
-                        >
-                            <Settings className="w-4 h-4" /> Configure
                         </button>
                     </div>
                 </div>

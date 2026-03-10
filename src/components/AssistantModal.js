@@ -853,8 +853,8 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         <div className="flex border-b border-slate-100 px-2 shrink-0">
           {[
             { id: 'brain', label: 'Brain', Icon: Brain },
-            { id: 'activity', label: 'Activity', Icon: Activity },
             { id: 'triggers', label: 'Automations', Icon: Zap },
+            { id: 'activity', label: 'Activity', Icon: Activity },
           ].map(tab => (
             <button
               key={tab.id}

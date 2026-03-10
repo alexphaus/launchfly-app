@@ -108,6 +108,18 @@ function evaluateConditions(conditions: Condition[], ctx: EventContext): boolean
       else { val = undefined; break; }
     }
 
+    // Fallback: if top-level field not found, check inside metadata
+    // This lets rules use "outcome" instead of "metadata.outcome"
+    if (val === undefined && ctx.metadata && !cond.field.startsWith('metadata.')) {
+      const metaParts = cond.field.split('.');
+      let metaVal: unknown = ctx.metadata;
+      for (const p of metaParts) {
+        if (metaVal && typeof metaVal === 'object') metaVal = (metaVal as Record<string, unknown>)[p];
+        else { metaVal = undefined; break; }
+      }
+      if (metaVal !== undefined) val = metaVal;
+    }
+
     switch (cond.op) {
       case 'exists':
         if (val == null || val === '') return false;

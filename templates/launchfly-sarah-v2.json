@@ -65,8 +65,7 @@
         "event": "new_lead_created",
         "conditions": [],
         "actions": [
-          { "type": "add_tag", "config": { "tag": "new_lead" } },
-          { "type": "trigger_voice_call", "config": { "fromNumber": "+13203627874", "retellAgentId": "agent_8d13aac0c3b22060d0ab23c442", "jobType": "Launchfly Sales Demo" } }
+          { "type": "add_tag", "config": { "tag": "new_lead" } }
         ],
         "enabled": true
       },
@@ -75,7 +74,7 @@
         "event": "external_webhook",
         "conditions": [],
         "actions": [
-          { "type": "trigger_voice_call", "config": { "fromNumber": "+13203627874", "retellAgentId": "agent_8d13aac0c3b22060d0ab23c442", "jobType": "Launchfly Sales Demo" } }
+          { "type": "trigger_voice_call", "config": { "jobType": "Launchfly Sales Demo" } }
         ],
         "enabled": true
       },

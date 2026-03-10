@@ -66,6 +66,7 @@ const AUTOMATION_EVENTS = [
 const AUTOMATION_ACTIONS = [
   { id: 'ai_response', label: 'AI Response', icon: '🤖', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
+  { id: 'condition_branch', label: 'If / Else Branch', icon: '🔀', configFields: [] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
   { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['fromNumber', 'retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
@@ -637,7 +638,18 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       const rules = [...prev];
       const actions = [...rules[ruleIndex].actions];
       if (field === 'type') {
-        actions[actionIndex] = { type: value, config: {} };
+        if (value === 'condition_branch') {
+          actions[actionIndex] = {
+            type: value,
+            config: {
+              conditions: [{ field: 'outcome', op: 'equals', value: 'interested' }],
+              thenActions: [{ type: 'send_whatsapp', config: { message: 'Nice! Let\'s move forward.' } }],
+              elseActions: [{ type: 'send_whatsapp', config: { message: 'No worries — I can follow up later.' } }],
+            },
+          };
+        } else {
+          actions[actionIndex] = { type: value, config: {} };
+        }
       } else {
         actions[actionIndex] = { ...actions[actionIndex], config: { ...actions[actionIndex].config, [field]: value } };
       }
@@ -653,6 +665,105 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         ...rules[ruleIndex],
         actions: rules[ruleIndex].actions.filter((_, i) => i !== actionIndex),
       };
+      return rules;
+    });
+  };
+
+  const addConditionToBranchAction = (ruleIndex, actionIndex) => {
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      const action = actions[actionIndex];
+      const cfg = action.config || {};
+      const conditions = Array.isArray(cfg.conditions) ? cfg.conditions : [];
+      actions[actionIndex] = {
+        ...action,
+        config: {
+          ...cfg,
+          conditions: [...conditions, { field: 'message', op: 'contains', value: '' }],
+        },
+      };
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
+      return rules;
+    });
+  };
+
+  const updateConditionInBranchAction = (ruleIndex, actionIndex, condIndex, field, value) => {
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      const action = actions[actionIndex];
+      const cfg = action.config || {};
+      const conditions = Array.isArray(cfg.conditions) ? [...cfg.conditions] : [];
+      conditions[condIndex] = { ...conditions[condIndex], [field]: value };
+      actions[actionIndex] = { ...action, config: { ...cfg, conditions } };
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
+      return rules;
+    });
+  };
+
+  const removeConditionFromBranchAction = (ruleIndex, actionIndex, condIndex) => {
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      const action = actions[actionIndex];
+      const cfg = action.config || {};
+      const conditions = Array.isArray(cfg.conditions) ? cfg.conditions.filter((_, i) => i !== condIndex) : [];
+      actions[actionIndex] = { ...action, config: { ...cfg, conditions } };
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
+      return rules;
+    });
+  };
+
+  const addBranchStep = (ruleIndex, actionIndex, branchKey) => {
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      const action = actions[actionIndex];
+      const cfg = action.config || {};
+      const branchSteps = Array.isArray(cfg[branchKey]) ? cfg[branchKey] : [];
+      actions[actionIndex] = {
+        ...action,
+        config: {
+          ...cfg,
+          [branchKey]: [...branchSteps, { type: 'send_whatsapp', config: { message: '' } }],
+        },
+      };
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
+      return rules;
+    });
+  };
+
+  const updateBranchStep = (ruleIndex, actionIndex, branchKey, stepIndex, field, value) => {
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      const action = actions[actionIndex];
+      const cfg = action.config || {};
+      const branchSteps = Array.isArray(cfg[branchKey]) ? [...cfg[branchKey]] : [];
+
+      if (field === 'type') {
+        branchSteps[stepIndex] = { type: value, config: {} };
+      } else {
+        const current = branchSteps[stepIndex] || { type: 'send_whatsapp', config: {} };
+        branchSteps[stepIndex] = { ...current, config: { ...current.config, [field]: value } };
+      }
+
+      actions[actionIndex] = { ...action, config: { ...cfg, [branchKey]: branchSteps } };
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
+      return rules;
+    });
+  };
+
+  const removeBranchStep = (ruleIndex, actionIndex, branchKey, stepIndex) => {
+    setRules(prev => {
+      const rules = [...prev];
+      const actions = [...rules[ruleIndex].actions];
+      const action = actions[actionIndex];
+      const cfg = action.config || {};
+      const branchSteps = Array.isArray(cfg[branchKey]) ? cfg[branchKey].filter((_, i) => i !== stepIndex) : [];
+      actions[actionIndex] = { ...action, config: { ...cfg, [branchKey]: branchSteps } };
+      rules[ruleIndex] = { ...rules[ruleIndex], actions };
       return rules;
     });
   };
@@ -1567,9 +1678,10 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                       <div className="w-px h-3 bg-slate-300" />
                                     </div>
                                   )}
-                                  <div className={`rounded-lg p-2.5 space-y-2 ${isDelay ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
+                                  <div className={`rounded-lg p-2.5 space-y-2 ${isDelay ? 'bg-amber-50 border border-amber-200' : action.type === 'condition_branch' ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}`}>
                                     <div className="flex items-center gap-1.5">
                                       {isDelay && <span className="text-sm">⏳</span>}
+                                      {action.type === 'condition_branch' && <span className="text-sm">🔀</span>}
                                       <select
                                         value={action.type}
                                         onChange={e => updateActionInRule(ruleIdx, actIdx, 'type', e.target.value)}
@@ -1584,6 +1696,177 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                       </button>
                                     </div>
                                     {/* Config fields */}
+                                    {action.type === 'condition_branch' && (
+                                      <div className="space-y-3 border border-sky-200 bg-sky-50 rounded-lg p-2.5">
+                                        <div>
+                                          <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider mb-1">If Conditions</p>
+                                          <div className="space-y-1.5">
+                                            {(action.config?.conditions || []).map((cond, condIdx) => (
+                                              <div key={condIdx} className="flex gap-1.5 items-center">
+                                                <input
+                                                  type="text"
+                                                  value={cond.field}
+                                                  onChange={e => updateConditionInBranchAction(ruleIdx, actIdx, condIdx, 'field', e.target.value)}
+                                                  className="w-24 p-2 border border-slate-200 rounded-lg text-xs"
+                                                  placeholder="field"
+                                                />
+                                                <select
+                                                  value={cond.op}
+                                                  onChange={e => updateConditionInBranchAction(ruleIdx, actIdx, condIdx, 'op', e.target.value)}
+                                                  className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                >
+                                                  <option value="contains">contains</option>
+                                                  <option value="equals">equals</option>
+                                                  <option value="gt">&gt;</option>
+                                                  <option value="lt">&lt;</option>
+                                                  <option value="exists">exists</option>
+                                                  <option value="not_exists">not exists</option>
+                                                </select>
+                                                {!['exists', 'not_exists'].includes(cond.op) && (
+                                                  <input
+                                                    type="text"
+                                                    value={cond.value || ''}
+                                                    onChange={e => updateConditionInBranchAction(ruleIdx, actIdx, condIdx, 'value', e.target.value)}
+                                                    className="flex-1 p-2 border border-slate-200 rounded-lg text-xs"
+                                                    placeholder="value"
+                                                  />
+                                                )}
+                                                <button onClick={() => removeConditionFromBranchAction(ruleIdx, actIdx, condIdx)} className="p-1 hover:bg-red-50 rounded">
+                                                  <X className="w-3 h-3 text-red-400" />
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <button
+                                            onClick={() => addConditionToBranchAction(ruleIdx, actIdx)}
+                                            className="mt-1.5 text-[11px] text-sky-600 font-medium hover:text-sky-700 flex items-center gap-1"
+                                          >
+                                            <Plus className="w-3 h-3" /> Add branch condition
+                                          </button>
+                                        </div>
+
+                                        {[
+                                          { key: 'thenActions', label: 'Then (true)' },
+                                          { key: 'elseActions', label: 'Else (false)' },
+                                        ].map(branch => (
+                                          <div key={branch.key} className="space-y-1.5">
+                                            <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">{branch.label}</p>
+                                            <div className="space-y-1.5">
+                                              {(action.config?.[branch.key] || []).map((branchAction, branchIdx) => {
+                                                const branchActionDef = AUTOMATION_ACTIONS.find(a => a.id === branchAction.type);
+                                                return (
+                                                  <div key={branchIdx} className="bg-white border border-sky-100 rounded-lg p-2 space-y-1.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <select
+                                                        value={branchAction.type}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'type', e.target.value)}
+                                                        className="flex-1 p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                      >
+                                                        {AUTOMATION_ACTIONS.filter(a => a.id !== 'condition_branch').map(act => (
+                                                          <option key={act.id} value={act.id}>{act.icon} {act.label}</option>
+                                                        ))}
+                                                      </select>
+                                                      <button onClick={() => removeBranchStep(ruleIdx, actIdx, branch.key, branchIdx)} className="p-1 hover:bg-red-50 rounded">
+                                                        <X className="w-3 h-3 text-red-400" />
+                                                      </button>
+                                                    </div>
+
+                                                    {branchActionDef?.configFields?.includes('message') && (
+                                                      <textarea
+                                                        value={branchAction.config?.message || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'message', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                        rows={2}
+                                                        placeholder="Message..."
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('delayHours') && (
+                                                      <input
+                                                        type="number"
+                                                        min="0.5"
+                                                        step="0.5"
+                                                        value={branchAction.config?.delayHours || 1}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'delayHours', parseFloat(e.target.value) || 1)}
+                                                        className="w-24 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('status') && (
+                                                      <input
+                                                        type="text"
+                                                        value={branchAction.config?.status || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'status', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        placeholder="e.g. hot_lead"
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('tag') && (
+                                                      <input
+                                                        type="text"
+                                                        value={branchAction.config?.tag || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'tag', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        placeholder="e.g. vip"
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('emailSubject') && (
+                                                      <div className="space-y-1.5">
+                                                        <input
+                                                          type="text"
+                                                          value={branchAction.config?.emailSubject || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'emailSubject', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          placeholder="Email subject..."
+                                                        />
+                                                        <textarea
+                                                          value={branchAction.config?.emailBody || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'emailBody', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                          rows={3}
+                                                          placeholder="Email body..."
+                                                        />
+                                                      </div>
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('templateSid') && (
+                                                      <input
+                                                        type="text"
+                                                        value={branchAction.config?.templateSid || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'templateSid', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                                        placeholder="HX... (Twilio Content SID)"
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('url') && (
+                                                      <input
+                                                        type="url"
+                                                        value={branchAction.config?.url || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'url', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        placeholder="https://hooks.zapier.com/..."
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('jobType') && (
+                                                      <input
+                                                        type="text"
+                                                        value={branchAction.config?.jobType || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'jobType', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        placeholder="Call purpose, e.g. Sales Demo"
+                                                      />
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                            <button
+                                              onClick={() => addBranchStep(ruleIdx, actIdx, branch.key)}
+                                              className="text-[11px] text-sky-600 font-medium hover:text-sky-700 flex items-center gap-1"
+                                            >
+                                              <Plus className="w-3 h-3" /> Add {branch.label.toLowerCase()} step
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                     {actionDef?.configFields?.includes('delayHours') && (
                                       <div className="flex items-center gap-2">
                                         <label className="text-[10px] text-amber-600 font-bold whitespace-nowrap">Wait</label>

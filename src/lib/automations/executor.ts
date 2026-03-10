@@ -39,6 +39,12 @@ export interface Action {
   config?: Record<string, unknown>;
 }
 
+interface ConditionBranchConfig {
+  conditions?: Condition[];
+  thenActions?: Action[];
+  elseActions?: Action[];
+}
+
 export interface EventContext {
   businessId: string;
   event: string;
@@ -83,6 +89,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', desc: 'Add a tag to the customer for segmentation', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', desc: 'Remove a tag from the customer', configFields: ['tag'] },
   { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', desc: 'AI reads the conversation history and generates a contextual follow-up message. Stops after 5 unanswered messages.', configFields: [] },
+  { id: 'condition_branch', label: 'If / Else Branch', icon: '🔀', desc: 'Evaluate conditions and run different actions for true vs false branches', configFields: [] },
 ] as const;
 
 // ─── Template Filling ────────────────────────────────────────────────────
@@ -763,6 +770,27 @@ export async function executeActions(
 ): Promise<void> {
   for (let i = startIndex; i < actions.length; i++) {
     const action = actions[i];
+
+    if (action.type === 'condition_branch') {
+      const cfg = (action.config || {}) as ConditionBranchConfig;
+      const branchConditions = cfg.conditions || [];
+      const thenActions = Array.isArray(cfg.thenActions) ? cfg.thenActions : [];
+      const elseActions = Array.isArray(cfg.elseActions) ? cfg.elseActions : [];
+      const branchMatched = evaluateConditions(branchConditions, ctx);
+      const selected = branchMatched ? thenActions : elseActions;
+
+      results.push({
+        ok: true,
+        detail: `Branch ${branchMatched ? 'matched' : 'not matched'} (${selected.length} step${selected.length === 1 ? '' : 's'})`,
+      });
+
+      // Execute selected branch inline, then continue with remaining outer actions.
+      // This preserves expected flow even when branch actions include delays.
+      const remainingOuter = actions.slice(i + 1);
+      const merged = [...selected, ...remainingOuter];
+      await executeActions(merged, 0, ctx, results);
+      return;
+    }
 
     if (action.type === 'delay') {
       const hours = Number(action.config?.delayHours) || 1;

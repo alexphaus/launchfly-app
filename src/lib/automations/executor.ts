@@ -71,7 +71,7 @@ export const AVAILABLE_EVENTS = [
 export const AVAILABLE_ACTIONS = [
   { id: 'ai_response', label: 'AI Response', icon: '🤖', desc: 'Let the AI assistant respond to the customer using the configured persona, tools, and knowledge base', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp Message', icon: '💬', desc: 'Send a text message via WhatsApp', configFields: ['message'] },
-  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', desc: 'Auto-creates lead, then triggers Retell AI voice call', configFields: ['retellAgentId', 'jobType'] },
+  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', desc: 'Auto-creates lead, then triggers Retell AI voice call. Leave blank to use Brain tab config.', configFields: ['fromNumber', 'retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Business Owner', icon: '🔔', desc: 'Send the owner a WhatsApp alert', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call External Webhook', icon: '🌐', desc: 'POST data to an external URL', configFields: ['url', 'webhookHeaders'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', desc: 'Set customer status in database', configFields: ['status'] },
@@ -212,6 +212,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone) return { ok: false, detail: 'Missing phone for voice call' };
       const supabase = getSupabase();
       const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      const jobType = (cfg.jobType as string) || (ctx.metadata?.job_type as string) || 'General Inquiry';
 
       // Auto-upsert lead record
       let { data: lead } = await supabase
@@ -230,7 +231,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
             business_id: ctx.businessId,
             phone: phoneNorm,
             name: ctx.customerName || 'Unknown',
-            job_type: (cfg.jobType as string) || (ctx.metadata?.job_type as string) || 'General Inquiry',
+            job_type: jobType,
             quote_amount: ctx.amount || 0,
             status: 'Open',
             source: (ctx.metadata?.source as string) || 'automation',
@@ -267,13 +268,9 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
 
       // Call Retell API directly
       const retellApiKey = process.env.RETELL_API_KEY;
-      const retellFromNumber = process.env.RETELL_FROM_NUMBER;
-      const agentId = (cfg.retellAgentId as string) || process.env.RETELL_AGENT_ID || '';
-      if (!retellApiKey || !agentId || !retellFromNumber) {
-        return { ok: false, detail: 'Missing RETELL_API_KEY, agent ID, or RETELL_FROM_NUMBER' };
-      }
+      if (!retellApiKey) return { ok: false, detail: 'Missing RETELL_API_KEY' };
 
-      // Load business context for dynamic variables
+      // Load business + assistant context
       const { data: biz } = await supabase
         .from('businesses')
         .select('name, business_data')
@@ -282,6 +279,81 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       const bizName = biz?.name || 'the team';
       const bizConfig = (biz?.business_data || {}) as Record<string, unknown>;
 
+      // Determine mode: custom (fromNumber set) or default (use Brain tab config)
+      const customFromNumber = (cfg.fromNumber as string) || '';
+      const customAgentId = (cfg.retellAgentId as string) || '';
+
+      let fromNumber: string;
+      let agentId: string;
+      let dynamicVars: Record<string, string> = {
+        customer_name: ctx.customerName || 'there',
+        business_name: bizName,
+        contractor_name: (bizConfig.ownerName as string) || '',
+        lead_id: lead.id,
+      };
+
+      if (customFromNumber || customAgentId) {
+        // ── CUSTOM MODE: use dedicated Retell agent ──
+        fromNumber = customFromNumber || process.env.RETELL_FROM_NUMBER || '';
+        agentId = customAgentId || process.env.RETELL_AGENT_ID || '';
+      } else {
+        // ── DEFAULT MODE: use universal agent + Brain tab config ──
+        const defaultAgentId = process.env.RETELL_DEFAULT_AGENT_ID || '';
+        const defaultFromNumber = process.env.RETELL_DEFAULT_FROM_NUMBER || '';
+
+        if (defaultAgentId && defaultFromNumber) {
+          // Load the business's active assistant config to build voice prompt
+          const { data: assistant } = await supabase
+            .from('assistants')
+            .select('system_prompt, knowledge_base, custom_rules, tone, goal, name')
+            .eq('business_id', ctx.businessId)
+            .eq('active', true)
+            .maybeSingle();
+
+          let voicePrompt = '';
+          if (assistant?.system_prompt) {
+            voicePrompt = assistant.system_prompt;
+          } else {
+            // Auto-build from config
+            const tone = assistant?.tone || 'friendly';
+            const goal = assistant?.goal || 'book_consultation';
+            voicePrompt = `You are the AI voice assistant for ${bizName}. Tone: ${tone}. Goal: ${goal}.`;
+            voicePrompt += `\nOwner: ${(bizConfig.ownerName as string) || 'the owner'}. Service: ${(bizConfig.niche as string) || 'General Service'}.`;
+          }
+
+          // Append knowledge base
+          if (assistant?.knowledge_base) {
+            const kb = assistant.knowledge_base as Record<string, unknown[]>;
+            if ((kb.pricing as { service: string; price: string; unit: string }[])?.length) {
+              voicePrompt += '\n\nPRICING:\n' + (kb.pricing as { service: string; price: string; unit: string }[]).map(p => `- ${p.service}: ${p.price} per ${p.unit}`).join('\n');
+            }
+            if ((kb.faq as { q: string; a: string }[])?.length) {
+              voicePrompt += '\n\nFAQ:\n' + (kb.faq as { q: string; a: string }[]).map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n');
+            }
+          }
+
+          // Append custom rules
+          if ((assistant?.custom_rules as string[])?.length) {
+            voicePrompt += '\n\nRULES:\n' + (assistant!.custom_rules as string[]).map((r: string) => `- ${r}`).join('\n');
+          }
+
+          // Add voice-specific instructions
+          voicePrompt += `\n\nVOICE CALL RULES:\n- Keep responses under 2 sentences. Be conversational and natural.\n- You are calling about: ${jobType}\n- Customer name: ${ctx.customerName || 'there'}\n- If asked something you don't know, offer to have someone call back.`;
+
+          dynamicVars.system_prompt = voicePrompt;
+          fromNumber = defaultFromNumber;
+          agentId = defaultAgentId;
+        } else {
+          // Fallback: use Launchfly's agent (backward compat)
+          fromNumber = process.env.RETELL_FROM_NUMBER || '';
+          agentId = process.env.RETELL_AGENT_ID || '';
+        }
+      }
+
+      if (!agentId || !fromNumber) {
+        return { ok: false, detail: 'Missing Retell agent ID or from number. Configure a custom number or set RETELL_DEFAULT_AGENT_ID + RETELL_DEFAULT_FROM_NUMBER env vars.' };
+      }
+
       const retellRes = await fetch('https://api.retellai.com/v2/create-phone-call', {
         method: 'POST',
         headers: {
@@ -289,15 +361,10 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from_number: retellFromNumber,
+          from_number: fromNumber,
           to_number: phoneNorm,
           agent_id: agentId,
-          retell_llm_dynamic_variables: {
-            customer_name: ctx.customerName || 'there',
-            business_name: bizName,
-            contractor_name: (bizConfig.ownerName as string) || '',
-            lead_id: lead.id,
-          },
+          retell_llm_dynamic_variables: dynamicVars,
           metadata: { lead_id: lead.id, source: 'automation' },
         }),
       });

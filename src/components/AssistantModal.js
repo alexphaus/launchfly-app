@@ -66,7 +66,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'ai_response', label: 'AI Response', icon: '🤖', configFields: [] },
   { id: 'send_whatsapp', label: 'Send WhatsApp', icon: '💬', configFields: ['message'] },
   { id: 'delay', label: 'Wait / Delay', icon: '⏳', configFields: ['delayHours'] },
-  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['retellAgentId', 'jobType'] },
+  { id: 'trigger_voice_call', label: 'AI Voice Call', icon: '📞', configFields: ['fromNumber', 'retellAgentId', 'jobType'] },
   { id: 'notify_owner', label: 'Notify Owner', icon: '🔔', configFields: ['message'] },
   { id: 'call_webhook', label: 'Call Webhook URL', icon: '🌐', configFields: ['url', 'webhookHeaders'] },
   { id: 'update_status', label: 'Update Customer Status', icon: '🏷️', configFields: ['status'] },
@@ -1620,13 +1620,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                       </div>
                                     )}
                                     {actionDef?.configFields?.includes('retellAgentId') && (
-                                      <input
-                                        type="text"
-                                        value={action.config?.retellAgentId || ''}
-                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'retellAgentId', e.target.value)}
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                                        placeholder="Retell Agent ID (leave empty for default)"
-                                      />
+                                      <div className="space-y-1.5">
+                                        <input
+                                          type="text"
+                                          value={action.config?.fromNumber || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'fromNumber', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                          placeholder="From Number, e.g. +18001234567 (blank = default)"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={action.config?.retellAgentId || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'retellAgentId', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                          placeholder="Retell Agent ID (blank = use Brain tab config)"
+                                        />
+                                        <p className="text-[10px] text-slate-400 px-1">
+                                          Leave both blank → uses your Brain tab prompt as the voice agent. Set a number + agent ID for a custom Retell agent.
+                                        </p>
+                                      </div>
                                     )}
                                     {actionDef?.configFields?.includes('jobType') && (
                                       <input

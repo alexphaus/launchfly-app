@@ -17,6 +17,8 @@ interface ActivityEvent {
   title: string;
   detail: string;
   phone?: string;
+  leadId?: string;
+  retellCallId?: string;
   created_at: string;
 }
 
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
       // Recent quote follow-up leads (calls + sequence activity)
       supabase
         .from('quote_leads')
-        .select('id, name, phone, job_type, quote_amount, status, call_outcome, sequence_step, attempts, created_at, updated_at')
+        .select('id, name, phone, job_type, quote_amount, status, call_outcome, retell_call_id, sequence_step, attempts, created_at, updated_at')
         .eq('business_id', businessId)
         .order('updated_at', { ascending: false })
         .limit(20),
@@ -98,6 +100,8 @@ export async function GET(req: NextRequest) {
             title: `Called ${lead.name}`,
             detail: `${outcomeLabel} · ${lead.job_type}`,
             phone: lead.phone,
+            leadId: lead.id,
+            retellCallId: lead.retell_call_id ?? undefined,
             created_at: lead.updated_at,
           });
         }

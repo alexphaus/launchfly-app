@@ -18,6 +18,7 @@ import {
   Check, RefreshCw, Zap, Globe, Copy,
   Eye, ToggleLeft, ToggleRight,
   Download, Upload, CopyPlus, AlertTriangle,
+  ArrowLeft, Phone, MessageCircle,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────
@@ -173,6 +174,11 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [switching, setSwitching] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // Activity detail state
+  const [expandedActivity, setExpandedActivity] = useState(null);   // the clicked event
+  const [activityDetail, setActivityDetail] = useState(null);       // { messages } or { transcript, summary, ... }
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   // ── Load assistant config ──────────────────────────────────────────────
   // Apply assistant data to local config state
@@ -443,6 +449,48 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       setLoadingActivity(false);
     }
   }, [business?.id]);
+
+  // ── Load activity detail (chat or call) ────────────────────────────────
+  const openActivityDetail = async (evt) => {
+    setExpandedActivity(evt);
+    setActivityDetail(null);
+    setLoadingDetail(true);
+    try {
+      if (evt.type === 'conversation') {
+        const res = await fetch(
+          `/api/assistants/activity/chat?businessId=${business.id}&phone=${encodeURIComponent(evt.phone)}`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json();
+        setActivityDetail({ type: 'chat', messages: data.messages || [] });
+      } else if (evt.type === 'call' && evt.retellCallId) {
+        const res = await fetch(
+          `/api/assistants/activity/call?callId=${encodeURIComponent(evt.retellCallId)}`,
+          { cache: 'no-store' },
+        );
+        const data = await res.json();
+        setActivityDetail({
+          type: 'call',
+          transcript: data.transcript || [],
+          summary: data.summary,
+          sentiment: data.sentiment,
+          duration: data.duration,
+        });
+      } else if (evt.type === 'call') {
+        setActivityDetail({ type: 'call', transcript: [], summary: 'No Retell call ID available for this call.' });
+      }
+    } catch (err) {
+      console.error('Failed to load activity detail:', err);
+      setActivityDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const closeActivityDetail = () => {
+    setExpandedActivity(null);
+    setActivityDetail(null);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -810,7 +858,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); closeActivityDetail(); }}
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors relative ${
                 activeTab === tab.id
                   ? 'text-emerald-600'
@@ -1199,49 +1247,157 @@ export default function AssistantModal({ isOpen, onClose, business }) {
               {/* ═══ ACTIVITY TAB ═══ */}
               {activeTab === 'activity' && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-500">Conversations, calls &amp; bookings</p>
-                    <button
-                      onClick={loadActivity}
-                      disabled={loadingActivity}
-                      className="text-xs text-emerald-600 font-medium hover:text-emerald-700 flex items-center gap-1"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${loadingActivity ? 'animate-spin' : ''}`} /> Refresh
-                    </button>
-                  </div>
+                  {/* ── Detail View (chat or call transcript) ── */}
+                  {expandedActivity ? (
+                    <>
+                      <button
+                        onClick={closeActivityDetail}
+                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 font-medium"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" /> Back to Activity
+                      </button>
 
-                  {loadingActivity && activityLog.length === 0 ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="animate-spin w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full" />
-                    </div>
-                  ) : activityLog.length === 0 ? (
-                    <div className="text-center py-10">
-                      <Activity className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400">No activity yet.</p>
-                      <p className="text-xs text-slate-300 mt-1">WhatsApp chats, calls, and bookings will appear here.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {activityLog.map((evt, i) => (
-                        <div key={evt.id || i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
-                            evt.type === 'conversation' ? 'bg-emerald-100'
-                              : evt.type === 'call' ? 'bg-blue-100'
-                              : evt.type === 'booking' ? 'bg-amber-100'
-                              : 'bg-purple-100'
-                          }`}>
-                            {evt.icon || '⚡'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-800 leading-snug">{evt.title}</p>
-                            {evt.detail && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{evt.detail}</p>}
-                          </div>
-                          <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0 mt-1">
-                            {formatTimeAgo(evt.created_at)}
-                          </span>
+                      {/* Header */}
+                      <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0 ${
+                          expandedActivity.type === 'conversation' ? 'bg-emerald-100' : 'bg-blue-100'
+                        }`}>
+                          {expandedActivity.type === 'conversation'
+                            ? <MessageCircle className="w-4 h-4 text-emerald-600" />
+                            : <Phone className="w-4 h-4 text-blue-600" />
+                          }
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800">{expandedActivity.title}</p>
+                          <p className="text-[11px] text-slate-400">{expandedActivity.detail} · {formatTimeAgo(expandedActivity.created_at)}</p>
+                        </div>
+                      </div>
+
+                      {/* Loading */}
+                      {loadingDetail && (
+                        <div className="flex items-center justify-center py-10">
+                          <div className="animate-spin w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full" />
+                        </div>
+                      )}
+
+                      {/* Chat messages */}
+                      {activityDetail?.type === 'chat' && (
+                        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                          {activityDetail.messages.length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-6">No messages found.</p>
+                          ) : activityDetail.messages.map((msg, i) => (
+                            <div key={msg.id || i} className={`flex ${msg.role === 'assistant' ? 'justify-start' : 'justify-end'}`}>
+                              <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed ${
+                                msg.role === 'assistant'
+                                  ? 'bg-emerald-50 text-slate-800 rounded-tl-md'
+                                  : 'bg-blue-500 text-white rounded-tr-md'
+                              }`}>
+                                <p className="whitespace-pre-wrap">{msg.content}</p>
+                                <p className={`text-[9px] mt-1 ${msg.role === 'assistant' ? 'text-slate-400' : 'text-blue-200'}`}>
+                                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Call transcript */}
+                      {activityDetail?.type === 'call' && (
+                        <div className="space-y-3">
+                          {/* Call meta */}
+                          {(activityDetail.summary || activityDetail.duration != null) && (
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-1.5">
+                              {activityDetail.duration != null && (
+                                <p className="text-xs text-blue-700">
+                                  <strong>Duration:</strong> {Math.floor(activityDetail.duration / 60)}m {activityDetail.duration % 60}s
+                                  {activityDetail.sentiment && <> · <strong>Sentiment:</strong> {activityDetail.sentiment}</>}
+                                </p>
+                              )}
+                              {activityDetail.summary && (
+                                <p className="text-xs text-blue-600">{activityDetail.summary}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Transcript bubbles */}
+                          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                            {activityDetail.transcript.length === 0 ? (
+                              <p className="text-xs text-slate-400 text-center py-6">
+                                {activityDetail.summary || 'No transcript available for this call.'}
+                              </p>
+                            ) : activityDetail.transcript.map((u, i) => (
+                              <div key={i} className={`flex ${u.role === 'assistant' ? 'justify-start' : 'justify-end'}`}>
+                                <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed ${
+                                  u.role === 'assistant'
+                                    ? 'bg-emerald-50 text-slate-800 rounded-tl-md'
+                                    : 'bg-blue-500 text-white rounded-tr-md'
+                                }`}>
+                                  <p className="whitespace-pre-wrap">{u.content}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* ── Activity list ── */
+                    <>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-slate-500">Conversations, calls &amp; bookings</p>
+                        <button
+                          onClick={loadActivity}
+                          disabled={loadingActivity}
+                          className="text-xs text-emerald-600 font-medium hover:text-emerald-700 flex items-center gap-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${loadingActivity ? 'animate-spin' : ''}`} /> Refresh
+                        </button>
+                      </div>
+
+                      {loadingActivity && activityLog.length === 0 ? (
+                        <div className="flex items-center justify-center py-12">
+                          <div className="animate-spin w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full" />
+                        </div>
+                      ) : activityLog.length === 0 ? (
+                        <div className="text-center py-10">
+                          <Activity className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                          <p className="text-sm text-slate-400">No activity yet.</p>
+                          <p className="text-xs text-slate-300 mt-1">WhatsApp chats, calls, and bookings will appear here.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5">
+                          {activityLog.map((evt, i) => {
+                            const isClickable = evt.type === 'conversation' || evt.type === 'call';
+                            return (
+                              <div
+                                key={evt.id || i}
+                                onClick={isClickable ? () => openActivityDetail(evt) : undefined}
+                                className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${
+                                  isClickable ? 'hover:bg-slate-50 cursor-pointer active:bg-slate-100' : 'hover:bg-slate-50'
+                                }`}
+                              >
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
+                                  evt.type === 'conversation' ? 'bg-emerald-100'
+                                    : evt.type === 'call' ? 'bg-blue-100'
+                                    : evt.type === 'booking' ? 'bg-amber-100'
+                                    : 'bg-purple-100'
+                                }`}>
+                                  {evt.icon || '⚡'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-800 leading-snug">{evt.title}</p>
+                                  {evt.detail && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{evt.detail}</p>}
+                                </div>
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0 mt-1">
+                                  {formatTimeAgo(evt.created_at)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

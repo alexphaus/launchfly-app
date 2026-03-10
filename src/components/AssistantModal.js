@@ -1678,7 +1678,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                       <div className="w-px h-3 bg-slate-300" />
                                     </div>
                                   )}
-                                  <div className={`rounded-lg p-2.5 space-y-2 ${isDelay ? 'bg-amber-50 border border-amber-200' : action.type === 'condition_branch' ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}`}>
+                                  <div className={`rounded-lg p-2.5 space-y-2 ${isDelay ? 'bg-amber-50 border border-amber-200' : action.type === 'condition_branch' ? 'bg-slate-50 border border-slate-200' : 'bg-slate-50'}`}>
                                     <div className="flex items-center gap-1.5">
                                       {isDelay && <span className="text-sm">⏳</span>}
                                       {action.type === 'condition_branch' && <span className="text-sm">🔀</span>}
@@ -1695,11 +1695,15 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         <X className="w-3 h-3 text-red-400" />
                                       </button>
                                     </div>
-                                    {/* Config fields */}
+                                    {/* Config fields — If/Else Branch */}
                                     {action.type === 'condition_branch' && (
-                                      <div className="space-y-3 border border-sky-200 bg-sky-50 rounded-lg p-2.5">
-                                        <div>
-                                          <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider mb-1">If Conditions</p>
+                                      <div className="space-y-2.5 pt-1">
+                                        {/* IF Conditions */}
+                                        <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-2.5">
+                                          <div className="flex items-center gap-1.5 mb-2">
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700">IF</span>
+                                            <span className="text-[10px] text-violet-500">conditions to evaluate</span>
+                                          </div>
                                           <div className="space-y-1.5">
                                             {(action.config?.conditions || []).map((cond, condIdx) => (
                                               <div key={condIdx} className="flex gap-1.5 items-center">
@@ -1707,13 +1711,13 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                   type="text"
                                                   value={cond.field}
                                                   onChange={e => updateConditionInBranchAction(ruleIdx, actIdx, condIdx, 'field', e.target.value)}
-                                                  className="w-24 p-2 border border-slate-200 rounded-lg text-xs"
+                                                  className="w-24 p-1.5 border border-violet-200 rounded-md text-xs bg-white focus:ring-1 focus:ring-violet-300 focus:border-violet-300 outline-none"
                                                   placeholder="field"
                                                 />
                                                 <select
                                                   value={cond.op}
                                                   onChange={e => updateConditionInBranchAction(ruleIdx, actIdx, condIdx, 'op', e.target.value)}
-                                                  className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                  className="p-1.5 border border-violet-200 rounded-md text-xs bg-white"
                                                 >
                                                   <option value="contains">contains</option>
                                                   <option value="equals">equals</option>
@@ -1727,7 +1731,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                     type="text"
                                                     value={cond.value || ''}
                                                     onChange={e => updateConditionInBranchAction(ruleIdx, actIdx, condIdx, 'value', e.target.value)}
-                                                    className="flex-1 p-2 border border-slate-200 rounded-lg text-xs"
+                                                    className="flex-1 p-1.5 border border-violet-200 rounded-md text-xs bg-white focus:ring-1 focus:ring-violet-300 focus:border-violet-300 outline-none"
                                                     placeholder="value"
                                                   />
                                                 )}
@@ -1739,28 +1743,39 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                           </div>
                                           <button
                                             onClick={() => addConditionToBranchAction(ruleIdx, actIdx)}
-                                            className="mt-1.5 text-[11px] text-sky-600 font-medium hover:text-sky-700 flex items-center gap-1"
+                                            className="mt-1.5 text-[10px] text-violet-600 font-medium hover:text-violet-700 flex items-center gap-1"
                                           >
-                                            <Plus className="w-3 h-3" /> Add branch condition
+                                            <Plus className="w-3 h-3" /> Add condition
                                           </button>
                                         </div>
 
+                                        {/* Fork visual indicator */}
+                                        <div className="flex items-center gap-2 px-2">
+                                          <div className="flex-1 h-px bg-gradient-to-r from-emerald-300 to-transparent" />
+                                          <span className="text-[9px] font-bold text-slate-400 tracking-widest">BRANCHES</span>
+                                          <div className="flex-1 h-px bg-gradient-to-l from-amber-300 to-transparent" />
+                                        </div>
+
+                                        {/* THEN / ELSE branches side by side on larger, stacked on small */}
                                         {[
-                                          { key: 'thenActions', label: 'Then (true)' },
-                                          { key: 'elseActions', label: 'Else (false)' },
+                                          { key: 'thenActions', label: 'THEN', sublabel: '✓ true', color: 'emerald', borderColor: 'border-emerald-200', bgColor: 'bg-emerald-50/50', labelBg: 'bg-emerald-100', labelText: 'text-emerald-700', accentBorder: 'border-l-emerald-400', addColor: 'text-emerald-600 hover:text-emerald-700' },
+                                          { key: 'elseActions', label: 'ELSE', sublabel: '✗ false', color: 'amber', borderColor: 'border-amber-200', bgColor: 'bg-amber-50/50', labelBg: 'bg-amber-100', labelText: 'text-amber-700', accentBorder: 'border-l-amber-400', addColor: 'text-amber-600 hover:text-amber-700' },
                                         ].map(branch => (
-                                          <div key={branch.key} className="space-y-1.5">
-                                            <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">{branch.label}</p>
+                                          <div key={branch.key} className={`rounded-lg border ${branch.borderColor} ${branch.bgColor} p-2.5`}>
+                                            <div className="flex items-center gap-1.5 mb-2">
+                                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${branch.labelBg} ${branch.labelText}`}>{branch.label}</span>
+                                              <span className={`text-[10px] ${branch.labelText} opacity-60`}>{branch.sublabel}</span>
+                                            </div>
                                             <div className="space-y-1.5">
                                               {(action.config?.[branch.key] || []).map((branchAction, branchIdx) => {
                                                 const branchActionDef = AUTOMATION_ACTIONS.find(a => a.id === branchAction.type);
                                                 return (
-                                                  <div key={branchIdx} className="bg-white border border-sky-100 rounded-lg p-2 space-y-1.5">
+                                                  <div key={branchIdx} className={`bg-white border ${branch.borderColor} border-l-2 ${branch.accentBorder} rounded-lg p-2 space-y-1.5`}>
                                                     <div className="flex items-center gap-1.5">
                                                       <select
                                                         value={branchAction.type}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'type', e.target.value)}
-                                                        className="flex-1 p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                        className="flex-1 p-1.5 border border-slate-200 rounded-md text-xs bg-white"
                                                       >
                                                         {AUTOMATION_ACTIONS.filter(a => a.id !== 'condition_branch').map(act => (
                                                           <option key={act.id} value={act.id}>{act.icon} {act.label}</option>
@@ -1775,27 +1790,31 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                       <textarea
                                                         value={branchAction.config?.message || ''}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'message', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                        className="w-full p-1.5 border border-slate-200 rounded-md text-xs resize-none"
                                                         rows={2}
                                                         placeholder="Message..."
                                                       />
                                                     )}
                                                     {branchActionDef?.configFields?.includes('delayHours') && (
-                                                      <input
-                                                        type="number"
-                                                        min="0.5"
-                                                        step="0.5"
-                                                        value={branchAction.config?.delayHours || 1}
-                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'delayHours', parseFloat(e.target.value) || 1)}
-                                                        className="w-24 p-2 border border-slate-200 rounded-lg text-xs text-center"
-                                                      />
+                                                      <div className="flex items-center gap-1.5">
+                                                        <span className="text-[10px] text-slate-500">Wait</span>
+                                                        <input
+                                                          type="number"
+                                                          min="0.5"
+                                                          step="0.5"
+                                                          value={branchAction.config?.delayHours || 1}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'delayHours', parseFloat(e.target.value) || 1)}
+                                                          className="w-16 p-1.5 border border-slate-200 rounded-md text-xs text-center"
+                                                        />
+                                                        <span className="text-[10px] text-slate-500">hours</span>
+                                                      </div>
                                                     )}
                                                     {branchActionDef?.configFields?.includes('status') && (
                                                       <input
                                                         type="text"
                                                         value={branchAction.config?.status || ''}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'status', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        className="w-full p-1.5 border border-slate-200 rounded-md text-xs"
                                                         placeholder="e.g. hot_lead"
                                                       />
                                                     )}
@@ -1804,7 +1823,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         type="text"
                                                         value={branchAction.config?.tag || ''}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'tag', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        className="w-full p-1.5 border border-slate-200 rounded-md text-xs"
                                                         placeholder="e.g. vip"
                                                       />
                                                     )}
@@ -1814,13 +1833,13 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                           type="text"
                                                           value={branchAction.config?.emailSubject || ''}
                                                           onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'emailSubject', e.target.value)}
-                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          className="w-full p-1.5 border border-slate-200 rounded-md text-xs"
                                                           placeholder="Email subject..."
                                                         />
                                                         <textarea
                                                           value={branchAction.config?.emailBody || ''}
                                                           onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'emailBody', e.target.value)}
-                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                          className="w-full p-1.5 border border-slate-200 rounded-md text-xs resize-none"
                                                           rows={3}
                                                           placeholder="Email body..."
                                                         />
@@ -1831,7 +1850,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         type="text"
                                                         value={branchAction.config?.templateSid || ''}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'templateSid', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                                        className="w-full p-1.5 border border-slate-200 rounded-md text-xs font-mono"
                                                         placeholder="HX... (Twilio Content SID)"
                                                       />
                                                     )}
@@ -1840,7 +1859,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         type="url"
                                                         value={branchAction.config?.url || ''}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'url', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        className="w-full p-1.5 border border-slate-200 rounded-md text-xs"
                                                         placeholder="https://hooks.zapier.com/..."
                                                       />
                                                     )}
@@ -1849,7 +1868,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         type="text"
                                                         value={branchAction.config?.jobType || ''}
                                                         onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'jobType', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                        className="w-full p-1.5 border border-slate-200 rounded-md text-xs"
                                                         placeholder="Call purpose, e.g. Sales Demo"
                                                       />
                                                     )}
@@ -1859,9 +1878,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                             </div>
                                             <button
                                               onClick={() => addBranchStep(ruleIdx, actIdx, branch.key)}
-                                              className="text-[11px] text-sky-600 font-medium hover:text-sky-700 flex items-center gap-1"
+                                              className={`mt-1.5 text-[10px] font-medium flex items-center gap-1 ${branch.addColor}`}
                                             >
-                                              <Plus className="w-3 h-3" /> Add {branch.label.toLowerCase()} step
+                                              <Plus className="w-3 h-3" /> Add step
                                             </button>
                                           </div>
                                         ))}

@@ -810,6 +810,8 @@ async function scheduleResume(
           event: ctx.event,
           phone: ctx.phone,
           customerName: ctx.customerName,
+          firstName: ctx.firstName,
+          businessName: ctx.businessName,
           message: ctx.message,
           amount: ctx.amount,
           metadata: ctx.metadata,

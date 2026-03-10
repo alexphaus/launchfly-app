@@ -1,9 +1,11 @@
 // src/app/api/webhook/twilio/v3/route.ts
 // ═══════════════════════════════════════════════════════════════════════════
-// V3 WhatsApp Webhook — Thin Router
+// V3 Messaging Webhook — Thin Router (WhatsApp + SMS)
 //
 // Does ONE thing: parse the incoming message, resolve the business,
 // then fire 'inbound_whatsapp' through the automation engine.
+// Detects SMS vs WhatsApp from Twilio's From field and passes
+// the channel in metadata so AI brain replies on the same channel.
 //
 // The AI brain, owner notifications, templates, delays — all configured
 // in the Automations tab via rules. Zero hardcoded behavior.
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Parse incoming WhatsApp message
+    // 1. Parse incoming message (WhatsApp or SMS)
     const formData = await request.formData();
     const from = formData.get('From') as string;
     const body = formData.get('Body') as string;
@@ -43,6 +45,9 @@ export async function POST(request: NextRequest) {
     const longitude = formData.get('Longitude') as string | null;
     const buttonPayload = formData.get('ButtonPayload') as string | null;
 
+    // Detect channel from Twilio's From field
+    const isWhatsApp = from.startsWith('whatsapp:');
+    const channel = isWhatsApp ? 'whatsapp' : 'sms';
     const customerPhone = from.replace('whatsapp:', '');
     let messageText = buttonPayload || body?.trim() || '';
 
@@ -55,7 +60,7 @@ export async function POST(request: NextRequest) {
       return new NextResponse(EMPTY_TWIML, { headers: twimlHeaders });
     }
 
-    console.log(`\n🚀 V3 Incoming: ${customerPhone}`);
+    console.log(`\n🚀 V3 Incoming [${channel}]: ${customerPhone}`);
     console.log(`   Message: ${messageText.substring(0, 100)}`);
 
     // 2. Resolve business ID
@@ -90,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     if (!businessId) {
       console.log('   ⚠️ V3: No business found — sending fallback');
-      await sendFallbackReply(from);
+      await sendFallbackReply(from, channel);
       return new NextResponse(EMPTY_TWIML, { headers: twimlHeaders });
     }
 
@@ -102,7 +107,7 @@ export async function POST(request: NextRequest) {
       event: 'inbound_whatsapp',
       phone: customerPhone,
       message: messageText,
-      metadata: { messageSid, latitude, longitude },
+      metadata: { messageSid, latitude, longitude, channel },
     });
 
     console.log(
@@ -133,24 +138,37 @@ function resolveBusinessIdFromMessage(text: string): string | null {
 }
 
 /** Generic fallback when no business could be resolved */
-async function sendFallbackReply(to: string) {
+async function sendFallbackReply(to: string, channel: string) {
   try {
     const twilio = (await import('twilio')).default;
     const client = twilio(
       process.env.TWILIO_ACCOUNT_SID,
       process.env.TWILIO_AUTH_TOKEN,
     );
-    const fromNum =
-      process.env.TWILIO_WHATSAPP_FROM ||
-      (process.env.TWILIO_WHATSAPP_NUMBER
-        ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`
-        : '');
-    if (!fromNum) return;
-    await client.messages.create({
-      from: fromNum.startsWith('whatsapp:') ? fromNum : `whatsapp:${fromNum}`,
-      to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-      body: "Hi! 👋 I couldn't identify which business you're trying to reach. Could you let me know the business name?",
-    });
+    const fallbackMsg = "Hi! 👋 I couldn't identify which business you're trying to reach. Could you let me know the business name?";
+
+    if (channel === 'sms') {
+      const smsFrom = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_WHATSAPP_NUMBER || '';
+      if (!smsFrom) return;
+      const phone = to.replace(/^whatsapp:/, '');
+      await client.messages.create({
+        from: smsFrom.replace(/^whatsapp:/, ''),
+        to: phone.startsWith('+') ? phone : `+${phone}`,
+        body: fallbackMsg,
+      });
+    } else {
+      const fromNum =
+        process.env.TWILIO_WHATSAPP_FROM ||
+        (process.env.TWILIO_WHATSAPP_NUMBER
+          ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`
+          : '');
+      if (!fromNum) return;
+      await client.messages.create({
+        from: fromNum.startsWith('whatsapp:') ? fromNum : `whatsapp:${fromNum}`,
+        to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
+        body: fallbackMsg,
+      });
+    }
   } catch (e) {
     console.error('[v3] Fallback reply failed:', e);
   }
@@ -163,6 +181,6 @@ export async function GET() {
     status: 'ok',
     version: 'v3-automation',
     description:
-      'Thin WhatsApp webhook — all behavior driven by automation rules',
+      'Messaging webhook (WhatsApp + SMS) — all behavior driven by automation rules',
   });
 }

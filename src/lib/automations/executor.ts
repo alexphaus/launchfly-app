@@ -153,6 +153,19 @@ async function saveToChatHistory(phone: string, businessId: string, content: str
 
 // ─── Twilio WhatsApp Helper ──────────────────────────────────────────────
 
+async function sendSms(to: string, body: string): Promise<void> {
+  const twilio = (await import('twilio')).default;
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  const smsFrom = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_WHATSAPP_NUMBER || '';
+  if (!smsFrom) throw new Error('Missing TWILIO_SMS_NUMBER');
+  const phoneForSms = to.replace(/^whatsapp:/, '');
+  await client.messages.create({
+    from: smsFrom.replace(/^whatsapp:/, ''),
+    to: phoneForSms.startsWith('+') ? phoneForSms : `+${phoneForSms}`,
+    body,
+  });
+}
+
 async function sendWhatsApp(to: string, body: string): Promise<void> {
   const twilio = (await import('twilio')).default;
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -166,6 +179,22 @@ async function sendWhatsApp(to: string, body: string): Promise<void> {
   });
 }
 
+/** Send a message — WhatsApp first, SMS fallback on failure */
+async function sendMessage(to: string, body: string, channel?: string): Promise<'whatsapp' | 'sms'> {
+  if (channel === 'sms') {
+    await sendSms(to, body);
+    return 'sms';
+  }
+  try {
+    await sendWhatsApp(to, body);
+    return 'whatsapp';
+  } catch (err) {
+    console.warn(`[automation] WhatsApp failed for ${to}, falling back to SMS:`, (err as Error).message);
+    await sendSms(to, body);
+    return 'sms';
+  }
+}
+
 // ─── Action Dispatcher ───────────────────────────────────────────────────
 
 async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: boolean; detail: string }> {
@@ -175,23 +204,25 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
     case 'ai_response': {
       if (!ctx.phone || !ctx.businessId) return { ok: false, detail: 'Missing phone or businessId' };
       if (!ctx.message) return { ok: false, detail: 'No message to respond to' };
+      const channel = (ctx.metadata?.channel as string) || 'whatsapp';
       const { handleAIResponse } = await import('@/lib/automations/ai-brain');
       const result = await handleAIResponse({
         businessId: ctx.businessId,
         phone: ctx.phone,
         messageText: ctx.message,
         messageSid: ctx.metadata?.messageSid as string | undefined,
+        channel,
       });
-      return { ok: true, detail: `AI replied (${result.toolsCalled.length} tools: ${result.toolsCalled.join(', ') || 'none'})` };
+      return { ok: true, detail: `AI replied via ${channel} (${result.toolsCalled.length} tools: ${result.toolsCalled.join(', ') || 'none'})` };
     }
 
     case 'send_whatsapp': {
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
-      await sendWhatsApp(ctx.phone, msg);
-      // Save to chat_history so v2 webhook can trace business on customer reply
+      const channel = (ctx.metadata?.channel as string) || undefined;
+      const sentVia = await sendMessage(ctx.phone, msg, channel);
       await saveToChatHistory(ctx.phone, ctx.businessId, msg);
-      return { ok: true, detail: `Sent WhatsApp to ${ctx.phone}` };
+      return { ok: true, detail: `Sent ${sentVia} to ${ctx.phone}` };
     }
 
     case 'notify_owner': {

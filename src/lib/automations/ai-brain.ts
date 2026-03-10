@@ -35,6 +35,7 @@ export interface AIBrainInput {
   phone: string;           // E.164 with +
   messageText: string;
   messageSid?: string;     // for typing indicator
+  channel?: string;        // 'whatsapp' | 'sms' — defaults to whatsapp
 }
 
 export interface AIBrainResult {
@@ -42,7 +43,7 @@ export interface AIBrainResult {
   toolsCalled: string[];
 }
 
-// ─── Twilio send helper ──────────────────────────────────────────────────
+// ─── Twilio send helpers ─────────────────────────────────────────────────
 
 async function sendWhatsApp(to: string, body: string): Promise<void> {
   const twilio = (await import('twilio')).default;
@@ -58,6 +59,27 @@ async function sendWhatsApp(to: string, body: string): Promise<void> {
     to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
     body,
   });
+}
+
+async function sendSms(to: string, body: string): Promise<void> {
+  const twilio = (await import('twilio')).default;
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  const smsFrom = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_WHATSAPP_NUMBER || '';
+  if (!smsFrom) throw new Error('Missing TWILIO_SMS_NUMBER');
+  const phone = to.replace(/^whatsapp:/, '');
+  await client.messages.create({
+    from: smsFrom.replace(/^whatsapp:/, ''),
+    to: phone.startsWith('+') ? phone : `+${phone}`,
+    body,
+  });
+}
+
+async function sendReply(to: string, body: string, channel: string): Promise<void> {
+  if (channel === 'sms') {
+    await sendSms(to, body);
+  } else {
+    await sendWhatsApp(to, body);
+  }
 }
 
 // ─── Prompt builder ──────────────────────────────────────────────────────
@@ -193,7 +215,7 @@ function getFilteredTools(toolsConfig: string[] | undefined) {
 // ─── Main entry point ────────────────────────────────────────────────────
 
 export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResult> {
-  const { businessId, phone, messageText, messageSid } = input;
+  const { businessId, phone, messageText, messageSid, channel = 'whatsapp' } = input;
   const supabase = getSupabase();
 
   // Typing indicator (fire-and-forget)
@@ -278,8 +300,8 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
 
   if (!aiResponse) aiResponse = `Hi! How can I help you?`;
 
-  // ── Send reply ──
-  await sendWhatsApp(phoneWithPlus, aiResponse);
+  // ── Send reply via same channel the customer used ──
+  await sendReply(phoneWithPlus, aiResponse, channel);
 
   // ── Save history ──
   await saveUserPromise;

@@ -43,22 +43,14 @@ export interface AIBrainResult {
   toolsCalled: string[];
 }
 
-// ─── Twilio send helpers ─────────────────────────────────────────────────
+// ─── Send helpers ────────────────────────────────────────────────────────
 
 async function sendWhatsApp(to: string, body: string): Promise<void> {
-  const twilio = (await import('twilio')).default;
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  const from =
-    process.env.TWILIO_WHATSAPP_FROM ||
-    (process.env.TWILIO_WHATSAPP_NUMBER
-      ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`
-      : '');
-  if (!from) throw new Error('Missing TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_NUMBER');
-  await client.messages.create({
-    from: from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
-    to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-    body,
-  });
+  const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
+  const result = await ultramsgSend(to, body);
+  if (!result.sent) {
+    throw new Error(`UltraMsg send failed: ${result.error}`);
+  }
 }
 
 async function sendSms(to: string, body: string): Promise<void> {

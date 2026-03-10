@@ -188,16 +188,11 @@ async function sendSms(to: string, body: string): Promise<void> {
 }
 
 async function sendWhatsApp(to: string, body: string): Promise<void> {
-  const twilio = (await import('twilio')).default;
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  const from = process.env.TWILIO_WHATSAPP_FROM
-    || (process.env.TWILIO_WHATSAPP_NUMBER ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}` : '');
-  if (!from) throw new Error('Missing TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_NUMBER');
-  await client.messages.create({
-    from: from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
-    to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-    body,
-  });
+  const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
+  const result = await ultramsgSend(to, body);
+  if (!result.sent) {
+    throw new Error(`UltraMsg send failed: ${result.error}`);
+  }
 }
 
 /** Send a message — WhatsApp first, SMS fallback on failure */
@@ -571,36 +566,24 @@ CUSTOMER NAME: ${customerName}
     }
 
     case 'send_template': {
-      const templateSid = cfg.templateSid as string;
-      if (!ctx.phone || !templateSid) return { ok: false, detail: 'Missing phone or template SID' };
-      const twilio = (await import('twilio')).default;
-      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      // UltraMsg: no templates needed — send as a plain message
+      // The templateSid field is repurposed: if it looks like a Twilio SID (HX...),
+      // we skip it and use contentVars as the message body instead.
+      // If a plain message is provided, send that directly.
+      if (!ctx.phone) return { ok: false, detail: 'Missing phone' };
 
-      // Build contentVariables from comma-separated config string
-      // e.g. "{businessName}, {firstName}" → { "1": "Acme Corp", "2": "John" }
-      const contentVariables: Record<string, string> = {};
+      let templateMsg = '';
       if (cfg.contentVars) {
-        const parts = (cfg.contentVars as string).split(',').map(s => s.trim());
-        parts.forEach((tmpl, i) => {
-          contentVariables[String(i + 1)] = fillVars(tmpl, ctx);
-        });
+        // Fill variable placeholders in the content vars string
+        templateMsg = fillVars(cfg.contentVars as string, ctx);
+      } else if (cfg.message) {
+        templateMsg = fillVars(cfg.message as string, ctx);
       }
+      if (!templateMsg) return { ok: false, detail: 'No message content for template action' };
 
-      const fromNum = process.env.TWILIO_WHATSAPP_FROM
-        || (process.env.TWILIO_WHATSAPP_NUMBER ? `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}` : '');
-      if (!fromNum) return { ok: false, detail: 'Missing TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_NUMBER' };
-
-      await client.messages.create({
-        from: fromNum.startsWith('whatsapp:') ? fromNum : `whatsapp:${fromNum}`,
-        to: `whatsapp:${ctx.phone}`,
-        contentSid: templateSid,
-        ...(Object.keys(contentVariables).length > 0
-          ? { contentVariables: JSON.stringify(contentVariables) }
-          : {}),
-      });
-      // Save to chat_history so v2 webhook can trace business on customer reply
-      await saveToChatHistory(ctx.phone, ctx.businessId, `[Template: ${templateSid}]`);
-      return { ok: true, detail: `Template ${templateSid} sent to ${ctx.phone}` };
+      await sendWhatsApp(ctx.phone, templateMsg);
+      await saveToChatHistory(ctx.phone, ctx.businessId, templateMsg);
+      return { ok: true, detail: `Template message sent to ${ctx.phone}` };
     }
 
     case 'send_email': {

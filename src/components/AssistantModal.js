@@ -1039,7 +1039,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                             <span>{t.emoji}</span>
                             <span className="text-sm font-medium">{t.label}</span>
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5 ml-6">{t.desc}</p>
                         </button>
                       ))}
                     </div>
@@ -1110,10 +1109,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                           {config.knowledge_base.faq?.length > 0 && `\n${config.knowledge_base.faq.length} FAQ answers loaded.`}
                           {config.custom_rules?.length > 0 && `\n${config.custom_rules.length} custom rules applied.`}
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-2">
-                          The full prompt is built automatically from your knowledge base, pricing, and business info.
-                          Switch to <span className="font-medium">Custom</span> to write your own.
-                        </p>
+
                       </div>
                     ) : (
                       <textarea
@@ -1185,11 +1181,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
                     {expandedSection === 'pricing' && (
                       <div className="space-y-2">
-                        {(config.knowledge_base.pricing || []).length === 0 ? (
-                          <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-xl text-center">
-                            Add your services and pricing so the AI can quote accurately.
-                          </p>
-                        ) : (
+                        {(config.knowledge_base.pricing || []).length === 0 ? null : (
                           (config.knowledge_base.pricing || []).map((item, i) => (
                             <div key={i} className="bg-slate-50 p-3 rounded-xl space-y-2">
                               <div className="flex gap-2">
@@ -1244,11 +1236,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
                     {expandedSection === 'faq' && (
                       <div className="space-y-2">
-                        {(config.knowledge_base.faq || []).length === 0 ? (
-                          <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-xl text-center">
-                            Add common questions your customers ask.
-                          </p>
-                        ) : (
+                        {(config.knowledge_base.faq || []).length === 0 ? null : (
                           (config.knowledge_base.faq || []).map((item, i) => (
                             <div key={i} className="bg-slate-50 p-3 rounded-xl space-y-2">
                               <div className="flex gap-2">
@@ -1294,11 +1282,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
                     {expandedSection === 'objections' && (
                       <div className="space-y-2">
-                        {(config.knowledge_base.objections || []).length === 0 ? (
-                          <p className="text-xs text-slate-400 bg-slate-50 p-3 rounded-xl text-center">
-                            Add objections and how the AI should respond.
-                          </p>
-                        ) : (
+                        {(config.knowledge_base.objections || []).length === 0 ? null : (
                           (config.knowledge_base.objections || []).map((item, i) => (
                             <div key={i} className="bg-slate-50 p-3 rounded-xl space-y-2">
                               <div className="flex gap-2">
@@ -1525,38 +1509,31 @@ export default function AssistantModal({ isOpen, onClose, business }) {
               {/* ═══ AUTOMATIONS TAB ═══ */}
               {activeTab === 'triggers' && (
                 <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                    <p className="text-xs text-blue-700">
-                      <strong>Automations</strong> — Build workflows with delays. Example: Quote Sent → Wait 48h → WhatsApp → Wait 24h → Call.
-                    </p>
-                  </div>
-
-                  {/* Webhook URL */}
-                  <div className="bg-slate-50 p-3 rounded-xl">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  {/* Webhook URL — collapsed by default */}
+                  <details className="bg-slate-50 rounded-xl">
+                    <summary className="px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-700 flex items-center gap-1.5 select-none">
                       <Globe className="w-3 h-3" /> Webhook URL
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/assistants/trigger?businessId=${business?.id || ''}`}
-                        className="flex-1 p-2 border border-slate-200 rounded-lg text-[11px] font-mono bg-white"
-                      />
-                      <button
-                        onClick={() => {
-                          const url = `${window.location.origin}/api/assistants/trigger?businessId=${business?.id || ''}`;
-                          navigator.clipboard.writeText(url);
-                        }}
-                        className="px-3 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
-                      >
-                        <Copy className="w-3 h-3" /> Copy
-                      </button>
+                    </summary>
+                    <div className="px-3 pb-3">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/assistants/trigger?businessId=${business?.id || ''}`}
+                          className="flex-1 p-2 border border-slate-200 rounded-lg text-[11px] font-mono bg-white"
+                        />
+                        <button
+                          onClick={() => {
+                            const url = `${window.location.origin}/api/assistants/trigger?businessId=${business?.id || ''}`;
+                            navigator.clipboard.writeText(url);
+                          }}
+                          className="px-3 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
+                        >
+                          <Copy className="w-3 h-3" /> Copy
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      External tools can POST here to trigger automations
-                    </p>
-                  </div>
+                  </details>
 
                   {/* Rules */}
                   {getRules().map((rule, ruleIdx) => (
@@ -1887,7 +1864,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         onChange={e => updateActionInRule(ruleIdx, actIdx, 'message', e.target.value)}
                                         className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
                                         rows={2}
-                                        placeholder="Message... use {firstName}, {businessName}, {quoteAmount}"
+                                        placeholder="Message... Variables: {firstName}, {businessName}, {phone}, {amount}"
                                       />
                                     )}
                                     {actionDef?.configFields?.includes('url') && (
@@ -1899,16 +1876,18 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                           className="w-full p-2 border border-slate-200 rounded-lg text-xs"
                                           placeholder="https://hooks.zapier.com/..."
                                         />
-                                        <input
-                                          type="text"
-                                          value={action.config?.webhookHeaders || ''}
-                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'webhookHeaders', e.target.value)}
-                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                                          placeholder='Headers (optional): Authorization=Bearer xxx, X-Api-Key=abc'
-                                        />
-                                        <p className="text-[10px] text-slate-400">
-                                          Comma-separated key=value pairs. Response status is logged.
-                                        </p>
+                                        <details className="text-xs">
+                                          <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">
+                                            Advanced: custom headers
+                                          </summary>
+                                          <input
+                                            type="text"
+                                            value={action.config?.webhookHeaders || ''}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'webhookHeaders', e.target.value)}
+                                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono mt-1.5"
+                                            placeholder='Authorization=Bearer xxx, X-Api-Key=abc'
+                                          />
+                                        </details>
                                       </div>
                                     )}
                                     {actionDef?.configFields?.includes('jobType') && (
@@ -1968,9 +1947,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                           className="w-full p-2 border border-slate-200 rounded-lg text-xs"
                                           placeholder='Variables: {businessName}, {firstName} (comma-separated)'
                                         />
-                                        <p className="text-[10px] text-slate-400">
-                                          Template variables map to {'{{1}}'}, {'{{2}}'}, etc. in order. Supports {'{ }'} placeholders.
-                                        </p>
+
                                       </div>
                                     )}
                                     {actionDef?.configFields?.includes('emailSubject') && (
@@ -2024,15 +2001,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     <Zap className="w-4 h-4" /> Add Automation Rule
                   </button>
 
-                  {/* Variables hint */}
-                  {getRules().length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Available Variables</p>
-                      <p className="text-[11px] text-amber-700 font-mono">
-                        {'{firstName}'} {'{customerName}'} {'{businessName}'} {'{phone}'} {'{event}'} {'{amount}'} {'{message}'}
-                      </p>
-                    </div>
-                  )}
+
                 </div>
               )}
             </>

@@ -39,13 +39,14 @@ export async function POST(req: NextRequest) {
 
     const callId = call.call_id as string;
     const callStatus = (call.call_status as string) || 'ended';
+    const disconnectionReason = (call.disconnection_reason as string) || '';
     const metadata = (call.metadata || {}) as Record<string, unknown>;
     const leadId = (metadata.lead_id as string) || '';
     const analysis = (call.call_analysis || {}) as Record<string, unknown>;
     const sentiment = (analysis.user_sentiment as string) || 'unknown';
     const summary = (analysis.call_summary as string) || '';
 
-    console.log(`[retell/webhook] event=${event || 'flat'} call=${callId} status=${callStatus} lead=${leadId} sentiment=${sentiment}`);
+    console.log(`[retell/webhook] event=${event || 'flat'} call=${callId} status=${callStatus} disconnect=${disconnectionReason} lead=${leadId} sentiment=${sentiment}`);
 
     if (!leadId) {
       console.warn('[retell/webhook] No lead_id in metadata — skipping');
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase();
 
     // ── Update lead with call outcome ──
-    const outcome = deriveOutcome(callStatus, sentiment, summary);
+    const outcome = deriveOutcome(callStatus, sentiment, summary, disconnectionReason);
 
     const { data: lead } = await supabase
       .from('quote_leads')
@@ -113,10 +114,31 @@ export async function POST(req: NextRequest) {
 
 // ── Derive a simple outcome from Retell's analysis ──
 
-function deriveOutcome(callStatus: string, sentiment: string, summary: string): string {
+function deriveOutcome(callStatus: string, sentiment: string, summary: string, disconnectionReason: string): string {
   if (callStatus === 'error') return 'failed';
 
   const lowerSummary = summary.toLowerCase();
+  const lowerDisconnect = disconnectionReason.toLowerCase();
+
+  // No answer — Retell disconnection reasons for unanswered calls
+  if (
+    lowerDisconnect.includes('no_answer') ||
+    lowerDisconnect.includes('dial_no_answer') ||
+    lowerDisconnect.includes('busy') ||
+    lowerDisconnect.includes('dial_busy') ||
+    lowerDisconnect.includes('no_pickup') ||
+    lowerDisconnect.includes('machine') ||
+    lowerSummary.includes('voicemail') ||
+    lowerSummary.includes('no answer') ||
+    lowerSummary.includes('didn\'t pick up')
+  ) {
+    return 'no_answer';
+  }
+
+  // If there's no summary at all (empty call — nobody picked up)
+  if (!summary.trim()) {
+    return 'no_answer';
+  }
 
   // Positive signals — prospect agreed to see demo
   if (
@@ -139,15 +161,6 @@ function deriveOutcome(callStatus: string, sentiment: string, summary: string): 
     lowerSummary.includes('remove')
   ) {
     return 'not_interested';
-  }
-
-  // No answer / voicemail
-  if (
-    lowerSummary.includes('voicemail') ||
-    lowerSummary.includes('no answer') ||
-    lowerSummary.includes('didn\'t pick up')
-  ) {
-    return 'no_answer';
   }
 
   return 'unknown';

@@ -297,12 +297,12 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         fromNumber = customFromNumber || process.env.RETELL_FROM_NUMBER || '';
         agentId = customAgentId || process.env.RETELL_AGENT_ID || '';
       } else {
-        // ── DEFAULT MODE: use universal agent + Brain tab config ──
+        // ── DEFAULT MODE: use universal agent + voice-optimized Brain tab config ──
         const defaultAgentId = process.env.RETELL_DEFAULT_AGENT_ID || '';
         const defaultFromNumber = process.env.RETELL_DEFAULT_FROM_NUMBER || '';
 
         if (defaultAgentId && defaultFromNumber) {
-          // Load the business's active assistant config to build voice prompt
+          // Load the business's active assistant config
           const { data: assistant } = await supabase
             .from('assistants')
             .select('system_prompt, knowledge_base, custom_rules, tone, goal, name')
@@ -310,35 +310,96 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
             .eq('active', true)
             .maybeSingle();
 
-          let voicePrompt = '';
-          if (assistant?.system_prompt) {
-            voicePrompt = assistant.system_prompt;
-          } else {
-            // Auto-build from config
-            const tone = assistant?.tone || 'friendly';
-            const goal = assistant?.goal || 'book_consultation';
-            voicePrompt = `You are the AI voice assistant for ${bizName}. Tone: ${tone}. Goal: ${goal}.`;
-            voicePrompt += `\nOwner: ${(bizConfig.ownerName as string) || 'the owner'}. Service: ${(bizConfig.niche as string) || 'General Service'}.`;
-          }
+          const assistantName = assistant?.name || 'the assistant';
+          const tone = assistant?.tone || 'friendly';
+          const goal = assistant?.goal || 'book_consultation';
+          const ownerName = (bizConfig.ownerName as string) || 'the owner';
+          const niche = (bizConfig.niche as string) || 'General Service';
+          const customerName = ctx.customerName || 'there';
 
-          // Append knowledge base
+          // Build voice-optimized prompt — DO NOT use the WhatsApp system_prompt directly
+          let voicePrompt = `You are ${assistantName}, an AI phone agent calling on behalf of ${bizName}.
+You are on a VOICE CALL — not text. Speak naturally like a real person on the phone.
+
+VOICE RULES (CRITICAL):
+- Keep every response to 1-2 SHORT sentences. This is a phone call, not a presentation.
+- Be conversational. Use natural speech patterns, contractions, brief pauses.
+- NEVER use emojis, bullet points, numbered lists, or any text formatting.
+- NEVER read out URLs, links, or long text.
+- Sound warm, confident, and human. Not scripted or robotic.
+- Match the prospect's energy. If they're short, be short. If they're chatty, be chattier.
+
+YOUR IDENTITY:
+- Name: ${assistantName}
+- Calling from: ${bizName}
+- Tone: ${tone}
+- Owner: ${ownerName}
+- Industry: ${niche}
+
+CALL PURPOSE: ${jobType}
+CUSTOMER NAME: ${customerName}
+
+`;
+
+          // Extract knowledge from Brain tab — but format for voice
           if (assistant?.knowledge_base) {
             const kb = assistant.knowledge_base as Record<string, unknown[]>;
             if ((kb.pricing as { service: string; price: string; unit: string }[])?.length) {
-              voicePrompt += '\n\nPRICING:\n' + (kb.pricing as { service: string; price: string; unit: string }[]).map(p => `- ${p.service}: ${p.price} per ${p.unit}`).join('\n');
+              voicePrompt += 'PRICING KNOWLEDGE (use naturally in conversation, don\'t list them):\n';
+              voicePrompt += (kb.pricing as { service: string; price: string; unit: string }[])
+                .map(p => `${p.service}: ${p.price}/${p.unit}`)
+                .join(', ') + '\n\n';
             }
             if ((kb.faq as { q: string; a: string }[])?.length) {
-              voicePrompt += '\n\nFAQ:\n' + (kb.faq as { q: string; a: string }[]).map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n');
+              voicePrompt += 'KEY ANSWERS (paraphrase naturally, don\'t read verbatim):\n';
+              voicePrompt += (kb.faq as { q: string; a: string }[])
+                .slice(0, 6) // limit for voice — don't overload
+                .map(f => `If asked "${f.q}" → ${f.a}`)
+                .join('\n') + '\n\n';
+            }
+            if ((kb.objections as { trigger: string; response: string }[])?.length) {
+              voicePrompt += 'OBJECTION RESPONSES (adapt to voice naturally):\n';
+              voicePrompt += (kb.objections as { trigger: string; response: string }[])
+                .map(o => `"${o.trigger}" → ${o.response}`)
+                .join('\n') + '\n\n';
             }
           }
 
-          // Append custom rules
+          // Custom rules — filter to voice-relevant ones
           if ((assistant?.custom_rules as string[])?.length) {
-            voicePrompt += '\n\nRULES:\n' + (assistant!.custom_rules as string[]).map((r: string) => `- ${r}`).join('\n');
+            voicePrompt += 'RULES:\n' + (assistant!.custom_rules as string[]).map((r: string) => `- ${r}`).join('\n') + '\n\n';
           }
 
-          // Add voice-specific instructions
-          voicePrompt += `\n\nVOICE CALL RULES:\n- Keep responses under 2 sentences. Be conversational and natural.\n- You are calling about: ${jobType}\n- Customer name: ${ctx.customerName || 'there'}\n- If asked something you don't know, offer to have someone call back.`;
+          // Call flow based on goal
+          const goalInstructions: Record<string, string> = {
+            close_sale: `CALL FLOW:
+1. Quick intro — say who you are and why you're calling (one sentence).
+2. Ask ONE qualifying question to hook them into conversation.
+3. If they engage, give a brief pitch (2-3 sentences max) focused on their biggest pain point.
+4. Handle objections with confidence — don't fold at the first "no" or "not interested." Push back once with value.
+5. Drive to action: "Want me to send you the signup link on WhatsApp right now?"
+6. If they say not interested TWICE, respect it. Say you'll follow up on WhatsApp and end warmly.`,
+            book_consultation: `CALL FLOW:
+1. Quick intro — say who you are and why you're calling (one sentence).
+2. Ask about their current situation — what are they dealing with?
+3. Based on their answer, explain how you can help (2 sentences max).
+4. Push for a booking: "I've got Thursday or Friday open — which works better for you?"
+5. If they hesitate, offer to send details on WhatsApp. Don't let the call end without a next step.`,
+            collect_review: `CALL FLOW:
+1. Quick intro — remind them of the recent service.
+2. Ask if everything went well.
+3. If happy: "Would you mind leaving us a quick review? I can text you the link right now."
+4. If there's an issue: "I'm sorry to hear that. Let me have the owner reach out to make it right."`,
+            reactivate: `CALL FLOW:
+1. Quick intro — mention you haven't connected in a while.
+2. Ask if they have any upcoming projects or needs.
+3. Mention any current availability, promotions, or seasonal relevance.
+4. Push for next step: schedule a visit, send a quote, or follow up on WhatsApp.`,
+          };
+
+          voicePrompt += (goalInstructions[goal] || goalInstructions.close_sale) + '\n\n';
+
+          voicePrompt += `CRITICAL: When someone says "not interested" the first time, don't just give up. Push back ONCE with a quick value prop. Only back off if they say no a second time. End every call with a next step — even if it's "I'll text you some info on WhatsApp."`;
 
           dynamicVars.system_prompt = voicePrompt;
           fromNumber = defaultFromNumber;

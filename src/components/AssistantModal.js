@@ -1646,7 +1646,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         value={action.config?.jobType || ''}
                                         onChange={e => updateActionInRule(ruleIdx, actIdx, 'jobType', e.target.value)}
                                         className="w-full p-2 border border-slate-200 rounded-lg text-xs"
-                                        placeholder="Job type, e.g. Sales Prospect, Support"
+                                        placeholder="Call purpose, e.g. Quote Follow-Up, Sales Demo"
                                       />
                                     )}
                                     {actionDef?.configFields?.includes('status') && (

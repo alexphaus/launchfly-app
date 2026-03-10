@@ -1628,27 +1628,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         </p>
                                       </div>
                                     )}
-                                    {actionDef?.configFields?.includes('retellAgentId') && (
-                                      <div className="space-y-1.5">
-                                        <input
-                                          type="text"
-                                          value={action.config?.fromNumber || ''}
-                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'fromNumber', e.target.value)}
-                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                                          placeholder="From Number, e.g. +18001234567 (blank = default)"
-                                        />
-                                        <input
-                                          type="text"
-                                          value={action.config?.retellAgentId || ''}
-                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'retellAgentId', e.target.value)}
-                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                                          placeholder="Retell Agent ID (blank = use Brain tab config)"
-                                        />
-                                        <p className="text-[10px] text-slate-400 px-1">
-                                          Leave both blank → uses your Brain tab prompt as the voice agent. Set a number + agent ID for a custom Retell agent.
-                                        </p>
-                                      </div>
-                                    )}
                                     {actionDef?.configFields?.includes('jobType') && (
                                       <input
                                         type="text"
@@ -1657,6 +1636,29 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         className="w-full p-2 border border-slate-200 rounded-lg text-xs"
                                         placeholder="Call purpose, e.g. Quote Follow-Up, Sales Demo"
                                       />
+                                    )}
+                                    {actionDef?.configFields?.includes('retellAgentId') && (
+                                      <details className="text-xs">
+                                        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">
+                                          Advanced: custom number / agent ID
+                                        </summary>
+                                        <div className="space-y-1.5 mt-1.5">
+                                          <input
+                                            type="text"
+                                            value={action.config?.fromNumber || ''}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'fromNumber', e.target.value)}
+                                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                            placeholder="From Number (blank = default)"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={action.config?.retellAgentId || ''}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'retellAgentId', e.target.value)}
+                                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                            placeholder="Retell Agent ID (blank = Brain tab)"
+                                          />
+                                        </div>
+                                      </details>
                                     )}
                                     {actionDef?.configFields?.includes('status') && (
                                       <input

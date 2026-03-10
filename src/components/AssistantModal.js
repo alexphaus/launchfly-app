@@ -190,6 +190,47 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [activityDetail, setActivityDetail] = useState(null);       // { messages } or { transcript, summary, ... }
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // WhatsApp API config (per-business, stored in businesses.whatsapp_api_config)
+  const [waConfig, setWaConfig] = useState({ instanceId: '', token: '' });
+  const [waSaving, setWaSaving] = useState(false);
+  const [waStatus, setWaStatus] = useState(null); // 'saved' | 'error'
+
+  useEffect(() => {
+    if (business?.whatsapp_api_config) {
+      setWaConfig({
+        instanceId: business.whatsapp_api_config.instanceId || '',
+        token: business.whatsapp_api_config.token || '',
+      });
+    }
+  }, [business?.whatsapp_api_config]);
+
+  const saveWhatsAppConfig = async () => {
+    if (!business?.id) return;
+    setWaSaving(true);
+    setWaStatus(null);
+    try {
+      const res = await fetch('/api/businesses/whatsapp-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: business.id,
+          instanceId: waConfig.instanceId,
+          token: waConfig.token,
+        }),
+      });
+      if (res.ok) {
+        setWaStatus('saved');
+        setTimeout(() => setWaStatus(null), 2000);
+      } else {
+        setWaStatus('error');
+      }
+    } catch {
+      setWaStatus('error');
+    } finally {
+      setWaSaving(false);
+    }
+  };
+
   // ── Load assistant config ──────────────────────────────────────────────
   // Apply assistant data to local config state
   const applyAssistantData = useCallback((assistant) => {
@@ -1343,6 +1384,71 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                           }
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* ── WhatsApp Connection (UltraMsg) ── */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                      WhatsApp Connection
+                    </label>
+                    <div className="bg-slate-50 p-3 rounded-xl space-y-2">
+                      {waConfig.instanceId && waConfig.token ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span className="text-xs text-emerald-700 font-medium">Connected</span>
+                          <span className="text-[10px] text-slate-400">({waConfig.instanceId})</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">Not connected — enter your UltraMsg credentials below.</p>
+                      )}
+                      <details className="text-xs">
+                        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">
+                          {waConfig.instanceId ? 'Edit credentials' : 'Setup WhatsApp API'}
+                        </summary>
+                        <div className="space-y-2 mt-2">
+                          <input
+                            type="text"
+                            value={waConfig.instanceId}
+                            onChange={e => setWaConfig(prev => ({ ...prev, instanceId: e.target.value }))}
+                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                            placeholder="Instance ID (e.g. instance164947)"
+                          />
+                          <input
+                            type="text"
+                            value={waConfig.token}
+                            onChange={e => setWaConfig(prev => ({ ...prev, token: e.target.value }))}
+                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                            placeholder="Token"
+                          />
+                          {business?.id && (
+                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
+                              <p className="text-[10px] text-slate-400 mb-1">Webhook URL (paste in UltraMsg dashboard):</p>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="text"
+                                  readOnly
+                                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/ultramsg?businessId=${business.id}`}
+                                  className="flex-1 p-1.5 border border-slate-200 rounded text-[10px] font-mono bg-slate-50"
+                                />
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ultramsg?businessId=${business.id}`)}
+                                  className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded hover:bg-slate-800 transition-colors"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <button
+                            onClick={saveWhatsAppConfig}
+                            disabled={waSaving || !waConfig.instanceId || !waConfig.token}
+                            className="w-full py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                          >
+                            {waSaving ? 'Saving...' : waStatus === 'saved' ? '✓ Saved' : 'Save WhatsApp Config'}
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 </div>

@@ -187,22 +187,22 @@ async function sendSms(to: string, body: string): Promise<void> {
   });
 }
 
-async function sendWhatsApp(to: string, body: string): Promise<void> {
+async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
   const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
-  const result = await ultramsgSend(to, body);
+  const result = await ultramsgSend(to, body, businessId);
   if (!result.sent) {
     throw new Error(`UltraMsg send failed: ${result.error}`);
   }
 }
 
 /** Send a message — WhatsApp first, SMS fallback on failure */
-async function sendMessage(to: string, body: string, channel?: string): Promise<'whatsapp' | 'sms'> {
+async function sendMessage(to: string, body: string, channel?: string, businessId?: string): Promise<'whatsapp' | 'sms'> {
   if (channel === 'sms') {
     await sendSms(to, body);
     return 'sms';
   }
   try {
-    await sendWhatsApp(to, body);
+    await sendWhatsApp(to, body, businessId);
     return 'whatsapp';
   } catch (err) {
     console.warn(`[automation] WhatsApp failed for ${to}, falling back to SMS:`, (err as Error).message);
@@ -249,7 +249,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
       const channel = (ctx.metadata?.channel as string) || undefined;
-      const sentVia = await sendMessage(ctx.phone, msg, channel);
+      const sentVia = await sendMessage(ctx.phone, msg, channel, ctx.businessId);
       await saveToChatHistory(ctx.phone, ctx.businessId, msg);
       return { ok: true, detail: `Sent ${sentVia} to ${ctx.phone}` };
     }
@@ -264,7 +264,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       const ownerPhone = biz?.whatsapp_number || biz?.phone_number;
       if (!ownerPhone) return { ok: false, detail: 'No owner phone found' };
       const notifyMsg = fillVars((cfg.message as string) || '🔔 Automation alert: {event} from {customerName}', ctx);
-      await sendWhatsApp(ownerPhone, notifyMsg);
+      await sendWhatsApp(ownerPhone, notifyMsg, ctx.businessId);
       return { ok: true, detail: `Notified owner at ${ownerPhone}` };
     }
 
@@ -581,7 +581,7 @@ CUSTOMER NAME: ${customerName}
       }
       if (!templateMsg) return { ok: false, detail: 'No message content for template action' };
 
-      await sendWhatsApp(ctx.phone, templateMsg);
+      await sendWhatsApp(ctx.phone, templateMsg, ctx.businessId);
       await saveToChatHistory(ctx.phone, ctx.businessId, templateMsg);
       return { ok: true, detail: `Template message sent to ${ctx.phone}` };
     }

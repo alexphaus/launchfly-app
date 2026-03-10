@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getLastBusinessId } from '@/lib/ai-receptionist/history';
 import { fireEvent } from '@/lib/automations/executor';
+import { resolveBusinessByInstance } from '@/lib/ultramsg';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
     let from = '';
     let body = '';
     let pushname = '';
+    let instanceId = '';
 
     const contentType = request.headers.get('content-type') || '';
 
@@ -44,11 +46,13 @@ export async function POST(request: NextRequest) {
       from = data.from || '';
       body = data.body || '';
       pushname = data.pushname || data.notifyName || '';
+      instanceId = data.instanceId || json.instanceId || '';
     } else {
       const formData = await request.formData();
       from = (formData.get('from') as string) || '';
       body = (formData.get('body') as string) || '';
       pushname = (formData.get('pushname') as string) || '';
+      instanceId = (formData.get('instanceId') as string) || '';
     }
 
     // Normalize phone: UltraMsg sends "639XXXXXXXXX@c.us"
@@ -74,8 +78,21 @@ export async function POST(request: NextRequest) {
     console.log(`   Message: ${messageText.substring(0, 100)}`);
     if (pushname) console.log(`   Name: ${pushname}`);
 
-    // Resolve business ID — same logic as v3
-    let businessId = resolveBusinessIdFromMessage(messageText);
+    // Resolve business ID:
+    // 1. Query param ?businessId=xxx (set when configuring webhook URL per business)
+    // 2. Match UltraMsg instance ID → businesses.whatsapp_api_config.instanceId
+    // 3. [BIZ:uuid] in message text
+    // 4. Chat history / customer table fallback
+    let businessId: string | null =
+      request.nextUrl.searchParams.get('businessId') || null;
+
+    if (!businessId && instanceId) {
+      businessId = await resolveBusinessByInstance(instanceId);
+    }
+
+    if (!businessId) {
+      businessId = resolveBusinessIdFromMessage(messageText);
+    }
 
     if (!businessId) {
       businessId = await getLastBusinessId(customerPhone);

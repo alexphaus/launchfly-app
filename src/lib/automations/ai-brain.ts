@@ -45,9 +45,9 @@ export interface AIBrainResult {
 
 // ─── Send helpers ────────────────────────────────────────────────────────
 
-async function sendWhatsApp(to: string, body: string): Promise<void> {
+async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
   const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
-  const result = await ultramsgSend(to, body);
+  const result = await ultramsgSend(to, body, businessId);
   if (!result.sent) {
     throw new Error(`UltraMsg send failed: ${result.error}`);
   }
@@ -66,11 +66,11 @@ async function sendSms(to: string, body: string): Promise<void> {
   });
 }
 
-async function sendReply(to: string, body: string, channel: string): Promise<void> {
+async function sendReply(to: string, body: string, channel: string, businessId?: string): Promise<void> {
   if (channel === 'sms') {
     await sendSms(to, body);
   } else {
-    await sendWhatsApp(to, body);
+    await sendWhatsApp(to, body, businessId);
   }
 }
 
@@ -293,7 +293,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   if (!aiResponse) aiResponse = `Hi! How can I help you?`;
 
   // ── Send reply via same channel the customer used ──
-  await sendReply(phoneWithPlus, aiResponse, channel);
+  await sendReply(phoneWithPlus, aiResponse, channel, businessId);
 
   // ── Save history ──
   await saveUserPromise;
@@ -449,7 +449,7 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
   if (!aiResponse) return { reply: '', toolsCalled: [], skipped: true, skipReason: 'AI generated empty response' };
 
   // ── Send via correct channel ──
-  await sendReply(phoneWithPlus, aiResponse, channel);
+  await sendReply(phoneWithPlus, aiResponse, channel, businessId);
 
   // ── Save to history (no user message to save — this is a follow-up) ──
   await saveMessage(

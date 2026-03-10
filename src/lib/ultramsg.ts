@@ -1,19 +1,49 @@
 // src/lib/ultramsg.ts
 // UltraMsg WhatsApp API — template-free, no 24h window restrictions
-// Replaces Twilio WhatsApp. SMS still goes through Twilio.
+// Each business has its own instance (QR-code-linked phone).
+// Credentials stored in businesses.whatsapp_api_config jsonb:
+//   { provider: 'ultramsg', instanceId: '...', token: '...' }
+// Falls back to env vars ULTRAMSG_INSTANCE_ID / ULTRAMSG_TOKEN for your own number.
+
+import { createClient } from '@supabase/supabase-js';
 
 const ULTRAMSG_BASE = 'https://api.ultramsg.com';
 
-function getInstanceId(): string {
-  const id = process.env.ULTRAMSG_INSTANCE_ID;
-  if (!id) throw new Error('Missing ULTRAMSG_INSTANCE_ID env var');
-  return id;
+export interface UltramsgCredentials {
+  instanceId: string;
+  token: string;
 }
 
-function getToken(): string {
+/** Look up a business's UltraMsg credentials from the DB, fallback to env vars */
+export async function getCredentials(businessId?: string): Promise<UltramsgCredentials> {
+  if (businessId) {
+    try {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!,
+      );
+      const { data } = await supabase
+        .from('businesses')
+        .select('whatsapp_api_config')
+        .eq('id', businessId)
+        .single();
+
+      const cfg = data?.whatsapp_api_config;
+      if (cfg?.instanceId && cfg?.token) {
+        return { instanceId: cfg.instanceId, token: cfg.token };
+      }
+    } catch {
+      // Fall through to env vars
+    }
+  }
+
+  // Fallback: global env vars (your own test instance)
+  const instanceId = process.env.ULTRAMSG_INSTANCE_ID;
   const token = process.env.ULTRAMSG_TOKEN;
-  if (!token) throw new Error('Missing ULTRAMSG_TOKEN env var');
-  return token;
+  if (!instanceId || !token) {
+    throw new Error('No UltraMsg credentials found — set per-business config or ULTRAMSG_INSTANCE_ID/ULTRAMSG_TOKEN env vars');
+  }
+  return { instanceId, token };
 }
 
 /** Normalize phone to international format without whatsapp: prefix */
@@ -24,9 +54,12 @@ function normalizePhone(phone: string): string {
 }
 
 /** Send a plain WhatsApp text message */
-export async function sendWhatsApp(to: string, body: string): Promise<{ sent: boolean; id?: string; error?: string }> {
-  const instanceId = getInstanceId();
-  const token = getToken();
+export async function sendWhatsApp(
+  to: string,
+  body: string,
+  businessId?: string,
+): Promise<{ sent: boolean; id?: string; error?: string }> {
+  const { instanceId, token } = await getCredentials(businessId);
   const phone = normalizePhone(to);
 
   const payload = new URLSearchParams();
@@ -49,9 +82,12 @@ export async function sendWhatsApp(to: string, body: string): Promise<{ sent: bo
 }
 
 /** Send a WhatsApp voice note from a URL (.ogg recommended) */
-export async function sendVoiceNote(to: string, audioUrl: string): Promise<{ sent: boolean; error?: string }> {
-  const instanceId = getInstanceId();
-  const token = getToken();
+export async function sendVoiceNote(
+  to: string,
+  audioUrl: string,
+  businessId?: string,
+): Promise<{ sent: boolean; error?: string }> {
+  const { instanceId, token } = await getCredentials(businessId);
   const phone = normalizePhone(to);
 
   const payload = new URLSearchParams();
@@ -73,9 +109,13 @@ export async function sendVoiceNote(to: string, audioUrl: string): Promise<{ sen
 }
 
 /** Send an image with optional caption */
-export async function sendImage(to: string, imageUrl: string, caption?: string): Promise<{ sent: boolean; error?: string }> {
-  const instanceId = getInstanceId();
-  const token = getToken();
+export async function sendImage(
+  to: string,
+  imageUrl: string,
+  caption?: string,
+  businessId?: string,
+): Promise<{ sent: boolean; error?: string }> {
+  const { instanceId, token } = await getCredentials(businessId);
   const phone = normalizePhone(to);
 
   const payload = new URLSearchParams();
@@ -95,4 +135,23 @@ export async function sendImage(to: string, imageUrl: string, caption?: string):
     return { sent: true };
   }
   return { sent: false, error: json.error || JSON.stringify(json) };
+}
+
+/** Resolve which business owns a given UltraMsg instance ID */
+export async function resolveBusinessByInstance(instanceId: string): Promise<string | null> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
+    const { data } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('whatsapp_api_config->>instanceId', instanceId)
+      .limit(1)
+      .single();
+    return data?.id || null;
+  } catch {
+    return null;
+  }
 }

@@ -130,6 +130,27 @@ export async function POST(request: NextRequest) {
 
     console.log(`   🏢 Business: ${businessId}`);
 
+    // ─── HARD STOP / OPT-OUT CHECK (after full business resolution) ───
+    const isOptOut = /^(stop|unsubscribe|cancel|quit|end|no\s*more|opt\s*out)$/i.test(messageText.trim());
+    if (isOptOut) {
+      console.log(`   🛑 User ${customerPhone} opted out via WhatsApp.`);
+      const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+      const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+
+      // Send confirmation FIRST (before blacklisting, otherwise our own check blocks it)
+      const { sendWhatsApp } = await import('@/lib/ultramsg');
+      await sendWhatsApp(customerPhone, "You've been successfully unsubscribed and won't receive more automated messages from us.", businessId);
+
+      // Now blacklist — scoped to this business so other businesses aren't affected
+      await supabase
+        .from('customers')
+        .update({ accepts_marketing: false })
+        .eq('business_id', businessId)
+        .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`);
+
+      return NextResponse.json({ ok: true, opted_out: true });
+    }
+
     // Fire automation event — all behavior driven by rules
     const result = await fireEvent({
       businessId,

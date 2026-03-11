@@ -1402,8 +1402,17 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       ) : (
                         <p className="text-xs text-slate-400">Not connected — enter your UltraMsg credentials below.</p>
                       )}
+                      
+                      {/* Anti-Ban Warning */}
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2 flex gap-2 items-start">
+                        <span className="text-amber-500 mt-0.5">⚠️</span>
+                        <p className="text-[10px] text-amber-700 leading-relaxed">
+                          <strong className="font-bold">Avoid Meta Bans:</strong> If using a brand-new SIM card, text manually with real humans for 3-5 days before turning on automated sequences. For first outreach messages, always ask a short &quot;ping&quot; question to get a reply before pitching.
+                        </p>
+                      </div>
+
                       <details className="text-xs">
-                        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">
+                        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none mt-2">
                           {waConfig.instanceId ? 'Edit credentials' : 'Setup WhatsApp API'}
                         </summary>
                         <div className="space-y-2 mt-2">

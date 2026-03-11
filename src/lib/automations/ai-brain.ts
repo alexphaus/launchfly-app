@@ -11,7 +11,8 @@
 // This file is ~120 lines of pure infrastructure. Zero business logic.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { generateText } from 'ai';
+import { generateText, generateObject } from 'ai';
+import { z } from 'zod';
 import { openai } from '@ai-sdk/openai';
 import { createClient } from '@supabase/supabase-js';
 import { receptionistTools } from '@/lib/ai-receptionist/tools';
@@ -256,16 +257,32 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     (err) => console.error('[ai-brain] Error saving user message:', err),
   );
 
-  // ── Call AI ──
-  const result = await generateText({
-    model: openai('gpt-4o-mini'),
-    system: systemPrompt,
-    messages: [...history, { role: 'user' as const, content: messageText }],
-    tools,
-    // @ts-ignore – maxSteps available in AI SDK 3.1+
-    maxSteps: 5,
-    toolChoice: 'auto',
-  });
+  // ── Call AI (Parallel text gen + intent classification) ──
+  const [result, intentCheck] = await Promise.all([
+    generateText({
+      model: openai('gpt-4o-mini'),
+      system: systemPrompt,
+      messages: [...history, { role: 'user' as const, content: messageText }],
+      tools,
+      // @ts-ignore – maxSteps available in AI SDK 3.1+
+      maxSteps: 5,
+      toolChoice: 'auto',
+    }),
+    
+    // Smart Followup Check: Is this prospect completely dead?
+    generateObject({
+      model: openai('gpt-4o-mini'),
+      schema: z.object({
+        isDead: z.boolean().describe("True if prospect explicitly opted out ('stop', 'no'), or gave very brief dead-end replies to a pitch (e.g. 'ok', 'not now') without asking any questions."),
+        reason: z.string().describe("Why you classified this as dead or active"),
+      }),
+      system: "You are a sales intent analyzer. Analyze the recent conversation history to decide if we should completely abort following up with this lead.",
+      messages: [...history.slice(-4), { role: 'user' as const, content: messageText }],
+    }).catch(err => {
+      console.warn('   ⚠️ [ai-brain] Intent check failed:', err);
+      return { object: { isDead: false, reason: 'error processing' } };
+    })
+  ]);
 
   let aiResponse = result.text || '';
   const allToolCalls = result.steps.flatMap((step) => step.toolCalls || []);
@@ -311,11 +328,22 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
 
   console.log(`   ✅ [ai-brain] ${aiResponse.length} chars, ${allToolCalls.length} tools`);
 
-  // ── Schedule inactivity check — if customer doesn't reply within 24h,
-  //    fire user_inactive so automation rules can trigger smart follow-ups ──
-  scheduleInactivityCheck(businessId, phoneWithPlus, channel).catch(err =>
-    console.warn('[ai-brain] Failed to schedule inactivity check:', err),
-  );
+  // ── Smart Followup Check Handling ──
+  if (intentCheck.object.isDead) {
+    console.log(`   🛑 [ai-brain] Prospect marked dead (${intentCheck.object.reason}). Aborting follow-ups.`);
+    if (customer?.id) {
+      // Fire and forget update so we don't block
+      supabase.from('customers').update({ status: 'not_interested' }).eq('id', customer.id).then(({error}) => {
+        if (error) console.warn('[ai-brain] Failed to update customer dead status:', error);
+      });
+    }
+  } else {
+    // ── Schedule inactivity check — if customer doesn't reply within 24h,
+    //    fire user_inactive so automation rules can trigger smart follow-ups ──
+    scheduleInactivityCheck(businessId, phoneWithPlus, channel).catch(err =>
+      console.warn('[ai-brain] Failed to schedule inactivity check:', err),
+    );
+  }
 
   return {
     reply: aiResponse,

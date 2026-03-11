@@ -158,6 +158,8 @@ function deriveOutcome(callStatus: string, sentiment: string, summary: string, d
     lowerDisconnect.includes('dial_busy') ||
     lowerDisconnect.includes('no_pickup') ||
     lowerDisconnect.includes('machine') ||
+    lowerDisconnect.includes('user_declined') ||
+    lowerDisconnect.includes('voicemail_reached') ||
     lowerSummary.includes('voicemail') ||
     lowerSummary.includes('no answer') ||
     lowerSummary.includes('didn\'t pick up')

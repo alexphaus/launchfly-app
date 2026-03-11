@@ -64,8 +64,8 @@ async function simulateHumanTyping(text: string) {
   await new Promise(resolve => setTimeout(resolve, totalDelayMs));
 }
 
-/** Check if number is completely blacklisted (has opted out) */
-async function isBlacklisted(phone: string): Promise<boolean> {
+/** Check if number is blacklisted (has opted out) — scoped to business when provided */
+async function isBlacklisted(phone: string, businessId?: string): Promise<boolean> {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -74,12 +74,17 @@ async function isBlacklisted(phone: string): Promise<boolean> {
     const p1 = phone.startsWith('+') ? phone : `+${phone}`;
     const p2 = phone.replace(/^\+/, '');
     
-    const { data } = await supabase
+    let query = supabase
       .from('customers')
       .select('accepts_marketing')
       .or(`phone.eq.${p1},phone.eq.${p2}`)
-      .eq('accepts_marketing', false)
-      .limit(1);
+      .eq('accepts_marketing', false);
+
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    }
+
+    const { data } = await query.limit(1);
 
     return Array.isArray(data) && data.length > 0;
   } catch {
@@ -94,7 +99,7 @@ export async function sendWhatsApp(
   businessId?: string,
 ): Promise<{ sent: boolean; id?: string; error?: string }> {
   // 1) HARD BLACKLIST CHECK - Prevent sending if customer opted out
-  if (await isBlacklisted(to)) {
+  if (await isBlacklisted(to, businessId)) {
     console.log(`[UltraMsg] 🚫 Blocked: ${to} is blacklisted (opted out).`);
     return { sent: false, error: 'Recipient is blacklisted from receiving automated messages.' };
   }
@@ -130,7 +135,7 @@ export async function sendVoiceNote(
   audioUrl: string,
   businessId?: string,
 ): Promise<{ sent: boolean; error?: string }> {
-  if (await isBlacklisted(to)) {
+  if (await isBlacklisted(to, businessId)) {
     return { sent: false, error: 'Recipient opted out.' };
   }
   const { instanceId, token } = await getCredentials(businessId);
@@ -161,7 +166,7 @@ export async function sendImage(
   caption?: string,
   businessId?: string,
 ): Promise<{ sent: boolean; error?: string }> {
-  if (await isBlacklisted(to)) {
+  if (await isBlacklisted(to, businessId)) {
     return { sent: false, error: 'Recipient opted out.' };
   }
   const { instanceId, token } = await getCredentials(businessId);

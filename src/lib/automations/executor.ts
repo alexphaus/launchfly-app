@@ -558,10 +558,13 @@ CUSTOMER NAME: ${customerName}
       const supabase = getSupabase();
       const status = cfg.status as string;
       if (!ctx.phone || !status) return { ok: false, detail: 'Missing phone or status' };
+      const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+      const phoneWithoutPlus = phoneNorm.replace(/^\+/, '');
       await supabase
         .from('customers')
         .update({ status })
-        .eq('phone', ctx.phone);
+        .eq('business_id', ctx.businessId)
+        .or(`phone.eq.${phoneNorm},phone.eq.${phoneWithoutPlus}`);
       return { ok: true, detail: `Status updated to ${status}` };
     }
 
@@ -827,7 +830,7 @@ async function scheduleResume(
         Authorization: `Bearer ${qstashToken}`,
         'Content-Type': 'application/json',
         'Upstash-Delay': `${delaySeconds}s`,
-        'Upstash-Retries': '2',
+        'Upstash-Retries': '0',
       },
       body: JSON.stringify({
         actions: remainingActions,

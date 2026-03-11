@@ -19,7 +19,7 @@ import {
   getConversationHistory,
   saveMessage,
 } from '@/lib/ai-receptionist/history';
-import { sendTypingIndicator } from '@/lib/whatsapp-push';
+// sendTypingIndicator removed — was Twilio-specific, not applicable to UltraMsg
 
 function getSupabase() {
   return createClient(
@@ -216,10 +216,8 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   const { businessId, phone, messageText, messageSid, channel = 'whatsapp' } = input;
   const supabase = getSupabase();
 
-  // Typing indicator (fire-and-forget)
-  if (messageSid) {
-    sendTypingIndicator(messageSid).catch(() => {});
-  }
+  // Note: UltraMsg doesn't support typing indicators via API.
+  // The simulateHumanTyping delay in ultramsg.ts handles perceived typing time.
 
   const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
   const phoneWithoutPlus = phone.replace(/^\+/, '');

@@ -71,6 +71,8 @@ export const AVAILABLE_EVENTS = [
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱', desc: 'Retell AI call ended — check outcome in metadata' },
   { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕', desc: 'A new customer/lead record is created for the first time' },
   { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶', desc: 'Customer hasn\'t replied after 24h — triggers smart AI follow-up' },
+  { id: 'prospect_found', label: 'Prospect Found', icon: '🎯', desc: 'A new prospect was discovered by search_leads — fires once per lead' },
+  { id: 'daily_schedule', label: 'Daily Schedule', icon: '⏰', desc: 'Fires on a schedule (daily/weekly). Configure time and days in the rule.' },
 ] as const;
 
 // ─── Available Actions ───────────────────────────────────────────────────
@@ -89,6 +91,9 @@ export const AVAILABLE_ACTIONS = [
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', desc: 'Add a tag to the customer for segmentation', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', desc: 'Remove a tag from the customer', configFields: ['tag'] },
   { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', desc: 'AI reads the conversation history and generates a contextual follow-up message. Stops after 5 unanswered messages.', configFields: [] },
+  { id: 'ai_qualify', label: 'AI Qualify Lead', icon: '🎯', desc: 'AI evaluates the lead and stops the chain if unqualified. Use {metadata.rating}, {metadata.reviews}, {customerName}.', configFields: ['qualifyPrompt'] },
+  { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', desc: 'Scrape Google Maps for businesses. Each result fires a prospect_found event for downstream rules.', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
+  { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', desc: 'Space out leads with progressive delays and a daily cap. Schedules remaining actions via QStash.', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
   { id: 'condition_branch', label: 'If / Else Branch', icon: '🔀', desc: 'Evaluate conditions and run different actions for true vs false branches', configFields: [] },
 ] as const;
 
@@ -696,6 +701,156 @@ CUSTOMER NAME: ${customerName}
       return { ok: true, detail: `Tag "${tag}" removed` };
     }
 
+    // ─── AI Qualify (gate — stops chain on NO) ────────────────────────────
+
+    case 'ai_qualify': {
+      const promptTemplate = (cfg.qualifyPrompt as string) || 'Is {customerName} a good prospect? Answer YES or NO.';
+      const prompt = fillVars(promptTemplate, ctx);
+      const { generateText } = await import('ai');
+      const { openai } = await import('@ai-sdk/openai');
+      const result = await generateText({
+        model: openai('gpt-4o-mini'),
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const answer = result.text.trim().toUpperCase();
+      console.log(`[automation] ai_qualify: "${answer}" for ${ctx.customerName || ctx.phone}`);
+      if (answer.includes('NO')) {
+        return { ok: true, detail: `Lead disqualified: "${result.text.trim()}"`, stopChain: true } as { ok: boolean; detail: string; stopChain: boolean };
+      }
+      return { ok: true, detail: `Lead qualified: "${result.text.trim()}"` };
+    }
+
+    // ─── Search Leads (Apify fan-out → prospect_found events) ─────────────
+
+    case 'search_leads': {
+      const searchQuery = (cfg.searchQuery as string) || '';
+      const searchLocation = (cfg.searchLocation as string) || '';
+      if (!searchQuery || !searchLocation) return { ok: false, detail: 'Missing searchQuery or searchLocation' };
+      const maxResults = Number(cfg.searchMaxResults) || 50;
+
+      const { searchGoogleMaps } = await import('@/lib/apify');
+      const leads = await searchGoogleMaps({
+        query: searchQuery,
+        location: searchLocation,
+        maxResults,
+        businessId: ctx.businessId,
+      });
+
+      if (leads.length === 0) return { ok: true, detail: 'Search returned 0 leads with phone numbers' };
+
+      // Dedup against existing quote_leads (normalize to digits-only for matching)
+      const supabase = getSupabase();
+      const normalizePhone = (p: string) => p.replace(/[^\d]/g, '');
+      const uniquePhones = [...new Set(leads.map(l => normalizePhone(l.phone)))];
+      // Supabase .in() has a 100-item limit, so batch if needed
+      const existingPhones = new Set<string>();
+      for (let batch = 0; batch < uniquePhones.length; batch += 80) {
+        const chunk = uniquePhones.slice(batch, batch + 80);
+        // Query both +XXX and XXX variants in case of inconsistent storage
+        const variants = chunk.flatMap(p => [p, `+${p}`]);
+        const { data: existing } = await supabase
+          .from('quote_leads')
+          .select('phone')
+          .eq('business_id', ctx.businessId)
+          .in('phone', variants);
+        for (const e of (existing || [])) existingPhones.add(normalizePhone(e.phone));
+      }
+      const newLeads = leads.filter(l => !existingPhones.has(normalizePhone(l.phone)));
+
+      if (newLeads.length === 0) return { ok: true, detail: `${leads.length} leads found, all already in database` };
+
+      // Fan-out: fire prospect_found for each new lead (non-blocking)
+      let firedCount = 0;
+      for (const lead of newLeads) {
+        fireEvent({
+          businessId: ctx.businessId,
+          event: 'prospect_found',
+          phone: lead.phone,
+          customerName: lead.title,
+          metadata: {
+            source: 'apify_prospecting',
+            rating: String(lead.rating),
+            reviews: String(lead.reviewsCount),
+            website: lead.website,
+            address: lead.address,
+            city: lead.city,
+            category: lead.categoryName,
+            place_id: lead.placeId,
+          },
+        }).catch(err => console.warn('[automation] prospect_found fire error:', err));
+        firedCount++;
+      }
+
+      return { ok: true, detail: `Found ${leads.length} leads, ${newLeads.length} new → fired ${firedCount} prospect_found events` };
+    }
+
+    // ─── Stagger Outreach (progressive delays + daily cap) ────────────────
+
+    case 'stagger_outreach': {
+      const intervalMin = Number(cfg.staggerIntervalMin) || 15;
+      const maxPerDay = Number(cfg.staggerMaxPerDay) || 15;
+
+      // Count how many outreach calls we've already made today
+      const supabase = getSupabase();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { count: todayCount } = await supabase
+        .from('quote_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', ctx.businessId)
+        .eq('source', 'prospecting')
+        .gte('created_at', todayStart.toISOString());
+
+      const position = todayCount || 0;
+
+      if (position >= maxPerDay) {
+        return { ok: true, detail: `Daily cap reached (${position}/${maxPerDay}) — skipping`, stopChain: true } as { ok: boolean; detail: string; stopChain: boolean };
+      }
+
+      // Schedule remaining actions with progressive delay
+      const delaySeconds = position * intervalMin * 60;
+      // Mark this lead with the prospecting source so the counter works
+      if (ctx.phone) {
+        const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+        const jobType = (ctx.metadata?.category as string) || 'Prospecting';
+        // Check if lead already exists (avoid duplicate insert — unique index is on phone+job_type)
+        const { data: existingLead } = await supabase
+          .from('quote_leads')
+          .select('id')
+          .eq('business_id', ctx.businessId)
+          .eq('phone', phoneNorm)
+          .maybeSingle();
+
+        if (!existingLead) {
+          await supabase.from('quote_leads').insert({
+            business_id: ctx.businessId,
+            phone: phoneNorm,
+            name: ctx.customerName || 'Unknown',
+            source: 'prospecting',
+            status: 'Open',
+            job_type: jobType,
+            quote_amount: 0,
+            attempts: 0,
+          });
+        }
+      }
+
+      if (delaySeconds <= 0) {
+        // First lead of the day — continue immediately (no delay needed)
+        return { ok: true, detail: `Stagger: position ${position + 1}/${maxPerDay}, executing now` };
+      }
+
+      // Use the existing scheduleResume to delay remaining actions
+      // We need to grab remaining actions from the call stack — return a special marker
+      // The executeActions loop doesn't know about remaining actions here,
+      // so we use the delay pattern: inject into ctx and break.
+      // Actually simpler: just return a detail and let the next action in the chain be a delay.
+      // But for progressive delays, we need to schedule from HERE.
+      // We'll abuse the existing scheduleResume by importing it.
+
+      return { ok: true, detail: `Stagger: position ${position + 1}/${maxPerDay}, delay=${Math.round(delaySeconds / 60)}min`, staggerDelay: delaySeconds } as { ok: boolean; detail: string; staggerDelay: number };
+    }
+
     default:
       return { ok: false, detail: `Unknown action type: ${action.type}` };
   }
@@ -825,6 +980,23 @@ export async function executeActions(
       const result = await dispatchAction(action, ctx);
       results.push(result);
       console.log(`[automation] ${ctx.event} → ${action.type}: ${result.detail}`);
+
+      // stopChain: action requested we abort remaining steps (e.g. ai_qualify said NO)
+      if ((result as { stopChain?: boolean }).stopChain) {
+        console.log(`[automation] Chain stopped by ${action.type}`);
+        return;
+      }
+
+      // staggerDelay: stagger_outreach wants us to delay remaining actions
+      const staggerDelay = (result as { staggerDelay?: number }).staggerDelay;
+      if (staggerDelay && staggerDelay > 0) {
+        const remaining = actions.slice(i + 1);
+        if (remaining.length > 0) {
+          const scheduled = await scheduleResume(remaining, ctx, staggerDelay);
+          results.push({ ok: scheduled, detail: `Stagger delay ${Math.round(staggerDelay / 60)}min → ${remaining.length} actions scheduled` });
+        }
+        return;
+      }
     } catch (err) {
       const detail = `Error executing ${action.type}: ${err instanceof Error ? err.message : String(err)}`;
       results.push({ ok: false, detail });

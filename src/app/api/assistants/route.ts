@@ -117,7 +117,7 @@ interface AssistantPayload {
     message: string;
     voicemail?: string;
   }[];
-  trigger_config?: Record<string, boolean>;
+  trigger_config?: Record<string, unknown>;
 }
 
 export async function POST(req: NextRequest) {
@@ -207,6 +207,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       result = data;
+    }
+
+    // ─── QStash CRON management for daily_schedule rules ──────────────────
+    try {
+      await syncDailyScheduleCrons(result, body.businessId);
+    } catch (cronErr) {
+      console.error('[assistants] CRON sync error (non-fatal):', cronErr);
     }
 
     return NextResponse.json({ assistant: result, ok: true });
@@ -371,5 +378,126 @@ export async function DELETE(req: NextRequest) {
   } catch (err) {
     console.error('[assistants] DELETE unexpected error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QStash CRON Sync — create/update/delete schedules for daily_schedule rules
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface ScheduleConfig {
+  hour?: number;
+  minute?: number;
+  days?: string[];       // ['mon','tue','wed','thu','fri','sat','sun']
+  timezone?: string;     // e.g. 'America/New_York'
+  qstashScheduleId?: string;
+}
+
+interface AutomationRule {
+  id: string;
+  event: string;
+  enabled: boolean;
+  scheduleConfig?: ScheduleConfig;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+async function syncDailyScheduleCrons(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  assistant: any,
+  businessId: string,
+) {
+  const qstashToken = process.env.QSTASH_TOKEN;
+  if (!qstashToken) return;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+  const triggerUrl = `${appUrl}/api/assistants/trigger`;
+  const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+  const rules: AutomationRule[] = assistant.trigger_config?.rules || [];
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!,
+  );
+
+  // Collect all daily_schedule rules (enabled or disabled)
+  const scheduleRules = rules.filter(r => r.event === 'daily_schedule');
+
+  for (const rule of scheduleRules) {
+    const cfg = rule.scheduleConfig || {};
+    const hour = cfg.hour ?? 9;
+    const minute = cfg.minute ?? 0;
+    const days = cfg.days || ['mon', 'tue', 'wed', 'thu', 'fri'];
+    const tz = cfg.timezone || 'America/New_York';
+
+    // Build cron expression: minute hour * * day1,day2,...
+    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    const dayNums = days.map(d => dayMap[d.toLowerCase()] ?? 1).sort().join(',');
+    const cron = `${minute} ${hour} * * ${dayNums}`;
+
+    if (!rule.enabled) {
+      // Disabled — delete existing schedule if any
+      if (cfg.qstashScheduleId) {
+        try {
+          await fetch(`${qstashBase}/v2/schedules/${cfg.qstashScheduleId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${qstashToken}` },
+          });
+          console.log(`[cron] Deleted schedule ${cfg.qstashScheduleId} for rule ${rule.id}`);
+        } catch (e) {
+          console.warn('[cron] Delete schedule failed:', e);
+        }
+        // Clear the stored ID
+        rule.scheduleConfig = { ...cfg, qstashScheduleId: undefined };
+      }
+      continue;
+    }
+
+    // If we already have a schedule, update it by deleting + recreating
+    if (cfg.qstashScheduleId) {
+      try {
+        await fetch(`${qstashBase}/v2/schedules/${cfg.qstashScheduleId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${qstashToken}` },
+        });
+      } catch {
+        // ignore — might already be gone
+      }
+    }
+
+    // Create new QStash schedule — businessId MUST be in the URL query param
+    const targetWithBiz = `${triggerUrl}?businessId=${encodeURIComponent(businessId)}`;
+    const res = await fetch(`${qstashBase}/v2/schedules/${targetWithBiz}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${qstashToken}`,
+        'Content-Type': 'application/json',
+        'Upstash-Cron': cron,
+        'Upstash-Retries': '0',
+        ...(tz ? { 'Upstash-Cron-Timezone': tz } : {}),
+      },
+      body: JSON.stringify({
+        businessId,
+        event: 'daily_schedule',
+        ruleId: rule.id,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      rule.scheduleConfig = { ...cfg, qstashScheduleId: data.scheduleId };
+      console.log(`[cron] Created schedule ${data.scheduleId} for rule ${rule.id}: ${cron} ${tz}`);
+    } else {
+      console.error(`[cron] Failed to create schedule for rule ${rule.id}:`, await res.text());
+    }
+  }
+
+  // Persist any updated scheduleConfig back to DB (qstashScheduleId changes)
+  const hasChanges = scheduleRules.length > 0;
+  if (hasChanges) {
+    await supabase
+      .from('assistants')
+      .update({ trigger_config: assistant.trigger_config })
+      .eq('id', assistant.id);
   }
 }

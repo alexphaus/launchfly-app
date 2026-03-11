@@ -61,6 +61,8 @@ const AUTOMATION_EVENTS = [
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱' },
   { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕' },
   { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶' },
+  { id: 'prospect_found', label: 'Prospect Found', icon: '🎯' },
+  { id: 'daily_schedule', label: 'Daily Schedule', icon: '⏰' },
 ];
 
 const AUTOMATION_ACTIONS = [
@@ -78,6 +80,9 @@ const AUTOMATION_ACTIONS = [
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', configFields: ['tag'] },
   { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', configFields: [] },
+  { id: 'ai_qualify', label: 'AI Qualify Lead', icon: '🎯', configFields: ['qualifyPrompt'] },
+  { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
+  { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -133,6 +138,14 @@ const DEFAULT_ACTIONS_BY_EVENT = {
     { type: 'ai_followup', config: {} },
     { type: 'delay', config: { delayHours: 72 } },
     { type: 'ai_followup', config: {} },
+  ],
+  prospect_found: [
+    { type: 'stagger_outreach', config: { staggerIntervalMin: 15, staggerMaxPerDay: 15 } },
+    { type: 'ai_qualify', config: { qualifyPrompt: 'Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nIs this a good prospect for {businessName}? Answer YES or NO with one reason.' } },
+    { type: 'trigger_voice_call', config: { jobType: 'Prospecting Call' } },
+  ],
+  daily_schedule: [
+    { type: 'search_leads', config: { searchQuery: 'contractors near me', searchLocation: 'Miami, FL', searchMaxResults: 50 } },
   ],
 };
 
@@ -1705,6 +1718,64 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                           </select>
                         </div>
 
+                        {/* Schedule config for daily_schedule */}
+                        {rule.event === 'daily_schedule' && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                            <label className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Schedule</label>
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] text-amber-700 font-medium whitespace-nowrap">Run at</label>
+                              <input
+                                type="time"
+                                value={`${String(rule.scheduleConfig?.hour ?? 9).padStart(2, '0')}:${String(rule.scheduleConfig?.minute ?? 0).padStart(2, '0')}`}
+                                onChange={e => {
+                                  const [h, m] = e.target.value.split(':').map(Number);
+                                  const rules = [...getRules()];
+                                  rules[ruleIdx] = { ...rules[ruleIdx], scheduleConfig: { ...rules[ruleIdx].scheduleConfig, hour: h, minute: m } };
+                                  setRules(rules);
+                                }}
+                                className="p-1.5 border border-amber-300 rounded-lg text-xs bg-white"
+                              />
+                              <select
+                                value={rule.scheduleConfig?.timezone || 'America/New_York'}
+                                onChange={e => {
+                                  const rules = [...getRules()];
+                                  rules[ruleIdx] = { ...rules[ruleIdx], scheduleConfig: { ...rules[ruleIdx].scheduleConfig, timezone: e.target.value } };
+                                  setRules(rules);
+                                }}
+                                className="p-1.5 border border-amber-300 rounded-lg text-xs bg-white"
+                              >
+                                <option value="America/New_York">Eastern (NY)</option>
+                                <option value="America/Chicago">Central (Chicago)</option>
+                                <option value="America/Denver">Mountain (Denver)</option>
+                                <option value="America/Los_Angeles">Pacific (LA)</option>
+                                <option value="Europe/London">London (GMT)</option>
+                                <option value="Europe/Madrid">Madrid (CET)</option>
+                              </select>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(day => {
+                                const days = rule.scheduleConfig?.days || ['mon', 'tue', 'wed', 'thu', 'fri'];
+                                const isActive = days.includes(day);
+                                return (
+                                  <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => {
+                                      const newDays = isActive ? days.filter(d => d !== day) : [...days, day];
+                                      const rules = [...getRules()];
+                                      rules[ruleIdx] = { ...rules[ruleIdx], scheduleConfig: { ...rules[ruleIdx].scheduleConfig, days: newDays } };
+                                      setRules(rules);
+                                    }}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${isActive ? 'bg-amber-500 text-white' : 'bg-white text-amber-600 border border-amber-300'}`}
+                                  >
+                                    {day}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* IF conditions */}
                         {(rule.conditions || []).length > 0 && (
                           <div>
@@ -1904,6 +1975,69 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         placeholder="e.g. vip"
                                                       />
                                                     )}
+                                                    {branchActionDef?.configFields?.includes('qualifyPrompt') && (
+                                                      <textarea
+                                                        value={branchAction.config?.qualifyPrompt || ''}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'qualifyPrompt', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                        rows={3}
+                                                        placeholder="AI prompt to qualify lead. Must answer YES/NO."
+                                                      />
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('searchQuery') && (
+                                                      <div className="space-y-1.5">
+                                                        <input
+                                                          type="text"
+                                                          value={branchAction.config?.searchQuery || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'searchQuery', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          placeholder="Search query, e.g. plumbers near me"
+                                                        />
+                                                        <input
+                                                          type="text"
+                                                          value={branchAction.config?.searchLocation || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'searchLocation', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          placeholder="Location, e.g. Miami, FL"
+                                                        />
+                                                        <div className="flex items-center gap-2">
+                                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Max</label>
+                                                          <input
+                                                            type="number"
+                                                            min="5"
+                                                            max="200"
+                                                            value={branchAction.config?.searchMaxResults || 50}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'searchMaxResults', parseInt(e.target.value) || 50)}
+                                                            className="w-20 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                                          />
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('staggerIntervalMin') && (
+                                                      <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-1.5">
+                                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Every</label>
+                                                          <input
+                                                            type="number"
+                                                            min="5"
+                                                            value={branchAction.config?.staggerIntervalMin || 15}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'staggerIntervalMin', parseInt(e.target.value) || 15)}
+                                                            className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                                          />
+                                                          <span className="text-[10px] text-slate-500">min</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Max/day</label>
+                                                          <input
+                                                            type="number"
+                                                            min="1"
+                                                            value={branchAction.config?.staggerMaxPerDay || 15}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'staggerMaxPerDay', parseInt(e.target.value) || 15)}
+                                                            className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                                          />
+                                                        </div>
+                                                      </div>
+                                                    )}
                                                     {branchActionDef?.configFields?.includes('emailSubject') && (
                                                       <div className="space-y-1.5">
                                                         <input
@@ -2095,6 +2229,69 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         className="w-full p-2 border border-slate-200 rounded-lg text-xs"
                                         placeholder="e.g. hot_lead, vip, kitchen_remodel"
                                       />
+                                    )}
+                                    {actionDef?.configFields?.includes('qualifyPrompt') && (
+                                      <textarea
+                                        value={action.config?.qualifyPrompt || ''}
+                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'qualifyPrompt', e.target.value)}
+                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                        rows={3}
+                                        placeholder="AI prompt to qualify lead. Use {customerName}, {metadata.category}, etc. Must answer YES/NO."
+                                      />
+                                    )}
+                                    {actionDef?.configFields?.includes('searchQuery') && (
+                                      <div className="space-y-1.5">
+                                        <input
+                                          type="text"
+                                          value={action.config?.searchQuery || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'searchQuery', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="Search query, e.g. plumbers near me"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={action.config?.searchLocation || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'searchLocation', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="Location, e.g. Miami, FL"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Max results</label>
+                                          <input
+                                            type="number"
+                                            min="5"
+                                            max="200"
+                                            value={action.config?.searchMaxResults || 50}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'searchMaxResults', parseInt(e.target.value) || 50)}
+                                            className="w-20 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('staggerIntervalMin') && (
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Every</label>
+                                          <input
+                                            type="number"
+                                            min="5"
+                                            value={action.config?.staggerIntervalMin || 15}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'staggerIntervalMin', parseInt(e.target.value) || 15)}
+                                            className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                          />
+                                          <span className="text-[10px] text-slate-500">min</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Max/day</label>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            value={action.config?.staggerMaxPerDay || 15}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'staggerMaxPerDay', parseInt(e.target.value) || 15)}
+                                            className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                          />
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
                                 </div>

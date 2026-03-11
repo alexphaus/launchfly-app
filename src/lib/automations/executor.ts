@@ -492,7 +492,12 @@ CUSTOMER NAME: ${customerName}
           to_number: phoneNorm,
           agent_id: agentId,
           retell_llm_dynamic_variables: dynamicVars,
-          metadata: { lead_id: lead.id, source: 'automation', is_retry: true },
+          // Only mark as retry when this voice call is triggered from within a
+          // call_completed sequence — prevents the Retell webhook from re-firing
+          // call_completed on no_answer (which would cause an infinite loop).
+          // First-time calls from external_webhook, missed_call etc. need is_retry=false
+          // so their results properly fire call_completed rules.
+          metadata: { lead_id: lead.id, source: 'automation', is_retry: ctx.event === 'call_completed' },
         }),
       });
 

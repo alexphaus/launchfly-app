@@ -486,7 +486,7 @@ CUSTOMER NAME: ${customerName}
           to_number: phoneNorm,
           agent_id: agentId,
           retell_llm_dynamic_variables: dynamicVars,
-          metadata: { lead_id: lead.id, source: 'automation' },
+          metadata: { lead_id: lead.id, source: 'automation', is_retry: true },
         }),
       });
 

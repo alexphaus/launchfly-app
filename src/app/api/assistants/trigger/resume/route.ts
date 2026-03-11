@@ -33,8 +33,11 @@ export async function POST(req: NextRequest) {
     // ── Auto-cancel if customer replied since this was scheduled ──
     if (scheduledAt && ctx.phone) {
       const phoneNorm = ctx.phone.replace(/^\+/, '');
+      const phoneWithPlus = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
       const supabase = getSupabase();
-      const { count } = await supabase
+
+      // Check 1: Did the customer reply via WhatsApp/SMS?
+      const { count: replyCount } = await supabase
         .from('chat_history')
         .select('id', { count: 'exact', head: true })
         .eq('business_id', ctx.businessId)
@@ -42,9 +45,27 @@ export async function POST(req: NextRequest) {
         .eq('role', 'user')
         .gt('created_at', scheduledAt);
 
-      if (count && count > 0) {
+      if (replyCount && replyCount > 0) {
         console.log(`[resume] Customer ${ctx.phone} replied since ${scheduledAt} — aborting ${actions.length} remaining actions`);
         return NextResponse.json({ ok: true, cancelled: true, reason: 'customer_replied' });
+      }
+
+      // Check 2: Did a voice call connect successfully since scheduling?
+      // (i.e. outcome is NOT no_answer/failed — they picked up)
+      const { data: recentCall } = await supabase
+        .from('quote_leads')
+        .select('call_outcome, updated_at')
+        .eq('business_id', ctx.businessId)
+        .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneNorm}`)
+        .gt('updated_at', scheduledAt)
+        .not('call_outcome', 'in', '("no_answer","failed")')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentCall) {
+        console.log(`[resume] Customer ${ctx.phone} had a successful call (outcome=${recentCall.call_outcome}) since ${scheduledAt} — aborting ${actions.length} remaining actions`);
+        return NextResponse.json({ ok: true, cancelled: true, reason: 'call_connected' });
       }
     }
 

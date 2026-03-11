@@ -31,9 +31,11 @@ export async function POST(req: NextRequest) {
     const event = body.event as string | undefined;
     const call = (body.call || body) as Record<string, unknown>;
 
-    // Only process call_ended or call_analyzed events (skip call_started)
-    if (event && event !== 'call_ended' && event !== 'call_analyzed') {
-      console.log(`[retell/webhook] Ignoring event: ${event}`);
+    // Only process call_analyzed (has full sentiment/summary data).
+    // Retell fires BOTH call_ended AND call_analyzed per call — processing both
+    // causes every automation to double-fire.
+    if (event && event !== 'call_analyzed') {
+      console.log(`[retell/webhook] Ignoring event: ${event} (only processing call_analyzed)`);
       return NextResponse.json({ ok: true, skipped: true, reason: `event=${event}` });
     }
 
@@ -87,6 +89,14 @@ export async function POST(req: NextRequest) {
 
     const channel = (recentWhatsApp && recentWhatsApp > 0) ? 'whatsapp' : 'sms';
     console.log(`[retell/webhook] Channel for ${lead.phone}: ${channel} (${recentWhatsApp || 0} recent msgs)`);
+
+    // ── Check if this was a retry call from an automation sequence ──
+    const isRetry = metadata.is_retry === true || metadata.is_retry === 'true';
+    if (isRetry) {
+      console.log(`[retell/webhook] Retry call for ${lead.phone} — outcome=${outcome}, NOT re-firing call_completed to prevent infinite loop`);
+      // Still update the lead status, but DON'T fire the automation engine again
+      return NextResponse.json({ ok: true, outcome, isRetry: true });
+    }
 
     // ── Fire call_completed event ──
     await fireEvent({

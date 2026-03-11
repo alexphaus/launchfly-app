@@ -42,9 +42,10 @@ const newRules = [
         },
       },
       {
-        type: 'ai_qualify',
+        type: 'ask_ai',
         config: {
-          qualifyPrompt: 'Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nWe sell AI sales assistants + automated follow-up to contractors and home service businesses at $150/mo.\nIs this business a good prospect? They should be a contractor, home service, or trade business with decent reviews.\nAnswer YES or NO with one reason.',
+          aiPrompt: 'Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nShould we reach out to this business?',
+          stopOnNo: true,
         },
       },
       {

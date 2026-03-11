@@ -80,7 +80,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', configFields: ['tag'] },
   { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', configFields: [] },
-  { id: 'ai_qualify', label: 'AI Qualify Lead', icon: '🎯', configFields: ['qualifyPrompt'] },
+  { id: 'ask_ai', label: 'Ask AI', icon: '🧩', configFields: ['aiPrompt', 'stopOnNo'] },
   { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
   { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
 ];
@@ -141,7 +141,7 @@ const DEFAULT_ACTIONS_BY_EVENT = {
   ],
   prospect_found: [
     { type: 'stagger_outreach', config: { staggerIntervalMin: 15, staggerMaxPerDay: 15 } },
-    { type: 'ai_qualify', config: { qualifyPrompt: 'Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nIs this a good prospect for {businessName}? Answer YES or NO with one reason.' } },
+    { type: 'ask_ai', config: { aiPrompt: 'Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nShould we reach out to this business?', stopOnNo: true } },
     { type: 'trigger_voice_call', config: { jobType: 'Prospecting Call' } },
   ],
   daily_schedule: [
@@ -1975,14 +1975,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         placeholder="e.g. vip"
                                                       />
                                                     )}
-                                                    {branchActionDef?.configFields?.includes('qualifyPrompt') && (
-                                                      <textarea
-                                                        value={branchAction.config?.qualifyPrompt || ''}
-                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'qualifyPrompt', e.target.value)}
-                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
-                                                        rows={3}
-                                                        placeholder="AI prompt to qualify lead. Must answer YES/NO."
-                                                      />
+                                                    {branchActionDef?.configFields?.includes('aiPrompt') && (
+                                                      <div className="space-y-1.5">
+                                                        <textarea
+                                                          value={branchAction.config?.aiPrompt || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'aiPrompt', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                          rows={3}
+                                                          placeholder="Prompt for AI. Has full business context."
+                                                        />
+                                                        <label className="flex items-center gap-1.5 text-[10px] text-slate-500 cursor-pointer">
+                                                          <input
+                                                            type="checkbox"
+                                                            checked={branchAction.config?.stopOnNo === true || branchAction.config?.stopOnNo === 'true'}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'stopOnNo', e.target.checked)}
+                                                            className="rounded border-slate-300"
+                                                          />
+                                                          <span className="font-medium">Stop chain if AI says NO</span>
+                                                        </label>
+                                                      </div>
                                                     )}
                                                     {branchActionDef?.configFields?.includes('searchQuery') && (
                                                       <div className="space-y-1.5">
@@ -2230,14 +2241,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                         placeholder="e.g. hot_lead, vip, kitchen_remodel"
                                       />
                                     )}
-                                    {actionDef?.configFields?.includes('qualifyPrompt') && (
-                                      <textarea
-                                        value={action.config?.qualifyPrompt || ''}
-                                        onChange={e => updateActionInRule(ruleIdx, actIdx, 'qualifyPrompt', e.target.value)}
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
-                                        rows={3}
-                                        placeholder="AI prompt to qualify lead. Use {customerName}, {metadata.category}, etc. Must answer YES/NO."
-                                      />
+                                    {actionDef?.configFields?.includes('aiPrompt') && (
+                                      <div className="space-y-1.5">
+                                        <textarea
+                                          value={action.config?.aiPrompt || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'aiPrompt', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                          rows={3}
+                                          placeholder="Prompt for AI. Use {customerName}, {metadata.category}, {aiResponse}, etc. Has full business context."
+                                        />
+                                        <label className="flex items-center gap-1.5 text-[10px] text-slate-500 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={action.config?.stopOnNo === true || action.config?.stopOnNo === 'true'}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'stopOnNo', e.target.checked)}
+                                            className="rounded border-slate-300"
+                                          />
+                                          <span className="font-medium">Stop chain if AI says NO</span> (for lead qualification)
+                                        </label>
+                                      </div>
                                     )}
                                     {actionDef?.configFields?.includes('searchQuery') && (
                                       <div className="space-y-1.5">

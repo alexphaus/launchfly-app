@@ -91,7 +91,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'add_tag', label: 'Add Tag', icon: '🏷️', desc: 'Add a tag to the customer for segmentation', configFields: ['tag'] },
   { id: 'remove_tag', label: 'Remove Tag', icon: '🗑️', desc: 'Remove a tag from the customer', configFields: ['tag'] },
   { id: 'ai_followup', label: 'AI Smart Follow-up', icon: '🧠', desc: 'AI reads the conversation history and generates a contextual follow-up message. Stops after 5 unanswered messages.', configFields: [] },
-  { id: 'ai_qualify', label: 'AI Qualify Lead', icon: '🎯', desc: 'AI evaluates the lead and stops the chain if unqualified. Use {metadata.rating}, {metadata.reviews}, {customerName}.', configFields: ['qualifyPrompt'] },
+  { id: 'ask_ai', label: 'Ask AI', icon: '🧩', desc: 'Send a prompt to AI with full business context. Use for qualification, personalization, categorization — anything. Optionally stops chain on NO. Result available as {aiResponse}.', configFields: ['aiPrompt', 'stopOnNo'] },
   { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', desc: 'Scrape Google Maps for businesses. Each result fires a prospect_found event for downstream rules.', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
   { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', desc: 'Space out leads with progressive delays and a daily cap. Schedules remaining actions via QStash.', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
   { id: 'condition_branch', label: 'If / Else Branch', icon: '🔀', desc: 'Evaluate conditions and run different actions for true vs false branches', configFields: [] },
@@ -701,23 +701,54 @@ CUSTOMER NAME: ${customerName}
       return { ok: true, detail: `Tag "${tag}" removed` };
     }
 
-    // ─── AI Qualify (gate — stops chain on NO) ────────────────────────────
+    // ─── Ask AI (general-purpose AI step with full business context) ─────
+    // Optionally gates the chain (stopOnNo: YES/NO check).
+    // Stores result in ctx.aiResponse so downstream actions can use {aiResponse}.
 
-    case 'ai_qualify': {
-      const promptTemplate = (cfg.qualifyPrompt as string) || 'Is {customerName} a good prospect? Answer YES or NO.';
+    case 'ask_ai': {
+      const promptTemplate = (cfg.aiPrompt as string) || 'Analyze this lead and tell me what you think.';
       const prompt = fillVars(promptTemplate, ctx);
+      const shouldGate = cfg.stopOnNo === true || cfg.stopOnNo === 'true';
+
+      // Load full business + assistant context
+      const supabase = getSupabase();
+      const [{ data: biz }, { data: assistant }] = await Promise.all([
+        supabase.from('businesses').select('name, industry, city, state').eq('id', ctx.businessId).single(),
+        supabase.from('assistants').select('system_prompt, knowledge_base, custom_rules, goal').eq('business_id', ctx.businessId).eq('active', true).maybeSingle(),
+      ]);
+
+      const kb = assistant?.knowledge_base || {};
+      const pricingInfo = (kb.pricing || []).map((p: { service: string; price: string }) => `${p.service}: ${p.price}`).join(', ');
+      const faqInfo = (kb.faq || []).map((f: { q: string; a: string }) => `Q: ${f.q} A: ${f.a}`).join('\n');
+
+      const systemParts = [
+        assistant?.system_prompt || '',
+        biz?.name ? `Business: ${biz.name}` : '',
+        biz?.industry ? `Industry: ${biz.industry}` : '',
+        biz?.city ? `Location: ${biz.city}, ${biz.state || ''}` : '',
+        assistant?.goal ? `Goal: ${assistant.goal}` : '',
+        pricingInfo ? `Pricing: ${pricingInfo}` : '',
+        faqInfo ? `Knowledge:\n${faqInfo}` : '',
+        (assistant?.custom_rules || []).length > 0 ? `Rules: ${((assistant?.custom_rules || []) as string[]).join('; ')}` : '',
+      ].filter(Boolean);
+      if (shouldGate) systemParts.push('\nYou MUST answer with YES or NO on the first line, followed by a brief reason.');
+      const systemPrompt = systemParts.join('\n');
+
       const { generateText } = await import('ai');
       const { openai } = await import('@ai-sdk/openai');
       const result = await generateText({
         model: openai('gpt-4o-mini'),
+        system: systemPrompt,
         messages: [{ role: 'user', content: prompt }],
       });
-      const answer = result.text.trim().toUpperCase();
-      console.log(`[automation] ai_qualify: "${answer}" for ${ctx.customerName || ctx.phone}`);
-      if (answer.includes('NO')) {
-        return { ok: true, detail: `Lead disqualified: "${result.text.trim()}"`, stopChain: true } as { ok: boolean; detail: string; stopChain: boolean };
+      const aiText = result.text.trim();
+      ctx.aiResponse = aiText; // Available as {aiResponse} in downstream actions
+      console.log(`[automation] ask_ai: "${aiText.substring(0, 100)}" for ${ctx.customerName || ctx.phone}`);
+
+      if (shouldGate && aiText.toUpperCase().startsWith('NO')) {
+        return { ok: true, detail: `AI said NO: "${aiText}"`, stopChain: true } as { ok: boolean; detail: string; stopChain: boolean };
       }
-      return { ok: true, detail: `Lead qualified: "${result.text.trim()}"` };
+      return { ok: true, detail: `AI: "${aiText.substring(0, 150)}"` };
     }
 
     // ─── Search Leads (Apify fan-out → prospect_found events) ─────────────
@@ -981,7 +1012,7 @@ export async function executeActions(
       results.push(result);
       console.log(`[automation] ${ctx.event} → ${action.type}: ${result.detail}`);
 
-      // stopChain: action requested we abort remaining steps (e.g. ai_qualify said NO)
+      // stopChain: action requested we abort remaining steps (e.g. ask_ai said NO)
       if ((result as { stopChain?: boolean }).stopChain) {
         console.log(`[automation] Chain stopped by ${action.type}`);
         return;

@@ -30,7 +30,7 @@ export interface AutomationRule {
 
 export interface Condition {
   field: string;             // dot-path into event context: "message", "customer.name", "amount"
-  op: 'contains' | 'equals' | 'gt' | 'lt' | 'exists' | 'not_exists';
+  op: 'contains' | 'equals' | 'gt' | 'lt' | 'exists' | 'not_exists' | 'not_equals' | 'not_contains';
   value?: string | number;
 }
 
@@ -141,6 +141,12 @@ function evaluateConditions(conditions: Condition[], ctx: EventContext): boolean
         break;
       case 'contains':
         if (!String(val || '').toLowerCase().includes(String(cond.value).toLowerCase())) return false;
+        break;
+      case 'not_equals':
+        if (String(val).toLowerCase() === String(cond.value).toLowerCase()) return false;
+        break;
+      case 'not_contains':
+        if (String(val || '').toLowerCase().includes(String(cond.value).toLowerCase())) return false;
         break;
       case 'gt':
         if (Number(val) <= Number(cond.value)) return false;
@@ -710,6 +716,22 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
   }
   if (!ctx.firstName && ctx.customerName) {
     ctx.firstName = ctx.customerName.split(' ')[0];
+  }
+
+  // Enrich customer status + tags so rules can filter on them
+  if (ctx.phone && ctx.businessId) {
+    const phoneWithPlus = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+    const phoneWithoutPlus = ctx.phone.replace(/^\+/, '');
+    const { data: cust } = await supabase
+      .from('customers')
+      .select('status, tags')
+      .eq('business_id', ctx.businessId)
+      .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
+      .maybeSingle();
+    if (cust) {
+      if (!ctx.customerStatus) ctx.customerStatus = cust.status || '';
+      if (!ctx.customerTags) ctx.customerTags = (cust.tags || []).join(',');
+    }
   }
 
   const { data: assistant } = await supabase

@@ -1725,7 +1725,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                     className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
                                   >
                                     <option value="contains">contains</option>
+                                    <option value="not_contains">not contains</option>
                                     <option value="equals">equals</option>
+                                    <option value="not_equals">not equals</option>
                                     <option value="gt">&gt;</option>
                                     <option value="lt">&lt;</option>
                                     <option value="exists">exists</option>
@@ -1808,7 +1810,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                   className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
                                                 >
                                                   <option value="contains">contains</option>
+                                                  <option value="not_contains">not contains</option>
                                                   <option value="equals">equals</option>
+                                                  <option value="not_equals">not equals</option>
                                                   <option value="gt">&gt;</option>
                                                   <option value="lt">&lt;</option>
                                                   <option value="exists">exists</option>

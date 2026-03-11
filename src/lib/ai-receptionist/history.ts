@@ -15,7 +15,7 @@ const supabase = createClient(
 // How many messages to keep in context
 const MAX_HISTORY_LENGTH = 50;
 // How old messages can be before we start fresh (24 hours)
-const HISTORY_EXPIRY_HOURS = 24;
+const HISTORY_EXPIRY_HOURS = 192; // 8 days — covers longest automation sequences
 
 export interface ConversationMessage {
     role: 'user' | 'assistant';

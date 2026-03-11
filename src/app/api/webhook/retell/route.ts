@@ -90,12 +90,32 @@ export async function POST(req: NextRequest) {
     const channel = (recentWhatsApp && recentWhatsApp > 0) ? 'whatsapp' : 'sms';
     console.log(`[retell/webhook] Channel for ${lead.phone}: ${channel} (${recentWhatsApp || 0} recent msgs)`);
 
+    // ── Save call summary to chat_history so AI follow-ups have context ──
+    if (summary.trim()) {
+      const callNote = outcome === 'no_answer'
+        ? `[System: AI voice call attempted — no answer. Disconnection: ${disconnectionReason}]`
+        : `[System: AI voice call completed — outcome: ${outcome}, sentiment: ${sentiment}. Summary: ${summary}]`;
+      await supabase.from('chat_history').insert({
+        phone: phoneNorm,
+        business_id: lead.business_id,
+        role: 'assistant',
+        content: callNote,
+      });
+      console.log(`[retell/webhook] Saved call summary to chat_history for ${lead.phone}`);
+    }
+
     // ── Check if this was a retry call from an automation sequence ──
+    // Only block call_completed for no_answer/failed — these are the outcomes that
+    // cause infinite loops (no_answer → rule triggers another call → no_answer → ...).
+    // If the prospect actually picked up (interested/not_interested/unknown), still fire
+    // call_completed so the appropriate follow-up rules trigger.
     const isRetry = metadata.is_retry === true || metadata.is_retry === 'true';
-    if (isRetry) {
-      console.log(`[retell/webhook] Retry call for ${lead.phone} — outcome=${outcome}, NOT re-firing call_completed to prevent infinite loop`);
-      // Still update the lead status, but DON'T fire the automation engine again
+    if (isRetry && (outcome === 'no_answer' || outcome === 'failed')) {
+      console.log(`[retell/webhook] Retry call for ${lead.phone} — outcome=${outcome}, skipping call_completed to prevent loop`);
       return NextResponse.json({ ok: true, outcome, isRetry: true });
+    }
+    if (isRetry) {
+      console.log(`[retell/webhook] Retry call for ${lead.phone} — outcome=${outcome}, prospect answered → firing call_completed`);
     }
 
     // ── Fire call_completed event ──

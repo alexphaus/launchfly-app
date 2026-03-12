@@ -200,9 +200,12 @@ async function sendSms(to: string, body: string): Promise<void> {
   });
 }
 
-async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<{ sent: boolean; id?: string; error?: string }> {
+async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
   const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
-  return ultramsgSend(to, body, businessId);
+  const result = await ultramsgSend(to, body, businessId);
+  if (!result.sent) {
+    throw new Error(`UltraMsg send failed: ${result.error}`);
+  }
 }
 
 /** Send a message — WhatsApp first, SMS fallback on failure */
@@ -212,8 +215,7 @@ async function sendMessage(to: string, body: string, channel?: string, businessI
     return 'sms';
   }
   try {
-    const result = await sendWhatsApp(to, body, businessId);
-    if (!result.sent) throw new Error(result.error || 'send failed');
+    await sendWhatsApp(to, body, businessId);
     return 'whatsapp';
   } catch (err) {
     console.warn(`[automation] WhatsApp failed for ${to}, falling back to SMS:`, (err as Error).message);
@@ -260,13 +262,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
       try {
-        const result = await sendWhatsApp(ctx.phone, msg, ctx.businessId);
-        if (!result.sent) {
-          if (result.error === 'not_whatsapp') {
-            return { ok: false, detail: `Skipped ${ctx.phone}: not a WhatsApp user`, stopChain: true };
-          }
-          return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${result.error}` };
-        }
+        await sendWhatsApp(ctx.phone, msg, ctx.businessId);
       } catch (err) {
         return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${err instanceof Error ? err.message : String(err)}` };
       }

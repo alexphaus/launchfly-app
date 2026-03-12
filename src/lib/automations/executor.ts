@@ -816,10 +816,12 @@ CUSTOMER NAME: ${customerName}
       const triggerUrl = `${appUrl}/api/assistants/trigger?businessId=${ctx.businessId}`;
 
       let firedCount = 0;
+      const basePosition = alreadySentToday || 0;
       const batchSize = 5;
       for (let i = 0; i < leadsToDispatch.length; i += batchSize) {
         const batch = leadsToDispatch.slice(i, i + batchSize);
-        await Promise.all(batch.map(async (lead) => {
+        await Promise.all(batch.map(async (lead, batchIdx) => {
+          const leadIndex = i + batchIdx;
           try {
             const res = await fetch(`${qstashBase}/v2/publish/${triggerUrl}`, {
               method: 'POST',
@@ -842,6 +844,7 @@ CUSTOMER NAME: ${customerName}
                   city: lead.city,
                   category: lead.categoryName,
                   place_id: lead.placeId,
+                  stagger_index: basePosition + leadIndex,
                 },
               }),
             });
@@ -863,18 +866,25 @@ CUSTOMER NAME: ${customerName}
       const intervalMin = Number(cfg.staggerIntervalMin) || 15;
       const maxPerDay = Number(cfg.staggerMaxPerDay) || 15;
 
-      // Count how many outreach calls we've already made today
+      // Use pre-assigned stagger_index from search_leads if available (race-free),
+      // otherwise fall back to counting DB rows (legacy / manual triggers)
       const supabase = getSupabase();
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { count: todayCount } = await supabase
-        .from('quote_leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('business_id', ctx.businessId)
-        .eq('source', 'prospecting')
-        .gte('created_at', todayStart.toISOString());
+      const staggerIdx = ctx.metadata?.stagger_index;
+      let position: number;
 
-      const position = todayCount || 0;
+      if (typeof staggerIdx === 'number' || typeof staggerIdx === 'string') {
+        position = Number(staggerIdx);
+      } else {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const { count: todayCount } = await supabase
+          .from('quote_leads')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', ctx.businessId)
+          .eq('source', 'prospecting')
+          .gte('created_at', todayStart.toISOString());
+        position = todayCount || 0;
+      }
 
       if (position >= maxPerDay) {
         return { ok: true, detail: `Daily cap reached (${position}/${maxPerDay}) — skipping`, stopChain: true } as { ok: boolean; detail: string; stopChain: boolean };
@@ -884,7 +894,7 @@ CUSTOMER NAME: ${customerName}
       const delaySeconds = position * intervalMin * 60;
       // Mark this lead with the prospecting source so the counter works
       if (ctx.phone) {
-        const phoneNorm = `+${ctx.phone.replace(/[^\\d]/g, '')}`;
+        const phoneNorm = `+${ctx.phone.replace(/[^\d]/g, '')}`;
         const jobType = (ctx.metadata?.category as string) || 'Prospecting';
         // Check if lead already exists (avoid duplicate insert — unique index is on phone+job_type)
         const { data: existingLead } = await supabase

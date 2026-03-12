@@ -58,11 +58,16 @@ function normalizePhone(phone: string): string {
 
 /** Helper to block execution to simulate human typing delays (varies by message length) */
 async function simulateHumanTyping(text: string) {
-  // Base delay of 2 seconds, plus ~50ms per character to pretend to type, up to max 8 seconds
-  const typingTimeMs = Math.min(2000 + (text.length * 50), 8000);
-  // Add random jitter of 1-3 seconds so it's never exact
-  const jitterMs = Math.floor(Math.random() * 2000) + 1000;
-  const totalDelayMs = typingTimeMs + jitterMs;
+  // Read delay: ~2 to 5 seconds to "read" the inbound message
+  const readDelayMs = Math.floor(Math.random() * 3000) + 2000;
+  
+  // Typing delay: ~40ms per character to pretend to type, up to max 15 seconds
+  const typingTimeMs = Math.min(text.length * 40, 15000);
+  
+  // Jitter: random 1-4 seconds so it's never exact
+  const jitterMs = Math.floor(Math.random() * 3000) + 1000;
+  
+  const totalDelayMs = readDelayMs + typingTimeMs + jitterMs;
   
   await new Promise(resolve => setTimeout(resolve, totalDelayMs));
 }

@@ -98,30 +98,32 @@ function buildSystemPrompt(
   phone: string,
   businessId: string,
 ): string {
-  // ── If custom prompt is set, use it directly ──
-  if (assistant?.system_prompt) {
-    // Still inject dynamic context the custom prompt can reference
-    return assistant.system_prompt + contextBlock(phone, businessId, customer, business);
-  }
-
-  // ── Auto-generate a minimal prompt from config ──
   const bizName = business?.name || 'the business';
-  const config = (business?.business_data || {}) as Record<string, any>;
-  const tone = assistant?.tone || 'friendly';
-  const goal = assistant?.goal || 'book_consultation';
-
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 
-  let prompt = `You are the AI assistant for **${bizName}**.
-Today is ${today}. You communicate via WhatsApp.
+  const baseRules = `You communicate via WhatsApp. Today is ${today}.
+CRITICAL WHATSAPP RULES (HUMAN REALISM & ANTI-BAN):
+- NEVER SEND WALLS OF TEXT. Keep responses exceptionally short, easy to read, and plain.
+- NO ENTHUSIASTIC CORPORATE BOT SPEAK. Never say "Got it!", "Great question!", or use exclamation marks excessively.
+- Tone should be casual, slightly lazy, like a real person typing on a phone while busy. Use lowercase sometimes.
+- 1 emoji max per message, preferably 0 unless necessary.
+- If they answer a direct question, acknowledge it casually (e.g. "yeah makes sense", "ah gotcha") before moving on.
+`;
 
-CRITICAL WHATSAPP RULES (ANTI-BAN & CONVERSATION STRATEGY):
-- NEVER SEND WALLS OF TEXT. Keep responses exceptionally short and easy to read.
-- If this is the FIRST message to a user, send a TINY "ping" (e.g. "Hey [Name], this is [YourName] from ${bizName}."). Wait for them to reply before pitching. This resets the WhatsApp unanswered penalty.
-- Keep the tone casual, conversational, and slightly lazy. Do not use overly formal corporate jargon.
-- If appropriate, end your first message with a soft opt-out (e.g. "Just reply 'STOP' if you're no longer interested!").
+  // ── If custom prompt is set, use it but still enforce base rules ──
+  if (assistant?.system_prompt) {
+    return baseRules + '\n\n' + assistant.system_prompt + contextBlock(phone, businessId, customer, business);
+  }
+
+  // ── Auto-generate a minimal prompt from config ──
+  const config = (business?.business_data || {}) as Record<string, any>;
+  const tone = assistant?.tone || 'friendly';
+  const goal = assistant?.goal || 'book_consultation';
+
+  let prompt = `You are the AI assistant for **${bizName}**.
+${baseRules}
 
 TONE: ${TONE_LABELS[tone] || tone}
 GOAL: ${GOAL_LABELS[goal] || goal}

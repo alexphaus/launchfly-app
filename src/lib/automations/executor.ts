@@ -816,9 +816,35 @@ CUSTOMER NAME: ${customerName}
         .gte('created_at', todayStartSearch.toISOString());
       const dailyCap = 15;
       const remaining = Math.max(0, dailyCap - (alreadySentToday || 0));
-      const leadsToDispatch = newLeads.slice(0, remaining);
 
-      if (leadsToDispatch.length === 0) return { ok: true, detail: `${newLeads.length} new leads found but daily cap already reached` };
+      if (remaining <= 0) return { ok: true, detail: `${newLeads.length} new leads found but daily cap already reached` };
+
+      // Find leads that actually have WhatsApp registered, until we hit the 'remaining' target
+      const { checkHasWhatsApp } = await import('@/lib/ultramsg');
+      const leadsToDispatch: typeof newLeads = [];
+      let checkedCount = 0;
+      let noWhatsAppCount = 0;
+      
+      // Check in concurrent batches of 5
+      for (let i = 0; i < newLeads.length && leadsToDispatch.length < remaining; i += 5) {
+        const batch = newLeads.slice(i, i + 5);
+        const results = await Promise.all(batch.map(async lead => {
+          const hasWa = await checkHasWhatsApp(lead.phone, ctx.businessId);
+          return { lead, hasWa };
+        }));
+        
+        for (const { lead, hasWa } of results) {
+          checkedCount++;
+          if (hasWa) {
+            leadsToDispatch.push(lead);
+            if (leadsToDispatch.length >= remaining) break;
+          } else {
+            noWhatsAppCount++;
+          }
+        }
+      }
+
+      if (leadsToDispatch.length === 0) return { ok: true, detail: `Checked ${checkedCount} leads, none had WhatsApp registered` };
 
       // Fan-out: dispatch prospect_found via QStash so each gets its own execution
       const qstashToken = process.env.QSTASH_TOKEN;
@@ -867,8 +893,8 @@ CUSTOMER NAME: ${customerName}
         }));
       }
 
-      const skipped = newLeads.length - leadsToDispatch.length;
-      return { ok: true, detail: `Found ${leads.length} leads, ${newLeads.length} new, dispatched ${firedCount}${skipped > 0 ? ` (${skipped} saved for tomorrow)` : ''} via QStash` };
+      const skipped = newLeads.length - checkedCount;
+      return { ok: true, detail: `Found ${leads.length} leads. Checked ${checkedCount}: ${noWhatsAppCount} no WhatsApp, ${firedCount} dispatched${skipped > 0 ? ` (${skipped} saved for tomorrow)` : ''} via QStash.` };
     }
 
     // ─── Stagger Outreach (progressive delays + daily cap) ────────────────

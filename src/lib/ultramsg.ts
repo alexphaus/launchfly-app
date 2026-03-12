@@ -67,6 +67,23 @@ async function simulateHumanTyping(text: string) {
   await new Promise(resolve => setTimeout(resolve, totalDelayMs));
 }
 
+/** Check if a number actually has a registered WhatsApp account */
+export async function checkHasWhatsApp(phone: string, businessId?: string): Promise<boolean> {
+  try {
+    const { instanceId, token } = await getCredentials(businessId);
+    let p = phone.replace(/^whatsapp:/, '');
+    const digits = p.replace(/[^\d]/g, '');
+    const phoneNorm = digits.length === 10 ? `1${digits}` : digits;
+    
+    const res = await fetch(`${ULTRAMSG_BASE}/${instanceId}/contacts/check?token=${token}&chatId=${phoneNorm}@c.us`);
+    const json = await res.json();
+    return json.status === 'valid';
+  } catch (err) {
+    console.warn(`[UltraMsg] Failed to check if ${phone} has WhatsApp:`, err);
+    return true; // fail-open so we don't accidentally block all leads if API is down
+  }
+}
+
 /** Check if number is blacklisted (has opted out) — scoped to business when provided */
 async function isBlacklisted(phone: string, businessId?: string): Promise<boolean> {
   try {

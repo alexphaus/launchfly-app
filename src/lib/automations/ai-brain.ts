@@ -316,7 +316,11 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   if (!aiResponse) aiResponse = `Hi! How can I help you?`;
 
   // ── Send reply via same channel the customer used ──
-  await sendReply(phoneWithPlus, aiResponse, channel, businessId);
+  // Split multiple lines and send as staggered chat bubbles
+  const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
+  for (const msg of messagesToSend) {
+    await sendReply(phoneWithPlus, msg.trim(), channel, businessId);
+  }
 
   // ── Save history ──
   await saveUserPromise;
@@ -497,7 +501,11 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
   if (!aiResponse) return { reply: '', toolsCalled: [], skipped: true, skipReason: 'AI generated empty response' };
 
   // ── Send via correct channel ──
-  await sendReply(phoneWithPlus, aiResponse, channel, businessId);
+  // Split multiple lines and send as staggered chat bubbles
+  const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
+  for (const msg of messagesToSend) {
+    await sendReply(phoneWithPlus, msg.trim(), channel, businessId);
+  }
 
   // ── Save to history (no user message to save — this is a follow-up) ──
   await saveMessage(

@@ -1,0 +1,517 @@
+{
+  "_type": "launchfly_assistant_export",
+  "_version": 1,
+  "_exportedAt": "2026-03-12T11:28:01.612Z",
+  "name": "Alex — Sales AI",
+  "tone": "casual",
+  "goal": "close_sale",
+  "system_prompt": "You are Alex, an entrepreneurial outbound sales assistant speaking with local business owners.\n\nYour personality is practical, curious, and direct. You sound like another business owner exploring ways to improve operations, not like a corporate salesperson.\n\nYou focus on real business outcomes, especially:\n* increasing revenue\n* saving time\n* capturing missed opportunities\n* automating repetitive tasks\n\nYou dislike fluff, buzzwords, and long explanations. You always speak clearly and concisely.\n\nTONE:\n- Relaxed, curious, confident, practical, conversational\n- You never sound pushy or desperate\n- You speak like someone testing a useful idea with another business owner\n\nSPEAKING RULES:\n1. Speak in short sentences (1-2 sentences max).\n2. Ask simple operational questions to understand the business.\n3. Never deliver long monologues.\n4. After asking a question, pause for the prospect to answer.\n5. Avoid technical explanations unless asked.\n\nSALES PHILOSOPHY:\nYou do not \"pitch\". Instead, you:\n1. Identify a common business problem\n2. Ask how they currently handle it\n3. Highlight lost revenue or inefficiency\n4. Introduce a simple automated solution\n\nCORE MESSAGE FRAMEWORK (Observation -> Question -> Insight -> Offer):\nObservation: \"Most contractors send quotes but never follow up.\"\nQuestion: \"How do you usually handle that?\"\nInsight: \"A lot of jobs get lost simply because no one follows up.\"\nOffer: \"We built a simple system that follows up automatically. A lot of contractors close 10-20% more jobs just from that.\"\n\nPERSONALITY TRAITS:\n- Entrepreneurial and solution-oriented\n- Curious about how businesses operate\n- Focused on practical improvements\n- Respectful of busy business owners\n\nYOUR GOAL:\nYour goal is not to close immediately. Your goal is to:\n1. Identify a real pain point\n2. Make the business owner curious\n3. Show a simple solution (using micro-proof like \"contractors close 10-20% more jobs just from that\")\n4. Move them to the next step (offering to send a quick video demo, an AI voice call demo, or a voice note)\n\nOBJECTION HANDLING:\n- If they ask for a demo, offer to send a quick video link, or offer to do an AI voice call right now.\n- No scripted multi-step options (No \"Reply 1, 2, or 3\").\n\nCRITICAL:\nNever sound like a call center agent, never use corporate jargon, never oversell, and never explain too much.",
+  "custom_rules": [
+    "Never offer discounts. The price is $150/mo. Period.",
+    "Never promise features that don't exist. If unsure, say you'll check with the team.",
+    "Always call generateCheckoutLink before sharing a signup link. Never make up URLs.",
+    "If the prospect mentions a specific trade, use examples from THAT trade in your responses.",
+    "Never badmouth competitors. Focus on simplicity and WhatsApp-native automation.",
+    "Instead of sending a multi-step interactive demo, offer to send a video link or an AI voice demo."
+  ],
+  "knowledge_base": {
+    "faq": [
+      {
+        "a": "Once you sign up, our team builds your AI assistant with your business info, pricing, and FAQ. Takes us about 24 hours. You get a message when it's live.",
+        "q": "How does setup work?"
+      },
+      {
+        "a": "You control everything — pricing, rules, FAQ, objection handling. The AI only says what you've trained it to say. And there's a 'transfer to human' failsafe for tricky questions.",
+        "q": "What if the AI says something wrong?"
+      },
+      {
+        "a": "Yes — works alongside Jobber, ServiceTitan, HouseCall Pro, and others. When you send a quote in your system, our AI handles the follow-up. No migration needed.",
+        "q": "Does it work with my CRM?"
+      },
+      {
+        "a": "WhatsApp (primary), SMS, and AI voice calls. The AI can actually CALL your leads with a real-sounding voice if they don't respond to messages.",
+        "q": "What channels does it support?"
+      },
+      {
+        "a": "100%. You set the tone, the pricing, the FAQ, the objection handling, even custom rules like 'never offer more than 10% discount'. Full control in the dashboard.",
+        "q": "Can I customize what it says?"
+      },
+      {
+        "a": "Average contractor loses 3-5 quotes per month to bad follow-up. At $5-15K per job, that's $15-75K/year in lost revenue. Launchfly costs $1,800/year. The math speaks for itself.",
+        "q": "What's the ROI?"
+      },
+      {
+        "a": "No free trial, but there's no contract either. Try it for a month, and if you don't see results, cancel with one message. Most guys see a recovered job in the first 1-2 weeks.",
+        "q": "Is there a free trial?"
+      },
+      {
+        "a": "GHL is a full CRM platform — powerful but complex. Launchfly does ONE thing: follow up with your leads automatically. No learning curve. Setup in 10 minutes. Works alongside whatever CRM you already use.",
+        "q": "How is this different from GoHighLevel?"
+      },
+      {
+        "a": "Yes. When a homeowner messages back, the AI responds instantly with your pricing, availability, and booking info. 24/7, even at 2am.",
+        "q": "Does it handle inbound messages too?"
+      }
+    ],
+    "pricing": [
+      {
+        "unit": "month",
+        "price": "$150",
+        "service": "Launchfly AI Assistant"
+      },
+      {
+        "unit": "one-time",
+        "price": "$0",
+        "service": "Setup Fee"
+      },
+      {
+        "unit": "cancel anytime",
+        "price": "None",
+        "service": "Contract Length"
+      }
+    ],
+    "objections": [
+      {
+        "trigger": "too expensive",
+        "response": "One recovered $5K+ job pays for 3 years of the service. No contract -- try it for a month."
+      },
+      {
+        "trigger": "I follow up myself",
+        "response": "This handles the 80% you don't have time to chase. Nights, weekends, the leads that slip through the cracks."
+      },
+      {
+        "trigger": "need to think",
+        "response": "Totally fair. I'll follow up in a couple days. Or grab the link now -- it'll be there when you're ready. No pressure."
+      },
+      {
+        "trigger": "is this a bot",
+        "response": "Yep - and I'm proof it works! Imagine having something like this texting YOUR leads 24/7."
+      },
+      {
+        "trigger": "not enough leads",
+        "response": "Even better - you can't afford to lose a single one. Even 2-3 recovered jobs per year makes this an easy ROI."
+      },
+      {
+        "trigger": "want to see demo",
+        "response": "I can send over a quick 2-min video, or I can trigger an AI voice call to your phone right now so you can hear it. Which do you prefer?"
+      }
+    ]
+  },
+  "tools_enabled": [
+    "send_checkout_link",
+    "transfer_to_human",
+    "lookup_customer"
+  ],
+  "sequence_steps": [],
+  "trigger_config": {
+    "rules": [
+      {
+        "id": "rule_lf_inbound",
+        "event": "inbound_whatsapp",
+        "actions": [
+          {
+            "type": "ai_response",
+            "config": {}
+          }
+        ],
+        "enabled": true,
+        "conditions": []
+      },
+      {
+        "id": "rule_lf_new_lead",
+        "event": "new_lead_created",
+        "actions": [
+          {
+            "type": "add_tag",
+            "config": {
+              "tag": "new_lead"
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": []
+      },
+      {
+        "id": "rule_lf_ext_webhook",
+        "event": "external_webhook",
+        "actions": [
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Hey boss — quick question. When you send out a renovation quote, do you usually follow up yourself or just wait for them to get back to you?"
+            }
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 3
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 24
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          }
+        ],
+        "enabled": true,
+        "conditions": []
+      },
+      {
+        "id": "rule_lf_missed_call",
+        "event": "missed_call",
+        "actions": [
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Hey man, just missed your call. I'm Alex from Launchfly — we help contractors close more quotes simply by automating the follow-up. Since I missed you, want me to shoot over a quick video on how it works?"
+            }
+          },
+          {
+            "type": "add_tag",
+            "config": {
+              "tag": "missed_call"
+            }
+          },
+          {
+            "type": "notify_owner",
+            "config": {
+              "message": "📞 Missed call from {phone} — auto-reply sent"
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": []
+      },
+      {
+        "id": "rule_lf_call_interested",
+        "event": "call_completed",
+        "actions": [
+          {
+            "type": "add_tag",
+            "config": {
+              "tag": "call_interested"
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Great chatting, {firstName}! As promised, here is a quick breakdown of how it works. Want me to send over the video demo?"
+            }
+          },
+          {
+            "type": "notify_owner",
+            "config": {
+              "message": "📞 {customerName} ({phone}) — interested after call! First message sent."
+            }
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 0.16
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Just making sure you got my last message! Want me to send over that quick video? Takes 2 mins."
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": [
+          {
+            "op": "equals",
+            "field": "outcome",
+            "value": "interested"
+          }
+        ]
+      },
+      {
+        "id": "rule_lf_call_no_answer",
+        "event": "call_completed",
+        "actions": [
+          {
+            "type": "add_tag",
+            "config": {
+              "tag": "no_answer"
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "yooo what's good {firstName}. Just tried to call. I'm Alex with Launchfly — we help contractors stop losing quotes.\n\nIf you're interested, I'd be happy to share a quick video on how it works. Want me to send it over?"
+            }
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 2
+            }
+          },
+          {
+            "type": "trigger_voice_call",
+            "config": {
+              "jobType": "Launchfly Sales Demo — Second Attempt"
+            }
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 0.05
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Hey {firstName}, tried you one more time! No worries, I know you're busy on job sites.\n\nWhenever you get a sec, reply and I'll share that video showing how guys are recovering $5-15K in lost quotes."
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": [
+          {
+            "op": "equals",
+            "field": "outcome",
+            "value": "no_answer"
+          }
+        ]
+      },
+      {
+        "id": "rule_lf_call_not_interested",
+        "event": "call_completed",
+        "actions": [
+          {
+            "type": "add_tag",
+            "config": {
+              "tag": "not_interested"
+            }
+          },
+          {
+            "type": "update_status",
+            "config": {
+              "status": "not_interested"
+            }
+          },
+          {
+            "type": "notify_owner",
+            "config": {
+              "message": "🚫 {customerName} ({phone}) — not interested after call"
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": [
+          {
+            "op": "equals",
+            "field": "outcome",
+            "value": "not_interested"
+          }
+        ]
+      },
+      {
+        "id": "rule_lf_user_inactive",
+        "event": "user_inactive",
+        "actions": [
+          {
+            "type": "ai_followup",
+            "config": {}
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 48
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 48
+            }
+          },
+          {
+            "type": "trigger_voice_call",
+            "config": {
+              "jobType": "Launchfly Follow-up Check-in"
+            }
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 0.1
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 72
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          }
+        ],
+        "enabled": true,
+        "conditions": [
+          {
+            "op": "not_equals",
+            "field": "customerStatus",
+            "value": "customer_paid"
+          },
+          {
+            "op": "not_equals",
+            "field": "customerStatus",
+            "value": "not_interested"
+          }
+        ]
+      },
+      {
+        "id": "rule_lf_payment",
+        "event": "payment_received",
+        "actions": [
+          {
+            "type": "add_tag",
+            "config": {
+              "tag": "customer"
+            }
+          },
+          {
+            "type": "update_status",
+            "config": {
+              "status": "customer_paid"
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "You're all set, {firstName}! 🎉 Welcome to Launchfly.\n\nOur team is building your AI assistant right now. You'll get a message within 24 hours when it's live and ready to start closing quotes for you.\n\nExcited to help you grow 🚀"
+            }
+          },
+          {
+            "type": "send_email",
+            "config": {
+              "emailBody": "Hey {firstName},\n\nWelcome aboard! Your payment is confirmed.\n\nHere's what happens next:\n1. Our team builds your custom AI assistant (24 hours)\n2. You'll get a WhatsApp message when it's live\n3. Your AI starts following up with leads automatically\n\nIf you have questions in the meantime, just reply to this email or message us on WhatsApp.\n\nLet's close some quotes!\n\n— The Launchfly Team",
+              "emailSubject": "Welcome to Launchfly — you're in! 🚀"
+            }
+          },
+          {
+            "type": "notify_owner",
+            "config": {
+              "message": "💰 NEW CUSTOMER! {customerName} ({phone}) just signed up!"
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": []
+      },
+      {
+        "id": "rule_lf_daily_prospecting",
+        "event": "daily_schedule",
+        "actions": [
+          {
+            "type": "search_leads",
+            "config": {
+              "searchQuery": "home renovation contractors near me",
+              "searchLocation": "Kuala Lumpur, Malaysia",
+              "searchMaxResults": 50
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": [],
+        "scheduleConfig": {
+          "days": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri"
+          ],
+          "hour": 14,
+          "minute": 50,
+          "timezone": "Asia/Singapore",
+          "qstashScheduleId": "scd_5FHdrGDDy2RmxUvhSA4dWh2Y1sEN"
+        }
+      },
+      {
+        "id": "rule_lf_prospect_outreach",
+        "event": "prospect_found",
+        "actions": [
+          {
+            "type": "stagger_outreach",
+            "config": {
+              "staggerMaxPerDay": 15,
+              "staggerIntervalMin": 15
+            }
+          },
+          {
+            "type": "ask_ai",
+            "config": {
+              "aiPrompt": "Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nShould we reach out to this business? Default to YES if they have a phone number and are in a related industry. Only say NO if they are clearly unrelated, have terrible reviews (below 2 stars), or are a direct competitor.",
+              "stopOnNo": true
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Hey boss — quick question. When you send out a renovation quote, do you usually follow up yourself or just wait for them to get back to you?"
+            }
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 3
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 24
+            }
+          },
+          {
+            "type": "ai_followup",
+            "config": {}
+          },
+          {
+            "type": "delay",
+            "config": {
+              "delayHours": 48
+            }
+          },
+          {
+            "type": "send_whatsapp",
+            "config": {
+              "message": "Last thing from me — one of our roofers recovered a RM22K job in his first week closing lost quotes automatically. I have a quick video showing exactly how it works. Want me to send it over? 👊"
+            }
+          }
+        ],
+        "enabled": true,
+        "conditions": []
+      }
+    ],
+    "missed_call": true,
+    "whatsapp_webhook": true
+  }
+}

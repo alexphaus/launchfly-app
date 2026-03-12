@@ -340,9 +340,24 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   } else {
     // ── Schedule inactivity check — if customer doesn't reply within 24h,
     //    fire user_inactive so automation rules can trigger smart follow-ups ──
-    scheduleInactivityCheck(businessId, phoneWithPlus, channel).catch(err =>
-      console.warn('[ai-brain] Failed to schedule inactivity check:', err),
-    );
+    // Skip for prospecting leads — their prospect_found chain already has its
+    // own delay-based follow-up sequence. Scheduling user_inactive here would
+    // create a parallel chain (exponential QStash messages + spam risk).
+    const phoneDigits = phoneWithPlus.replace(/[^\d]/g, '');
+    const { count: isProspect } = await supabase
+      .from('quote_leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('source', 'prospecting')
+      .or(`phone.eq.${phoneWithPlus},phone.eq.+${phoneDigits}`);
+
+    if (isProspect && isProspect > 0) {
+      console.log(`   ⏭️ [ai-brain] Skipping user_inactive for ${phoneWithPlus} — prospecting lead (own chain handles follow-ups)`);
+    } else {
+      scheduleInactivityCheck(businessId, phoneWithPlus, channel).catch(err =>
+        console.warn('[ai-brain] Failed to schedule inactivity check:', err),
+      );
+    }
   }
 
   return {

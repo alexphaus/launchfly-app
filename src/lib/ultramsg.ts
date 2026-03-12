@@ -95,6 +95,26 @@ async function isBlacklisted(phone: string, businessId?: string): Promise<boolea
   }
 }
 
+/** Check if a phone number is a valid WhatsApp user */
+export async function checkWhatsAppNumber(
+  phone: string,
+  businessId?: string,
+): Promise<boolean> {
+  try {
+    const { instanceId, token } = await getCredentials(businessId);
+    const p = normalizePhone(phone).replace(/^\+/, '');
+    const chatId = `${p}@c.us`;
+    const url = `${ULTRAMSG_BASE}/${instanceId}/contacts/check?token=${encodeURIComponent(token)}&chatId=${encodeURIComponent(chatId)}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    return json.status === 'valid';
+  } catch (err) {
+    console.log(`[UltraMsg] contacts/check failed for ${phone}:`, err);
+    // On error, allow send to proceed (don't block on API issues)
+    return true;
+  }
+}
+
 /** Send a plain WhatsApp text message */
 export async function sendWhatsApp(
   to: string,
@@ -107,7 +127,14 @@ export async function sendWhatsApp(
     return { sent: false, error: 'Recipient is blacklisted from receiving automated messages.' };
   }
 
-  // 2) HUMAN TYPING DELAY - Anti-spam mechanism
+  // 2) WHATSAPP NUMBER VALIDATION - Skip if number doesn't have WhatsApp
+  const isValid = await checkWhatsAppNumber(to, businessId);
+  if (!isValid) {
+    console.log(`[UltraMsg] ⏭️ Skipped: ${to} is not a WhatsApp user.`);
+    return { sent: false, error: 'not_whatsapp' };
+  }
+
+  // 3) HUMAN TYPING DELAY - Anti-spam mechanism
   await simulateHumanTyping(body);
 
   const { instanceId, token } = await getCredentials(businessId);

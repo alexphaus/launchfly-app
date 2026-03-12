@@ -262,7 +262,13 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
       try {
-        await sendWhatsApp(ctx.phone, msg, ctx.businessId);
+        const result = await sendWhatsApp(ctx.phone, msg, ctx.businessId);
+        if (!result.sent) {
+          if (result.error === 'not_whatsapp') {
+            return { ok: false, detail: `Skipped ${ctx.phone}: not a WhatsApp user`, stopChain: true };
+          }
+          return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${result.error}` };
+        }
       } catch (err) {
         return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${err instanceof Error ? err.message : String(err)}` };
       }

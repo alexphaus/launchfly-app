@@ -1,41 +1,44 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, '.env.local') });
+
 import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY);
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-const businessId = '06203464-2b76-4468-8d2e-6630ab0ed71a';
-
-// Check new quote_leads
-const { data: leads } = await supabase
+// Check latest prospecting leads
+const { data: leads } = await s
   .from('quote_leads')
-  .select('id, name, phone, city, source, created_at')
-  .eq('business_id', businessId)
+  .select('id, name, phone, status, source, attempts, created_at')
+  .eq('business_id', '06203464-2b76-4468-8d2e-6630ab0ed71a')
+  .eq('source', 'prospecting')
   .order('created_at', { ascending: false })
-  .limit(10);
+  .limit(15);
+console.log(`Prospecting leads: ${leads?.length || 0}`);
+leads?.forEach(l => console.log(`  ${l.created_at.substring(11, 19)} | ${l.name?.substring(0, 35)} | ${l.phone} | ${l.status} | attempts:${l.attempts}`));
 
-console.log(`=== Latest leads (${leads?.length}) ===`);
-leads?.forEach(l => console.log(`  ${l.name} | ${l.phone} | ${l.city} | ${l.source} | ${l.created_at}`));
-
-// Check new customers (prospects)
-const { data: customers } = await supabase
-  .from('customers')
-  .select('id, name, phone, status, tags, created_at')
-  .eq('business_id', businessId)
-  .order('created_at', { ascending: false })
-  .limit(10);
-
-console.log(`\n=== Latest customers (${customers?.length}) ===`);
-customers?.forEach(c => console.log(`  ${c.name} | ${c.phone} | ${c.status} | ${JSON.stringify(c.tags)} | ${c.created_at}`));
-
-// Check outgoing messages
-const { data: msgs } = await supabase
+// Check chat_history for WhatsApp messages
+const { data: chats } = await s
   .from('chat_history')
-  .select('id, customer_id, direction, message, created_at')
-  .eq('business_id', businessId)
-  .eq('direction', 'outgoing')
+  .select('phone, role, message, created_at')
+  .eq('business_id', '06203464-2b76-4468-8d2e-6630ab0ed71a')
   .order('created_at', { ascending: false })
-  .limit(5);
+  .limit(10);
+console.log(`\nChat messages: ${chats?.length || 0}`);
+chats?.forEach(c => console.log(`  ${c.created_at?.substring(11, 19)} | ${c.role} | ${c.phone} | ${c.message?.substring(0, 80)}`));
 
-console.log(`\n=== Latest outgoing messages (${msgs?.length}) ===`);
-msgs?.forEach(m => console.log(`  to:${m.customer_id} | ${m.message?.substring(0, 80)} | ${m.created_at}`));
+// Check QStash events
+const QSTASH_BASE = process.env.QSTASH_URL;
+const TOKEN = process.env.QSTASH_TOKEN;
+const evRes = await fetch(`${QSTASH_BASE}/v2/events?count=20`, {
+  headers: { Authorization: `Bearer ${TOKEN}` },
+});
+const evData = await evRes.json();
+const events = Array.isArray(evData) ? evData : evData.events || [];
+console.log(`\nRecent QStash events:`);
+events.forEach(e => {
+  const time = new Date(e.time).toISOString().substring(11, 19);
+  const url = (e.url || '').replace('https://app.launchfly.ai', '');
+  console.log(`  ${time} ${e.state.padEnd(10)} ${url.substring(0, 60)}`);
+});

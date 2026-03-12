@@ -16,6 +16,7 @@ import { createClient } from '@supabase/supabase-js';
 import { fireEvent } from '@/lib/automations/executor';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Apify scrapes can take 60-120s
 
 function getSupabase() {
   return createClient(

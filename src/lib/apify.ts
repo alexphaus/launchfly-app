@@ -63,9 +63,9 @@ export async function searchGoogleMaps(opts: {
 
   const searchTerms = [`${query} in ${location}`];
 
-  // Run actor synchronously (blocks until done, max 120s timeout)
+  // Run actor synchronously (blocks until done, 240s timeout for larger scrapes)
   const res = await fetch(
-    `${APIFY_BASE}/acts/compass~crawler-google-places/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
+    `${APIFY_BASE}/acts/compass~crawler-google-places/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=240`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

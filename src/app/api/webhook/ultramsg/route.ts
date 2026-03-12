@@ -162,89 +162,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'auto_reply' });
     }
 
-    // ─── DEBOUNCE: Buffer rapid-fire messages from same user ───
-    // When a user sends multiple texts quickly ("No automation" + "We follow up manually")
-    // each webhook fires separately. We use a Supabase row to buffer them.
-    // First message in a burst stores itself and waits 3s. If more come in within 3s,
-    // they append to the buffer. Only the last one actually fires the AI.
-    const debounceKey = `${businessId}:${customerPhone}`;
-    const now = Date.now();
-    
-    // Store message in a simple buffer using the existing chat_history table
-    // We use a debounce approach: save message text, wait 3s, then check if more came in
-    const { data: pendingMsgs } = await supabase
-      .from('message_buffer')
-      .select('id, messages, created_at')
-      .eq('debounce_key', debounceKey)
-      .gte('created_at', new Date(now - 8000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    let combinedMessage = messageText;
-
-    if (pendingMsgs && pendingMsgs.length > 0) {
-      // There's a recent buffer — append our message to it
-      const existing = pendingMsgs[0];
-      const existingMessages = existing.messages as string[];
-      existingMessages.push(messageText);
-      combinedMessage = existingMessages.join('\n');
-      
-      await supabase
-        .from('message_buffer')
-        .update({ messages: existingMessages, updated_at: new Date().toISOString() })
-        .eq('id', existing.id);
-      
-      console.log(`   ⏳ Debounce: appended to buffer (${existingMessages.length} msgs)`);
-    } else {
-      // No recent buffer — create one
-      await supabase
-        .from('message_buffer')
-        .insert({
-          debounce_key: debounceKey,
-          messages: [messageText],
-          business_id: businessId,
-          phone: customerPhone,
-        });
-      
-      console.log(`   ⏳ Debounce: new buffer created, waiting 3s...`);
-    }
-
-    // Wait 3 seconds to let more messages arrive
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Re-read the buffer — if more messages were added after us, bail (the later one will handle it)
-    const { data: latestBuffer } = await supabase
-      .from('message_buffer')
-      .select('id, messages, updated_at')
-      .eq('debounce_key', debounceKey)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (latestBuffer && latestBuffer.length > 0) {
-      const buf = latestBuffer[0];
-      const bufMessages = buf.messages as string[];
-      const lastMsg = bufMessages[bufMessages.length - 1];
-      
-      // Only proceed if WE are the last message in the buffer
-      if (lastMsg !== messageText) {
-        console.log(`   ⏭️ Debounce: newer message exists, yielding to it`);
-        return NextResponse.json({ ok: true, debounced: true });
-      }
-      
-      // We're the last message — use the combined text
-      combinedMessage = bufMessages.join('\n');
-      
-      // Clean up the buffer
-      await supabase.from('message_buffer').delete().eq('id', buf.id);
-      console.log(`   ✅ Debounce: firing with ${bufMessages.length} combined message(s)`);
-    }
-
     // Fire automation event — all behavior driven by rules
     const result = await fireEvent({
       businessId,
       event: 'inbound_whatsapp',
       phone: customerPhone,
-      message: combinedMessage,
+      message: messageText,
       metadata: {
         channel: 'whatsapp',
         pushname,

@@ -63,9 +63,9 @@ export async function searchGoogleMaps(opts: {
 
   const searchTerms = [`${query} in ${location}`];
 
-  // Run actor synchronously (blocks until done, 240s timeout for larger scrapes)
-  const res = await fetch(
-    `${APIFY_BASE}/acts/compass~crawler-google-places/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=240`,
+  // Step 1: Start the actor run asynchronously
+  const startRes = await fetch(
+    `${APIFY_BASE}/acts/compass~crawler-google-places/runs?token=${encodeURIComponent(token)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,7 +73,6 @@ export async function searchGoogleMaps(opts: {
         searchStringsArray: searchTerms,
         maxCrawledPlacesPerSearch: maxResults,
         language: 'en',
-        // Only get essential fields to minimize cost
         includeWebResults: false,
         includeHistogram: false,
         includeOpeningHours: false,
@@ -82,12 +81,38 @@ export async function searchGoogleMaps(opts: {
     },
   );
 
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    throw new Error(`Apify API error ${res.status}: ${errText.substring(0, 200)}`);
+  if (!startRes.ok) {
+    const errText = await startRes.text().catch(() => '');
+    throw new Error(`Apify start error ${startRes.status}: ${errText.substring(0, 200)}`);
   }
 
-  const results = (await res.json()) as Record<string, unknown>[];
+  const run = (await startRes.json()) as { data: { id: string; defaultDatasetId: string } };
+  const runId = run.data.id;
+  const datasetId = run.data.defaultDatasetId;
+
+  // Step 2: Wait for run to finish (poll with waitForFinish — Apify long-polls up to the specified seconds)
+  const waitSecs = 50; // Stay under Vercel 60s limit
+  const waitRes = await fetch(
+    `${APIFY_BASE}/actor-runs/${runId}?token=${encodeURIComponent(token)}&waitForFinish=${waitSecs}`,
+  );
+  const runStatus = (await waitRes.json()) as { data: { status: string } };
+
+  if (runStatus.data.status !== 'SUCCEEDED') {
+    // Run still going or failed — return whatever partial results are in the dataset
+    console.warn(`[apify] Run ${runId} status: ${runStatus.data.status} — fetching partial results`);
+  }
+
+  // Step 3: Fetch dataset items
+  const dataRes = await fetch(
+    `${APIFY_BASE}/datasets/${datasetId}/items?token=${encodeURIComponent(token)}&format=json`,
+  );
+
+  if (!dataRes.ok) {
+    const errText = await dataRes.text().catch(() => '');
+    throw new Error(`Apify dataset error ${dataRes.status}: ${errText.substring(0, 200)}`);
+  }
+
+  const results = (await dataRes.json()) as Record<string, unknown>[];
 
   // Parse and filter — only keep businesses with phone numbers
   const leads: ScrapedLead[] = [];

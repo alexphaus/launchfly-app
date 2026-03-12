@@ -42,6 +42,7 @@ export interface AIBrainInput {
 export interface AIBrainResult {
   reply: string;
   toolsCalled: string[];
+  skipped?: boolean;
 }
 
 // ─── Send helpers ────────────────────────────────────────────────────────
@@ -256,7 +257,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
 
   // ── Save user message (fire-and-forget, but await before return) ──
   const saveUserPromise = saveMessage(phoneWithoutPlus, 'user', messageText, businessId).catch(
-    (err) => console.error('[ai-brain] Error saving user message:', err),
+    (err) => { console.error('[ai-brain] Error saving user message:', err); return null; }
   );
 
   // ── Call AI (Parallel text gen + intent classification) ──
@@ -315,6 +316,24 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
 
   if (!aiResponse) aiResponse = `Hi! How can I help you?`;
 
+  // ── Concurrency Check: Did the user send another message? ──
+  const userMsgId = await saveUserPromise;
+  if (userMsgId) {
+    const { data: latestUserMsg } = await supabase
+      .from('chat_history')
+      .select('id')
+      .eq('phone', phoneWithoutPlus)
+      .eq('role', 'user')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (latestUserMsg && latestUserMsg.id !== userMsgId) {
+      console.log(`   🛑 [ai-brain] User sent another message during generation. Aborting to prevent double-reply.`);
+      return { reply: '', toolsCalled: [], skipped: true };
+    }
+  }
+
   // ── Send reply via same channel the customer used ──
   // Split multiple lines and send as staggered chat bubbles
   const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
@@ -323,7 +342,6 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   }
 
   // ── Save history ──
-  await saveUserPromise;
   await saveMessage(
     phoneWithoutPlus,
     'assistant',

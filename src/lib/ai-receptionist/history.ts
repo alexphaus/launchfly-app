@@ -73,10 +73,10 @@ export async function saveMessage(
     content: string,
     businessId?: string,
     toolCalls?: object[],
-): Promise<void> {
+): Promise<string | null> {
     const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
 
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from('chat_history')
         .insert({
             phone: phoneNormalized,
@@ -84,11 +84,15 @@ export async function saveMessage(
             role,
             content,
             tool_calls: toolCalls ? JSON.stringify(toolCalls) : null,
-        });
+        })
+        .select('id')
+        .single();
 
     if (error) {
         console.error('❌ Failed to save message to history:', error.message);
+        return null;
     }
+    return data?.id || null;
 }
 
 /**

@@ -203,6 +203,33 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [activityDetail, setActivityDetail] = useState(null);       // { messages } or { transcript, summary, ... }
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // Outreach pause toggle
+  const [outreachPaused, setOutreachPaused] = useState(false);
+  const [pauseLoading, setPauseLoading] = useState(false);
+
+  useEffect(() => {
+    if (business?.id) {
+      fetch(`/api/businesses/outreach-pause?businessId=${business.id}`)
+        .then(r => r.json())
+        .then(d => setOutreachPaused(d.paused ?? false))
+        .catch(() => {});
+    }
+  }, [business?.id]);
+
+  const toggleOutreachPause = async () => {
+    if (!business?.id) return;
+    setPauseLoading(true);
+    try {
+      const res = await fetch('/api/businesses/outreach-pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id }),
+      });
+      const d = await res.json();
+      if (d.ok) setOutreachPaused(d.paused);
+    } catch {} finally { setPauseLoading(false); }
+  };
+
   // WhatsApp API config (per-business, stored in businesses.whatsapp_api_config)
   const [waConfig, setWaConfig] = useState({ instanceId: '', token: '' });
   const [waSaving, setWaSaving] = useState(false);
@@ -1479,6 +1506,24 @@ export default function AssistantModal({ isOpen, onClose, business }) {
               {/* ═══ ACTIVITY TAB ═══ */}
               {activeTab === 'activity' && (
                 <div className="space-y-3">
+                  {/* Outreach Pause Toggle */}
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Outreach sequences</p>
+                      <p className="text-[11px] text-slate-400">{outreachPaused ? 'Paused — follow-ups held until resumed' : 'Active — follow-ups running normally'}</p>
+                    </div>
+                    <button
+                      onClick={toggleOutreachPause}
+                      disabled={pauseLoading}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        outreachPaused ? 'bg-slate-300' : 'bg-emerald-500'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
+                        outreachPaused ? 'translate-x-1' : 'translate-x-6'
+                      }`} />
+                    </button>
+                  </div>
                   {/* ── Detail View (chat or call transcript) ── */}
                   {expandedActivity ? (
                     <>

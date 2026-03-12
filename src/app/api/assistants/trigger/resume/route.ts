@@ -30,6 +30,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing actions or context' }, { status: 400 });
     }
 
+    // ── Pause check: if outreach is paused, re-queue with 1h delay ──
+    const supabase = getSupabase();
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('outreach_paused')
+      .eq('id', ctx.businessId)
+      .single();
+
+    if (biz?.outreach_paused) {
+      // Re-schedule with 1h delay so it keeps checking until unpaused
+      const qstashToken = process.env.QSTASH_TOKEN;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+      const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+      if (qstashToken) {
+        await fetch(`${qstashBase}/v2/publish/${appUrl}/api/assistants/trigger/resume`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${qstashToken}`,
+            'Content-Type': 'application/json',
+            'Upstash-Delay': '3600s',
+            'Upstash-Retries': '0',
+          },
+          body: JSON.stringify({ actions, ctx, scheduledAt: scheduledAt || new Date().toISOString() }),
+        });
+      }
+      console.log(`[resume] Outreach paused for ${ctx.businessId} — re-queued in 1h`);
+      return NextResponse.json({ ok: true, paused: true, reason: 'outreach_paused', requeued: '1h' });
+    }
+
     // ── Auto-cancel if customer replied since this was scheduled ──
     if (scheduledAt && ctx.phone) {
       const phoneNorm = ctx.phone.replace(/^\+/, '');

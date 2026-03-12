@@ -989,6 +989,21 @@ CUSTOMER NAME: ${customerName}
 export async function fireEvent(ctx: EventContext): Promise<{ fired: number; results: { ok: boolean; detail: string }[] }> {
   const supabase = getSupabase();
 
+  // ── Pause check for outbound events (prospecting, scheduled outreach) ──
+  // Inbound events (inbound_whatsapp, payment_received) should ALWAYS be processed
+  const OUTBOUND_EVENTS = new Set(['prospect_found', 'daily_schedule', 'user_inactive']);
+  if (OUTBOUND_EVENTS.has(ctx.event) && ctx.businessId) {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('outreach_paused')
+      .eq('id', ctx.businessId)
+      .single();
+    if (biz?.outreach_paused) {
+      console.log(`[automation] Outreach paused for ${ctx.businessId} — skipping ${ctx.event}`);
+      return { fired: 0, results: [{ ok: true, detail: 'Outreach paused — skipped' }] };
+    }
+  }
+
   // Enrich context: auto-resolve businessName + firstName if not provided
   if (!ctx.businessName && ctx.businessId) {
     const { data: biz } = await supabase

@@ -895,8 +895,10 @@ CUSTOMER NAME: ${customerName}
         return { ok: true, detail: `Daily cap reached (${position}/${maxPerDay}) — skipping`, stopChain: true } as { ok: boolean; detail: string; stopChain: boolean };
       }
 
-      // Schedule remaining actions with progressive delay
-      const delaySeconds = position * intervalMin * 60;
+      // Schedule remaining actions with progressive delay + random jitter
+      // Jitter avoids exact intervals which WhatsApp flags as bot behavior
+      const jitterSec = Math.floor(Math.random() * 5 * 60); // 0–5 min random offset
+      const delaySeconds = position * intervalMin * 60 + jitterSec;
       // Mark this lead with the prospecting source so the counter works
       if (ctx.phone) {
         let digits = ctx.phone.replace(/[^\d]/g, '');

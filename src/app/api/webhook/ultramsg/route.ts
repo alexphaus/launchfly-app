@@ -151,6 +151,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, opted_out: true });
     }
 
+    // ─── AUTO-REPLY DETECTOR (Ignore completely) ───
+    // If the target sends an auto-reply, ignore it entirely.
+    // This prevents the AI from replying instantly and inappropriately,
+    // and explicitly keeps the message out of chat_history so our scheduled delays
+    // do not get canceled (giving the human a chance to reply later).
+    const autoReplyRegex = /thank you for contacting|thanks for contacting|automated message|auto-?reply|out of (the )?office|currently closed|will get back to you|we are away|not in the office/i;
+    if (autoReplyRegex.test(messageText)) {
+      console.log(`   🤖 Detected Auto-Reply from +${customerPhone}. Ignoring to prevent AI loop.`);
+      return NextResponse.json({ ok: true, skipped: true, reason: 'auto_reply' });
+    }
+
     // Fire automation event — all behavior driven by rules
     const result = await fireEvent({
       businessId,

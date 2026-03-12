@@ -178,7 +178,7 @@ async function saveToChatHistory(phone: string, businessId: string, content: str
       phone: digits,
       business_id: businessId,
       role: 'assistant',
-      content,
+      message: content,
     });
   } catch (err) {
     console.warn('[automation] Failed to save chat_history breadcrumb:', err);

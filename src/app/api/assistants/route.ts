@@ -430,10 +430,30 @@ async function syncDailyScheduleCrons(
     const days = cfg.days || ['mon', 'tue', 'wed', 'thu', 'fri'];
     const tz = cfg.timezone || 'America/New_York';
 
+    // Convert local time to UTC for QStash (timezone headers unreliable)
+    const tzOffsets: Record<string, number> = {
+      'Pacific/Honolulu': -10, 'America/Los_Angeles': -8, 'America/Denver': -7,
+      'America/Chicago': -6, 'America/New_York': -5, 'America/Sao_Paulo': -3,
+      'Europe/London': 0, 'Europe/Madrid': 1, 'Europe/Istanbul': 3,
+      'Asia/Dubai': 4, 'Asia/Kolkata': 5.5, 'Asia/Bangkok': 7,
+      'Asia/Singapore': 8, 'Asia/Tokyo': 9, 'Australia/Sydney': 11,
+    };
+    const offset = tzOffsets[tz] ?? 0;
+    let utcHour = hour - offset;
+    // Handle day wrap-around
+    let dayShift = 0;
+    if (utcHour < 0) { utcHour += 24; dayShift = -1; }
+    if (utcHour >= 24) { utcHour -= 24; dayShift = 1; }
+
     // Build cron expression: minute hour * * day1,day2,...
     const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-    const dayNums = days.map(d => dayMap[d.toLowerCase()] ?? 1).sort().join(',');
-    const cron = `${minute} ${hour} * * ${dayNums}`;
+    let dayNums = days.map(d => {
+      let n = (dayMap[d.toLowerCase()] ?? 1) + dayShift;
+      if (n < 0) n += 7;
+      if (n > 6) n -= 7;
+      return n;
+    }).sort((a, b) => a - b).join(',');
+    const cron = `${minute} ${Math.floor(utcHour)} * * ${dayNums}`;
 
     if (!rule.enabled) {
       // Disabled — delete existing schedule if any
@@ -474,7 +494,6 @@ async function syncDailyScheduleCrons(
         'Content-Type': 'application/json',
         'Upstash-Cron': cron,
         'Upstash-Retries': '0',
-        ...(tz ? { 'Upstash-Cron-Timezone': tz } : {}),
       },
       body: JSON.stringify({
         businessId,

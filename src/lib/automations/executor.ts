@@ -790,29 +790,51 @@ CUSTOMER NAME: ${customerName}
 
       if (newLeads.length === 0) return { ok: true, detail: `${leads.length} leads found, all already in database` };
 
-      // Fan-out: fire prospect_found for each new lead (non-blocking)
+      // Fan-out: dispatch prospect_found via QStash so each gets its own execution
+      const qstashToken = process.env.QSTASH_TOKEN;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+      const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+      const triggerUrl = `${appUrl}/api/assistants/trigger?businessId=${ctx.businessId}`;
+
       let firedCount = 0;
-      for (const lead of newLeads) {
-        fireEvent({
-          businessId: ctx.businessId,
-          event: 'prospect_found',
-          phone: lead.phone,
-          customerName: lead.title,
-          metadata: {
-            source: 'apify_prospecting',
-            rating: String(lead.rating),
-            reviews: String(lead.reviewsCount),
-            website: lead.website,
-            address: lead.address,
-            city: lead.city,
-            category: lead.categoryName,
-            place_id: lead.placeId,
-          },
-        }).catch(err => console.warn('[automation] prospect_found fire error:', err));
-        firedCount++;
+      const batchSize = 5;
+      for (let i = 0; i < newLeads.length; i += batchSize) {
+        const batch = newLeads.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (lead) => {
+          try {
+            const res = await fetch(`${qstashBase}/v2/publish/${triggerUrl}`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${qstashToken}`,
+                'Content-Type': 'application/json',
+                'Upstash-Delay': `${Math.floor(i / batchSize) * 5}s`,
+                'Upstash-Retries': '1',
+              },
+              body: JSON.stringify({
+                event: 'prospect_found',
+                phone: lead.phone,
+                name: lead.title,
+                metadata: {
+                  source: 'apify_prospecting',
+                  rating: String(lead.rating),
+                  reviews: String(lead.reviewsCount),
+                  website: lead.website,
+                  address: lead.address,
+                  city: lead.city,
+                  category: lead.categoryName,
+                  place_id: lead.placeId,
+                },
+              }),
+            });
+            if (res.ok) firedCount++;
+            else console.warn(`[automation] QStash prospect_found publish failed: ${res.status}`);
+          } catch (err) {
+            console.warn('[automation] prospect_found dispatch error:', err);
+          }
+        }));
       }
 
-      return { ok: true, detail: `Found ${leads.length} leads, ${newLeads.length} new → fired ${firedCount} prospect_found events` };
+      return { ok: true, detail: `Found ${leads.length} leads, ${newLeads.length} new → dispatched ${firedCount} prospect_found events via QStash` };
     }
 
     // ─── Stagger Outreach (progressive delays + daily cap) ────────────────

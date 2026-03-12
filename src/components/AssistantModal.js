@@ -1744,12 +1744,21 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                 }}
                                 className="p-1.5 border border-amber-300 rounded-lg text-xs bg-white"
                               >
-                                <option value="America/New_York">Eastern (NY)</option>
-                                <option value="America/Chicago">Central (Chicago)</option>
-                                <option value="America/Denver">Mountain (Denver)</option>
-                                <option value="America/Los_Angeles">Pacific (LA)</option>
+                                <option value="Pacific/Honolulu">Hawaii (-10)</option>
+                                <option value="America/Los_Angeles">US Pacific (-8)</option>
+                                <option value="America/Denver">US Mountain (-7)</option>
+                                <option value="America/Chicago">US Central (-6)</option>
+                                <option value="America/New_York">US Eastern (-5)</option>
+                                <option value="America/Sao_Paulo">Brazil (-3)</option>
                                 <option value="Europe/London">London (GMT)</option>
-                                <option value="Europe/Madrid">Madrid (CET)</option>
+                                <option value="Europe/Madrid">Europe Central (+1)</option>
+                                <option value="Europe/Istanbul">Turkey (+3)</option>
+                                <option value="Asia/Dubai">Dubai / Gulf (+4)</option>
+                                <option value="Asia/Kolkata">India (+5:30)</option>
+                                <option value="Asia/Bangkok">SE Asia (+7)</option>
+                                <option value="Asia/Singapore">Singapore (+8)</option>
+                                <option value="Asia/Tokyo">Japan / Korea (+9)</option>
+                                <option value="Australia/Sydney">Australia (+11)</option>
                               </select>
                             </div>
                             <div className="flex flex-wrap gap-1.5">

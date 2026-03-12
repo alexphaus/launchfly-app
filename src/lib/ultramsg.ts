@@ -51,6 +51,8 @@ function normalizePhone(phone: string): string {
   let p = phone.replace(/^whatsapp:/, '');
   // Strip spaces, dashes, parentheses — keep only digits and leading +
   const digits = p.replace(/[^\d]/g, '');
+  // US/Canada domestic numbers are 10 digits — need country code 1
+  if (digits.length === 10) return `+1${digits}`;
   return `+${digits}`;
 }
 

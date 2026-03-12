@@ -171,9 +171,11 @@ function evaluateConditions(conditions: Condition[], ctx: EventContext): boolean
 async function saveToChatHistory(phone: string, businessId: string, content: string): Promise<void> {
   try {
     const supabase = getSupabase();
-    const phoneNormalized = phone.replace('whatsapp:', '').replace(/^\+/, '');
+    // Normalize: strip non-digits, add +1 for US 10-digit numbers, store without +
+    let digits = phone.replace(/^whatsapp:/, '').replace(/[^\d]/g, '');
+    if (digits.length === 10) digits = `1${digits}`;
     await supabase.from('chat_history').insert({
-      phone: phoneNormalized,
+      phone: digits,
       business_id: businessId,
       role: 'assistant',
       content,
@@ -774,7 +776,10 @@ CUSTOMER NAME: ${customerName}
 
       // Dedup against existing quote_leads (normalize to digits-only for matching)
       const supabase = getSupabase();
-      const normalizePhone = (p: string) => p.replace(/[^\d]/g, '');
+      const normalizePhone = (p: string) => {
+        const digits = p.replace(/[^\d]/g, '');
+        return digits.length === 10 ? `1${digits}` : digits; // US/CA 10-digit → add country code
+      };
       // Fetch all existing phones for this business and normalize in JS
       // (avoids format mismatch issues with spaces/dashes in DB)
       const existingPhones = new Set<string>();
@@ -894,7 +899,9 @@ CUSTOMER NAME: ${customerName}
       const delaySeconds = position * intervalMin * 60;
       // Mark this lead with the prospecting source so the counter works
       if (ctx.phone) {
-        const phoneNorm = `+${ctx.phone.replace(/[^\d]/g, '')}`;
+        let digits = ctx.phone.replace(/[^\d]/g, '');
+        if (digits.length === 10) digits = `1${digits}`; // US/CA numbers need country code
+        const phoneNorm = `+${digits}`;
         const jobType = (ctx.metadata?.category as string) || 'Prospecting';
         // Check if lead already exists (avoid duplicate insert — unique index is on phone+job_type)
         const { data: existingLead } = await supabase

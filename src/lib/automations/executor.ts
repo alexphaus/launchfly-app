@@ -200,12 +200,9 @@ async function sendSms(to: string, body: string): Promise<void> {
   });
 }
 
-async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
+async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<{ sent: boolean; id?: string; error?: string }> {
   const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
-  const result = await ultramsgSend(to, body, businessId);
-  if (!result.sent) {
-    throw new Error(`UltraMsg send failed: ${result.error}`);
-  }
+  return ultramsgSend(to, body, businessId);
 }
 
 /** Send a message — WhatsApp first, SMS fallback on failure */
@@ -215,7 +212,8 @@ async function sendMessage(to: string, body: string, channel?: string, businessI
     return 'sms';
   }
   try {
-    await sendWhatsApp(to, body, businessId);
+    const result = await sendWhatsApp(to, body, businessId);
+    if (!result.sent) throw new Error(result.error || 'send failed');
     return 'whatsapp';
   } catch (err) {
     console.warn(`[automation] WhatsApp failed for ${to}, falling back to SMS:`, (err as Error).message);

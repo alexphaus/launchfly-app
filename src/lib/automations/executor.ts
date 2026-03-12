@@ -259,10 +259,13 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
     case 'send_whatsapp': {
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
-      const channel = (ctx.metadata?.channel as string) || undefined;
-      const sentVia = await sendMessage(ctx.phone, msg, channel, ctx.businessId);
+      try {
+        await sendWhatsApp(ctx.phone, msg, ctx.businessId);
+      } catch (err) {
+        return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${err instanceof Error ? err.message : String(err)}` };
+      }
       await saveToChatHistory(ctx.phone, ctx.businessId, msg);
-      return { ok: true, detail: `Sent ${sentVia} to ${ctx.phone}` };
+      return { ok: true, detail: `Sent whatsapp to ${ctx.phone}` };
     }
 
     case 'notify_owner': {
@@ -772,23 +775,39 @@ CUSTOMER NAME: ${customerName}
       // Dedup against existing quote_leads (normalize to digits-only for matching)
       const supabase = getSupabase();
       const normalizePhone = (p: string) => p.replace(/[^\d]/g, '');
-      const uniquePhones = [...new Set(leads.map(l => normalizePhone(l.phone)))];
-      // Supabase .in() has a 100-item limit, so batch if needed
+      // Fetch all existing phones for this business and normalize in JS
+      // (avoids format mismatch issues with spaces/dashes in DB)
       const existingPhones = new Set<string>();
-      for (let batch = 0; batch < uniquePhones.length; batch += 80) {
-        const chunk = uniquePhones.slice(batch, batch + 80);
-        // Query both +XXX and XXX variants in case of inconsistent storage
-        const variants = chunk.flatMap(p => [p, `+${p}`]);
-        const { data: existing } = await supabase
+      let from = 0;
+      while (true) {
+        const { data: batch } = await supabase
           .from('quote_leads')
           .select('phone')
           .eq('business_id', ctx.businessId)
-          .in('phone', variants);
-        for (const e of (existing || [])) existingPhones.add(normalizePhone(e.phone));
+          .range(from, from + 999);
+        if (!batch || batch.length === 0) break;
+        for (const e of batch) existingPhones.add(normalizePhone(e.phone));
+        if (batch.length < 1000) break;
+        from += 1000;
       }
       const newLeads = leads.filter(l => !existingPhones.has(normalizePhone(l.phone)));
 
       if (newLeads.length === 0) return { ok: true, detail: `${leads.length} leads found, all already in database` };
+
+      // Only dispatch up to the remaining daily cap — extras stay undiscovered for tomorrow
+      const todayStartSearch = new Date();
+      todayStartSearch.setHours(0, 0, 0, 0);
+      const { count: alreadySentToday } = await supabase
+        .from('quote_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', ctx.businessId)
+        .eq('source', 'prospecting')
+        .gte('created_at', todayStartSearch.toISOString());
+      const dailyCap = 15;
+      const remaining = Math.max(0, dailyCap - (alreadySentToday || 0));
+      const leadsToDispatch = newLeads.slice(0, remaining);
+
+      if (leadsToDispatch.length === 0) return { ok: true, detail: `${newLeads.length} new leads found but daily cap already reached` };
 
       // Fan-out: dispatch prospect_found via QStash so each gets its own execution
       const qstashToken = process.env.QSTASH_TOKEN;
@@ -798,8 +817,8 @@ CUSTOMER NAME: ${customerName}
 
       let firedCount = 0;
       const batchSize = 5;
-      for (let i = 0; i < newLeads.length; i += batchSize) {
-        const batch = newLeads.slice(i, i + batchSize);
+      for (let i = 0; i < leadsToDispatch.length; i += batchSize) {
+        const batch = leadsToDispatch.slice(i, i + batchSize);
         await Promise.all(batch.map(async (lead) => {
           try {
             const res = await fetch(`${qstashBase}/v2/publish/${triggerUrl}`, {
@@ -834,7 +853,8 @@ CUSTOMER NAME: ${customerName}
         }));
       }
 
-      return { ok: true, detail: `Found ${leads.length} leads, ${newLeads.length} new → dispatched ${firedCount} prospect_found events via QStash` };
+      const skipped = newLeads.length - leadsToDispatch.length;
+      return { ok: true, detail: `Found ${leads.length} leads, ${newLeads.length} new, dispatched ${firedCount}${skipped > 0 ? ` (${skipped} saved for tomorrow)` : ''} via QStash` };
     }
 
     // ─── Stagger Outreach (progressive delays + daily cap) ────────────────
@@ -864,7 +884,7 @@ CUSTOMER NAME: ${customerName}
       const delaySeconds = position * intervalMin * 60;
       // Mark this lead with the prospecting source so the counter works
       if (ctx.phone) {
-        const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+        const phoneNorm = `+${ctx.phone.replace(/[^\\d]/g, '')}`;
         const jobType = (ctx.metadata?.category as string) || 'Prospecting';
         // Check if lead already exists (avoid duplicate insert — unique index is on phone+job_type)
         const { data: existingLead } = await supabase

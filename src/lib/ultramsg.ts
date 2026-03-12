@@ -49,8 +49,9 @@ export async function getCredentials(businessId?: string): Promise<UltramsgCrede
 /** Normalize phone to international format without whatsapp: prefix */
 function normalizePhone(phone: string): string {
   let p = phone.replace(/^whatsapp:/, '');
-  if (!p.startsWith('+')) p = `+${p}`;
-  return p;
+  // Strip spaces, dashes, parentheses — keep only digits and leading +
+  const digits = p.replace(/[^\d]/g, '');
+  return `+${digits}`;
 }
 
 /** Helper to block execution to simulate human typing delays (varies by message length) */

@@ -58,14 +58,15 @@ function normalizePhone(phone: string): string {
 
 /** Helper to block execution to simulate human typing delays (varies by message length) */
 async function simulateHumanTyping(text: string) {
-  // Read delay: ~2 to 5 seconds to "read" the inbound message
-  const readDelayMs = Math.floor(Math.random() * 3000) + 2000;
+  // Read delay: ~1 to 2 seconds to "read" the inbound message
+  const readDelayMs = Math.floor(Math.random() * 1000) + 1000;
   
-  // Typing delay: ~40ms per character to pretend to type, up to max 15 seconds
-  const typingTimeMs = Math.min(text.length * 40, 15000);
+  // Typing delay: ~20ms per character to pretend to type, up to max 3 seconds
+  // (We keep this short so the Vercel webhook doesn't time out and trigger an UltraMsg retry storm)
+  const typingTimeMs = Math.min(text.length * 20, 3000);
   
-  // Jitter: random 1-4 seconds so it's never exact
-  const jitterMs = Math.floor(Math.random() * 3000) + 1000;
+  // Jitter: random 0.5-1 seconds so it's never exact
+  const jitterMs = Math.floor(Math.random() * 500) + 500;
   
   const totalDelayMs = readDelayMs + typingTimeMs + jitterMs;
   

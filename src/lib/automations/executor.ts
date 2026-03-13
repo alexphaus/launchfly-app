@@ -247,11 +247,6 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       if (!ctx.phone || !ctx.businessId) return { ok: false, detail: 'Missing phone or businessId' };
       if (!ctx.message) return { ok: false, detail: 'No message to respond to' };
       
-      // Artificial delay (3-8 seconds) for inbound replies to simulate typing/human behavior
-      // This prevents the "immediate machine-gun" reply that clearly identifies a bot.
-      const jitterMs = Math.floor(Math.random() * 5000) + 3000;
-      await new Promise(resolve => setTimeout(resolve, jitterMs));
-
       const channel = (ctx.metadata?.channel as string) || 'whatsapp';
       const { handleAIResponse } = await import('@/lib/automations/ai-brain');
       const result = await handleAIResponse({

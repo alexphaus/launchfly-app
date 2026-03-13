@@ -162,6 +162,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'auto_reply' });
     }
 
+    // ─── DEDUPLICATION CHECK (Prevent UltraMsg Retry Storm) ───
+    // UltraMsg times out webhooks after ~15s and retries. If the AI takes too long to generate
+    // and sends multiple bubbles, the webhook might retry, causing an infinite loop.
+    // If we've seen this exact same text from this exact phone in the last 30 seconds, drop it.
+    const duplicateWindowMs = 30 * 1000;
+    const { data: recentDups } = await supabase
+      .from('chat_history')
+      .select('id')
+      .eq('phone', customerPhone.replace(/^\+/, ''))
+      .eq('role', 'user')
+      .eq('content', messageText)
+      .gte('created_at', new Date(Date.now() - duplicateWindowMs).toISOString())
+      .limit(1);
+
+    if (recentDups && recentDups.length > 0) {
+      console.log(`   🔄 Detected duplicate webhook retry for ${customerPhone}. Skipping to prevent spam storm.`);
+      return NextResponse.json({ ok: true, skipped: true, reason: 'duplicate_retry' });
+    }
+
     // Fire automation event — all behavior driven by rules
     const result = await fireEvent({
       businessId,

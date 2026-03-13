@@ -201,10 +201,11 @@ async function sendSms(to: string, body: string): Promise<void> {
 }
 
 async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
-  const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
-  const result = await ultramsgSend(to, body, businessId);
+  const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+  const wa = await getWhatsAppProvider(businessId);
+  const result = await wa.sendWhatsApp(to, body, businessId);
   if (!result.sent) {
-    throw new Error(`UltraMsg send failed: ${result.error}`);
+    throw new Error(`WhatsApp send failed (${wa.name}): ${result.error}`);
   }
 }
 
@@ -815,7 +816,9 @@ CUSTOMER NAME: ${customerName}
       if (remaining <= 0) return { ok: true, detail: `${newLeads.length} new leads found but daily cap already reached` };
 
       // Find leads that actually have WhatsApp registered, until we hit the 'remaining' target
-      const { checkHasWhatsApp } = await import('@/lib/ultramsg');
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const waProvider = await getWhatsAppProvider(ctx.businessId);
+      const checkHasWhatsApp = waProvider.checkHasWhatsApp;
       const leadsToDispatch: typeof newLeads = [];
       let checkedCount = 0;
       let noWhatsAppCount = 0;

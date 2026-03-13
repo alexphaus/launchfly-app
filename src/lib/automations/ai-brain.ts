@@ -48,10 +48,11 @@ export interface AIBrainResult {
 // ─── Send helpers ────────────────────────────────────────────────────────
 
 async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
-  const { sendWhatsApp: ultramsgSend } = await import('@/lib/ultramsg');
-  const result = await ultramsgSend(to, body, businessId);
+  const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+  const wa = await getWhatsAppProvider(businessId);
+  const result = await wa.sendWhatsApp(to, body, businessId);
   if (!result.sent) {
-    throw new Error(`UltraMsg send failed: ${result.error}`);
+    throw new Error(`WhatsApp send failed (${wa.name}): ${result.error}`);
   }
 }
 
@@ -220,8 +221,12 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   const { businessId, phone, messageText, messageSid, channel = 'whatsapp' } = input;
   const supabase = getSupabase();
 
-  // Note: UltraMsg doesn't support typing indicators via API.
-  // The simulateHumanTyping delay in ultramsg.ts handles perceived typing time.
+  // Send typing indicator if on Evolution API (fire-and-forget)
+  const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+  const waProvider = await getWhatsAppProvider(businessId);
+  if (waProvider.sendTypingPresence) {
+    waProvider.sendTypingPresence(phone, businessId).catch(() => {});
+  }
 
   const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
   const phoneWithoutPlus = phone.replace(/^\+/, '');

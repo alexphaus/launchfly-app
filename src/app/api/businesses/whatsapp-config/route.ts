@@ -8,21 +8,34 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { businessId, instanceId, token } = await req.json();
+    const body = await req.json();
+    const { businessId, provider } = body;
 
-    if (!businessId || !instanceId || !token) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!businessId) {
+      return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
+    }
+
+    let config: Record<string, string>;
+
+    if (provider === 'evolution') {
+      // Evolution API: { provider, baseUrl, apiKey, instanceName }
+      const { baseUrl, apiKey, instanceName } = body;
+      if (!baseUrl || !apiKey || !instanceName) {
+        return NextResponse.json({ error: 'Missing Evolution fields: baseUrl, apiKey, instanceName' }, { status: 400 });
+      }
+      config = { provider: 'evolution', baseUrl, apiKey, instanceName };
+    } else {
+      // UltraMsg (default): { provider, instanceId, token }
+      const { instanceId, token } = body;
+      if (!instanceId || !token) {
+        return NextResponse.json({ error: 'Missing UltraMsg fields: instanceId, token' }, { status: 400 });
+      }
+      config = { provider: 'ultramsg', instanceId, token };
     }
 
     const { error } = await supabase
       .from('businesses')
-      .update({
-        whatsapp_api_config: {
-          provider: 'ultramsg',
-          instanceId,
-          token,
-        },
-      })
+      .update({ whatsapp_api_config: config })
       .eq('id', businessId);
 
     if (error) {
@@ -30,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save config' }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, provider: config.provider });
   } catch (err: any) {
     console.error('[whatsapp-config] Error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });

@@ -342,8 +342,25 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   // ── Send reply via same channel the customer used ──
   // Split multiple lines and send as staggered chat bubbles
   const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
-  for (const msg of messagesToSend) {
+  for (let i = 0; i < messagesToSend.length; i++) {
+    const msg = messagesToSend[i];
     await sendReply(phoneWithPlus, msg.trim(), channel, businessId);
+
+    // If there's another bubble coming, delay realistically before sending it
+    if (i < messagesToSend.length - 1) {
+      const nextMsg = messagesToSend[i + 1];
+      // Delay based on next message length: ~20ms per char, min 1s, max 4s
+      const delayMs = Math.max(1000, Math.min(nextMsg.length * 20, 4000));
+      
+      // Re-fire typing indicator for the next bubble (if using Evolution)
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const waProvider = await getWhatsAppProvider(businessId);
+      if (waProvider.sendTypingPresence) {
+        waProvider.sendTypingPresence(phoneWithPlus, businessId).catch(() => {});
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
   }
 
   // ── Save history ──
@@ -526,8 +543,22 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
   // ── Send via correct channel ──
   // Split multiple lines and send as staggered chat bubbles
   const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
-  for (const msg of messagesToSend) {
+  for (let i = 0; i < messagesToSend.length; i++) {
+    const msg = messagesToSend[i];
     await sendReply(phoneWithPlus, msg.trim(), channel, businessId);
+
+    if (i < messagesToSend.length - 1) {
+      const nextMsg = messagesToSend[i + 1];
+      const delayMs = Math.max(1000, Math.min(nextMsg.length * 20, 4000));
+      
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const waProvider = await getWhatsAppProvider(businessId);
+      if (waProvider.sendTypingPresence) {
+        waProvider.sendTypingPresence(phoneWithPlus, businessId).catch(() => {});
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
   }
 
   // ── Save to history (no user message to save — this is a follow-up) ──

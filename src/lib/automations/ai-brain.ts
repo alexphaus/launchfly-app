@@ -268,7 +268,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   // ── Call AI (Parallel text gen + intent classification) ──
   const [result, intentCheck] = await Promise.all([
     generateText({
-      model: openai('gpt-4o-mini'),
+      model: openai('gpt-4o'),
       system: systemPrompt,
       messages: [...history, { role: 'user' as const, content: messageText }],
       tools,

@@ -349,8 +349,8 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     // If there's another bubble coming, delay realistically before sending it
     if (i < messagesToSend.length - 1) {
       const nextMsg = messagesToSend[i + 1];
-      // Delay based on next message length: ~20ms per char, min 1s, max 4s
-      const delayMs = Math.max(1000, Math.min(nextMsg.length * 20, 4000));
+      // Delay based on next message length: ~30ms per char, plus a base delay of 1.5s and a little jitter
+      const delayMs = Math.max(1500, Math.min(nextMsg.length * 30, 5000)) + Math.floor(Math.random() * 500);
       
       // Re-fire typing indicator for the next bubble (if using Evolution)
       const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
@@ -549,7 +549,7 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
 
     if (i < messagesToSend.length - 1) {
       const nextMsg = messagesToSend[i + 1];
-      const delayMs = Math.max(1000, Math.min(nextMsg.length * 20, 4000));
+      const delayMs = Math.max(1500, Math.min(nextMsg.length * 30, 5000)) + Math.floor(Math.random() * 500);
       
       const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
       const waProvider = await getWhatsAppProvider(businessId);

@@ -85,6 +85,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'ask_ai', label: 'Ask AI', icon: '🧩', configFields: ['aiPrompt', 'stopOnNo'] },
   { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
   { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
+  { id: 'outreach', label: 'Outreach (Drip)', icon: '📤', configFields: ['outreachLeadsPerDay', 'outreachWindowStart', 'outreachWindowEnd'] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -142,12 +143,10 @@ const DEFAULT_ACTIONS_BY_EVENT = {
     { type: 'ai_followup', config: {} },
   ],
   prospect_found: [
-    { type: 'stagger_outreach', config: { staggerIntervalMin: 15, staggerMaxPerDay: 15 } },
-    { type: 'ask_ai', config: { aiPrompt: 'Business: {customerName}\nCategory: {metadata.category}\nRating: {metadata.rating} ({metadata.reviews} reviews)\nLocation: {metadata.city}\n\nShould we reach out to this business?', stopOnNo: true } },
-    { type: 'trigger_voice_call', config: { jobType: 'Prospecting Call' } },
+    { type: 'send_whatsapp', config: { message: 'hey {customerName}, quick question — you do {metadata.service_type} work in {metadata.area} right?' } },
   ],
   daily_schedule: [
-    { type: 'search_leads', config: { searchQuery: 'contractors near me', searchLocation: 'Miami, FL', searchMaxResults: 50 } },
+    { type: 'outreach', config: { outreachLeadsPerDay: 5, outreachWindowStart: '09:00', outreachWindowEnd: '18:00' } },
   ],
 };
 
@@ -2195,6 +2194,38 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         </div>
                                                       </div>
                                                     )}
+                                                    {branchActionDef?.configFields?.includes('outreachLeadsPerDay') && (
+                                                      <div className="space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Leads/day</label>
+                                                          <input
+                                                            type="number"
+                                                            min="1"
+                                                            max="20"
+                                                            value={branchAction.config?.outreachLeadsPerDay || 5}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'outreachLeadsPerDay', parseInt(e.target.value) || 5)}
+                                                            className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                                          />
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Window</label>
+                                                          <input
+                                                            type="time"
+                                                            value={branchAction.config?.outreachWindowStart || '09:00'}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'outreachWindowStart', e.target.value)}
+                                                            className="p-2 border border-slate-200 rounded-lg text-xs"
+                                                          />
+                                                          <span className="text-[10px] text-slate-400">to</span>
+                                                          <input
+                                                            type="time"
+                                                            value={branchAction.config?.outreachWindowEnd || '18:00'}
+                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'outreachWindowEnd', e.target.value)}
+                                                            className="p-2 border border-slate-200 rounded-lg text-xs"
+                                                          />
+                                                        </div>
+                                                        <p className="text-[9px] text-slate-400">Picks leads from pool, fires prospect_found at random times.</p>
+                                                      </div>
+                                                    )}
                                                     {branchActionDef?.configFields?.includes('emailSubject') && (
                                                       <div className="space-y-1.5">
                                                         <input
@@ -2459,6 +2490,38 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                             className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
                                           />
                                         </div>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('outreachLeadsPerDay') && (
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Leads/day</label>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            max="20"
+                                            value={action.config?.outreachLeadsPerDay || 5}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'outreachLeadsPerDay', parseInt(e.target.value) || 5)}
+                                            className="w-16 p-2 border border-slate-200 rounded-lg text-xs text-center"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Window</label>
+                                          <input
+                                            type="time"
+                                            value={action.config?.outreachWindowStart || '09:00'}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'outreachWindowStart', e.target.value)}
+                                            className="p-2 border border-slate-200 rounded-lg text-xs"
+                                          />
+                                          <span className="text-[10px] text-slate-400">to</span>
+                                          <input
+                                            type="time"
+                                            value={action.config?.outreachWindowEnd || '18:00'}
+                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'outreachWindowEnd', e.target.value)}
+                                            className="p-2 border border-slate-200 rounded-lg text-xs"
+                                          />
+                                        </div>
+                                        <p className="text-[9px] text-slate-400">Picks leads from hunter_prospects pool. Each fires as prospect_found at a random time in the window.</p>
                                       </div>
                                     )}
                                   </div>

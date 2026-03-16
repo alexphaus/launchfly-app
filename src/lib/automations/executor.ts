@@ -71,7 +71,7 @@ export const AVAILABLE_EVENTS = [
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱', desc: 'Retell AI call ended — check outcome in metadata' },
   { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕', desc: 'A new customer/lead record is created for the first time' },
   { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶', desc: 'Customer hasn\'t replied after 24h — triggers smart AI follow-up' },
-  { id: 'prospect_found', label: 'Prospect Found', icon: '🎯', desc: 'A new prospect was discovered by search_leads — fires once per lead' },
+  { id: 'prospect_found', label: 'Prospect Found', icon: '🎯', desc: 'Fires per lead — from outreach drip or search_leads. Configure what happens when a prospect is contacted.' },
   { id: 'daily_schedule', label: 'Daily Schedule', icon: '⏰', desc: 'Fires on a schedule (daily/weekly). Configure time and days in the rule.' },
 ] as const;
 
@@ -94,6 +94,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'ask_ai', label: 'Ask AI', icon: '🧩', desc: 'Send a prompt to AI with full business context. Use for qualification, personalization, categorization — anything. Optionally stops chain on NO. Result available as {aiResponse}.', configFields: ['aiPrompt', 'stopOnNo'] },
   { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', desc: 'Scrape Google Maps for businesses. Each result fires a prospect_found event for downstream rules.', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
   { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', desc: 'Space out leads with progressive delays and a daily cap. Schedules remaining actions via QStash.', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
+  { id: 'outreach', label: 'Outreach (Drip from Pool)', icon: '📤', desc: 'Pick N leads from hunter_prospects pool and schedule each as a prospect_found event at a random business-hours time. Decouples lead finding from outreach.', configFields: ['outreachLeadsPerDay', 'outreachWindowStart', 'outreachWindowEnd'] },
   { id: 'condition_branch', label: 'If / Else Branch', icon: '🔀', desc: 'Evaluate conditions and run different actions for true vs false branches', configFields: [] },
 ] as const;
 
@@ -971,6 +972,141 @@ CUSTOMER NAME: ${customerName}
       // We'll abuse the existing scheduleResume by importing it.
 
       return { ok: true, detail: `Stagger: position ${position + 1}/${maxPerDay}, delay=${Math.round(delaySeconds / 60)}min`, staggerDelay: delaySeconds } as { ok: boolean; detail: string; staggerDelay: number };
+    }
+
+    // ─── Outreach (Drip from Pool) ───────────────────────────────────────
+
+    case 'outreach': {
+      const leadsPerDay = Number(cfg.outreachLeadsPerDay) || 5;
+      const windowStart = (cfg.outreachWindowStart as string) || '09:00';
+      const windowEnd = (cfg.outreachWindowEnd as string) || '18:00';
+
+      const supabase = getSupabase();
+
+      // 1. Pick N leads from hunter_prospects WHERE status = 'new', oldest first
+      const { data: prospects, error: fetchErr } = await supabase
+        .from('hunter_prospects')
+        .select('id, business_name, whatsapp_number, service_type, area, owner_name, source, pain_signals, website_url')
+        .eq('status', 'new')
+        .order('created_at', { ascending: true })
+        .limit(leadsPerDay);
+
+      if (fetchErr) {
+        return { ok: false, detail: `Failed to fetch prospects: ${fetchErr.message}` };
+      }
+      if (!prospects || prospects.length === 0) {
+        return { ok: true, detail: 'No new prospects in pool — refill hunter_prospects table' };
+      }
+
+      // 2. WhatsApp availability check (batches of 5)
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const waProvider = await getWhatsAppProvider(ctx.businessId);
+      const withWhatsApp: typeof prospects = [];
+      const noWa: string[] = [];
+
+      for (let i = 0; i < prospects.length; i += 5) {
+        const batch = prospects.slice(i, i + 5);
+        const results = await Promise.all(batch.map(async p => {
+          const hasWa = await waProvider.checkHasWhatsApp(p.whatsapp_number, ctx.businessId);
+          return { prospect: p, hasWa };
+        }));
+        for (const { prospect, hasWa } of results) {
+          if (hasWa) {
+            withWhatsApp.push(prospect);
+          } else {
+            noWa.push(prospect.id);
+          }
+        }
+      }
+
+      // Mark no-WhatsApp prospects so we don't pick them again
+      if (noWa.length > 0) {
+        await supabase
+          .from('hunter_prospects')
+          .update({ status: 'no_whatsapp' })
+          .in('id', noWa);
+      }
+
+      if (withWhatsApp.length === 0) {
+        return { ok: true, detail: `Checked ${prospects.length} prospects — none had WhatsApp. Marked as no_whatsapp.` };
+      }
+
+      // 3. Schedule each as a prospect_found event at a random time within the business-hours window
+      const qstashToken = process.env.QSTASH_TOKEN;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+      const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+      const triggerUrl = `${appUrl}/api/assistants/trigger?businessId=${ctx.businessId}`;
+
+      // Parse window times (HH:MM) into seconds-from-midnight
+      const [startH, startM] = windowStart.split(':').map(Number);
+      const [endH, endM] = windowEnd.split(':').map(Number);
+      const windowStartSec = startH * 3600 + startM * 60;
+      const windowEndSec = endH * 3600 + endM * 60;
+      const windowSpan = Math.max(windowEndSec - windowStartSec, 3600); // at least 1hr window
+
+      // Current time in seconds from midnight (UTC — the schedule cron handles timezone)
+      const now = new Date();
+      const nowSec = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+
+      let scheduled = 0;
+      const prospectIds: string[] = [];
+
+      for (const prospect of withWhatsApp) {
+        // Random time within window
+        const randomOffsetSec = Math.floor(Math.random() * windowSpan);
+        const targetSec = windowStartSec + randomOffsetSec;
+
+        // Delay from now to the target time (same day)
+        let delaySec = targetSec - nowSec;
+        if (delaySec < 60) delaySec = 60 + Math.floor(Math.random() * 300); // at least 1-6 min from now
+
+        try {
+          const res = await fetch(`${qstashBase}/v2/publish/${triggerUrl}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${qstashToken}`,
+              'Content-Type': 'application/json',
+              'Upstash-Delay': `${delaySec}s`,
+              'Upstash-Retries': '1',
+            },
+            body: JSON.stringify({
+              event: 'prospect_found',
+              phone: prospect.whatsapp_number,
+              name: prospect.business_name,
+              metadata: {
+                source: prospect.source || 'hunter_pool',
+                prospect_id: prospect.id,
+                service_type: prospect.service_type,
+                area: prospect.area,
+                owner_name: prospect.owner_name,
+                website: prospect.website_url,
+                pain_signals: prospect.pain_signals,
+              },
+            }),
+          });
+          if (res.ok) {
+            scheduled++;
+            prospectIds.push(prospect.id);
+          } else {
+            console.warn(`[outreach] QStash publish failed for ${prospect.business_name}: ${res.status}`);
+          }
+        } catch (err) {
+          console.warn('[outreach] QStash dispatch error:', err);
+        }
+      }
+
+      // 4. Mark scheduled prospects as 'opener_queued'
+      if (prospectIds.length > 0) {
+        await supabase
+          .from('hunter_prospects')
+          .update({ status: 'opener_queued', opener_sent_at: new Date().toISOString() })
+          .in('id', prospectIds);
+      }
+
+      return {
+        ok: true,
+        detail: `Pool: ${prospects.length} picked, ${noWa.length} no WhatsApp, ${scheduled} scheduled as prospect_found (window ${windowStart}–${windowEnd})`,
+      };
     }
 
     default:

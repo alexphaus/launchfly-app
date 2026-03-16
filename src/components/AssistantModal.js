@@ -44,6 +44,8 @@ const AVAILABLE_TOOLS = [
   { id: 'transfer_to_human', label: 'Transfer to Human', emoji: '🙋', desc: 'Escalate to the owner' },
   { id: 'send_financing_link', label: 'Send Financing Link', emoji: '🏦', desc: 'Financing application' },
   { id: 'lookup_customer', label: 'Lookup Customer', emoji: '🔍', desc: 'Check customer history' },
+  { id: 'trigger_demo_call', label: 'Trigger Demo Call', emoji: '📞', desc: 'AI voice demo via Retell' },
+  { id: 'call_webhook', label: 'Call External Webhook', emoji: '🌐', desc: 'Zapier, Make, or custom API' },
 ];
 
 // ─── Automation Events & Actions ─────────────────────────────────────────
@@ -183,6 +185,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     tools_enabled: ['send_checkout_link', 'book_calendar', 'send_template', 'transfer_to_human'],
     sequence_steps: [],
     trigger_config: { whatsapp_webhook: true, missed_call: true },
+    webhooks: [],
   });
 
   const [promptMode, setPromptMode] = useState('auto'); // 'auto' | 'custom'
@@ -286,6 +289,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       tools_enabled: assistant.tools_enabled || [],
       sequence_steps: assistant.sequence_steps || [],
       trigger_config: assistant.trigger_config || {},
+      webhooks: business?.business_data?.webhooks || (business?.business_data?.webhook_url ? [{ label: '', url: business.business_data.webhook_url, headers: business.business_data.webhook_headers || '', events: [] }] : []),
     });
     setPromptMode(assistant.system_prompt ? 'custom' : 'auto');
   }, []);
@@ -605,6 +609,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
           assistantId: currentAssistantId,
           ...config,
           system_prompt: promptMode === 'custom' ? config.system_prompt : null,
+          webhooks: config.webhooks?.length ? config.webhooks : undefined,
         }),
       });
       const data = await res.json();
@@ -1426,6 +1431,92 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       ))}
                     </div>
                   </div>
+
+                  {/* Webhooks (for call_webhook tool) */}
+                  {config.tools_enabled.includes('call_webhook') && (
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                        🌐 External Webhooks
+                      </label>
+                      <p className="text-[11px] text-slate-400 mb-2">The AI will POST event data to these URLs when something important happens. Add multiple for different integrations.</p>
+                      <div className="space-y-3">
+                        {(config.webhooks || []).map((wh, idx) => (
+                          <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <input
+                                type="text"
+                                value={wh.label || ''}
+                                onChange={e => {
+                                  const updated = [...config.webhooks];
+                                  updated[idx] = { ...updated[idx], label: e.target.value };
+                                  setConfig(prev => ({ ...prev, webhooks: updated }));
+                                }}
+                                className="text-xs font-medium text-slate-700 bg-transparent border-none outline-none flex-1"
+                                placeholder={`Webhook ${idx + 1} (e.g. "Zapier CRM", "Slack alerts")`}
+                              />
+                              <button
+                                onClick={() => {
+                                  const updated = config.webhooks.filter((_, i) => i !== idx);
+                                  setConfig(prev => ({ ...prev, webhooks: updated }));
+                                }}
+                                className="text-red-400 hover:text-red-600 p-1"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <input
+                              type="url"
+                              value={wh.url || ''}
+                              onChange={e => {
+                                const updated = [...config.webhooks];
+                                updated[idx] = { ...updated[idx], url: e.target.value };
+                                setConfig(prev => ({ ...prev, webhooks: updated }));
+                              }}
+                              className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                              placeholder="https://hooks.zapier.com/hooks/catch/..."
+                            />
+                            <details className="text-xs">
+                              <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">Advanced: headers & event filter</summary>
+                              <div className="space-y-1.5 mt-1.5">
+                                <input
+                                  type="text"
+                                  value={wh.headers || ''}
+                                  onChange={e => {
+                                    const updated = [...config.webhooks];
+                                    updated[idx] = { ...updated[idx], headers: e.target.value };
+                                    setConfig(prev => ({ ...prev, webhooks: updated }));
+                                  }}
+                                  className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                  placeholder="Authorization=Bearer xxx, X-Api-Key=abc"
+                                />
+                                <input
+                                  type="text"
+                                  value={(wh.events || []).join(', ')}
+                                  onChange={e => {
+                                    const updated = [...config.webhooks];
+                                    const events = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                    updated[idx] = { ...updated[idx], events };
+                                    setConfig(prev => ({ ...prev, webhooks: updated }));
+                                  }}
+                                  className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                                  placeholder="hot_lead, demo_requested, booking_confirmed (blank = all events)"
+                                />
+                              </div>
+                            </details>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setConfig(prev => ({
+                            ...prev,
+                            webhooks: [...(prev.webhooks || []), { label: '', url: '', headers: '', events: [] }],
+                          }))}
+                          className="w-full p-2.5 border-2 border-dashed border-slate-200 rounded-xl text-xs text-slate-400 hover:text-slate-600 hover:border-slate-300 transition-colors"
+                        >
+                          + Add Webhook
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* ── WhatsApp Connection (UltraMsg) ── */}
                   <div>

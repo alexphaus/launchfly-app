@@ -640,7 +640,7 @@ export const receptionistTools = {
      * Send notification to business owner
      */
     notifyOwner: tool({
-        description: 'Send a WhatsApp notification to the business owner about a new booking or important event.',
+        description: 'Send a text message notification to the business owner to alert them of something. DO NOT USE THIS TO TRIGGER VOICE CALLS OR DEMOS.',
         inputSchema: notifyOwnerSchema,
         execute: async (input: NotifyOwnerInput) => {
             const { ownerPhone, message } = input;
@@ -1187,6 +1187,108 @@ export const receptionistTools = {
                 return { success: true, message: 'Demo call triggered! The prospect\'s phone is ringing now.' };
             } catch (err: any) {
                 console.error('[triggerDemoCall] Error:', err);
+                return { success: false, error: err.message };
+            }
+        },
+    }),
+
+    /**
+     * Call external webhooks (Zapier, Make, custom API)
+     * URLs are pre-configured per business — AI cannot call arbitrary URLs
+     */
+    callWebhook: tool({
+        description: 'Fire webhooks to the business owner\'s external automations (Zapier, Make, CRM, etc.). Use this when a significant event happens mid-conversation: prospect showed interest, booking confirmed, hot lead detected, etc. The webhook URLs are pre-configured by the business owner.',
+        inputSchema: z.object({
+            businessId: z.string().describe('Business UUID'),
+            event: z.string().describe('Event name, e.g. "hot_lead", "demo_requested", "booking_confirmed", "objection_price"'),
+            customerPhone: z.string().describe('Customer phone number'),
+            customerName: z.string().optional().describe('Customer name if known'),
+            summary: z.string().describe('Brief summary of what happened in the conversation'),
+        }),
+        execute: async (input: { businessId: string; event: string; customerPhone: string; customerName?: string; summary: string }) => {
+            try {
+                const { data: business } = await supabase
+                    .from('businesses')
+                    .select('business_data')
+                    .eq('id', input.businessId)
+                    .single();
+
+                const bizData = business?.business_data || {};
+
+                // Build webhooks list — support both legacy single URL and new array format
+                type WebhookEntry = { label?: string; url: string; headers?: string; events?: string[] };
+                const webhooks: WebhookEntry[] = [];
+                if (Array.isArray(bizData.webhooks)) {
+                    webhooks.push(...bizData.webhooks);
+                } else if (bizData.webhook_url) {
+                    webhooks.push({ url: bizData.webhook_url, headers: bizData.webhook_headers });
+                }
+
+                if (webhooks.length === 0) return { success: false, error: 'No webhook URLs configured for this business' };
+
+                const payload = JSON.stringify({
+                    event: input.event,
+                    business_id: input.businessId,
+                    phone: input.customerPhone,
+                    customer_name: input.customerName || 'Unknown',
+                    summary: input.summary,
+                    timestamp: new Date().toISOString(),
+                    source: 'ai_conversation',
+                });
+
+                const results: { label: string; ok: boolean; detail: string }[] = [];
+
+                for (const wh of webhooks) {
+                    // Skip webhooks that have an event filter that doesn't match
+                    if (wh.events?.length && !wh.events.includes(input.event)) {
+                        results.push({ label: wh.label || wh.url, ok: true, detail: 'skipped (event filter)' });
+                        continue;
+                    }
+
+                    // SSRF protection
+                    try {
+                        const parsed = new URL(wh.url);
+                        if (!['http:', 'https:'].includes(parsed.protocol)) {
+                            results.push({ label: wh.label || wh.url, ok: false, detail: 'Only http/https allowed' });
+                            continue;
+                        }
+                        if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(parsed.hostname)) {
+                            results.push({ label: wh.label || wh.url, ok: false, detail: 'Private URL blocked' });
+                            continue;
+                        }
+                    } catch {
+                        results.push({ label: wh.label || wh.url, ok: false, detail: 'Invalid URL' });
+                        continue;
+                    }
+
+                    // Parse optional custom headers
+                    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                    if (wh.headers && typeof wh.headers === 'string') {
+                        for (const pair of wh.headers.split(',')) {
+                            const eqIdx = pair.indexOf('=');
+                            if (eqIdx > 0) {
+                                headers[pair.substring(0, eqIdx).trim()] = pair.substring(eqIdx + 1).trim();
+                            }
+                        }
+                    }
+
+                    try {
+                        const res = await fetch(wh.url, { method: 'POST', headers, body: payload });
+                        if (!res.ok) {
+                            const errBody = await res.text().catch(() => '');
+                            results.push({ label: wh.label || wh.url, ok: false, detail: `HTTP ${res.status}: ${errBody.substring(0, 80)}` });
+                        } else {
+                            results.push({ label: wh.label || wh.url, ok: true, detail: 'OK' });
+                        }
+                    } catch (err: any) {
+                        results.push({ label: wh.label || wh.url, ok: false, detail: err.message });
+                    }
+                }
+
+                const fired = results.filter(r => r.ok && r.detail !== 'skipped (event filter)').length;
+                return { success: fired > 0, message: `${fired}/${webhooks.length} webhooks fired for "${input.event}"`, details: results };
+            } catch (err: any) {
+                console.error('[callWebhook] Error:', err);
                 return { success: false, error: err.message };
             }
         },

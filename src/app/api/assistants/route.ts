@@ -118,6 +118,7 @@ interface AssistantPayload {
     voicemail?: string;
   }[];
   trigger_config?: Record<string, unknown>;
+  webhooks?: { label?: string; url: string; headers?: string; events?: string[] }[];
 }
 
 export async function POST(req: NextRequest) {
@@ -214,6 +215,24 @@ export async function POST(req: NextRequest) {
       await syncDailyScheduleCrons(result, body.businessId);
     } catch (cronErr) {
       console.error('[assistants] CRON sync error (non-fatal):', cronErr);
+    }
+
+    // ─── Persist webhook config to business_data (if provided) ────────────
+    if (body.webhooks !== undefined) {
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('business_data')
+        .eq('id', body.businessId)
+        .single();
+      const bizData = (biz?.business_data || {}) as Record<string, unknown>;
+      bizData.webhooks = body.webhooks;
+      // Clean up legacy single-URL fields
+      delete bizData.webhook_url;
+      delete bizData.webhook_headers;
+      await supabase
+        .from('businesses')
+        .update({ business_data: bizData })
+        .eq('id', body.businessId);
     }
 
     return NextResponse.json({ assistant: result, ok: true });

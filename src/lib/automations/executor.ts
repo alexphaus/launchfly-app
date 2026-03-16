@@ -270,6 +270,29 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${err instanceof Error ? err.message : String(err)}` };
       }
       await saveToChatHistory(ctx.phone, ctx.businessId, msg);
+
+      // Auto-create customer record for prospect_found events so they appear in CRM
+      if (ctx.event === 'prospect_found' && ctx.businessId) {
+        const supabase = getSupabase();
+        const phoneNorm = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
+        await supabase.from('customers').upsert({
+          business_id: ctx.businessId,
+          phone: phoneNorm,
+          name: ctx.customerName || 'Unknown',
+          status: 'lead',
+          source: 'outreach',
+          tags: ['prospect', ctx.metadata?.service_type as string || 'unknown'].filter(Boolean),
+        }, { onConflict: 'business_id,phone' }).then(() => {});
+
+        // Update hunter_prospects status to opener_sent
+        const prospectId = ctx.metadata?.prospect_id as string;
+        if (prospectId) {
+          await supabase.from('hunter_prospects')
+            .update({ status: 'opener_sent', opener_sent_at: new Date().toISOString() })
+            .eq('id', prospectId);
+        }
+      }
+
       return { ok: true, detail: `Sent whatsapp to ${ctx.phone}` };
     }
 
@@ -1052,8 +1075,21 @@ CUSTOMER NAME: ${customerName}
       const windowEndSec = endH * 3600 + endM * 60;
       const windowSpan = Math.max(windowEndSec - windowStartSec, 3600);
 
-      const now = new Date();
-      const nowSec = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+      // Calculate current time in the schedule's timezone (window times are local)
+      const tz = (ctx.metadata?.__timezone as string) || 'UTC';
+      let nowSec: number;
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: tz, hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false,
+        }).formatToParts(new Date());
+        const h = Number(parts.find(p => p.type === 'hour')?.value || 0);
+        const m = Number(parts.find(p => p.type === 'minute')?.value || 0);
+        const s = Number(parts.find(p => p.type === 'second')?.value || 0);
+        nowSec = h * 3600 + m * 60 + s;
+      } catch {
+        const now = new Date();
+        nowSec = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+      }
 
       let scheduled = 0;
       const scheduledIds: string[] = [];
@@ -1195,7 +1231,13 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
   const results: { ok: boolean; detail: string }[] = [];
 
   for (const rule of matchingRules) {
-    await executeActions(rule.actions, 0, ctx, results);
+    // Propagate schedule timezone to actions (used by outreach for window calculation)
+    const ruleCtx = { ...ctx };
+    const schedCfg = (rule as any).scheduleConfig;
+    if (schedCfg?.timezone) {
+      ruleCtx.metadata = { ...ruleCtx.metadata, __timezone: schedCfg.timezone };
+    }
+    await executeActions(rule.actions, 0, ruleCtx, results);
   }
 
   return { fired: matchingRules.length, results };

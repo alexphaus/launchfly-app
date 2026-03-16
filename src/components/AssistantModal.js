@@ -44,7 +44,6 @@ const AVAILABLE_TOOLS = [
   { id: 'transfer_to_human', label: 'Transfer to Human', emoji: '🙋', desc: 'Escalate to the owner' },
   { id: 'send_financing_link', label: 'Send Financing Link', emoji: '🏦', desc: 'Financing application' },
   { id: 'lookup_customer', label: 'Lookup Customer', emoji: '🔍', desc: 'Check customer history' },
-  { id: 'trigger_demo_call', label: 'Trigger Demo Call', emoji: '📞', desc: 'AI voice demo via Retell' },
   { id: 'call_webhook', label: 'Call External Webhook', emoji: '🌐', desc: 'Zapier, Make, or custom API' },
 ];
 

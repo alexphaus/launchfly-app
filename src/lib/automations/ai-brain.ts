@@ -184,7 +184,8 @@ Owner phone: ${ownerPhone}
 
 When calling any tool that needs businessId, use "${businessId}".
 When calling any tool that needs customerPhone/phone, use "${phone}".
-When calling notifyOwner, use ownerPhone "${ownerPhone}" to text your boss (the system owner). DO NOT use notifyOwner to trigger demo calls or voice calls to the prospect. Use triggerDemoCall to call the prospect.
+When calling notifyOwner, use ownerPhone "${ownerPhone}" to text your boss (the system owner). DO NOT use notifyOwner to trigger demo calls or voice calls to the prospect.
+To trigger a demo call, use the callWebhook tool with event "demo_requested".
 Do NOT claim an action is done unless you called the tool and it succeeded.
 `;
 }
@@ -197,7 +198,6 @@ const TOOL_GROUPS: Record<string, string[]> = {
   transfer_to_human: ['notifyOwner'],
   send_checkout_link: ['calculatePrice', 'generateCheckoutLink'],
   warranty: ['activateWarranty', 'saveFeedback', 'saveReferral'],
-  trigger_demo_call: ['triggerDemoCall'],
   send_media: ['sendImage'],
   call_webhook: ['callWebhook'],
 };

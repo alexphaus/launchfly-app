@@ -980,85 +980,89 @@ CUSTOMER NAME: ${customerName}
       const leadsPerDay = Number(cfg.outreachLeadsPerDay) || 5;
       const windowStart = (cfg.outreachWindowStart as string) || '09:00';
       const windowEnd = (cfg.outreachWindowEnd as string) || '18:00';
+      const maxChecks = leadsPerDay * 5; // Check up to 5x quota to fill the day
 
       const supabase = getSupabase();
-
-      // 1. Pick N leads from hunter_prospects WHERE status = 'new', oldest first
-      const { data: prospects, error: fetchErr } = await supabase
-        .from('hunter_prospects')
-        .select('id, business_name, whatsapp_number, service_type, area, owner_name, source, pain_signals, website_url')
-        .eq('status', 'new')
-        .order('created_at', { ascending: true })
-        .limit(leadsPerDay);
-
-      if (fetchErr) {
-        return { ok: false, detail: `Failed to fetch prospects: ${fetchErr.message}` };
-      }
-      if (!prospects || prospects.length === 0) {
-        return { ok: true, detail: 'No new prospects in pool — refill hunter_prospects table' };
-      }
-
-      // 2. WhatsApp availability check (batches of 5)
       const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
       const waProvider = await getWhatsAppProvider(ctx.businessId);
-      const withWhatsApp: typeof prospects = [];
-      const noWa: string[] = [];
 
-      for (let i = 0; i < prospects.length; i += 5) {
-        const batch = prospects.slice(i, i + 5);
-        const results = await Promise.all(batch.map(async p => {
-          const hasWa = await waProvider.checkHasWhatsApp(p.whatsapp_number, ctx.businessId);
-          return { prospect: p, hasWa };
-        }));
-        for (const { prospect, hasWa } of results) {
-          if (hasWa) {
-            withWhatsApp.push(prospect);
-          } else {
-            noWa.push(prospect.id);
+      // Backfill loop: keep fetching batches until we have enough WhatsApp-verified leads
+      const verified: { id: string; business_name: string; whatsapp_number: string; service_type: string; area: string; owner_name: string | null; source: string; pain_signals: string[] | null; website_url: string | null }[] = [];
+      const noWaIds: string[] = [];
+      let offset = 0;
+      let totalChecked = 0;
+
+      while (verified.length < leadsPerDay && totalChecked < maxChecks) {
+        const batchSize = Math.min(10, leadsPerDay * 2 - verified.length); // Fetch a smart batch
+        const { data: batch, error: fetchErr } = await supabase
+          .from('hunter_prospects')
+          .select('id, business_name, whatsapp_number, service_type, area, owner_name, source, pain_signals, website_url')
+          .eq('status', 'new')
+          .order('priority', { ascending: false })   // highest priority first
+          .order('created_at', { ascending: true })   // then oldest
+          .range(offset, offset + batchSize - 1);
+
+        if (fetchErr) {
+          console.error('[outreach] Fetch error:', fetchErr.message);
+          break;
+        }
+        if (!batch || batch.length === 0) break; // pool exhausted
+
+        // WhatsApp check in parallel (batches of 5)
+        for (let i = 0; i < batch.length && verified.length < leadsPerDay; i += 5) {
+          const chunk = batch.slice(i, Math.min(i + 5, batch.length));
+          const results = await Promise.all(chunk.map(async p => {
+            const hasWa = await waProvider.checkHasWhatsApp(p.whatsapp_number, ctx.businessId);
+            return { prospect: p, hasWa };
+          }));
+          for (const { prospect, hasWa } of results) {
+            totalChecked++;
+            if (hasWa && verified.length < leadsPerDay) {
+              verified.push(prospect);
+            } else if (!hasWa) {
+              noWaIds.push(prospect.id);
+            }
           }
         }
+
+        offset += batch.length;
       }
 
-      // Mark no-WhatsApp prospects so we don't pick them again
-      if (noWa.length > 0) {
+      // Mark no-WhatsApp prospects permanently
+      if (noWaIds.length > 0) {
         await supabase
           .from('hunter_prospects')
           .update({ status: 'no_whatsapp' })
-          .in('id', noWa);
+          .in('id', noWaIds);
       }
 
-      if (withWhatsApp.length === 0) {
-        return { ok: true, detail: `Checked ${prospects.length} prospects — none had WhatsApp. Marked as no_whatsapp.` };
+      if (verified.length === 0) {
+        return { ok: true, detail: `Checked ${totalChecked} prospects — none had WhatsApp. Pool may need refilling.` };
       }
 
-      // 3. Schedule each as a prospect_found event at a random time within the business-hours window
+      // Schedule each as prospect_found at a random time within the business-hours window
       const qstashToken = process.env.QSTASH_TOKEN;
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
       const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
       const triggerUrl = `${appUrl}/api/assistants/trigger?businessId=${ctx.businessId}`;
 
-      // Parse window times (HH:MM) into seconds-from-midnight
       const [startH, startM] = windowStart.split(':').map(Number);
       const [endH, endM] = windowEnd.split(':').map(Number);
       const windowStartSec = startH * 3600 + startM * 60;
       const windowEndSec = endH * 3600 + endM * 60;
-      const windowSpan = Math.max(windowEndSec - windowStartSec, 3600); // at least 1hr window
+      const windowSpan = Math.max(windowEndSec - windowStartSec, 3600);
 
-      // Current time in seconds from midnight (UTC — the schedule cron handles timezone)
       const now = new Date();
       const nowSec = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
 
       let scheduled = 0;
-      const prospectIds: string[] = [];
+      const scheduledIds: string[] = [];
 
-      for (const prospect of withWhatsApp) {
-        // Random time within window
+      for (const prospect of verified) {
         const randomOffsetSec = Math.floor(Math.random() * windowSpan);
         const targetSec = windowStartSec + randomOffsetSec;
-
-        // Delay from now to the target time (same day)
         let delaySec = targetSec - nowSec;
-        if (delaySec < 60) delaySec = 60 + Math.floor(Math.random() * 300); // at least 1-6 min from now
+        if (delaySec < 60) delaySec = 60 + Math.floor(Math.random() * 300);
 
         try {
           const res = await fetch(`${qstashBase}/v2/publish/${triggerUrl}`, {
@@ -1086,7 +1090,7 @@ CUSTOMER NAME: ${customerName}
           });
           if (res.ok) {
             scheduled++;
-            prospectIds.push(prospect.id);
+            scheduledIds.push(prospect.id);
           } else {
             console.warn(`[outreach] QStash publish failed for ${prospect.business_name}: ${res.status}`);
           }
@@ -1095,17 +1099,17 @@ CUSTOMER NAME: ${customerName}
         }
       }
 
-      // 4. Mark scheduled prospects as 'opener_queued'
-      if (prospectIds.length > 0) {
+      // Mark scheduled prospects as 'opener_queued'
+      if (scheduledIds.length > 0) {
         await supabase
           .from('hunter_prospects')
           .update({ status: 'opener_queued', opener_sent_at: new Date().toISOString() })
-          .in('id', prospectIds);
+          .in('id', scheduledIds);
       }
 
       return {
         ok: true,
-        detail: `Pool: ${prospects.length} picked, ${noWa.length} no WhatsApp, ${scheduled} scheduled as prospect_found (window ${windowStart}–${windowEnd})`,
+        detail: `Checked ${totalChecked}, ${noWaIds.length} no WhatsApp, ${scheduled}/${leadsPerDay} scheduled (window ${windowStart}–${windowEnd})`,
       };
     }
 

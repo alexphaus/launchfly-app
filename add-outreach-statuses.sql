@@ -11,7 +11,11 @@ ALTER TABLE hunter_prospects ADD CONSTRAINT hunter_prospects_status_check
     'closed_won', 'closed_lost', 'archived', 'no_whatsapp'
   ));
 
--- Index for the outreach drip query: pick 'new' prospects, oldest first
+-- Priority column: higher = picked first by outreach drip (default 0)
+-- Set manually for hand-picked prospects, or bulk-update via AI scoring
+ALTER TABLE hunter_prospects ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0;
+
+-- Index for the outreach drip query: highest priority first, then oldest
 CREATE INDEX IF NOT EXISTS idx_hunter_prospects_outreach_pool 
-  ON hunter_prospects (status, created_at ASC) 
+  ON hunter_prospects (priority DESC, created_at ASC) 
   WHERE status = 'new';

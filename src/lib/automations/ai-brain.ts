@@ -197,7 +197,7 @@ const TOOL_GROUPS: Record<string, string[]> = {
   transfer_to_human: ['notifyOwner'],
   send_checkout_link: ['calculatePrice', 'generateCheckoutLink'],
   warranty: ['activateWarranty', 'saveFeedback', 'saveReferral'],
-  demo_call: ['triggerDemoCall'],
+  trigger_demo_call: ['triggerDemoCall'],
   send_media: ['sendImage'],
 };
 

@@ -74,6 +74,20 @@ export async function POST(req: NextRequest) {
 
       await emit(Event.PaymentSucceeded, { businessId, amount, stripeId: session.id });
       if (newTotal >= 1000) await emit(Event.MilestoneHit, { businessId, milestone: '1k_revenue', total: newTotal });
+
+      // Fire automation rules for payment_received
+      try {
+        const { fireEvent } = await import('@/lib/automations/executor');
+        await fireEvent({
+          event: 'payment_received',
+          businessId,
+          phone: session.metadata?.customer_phone || '',
+          customerName: session.customer_details?.name || session.metadata?.customer_name || '',
+          amount,
+        });
+      } catch (err) {
+        console.error('[stripe webhook] fireEvent(payment_received) failed:', err);
+      }
       break;
     }
   }

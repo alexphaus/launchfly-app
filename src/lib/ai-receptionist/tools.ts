@@ -1086,8 +1086,9 @@ export const receptionistTools = {
             customerName: z.string().describe('Prospect name'),
             customerPhone: z.string().describe('Prospect phone number'),
             customerEmail: z.string().optional().describe('Prospect email if known'),
+            businessId: z.string().describe('Business UUID'),
         }),
-        execute: async (input: { customerName: string; customerPhone: string; customerEmail?: string }) => {
+        execute: async (input: { customerName: string; customerPhone: string; customerEmail?: string; businessId: string }) => {
             try {
                 const Stripe = (await import('stripe')).default;
                 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -1108,7 +1109,8 @@ export const receptionistTools = {
                     }],
                     customer_email: input.customerEmail || undefined,
                     metadata: {
-                        source: 'sarah_sales_bot',
+                        business_id: input.businessId,
+                        source: 'ai_sales_bot',
                         customer_name: input.customerName,
                         customer_phone: input.customerPhone,
                     },

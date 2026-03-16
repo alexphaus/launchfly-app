@@ -184,7 +184,8 @@ Owner phone: ${ownerPhone}
 
 When calling any tool that needs businessId, use "${businessId}".
 When calling any tool that needs customerPhone/phone, use "${phone}".
-When calling notifyOwner, use ownerPhone "${ownerPhone}".
+To DIAL/RING/CALL the prospect's phone, use the triggerDemoCall tool with customerPhone "${phone}".
+DO NOT use notifyOwner to call or ring the prospect. notifyOwner ONLY sends a WhatsApp alert to the business owner (ownerPhone "${ownerPhone}") — it does NOT make phone calls.
 Do NOT claim an action is done unless you called the tool and it succeeded.
 `;
 }

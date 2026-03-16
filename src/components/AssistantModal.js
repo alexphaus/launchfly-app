@@ -292,7 +292,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       webhooks: business?.business_data?.webhooks || (business?.business_data?.webhook_url ? [{ label: '', url: business.business_data.webhook_url, headers: business.business_data.webhook_headers || '', events: [] }] : []),
     });
     setPromptMode(assistant.system_prompt ? 'custom' : 'auto');
-  }, []);
+  }, [business]);
 
   const loadAssistant = useCallback(async () => {
     if (!business?.id) return;
@@ -601,13 +601,14 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     setSaving(true);
     setSaveStatus(null);
     try {
+      const { webhooks: _wh, ...assistantConfig } = config;
       const res = await fetch('/api/assistants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId: business.id,
           assistantId: currentAssistantId,
-          ...config,
+          ...assistantConfig,
           system_prompt: promptMode === 'custom' ? config.system_prompt : null,
           webhooks: config.webhooks?.length ? config.webhooks : undefined,
         }),

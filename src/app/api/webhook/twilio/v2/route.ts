@@ -915,6 +915,8 @@ When customer provides a friend's name AND phone (e.g., "Ahmad 0123456789"):
                 lookup_customer: ['lookupCustomer', 'updateCustomer'],
                 transfer_to_human: ['notifyOwner'],
                 send_checkout_link: ['calculatePrice'],
+                send_media: ['sendImage', 'sendVoiceNote'],
+                call_webhook: ['callWebhook'],
             };
             const CORE_TOOLS = ['getBusinessConfig', 'checkAvailability', 'activateWarranty', 'saveFeedback', 'saveReferral'];
 

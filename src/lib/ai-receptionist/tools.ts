@@ -1250,6 +1250,70 @@ export const receptionistTools = {
             }
         },
     }),
+
+    /**
+     * Send a voice note (TTS) to the prospect via WhatsApp
+     */
+    sendVoiceNote: tool({
+        description:
+            'Send a voice note to the prospect via WhatsApp. The AI composes text and this tool converts it to a natural-sounding voice message using text-to-speech, then delivers it as a WhatsApp voice note. Use this when a personal, warm touch is more effective than text — e.g. after sharing pricing, handling objections, or closing.',
+        inputSchema: z.object({
+            customerPhone: z.string().describe('Prospect phone number'),
+            text: z.string().describe('The message to speak in the voice note. Write naturally as if speaking.'),
+            businessId: z.string().describe('Business UUID'),
+        }),
+        execute: async (input: { customerPhone: string; text: string; businessId: string }) => {
+            try {
+                const OpenAI = (await import('openai')).default;
+                const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+                // 1. Generate audio via OpenAI TTS (opus = OGG/Opus, ideal for WhatsApp voice notes)
+                const ttsResponse = await openai.audio.speech.create({
+                    model: 'tts-1',
+                    voice: 'nova',
+                    input: input.text,
+                    response_format: 'opus',
+                });
+
+                const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+
+                // 2. Upload to Supabase storage
+                const bucket = 'voice-notes';
+                // Ensure bucket exists (idempotent)
+                await supabase.storage.createBucket(bucket, {
+                    public: true,
+                    allowedMimeTypes: ['audio/ogg', 'audio/opus', 'audio/mpeg'],
+                    fileSizeLimit: 10 * 1024 * 1024, // 10MB
+                });
+
+                const filename = `${input.businessId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ogg`;
+                const { error: uploadError } = await supabase.storage
+                    .from(bucket)
+                    .upload(filename, audioBuffer, {
+                        contentType: 'audio/ogg',
+                        cacheControl: '86400',
+                    });
+                if (uploadError) {
+                    console.error('[sendVoiceNote] Upload error:', uploadError);
+                    return { success: false, error: `Upload failed: ${uploadError.message}` };
+                }
+
+                const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filename);
+
+                // 3. Send via WhatsApp
+                const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+                const wa = await getWhatsAppProvider(input.businessId);
+                const phoneNorm = input.customerPhone.startsWith('+') ? input.customerPhone : `+${input.customerPhone}`;
+                const result = await wa.sendVoiceNote(phoneNorm, publicUrl, input.businessId);
+
+                if (!result.sent) return { success: false, error: result.error };
+                return { success: true, message: 'Voice note sent successfully' };
+            } catch (err: any) {
+                console.error('[sendVoiceNote] Error:', err);
+                return { success: false, error: err.message };
+            }
+        },
+    }),
 };
 
 // Export tool names for type safety

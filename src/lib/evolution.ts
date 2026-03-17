@@ -95,26 +95,11 @@ export async function sendTypingPresence(to: string, businessId?: string): Promi
     const number = normalizePhone(to);
     await evoFetch(creds, `chat/sendPresence/${creds.instanceName}`, {
       number,
-      delay: 1200,
+      delay: 20000, // Hold composing for 20s — auto-clears when message is sent
       presence: 'composing',
     });
   } catch (err) {
     console.warn('[Evolution] Failed to send typing presence:', err);
-  }
-}
-
-/** Restore "online" presence after sending a message — prevents composing from hiding alwaysOnline */
-export async function sendAvailablePresence(to: string, businessId?: string): Promise<void> {
-  try {
-    const creds = await getCredentials(businessId);
-    const number = normalizePhone(to);
-    await evoFetch(creds, `chat/sendPresence/${creds.instanceName}`, {
-      number,
-      delay: 0,
-      presence: 'available',
-    });
-  } catch (err) {
-    // silent
   }
 }
 

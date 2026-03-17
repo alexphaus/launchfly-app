@@ -188,6 +188,8 @@ export async function incrementInstanceCounter(instanceId: string): Promise<void
  * they use the instance's stored creds directly.
  */
 export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
+  const instId = instance.id;
+
   if (instance.provider === 'evolution') {
     // Dynamically import evolution and bind to instance credentials
     const makeProvider = async () => {
@@ -202,14 +204,12 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
 
     return {
       name: 'evolution',
-      instanceId: instance.id,
+      instanceId: instId,
       sendWhatsApp: async (to, body) => {
         const evo = await makeProvider();
-        // Use getCredentials override via env-var style — but we need direct creds
-        // Evolution's functions take businessId, so we override by setting instance creds
-        // Simplest: call evoFetch directly-ish. But evolution.ts functions use getCredentials(businessId).
-        // Instead, use the raw Evolution API via fetch, same as the module does internally.
-        return evo.sendWhatsAppWithCreds(to, body, creds);
+        const result = await evo.sendWhatsAppWithCreds(to, body, creds);
+        if (result.sent) incrementInstanceCounter(instId).catch(() => {});
+        return result;
       },
       sendVoiceNote: async (to, audioUrl) => {
         const evo = await makeProvider();
@@ -234,10 +234,12 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
 
   return {
     name: 'ultramsg',
-    instanceId: instance.id,
+    instanceId: instId,
     sendWhatsApp: async (to, body) => {
       const ultra = await import('@/lib/ultramsg');
-      return ultra.sendWhatsAppWithCreds(to, body, ultramsgCreds);
+      const result = await ultra.sendWhatsAppWithCreds(to, body, ultramsgCreds);
+      if (result.sent) incrementInstanceCounter(instId).catch(() => {});
+      return result;
     },
     sendVoiceNote: async (to, audioUrl) => {
       const ultra = await import('@/lib/ultramsg');

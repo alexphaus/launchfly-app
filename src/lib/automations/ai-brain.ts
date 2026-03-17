@@ -60,10 +60,7 @@ async function sendWhatsApp(to: string, body: string, businessId?: string, waIns
   if (!result.sent) {
     throw new Error(`WhatsApp send failed (${wa.name}): ${result.error}`);
   }
-  if (waInstanceId) {
-    const { incrementInstanceCounter } = await import('@/lib/whatsapp-provider');
-    await incrementInstanceCounter(waInstanceId);
-  }
+  // Note: sends_today counter is auto-incremented by the provider on successful send
 }
 
 async function sendSms(to: string, body: string): Promise<void> {

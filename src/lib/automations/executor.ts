@@ -269,13 +269,12 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
       // Use pinned WhatsApp instance if this prospect was assigned one (multi-instance outreach)
       const pinnedInstanceId = ctx.metadata?.wa_instance_id as string | undefined;
       if (pinnedInstanceId) {
-        const { getProviderByInstanceId, incrementInstanceCounter } = await import('@/lib/whatsapp-provider');
+        const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
         const wa = await getProviderByInstanceId(pinnedInstanceId, ctx.businessId);
         const result = await wa.sendWhatsApp(ctx.phone, msg);
         if (!result.sent) {
           return { ok: false, detail: `WhatsApp failed for ${ctx.phone} (instance ${pinnedInstanceId}): ${result.error}` };
         }
-        await incrementInstanceCounter(pinnedInstanceId);
       } else {
         try {
           await sendWhatsApp(ctx.phone, msg, ctx.businessId);
@@ -1020,7 +1019,7 @@ CUSTOMER NAME: ${customerName}
       const maxChecks = leadsPerDay * 5; // Check up to 5x quota to fill the day
 
       const supabase = getSupabase();
-      const { getOutreachInstances, getProviderForInstance, incrementInstanceCounter, getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const { getOutreachInstances, getProviderForInstance, getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
 
       // Load multi-instance config (may be empty → falls back to single instance)
       const instances = await getOutreachInstances(ctx.businessId);
@@ -1151,7 +1150,6 @@ CUSTOMER NAME: ${customerName}
 
       let scheduled = 0;
       const scheduledIds: string[] = [];
-      const instanceCounterUpdates: Record<string, number> = {};
 
       const intervalSec = assignments.length > 0 ? windowSpan / assignments.length : 0;
 
@@ -1194,9 +1192,6 @@ CUSTOMER NAME: ${customerName}
           if (res.ok) {
             scheduled++;
             scheduledIds.push(prospect.id);
-            if (instanceId) {
-              instanceCounterUpdates[instanceId] = (instanceCounterUpdates[instanceId] || 0) + 1;
-            }
           } else {
             console.warn(`[outreach] QStash publish failed for ${prospect.business_name}: ${res.status}`);
           }
@@ -1223,12 +1218,7 @@ CUSTOMER NAME: ${customerName}
                 .eq('id', prospect.id);
             }
           }
-          // Increment send counters (each prospect = 1 opener + future follow-ups counted later)
-          for (const [instId, count] of Object.entries(instanceCounterUpdates)) {
-            for (let i = 0; i < count; i++) {
-              await incrementInstanceCounter(instId);
-            }
-          }
+          // Note: sends_today counters are auto-incremented by the provider on each successful send
         }
       }
 

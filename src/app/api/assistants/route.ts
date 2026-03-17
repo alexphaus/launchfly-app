@@ -492,16 +492,45 @@ async function syncDailyScheduleCrons(
       continue;
     }
 
-    // If we already have a schedule, update it by deleting + recreating
-    if (cfg.qstashScheduleId) {
-      try {
-        await fetch(`${qstashBase}/v2/schedules/${cfg.qstashScheduleId}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${qstashToken}` },
-        });
-      } catch {
-        // ignore — might already be gone
+    // Delete ALL existing QStash schedules for this rule (prevents duplicates)
+    // We can't rely solely on cfg.qstashScheduleId because the frontend may
+    // have a stale copy. Instead, list all schedules and delete any that match
+    // this business + ruleId payload.
+    try {
+      const listRes = await fetch(`${qstashBase}/v2/schedules`, {
+        headers: { Authorization: `Bearer ${qstashToken}` },
+      });
+      if (listRes.ok) {
+        const allSchedules = await listRes.json();
+        for (const sched of allSchedules) {
+          // Match: same destination URL (contains businessId) AND same ruleId in body
+          const isThisBusiness = sched.destination?.includes(businessId);
+          let isThisRule = false;
+          if (sched.body) {
+            try {
+              const parsed = JSON.parse(typeof sched.body === 'string' && sched.body.match(/^ey/)
+                ? Buffer.from(sched.body, 'base64').toString()
+                : sched.body);
+              isThisRule = parsed.ruleId === rule.id;
+            } catch {
+              // body might be base64 or unparseable — try raw match
+              try {
+                const decoded = Buffer.from(sched.body, 'base64').toString();
+                isThisRule = decoded.includes(rule.id);
+              } catch { /* skip */ }
+            }
+          }
+          if (isThisBusiness && isThisRule) {
+            await fetch(`${qstashBase}/v2/schedules/${sched.scheduleId}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${qstashToken}` },
+            });
+            console.log(`[cron] Cleaned up old schedule ${sched.scheduleId} for rule ${rule.id}`);
+          }
+        }
       }
+    } catch (e) {
+      console.warn('[cron] Error cleaning up old schedules:', e);
     }
 
     // Create new QStash schedule — businessId MUST be in the URL query param

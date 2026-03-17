@@ -22,6 +22,22 @@ export async function getCredentials(businessId?: string): Promise<UltramsgCrede
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!,
       );
+
+      // 1. Check whatsapp_instances table first (new unified model)
+      const { data: inst } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_id, token')
+        .eq('business_id', businessId)
+        .eq('provider', 'ultramsg')
+        .eq('active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+      if (inst?.instance_id && inst?.token) {
+        return { instanceId: inst.instance_id, token: inst.token };
+      }
+
+      // 2. Fallback: legacy businesses.whatsapp_api_config
       const { data } = await supabase
         .from('businesses')
         .select('whatsapp_api_config')
@@ -310,6 +326,18 @@ export async function resolveBusinessByInstance(instanceId: string): Promise<str
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_KEY!,
     );
+
+    // 1. Check whatsapp_instances table first (new unified model)
+    const { data: inst } = await supabase
+      .from('whatsapp_instances')
+      .select('business_id')
+      .eq('instance_id', instanceId)
+      .eq('active', true)
+      .limit(1)
+      .single();
+    if (inst?.business_id) return inst.business_id;
+
+    // 2. Fallback: legacy businesses.whatsapp_api_config
     const { data } = await supabase
       .from('businesses')
       .select('id')

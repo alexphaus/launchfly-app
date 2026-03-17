@@ -1153,11 +1153,18 @@ CUSTOMER NAME: ${customerName}
       const scheduledIds: string[] = [];
       const instanceCounterUpdates: Record<string, number> = {};
 
-      for (const { prospect, instanceId } of assignments) {
-        const randomOffsetSec = Math.floor(Math.random() * windowSpan);
-        const targetSec = windowStartSec + randomOffsetSec;
+      const intervalSec = assignments.length > 0 ? windowSpan / assignments.length : 0;
+
+      for (let i = 0; i < assignments.length; i++) {
+        const { prospect, instanceId } = assignments[i];
+        
+        // Distribute evenly across the window, plus up to 50% of interval as jitter
+        const baseOffset = i * intervalSec;
+        const jitter = Math.floor(Math.random() * (intervalSec * 0.5));
+        const targetSec = windowStartSec + baseOffset + jitter;
+        
         let delaySec = targetSec - nowSec;
-        if (delaySec < 60) delaySec = 60 + Math.floor(Math.random() * 300);
+        if (delaySec < 60) delaySec = 60 + i * 30 + Math.floor(Math.random() * 30); // Prevent zero-delays and clumped retries
 
         try {
           const res = await fetch(`${qstashBase}/v2/publish/${triggerUrl}`, {

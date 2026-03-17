@@ -369,9 +369,15 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
   const startEvoPolling = () => {
     if (evoPolling) clearInterval(evoPolling);
+    // Capture values at poll creation so the interval doesn't use stale state
+    const pollBaseUrl = newInstance.baseUrl;
+    const pollApiKey = newInstance.apiKey;
+    const pollInstanceName = newInstance.instanceName;
+    const pollLabel = newInstance.label;
+    const pollDailyLimit = newInstance.dailyLimit;
     const interval = setInterval(async () => {
       try {
-        const body = { action: 'status', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName };
+        const body = { action: 'status', baseUrl: pollBaseUrl, apiKey: pollApiKey, instanceName: pollInstanceName };
         const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
@@ -380,15 +386,31 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         if (state === 'open' || state === 'connected') {
           clearInterval(interval);
           setEvoPolling(null);
-          setEvoStep('connected');
           // Auto-set webhook
           const webhookUrl = `${window.location.origin}/api/webhook/evolution`;
           await fetch('/api/businesses/whatsapp-instances/evolution', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'set-webhook', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName, webhookUrl }),
+            body: JSON.stringify({ action: 'set-webhook', baseUrl: pollBaseUrl, apiKey: pollApiKey, instanceName: pollInstanceName, webhookUrl }),
           });
-          // Auto-save to whatsapp_instances table
-          await saveNewInstance();
+          // Save to DB using captured values (don't close form yet — let user see "Connected!")
+          if (business?.id) {
+            try {
+              await fetch('/api/businesses/whatsapp-instances', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  businessId: business.id,
+                  label: pollLabel,
+                  provider: 'evolution',
+                  dailyLimit: pollDailyLimit,
+                  baseUrl: pollBaseUrl,
+                  apiKey: pollApiKey,
+                  instanceName: pollInstanceName,
+                }),
+              });
+            } catch (e) { console.error('[evo] save instance error:', e); }
+          }
+          setEvoStep('connected');
         }
       } catch {}
     }, 3000);
@@ -1851,7 +1873,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                   <p className="text-sm font-bold text-emerald-700">WhatsApp Connected!</p>
                                   <p className="text-[10px] text-slate-400 mt-1">Instance saved and webhook configured automatically.</p>
                                   <button
-                                    onClick={() => { setShowAddInstance(false); resetEvoFlow(); }}
+                                    onClick={async () => { setShowAddInstance(false); resetEvoFlow(); setNewInstance({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 }); await loadWaInstances(); }}
                                     className="mt-3 px-6 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors"
                                   >
                                     Done

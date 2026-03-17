@@ -1,0 +1,46 @@
+services:
+  evolution:
+    image: evolution-api:v2.3.7  # built from source: https://github.com/EvolutionAPI/evolution-api/tree/2.3.7
+    container_name: evolution
+    restart: always
+    network_mode: host
+    environment:
+      - AUTHENTICATION_API_KEY=ff5c45e93d0c3025e03f8ab96d9b4a598117ee181c93828dd66d9d9cc1b82078
+      - SERVER_URL=https://evo.launchfly.ai
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:evo_secret_pass@localhost:5432/evolution
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://localhost:6379
+      - CACHE_REDIS_PREFIX_KEY=evo
+      - CACHE_LOCAL_ENABLED=false
+      - CACHE_REDIS_SAVE_INSTANCES=true
+      - LOG_LEVEL=ERROR,WARN,DEBUG,INFO,LOG,VERBOSE
+      - LOG_BAILEYS=debug
+    volumes:
+      - evolution_data:/evolution/instances
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: evolution_db
+    restart: always
+    network_mode: host
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=evo_secret_pass
+      - POSTGRES_DB=evolution
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: evolution_redis
+    restart: always
+    network_mode: host
+    volumes:
+      - redis_data:/data
+
+volumes:
+  evolution_data:
+  postgres_data:
+  redis_data:

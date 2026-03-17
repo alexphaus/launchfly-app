@@ -1132,7 +1132,7 @@ CUSTOMER NAME: ${customerName}
       const [endH, endM] = windowEnd.split(':').map(Number);
       const windowStartSec = startH * 3600 + startM * 60;
       const windowEndSec = endH * 3600 + endM * 60;
-      const windowSpan = Math.max(windowEndSec - windowStartSec, 3600);
+      const windowSpan = Math.max(windowEndSec - windowStartSec, 60); // Minimum 60s span
 
       const tz = (ctx.metadata?.__timezone as string) || 'UTC';
       let nowSec: number;

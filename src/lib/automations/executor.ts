@@ -1131,11 +1131,10 @@ CUSTOMER NAME: ${customerName}
       const [startH, startM] = windowStart.split(':').map(Number);
       const [endH, endM] = windowEnd.split(':').map(Number);
       const windowStartSec = startH * 3600 + startM * 60;
-      let windowEndSec = endH * 3600 + endM * 60;
-      if (windowEndSec <= windowStartSec) windowEndSec = windowStartSec + 3600;
-      const windowSpan = windowEndSec - windowStartSec; // Randomize precisely within the given window
+      const windowEndSec = endH * 3600 + endM * 60;
+      const windowSpan = Math.max(windowEndSec - windowStartSec, 3600);
 
-      const tz = (cfg.outreachTimezone as string) || (ctx.metadata?.__timezone as string) || 'UTC';
+      const tz = (ctx.metadata?.__timezone as string) || 'UTC';
       let nowSec: number;
       try {
         const parts = new Intl.DateTimeFormat('en-US', {

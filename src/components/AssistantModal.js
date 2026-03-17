@@ -2405,18 +2405,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                             onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'outreachWindowEnd', e.target.value)}
                                                             className="p-2 border border-slate-200 rounded-lg text-xs"
                                                           />
-                                                        <div className="flex items-center gap-2">
-                                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Timezone</label>
-                                                          <select
-                                                            value={branchAction.config?.outreachTimezone || 'Asia/Singapore'}
-                                                            onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'outreachTimezone', e.target.value)}
-                                                            className="p-2 border border-slate-200 rounded-lg text-xs bg-white flex-1"
-                                                          >
-                                                            <option value="America/New_York">US Eastern (-5)</option>
-                                                            <option value="Europe/London">London (GMT)</option>
-                                                            <option value="Asia/Singapore">Singapore/MY (+8)</option>
-                                                            <option value="Australia/Sydney">Australia (+11)</option>
-                                                          </select>
                                                         </div>
                                                         <p className="text-[9px] text-slate-400">Picks leads from pool, fires prospect_found at random times.</p>
                                                       </div>
@@ -2715,29 +2703,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                             onChange={e => updateActionInRule(ruleIdx, actIdx, 'outreachWindowEnd', e.target.value)}
                                             className="p-2 border border-slate-200 rounded-lg text-xs"
                                           />
-                                        <div className="flex items-center gap-2">
-                                          <label className="text-[10px] text-slate-500 font-bold whitespace-nowrap">Timezone</label>
-                                          <select
-                                            value={action.config?.outreachTimezone || 'Asia/Singapore'}
-                                            onChange={e => updateActionInRule(ruleIdx, actIdx, 'outreachTimezone', e.target.value)}
-                                            className="p-2 border border-slate-200 rounded-lg text-xs bg-white flex-1"
-                                          >
-                                            <option value="Pacific/Honolulu">Hawaii (-10)</option>
-                                            <option value="America/Los_Angeles">US Pacific (-8)</option>
-                                            <option value="America/Denver">US Mountain (-7)</option>
-                                            <option value="America/Chicago">US Central (-6)</option>
-                                            <option value="America/New_York">US Eastern (-5)</option>
-                                            <option value="America/Sao_Paulo">Brazil (-3)</option>
-                                            <option value="Europe/London">London (GMT)</option>
-                                            <option value="Europe/Madrid">Europe Central (+1)</option>
-                                            <option value="Europe/Istanbul">Turkey (+3)</option>
-                                            <option value="Asia/Dubai">Dubai / Gulf (+4)</option>
-                                            <option value="Asia/Kolkata">India (+5:30)</option>
-                                            <option value="Asia/Bangkok">SE Asia (+7)</option>
-                                            <option value="Asia/Singapore">Singapore/MY (+8)</option>
-                                            <option value="Asia/Tokyo">Japan / Korea (+9)</option>
-                                            <option value="Australia/Sydney">Australia (+11)</option>
-                                          </select>
                                         </div>
                                         <p className="text-[9px] text-slate-400">Picks leads from hunter_prospects pool. Each fires as prospect_found at a random time in the window.</p>
                                       </div>

@@ -219,17 +219,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   }, [business?.id]);
 
   const toggleOutreachPause = async () => {
-    if (!business?.id) return;
+    if (!business?.id || pauseLoading) return;
+    const desired = !outreachPaused; // what we WANT it to be
+    setOutreachPaused(desired); // optimistic update
     setPauseLoading(true);
     try {
       const res = await fetch('/api/businesses/outreach-pause', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId: business.id }),
+        body: JSON.stringify({ businessId: business.id, paused: desired }),
       });
       const d = await res.json();
-      if (d.ok) setOutreachPaused(d.paused);
-    } catch {} finally { setPauseLoading(false); }
+      if (d.ok) {
+        setOutreachPaused(d.paused);
+      } else {
+        setOutreachPaused(!desired); // revert on failure
+      }
+    } catch {
+      setOutreachPaused(!desired); // revert on error
+    } finally { setPauseLoading(false); }
   };
 
   // WhatsApp API config (per-business, stored in businesses.whatsapp_api_config)

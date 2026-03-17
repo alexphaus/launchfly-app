@@ -248,6 +248,12 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [showAddInstance, setShowAddInstance] = useState(false);
   const [newInstance, setNewInstance] = useState({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 });
 
+  // Evolution QR code setup flow
+  const [evoStep, setEvoStep] = useState('form'); // 'form' | 'creating' | 'qr' | 'connected'
+  const [evoQr, setEvoQr] = useState(null);       // { base64, pairingCode }
+  const [evoError, setEvoError] = useState('');
+  const [evoPolling, setEvoPolling] = useState(null); // interval id
+
   const loadWaInstances = useCallback(async () => {
     if (!business?.id) return;
     setWaInstancesLoading(true);
@@ -304,6 +310,82 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       await loadWaInstances();
     } catch {}
   };
+
+  // ── Evolution QR Setup Flow ──
+  const resetEvoFlow = () => {
+    setEvoStep('form');
+    setEvoQr(null);
+    setEvoError('');
+    if (evoPolling) { clearInterval(evoPolling); setEvoPolling(null); }
+  };
+
+  const startEvoSetup = async () => {
+    setEvoStep('creating');
+    setEvoError('');
+    try {
+      const body = { action: 'create', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName };
+      const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) { setEvoError(json.error || 'Failed to create instance'); setEvoStep('form'); return; }
+
+      // Fetch QR code
+      await fetchEvoQr();
+    } catch (err) { setEvoError(err.message); setEvoStep('form'); }
+  };
+
+  const fetchEvoQr = async () => {
+    try {
+      const body = { action: 'connect', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName };
+      const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (json.ok && json.data) {
+        setEvoQr(json.data);
+        setEvoStep('qr');
+        // Start polling for connection status
+        startEvoPolling();
+      } else {
+        setEvoError('Could not get QR code. Try again.');
+        setEvoStep('form');
+      }
+    } catch (err) { setEvoError(err.message); setEvoStep('form'); }
+  };
+
+  const startEvoPolling = () => {
+    if (evoPolling) clearInterval(evoPolling);
+    const interval = setInterval(async () => {
+      try {
+        const body = { action: 'status', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName };
+        const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        const state = json?.data?.state || json?.data?.instance?.state;
+        if (state === 'open' || state === 'connected') {
+          clearInterval(interval);
+          setEvoPolling(null);
+          setEvoStep('connected');
+          // Auto-set webhook
+          const webhookUrl = `${window.location.origin}/api/webhook/evolution`;
+          await fetch('/api/businesses/whatsapp-instances/evolution', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set-webhook', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName, webhookUrl }),
+          });
+          // Auto-save to whatsapp_instances table
+          await saveNewInstance();
+        }
+      } catch {}
+    }, 3000);
+    setEvoPolling(interval);
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => { if (evoPolling) clearInterval(evoPolling); };
+  }, [evoPolling]);
 
 
 
@@ -1602,18 +1684,18 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                               </div>
                             </div>
                             {/* Webhook URL — collapsible */}
-                            {inst.provider === 'ultramsg' && business?.id && inst.active && (
+                            {business?.id && inst.active && (
                               <details className="px-3 pb-3">
                                 <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">Webhook URL</summary>
                                 <div className="flex gap-1.5 mt-1.5">
                                   <input
                                     type="text"
                                     readOnly
-                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/ultramsg?businessId=${business.id}`}
+                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/${inst.provider === 'evolution' ? 'evolution' : 'ultramsg'}?businessId=${business.id}`}
                                     className="flex-1 p-1.5 border border-slate-200 rounded-lg text-[10px] font-mono bg-white"
                                   />
                                   <button
-                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ultramsg?businessId=${business.id}`)}
+                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/${inst.provider === 'evolution' ? 'evolution' : 'ultramsg'}?businessId=${business.id}`)}
                                     className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
                                   >
                                     <Copy className="w-3 h-3" /> Copy
@@ -1628,54 +1710,143 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       {/* Add Number Form */}
                       {showAddInstance ? (
                         <div className="space-y-2 p-3 border border-emerald-200 rounded-xl bg-emerald-50/30">
-                          <input
-                            type="text"
-                            value={newInstance.label}
-                            onChange={e => setNewInstance(p => ({ ...p, label: e.target.value }))}
-                            className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
-                            placeholder="Label (e.g. Phone 2 — SG number)"
-                          />
-                          <div className="flex gap-2">
-                            <select
-                              value={newInstance.provider}
-                              onChange={e => setNewInstance(p => ({ ...p, provider: e.target.value }))}
-                              className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
-                            >
-                              <option value="ultramsg">UltraMsg</option>
-                              <option value="evolution">Evolution API</option>
-                            </select>
-                            <div className="flex items-center gap-1">
+                          {/* Step 1: Basic config (always shown unless QR/connected) */}
+                          {(newInstance.provider !== 'evolution' || evoStep === 'form') && (
+                            <>
                               <input
-                                type="number"
-                                value={newInstance.dailyLimit}
-                                onChange={e => setNewInstance(p => ({ ...p, dailyLimit: Number(e.target.value) }))}
-                                className="w-16 p-2 border border-slate-200 rounded-lg text-xs bg-white text-center"
-                                min={1}
-                                max={100}
+                                type="text"
+                                value={newInstance.label}
+                                onChange={e => setNewInstance(p => ({ ...p, label: e.target.value }))}
+                                className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                placeholder="Label (e.g. Phone 2 — SG number)"
                               />
-                              <span className="text-[10px] text-slate-400">/day</span>
-                            </div>
-                          </div>
-                          {newInstance.provider === 'ultramsg' ? (
+                              <div className="flex gap-2">
+                                <select
+                                  value={newInstance.provider}
+                                  onChange={e => { setNewInstance(p => ({ ...p, provider: e.target.value })); resetEvoFlow(); }}
+                                  className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                >
+                                  <option value="ultramsg">UltraMsg</option>
+                                  <option value="evolution">Evolution API</option>
+                                </select>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    value={newInstance.dailyLimit}
+                                    onChange={e => setNewInstance(p => ({ ...p, dailyLimit: Number(e.target.value) }))}
+                                    className="w-16 p-2 border border-slate-200 rounded-lg text-xs bg-white text-center"
+                                    min={1}
+                                    max={100}
+                                  />
+                                  <span className="text-[10px] text-slate-400">/day</span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          {/* UltraMsg fields */}
+                          {newInstance.provider === 'ultramsg' && (
                             <>
                               <input type="text" value={newInstance.instanceId} onChange={e => setNewInstance(p => ({ ...p, instanceId: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Instance ID" />
                               <input type="text" value={newInstance.token} onChange={e => setNewInstance(p => ({ ...p, token: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Token" />
-                            </>
-                          ) : (
-                            <>
-                              <input type="text" value={newInstance.baseUrl} onChange={e => setNewInstance(p => ({ ...p, baseUrl: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Base URL (e.g. https://evo.yourdomain.com)" />
-                              <input type="text" value={newInstance.apiKey} onChange={e => setNewInstance(p => ({ ...p, apiKey: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="API Key" />
-                              <input type="text" value={newInstance.instanceName} onChange={e => setNewInstance(p => ({ ...p, instanceName: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Instance Name" />
+                              <div className="flex gap-2 pt-1">
+                                <button onClick={saveNewInstance} className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors">
+                                  Add Number
+                                </button>
+                                <button onClick={() => { setShowAddInstance(false); resetEvoFlow(); }} className="px-4 py-2 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-100 transition-colors">
+                                  Cancel
+                                </button>
+                              </div>
                             </>
                           )}
-                          <div className="flex gap-2 pt-1">
-                            <button onClick={saveNewInstance} className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors">
-                              Add Number
-                            </button>
-                            <button onClick={() => setShowAddInstance(false)} className="px-4 py-2 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-100 transition-colors">
-                              Cancel
-                            </button>
-                          </div>
+
+                          {/* Evolution API — Step-by-step QR flow */}
+                          {newInstance.provider === 'evolution' && (
+                            <>
+                              {evoStep === 'form' && (
+                                <>
+                                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                                    <p className="text-[10px] text-blue-700 leading-relaxed">
+                                      Enter your Evolution API server details. We&apos;ll create the instance and show a QR code to scan with WhatsApp.
+                                    </p>
+                                  </div>
+                                  <input type="text" value={newInstance.baseUrl} onChange={e => setNewInstance(p => ({ ...p, baseUrl: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Server URL (e.g. http://165.22.252.87:8080)" />
+                                  <input type="text" value={newInstance.apiKey} onChange={e => setNewInstance(p => ({ ...p, apiKey: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="API Key" />
+                                  <input type="text" value={newInstance.instanceName} onChange={e => setNewInstance(p => ({ ...p, instanceName: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Instance Name (e.g. launchfly-main)" />
+                                  {evoError && <p className="text-[11px] text-red-500 font-medium">{evoError}</p>}
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      onClick={startEvoSetup}
+                                      disabled={!newInstance.baseUrl || !newInstance.apiKey || !newInstance.instanceName}
+                                      className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Connect WhatsApp →
+                                    </button>
+                                    <button onClick={() => { setShowAddInstance(false); resetEvoFlow(); }} className="px-4 py-2 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-100 transition-colors">
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+
+                              {evoStep === 'creating' && (
+                                <div className="flex flex-col items-center justify-center py-8">
+                                  <RefreshCw className="w-6 h-6 text-emerald-500 animate-spin mb-2" />
+                                  <p className="text-xs text-slate-500">Creating instance on Evolution API...</p>
+                                </div>
+                              )}
+
+                              {evoStep === 'qr' && (
+                                <div className="flex flex-col items-center py-4">
+                                  <p className="text-xs font-bold text-slate-700 mb-3">Scan this QR code with WhatsApp</p>
+                                  {evoQr?.base64 ? (
+                                    <img
+                                      src={evoQr.base64.startsWith('data:') ? evoQr.base64 : `data:image/png;base64,${evoQr.base64}`}
+                                      alt="WhatsApp QR Code"
+                                      className="w-48 h-48 rounded-xl border-2 border-slate-200 shadow-sm"
+                                    />
+                                  ) : evoQr?.pairingCode ? (
+                                    <div className="bg-slate-900 rounded-xl px-6 py-4">
+                                      <p className="text-xl font-mono text-white tracking-widest">{evoQr.pairingCode}</p>
+                                    </div>
+                                  ) : (
+                                    <div className="w-48 h-48 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center">
+                                      <RefreshCw className="w-5 h-5 text-slate-300 animate-spin" />
+                                    </div>
+                                  )}
+                                  <div className="mt-3 flex items-center gap-1.5">
+                                    <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                                    <p className="text-[10px] text-slate-400">Waiting for connection...</p>
+                                  </div>
+                                  <button
+                                    onClick={fetchEvoQr}
+                                    className="mt-2 text-[10px] text-blue-500 hover:text-blue-700 underline"
+                                  >
+                                    Refresh QR Code
+                                  </button>
+                                  <button onClick={() => { setShowAddInstance(false); resetEvoFlow(); }} className="mt-1 text-[10px] text-slate-400 hover:text-slate-600">
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+
+                              {evoStep === 'connected' && (
+                                <div className="flex flex-col items-center py-6">
+                                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mb-3">
+                                    <Check className="w-6 h-6 text-emerald-600" />
+                                  </div>
+                                  <p className="text-sm font-bold text-emerald-700">WhatsApp Connected!</p>
+                                  <p className="text-[10px] text-slate-400 mt-1">Instance saved and webhook configured automatically.</p>
+                                  <button
+                                    onClick={() => { setShowAddInstance(false); resetEvoFlow(); }}
+                                    className="mt-3 px-6 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors"
+                                  >
+                                    Done
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       ) : (
                         <button

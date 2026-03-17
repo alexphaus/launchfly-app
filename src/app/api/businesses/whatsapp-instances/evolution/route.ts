@@ -1,40 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Proxy to Evolution API server — keeps the API key out of the browser.
+ * Proxy to Evolution API server — keeps the API key on the server.
+ * baseUrl + apiKey come from env vars; only instanceName + action come from client.
  *
  * POST /api/businesses/whatsapp-instances/evolution
- *   body: { action: 'create' | 'connect' | 'status' | 'set-webhook', baseUrl, apiKey, instanceName, webhookUrl? }
+ *   body: { action: 'create' | 'connect' | 'status' | 'set-webhook', instanceName, webhookUrl? }
  */
+
+const EVO_BASE = (process.env.EVOLUTION_BASE_URL || '').replace(/\/+$/, '');
+const EVO_KEY  = process.env.EVOLUTION_API_KEY || '';
+
 export async function POST(req: NextRequest) {
   try {
-    const { action, baseUrl, apiKey, instanceName, webhookUrl } = await req.json();
+    const { action, instanceName, webhookUrl } = await req.json();
 
-    if (!baseUrl || !apiKey || !instanceName) {
-      return NextResponse.json({ error: 'Missing baseUrl, apiKey, or instanceName' }, { status: 400 });
+    if (!EVO_BASE || !EVO_KEY) {
+      return NextResponse.json({ error: 'Evolution API not configured on server' }, { status: 500 });
+    }
+    if (!instanceName) {
+      return NextResponse.json({ error: 'Missing instanceName' }, { status: 400 });
     }
 
-    // Validate baseUrl is a proper URL (prevent SSRF to internal networks)
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(baseUrl);
-    } catch {
-      return NextResponse.json({ error: 'Invalid baseUrl' }, { status: 400 });
-    }
-    const hostname = parsedUrl.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('10.') || hostname.startsWith('192.168.') || hostname.startsWith('169.254.')) {
-      return NextResponse.json({ error: 'Internal addresses not allowed' }, { status: 400 });
-    }
-
-    const base = baseUrl.replace(/\/+$/, '');
     const headers: Record<string, string> = {
-      apikey: apiKey,
+      apikey: EVO_KEY,
       'Content-Type': 'application/json',
     };
 
     // ── CREATE INSTANCE ──
     if (action === 'create') {
-      const res = await fetch(`${base}/instance/create`, {
+      const res = await fetch(`${EVO_BASE}/instance/create`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -59,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     // ── GET QR CODE / CONNECTION STATUS ──
     if (action === 'connect') {
-      const res = await fetch(`${base}/instance/connect/${instanceName}`, { headers: { apikey: apiKey } });
+      const res = await fetch(`${EVO_BASE}/instance/connect/${instanceName}`, { headers: { apikey: EVO_KEY } });
       const data = await res.json();
       // Normalize: Evolution v2 may nest QR in different places
       const qr = data?.base64 || data?.qrcode?.base64 || data?.code || null;
@@ -69,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     // ── CHECK INSTANCE STATUS ──
     if (action === 'status') {
-      const res = await fetch(`${base}/instance/connectionState/${instanceName}`, { headers: { apikey: apiKey } });
+      const res = await fetch(`${EVO_BASE}/instance/connectionState/${instanceName}`, { headers: { apikey: EVO_KEY } });
       const data = await res.json();
       return NextResponse.json({ ok: true, data });
     }
@@ -79,7 +74,7 @@ export async function POST(req: NextRequest) {
       if (!webhookUrl) {
         return NextResponse.json({ error: 'Missing webhookUrl' }, { status: 400 });
       }
-      const res = await fetch(`${base}/webhook/set/${instanceName}`, {
+      const res = await fetch(`${EVO_BASE}/webhook/set/${instanceName}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

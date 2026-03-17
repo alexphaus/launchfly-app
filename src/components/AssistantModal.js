@@ -246,7 +246,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [waInstances, setWaInstances] = useState([]);
   const [waInstancesLoading, setWaInstancesLoading] = useState(false);
   const [showAddInstance, setShowAddInstance] = useState(false);
-  const [newInstance, setNewInstance] = useState({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 });
+  const [newInstance, setNewInstance] = useState({ label: '', provider: 'evolution', instanceId: '', token: '', dailyLimit: 25 });
 
   // Evolution QR code setup flow
   const [evoStep, setEvoStep] = useState('form'); // 'form' | 'creating' | 'qr' | 'connected'
@@ -285,7 +285,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       });
       if (res.ok) {
         setShowAddInstance(false);
-        setNewInstance({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 });
+        setNewInstance({ label: '', provider: 'evolution', instanceId: '', token: '', dailyLimit: 25 });
         await loadWaInstances();
       }
     } catch {}
@@ -322,8 +322,13 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const startEvoSetup = async () => {
     setEvoStep('creating');
     setEvoError('');
+    // Auto-generate instance name from business ID + short random suffix
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const autoInstanceName = `${(business?.id || 'inst').slice(0, 8)}-${suffix}`;
+    // Stash it on newInstance so polling/save can use it
+    setNewInstance(p => ({ ...p, instanceName: autoInstanceName }));
     try {
-      const body = { action: 'create', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName };
+      const body = { action: 'create', instanceName: autoInstanceName };
       const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
@@ -334,18 +339,19 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       if (json.qrBase64) {
         setEvoQr({ base64: json.qrBase64 });
         setEvoStep('qr');
-        startEvoPolling();
+        startEvoPollingWith(autoInstanceName);
         return;
       }
 
       // Otherwise fetch QR from connect endpoint
-      await fetchEvoQr();
+      await fetchEvoQrWith(autoInstanceName);
     } catch (err) { setEvoError(err.message); setEvoStep('form'); }
   };
 
-  const fetchEvoQr = async () => {
+  const fetchEvoQr = async () => { await fetchEvoQrWith(newInstance.instanceName); };
+  const fetchEvoQrWith = async (instName) => {
     try {
-      const body = { action: 'connect', baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName };
+      const body = { action: 'connect', instanceName: instName };
       const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
@@ -356,28 +362,25 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       if (qrData || pairingCode) {
         setEvoQr({ base64: qrData, pairingCode });
         setEvoStep('qr');
-        startEvoPolling();
+        startEvoPollingWith(instName);
       } else {
-        // QR not ready yet — retry in 2 seconds
         console.log('[evo-qr] no QR yet, retrying...');
-        setTimeout(() => fetchEvoQr(), 2000);
-        setEvoStep('qr'); // show the QR step with spinner
-        startEvoPolling();
+        setTimeout(() => fetchEvoQrWith(instName), 2000);
+        setEvoStep('qr');
+        startEvoPollingWith(instName);
       }
     } catch (err) { setEvoError(err.message); setEvoStep('form'); }
   };
 
-  const startEvoPolling = () => {
+  const startEvoPolling = () => { startEvoPollingWith(newInstance.instanceName); };
+  const startEvoPollingWith = (instName) => {
     if (evoPolling) clearInterval(evoPolling);
-    // Capture values at poll creation so the interval doesn't use stale state
-    const pollBaseUrl = newInstance.baseUrl;
-    const pollApiKey = newInstance.apiKey;
-    const pollInstanceName = newInstance.instanceName;
+    const pollInstanceName = instName;
     const pollLabel = newInstance.label;
     const pollDailyLimit = newInstance.dailyLimit;
     const interval = setInterval(async () => {
       try {
-        const body = { action: 'status', baseUrl: pollBaseUrl, apiKey: pollApiKey, instanceName: pollInstanceName };
+        const body = { action: 'status', instanceName: pollInstanceName };
         const res = await fetch('/api/businesses/whatsapp-instances/evolution', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
@@ -390,9 +393,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
           const webhookUrl = `${window.location.origin}/api/webhook/evolution`;
           await fetch('/api/businesses/whatsapp-instances/evolution', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'set-webhook', baseUrl: pollBaseUrl, apiKey: pollApiKey, instanceName: pollInstanceName, webhookUrl }),
+            body: JSON.stringify({ action: 'set-webhook', instanceName: pollInstanceName, webhookUrl }),
           });
-          // Save to DB using captured values (don't close form yet — let user see "Connected!")
+          // Save to DB (server will fill in baseUrl/apiKey)
           if (business?.id) {
             try {
               await fetch('/api/businesses/whatsapp-instances', {
@@ -400,11 +403,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   businessId: business.id,
-                  label: pollLabel,
+                  label: pollLabel || pollInstanceName,
                   provider: 'evolution',
                   dailyLimit: pollDailyLimit,
-                  baseUrl: pollBaseUrl,
-                  apiKey: pollApiKey,
                   instanceName: pollInstanceName,
                 }),
               });
@@ -1802,18 +1803,14 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                 <>
                                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
                                     <p className="text-[10px] text-blue-700 leading-relaxed">
-                                      Enter your Evolution API server details. We&apos;ll create the instance and show a QR code to scan with WhatsApp.
+                                      We&apos;ll generate a QR code for you to scan with WhatsApp. Your number will be connected instantly.
                                     </p>
                                   </div>
-                                  <input type="text" value={newInstance.baseUrl} onChange={e => setNewInstance(p => ({ ...p, baseUrl: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Server URL (e.g. http://165.22.252.87:8080)" />
-                                  <input type="text" value={newInstance.apiKey} onChange={e => setNewInstance(p => ({ ...p, apiKey: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="API Key" />
-                                  <input type="text" value={newInstance.instanceName} onChange={e => setNewInstance(p => ({ ...p, instanceName: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Instance Name (e.g. launchfly-main)" />
                                   {evoError && <p className="text-[11px] text-red-500 font-medium">{evoError}</p>}
                                   <div className="flex gap-2 pt-1">
                                     <button
                                       onClick={startEvoSetup}
-                                      disabled={!newInstance.baseUrl || !newInstance.apiKey || !newInstance.instanceName}
-                                      className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors"
                                     >
                                       Connect WhatsApp →
                                     </button>
@@ -1873,7 +1870,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                   <p className="text-sm font-bold text-emerald-700">WhatsApp Connected!</p>
                                   <p className="text-[10px] text-slate-400 mt-1">Instance saved and webhook configured automatically.</p>
                                   <button
-                                    onClick={async () => { setShowAddInstance(false); resetEvoFlow(); setNewInstance({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 }); await loadWaInstances(); }}
+                                    onClick={async () => { setShowAddInstance(false); resetEvoFlow(); setNewInstance({ label: '', provider: 'evolution', instanceId: '', token: '', dailyLimit: 25 }); await loadWaInstances(); }}
                                     className="mt-3 px-6 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors"
                                   >
                                     Done

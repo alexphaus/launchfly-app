@@ -89,11 +89,12 @@ export async function POST(req: NextRequest) {
     };
 
     if (provider === 'evolution') {
-      if (!creds.baseUrl || !creds.apiKey || !creds.instanceName) {
-        return NextResponse.json({ error: 'Missing Evolution fields' }, { status: 400 });
+      if (!creds.instanceName) {
+        return NextResponse.json({ error: 'Missing instanceName' }, { status: 400 });
       }
-      row.base_url = creds.baseUrl;
-      row.api_key = creds.apiKey;
+      // Use server-side env vars for Evolution credentials
+      row.base_url = process.env.EVOLUTION_BASE_URL || creds.baseUrl || '';
+      row.api_key = process.env.EVOLUTION_API_KEY || creds.apiKey || '';
       row.instance_name = creds.instanceName;
     } else {
       if (!creds.instanceId || !creds.token) {

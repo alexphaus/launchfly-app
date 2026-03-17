@@ -226,6 +226,76 @@ export async function checkHasWhatsApp(phone: string, businessId?: string): Prom
   }
 }
 
+// ─── WithCreds variants (for multi-instance outreach) ─────────────────
+// These accept explicit credentials instead of looking up by businessId,
+// so the outreach load-balancer can route to a specific phone instance.
+
+export async function sendWhatsAppWithCreds(
+  to: string,
+  body: string,
+  creds: EvolutionCredentials,
+): Promise<{ sent: boolean; id?: string; error?: string }> {
+  if (await isBlacklisted(to)) {
+    return { sent: false, error: 'Recipient is blacklisted from receiving automated messages.' };
+  }
+  const number = normalizePhone(to);
+  try {
+    const json = await evoFetch(creds, `message/sendText/${creds.instanceName}`, { number, text: body });
+    if (json?.key?.id) return { sent: true, id: json.key.id };
+    return { sent: false, error: json?.error || json?.message || JSON.stringify(json) };
+  } catch (err: any) {
+    return { sent: false, error: err.message };
+  }
+}
+
+export async function sendVoiceNoteWithCreds(
+  to: string,
+  audioUrl: string,
+  creds: EvolutionCredentials,
+): Promise<{ sent: boolean; error?: string }> {
+  const number = normalizePhone(to);
+  try {
+    const json = await evoFetch(creds, `message/sendWhatsAppAudio/${creds.instanceName}`, { number, audio: audioUrl });
+    if (json?.key?.id) return { sent: true };
+    return { sent: false, error: json?.error || JSON.stringify(json) };
+  } catch (err: any) {
+    return { sent: false, error: err.message };
+  }
+}
+
+export async function sendImageWithCreds(
+  to: string,
+  imageUrl: string,
+  creds: EvolutionCredentials,
+  caption?: string,
+): Promise<{ sent: boolean; error?: string }> {
+  const number = normalizePhone(to);
+  try {
+    const json = await evoFetch(creds, `message/sendMedia/${creds.instanceName}`, {
+      number, mediatype: 'image', media: imageUrl, caption: caption || '',
+    });
+    if (json?.key?.id) return { sent: true };
+    return { sent: false, error: json?.error || JSON.stringify(json) };
+  } catch (err: any) {
+    return { sent: false, error: err.message };
+  }
+}
+
+export async function checkHasWhatsAppWithCreds(
+  phone: string,
+  creds: EvolutionCredentials,
+): Promise<boolean> {
+  try {
+    const number = normalizePhone(phone);
+    const json = await evoFetch(creds, `chat/whatsappNumbers/${creds.instanceName}`, {
+      numbers: [`${number}`],
+    });
+    return Array.isArray(json) && json.some((r: any) => r.exists === true);
+  } catch {
+    return true; // fail-open
+  }
+}
+
 /** Resolve which business owns a given Evolution instance name */
 export async function resolveBusinessByInstance(instanceName: string): Promise<string | null> {
   try {

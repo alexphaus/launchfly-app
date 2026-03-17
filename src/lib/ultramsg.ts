@@ -217,6 +217,92 @@ export async function sendImage(
   return { sent: false, error: json.error || JSON.stringify(json) };
 }
 
+// ─── WithCreds variants (for multi-instance outreach) ─────────────────
+// These accept explicit credentials instead of looking up by businessId,
+// so the outreach load-balancer can route to a specific phone instance.
+
+export async function sendWhatsAppWithCreds(
+  to: string,
+  body: string,
+  creds: UltramsgCredentials,
+): Promise<{ sent: boolean; id?: string; error?: string }> {
+  if (await isBlacklisted(to)) {
+    return { sent: false, error: 'Recipient is blacklisted from receiving automated messages.' };
+  }
+  await simulateHumanTyping(body);
+  const phone = normalizePhone(to);
+  const payload = new URLSearchParams();
+  payload.append('token', creds.token);
+  payload.append('to', phone);
+  payload.append('body', body);
+  const res = await fetch(`${ULTRAMSG_BASE}/${creds.instanceId}/messages/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload,
+  });
+  const json = await res.json();
+  if (json.sent === 'true' || json.sent === true || json.id) return { sent: true, id: json.id };
+  return { sent: false, error: json.error || JSON.stringify(json) };
+}
+
+export async function sendVoiceNoteWithCreds(
+  to: string,
+  audioUrl: string,
+  creds: UltramsgCredentials,
+): Promise<{ sent: boolean; error?: string }> {
+  const phone = normalizePhone(to);
+  const payload = new URLSearchParams();
+  payload.append('token', creds.token);
+  payload.append('to', phone);
+  payload.append('audio', audioUrl);
+  const res = await fetch(`${ULTRAMSG_BASE}/${creds.instanceId}/messages/voice`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload,
+  });
+  const json = await res.json();
+  if (json.sent === 'true' || json.sent === true || json.id) return { sent: true };
+  return { sent: false, error: json.error || JSON.stringify(json) };
+}
+
+export async function sendImageWithCreds(
+  to: string,
+  imageUrl: string,
+  creds: UltramsgCredentials,
+  caption?: string,
+): Promise<{ sent: boolean; error?: string }> {
+  const phone = normalizePhone(to);
+  const payload = new URLSearchParams();
+  payload.append('token', creds.token);
+  payload.append('to', phone);
+  payload.append('image', imageUrl);
+  if (caption) payload.append('caption', caption);
+  const res = await fetch(`${ULTRAMSG_BASE}/${creds.instanceId}/messages/image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload,
+  });
+  const json = await res.json();
+  if (json.sent === 'true' || json.sent === true || json.id) return { sent: true };
+  return { sent: false, error: json.error || JSON.stringify(json) };
+}
+
+export async function checkHasWhatsAppWithCreds(
+  phone: string,
+  creds: UltramsgCredentials,
+): Promise<boolean> {
+  try {
+    let p = phone.replace(/^whatsapp:/, '');
+    const digits = p.replace(/[^\d]/g, '');
+    const phoneNorm = digits.length === 10 ? `1${digits}` : digits;
+    const res = await fetch(`${ULTRAMSG_BASE}/${creds.instanceId}/contacts/check?token=${creds.token}&chatId=${phoneNorm}@c.us`);
+    const json = await res.json();
+    return json.status === 'valid';
+  } catch {
+    return true; // fail-open
+  }
+}
+
 /** Resolve which business owns a given UltraMsg instance ID */
 export async function resolveBusinessByInstance(instanceId: string): Promise<string | null> {
   try {

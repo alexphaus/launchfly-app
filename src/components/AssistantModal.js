@@ -237,6 +237,69 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [waSaving, setWaSaving] = useState(false);
   const [waStatus, setWaStatus] = useState(null); // 'saved' | 'error'
 
+  // Multi-instance outreach (whatsapp_instances table)
+  const [waInstances, setWaInstances] = useState([]);
+  const [waInstancesLoading, setWaInstancesLoading] = useState(false);
+  const [showAddInstance, setShowAddInstance] = useState(false);
+  const [newInstance, setNewInstance] = useState({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 });
+
+  const loadWaInstances = useCallback(async () => {
+    if (!business?.id) return;
+    setWaInstancesLoading(true);
+    try {
+      const res = await fetch(`/api/businesses/whatsapp-instances?businessId=${business.id}`);
+      const d = await res.json();
+      if (d.instances) setWaInstances(d.instances);
+    } catch {} finally { setWaInstancesLoading(false); }
+  }, [business?.id]);
+
+  useEffect(() => { loadWaInstances(); }, [loadWaInstances]);
+
+  const saveNewInstance = async () => {
+    if (!business?.id) return;
+    const body = {
+      businessId: business.id,
+      label: newInstance.label,
+      provider: newInstance.provider,
+      dailyLimit: newInstance.dailyLimit,
+      ...(newInstance.provider === 'ultramsg'
+        ? { instanceId: newInstance.instanceId, token: newInstance.token }
+        : { baseUrl: newInstance.baseUrl, apiKey: newInstance.apiKey, instanceName: newInstance.instanceName }),
+    };
+    try {
+      const res = await fetch('/api/businesses/whatsapp-instances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setShowAddInstance(false);
+        setNewInstance({ label: '', provider: 'ultramsg', instanceId: '', token: '', baseUrl: '', apiKey: '', instanceName: '', dailyLimit: 25 });
+        await loadWaInstances();
+      }
+    } catch {}
+  };
+
+  const deleteWaInstance = async (id) => {
+    if (!business?.id || !confirm('Delete this WhatsApp instance?')) return;
+    try {
+      await fetch(`/api/businesses/whatsapp-instances?id=${id}&businessId=${business.id}`, { method: 'DELETE' });
+      await loadWaInstances();
+    } catch {}
+  };
+
+  const toggleWaInstance = async (inst) => {
+    if (!business?.id) return;
+    try {
+      await fetch('/api/businesses/whatsapp-instances', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, id: inst.id, active: !inst.active }),
+      });
+      await loadWaInstances();
+    } catch {}
+  };
+
   useEffect(() => {
     if (business?.whatsapp_api_config) {
       setWaConfig({
@@ -1518,77 +1581,197 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
                   )}
 
-                  {/* ── WhatsApp Connection (UltraMsg) ── */}
+                  {/* ── WhatsApp Numbers (unified primary + outreach) ── */}
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                      WhatsApp Connection
+                      WhatsApp Numbers
                     </label>
-                    <div className="bg-slate-50 p-3 rounded-xl space-y-2">
-                      {waConfig.instanceId && waConfig.token ? (
+                    <p className="text-[10px] text-slate-400 mb-2">
+                      Your primary number handles inbound messages &amp; AI replies. Add more numbers to spread outreach load.
+                    </p>
+
+                    {/* Anti-Ban Warning */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3 flex gap-2 items-start">
+                      <span className="text-amber-500 mt-0.5">⚠️</span>
+                      <p className="text-[10px] text-amber-700 leading-relaxed">
+                        <strong className="font-bold">Avoid Meta Bans:</strong> If using a brand-new SIM card, text manually with real humans for 3-5 days before turning on automated sequences. For first outreach messages, always ask a short &quot;ping&quot; question to get a reply before pitching.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {/* ── Primary Number Card ── */}
+                      <div className={`p-2.5 rounded-lg border ${waConfig.instanceId && waConfig.token ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}`}>
                         <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-xs text-emerald-700 font-medium">Connected</span>
-                          <span className="text-[10px] text-slate-400">({waConfig.instanceId})</span>
+                          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${waConfig.instanceId && waConfig.token ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-medium text-slate-700 truncate">
+                                {waConfig.instanceId || 'Primary Number'}
+                              </p>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-700 text-white flex-shrink-0">PRIMARY</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                              {waConfig.instanceId && waConfig.token
+                                ? 'Inbound + AI replies + outreach'
+                                : 'Not connected — set up credentials below'}
+                            </p>
+                          </div>
                         </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">Not connected — enter your UltraMsg credentials below.</p>
-                      )}
-                      
-                      {/* Anti-Ban Warning */}
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2 flex gap-2 items-start">
-                        <span className="text-amber-500 mt-0.5">⚠️</span>
-                        <p className="text-[10px] text-amber-700 leading-relaxed">
-                          <strong className="font-bold">Avoid Meta Bans:</strong> If using a brand-new SIM card, text manually with real humans for 3-5 days before turning on automated sequences. For first outreach messages, always ask a short &quot;ping&quot; question to get a reply before pitching.
-                        </p>
+                        <details className="text-xs mt-2">
+                          <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">
+                            {waConfig.instanceId ? 'Edit credentials' : 'Setup WhatsApp API'}
+                          </summary>
+                          <div className="space-y-2 mt-2">
+                            <input
+                              type="text"
+                              value={waConfig.instanceId}
+                              onChange={e => setWaConfig(prev => ({ ...prev, instanceId: e.target.value }))}
+                              className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                              placeholder="Instance ID (e.g. instance164947)"
+                            />
+                            <input
+                              type="text"
+                              value={waConfig.token}
+                              onChange={e => setWaConfig(prev => ({ ...prev, token: e.target.value }))}
+                              className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
+                              placeholder="Token"
+                            />
+                            {business?.id && (
+                              <div className="bg-white p-2 border border-slate-200 rounded-lg">
+                                <p className="text-[10px] text-slate-400 mb-1">Webhook URL (paste in UltraMsg dashboard):</p>
+                                <div className="flex gap-1.5">
+                                  <input
+                                    type="text"
+                                    readOnly
+                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/ultramsg?businessId=${business.id}`}
+                                    className="flex-1 p-1.5 border border-slate-200 rounded text-[10px] font-mono bg-slate-50"
+                                  />
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ultramsg?businessId=${business.id}`)}
+                                    className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded hover:bg-slate-800 transition-colors"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              onClick={saveWhatsAppConfig}
+                              disabled={waSaving || !waConfig.instanceId || !waConfig.token}
+                              className="w-full py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            >
+                              {waSaving ? 'Saving...' : waStatus === 'saved' ? '✓ Saved' : 'Save WhatsApp Config'}
+                            </button>
+                          </div>
+                        </details>
                       </div>
 
-                      <details className="text-xs">
-                        <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none mt-2">
-                          {waConfig.instanceId ? 'Edit credentials' : 'Setup WhatsApp API'}
-                        </summary>
-                        <div className="space-y-2 mt-2">
-                          <input
-                            type="text"
-                            value={waConfig.instanceId}
-                            onChange={e => setWaConfig(prev => ({ ...prev, instanceId: e.target.value }))}
-                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                            placeholder="Instance ID (e.g. instance164947)"
-                          />
-                          <input
-                            type="text"
-                            value={waConfig.token}
-                            onChange={e => setWaConfig(prev => ({ ...prev, token: e.target.value }))}
-                            className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                            placeholder="Token"
-                          />
-                          {business?.id && (
-                            <div className="bg-white p-2 border border-slate-200 rounded-lg">
-                              <p className="text-[10px] text-slate-400 mb-1">Webhook URL (paste in UltraMsg dashboard):</p>
-                              <div className="flex gap-1.5">
-                                <input
-                                  type="text"
-                                  readOnly
-                                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/ultramsg?businessId=${business.id}`}
-                                  className="flex-1 p-1.5 border border-slate-200 rounded text-[10px] font-mono bg-slate-50"
-                                />
-                                <button
-                                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ultramsg?businessId=${business.id}`)}
-                                  className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded hover:bg-slate-800 transition-colors"
-                                >
-                                  Copy
-                                </button>
+                      {/* ── Additional Outreach Numbers ── */}
+                      {waInstancesLoading ? (
+                        <p className="text-xs text-slate-400 pl-1">Loading...</p>
+                      ) : (
+                        waInstances.map(inst => (
+                          <div key={inst.id} className={`flex items-center gap-2 p-2.5 rounded-lg border ${inst.active ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                            <button onClick={() => toggleWaInstance(inst)} className="flex-shrink-0">
+                              <div className={`w-2.5 h-2.5 rounded-full ${inst.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-medium text-slate-700 truncate">{inst.label || `${inst.provider} instance`}</p>
+                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 flex-shrink-0">OUTREACH</span>
                               </div>
+                              <p className="text-[10px] text-slate-400">
+                                {inst.provider === 'ultramsg' ? inst.instance_id : inst.instance_name} · {inst.sends_today}/{inst.daily_limit} today
+                              </p>
                             </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                inst.sends_today >= inst.daily_limit ? 'bg-red-100 text-red-600' :
+                                inst.sends_today > inst.daily_limit * 0.8 ? 'bg-amber-100 text-amber-600' :
+                                'bg-emerald-100 text-emerald-600'
+                              }`}>
+                                {inst.daily_limit - inst.sends_today} left
+                              </span>
+                              <button
+                                onClick={() => deleteWaInstance(inst.id)}
+                                className="text-slate-300 hover:text-red-400 transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+
+                      {/* Add Number Form */}
+                      {showAddInstance ? (
+                        <div className="space-y-2 p-3 border border-slate-200 rounded-xl bg-white">
+                          <input
+                            type="text"
+                            value={newInstance.label}
+                            onChange={e => setNewInstance(p => ({ ...p, label: e.target.value }))}
+                            className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                            placeholder="Label (e.g. Phone 2 — SG number)"
+                          />
+                          <div className="flex gap-2">
+                            <select
+                              value={newInstance.provider}
+                              onChange={e => setNewInstance(p => ({ ...p, provider: e.target.value }))}
+                              className="p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                            >
+                              <option value="ultramsg">UltraMsg</option>
+                              <option value="evolution">Evolution API</option>
+                            </select>
+                            <input
+                              type="number"
+                              value={newInstance.dailyLimit}
+                              onChange={e => setNewInstance(p => ({ ...p, dailyLimit: Number(e.target.value) }))}
+                              className="w-20 p-2 border border-slate-200 rounded-lg text-xs"
+                              placeholder="Limit"
+                              min={1}
+                              max={100}
+                            />
+                            <span className="text-[10px] text-slate-400 self-center">/day</span>
+                          </div>
+                          {newInstance.provider === 'ultramsg' ? (
+                            <>
+                              <input type="text" value={newInstance.instanceId} onChange={e => setNewInstance(p => ({ ...p, instanceId: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Instance ID" />
+                              <input type="text" value={newInstance.token} onChange={e => setNewInstance(p => ({ ...p, token: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Token" />
+                            </>
+                          ) : (
+                            <>
+                              <input type="text" value={newInstance.baseUrl} onChange={e => setNewInstance(p => ({ ...p, baseUrl: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Base URL (e.g. https://evo.yourdomain.com)" />
+                              <input type="text" value={newInstance.apiKey} onChange={e => setNewInstance(p => ({ ...p, apiKey: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="API Key" />
+                              <input type="text" value={newInstance.instanceName} onChange={e => setNewInstance(p => ({ ...p, instanceName: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Instance Name" />
+                            </>
                           )}
-                          <button
-                            onClick={saveWhatsAppConfig}
-                            disabled={waSaving || !waConfig.instanceId || !waConfig.token}
-                            className="w-full py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                          >
-                            {waSaving ? 'Saving...' : waStatus === 'saved' ? '✓ Saved' : 'Save WhatsApp Config'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button onClick={saveNewInstance} className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors">
+                              Add Number
+                            </button>
+                            <button onClick={() => setShowAddInstance(false)} className="px-3 py-2 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors">
+                              Cancel
+                            </button>
+                          </div>
                         </div>
-                      </details>
+                      ) : (
+                        <button
+                          onClick={() => setShowAddInstance(true)}
+                          className="w-full py-2 border-2 border-dashed border-slate-200 text-slate-400 text-xs font-medium rounded-xl hover:border-slate-300 hover:text-slate-500 transition-colors"
+                        >
+                          + Add Outreach Number
+                        </button>
+                      )}
+
+                      {/* Capacity summary */}
+                      {waInstances.filter(i => i.active).length > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-1">
+                          <p className="text-[10px] text-blue-700">
+                            <strong>Outreach capacity:</strong> {waInstances.filter(i => i.active).reduce((s, i) => s + i.daily_limit, 0)} msgs/day across {waInstances.filter(i => i.active).length} outreach number{waInstances.filter(i => i.active).length !== 1 ? 's' : ''} (+ primary).
+                            Leads are round-robined across numbers, each staying under its daily limit.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -47,12 +47,22 @@ export interface AIBrainResult {
 
 // ─── Send helpers ────────────────────────────────────────────────────────
 
-async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<void> {
-  const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-  const wa = await getWhatsAppProvider(businessId);
+async function sendWhatsApp(to: string, body: string, businessId?: string, waInstanceId?: string): Promise<void> {
+  let wa;
+  if (waInstanceId) {
+    const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
+    wa = await getProviderByInstanceId(waInstanceId, businessId || '');
+  } else {
+    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+    wa = await getWhatsAppProvider(businessId);
+  }
   const result = await wa.sendWhatsApp(to, body, businessId);
   if (!result.sent) {
     throw new Error(`WhatsApp send failed (${wa.name}): ${result.error}`);
+  }
+  if (waInstanceId) {
+    const { incrementInstanceCounter } = await import('@/lib/whatsapp-provider');
+    await incrementInstanceCounter(waInstanceId);
   }
 }
 
@@ -69,11 +79,11 @@ async function sendSms(to: string, body: string): Promise<void> {
   });
 }
 
-async function sendReply(to: string, body: string, channel: string, businessId?: string): Promise<void> {
+async function sendReply(to: string, body: string, channel: string, businessId?: string, waInstanceId?: string): Promise<void> {
   if (channel === 'sms') {
     await sendSms(to, body);
   } else {
-    await sendWhatsApp(to, body, businessId);
+    await sendWhatsApp(to, body, businessId, waInstanceId);
   }
 }
 
@@ -444,6 +454,7 @@ export interface AIFollowupInput {
   businessId: string;
   phone: string;
   channel?: string;
+  waInstanceId?: string; // pinned WhatsApp instance for multi-instance outreach
 }
 
 export interface AIFollowupResult {
@@ -454,7 +465,7 @@ export interface AIFollowupResult {
 }
 
 export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollowupResult> {
-  const { businessId, phone, channel = 'whatsapp' } = input;
+  const { businessId, phone, channel = 'whatsapp', waInstanceId } = input;
   const supabase = getSupabase();
 
   const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
@@ -552,16 +563,24 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
   const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
   for (let i = 0; i < messagesToSend.length; i++) {
     const msg = messagesToSend[i];
-    await sendReply(phoneWithPlus, msg.trim(), channel, businessId);
+    await sendReply(phoneWithPlus, msg.trim(), channel, businessId, waInstanceId);
 
     if (i < messagesToSend.length - 1) {
       const nextMsg = messagesToSend[i + 1];
       const delayMs = Math.max(1500, Math.min(nextMsg.length * 30, 5000)) + Math.floor(Math.random() * 500);
       
-      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-      const waProvider = await getWhatsAppProvider(businessId);
-      if (waProvider.sendTypingPresence) {
-        waProvider.sendTypingPresence(phoneWithPlus, businessId).catch(() => {});
+      if (waInstanceId) {
+        const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
+        const waProvider = await getProviderByInstanceId(waInstanceId, businessId);
+        if (waProvider.sendTypingPresence) {
+          waProvider.sendTypingPresence(phoneWithPlus, businessId).catch(() => {});
+        }
+      } else {
+        const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+        const waProvider = await getWhatsAppProvider(businessId);
+        if (waProvider.sendTypingPresence) {
+          waProvider.sendTypingPresence(phoneWithPlus, businessId).catch(() => {});
+        }
       }
       
       await new Promise(resolve => setTimeout(resolve, delayMs));

@@ -240,6 +240,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         businessId: ctx.businessId,
         phone: ctx.phone,
         channel: followupChannel,
+        waInstanceId: ctx.metadata?.wa_instance_id as string | undefined,
       });
       if (followupResult.skipped) return { ok: true, detail: `Skipped: ${followupResult.skipReason}` };
       return { ok: true, detail: `AI follow-up sent via ${followupChannel} (${followupResult.toolsCalled.length} tools)` };
@@ -264,10 +265,23 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
     case 'send_whatsapp': {
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
       const msg = fillVars(cfg.message as string, ctx);
-      try {
-        await sendWhatsApp(ctx.phone, msg, ctx.businessId);
-      } catch (err) {
-        return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${err instanceof Error ? err.message : String(err)}` };
+
+      // Use pinned WhatsApp instance if this prospect was assigned one (multi-instance outreach)
+      const pinnedInstanceId = ctx.metadata?.wa_instance_id as string | undefined;
+      if (pinnedInstanceId) {
+        const { getProviderByInstanceId, incrementInstanceCounter } = await import('@/lib/whatsapp-provider');
+        const wa = await getProviderByInstanceId(pinnedInstanceId, ctx.businessId);
+        const result = await wa.sendWhatsApp(ctx.phone, msg);
+        if (!result.sent) {
+          return { ok: false, detail: `WhatsApp failed for ${ctx.phone} (instance ${pinnedInstanceId}): ${result.error}` };
+        }
+        await incrementInstanceCounter(pinnedInstanceId);
+      } else {
+        try {
+          await sendWhatsApp(ctx.phone, msg, ctx.businessId);
+        } catch (err) {
+          return { ok: false, detail: `WhatsApp failed for ${ctx.phone}: ${err instanceof Error ? err.message : String(err)}` };
+        }
       }
       await saveToChatHistory(ctx.phone, ctx.businessId, msg);
 
@@ -1006,8 +1020,28 @@ CUSTOMER NAME: ${customerName}
       const maxChecks = leadsPerDay * 5; // Check up to 5x quota to fill the day
 
       const supabase = getSupabase();
-      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-      const waProvider = await getWhatsAppProvider(ctx.businessId);
+      const { getOutreachInstances, getProviderForInstance, incrementInstanceCounter, getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+
+      // Load multi-instance config (may be empty → falls back to single instance)
+      const instances = await getOutreachInstances(ctx.businessId);
+      const useMultiInstance = instances.length > 0;
+
+      // Calculate total remaining capacity across all instances
+      let totalCapacity = leadsPerDay;
+      if (useMultiInstance) {
+        totalCapacity = Math.min(
+          leadsPerDay,
+          instances.reduce((sum, inst) => sum + Math.max(0, inst.daily_limit - inst.sends_today), 0),
+        );
+        if (totalCapacity <= 0) {
+          return { ok: true, detail: `All ${instances.length} WhatsApp instances at daily limit — skipping outreach` };
+        }
+      }
+
+      // Use the first available instance (or default provider) for WhatsApp checks
+      const waProvider = useMultiInstance
+        ? getProviderForInstance(instances[0])
+        : await getWhatsAppProvider(ctx.businessId);
 
       // Backfill loop: keep fetching batches until we have enough WhatsApp-verified leads
       const verified: { id: string; business_name: string; whatsapp_number: string; service_type: string; area: string; owner_name: string | null; source: string; pain_signals: string[] | null; website_url: string | null }[] = [];
@@ -1015,24 +1049,23 @@ CUSTOMER NAME: ${customerName}
       let offset = 0;
       let totalChecked = 0;
 
-      while (verified.length < leadsPerDay && totalChecked < maxChecks) {
-        const batchSize = Math.min(10, leadsPerDay * 2 - verified.length); // Fetch a smart batch
+      while (verified.length < totalCapacity && totalChecked < maxChecks) {
+        const batchSize = Math.min(10, totalCapacity * 2 - verified.length);
         const { data: batch, error: fetchErr } = await supabase
           .from('hunter_prospects')
           .select('id, business_name, whatsapp_number, service_type, area, owner_name, source, pain_signals, website_url')
           .eq('status', 'new')
-          .order('priority', { ascending: false })   // highest priority first
-          .order('created_at', { ascending: true })   // then oldest
+          .order('priority', { ascending: false })
+          .order('created_at', { ascending: true })
           .range(offset, offset + batchSize - 1);
 
         if (fetchErr) {
           console.error('[outreach] Fetch error:', fetchErr.message);
           break;
         }
-        if (!batch || batch.length === 0) break; // pool exhausted
+        if (!batch || batch.length === 0) break;
 
-        // WhatsApp check in parallel (batches of 5)
-        for (let i = 0; i < batch.length && verified.length < leadsPerDay; i += 5) {
+        for (let i = 0; i < batch.length && verified.length < totalCapacity; i += 5) {
           const chunk = batch.slice(i, Math.min(i + 5, batch.length));
           const results = await Promise.all(chunk.map(async p => {
             const hasWa = await waProvider.checkHasWhatsApp(p.whatsapp_number, ctx.businessId);
@@ -1040,7 +1073,7 @@ CUSTOMER NAME: ${customerName}
           }));
           for (const { prospect, hasWa } of results) {
             totalChecked++;
-            if (hasWa && verified.length < leadsPerDay) {
+            if (hasWa && verified.length < totalCapacity) {
               verified.push(prospect);
             } else if (!hasWa) {
               noWaIds.push(prospect.id);
@@ -1051,7 +1084,6 @@ CUSTOMER NAME: ${customerName}
         offset += batch.length;
       }
 
-      // Mark no-WhatsApp prospects permanently
       if (noWaIds.length > 0) {
         await supabase
           .from('hunter_prospects')
@@ -1063,7 +1095,34 @@ CUSTOMER NAME: ${customerName}
         return { ok: true, detail: `Checked ${totalChecked} prospects — none had WhatsApp. Pool may need refilling.` };
       }
 
-      // Schedule each as prospect_found at a random time within the business-hours window
+      // ─── Round-robin assign prospects to instances ──────────────────────
+      // Build assignment: each prospect gets pinned to an instance
+      type Assignment = { prospect: typeof verified[0]; instanceId: string | null };
+      const assignments: Assignment[] = [];
+
+      if (useMultiInstance) {
+        // Track remaining capacity per instance during assignment
+        const caps = instances.map(inst => ({
+          id: inst.id,
+          remaining: Math.max(0, inst.daily_limit - inst.sends_today),
+        }));
+
+        for (const prospect of verified) {
+          // Pick instance with most remaining capacity (spread the load)
+          caps.sort((a, b) => b.remaining - a.remaining);
+          const pick = caps.find(c => c.remaining > 0);
+          if (!pick) break; // all full
+          assignments.push({ prospect, instanceId: pick.id });
+          pick.remaining--;
+        }
+      } else {
+        // Single instance mode — no pinning
+        for (const prospect of verified) {
+          assignments.push({ prospect, instanceId: null });
+        }
+      }
+
+      // ─── Schedule each as prospect_found ────────────────────────────────
       const qstashToken = process.env.QSTASH_TOKEN;
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
       const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
@@ -1075,7 +1134,6 @@ CUSTOMER NAME: ${customerName}
       const windowEndSec = endH * 3600 + endM * 60;
       const windowSpan = Math.max(windowEndSec - windowStartSec, 3600);
 
-      // Calculate current time in the schedule's timezone (window times are local)
       const tz = (ctx.metadata?.__timezone as string) || 'UTC';
       let nowSec: number;
       try {
@@ -1093,8 +1151,9 @@ CUSTOMER NAME: ${customerName}
 
       let scheduled = 0;
       const scheduledIds: string[] = [];
+      const instanceCounterUpdates: Record<string, number> = {};
 
-      for (const prospect of verified) {
+      for (const { prospect, instanceId } of assignments) {
         const randomOffsetSec = Math.floor(Math.random() * windowSpan);
         const targetSec = windowStartSec + randomOffsetSec;
         let delaySec = targetSec - nowSec;
@@ -1121,12 +1180,16 @@ CUSTOMER NAME: ${customerName}
                 owner_name: prospect.owner_name,
                 website: prospect.website_url,
                 pain_signals: prospect.pain_signals,
+                wa_instance_id: instanceId, // pin to this instance for all follow-ups
               },
             }),
           });
           if (res.ok) {
             scheduled++;
             scheduledIds.push(prospect.id);
+            if (instanceId) {
+              instanceCounterUpdates[instanceId] = (instanceCounterUpdates[instanceId] || 0) + 1;
+            }
           } else {
             console.warn(`[outreach] QStash publish failed for ${prospect.business_name}: ${res.status}`);
           }
@@ -1135,17 +1198,37 @@ CUSTOMER NAME: ${customerName}
         }
       }
 
-      // Mark scheduled prospects as 'opener_queued'
+      // Mark scheduled prospects as 'opener_queued' + pin the instance
       if (scheduledIds.length > 0) {
+        // Bulk update status
         await supabase
           .from('hunter_prospects')
           .update({ status: 'opener_queued', opener_sent_at: new Date().toISOString() })
           .in('id', scheduledIds);
+
+        // Pin wa_instance_id per prospect
+        if (useMultiInstance) {
+          for (const { prospect, instanceId } of assignments) {
+            if (instanceId && scheduledIds.includes(prospect.id)) {
+              await supabase
+                .from('hunter_prospects')
+                .update({ wa_instance_id: instanceId })
+                .eq('id', prospect.id);
+            }
+          }
+          // Increment send counters (each prospect = 1 opener + future follow-ups counted later)
+          for (const [instId, count] of Object.entries(instanceCounterUpdates)) {
+            for (let i = 0; i < count; i++) {
+              await incrementInstanceCounter(instId);
+            }
+          }
+        }
       }
 
+      const instanceInfo = useMultiInstance ? ` across ${instances.length} instances` : '';
       return {
         ok: true,
-        detail: `Checked ${totalChecked}, ${noWaIds.length} no WhatsApp, ${scheduled}/${leadsPerDay} scheduled (window ${windowStart}–${windowEnd})`,
+        detail: `Checked ${totalChecked}, ${noWaIds.length} no WhatsApp, ${scheduled}/${totalCapacity} scheduled (window ${windowStart}–${windowEnd})${instanceInfo}`,
       };
     }
 

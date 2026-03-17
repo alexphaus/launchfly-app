@@ -95,7 +95,7 @@ export async function sendTypingPresence(to: string, businessId?: string): Promi
     const number = normalizePhone(to);
     await evoFetch(creds, `chat/sendPresence/${creds.instanceName}`, {
       number,
-      delay: 5000, // Evolution uses this to hold the composing state
+      delay: 0, // Evolution uses this as a server-held delay; 0 = just show composing
       presence: 'composing',
     });
   } catch (err) {

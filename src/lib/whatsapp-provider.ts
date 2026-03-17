@@ -232,6 +232,14 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
         const evo = await makeProvider();
         return evo.checkHasWhatsAppWithCreds(phone, creds);
       },
+      sendTypingPresence: async (to, businessId) => {
+        const evo = await makeProvider();
+        return evo.sendTypingPresence(to, businessId);
+      },
+      markAsRead: async (messageId, fromPhone, businessId) => {
+        const evo = await makeProvider();
+        return evo.markAsRead(messageId, fromPhone, businessId);
+      },
     };
   }
 

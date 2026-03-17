@@ -47,6 +47,21 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json({ error: errMsg || 'Failed to create instance' }, { status: res.status });
       }
+
+      // Apply default settings: show online, auto-read, ignore groups
+      fetch(`${EVO_BASE}/settings/set/${instanceName}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          rejectCall: false,
+          groupsIgnore: true,
+          alwaysOnline: true,
+          readMessages: true,
+          readStatus: true,
+          syncFullHistory: false,
+        }),
+      }).catch(() => {});
+
       // Extract the QR from the create response — normalize the format
       const qr = data?.qrcode?.base64 || data?.base64 || data?.qrcode?.pairingCode || null;
       return NextResponse.json({ ok: true, data, qrBase64: qr });

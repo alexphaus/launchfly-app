@@ -176,10 +176,15 @@ export async function getOutreachInstances(businessId: string): Promise<WaInstan
 
 /**
  * Increment the sends_today counter for an instance. Called after each send.
+ * Uses `p_instance_id` parameter name to avoid collision with the column
+ * `instance_id` on whatsapp_instances table.
  */
 export async function incrementInstanceCounter(instanceId: string): Promise<void> {
   const supabase = getSupabase();
-  await supabase.rpc('increment_wa_sends', { instance_id: instanceId }).then(() => {});
+  const { error } = await supabase.rpc('increment_wa_sends', { p_instance_id: instanceId });
+  if (error) {
+    console.error('[wa-counter] increment_wa_sends failed for', instanceId, ':', error.message);
+  }
 }
 
 /**
@@ -208,16 +213,20 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
       sendWhatsApp: async (to, body) => {
         const evo = await makeProvider();
         const result = await evo.sendWhatsAppWithCreds(to, body, creds);
-        if (result.sent) incrementInstanceCounter(instId).catch(() => {});
+        if (result.sent) await incrementInstanceCounter(instId);
         return result;
       },
       sendVoiceNote: async (to, audioUrl) => {
         const evo = await makeProvider();
-        return evo.sendVoiceNoteWithCreds(to, audioUrl, creds);
+        const result = await evo.sendVoiceNoteWithCreds(to, audioUrl, creds);
+        if (result.sent) await incrementInstanceCounter(instId);
+        return result;
       },
       sendImage: async (to, imageUrl, caption) => {
         const evo = await makeProvider();
-        return evo.sendImageWithCreds(to, imageUrl, creds, caption);
+        const result = await evo.sendImageWithCreds(to, imageUrl, creds, caption);
+        if (result.sent) await incrementInstanceCounter(instId);
+        return result;
       },
       checkHasWhatsApp: async (phone) => {
         const evo = await makeProvider();
@@ -238,16 +247,20 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
     sendWhatsApp: async (to, body) => {
       const ultra = await import('@/lib/ultramsg');
       const result = await ultra.sendWhatsAppWithCreds(to, body, ultramsgCreds);
-      if (result.sent) incrementInstanceCounter(instId).catch(() => {});
+      if (result.sent) await incrementInstanceCounter(instId);
       return result;
     },
     sendVoiceNote: async (to, audioUrl) => {
       const ultra = await import('@/lib/ultramsg');
-      return ultra.sendVoiceNoteWithCreds(to, audioUrl, ultramsgCreds);
+      const result = await ultra.sendVoiceNoteWithCreds(to, audioUrl, ultramsgCreds);
+      if (result.sent) await incrementInstanceCounter(instId);
+      return result;
     },
     sendImage: async (to, imageUrl, caption) => {
       const ultra = await import('@/lib/ultramsg');
-      return ultra.sendImageWithCreds(to, imageUrl, ultramsgCreds, caption);
+      const result = await ultra.sendImageWithCreds(to, imageUrl, ultramsgCreds, caption);
+      if (result.sent) await incrementInstanceCounter(instId);
+      return result;
     },
     checkHasWhatsApp: async (phone) => {
       const ultra = await import('@/lib/ultramsg');

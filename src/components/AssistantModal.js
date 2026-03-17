@@ -1555,76 +1555,71 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                   {/* ── WhatsApp Numbers (all managed via whatsapp_instances table) ── */}
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
-                      WhatsApp Numbers
+                      📱 WhatsApp Numbers
                     </label>
-                    <p className="text-[10px] text-slate-400 mb-2">
-                      All your WhatsApp accounts. The first one handles inbound + AI replies. Multiple numbers distribute outreach load automatically.
+                    <p className="text-[11px] text-slate-400 mb-3">
+                      All your WhatsApp accounts. Multiple numbers distribute outreach load automatically.
                     </p>
 
-                    {/* Anti-Ban Warning */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3 flex gap-2 items-start">
-                      <span className="text-amber-500 mt-0.5">⚠️</span>
-                      <p className="text-[10px] text-amber-700 leading-relaxed">
-                        <strong className="font-bold">Avoid Meta Bans:</strong> If using a brand-new SIM card, text manually with real humans for 3-5 days before turning on automated sequences. For first outreach messages, always ask a short &quot;ping&quot; question to get a reply before pitching.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {/* ── Instance List ── */}
                       {waInstancesLoading ? (
-                        <p className="text-xs text-slate-400 pl-1">Loading...</p>
+                        <div className="flex items-center justify-center p-6">
+                          <RefreshCw className="w-4 h-4 text-slate-300 animate-spin" />
+                        </div>
                       ) : waInstances.length === 0 ? (
-                        <div className="p-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center">
-                          <p className="text-xs text-slate-400">No WhatsApp numbers connected yet. Add one below.</p>
+                        <div className="p-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                          <MessageCircle className="w-5 h-5 text-slate-300 mx-auto mb-1.5" />
+                          <p className="text-xs text-slate-400">No WhatsApp numbers connected</p>
+                          <p className="text-[10px] text-slate-300 mt-0.5">Add one below to start sending messages</p>
                         </div>
                       ) : (
                         waInstances.map(inst => (
-                          <div key={inst.id} className={`p-2.5 rounded-lg border ${inst.active ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}`}>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => toggleWaInstance(inst)} className="flex-shrink-0">
-                                <div className={`w-2.5 h-2.5 rounded-full ${inst.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-slate-700 truncate">{inst.label || `${inst.provider} instance`}</p>
-                                <p className="text-[10px] text-slate-400">
-                                  {inst.provider === 'ultramsg' ? inst.instance_id : inst.instance_name} · {inst.sends_today}/{inst.daily_limit} today
-                                </p>
+                          <div key={inst.id} className={`rounded-xl border transition-all ${inst.active ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50 opacity-60'}`}>
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <span className="text-base">💬</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-900 truncate">{inst.label || `${inst.provider} instance`}</p>
+                                  <p className="text-[11px] text-slate-500">
+                                    {inst.provider === 'ultramsg' ? inst.instance_id : inst.instance_name} · <span className={inst.sends_today >= inst.daily_limit ? 'text-red-500 font-medium' : inst.sends_today > inst.daily_limit * 0.8 ? 'text-amber-500 font-medium' : ''}>{inst.sends_today}/{inst.daily_limit} today</span>
+                                  </p>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                  inst.sends_today >= inst.daily_limit ? 'bg-red-100 text-red-600' :
-                                  inst.sends_today > inst.daily_limit * 0.8 ? 'bg-amber-100 text-amber-600' :
-                                  'bg-emerald-100 text-emerald-600'
-                                }`}>
-                                  {inst.daily_limit - inst.sends_today} left
-                                </span>
+                              <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => deleteWaInstance(inst.id)}
-                                  className="text-slate-300 hover:text-red-400 transition-colors"
+                                  className="text-slate-300 hover:text-red-400 transition-colors p-1"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => toggleWaInstance(inst)} className="flex-shrink-0">
+                                  {inst.active
+                                    ? <ToggleRight className="w-5 h-5 text-emerald-600" />
+                                    : <ToggleLeft className="w-5 h-5 text-slate-400" />
+                                  }
                                 </button>
                               </div>
                             </div>
-                            {/* Webhook URL for UltraMsg instances */}
-                            {inst.provider === 'ultramsg' && business?.id && (
-                              <div className="mt-2 bg-white p-2 border border-slate-200 rounded-lg">
-                                <p className="text-[10px] text-slate-400 mb-1">Webhook URL (paste in UltraMsg dashboard):</p>
-                                <div className="flex gap-1.5">
+                            {/* Webhook URL — collapsible */}
+                            {inst.provider === 'ultramsg' && business?.id && inst.active && (
+                              <details className="px-3 pb-3">
+                                <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">Webhook URL</summary>
+                                <div className="flex gap-1.5 mt-1.5">
                                   <input
                                     type="text"
                                     readOnly
                                     value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/ultramsg?businessId=${business.id}`}
-                                    className="flex-1 p-1.5 border border-slate-200 rounded text-[10px] font-mono bg-slate-50"
+                                    className="flex-1 p-1.5 border border-slate-200 rounded-lg text-[10px] font-mono bg-white"
                                   />
                                   <button
                                     onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/ultramsg?businessId=${business.id}`)}
-                                    className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded hover:bg-slate-800 transition-colors"
+                                    className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
                                   >
-                                    Copy
+                                    <Copy className="w-3 h-3" /> Copy
                                   </button>
                                 </div>
-                              </div>
+                              </details>
                             )}
                           </div>
                         ))
@@ -1632,12 +1627,12 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
                       {/* Add Number Form */}
                       {showAddInstance ? (
-                        <div className="space-y-2 p-3 border border-slate-200 rounded-xl bg-white">
+                        <div className="space-y-2 p-3 border border-emerald-200 rounded-xl bg-emerald-50/30">
                           <input
                             type="text"
                             value={newInstance.label}
                             onChange={e => setNewInstance(p => ({ ...p, label: e.target.value }))}
-                            className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                            className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
                             placeholder="Label (e.g. Phone 2 — SG number)"
                           />
                           <div className="flex gap-2">
@@ -1649,34 +1644,35 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                               <option value="ultramsg">UltraMsg</option>
                               <option value="evolution">Evolution API</option>
                             </select>
-                            <input
-                              type="number"
-                              value={newInstance.dailyLimit}
-                              onChange={e => setNewInstance(p => ({ ...p, dailyLimit: Number(e.target.value) }))}
-                              className="w-20 p-2 border border-slate-200 rounded-lg text-xs"
-                              placeholder="Limit"
-                              min={1}
-                              max={100}
-                            />
-                            <span className="text-[10px] text-slate-400 self-center">/day</span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={newInstance.dailyLimit}
+                                onChange={e => setNewInstance(p => ({ ...p, dailyLimit: Number(e.target.value) }))}
+                                className="w-16 p-2 border border-slate-200 rounded-lg text-xs bg-white text-center"
+                                min={1}
+                                max={100}
+                              />
+                              <span className="text-[10px] text-slate-400">/day</span>
+                            </div>
                           </div>
                           {newInstance.provider === 'ultramsg' ? (
                             <>
-                              <input type="text" value={newInstance.instanceId} onChange={e => setNewInstance(p => ({ ...p, instanceId: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Instance ID" />
-                              <input type="text" value={newInstance.token} onChange={e => setNewInstance(p => ({ ...p, token: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Token" />
+                              <input type="text" value={newInstance.instanceId} onChange={e => setNewInstance(p => ({ ...p, instanceId: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Instance ID" />
+                              <input type="text" value={newInstance.token} onChange={e => setNewInstance(p => ({ ...p, token: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Token" />
                             </>
                           ) : (
                             <>
-                              <input type="text" value={newInstance.baseUrl} onChange={e => setNewInstance(p => ({ ...p, baseUrl: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Base URL (e.g. https://evo.yourdomain.com)" />
-                              <input type="text" value={newInstance.apiKey} onChange={e => setNewInstance(p => ({ ...p, apiKey: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="API Key" />
-                              <input type="text" value={newInstance.instanceName} onChange={e => setNewInstance(p => ({ ...p, instanceName: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono" placeholder="Instance Name" />
+                              <input type="text" value={newInstance.baseUrl} onChange={e => setNewInstance(p => ({ ...p, baseUrl: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Base URL (e.g. https://evo.yourdomain.com)" />
+                              <input type="text" value={newInstance.apiKey} onChange={e => setNewInstance(p => ({ ...p, apiKey: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="API Key" />
+                              <input type="text" value={newInstance.instanceName} onChange={e => setNewInstance(p => ({ ...p, instanceName: e.target.value }))} className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" placeholder="Instance Name" />
                             </>
                           )}
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 pt-1">
                             <button onClick={saveNewInstance} className="flex-1 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors">
                               Add Number
                             </button>
-                            <button onClick={() => setShowAddInstance(false)} className="px-3 py-2 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors">
+                            <button onClick={() => setShowAddInstance(false)} className="px-4 py-2 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-100 transition-colors">
                               Cancel
                             </button>
                           </div>
@@ -1684,22 +1680,23 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       ) : (
                         <button
                           onClick={() => setShowAddInstance(true)}
-                          className="w-full py-2 border-2 border-dashed border-slate-200 text-slate-400 text-xs font-medium rounded-xl hover:border-slate-300 hover:text-slate-500 transition-colors"
+                          className="w-full p-2.5 border-2 border-dashed border-slate-200 rounded-xl text-xs text-slate-400 hover:text-slate-600 hover:border-slate-300 transition-colors"
                         >
                           + Add WhatsApp Number
                         </button>
                       )}
-
-                      {/* Capacity summary */}
-                      {waInstances.filter(i => i.active).length > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-1">
-                          <p className="text-[10px] text-blue-700">
-                            <strong>Capacity:</strong> {waInstances.filter(i => i.active).reduce((s, i) => s + i.daily_limit, 0)} msgs/day across {waInstances.filter(i => i.active).length} number{waInstances.filter(i => i.active).length !== 1 ? 's' : ''}.
-                            {waInstances.filter(i => i.active).length > 1 ? ' Leads are round-robined across numbers, each staying under its daily limit.' : ''}
-                          </p>
-                        </div>
-                      )}
                     </div>
+
+                    {/* Capacity summary */}
+                    {waInstances.filter(i => i.active).length > 0 && (
+                      <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex gap-2 items-start">
+                        <span className="text-amber-500 mt-0.5">⚠️</span>
+                        <p className="text-[10px] text-amber-700 leading-relaxed">
+                          <strong className="font-bold">Avoid Meta Bans:</strong> If using a brand-new SIM card, text manually with real humans for 3-5 days before enabling automated sequences.
+                          {waInstances.filter(i => i.active).length > 1 && <> Leads are round-robined across your {waInstances.filter(i => i.active).length} numbers, each capped at its daily limit.</>}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

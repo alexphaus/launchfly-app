@@ -377,6 +377,13 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     }
   }
 
+  // Restore online presence after last bubble
+  {
+    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+    const waP = await getWhatsAppProvider(businessId);
+    if (waP.sendAvailablePresence) waP.sendAvailablePresence(phoneWithPlus, businessId).catch(() => {});
+  }
+
   // ── Save history ──
   await saveMessage(
     phoneWithoutPlus,
@@ -581,6 +588,19 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
       }
       
       await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Restore online presence after last bubble
+  {
+    if (waInstanceId) {
+      const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
+      const waP = await getProviderByInstanceId(waInstanceId, businessId);
+      if (waP.sendAvailablePresence) waP.sendAvailablePresence(phoneWithPlus, businessId).catch(() => {});
+    } else {
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const waP = await getWhatsAppProvider(businessId);
+      if (waP.sendAvailablePresence) waP.sendAvailablePresence(phoneWithPlus, businessId).catch(() => {});
     }
   }
 

@@ -32,6 +32,8 @@ export interface WhatsAppProvider {
   sendTypingPresence?: (to: string, businessId?: string) => Promise<void>;
   /** Only available on Evolution — marks message as read (blue ticks) */
   markAsRead?: (messageId: string, fromPhone: string, businessId?: string) => Promise<void>;
+  /** Only available on Evolution — restores 'online' presence after composing */
+  sendAvailablePresence?: (to: string, businessId?: string) => Promise<void>;
 }
 
 /** Row from whatsapp_instances table */
@@ -112,6 +114,7 @@ export async function getWhatsAppProvider(businessId?: string): Promise<WhatsApp
       checkHasWhatsApp: evo.checkHasWhatsApp,
       sendTypingPresence: evo.sendTypingPresence,
       markAsRead: evo.markAsRead,
+      sendAvailablePresence: evo.sendAvailablePresence,
     };
   }
 
@@ -239,6 +242,10 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
       markAsRead: async (messageId, fromPhone, businessId) => {
         const evo = await makeProvider();
         return evo.markAsRead(messageId, fromPhone, businessId);
+      },
+      sendAvailablePresence: async (to, businessId) => {
+        const evo = await makeProvider();
+        return evo.sendAvailablePresence(to, businessId);
       },
     };
   }

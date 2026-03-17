@@ -328,9 +328,17 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!res.ok) { setEvoError(json.error || 'Failed to create instance'); setEvoStep('form'); return; }
+      if (!res.ok && !json.alreadyExists) { setEvoError(json.error || 'Failed to create instance'); setEvoStep('form'); return; }
 
-      // Fetch QR code
+      // If create response already has QR, use it directly
+      if (json.qrBase64) {
+        setEvoQr({ base64: json.qrBase64 });
+        setEvoStep('qr');
+        startEvoPolling();
+        return;
+      }
+
+      // Otherwise fetch QR from connect endpoint
       await fetchEvoQr();
     } catch (err) { setEvoError(err.message); setEvoStep('form'); }
   };
@@ -342,14 +350,19 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (json.ok && json.data) {
-        setEvoQr(json.data);
+      console.log('[evo-qr] connect response:', JSON.stringify(json).slice(0, 200));
+      const qrData = json.qrBase64 || json.data?.base64 || json.data?.qrcode?.base64 || json.data?.code;
+      const pairingCode = json.pairingCode || json.data?.pairingCode;
+      if (qrData || pairingCode) {
+        setEvoQr({ base64: qrData, pairingCode });
         setEvoStep('qr');
-        // Start polling for connection status
         startEvoPolling();
       } else {
-        setEvoError('Could not get QR code. Try again.');
-        setEvoStep('form');
+        // QR not ready yet — retry in 2 seconds
+        console.log('[evo-qr] no QR yet, retrying...');
+        setTimeout(() => fetchEvoQr(), 2000);
+        setEvoStep('qr'); // show the QR step with spinner
+        startEvoPolling();
       }
     } catch (err) { setEvoError(err.message); setEvoStep('form'); }
   };

@@ -45,16 +45,26 @@ export async function POST(req: NextRequest) {
       });
       const data = await res.json();
       if (!res.ok) {
-        return NextResponse.json({ error: data?.response?.message?.[0] || data?.message || 'Failed to create instance' }, { status: res.status });
+        // If instance already exists, that's fine — we'll just connect
+        const errMsg = data?.response?.message?.[0] || data?.message || '';
+        if (typeof errMsg === 'string' && errMsg.toLowerCase().includes('already')) {
+          return NextResponse.json({ ok: true, data, alreadyExists: true });
+        }
+        return NextResponse.json({ error: errMsg || 'Failed to create instance' }, { status: res.status });
       }
-      return NextResponse.json({ ok: true, data });
+      // Extract the QR from the create response — normalize the format
+      const qr = data?.qrcode?.base64 || data?.base64 || data?.qrcode?.pairingCode || null;
+      return NextResponse.json({ ok: true, data, qrBase64: qr });
     }
 
     // ── GET QR CODE / CONNECTION STATUS ──
     if (action === 'connect') {
       const res = await fetch(`${base}/instance/connect/${instanceName}`, { headers: { apikey: apiKey } });
       const data = await res.json();
-      return NextResponse.json({ ok: true, data });
+      // Normalize: Evolution v2 may nest QR in different places
+      const qr = data?.base64 || data?.qrcode?.base64 || data?.code || null;
+      const pairingCode = data?.pairingCode || data?.qrcode?.pairingCode || null;
+      return NextResponse.json({ ok: true, data, qrBase64: qr, pairingCode });
     }
 
     // ── CHECK INSTANCE STATUS ──

@@ -158,6 +158,15 @@ export async function DELETE(req: NextRequest) {
   const businessId = req.nextUrl.searchParams.get('businessId');
   if (!id || !businessId) return NextResponse.json({ error: 'Missing id or businessId' }, { status: 400 });
 
+  // Fetch the instance first so we can clean up Evolution API if needed
+  const { data: instance } = await supabase
+    .from('whatsapp_instances')
+    .select('provider, instance_name')
+    .eq('id', id)
+    .eq('business_id', businessId)
+    .single();
+
+  // Delete from DB
   const { error } = await supabase
     .from('whatsapp_instances')
     .delete()
@@ -165,5 +174,28 @@ export async function DELETE(req: NextRequest) {
     .eq('business_id', businessId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Also logout + delete the instance on Evolution API server
+  if (instance?.provider === 'evolution' && instance.instance_name) {
+    const evoBase = (process.env.EVOLUTION_BASE_URL || '').replace(/\/+$/, '');
+    const evoKey = process.env.EVOLUTION_API_KEY || '';
+    if (evoBase && evoKey) {
+      try {
+        // Logout first (disconnects WhatsApp session)
+        await fetch(`${evoBase}/instance/logout/${instance.instance_name}`, {
+          method: 'DELETE',
+          headers: { apikey: evoKey },
+        });
+        // Then delete the instance from the server
+        await fetch(`${evoBase}/instance/delete/${instance.instance_name}`, {
+          method: 'DELETE',
+          headers: { apikey: evoKey },
+        });
+      } catch {
+        // Non-fatal — DB row is already deleted
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

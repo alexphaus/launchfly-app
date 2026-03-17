@@ -390,7 +390,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
           clearInterval(interval);
           setEvoPolling(null);
           // Auto-set webhook
-          const webhookUrl = `${window.location.origin}/api/webhook/evolution`;
+          const webhookUrl = `${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || window.location.origin}/api/webhook/evolution`;
           await fetch('/api/businesses/whatsapp-instances/evolution', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'set-webhook', instanceName: pollInstanceName, webhookUrl }),
@@ -1727,11 +1727,11 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                   <input
                                     type="text"
                                     readOnly
-                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/${inst.provider === 'evolution' ? 'evolution' : 'ultramsg'}?businessId=${business.id}`}
+                                    value={`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || window.location.origin}/api/webhook/${inst.provider === 'evolution' ? 'evolution' : 'ultramsg'}?businessId=${business.id}`}
                                     className="flex-1 p-1.5 border border-slate-200 rounded-lg text-[10px] font-mono bg-white"
                                   />
                                   <button
-                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/${inst.provider === 'evolution' ? 'evolution' : 'ultramsg'}?businessId=${business.id}`)}
+                                    onClick={() => navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_WEBSITE_BASE_URL || window.location.origin}/api/webhook/${inst.provider === 'evolution' ? 'evolution' : 'ultramsg'}?businessId=${business.id}`)}
                                     className="px-2 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-1"
                                   >
                                     <Copy className="w-3 h-3" /> Copy

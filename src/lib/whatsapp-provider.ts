@@ -75,8 +75,31 @@ export async function detectProvider(businessId?: string): Promise<WhatsAppProvi
   return 'ultramsg';
 }
 
-/** Get the right provider module for a business */
+/** Get the right provider module for a business.
+ *  Priority: whatsapp_instances table → businesses.whatsapp_api_config → env vars.
+ *  This means ALL WhatsApp accounts live in the instances table once migrated. */
 export async function getWhatsAppProvider(businessId?: string): Promise<WhatsAppProvider> {
+  // ── 1. Check whatsapp_instances table first (unified model) ──
+  if (businessId) {
+    try {
+      const supabase = getSupabase();
+      const { data } = await supabase
+        .from('whatsapp_instances')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('active', true)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        return getProviderForInstance(data[0] as WaInstance);
+      }
+    } catch {
+      // fall through to legacy path
+    }
+  }
+
+  // ── 2. Fallback: legacy businesses.whatsapp_api_config (backward compat) ──
   const providerName = await detectProvider(businessId);
 
   if (providerName === 'evolution') {

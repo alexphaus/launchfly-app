@@ -11,13 +11,63 @@ export async function GET(req: NextRequest) {
   const businessId = req.nextUrl.searchParams.get('businessId');
   if (!businessId) return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('whatsapp_instances')
     .select('id, label, provider, instance_id, instance_name, daily_limit, sends_today, active, created_at')
     .eq('business_id', businessId)
     .order('created_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // ── Auto-migrate: if no instances exist but business has whatsapp_api_config, create one ──
+  if (!data || data.length === 0) {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('whatsapp_api_config')
+      .eq('id', businessId)
+      .single();
+
+    const cfg = biz?.whatsapp_api_config;
+    if (cfg?.instanceId && cfg?.token) {
+      // UltraMsg migration
+      const { data: newInst } = await supabase
+        .from('whatsapp_instances')
+        .insert({
+          business_id: businessId,
+          label: cfg.instanceId,
+          provider: cfg.provider || 'ultramsg',
+          instance_id: cfg.instanceId,
+          token: cfg.token,
+          daily_limit: 25,
+          sends_today: 0,
+          active: true,
+        })
+        .select('id, label, provider, instance_id, instance_name, daily_limit, sends_today, active, created_at')
+        .single();
+
+      if (newInst) data = [newInst];
+    } else if (cfg?.provider === 'evolution' && cfg?.baseUrl && cfg?.apiKey && cfg?.instanceName) {
+      // Evolution migration
+      const { data: newInst } = await supabase
+        .from('whatsapp_instances')
+        .insert({
+          business_id: businessId,
+          label: cfg.instanceName,
+          provider: 'evolution',
+          base_url: cfg.baseUrl,
+          api_key: cfg.apiKey,
+          instance_name: cfg.instanceName,
+          daily_limit: 25,
+          sends_today: 0,
+          active: true,
+        })
+        .select('id, label, provider, instance_id, instance_name, daily_limit, sends_today, active, created_at')
+        .single();
+
+      if (newInst) data = [newInst];
+    }
+  }
+
   return NextResponse.json({ instances: data || [] });
 }
 

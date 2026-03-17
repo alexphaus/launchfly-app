@@ -240,10 +240,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     } finally { setPauseLoading(false); }
   };
 
-  // WhatsApp API config (per-business, stored in businesses.whatsapp_api_config)
-  const [waConfig, setWaConfig] = useState({ instanceId: '', token: '' });
-  const [waSaving, setWaSaving] = useState(false);
-  const [waStatus, setWaStatus] = useState(null); // 'saved' | 'error'
+  // WhatsApp instances (all accounts live in whatsapp_instances table)
 
   // Multi-instance outreach (whatsapp_instances table)
   const [waInstances, setWaInstances] = useState([]);
@@ -308,41 +305,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     } catch {}
   };
 
-  useEffect(() => {
-    if (business?.whatsapp_api_config) {
-      setWaConfig({
-        instanceId: business.whatsapp_api_config.instanceId || '',
-        token: business.whatsapp_api_config.token || '',
-      });
-    }
-  }, [business?.whatsapp_api_config]);
 
-  const saveWhatsAppConfig = async () => {
-    if (!business?.id) return;
-    setWaSaving(true);
-    setWaStatus(null);
-    try {
-      const res = await fetch('/api/businesses/whatsapp-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessId: business.id,
-          instanceId: waConfig.instanceId,
-          token: waConfig.token,
-        }),
-      });
-      if (res.ok) {
-        setWaStatus('saved');
-        setTimeout(() => setWaStatus(null), 2000);
-      } else {
-        setWaStatus('error');
-      }
-    } catch {
-      setWaStatus('error');
-    } finally {
-      setWaSaving(false);
-    }
-  };
 
   // ── Load assistant config ──────────────────────────────────────────────
   // Apply assistant data to local config state
@@ -1589,13 +1552,13 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
                   )}
 
-                  {/* ── WhatsApp Numbers (unified primary + outreach) ── */}
+                  {/* ── WhatsApp Numbers (all managed via whatsapp_instances table) ── */}
                   <div>
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">
                       WhatsApp Numbers
                     </label>
                     <p className="text-[10px] text-slate-400 mb-2">
-                      Your primary number handles inbound messages &amp; AI replies. Add more numbers to spread outreach load.
+                      All your WhatsApp accounts. The first one handles inbound + AI replies. Multiple numbers distribute outreach load automatically.
                     </p>
 
                     {/* Anti-Ban Warning */}
@@ -1607,45 +1570,45 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                     </div>
 
                     <div className="space-y-2">
-                      {/* ── Primary Number Card ── */}
-                      <div className={`p-2.5 rounded-lg border ${waConfig.instanceId && waConfig.token ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}`}>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${waConfig.instanceId && waConfig.token ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-medium text-slate-700 truncate">
-                                {waConfig.instanceId || 'Primary Number'}
-                              </p>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-700 text-white flex-shrink-0">PRIMARY</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400">
-                              {waConfig.instanceId && waConfig.token
-                                ? 'Inbound + AI replies + outreach'
-                                : 'Not connected — set up credentials below'}
-                            </p>
-                          </div>
+                      {/* ── Instance List ── */}
+                      {waInstancesLoading ? (
+                        <p className="text-xs text-slate-400 pl-1">Loading...</p>
+                      ) : waInstances.length === 0 ? (
+                        <div className="p-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center">
+                          <p className="text-xs text-slate-400">No WhatsApp numbers connected yet. Add one below.</p>
                         </div>
-                        <details className="text-xs mt-2">
-                          <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-600 select-none">
-                            {waConfig.instanceId ? 'Edit credentials' : 'Setup WhatsApp API'}
-                          </summary>
-                          <div className="space-y-2 mt-2">
-                            <input
-                              type="text"
-                              value={waConfig.instanceId}
-                              onChange={e => setWaConfig(prev => ({ ...prev, instanceId: e.target.value }))}
-                              className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                              placeholder="Instance ID (e.g. instance164947)"
-                            />
-                            <input
-                              type="text"
-                              value={waConfig.token}
-                              onChange={e => setWaConfig(prev => ({ ...prev, token: e.target.value }))}
-                              className="w-full p-2 border border-slate-200 rounded-lg text-xs font-mono"
-                              placeholder="Token"
-                            />
-                            {business?.id && (
-                              <div className="bg-white p-2 border border-slate-200 rounded-lg">
+                      ) : (
+                        waInstances.map(inst => (
+                          <div key={inst.id} className={`p-2.5 rounded-lg border ${inst.active ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => toggleWaInstance(inst)} className="flex-shrink-0">
+                                <div className={`w-2.5 h-2.5 rounded-full ${inst.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-slate-700 truncate">{inst.label || `${inst.provider} instance`}</p>
+                                <p className="text-[10px] text-slate-400">
+                                  {inst.provider === 'ultramsg' ? inst.instance_id : inst.instance_name} · {inst.sends_today}/{inst.daily_limit} today
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                  inst.sends_today >= inst.daily_limit ? 'bg-red-100 text-red-600' :
+                                  inst.sends_today > inst.daily_limit * 0.8 ? 'bg-amber-100 text-amber-600' :
+                                  'bg-emerald-100 text-emerald-600'
+                                }`}>
+                                  {inst.daily_limit - inst.sends_today} left
+                                </span>
+                                <button
+                                  onClick={() => deleteWaInstance(inst.id)}
+                                  className="text-slate-300 hover:text-red-400 transition-colors"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              </div>
+                            </div>
+                            {/* Webhook URL for UltraMsg instances */}
+                            {inst.provider === 'ultramsg' && business?.id && (
+                              <div className="mt-2 bg-white p-2 border border-slate-200 rounded-lg">
                                 <p className="text-[10px] text-slate-400 mb-1">Webhook URL (paste in UltraMsg dashboard):</p>
                                 <div className="flex gap-1.5">
                                   <input
@@ -1663,50 +1626,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                 </div>
                               </div>
                             )}
-                            <button
-                              onClick={saveWhatsAppConfig}
-                              disabled={waSaving || !waConfig.instanceId || !waConfig.token}
-                              className="w-full py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                            >
-                              {waSaving ? 'Saving...' : waStatus === 'saved' ? '✓ Saved' : 'Save WhatsApp Config'}
-                            </button>
-                          </div>
-                        </details>
-                      </div>
-
-                      {/* ── Additional Outreach Numbers ── */}
-                      {waInstancesLoading ? (
-                        <p className="text-xs text-slate-400 pl-1">Loading...</p>
-                      ) : (
-                        waInstances.map(inst => (
-                          <div key={inst.id} className={`flex items-center gap-2 p-2.5 rounded-lg border ${inst.active ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}`}>
-                            <button onClick={() => toggleWaInstance(inst)} className="flex-shrink-0">
-                              <div className={`w-2.5 h-2.5 rounded-full ${inst.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-xs font-medium text-slate-700 truncate">{inst.label || `${inst.provider} instance`}</p>
-                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 flex-shrink-0">OUTREACH</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400">
-                                {inst.provider === 'ultramsg' ? inst.instance_id : inst.instance_name} · {inst.sends_today}/{inst.daily_limit} today
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                inst.sends_today >= inst.daily_limit ? 'bg-red-100 text-red-600' :
-                                inst.sends_today > inst.daily_limit * 0.8 ? 'bg-amber-100 text-amber-600' :
-                                'bg-emerald-100 text-emerald-600'
-                              }`}>
-                                {inst.daily_limit - inst.sends_today} left
-                              </span>
-                              <button
-                                onClick={() => deleteWaInstance(inst.id)}
-                                className="text-slate-300 hover:text-red-400 transition-colors"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                              </button>
-                            </div>
                           </div>
                         ))
                       )}
@@ -1767,7 +1686,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                           onClick={() => setShowAddInstance(true)}
                           className="w-full py-2 border-2 border-dashed border-slate-200 text-slate-400 text-xs font-medium rounded-xl hover:border-slate-300 hover:text-slate-500 transition-colors"
                         >
-                          + Add Outreach Number
+                          + Add WhatsApp Number
                         </button>
                       )}
 
@@ -1775,8 +1694,8 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                       {waInstances.filter(i => i.active).length > 0 && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-1">
                           <p className="text-[10px] text-blue-700">
-                            <strong>Outreach capacity:</strong> {waInstances.filter(i => i.active).reduce((s, i) => s + i.daily_limit, 0)} msgs/day across {waInstances.filter(i => i.active).length} outreach number{waInstances.filter(i => i.active).length !== 1 ? 's' : ''} (+ primary).
-                            Leads are round-robined across numbers, each staying under its daily limit.
+                            <strong>Capacity:</strong> {waInstances.filter(i => i.active).reduce((s, i) => s + i.daily_limit, 0)} msgs/day across {waInstances.filter(i => i.active).length} number{waInstances.filter(i => i.active).length !== 1 ? 's' : ''}.
+                            {waInstances.filter(i => i.active).length > 1 ? ' Leads are round-robined across numbers, each staying under its daily limit.' : ''}
                           </p>
                         </div>
                       )}

@@ -65,6 +65,36 @@ export async function POST(req: NextRequest) {
       const phoneWithPlus = ctx.phone.startsWith('+') ? ctx.phone : `+${ctx.phone}`;
       const supabase = getSupabase();
 
+      // Check 0: Is AI paused for this customer (human handoff)?
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('ai_paused_until')
+        .eq('business_id', ctx.businessId)
+        .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneNorm}`)
+        .maybeSingle();
+
+      if (cust?.ai_paused_until && new Date(cust.ai_paused_until) > new Date()) {
+        // Re-queue to check again after pause expires
+        const qstashToken = process.env.QSTASH_TOKEN;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+        const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+        const pauseRemainingSec = Math.ceil((new Date(cust.ai_paused_until).getTime() - Date.now()) / 1000) + 60;
+        if (qstashToken) {
+          await fetch(`${qstashBase}/v2/publish/${appUrl}/api/assistants/trigger/resume`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${qstashToken}`,
+              'Content-Type': 'application/json',
+              'Upstash-Delay': `${pauseRemainingSec}s`,
+              'Upstash-Retries': '0',
+            },
+            body: JSON.stringify({ actions, ctx, scheduledAt: scheduledAt || new Date().toISOString() }),
+          });
+        }
+        console.log(`[resume] AI paused for ${ctx.phone} (human handoff) — re-queued in ${pauseRemainingSec}s`);
+        return NextResponse.json({ ok: true, paused: true, reason: 'human_handoff', requeued: `${pauseRemainingSec}s` });
+      }
+
       // Check 1: Did the customer reply via WhatsApp/SMS?
       const { count: replyCount } = await supabase
         .from('chat_history')

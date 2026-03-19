@@ -166,6 +166,14 @@ export async function sendWhatsApp(
     });
 
     if (json?.key?.id) {
+      // Track this message ID so the webhook can distinguish bot echoes from contractor messages
+      try {
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_KEY!,
+        );
+        await supabase.from('_bot_message_ids').insert({ message_id: json.key.id });
+      } catch { /* non-fatal */ }
       return { sent: true, id: json.key.id };
     }
     return { sent: false, error: json?.error || json?.message || JSON.stringify(json) };

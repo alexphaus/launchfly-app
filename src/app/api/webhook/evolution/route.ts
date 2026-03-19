@@ -7,6 +7,10 @@
 //
 // Mirrors the UltraMsg webhook flow: resolve business → fire automation.
 // Adds: typing indicator + read receipts for realism.
+//
+// Also handles outgoing messages (fromMe):
+//   - If message contains 📝 or #q → detected as a quote, fires quote_sent
+//   - Otherwise → human handoff, pauses AI for that customer for 24h
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +22,7 @@ import {
   sendTypingPresence,
   markAsRead,
 } from '@/lib/evolution';
+import OpenAI from 'openai';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -48,9 +53,109 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'no_data' });
     }
 
-    // Skip outgoing messages (fromMe = true)
+    // ── Handle outgoing messages (fromMe) ──────────────────────────
     if (data.key?.fromMe) {
-      return NextResponse.json({ ok: true, skipped: true, reason: 'outgoing' });
+      const instanceName = json.instance || json.instanceName || '';
+      const remoteJid = data.key?.remoteJid || '';
+      if (remoteJid.includes('@g.us')) {
+        return NextResponse.json({ ok: true, skipped: true, reason: 'outgoing_group' });
+      }
+
+      const outText =
+        data.message?.conversation ||
+        data.message?.extendedTextMessage?.text ||
+        '';
+      const customerPhone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      if (!outText.trim() || !customerPhone) {
+        return NextResponse.json({ ok: true, skipped: true, reason: 'outgoing_no_text' });
+      }
+
+      // Resolve which business this instance belongs to
+      let bizId: string | null = null;
+      if (instanceName) bizId = await resolveBusinessByInstance(instanceName);
+      if (!bizId) {
+        return NextResponse.json({ ok: true, skipped: true, reason: 'outgoing_no_business' });
+      }
+
+      const supabase = getSupabase();
+
+      // ── Bot echo filter: skip messages sent by our own API ──
+      const msgId = data.key?.id;
+      if (msgId) {
+        const { data: botMsg } = await supabase
+          .from('_bot_message_ids')
+          .delete()
+          .eq('message_id', msgId)
+          .select('message_id')
+          .maybeSingle();
+        if (botMsg) {
+          return NextResponse.json({ ok: true, skipped: true, reason: 'bot_echo' });
+        }
+      }
+
+      const QUOTE_TAG = /📝|#q\b/i;
+      const isQuote = QUOTE_TAG.test(outText);
+
+      if (isQuote) {
+        // ── Quote Detection: contractor tagged this message as a quote ──
+        console.log(`\n📝 Quote detected from contractor (business ${bizId}) to +${customerPhone}`);
+        const cleanText = outText.replace(/📝/g, '').replace(/#q\b/gi, '').trim();
+
+        // Extract quote details via fast LLM
+        let quoteAmount: number | undefined;
+        let jobType: string | undefined;
+        try {
+          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+          const extraction = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            temperature: 0,
+            max_tokens: 150,
+            messages: [{
+              role: 'user',
+              content: `Extract from this contractor quote message:\n- quote_amount (number only, no currency symbol)\n- job_type (short description)\n\nMessage: "${cleanText}"\n\nReturn JSON only: {"quote_amount": number|null, "job_type": string|null}`,
+            }],
+          });
+          const parsed = JSON.parse(extraction.choices[0]?.message?.content || '{}');
+          quoteAmount = parsed.quote_amount ?? undefined;
+          jobType = parsed.job_type ?? undefined;
+        } catch (e) {
+          console.warn('   ⚠️ Quote extraction failed (non-fatal):', e);
+        }
+
+        // Fire quote_sent event → triggers assistant's quote follow-up sequence
+        const result = await fireEvent({
+          businessId: bizId,
+          event: 'quote_sent',
+          phone: customerPhone,
+          amount: quoteAmount,
+          metadata: {
+            quoteAmount,
+            jobType,
+            source: 'whatsapp_tag',
+            rawMessage: cleanText.substring(0, 500),
+          },
+        });
+
+        console.log(`   ✅ Quote event fired: ${result.fired} rule(s)`);
+        return NextResponse.json({ ok: true, quote_detected: true, fired: result.fired });
+      } else {
+        // ── Human Handoff: contractor manually replied → pause AI for this customer ──
+        const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+        const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+        const pauseUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+        const { error } = await supabase
+          .from('customers')
+          .update({ ai_paused_until: pauseUntil })
+          .eq('business_id', bizId)
+          .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`);
+
+        if (!error) {
+          console.log(`\n🤝 Human handoff: contractor (${bizId}) replied to +${customerPhone} — AI paused until ${pauseUntil}`);
+        }
+
+        return NextResponse.json({ ok: true, human_handoff: true, paused_until: pauseUntil });
+      }
     }
 
     // Extract fields
@@ -170,6 +275,24 @@ export async function POST(request: NextRequest) {
     if (recentDups && recentDups.length > 0) {
       console.log(`   🔄 Detected duplicate webhook for ${customerPhone}. Skipping.`);
       return NextResponse.json({ ok: true, skipped: true, reason: 'duplicate_retry' });
+    }
+
+    // ─── HUMAN HANDOFF CHECK ────────────────────────────────────────
+    // If the contractor recently replied to this customer, skip AI response
+    {
+      const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+      const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('ai_paused_until')
+        .eq('business_id', businessId)
+        .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`)
+        .maybeSingle();
+
+      if (cust?.ai_paused_until && new Date(cust.ai_paused_until) > new Date()) {
+        console.log(`   🤝 AI paused for +${customerPhone} until ${cust.ai_paused_until} (human handoff). Skipping.`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'human_handoff' });
+      }
     }
 
     // ─── Fire automation event ──────────────────────────────────────

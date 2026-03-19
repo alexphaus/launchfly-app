@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getSupabase } from '@/lib/quote-followup/supabase';
+import { fireEvent } from '@/lib/automations/executor';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -147,9 +148,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Create the lead via internal quotes/new route ────────────────────
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
-
+    // ── Trigger the flexible executor rules ────────────────────
     const leadPayload = {
       name: parsed.name || 'Customer',
       phone: parsed.phone,
@@ -160,15 +159,21 @@ export async function POST(req: NextRequest) {
       currency: businessCurrency,
     };
 
-    const createRes = await fetch(`${appUrl}/api/quotes/new`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(leadPayload),
+    const triggerResult = await fireEvent({
+      businessId: businessId,
+      event: 'quote_sent',
+      phone: leadPayload.phone,
+      customerName: leadPayload.name,
+      amount: leadPayload.quote_amount,
+      metadata: { 
+        quoteAmount: leadPayload.quote_amount, 
+        jobType: leadPayload.job_type,
+        email: leadPayload.email,
+        currency: leadPayload.currency
+      }
     });
 
-    const createResult = await createRes.json();
-
-    console.log(`[ingest-email] Lead created:`, createResult);
+    console.log(`[ingest-email] Triggered executor rules:`, triggerResult);
 
     return NextResponse.json({
       ok: true,
@@ -179,9 +184,9 @@ export async function POST(req: NextRequest) {
         job_type: parsed.job_type,
         confidence: parsed.confidence,
       },
-      lead: createResult,
+      rulesFired: triggerResult.fired,
       business: { id: businessId, name: businessName },
-    }, { status: createRes.ok ? 201 : 200 });
+    }, { status: 201 });
 
   } catch (err) {
     console.error('[ingest-email] Unexpected error:', err);

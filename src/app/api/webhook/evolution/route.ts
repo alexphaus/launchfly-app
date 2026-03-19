@@ -93,6 +93,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Look up the DB instance ID for routing follow-ups to the correct instance
+      let waInstanceId: string | undefined;
+      if (instanceName) {
+        const { data: inst } = await supabase
+          .from('whatsapp_instances')
+          .select('id')
+          .eq('instance_name', instanceName)
+          .eq('active', true)
+          .limit(1)
+          .maybeSingle();
+        waInstanceId = inst?.id;
+      }
+
       const QUOTE_TAG = /📝|#q\b/i;
       const isQuote = QUOTE_TAG.test(outText);
 
@@ -133,6 +146,7 @@ export async function POST(request: NextRequest) {
             jobType,
             source: 'whatsapp_tag',
             rawMessage: cleanText.substring(0, 500),
+            ...(waInstanceId && { wa_instance_id: waInstanceId }),
           },
         });
 
@@ -307,6 +321,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ─── Resolve instance ID for correct follow-up routing ────────
+    let waInstanceId: string | undefined;
+    if (instanceName) {
+      const { data: inst } = await supabase
+        .from('whatsapp_instances')
+        .select('id')
+        .eq('instance_name', instanceName)
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle();
+      waInstanceId = inst?.id;
+    }
+
     // ─── Fire automation event ──────────────────────────────────────
     const result = await fireEvent({
       businessId,
@@ -318,6 +345,7 @@ export async function POST(request: NextRequest) {
         pushname,
         source: 'evolution',
         messageId,
+        ...(waInstanceId && { wa_instance_id: waInstanceId }),
       },
     });
 

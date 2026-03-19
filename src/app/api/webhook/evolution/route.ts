@@ -231,6 +231,21 @@ export async function POST(request: NextRequest) {
 
     console.log(`   🏢 Business: ${businessId}`);
 
+    // ─── Ensure customer record exists (upsert on business_id+phone) ──
+    const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+    const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+    await supabase.from('customers').upsert(
+      {
+        business_id: businessId,
+        phone: phoneWithPlus,
+        name: pushname || 'Unknown',
+        email: `${phoneWithoutPlus}@wa.placeholder`,
+        status: 'lead',
+        source: 'whatsapp_inbound',
+      },
+      { onConflict: 'business_id,phone', ignoreDuplicates: true },
+    );
+
     // ─── Immediately: Read receipt + typing indicator (fire-and-forget) ──
     markAsRead(messageId, customerPhone, businessId).catch(() => {});
     sendTypingPresence(customerPhone, businessId).catch(() => {});
@@ -239,8 +254,6 @@ export async function POST(request: NextRequest) {
     const isOptOut = /^(stop|unsubscribe|cancel|quit|end|no\s*more|opt\s*out)$/i.test(messageText.trim());
     if (isOptOut) {
       console.log(`   🛑 User ${customerPhone} opted out via WhatsApp.`);
-      const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-      const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
 
       const { sendWhatsApp } = await import('@/lib/evolution');
       await sendWhatsApp(customerPhone, "You've been successfully unsubscribed and won't receive more automated messages from us.", businessId);
@@ -280,8 +293,7 @@ export async function POST(request: NextRequest) {
     // ─── HUMAN HANDOFF CHECK ────────────────────────────────────────
     // If the contractor recently replied to this customer, skip AI response
     {
-      const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-      const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+
       const { data: cust } = await supabase
         .from('customers')
         .select('ai_paused_until')

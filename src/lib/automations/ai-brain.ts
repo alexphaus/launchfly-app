@@ -37,6 +37,7 @@ export interface AIBrainInput {
   messageText: string;
   messageSid?: string;     // for typing indicator
   channel?: string;        // 'whatsapp' | 'sms' — defaults to whatsapp
+  waInstanceId?: string;   // pin replies to a specific WhatsApp instance
 }
 
 export interface AIBrainResult {
@@ -232,14 +233,20 @@ function getFilteredTools(toolsConfig: string[] | undefined) {
 // ─── Main entry point ────────────────────────────────────────────────────
 
 export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResult> {
-  const { businessId, phone, messageText, messageSid, channel = 'whatsapp' } = input;
+  const { businessId, phone, messageText, messageSid, channel = 'whatsapp', waInstanceId } = input;
   const supabase = getSupabase();
 
   // Send typing indicator if on Evolution API (fire-and-forget)
-  const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-  const waProvider = await getWhatsAppProvider(businessId);
+  let waProvider;
+  if (waInstanceId) {
+    const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
+    waProvider = await getProviderByInstanceId(waInstanceId, businessId);
+  } else {
+    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+    waProvider = await getWhatsAppProvider(businessId);
+  }
   if (waProvider.sendTypingPresence) {
-    waProvider.sendTypingPresence(phone, businessId).catch(() => {});
+    waProvider.sendTypingPresence(phone, businessId).catch(() => {}); 
   }
 
   const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;
@@ -358,7 +365,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
   for (let i = 0; i < messagesToSend.length; i++) {
     const msg = messagesToSend[i];
-    await sendReply(phoneWithPlus, msg.trim(), channel, businessId, undefined, false);
+    await sendReply(phoneWithPlus, msg.trim(), channel, businessId, waInstanceId, false);
 
     // If there's another bubble coming, delay realistically before sending it
     if (i < messagesToSend.length - 1) {
@@ -367,8 +374,6 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
       const delayMs = Math.max(1500, Math.min(nextMsg.length * 30, 5000)) + Math.floor(Math.random() * 500);
       
       // Re-fire typing indicator for the next bubble (if using Evolution)
-      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-      const waProvider = await getWhatsAppProvider(businessId);
       if (waProvider.sendTypingPresence) {
         waProvider.sendTypingPresence(phoneWithPlus, businessId).catch(() => {});
       }

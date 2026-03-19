@@ -258,6 +258,7 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
         messageText: ctx.message,
         messageSid: ctx.metadata?.messageSid as string | undefined,
         channel,
+        waInstanceId: ctx.metadata?.wa_instance_id as string | undefined,
       });
       return { ok: true, detail: `AI replied via ${channel} (${result.toolsCalled.length} tools: ${result.toolsCalled.join(', ') || 'none'})` };
     }

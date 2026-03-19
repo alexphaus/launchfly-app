@@ -47,7 +47,7 @@ export interface AIBrainResult {
 
 // ─── Send helpers ────────────────────────────────────────────────────────
 
-async function sendWhatsApp(to: string, body: string, businessId?: string, waInstanceId?: string): Promise<void> {
+async function sendWhatsApp(to: string, body: string, businessId?: string, waInstanceId?: string, countSend = true): Promise<void> {
   let wa;
   if (waInstanceId) {
     const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
@@ -56,11 +56,11 @@ async function sendWhatsApp(to: string, body: string, businessId?: string, waIns
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     wa = await getWhatsAppProvider(businessId);
   }
+  if (!countSend) wa.countSends = false;
   const result = await wa.sendWhatsApp(to, body, businessId);
   if (!result.sent) {
     throw new Error(`WhatsApp send failed (${wa.name}): ${result.error}`);
   }
-  // Note: sends_today counter is auto-incremented by the provider on successful send
 }
 
 async function sendSms(to: string, body: string): Promise<void> {
@@ -76,11 +76,11 @@ async function sendSms(to: string, body: string): Promise<void> {
   });
 }
 
-async function sendReply(to: string, body: string, channel: string, businessId?: string, waInstanceId?: string): Promise<void> {
+async function sendReply(to: string, body: string, channel: string, businessId?: string, waInstanceId?: string, countSend = true): Promise<void> {
   if (channel === 'sms') {
     await sendSms(to, body);
   } else {
-    await sendWhatsApp(to, body, businessId, waInstanceId);
+    await sendWhatsApp(to, body, businessId, waInstanceId, countSend);
   }
 }
 
@@ -358,7 +358,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   const messagesToSend = aiResponse.split(/\n{2,}/).filter(m => m.trim().length > 0);
   for (let i = 0; i < messagesToSend.length; i++) {
     const msg = messagesToSend[i];
-    await sendReply(phoneWithPlus, msg.trim(), channel, businessId);
+    await sendReply(phoneWithPlus, msg.trim(), channel, businessId, undefined, false);
 
     // If there's another bubble coming, delay realistically before sending it
     if (i < messagesToSend.length - 1) {

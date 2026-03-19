@@ -32,6 +32,8 @@ export interface WhatsAppProvider {
   sendTypingPresence?: (to: string, businessId?: string) => Promise<void>;
   /** Only available on Evolution — marks message as read (blue ticks) */
   markAsRead?: (messageId: string, fromPhone: string, businessId?: string) => Promise<void>;
+  /** Set to false to skip incrementing sends_today (e.g. for inbound AI replies) */
+  countSends?: boolean;
 }
 
 /** Row from whatsapp_instances table */
@@ -207,25 +209,26 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
       instanceName: instance.instance_name!,
     };
 
-    return {
+    const provider: WhatsAppProvider = {
       name: 'evolution',
       instanceId: instId,
+      countSends: true,
       sendWhatsApp: async (to, body) => {
         const evo = await makeProvider();
         const result = await evo.sendWhatsAppWithCreds(to, body, creds);
-        if (result.sent) await incrementInstanceCounter(instId);
+        if (result.sent && provider.countSends !== false) await incrementInstanceCounter(instId);
         return result;
       },
       sendVoiceNote: async (to, audioUrl) => {
         const evo = await makeProvider();
         const result = await evo.sendVoiceNoteWithCreds(to, audioUrl, creds);
-        if (result.sent) await incrementInstanceCounter(instId);
+        if (result.sent && provider.countSends !== false) await incrementInstanceCounter(instId);
         return result;
       },
       sendImage: async (to, imageUrl, caption) => {
         const evo = await makeProvider();
         const result = await evo.sendImageWithCreds(to, imageUrl, creds, caption);
-        if (result.sent) await incrementInstanceCounter(instId);
+        if (result.sent && provider.countSends !== false) await incrementInstanceCounter(instId);
         return result;
       },
       checkHasWhatsApp: async (phone) => {
@@ -241,6 +244,7 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
         return evo.markAsRead(messageId, fromPhone, businessId);
       },
     };
+    return provider;
   }
 
   // UltraMsg
@@ -249,25 +253,26 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
     token: instance.token!,
   };
 
-  return {
+  const ultraProvider: WhatsAppProvider = {
     name: 'ultramsg',
     instanceId: instId,
+    countSends: true,
     sendWhatsApp: async (to, body) => {
       const ultra = await import('@/lib/ultramsg');
       const result = await ultra.sendWhatsAppWithCreds(to, body, ultramsgCreds);
-      if (result.sent) await incrementInstanceCounter(instId);
+      if (result.sent && ultraProvider.countSends !== false) await incrementInstanceCounter(instId);
       return result;
     },
     sendVoiceNote: async (to, audioUrl) => {
       const ultra = await import('@/lib/ultramsg');
       const result = await ultra.sendVoiceNoteWithCreds(to, audioUrl, ultramsgCreds);
-      if (result.sent) await incrementInstanceCounter(instId);
+      if (result.sent && ultraProvider.countSends !== false) await incrementInstanceCounter(instId);
       return result;
     },
     sendImage: async (to, imageUrl, caption) => {
       const ultra = await import('@/lib/ultramsg');
       const result = await ultra.sendImageWithCreds(to, imageUrl, ultramsgCreds, caption);
-      if (result.sent) await incrementInstanceCounter(instId);
+      if (result.sent && ultraProvider.countSends !== false) await incrementInstanceCounter(instId);
       return result;
     },
     checkHasWhatsApp: async (phone) => {
@@ -275,6 +280,7 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
       return ultra.checkHasWhatsAppWithCreds(phone, ultramsgCreds);
     },
   };
+  return ultraProvider;
 }
 
 /**

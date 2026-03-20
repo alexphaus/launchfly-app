@@ -1362,7 +1362,13 @@ export async function executeActions(
 
     if (action.type === 'delay') {
       const hours = Number(action.config?.delayHours) || 1;
-      const delaySeconds = Math.max(60, Math.round(hours * 3600));
+      const baseSeconds = Math.max(60, Math.round(hours * 3600));
+
+      // Add human-like jitter: ±5% of total delay (min ±5min, max ±2h)
+      const jitterRange = Math.min(7200, Math.max(300, Math.round(baseSeconds * 0.05)));
+      const jitter = Math.round((Math.random() * 2 - 1) * jitterRange);
+      const delaySeconds = Math.max(60, baseSeconds + jitter);
+
       const remaining = actions.slice(i + 1);
 
       if (remaining.length === 0) {

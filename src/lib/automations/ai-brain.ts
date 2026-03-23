@@ -453,14 +453,13 @@ const FOLLOWUP_SYSTEM_ADDITION = `
 ══════════════════════════════════════
 FOLLOW-UP MODE — CUSTOMER WENT SILENT
 ══════════════════════════════════════
-The customer stopped replying. Your job is to send ONE short follow-up message to re-engage them.
+The customer has not replied in a while. 
+CRITICAL RULE: If the prompt contains specific instructions for a "SMART FOLLOW-UP SEQUENCE", you MUST follow them exactly. Only use the generic rules below if there are no specific follow-up instructions provided.
 
-FOLLOWUP_RULES:
-- KEEP IT EXTREMELY SHORT (1-2 sentences MAX). Never send a wall of text. It increases the risk of WhatsApp spam bans if they don't reply.
-- Use a soft, casual ping to get a reply first. Ask an easy question to elicit a response (e.g. "Hey [Name], still looking into this?").
-- Reference the EXACT point where the conversation left off. Be specific.
-- If you sent a checkout/signup link and they didn't respond, ask if they had trouble or questions about it.
-- If they had a pricing objection, approach it from a DIFFERENT angle than before.
+GENERIC_FOLLOWUP_RULES (Only use if no sequence is defined):
+- Keep it short (1-2 sentences).
+- Reference where the conversation left off.
+- Use a soft, casual ping to elicit a response.
 - NEVER start with "Just following up" or "Just checking in" — be creative and specific.
 - NEVER repeat a message you already sent — check the conversation history.
 - If you've already sent 3+ unanswered follow-ups, make it a warm final check-in and provide an opt-out (e.g., "Reply STOP and I'll close out your file").

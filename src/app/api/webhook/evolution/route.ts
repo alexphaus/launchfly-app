@@ -299,10 +299,6 @@ export async function POST(request: NextRequest) {
       { onConflict: 'business_id,phone', ignoreDuplicates: true },
     );
 
-    // ─── Immediately: Read receipt + typing indicator (fire-and-forget) ──
-    markAsRead(messageId, customerPhone, businessId).catch(() => {});
-    sendTypingPresence(customerPhone, businessId).catch(() => {});
-
     // ─── OPT-OUT CHECK ──────────────────────────────────────────────
     const isOptOut = /^(stop|unsubscribe|cancel|quit|end|no\s*more|opt\s*out)$/i.test(messageText.trim());
     if (isOptOut) {

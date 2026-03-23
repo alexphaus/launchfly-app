@@ -236,7 +236,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   const { businessId, phone, messageText, messageSid, channel = 'whatsapp', waInstanceId } = input;
   const supabase = getSupabase();
 
-  // Send typing indicator if on Evolution API (fire-and-forget)
+  // ── Human simulation: delays and typing indicators ──
   let waProvider;
   if (waInstanceId) {
     const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');
@@ -245,8 +245,23 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     waProvider = await getWhatsAppProvider(businessId);
   }
+
+  // 1. Simulate "time to notice notification" (1.5 to 4 seconds)
+  const noticeDelay = 1500 + Math.random() * 2500;
+  await new Promise(r => setTimeout(r, noticeDelay));
+
+  // 2. Mark as read (turns ticks blue)
+  if (waProvider.markAsRead && messageSid) {
+    waProvider.markAsRead(messageSid, phone, businessId).catch(() => {});
+  }
+
+  // 3. Simulate "time to read the incoming message" (based on length, capped at 5s)
+  const readDelay = Math.min(5000, 1000 + (messageText.length * 30));
+  await new Promise(r => setTimeout(r, readDelay));
+
+  // 4. Start typing indicator while LLM generates response
   if (waProvider.sendTypingPresence) {
-    waProvider.sendTypingPresence(phone, businessId).catch(() => {}); 
+    waProvider.sendTypingPresence(phone, businessId).catch(() => {});
   }
 
   const phoneWithPlus = phone.startsWith('+') ? phone : `+${phone}`;

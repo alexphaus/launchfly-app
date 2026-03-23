@@ -48,15 +48,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: errMsg || 'Failed to create instance' }, { status: res.status });
       }
 
-      // Apply default settings: show online, auto-read, ignore groups
+      // Apply default settings: human-like behavior
       fetch(`${EVO_BASE}/settings/set/${instanceName}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           rejectCall: false,
           groupsIgnore: true,
-          alwaysOnline: true,
-          readMessages: true,
+          alwaysOnline: false,   // ❌ Humanize: Don't stay online 24/7
+          readMessages: false,   // ❌ Humanize: Don't auto-read instantly on delivery
           readStatus: true,
           syncFullHistory: false,
         }),

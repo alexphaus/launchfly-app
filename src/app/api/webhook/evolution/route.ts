@@ -109,6 +109,49 @@ export async function POST(request: NextRequest) {
       const QUOTE_TAG = /📝|#q\b/i;
       const isQuote = QUOTE_TAG.test(outText);
 
+      // Phone normalization for DB queries
+      const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
+      const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
+
+      // ── Ensure customer record exists so handoff/disable always works ──
+      await supabase.from('customers').upsert(
+        {
+          business_id: bizId,
+          phone: phoneWithPlus,
+          name: 'Unknown',
+          email: `${phoneWithoutPlus}@wa.placeholder`,
+          status: 'lead',
+          source: 'whatsapp_outbound',
+        },
+        { onConflict: 'business_id,phone', ignoreDuplicates: true },
+      );
+
+      // ── Per-contact bot control: #off / #on ──
+      const OFF_TAG = /\b#off\b/i;
+      const ON_TAG = /\b#on\b/i;
+
+      if (OFF_TAG.test(outText)) {
+        // Permanently disable bot for this contact
+        await supabase
+          .from('customers')
+          .update({ ai_paused_until: '2099-12-31T23:59:59Z' })
+          .eq('business_id', bizId)
+          .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`);
+        console.log(`\n🚫 Bot disabled for +${customerPhone} (business ${bizId}) via #off`);
+        return NextResponse.json({ ok: true, bot_disabled: true });
+      }
+
+      if (ON_TAG.test(outText)) {
+        // Re-enable bot for this contact
+        await supabase
+          .from('customers')
+          .update({ ai_paused_until: null })
+          .eq('business_id', bizId)
+          .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`);
+        console.log(`\n✅ Bot re-enabled for +${customerPhone} (business ${bizId}) via #on`);
+        return NextResponse.json({ ok: true, bot_enabled: true });
+      }
+
       if (isQuote) {
         // ── Quote Detection: contractor tagged this message as a quote ──
         console.log(`\n📝 Quote detected from contractor (business ${bizId}) to +${customerPhone}`);
@@ -154,19 +197,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, quote_detected: true, fired: result.fired });
       } else {
         // ── Human Handoff: contractor manually replied → pause AI for this customer ──
-        const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-        const phoneWithoutPlus = customerPhone.replace(/^\+/, '');
         const pauseUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-        const { error } = await supabase
+        await supabase
           .from('customers')
           .update({ ai_paused_until: pauseUntil })
           .eq('business_id', bizId)
           .or(`phone.eq.${phoneWithPlus},phone.eq.${phoneWithoutPlus}`);
 
-        if (!error) {
-          console.log(`\n🤝 Human handoff: contractor (${bizId}) replied to +${customerPhone} — AI paused until ${pauseUntil}`);
-        }
+        console.log(`\n🤝 Human handoff: contractor (${bizId}) replied to +${customerPhone} — AI paused until ${pauseUntil}`);
 
         return NextResponse.json({ ok: true, human_handoff: true, paused_until: pauseUntil });
       }

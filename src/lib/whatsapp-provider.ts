@@ -214,6 +214,19 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
       instanceId: instId,
       countSends: true,
       sendWhatsApp: async (to, body) => {
+        // Enforce daily cap for outbound sends (countSends = true)
+        if (provider.countSends !== false) {
+          const supabase = getSupabase();
+          const { data: live } = await supabase
+            .from('whatsapp_instances')
+            .select('sends_today, daily_limit')
+            .eq('id', instId)
+            .single();
+          if (live && live.sends_today >= live.daily_limit) {
+            console.warn(`[wa-cap] Instance ${instance.instance_name} at daily limit (${live.sends_today}/${live.daily_limit}) — skipping send to ${to}`);
+            return { sent: false, error: 'Daily send limit reached' };
+          }
+        }
         const evo = await makeProvider();
         const result = await evo.sendWhatsAppWithCreds(to, body, creds);
         if (result.sent && provider.countSends !== false) await incrementInstanceCounter(instId);
@@ -258,6 +271,19 @@ export function getProviderForInstance(instance: WaInstance): WhatsAppProvider {
     instanceId: instId,
     countSends: true,
     sendWhatsApp: async (to, body) => {
+      // Enforce daily cap for outbound sends
+      if (ultraProvider.countSends !== false) {
+        const supabase = getSupabase();
+        const { data: live } = await supabase
+          .from('whatsapp_instances')
+          .select('sends_today, daily_limit')
+          .eq('id', instId)
+          .single();
+        if (live && live.sends_today >= live.daily_limit) {
+          console.warn(`[wa-cap] UltraMsg instance at daily limit (${live.sends_today}/${live.daily_limit}) — skipping send to ${to}`);
+          return { sent: false, error: 'Daily send limit reached' };
+        }
+      }
       const ultra = await import('@/lib/ultramsg');
       const result = await ultra.sendWhatsAppWithCreds(to, body, ultramsgCreds);
       if (result.sent && ultraProvider.countSends !== false) await incrementInstanceCounter(instId);

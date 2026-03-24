@@ -255,8 +255,8 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     waProvider.markAsRead(messageSid, phone, businessId).catch(() => {});
   }
 
-  // 3. Simulate "time to read the incoming message" (based on length, capped at 5s)
-  const readDelay = Math.min(5000, 1000 + (messageText.length * 30));
+  // 3. Simulate "time to read the incoming message" (based on length, capped at 8s)
+  const readDelay = Math.min(8000, 1500 + (messageText.length * 40));
   await new Promise(r => setTimeout(r, readDelay));
 
   // 4. Start typing indicator while LLM generates response
@@ -385,8 +385,8 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     // If there's another bubble coming, delay realistically before sending it
     if (i < messagesToSend.length - 1) {
       const nextMsg = messagesToSend[i + 1];
-      // Delay based on next message length: ~30ms per char, plus a base delay of 1.5s and a little jitter
-      const delayMs = Math.max(1500, Math.min(nextMsg.length * 30, 5000)) + Math.floor(Math.random() * 500);
+      // Delay based on next message length: ~50ms per char (fast but human), min 2.5s, max 12s, plus jitter
+      const delayMs = Math.max(2500, Math.min(nextMsg.length * 50, 12000)) + Math.floor(Math.random() * 1000);
       
       // Re-fire typing indicator for the next bubble (if using Evolution)
       if (waProvider.sendTypingPresence) {
@@ -583,7 +583,8 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
 
     if (i < messagesToSend.length - 1) {
       const nextMsg = messagesToSend[i + 1];
-      const delayMs = Math.max(1500, Math.min(nextMsg.length * 30, 5000)) + Math.floor(Math.random() * 500);
+      // Delay based on next message length: ~50ms per char (fast but human), min 2.5s, max 12s, plus jitter
+      const delayMs = Math.max(2500, Math.min(nextMsg.length * 50, 12000)) + Math.floor(Math.random() * 1000);
       
       if (waInstanceId) {
         const { getProviderByInstanceId } = await import('@/lib/whatsapp-provider');

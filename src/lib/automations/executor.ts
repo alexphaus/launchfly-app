@@ -64,8 +64,6 @@ export const AVAILABLE_EVENTS = [
   { id: 'booking_created', label: 'Booking Created', icon: '📅', desc: 'AI creates a new booking' },
   { id: 'booking_cancelled', label: 'Booking Cancelled', icon: '❌', desc: 'Customer cancels a booking' },
   { id: 'payment_received', label: 'Payment Received', icon: '💰', desc: 'Stripe payment succeeds' },
-  { id: 'sequence_completed', label: 'Sequence Completed', icon: '✅', desc: 'Follow-up sequence finishes all steps' },
-  { id: 'customer_replied', label: 'Customer Replied to Sequence', icon: '💬', desc: 'Prospect replies during follow-up sequence' },
   { id: 'quote_sent', label: 'Quote / Email Sent', icon: '📧', desc: 'A quote or email was sent to a prospect' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡', desc: 'POST from Zapier, Make, or any external tool' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱', desc: 'Retell AI call ended — check outcome in metadata' },

@@ -57,8 +57,6 @@ const AUTOMATION_EVENTS = [
   { id: 'booking_cancelled', label: 'Booking Cancelled', icon: '❌' },
   { id: 'payment_received', label: 'Payment Received', icon: '💰' },
   { id: 'quote_sent', label: 'Quote / Email Sent', icon: '📧' },
-  { id: 'sequence_completed', label: 'Sequence Completed', icon: '✅' },
-  { id: 'customer_replied', label: 'Customer Replied', icon: '↩️' },
   { id: 'external_webhook', label: 'External Webhook', icon: '⚡' },
   { id: 'call_completed', label: 'Voice Call Completed', icon: '📱' },
   { id: 'new_lead_created', label: 'New Lead Created', icon: '🆕' },

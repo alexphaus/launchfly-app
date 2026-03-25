@@ -166,6 +166,12 @@ export async function DELETE(req: NextRequest) {
     .eq('business_id', businessId)
     .single();
 
+  // Nullify FK references so delete doesn't violate constraints
+  await Promise.all([
+    supabase.from('hunter_prospects').update({ wa_instance_id: null }).eq('wa_instance_id', id),
+    supabase.from('customers').update({ wa_instance_id: null }).eq('wa_instance_id', id),
+  ]);
+
   // Delete from DB
   const { error } = await supabase
     .from('whatsapp_instances')

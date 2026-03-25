@@ -161,7 +161,7 @@ export async function DELETE(req: NextRequest) {
   // Fetch the instance first so we can clean up Evolution API if needed
   const { data: instance } = await supabase
     .from('whatsapp_instances')
-    .select('provider, instance_name')
+    .select('provider, instance_name, base_url, api_key')
     .eq('id', id)
     .eq('business_id', businessId)
     .single();
@@ -183,8 +183,8 @@ export async function DELETE(req: NextRequest) {
 
   // Also logout + delete the instance on Evolution API server
   if (instance?.provider === 'evolution' && instance.instance_name) {
-    const evoBase = (process.env.EVOLUTION_BASE_URL || '').replace(/\/+$/, '');
-    const evoKey = process.env.EVOLUTION_API_KEY || '';
+    const evoBase = (instance.base_url || process.env.EVOLUTION_BASE_URL || '').replace(/\/+$/, '');
+    const evoKey = instance.api_key || process.env.EVOLUTION_API_KEY || '';
     if (evoBase && evoKey) {
       try {
         // Logout first (disconnects WhatsApp session)

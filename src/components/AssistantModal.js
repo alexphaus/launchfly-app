@@ -65,6 +65,7 @@ const AUTOMATION_EVENTS = [
   { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶' },
   { id: 'prospect_found', label: 'Prospect Found', icon: '🎯' },
   { id: 'daily_schedule', label: 'Daily Schedule', icon: '⏰' },
+  { id: 'job_completed', label: 'Job Completed', icon: '✅' },
 ];
 
 const AUTOMATION_ACTIONS = [

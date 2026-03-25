@@ -73,6 +73,7 @@ export const AVAILABLE_EVENTS = [
   { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶', desc: 'Customer hasn\'t replied after 24h — triggers smart AI follow-up' },
   { id: 'prospect_found', label: 'Prospect Found', icon: '🎯', desc: 'Fires per lead — from outreach drip or search_leads. Configure what happens when a prospect is contacted.' },
   { id: 'daily_schedule', label: 'Daily Schedule', icon: '⏰', desc: 'Fires on a schedule (daily/weekly). Configure time and days in the rule.' },
+  { id: 'job_completed', label: 'Job Completed', icon: '✅', desc: 'Fires when a job/project is marked complete. Trigger review requests, referral asks, and seasonal reactivation.' },
 ] as const;
 
 // ─── Available Actions ───────────────────────────────────────────────────
@@ -1259,14 +1260,18 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
     }
   }
 
-  // Enrich context: auto-resolve businessName + firstName if not provided
+  // Enrich context: auto-resolve businessName, googleReviewUrl + firstName if not provided
   if (!ctx.businessName && ctx.businessId) {
     const { data: biz } = await supabase
       .from('businesses')
-      .select('name')
+      .select('name, business_data')
       .eq('id', ctx.businessId)
       .single();
     if (biz?.name) ctx.businessName = biz.name;
+    const bd = biz?.business_data as Record<string, unknown> | null;
+    if (bd) {
+      ctx.googleReviewUrl = (bd.googleReviewLink || bd.google_review_link || '') as string;
+    }
   }
   if (!ctx.firstName && ctx.customerName) {
     ctx.firstName = ctx.customerName.split(' ')[0];

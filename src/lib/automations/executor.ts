@@ -71,7 +71,7 @@ export const AVAILABLE_EVENTS = [
   { id: 'user_inactive', label: 'Customer Went Silent', icon: '😶', desc: 'Customer hasn\'t replied after 24h — triggers smart AI follow-up' },
   { id: 'prospect_found', label: 'Prospect Found', icon: '🎯', desc: 'Fires per lead — from outreach drip or search_leads. Configure what happens when a prospect is contacted.' },
   { id: 'daily_schedule', label: 'Daily Schedule', icon: '⏰', desc: 'Fires on a schedule (daily/weekly). Configure time and days in the rule.' },
-  { id: 'job_completed', label: 'Job Completed', icon: '✅', desc: 'Fires when a job/project is marked complete. Trigger review requests, referral asks, and seasonal reactivation.' },
+  { id: 'job_completed', label: 'Job Completed', icon: '🔨', desc: 'Fires when a job/project is marked complete. Trigger review requests, referral asks, and seasonal reactivation.' },
 ] as const;
 
 // ─── Available Actions ───────────────────────────────────────────────────

@@ -223,10 +223,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract message text from different message types
-    const messageText =
+    let messageText =
       data.message?.conversation ||
       data.message?.extendedTextMessage?.text ||
       '';
+
+    // ─── Voice Note Transcription ───────────────────────────────────
+    const isAudioMessage = !!(data.message?.audioMessage);
+    if (isAudioMessage && !messageText) {
+      console.log(`   🎤 Voice note detected from ${remoteJid}, transcribing...`);
+      try {
+        // Resolve instance credentials for media download
+        const instCreds = await resolveInstanceCreds(instanceName);
+        if (instCreds) {
+          const { transcribeVoiceNote } = await import('@/lib/transcribe-audio');
+          const transcribed = await transcribeVoiceNote({
+            baseUrl: instCreds.baseUrl,
+            apiKey: instCreds.apiKey,
+            instanceName: instCreds.instanceName,
+            message: data.message,
+            messageKey: data.key,
+          });
+          if (transcribed) {
+            messageText = transcribed;
+            console.log(`   📝 Transcribed: "${messageText.substring(0, 100)}"`);
+          }
+        }
+      } catch (err) {
+        console.warn('   ⚠️ Voice transcription failed:', err);
+      }
+    }
 
     const customerPhone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
 
@@ -396,6 +422,30 @@ export async function POST(request: NextRequest) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+/** Resolve Evolution API credentials for a given instance name */
+async function resolveInstanceCreds(instName: string): Promise<{ baseUrl: string; apiKey: string; instanceName: string } | null> {
+  if (!instName) return null;
+  try {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from('whatsapp_instances')
+      .select('base_url, api_key, instance_name')
+      .eq('instance_name', instName)
+      .eq('provider', 'evolution')
+      .eq('active', true)
+      .limit(1)
+      .maybeSingle();
+    if (data?.base_url && data?.api_key) {
+      return { baseUrl: data.base_url, apiKey: data.api_key, instanceName: data.instance_name };
+    }
+  } catch { /* fall through */ }
+  // Fallback to env vars
+  const baseUrl = process.env.EVOLUTION_BASE_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  if (baseUrl && apiKey) return { baseUrl, apiKey, instanceName: instName };
+  return null;
+}
 
 function resolveBusinessIdFromMessage(text: string): string | null {
   const bizMatch = text.match(/\[BIZ:([a-f0-9-]+)\]/i);

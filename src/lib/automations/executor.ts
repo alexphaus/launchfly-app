@@ -18,6 +18,8 @@ function getSupabase() {
   );
 }
 
+const APIFY_BASE = 'https://api.apify.com/v2';
+
 // ─── Types ───────────────────────────────────────────────────────────────
 
 export interface AutomationRule {
@@ -95,6 +97,10 @@ export const AVAILABLE_ACTIONS = [
   { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', desc: 'Space out leads with progressive delays and a daily cap. Schedules remaining actions via QStash.', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
   { id: 'outreach', label: 'Outreach (Drip from Pool)', icon: '📤', desc: 'Pick N leads from hunter_prospects pool and schedule each as a prospect_found event at a random business-hours time. Decouples lead finding from outreach.', configFields: ['outreachLeadsPerDay', 'outreachWindowStart', 'outreachWindowEnd'] },
   { id: 'condition_branch', label: 'If / Else Branch', icon: '🔀', desc: 'Evaluate conditions and run different actions for true vs false branches', configFields: [] },
+  { id: 'generate_content', label: 'Generate Content (AI)', icon: '✍️', desc: 'AI generates social media posts, captions, or video scripts based on business context and optional topic. Result in {aiResponse}.', configFields: ['contentType', 'contentTopic', 'contentPlatform'] },
+  { id: 'post_social', label: 'Post to Social Media', icon: '📣', desc: 'Publish a post to Facebook/Instagram via Meta Graph API. Use with generate_content or provide text directly.', configFields: ['socialPlatform', 'socialMessage'] },
+  { id: 'generate_report', label: 'Generate Business Report', icon: '📊', desc: 'AI analyzes leads, bookings, revenue, and conversations. Sends summary to owner via WhatsApp.', configFields: ['reportType'] },
+  { id: 'scrape_url', label: 'Scrape URL', icon: '🕸️', desc: 'Scrape a website for data (competitor prices, job listings, directory info). Result in {aiResponse}.', configFields: ['scrapeUrl', 'scrapeExtract'] },
 ] as const;
 
 // ─── Template Filling ────────────────────────────────────────────────────
@@ -1227,6 +1233,298 @@ CUSTOMER NAME: ${customerName}
         ok: true,
         detail: `Checked ${totalChecked}, ${noWaIds.length} no WhatsApp, ${scheduled}/${totalCapacity} scheduled (window ${windowStart}–${windowEnd})${instanceInfo}`,
       };
+    }
+
+    // ─── Generate Content (AI-powered content creation) ─────────────────
+
+    case 'generate_content': {
+      const contentType = (cfg.contentType as string) || 'social_post';
+      const topic = (cfg.contentTopic as string) ? fillVars(cfg.contentTopic as string, ctx) : '';
+      const platform = (cfg.contentPlatform as string) || 'instagram';
+
+      const supabase = getSupabase();
+      const [{ data: biz }, { data: assistant }] = await Promise.all([
+        supabase.from('businesses').select('name, industry, city, state, business_data').eq('id', ctx.businessId).single(),
+        supabase.from('assistants').select('system_prompt, knowledge_base, tone, goal').eq('business_id', ctx.businessId).eq('active', true).maybeSingle(),
+      ]);
+
+      const bizName = biz?.name || 'the business';
+      const industry = biz?.industry || '';
+      const location = biz?.city ? `${biz.city}, ${biz.state || ''}` : '';
+      const tone = assistant?.tone || 'friendly';
+      const bd = (biz?.business_data || {}) as Record<string, unknown>;
+      const kb = (assistant?.knowledge_base || {}) as Record<string, unknown[]>;
+
+      const contentTypeInstructions: Record<string, string> = {
+        social_post: `Write a compelling social media post for ${platform}. Include relevant hashtags. Keep it concise and engaging. If Instagram, suggest a visual description in brackets [like this] at the end.`,
+        carousel_script: `Write a 5-7 slide Instagram carousel script. Format: SLIDE 1: [visual description] / Caption: text. Make it educational and shareable.`,
+        video_script: `Write a short-form video script (30-60 seconds) for ${platform}. Include: HOOK (first 3 seconds), BODY (value/story), CTA (call to action). Format with scene directions.`,
+        blog_outline: `Write a detailed blog post outline with title, intro hook, 5-7 sections with key points, and conclusion CTA.`,
+        email_campaign: `Write a marketing email with subject line, preview text, body with clear sections, and a strong CTA button text.`,
+      };
+
+      const systemPrompt = [
+        `You are a content marketing expert creating ${contentType.replace('_', ' ')} for ${bizName}.`,
+        `Industry: ${industry}. Location: ${location}. Tone: ${tone}.`,
+        bd.niche ? `Niche: ${bd.niche}` : '',
+        bd.usp ? `USP: ${bd.usp}` : '',
+        contentTypeInstructions[contentType] || contentTypeInstructions.social_post,
+        kb.pricing ? `Services: ${(kb.pricing as { service: string }[]).map(p => p.service).join(', ')}` : '',
+        'Write content that drives engagement and leads. Be authentic, not salesy.',
+        'Output ONLY the content — no meta-commentary.',
+      ].filter(Boolean).join('\n');
+
+      const userPrompt = topic
+        ? `Create content about: ${topic}`
+        : `Create content that would resonate with potential customers looking for ${industry || 'services'} in ${location || 'the area'}. Pick a trending angle.`;
+
+      const { generateText } = await import('ai');
+      const { openai } = await import('@ai-sdk/openai');
+      const result = await generateText({
+        model: openai('gpt-4o-mini'),
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+
+      ctx.aiResponse = result.text.trim();
+      return { ok: true, detail: `Generated ${contentType} for ${platform}: "${(ctx.aiResponse as string).substring(0, 100)}..."` };
+    }
+
+    // ─── Post to Social Media (Meta Graph API) ───────────────────────────
+
+    case 'post_social': {
+      const platform = (cfg.socialPlatform as string) || 'facebook';
+      const messageTemplate = (cfg.socialMessage as string) || '{aiResponse}';
+      const postText = fillVars(messageTemplate, ctx);
+
+      if (!postText || postText === '{aiResponse}') {
+        return { ok: false, detail: 'No content to post. Chain generate_content before this action, or provide socialMessage.' };
+      }
+
+      // Load Meta credentials from business config
+      const supabase = getSupabase();
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('business_data')
+        .eq('id', ctx.businessId)
+        .single();
+
+      const bd = (biz?.business_data || {}) as Record<string, unknown>;
+      const metaAccessToken = (bd.meta_access_token || bd.facebook_access_token || process.env.META_ACCESS_TOKEN) as string;
+      const fbPageId = (bd.facebook_page_id || process.env.META_PAGE_ID) as string;
+      const igAccountId = (bd.instagram_account_id || process.env.META_IG_ACCOUNT_ID) as string;
+
+      if (!metaAccessToken) {
+        return { ok: false, detail: 'No Meta/Facebook access token configured. Add meta_access_token to business settings.' };
+      }
+
+      if (platform === 'facebook' || platform === 'both') {
+        if (!fbPageId) return { ok: false, detail: 'No Facebook Page ID configured.' };
+        const fbRes = await fetch(`https://graph.facebook.com/v19.0/${fbPageId}/feed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: postText,
+            access_token: metaAccessToken,
+          }),
+        });
+        if (!fbRes.ok) {
+          const err = await fbRes.text().catch(() => '');
+          return { ok: false, detail: `Facebook post failed ${fbRes.status}: ${err.substring(0, 200)}` };
+        }
+      }
+
+      if (platform === 'instagram' || platform === 'both') {
+        if (!igAccountId) return { ok: false, detail: 'No Instagram Account ID configured.' };
+        // Instagram Graph API requires a media URL for posts — text-only not supported
+        // For text-only, we post to Facebook. For IG, we need an image URL.
+        const imageUrl = (cfg.socialImageUrl as string) || (ctx.metadata?.image_url as string);
+        if (!imageUrl) {
+          return { ok: false, detail: 'Instagram requires an image URL. Provide socialImageUrl or chain with an image generator.' };
+        }
+        // Step 1: Create media container
+        const containerRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_url: imageUrl,
+            caption: postText,
+            access_token: metaAccessToken,
+          }),
+        });
+        if (!containerRes.ok) {
+          const err = await containerRes.text().catch(() => '');
+          return { ok: false, detail: `Instagram container creation failed ${containerRes.status}: ${err.substring(0, 200)}` };
+        }
+        const container = (await containerRes.json()) as { id: string };
+        // Step 2: Publish
+        const publishRes = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/media_publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            creation_id: container.id,
+            access_token: metaAccessToken,
+          }),
+        });
+        if (!publishRes.ok) {
+          const err = await publishRes.text().catch(() => '');
+          return { ok: false, detail: `Instagram publish failed ${publishRes.status}: ${err.substring(0, 200)}` };
+        }
+      }
+
+      return { ok: true, detail: `Posted to ${platform}: "${postText.substring(0, 80)}..."` };
+    }
+
+    // ─── Generate Business Report ────────────────────────────────────────
+
+    case 'generate_report': {
+      const reportType = (cfg.reportType as string) || 'weekly_summary';
+      const supabase = getSupabase();
+
+      // Gather business metrics
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const periodStart = reportType === 'monthly_summary' ? monthAgo : weekAgo;
+      const periodLabel = reportType === 'monthly_summary' ? 'month' : 'week';
+
+      const [{ data: biz }, leadsResult, customersResult, chatResult, prospectsResult] = await Promise.all([
+        supabase.from('businesses').select('name, whatsapp_number, phone_number').eq('id', ctx.businessId).single(),
+        supabase.from('quote_leads').select('id, status, source, quote_amount, created_at')
+          .eq('business_id', ctx.businessId).gte('created_at', periodStart.toISOString()),
+        supabase.from('customers').select('id, status, source, created_at')
+          .eq('business_id', ctx.businessId).gte('created_at', periodStart.toISOString()),
+        supabase.from('chat_history').select('id, role, created_at')
+          .eq('business_id', ctx.businessId).gte('created_at', periodStart.toISOString()),
+        supabase.from('hunter_prospects').select('id, status, created_at')
+          .eq('business_id', ctx.businessId).gte('created_at', periodStart.toISOString()),
+      ]);
+
+      const leads = leadsResult.data || [];
+      const customers = customersResult.data || [];
+      const chats = chatResult.data || [];
+      const prospects = prospectsResult.data || [];
+
+      const totalLeads = leads.length;
+      const convertedLeads = leads.filter(l => l.status === 'Won' || l.status === 'Converted').length;
+      const totalRevenue = leads.reduce((sum, l) => sum + (l.quote_amount || 0), 0);
+      const newCustomers = customers.length;
+      const totalConversations = chats.filter(c => c.role === 'user').length;
+      const aiResponses = chats.filter(c => c.role === 'assistant').length;
+      const prospectsContacted = prospects.filter(p => p.status === 'opener_sent' || p.status === 'replied').length;
+      const prospectsReplied = prospects.filter(p => p.status === 'replied').length;
+      const responseRate = prospectsContacted > 0 ? Math.round((prospectsReplied / prospectsContacted) * 100) : 0;
+
+      const metricsBlock = [
+        `📊 ${periodLabel.toUpperCase()}LY REPORT — ${biz?.name || 'Your Business'}`,
+        `Period: ${periodStart.toLocaleDateString()} → ${now.toLocaleDateString()}`,
+        '',
+        `📈 LEADS: ${totalLeads} new (${convertedLeads} converted)`,
+        `💰 PIPELINE: $${totalRevenue.toLocaleString()}`,
+        `👥 NEW CUSTOMERS: ${newCustomers}`,
+        `💬 CONVERSATIONS: ${totalConversations} inbound, ${aiResponses} AI replies`,
+        `🎯 OUTREACH: ${prospectsContacted} contacted, ${prospectsReplied} replied (${responseRate}% response rate)`,
+      ].join('\n');
+
+      // Ask AI to analyze and add insights
+      const { generateText } = await import('ai');
+      const { openai } = await import('@ai-sdk/openai');
+
+      const analysisResult = await generateText({
+        model: openai('gpt-4o-mini'),
+        system: 'You are a business analyst. Given the metrics below, provide 3 specific, actionable insights in 2-3 sentences each. Focus on what to improve and what\'s working. Be direct and practical. Format with emoji bullets.',
+        messages: [{ role: 'user', content: metricsBlock }],
+      });
+
+      const fullReport = `${metricsBlock}\n\n🧠 AI INSIGHTS:\n${analysisResult.text.trim()}`;
+
+      // Send report to business owner
+      const ownerPhone = biz?.whatsapp_number || biz?.phone_number;
+      if (ownerPhone) {
+        await sendWhatsApp(ownerPhone, fullReport, ctx.businessId);
+      }
+
+      ctx.aiResponse = fullReport;
+      return { ok: true, detail: `Report generated and sent to owner: ${totalLeads} leads, $${totalRevenue} pipeline` };
+    }
+
+    // ─── Scrape URL (generic web scraper via Apify) ──────────────────────
+
+    case 'scrape_url': {
+      const url = (cfg.scrapeUrl as string) ? fillVars(cfg.scrapeUrl as string, ctx) : '';
+      const extractInstruction = (cfg.scrapeExtract as string) || 'Extract all relevant business information, prices, contact details, and key content.';
+
+      if (!url) return { ok: false, detail: 'No URL to scrape' };
+
+      // Validate URL
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          return { ok: false, detail: 'Only http/https URLs allowed' };
+        }
+        if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(parsed.hostname)) {
+          return { ok: false, detail: 'Private/internal URLs not allowed' };
+        }
+      } catch {
+        return { ok: false, detail: 'Invalid URL format' };
+      }
+
+      const { getApifyToken } = await import('@/lib/apify');
+      const token = await getApifyToken(ctx.businessId);
+
+      // Use Apify's web scraper actor for general URL scraping
+      const startRes = await fetch(
+        `${APIFY_BASE}/acts/apify~website-content-crawler/runs?token=${encodeURIComponent(token)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startUrls: [{ url }],
+            maxCrawlPages: 3,
+            maxCrawlDepth: 1,
+          }),
+        },
+      );
+
+      if (!startRes.ok) {
+        const err = await startRes.text().catch(() => '');
+        return { ok: false, detail: `Apify scrape start error ${startRes.status}: ${err.substring(0, 200)}` };
+      }
+
+      const run = (await startRes.json()) as { data: { id: string; defaultDatasetId: string } };
+
+      // Wait for completion
+      const waitRes = await fetch(
+        `${APIFY_BASE}/actor-runs/${run.data.id}?token=${encodeURIComponent(token)}&waitForFinish=50`,
+      );
+      const runStatus = (await waitRes.json()) as { data: { status: string } };
+
+      if (runStatus.data.status !== 'SUCCEEDED') {
+        console.warn(`[scrape_url] Run status: ${runStatus.data.status}`);
+      }
+
+      // Fetch results
+      const dataRes = await fetch(
+        `${APIFY_BASE}/datasets/${run.data.defaultDatasetId}/items?token=${encodeURIComponent(token)}&format=json`,
+      );
+      const results = (await dataRes.json()) as { url?: string; text?: string; title?: string }[];
+      const scrapedText = results.map(r => `## ${r.title || r.url || ''}\n${(r.text || '').substring(0, 3000)}`).join('\n\n');
+
+      if (!scrapedText.trim()) {
+        return { ok: false, detail: 'Scrape returned no content' };
+      }
+
+      // Ask AI to extract the relevant info
+      const { generateText } = await import('ai');
+      const { openai } = await import('@ai-sdk/openai');
+      const extraction = await generateText({
+        model: openai('gpt-4o-mini'),
+        system: 'You are a data extraction specialist. Extract and structure the requested information from the scraped web content below. Be precise and concise.',
+        messages: [{ role: 'user', content: `INSTRUCTION: ${extractInstruction}\n\nSCRAPED CONTENT:\n${scrapedText.substring(0, 8000)}` }],
+      });
+
+      ctx.aiResponse = extraction.text.trim();
+      return { ok: true, detail: `Scraped ${url}: "${(ctx.aiResponse as string).substring(0, 100)}..."` };
     }
 
     default:

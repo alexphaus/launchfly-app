@@ -85,6 +85,10 @@ const AUTOMATION_ACTIONS = [
   { id: 'search_leads', label: 'Search Leads (Apify)', icon: '🔍', configFields: ['searchQuery', 'searchLocation', 'searchMaxResults'] },
   { id: 'stagger_outreach', label: 'Stagger Outreach', icon: '⏱️', configFields: ['staggerIntervalMin', 'staggerMaxPerDay'] },
   { id: 'outreach', label: 'Outreach (Drip)', icon: '📤', configFields: ['outreachLeadsPerDay', 'outreachWindowStart', 'outreachWindowEnd'] },
+  { id: 'generate_content', label: 'Generate Content (AI)', icon: '✍️', configFields: ['contentType', 'contentTopic', 'contentPlatform'] },
+  { id: 'post_social', label: 'Post to Social', icon: '📣', configFields: ['socialPlatform', 'socialMessage'] },
+  { id: 'generate_report', label: 'Business Report', icon: '📊', configFields: ['reportType'] },
+  { id: 'scrape_url', label: 'Scrape URL', icon: '🕸️', configFields: ['scrapeUrl', 'scrapeExtract'] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -2580,6 +2584,86 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         placeholder="Call purpose, e.g. Sales Demo"
                                                       />
                                                     )}
+                                                    {branchActionDef?.configFields?.includes('contentType') && (
+                                                      <div className="space-y-1.5">
+                                                        <select
+                                                          value={branchAction.config?.contentType || 'social_post'}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'contentType', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                        >
+                                                          <option value="social_post">Social Media Post</option>
+                                                          <option value="carousel_script">Carousel Script</option>
+                                                          <option value="video_script">Video Script</option>
+                                                          <option value="blog_outline">Blog Outline</option>
+                                                          <option value="email_campaign">Email Campaign</option>
+                                                        </select>
+                                                        <select
+                                                          value={branchAction.config?.contentPlatform || 'instagram'}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'contentPlatform', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                        >
+                                                          <option value="instagram">Instagram</option>
+                                                          <option value="facebook">Facebook</option>
+                                                          <option value="tiktok">TikTok</option>
+                                                          <option value="linkedin">LinkedIn</option>
+                                                        </select>
+                                                        <input
+                                                          type="text"
+                                                          value={branchAction.config?.contentTopic || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'contentTopic', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          placeholder="Topic (optional)"
+                                                        />
+                                                      </div>
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('socialPlatform') && (
+                                                      <div className="space-y-1.5">
+                                                        <select
+                                                          value={branchAction.config?.socialPlatform || 'facebook'}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'socialPlatform', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                        >
+                                                          <option value="facebook">Facebook</option>
+                                                          <option value="instagram">Instagram</option>
+                                                          <option value="both">Both</option>
+                                                        </select>
+                                                        <textarea
+                                                          value={branchAction.config?.socialMessage || '{aiResponse}'}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'socialMessage', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                          rows={2}
+                                                          placeholder="Post text — use {aiResponse} or custom"
+                                                        />
+                                                      </div>
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('reportType') && (
+                                                      <select
+                                                        value={branchAction.config?.reportType || 'weekly_summary'}
+                                                        onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'reportType', e.target.value)}
+                                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                                      >
+                                                        <option value="weekly_summary">Weekly Summary</option>
+                                                        <option value="monthly_summary">Monthly Summary</option>
+                                                      </select>
+                                                    )}
+                                                    {branchActionDef?.configFields?.includes('scrapeUrl') && (
+                                                      <div className="space-y-1.5">
+                                                        <input
+                                                          type="url"
+                                                          value={branchAction.config?.scrapeUrl || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'scrapeUrl', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          placeholder="https://competitor.com/pricing"
+                                                        />
+                                                        <textarea
+                                                          value={branchAction.config?.scrapeExtract || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'scrapeExtract', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                          rows={2}
+                                                          placeholder="What to extract..."
+                                                        />
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 );
                                               })}
@@ -2831,6 +2915,92 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                           />
                                         </div>
                                         <p className="text-[9px] text-slate-400">Picks leads from hunter_prospects pool. Each fires as prospect_found at a random time in the window.</p>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('contentType') && (
+                                      <div className="space-y-1.5">
+                                        <select
+                                          value={action.config?.contentType || 'social_post'}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'contentType', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                        >
+                                          <option value="social_post">Social Media Post</option>
+                                          <option value="carousel_script">Carousel Script</option>
+                                          <option value="video_script">Video Script (Reels/Shorts)</option>
+                                          <option value="blog_outline">Blog Outline</option>
+                                          <option value="email_campaign">Email Campaign</option>
+                                        </select>
+                                        <select
+                                          value={action.config?.contentPlatform || 'instagram'}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'contentPlatform', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                        >
+                                          <option value="instagram">Instagram</option>
+                                          <option value="facebook">Facebook</option>
+                                          <option value="tiktok">TikTok</option>
+                                          <option value="linkedin">LinkedIn</option>
+                                        </select>
+                                        <input
+                                          type="text"
+                                          value={action.config?.contentTopic || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'contentTopic', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="Topic (optional) — e.g., kitchen renovation tips, seasonal promo"
+                                        />
+                                        <p className="text-[9px] text-slate-400">AI generates content using your business context. Result available as {'{aiResponse}'} in next steps.</p>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('socialPlatform') && (
+                                      <div className="space-y-1.5">
+                                        <select
+                                          value={action.config?.socialPlatform || 'facebook'}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'socialPlatform', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                        >
+                                          <option value="facebook">Facebook Page</option>
+                                          <option value="instagram">Instagram</option>
+                                          <option value="both">Both</option>
+                                        </select>
+                                        <textarea
+                                          value={action.config?.socialMessage || '{aiResponse}'}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'socialMessage', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                          rows={3}
+                                          placeholder="Post text — use {aiResponse} from generate_content, or write custom text"
+                                        />
+                                        <p className="text-[9px] text-slate-400">Requires Meta access token in business settings. Chain with Generate Content for AI-written posts.</p>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('reportType') && (
+                                      <div className="space-y-1.5">
+                                        <select
+                                          value={action.config?.reportType || 'weekly_summary'}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'reportType', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-white"
+                                        >
+                                          <option value="weekly_summary">Weekly Summary</option>
+                                          <option value="monthly_summary">Monthly Summary</option>
+                                        </select>
+                                        <p className="text-[9px] text-slate-400">Analyzes leads, revenue, conversations & outreach. Sends AI insights to owner via WhatsApp.</p>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('scrapeUrl') && (
+                                      <div className="space-y-1.5">
+                                        <input
+                                          type="url"
+                                          value={action.config?.scrapeUrl || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'scrapeUrl', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="https://competitor.com/pricing"
+                                        />
+                                        <textarea
+                                          value={action.config?.scrapeExtract || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'scrapeExtract', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                          rows={2}
+                                          placeholder="What to extract — e.g., all service prices, contact info, job listings"
+                                        />
+                                        <p className="text-[9px] text-slate-400">Scrapes the URL via Apify and uses AI to extract structured data. Result in {'{aiResponse}'}.</p>
                                       </div>
                                     )}
                                   </div>

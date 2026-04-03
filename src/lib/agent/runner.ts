@@ -29,6 +29,8 @@ function getSupabase() {
 const MAX_STEPS_PER_INVOCATION = 5;   // Tools per serverless invocation (avoid timeout)
 const MAX_TOTAL_STEPS = 25;           // Hard cap across all continuations
 const AGENT_MODEL = 'gpt-4o-mini';    // Cost-effective for tool use
+const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — bail before Vercel's 60s hard kill
+const STALE_TASK_MINUTES = 5;         // Mark running tasks older than this as timed-out
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -144,7 +146,18 @@ export async function executeAgentTask(params: {
     toolLog,
   });
 
+  // Auto-clean stale tasks from previous invocations that got killed by Vercel
+  try {
+    await supabase
+      .from('agent_tasks')
+      .update({ status: 'failed', result: 'Timed out: stuck in running state', updated_at: new Date().toISOString() })
+      .eq('status', 'running')
+      .neq('id', taskId)
+      .lt('updated_at', new Date(Date.now() - STALE_TASK_MINUTES * 60_000).toISOString());
+  } catch { /* non-critical */ }
+
   // ── Agent Loop (wrapped in top-level try/catch so task never stays stuck) ──
+  const startTime = Date.now();
   try {
     let stepsThisInvocation = 0;
 
@@ -153,6 +166,12 @@ export async function executeAgentTask(params: {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
+      // ── Wall-clock check: bail before Vercel kills us ──
+      if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
+        console.log(`[agent:${taskId}] Approaching wall-clock limit (${Math.round((Date.now() - startTime) / 1000)}s), scheduling continuation`);
+        break; // Fall through to continuation logic below
+      }
+
       const completion = await client.chat.completions.create({
         model: AGENT_MODEL,
         messages: messages as Parameters<typeof client.chat.completions.create>[0]['messages'],
@@ -219,6 +238,12 @@ export async function executeAgentTask(params: {
 
           stepsUsed++;
           stepsThisInvocation++;
+
+          // Check wall clock after each tool execution too
+          if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
+            console.log(`[agent:${taskId}] Wall-clock limit hit mid-step, breaking to schedule continuation`);
+            break;
+          }
         }
       } else {
         // Model returned a final text response — task is complete

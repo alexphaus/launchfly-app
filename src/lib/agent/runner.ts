@@ -97,7 +97,7 @@ export async function executeAgentTask(params: {
   // Load business context for tools
   const { data: biz } = await supabase
     .from('businesses')
-    .select('name, whatsapp_number, phone_number, business_data')
+    .select('name, whatsapp_number, whatsapp_notify_number, phone_number, business_data')
     .eq('id', params.businessId)
     .single();
 
@@ -108,10 +108,12 @@ export async function executeAgentTask(params: {
     .eq('active', true)
     .maybeSingle();
 
+  // ownerPhone = where to deliver agent reports
+  // Priority: whatsapp_notify_number (explicit) > whatsapp_number > phone_number
   const toolCtx: ToolContext = {
     businessId: params.businessId,
     businessName: biz?.name || undefined,
-    ownerPhone: biz?.whatsapp_number || biz?.phone_number || undefined,
+    ownerPhone: biz?.whatsapp_notify_number || biz?.whatsapp_number || biz?.phone_number || undefined,
     assistantName: assistant?.name || undefined,
   };
 
@@ -142,15 +144,15 @@ export async function executeAgentTask(params: {
     toolLog,
   });
 
-  // ── Agent Loop ──
-  let stepsThisInvocation = 0;
+  // ── Agent Loop (wrapped in top-level try/catch so task never stays stuck) ──
+  try {
+    let stepsThisInvocation = 0;
 
-  // Instantiate OpenAI client once outside the loop
-  const OpenAI = (await import('openai')).default;
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    // Instantiate OpenAI client once outside the loop
+    const OpenAI = (await import('openai')).default;
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
-    try {
+    while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
       const completion = await client.chat.completions.create({
         model: AGENT_MODEL,
         messages: messages as Parameters<typeof client.chat.completions.create>[0]['messages'],
@@ -193,7 +195,13 @@ export async function executeAgentTask(params: {
           }
           console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name}(${JSON.stringify(toolArgs).substring(0, 100)})`);
 
-          const toolResult = await executeTool(tc.function.name, toolArgs, toolCtx);
+          let toolResult: string;
+          try {
+            toolResult = await executeTool(tc.function.name, toolArgs, toolCtx);
+          } catch (toolErr) {
+            toolResult = `Tool error: ${toolErr instanceof Error ? toolErr.message : String(toolErr)}`;
+            console.warn(`[agent:${taskId}] Tool ${tc.function.name} threw:`, toolResult);
+          }
 
           // Record tool observation
           messages.push({
@@ -227,21 +235,21 @@ export async function executeAgentTask(params: {
 
         return { status: 'completed', result: finalResult, taskId, stepsUsed, toolLog };
       }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[agent:${taskId}] Error at step ${stepsUsed}:`, errMsg);
-
-      await saveTaskState(supabase, taskId, params.businessId, {
-        status: 'failed',
-        goal: params.goal,
-        role: params.role,
-        stepsUsed,
-        toolLog,
-        result: `Agent error: ${errMsg}`,
-      });
-
-      return { status: 'failed', result: `Agent error: ${errMsg}`, taskId, stepsUsed, toolLog };
     }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[agent:${taskId}] Fatal error at step ${stepsUsed}:`, errMsg);
+
+    await saveTaskState(supabase, taskId, params.businessId, {
+      status: 'failed',
+      goal: params.goal,
+      role: params.role,
+      stepsUsed,
+      toolLog,
+      result: `Agent error: ${errMsg}`,
+    });
+
+    return { status: 'failed', result: `Agent error: ${errMsg}`, taskId, stepsUsed, toolLog };
   }
 
   // ── Budget exhausted for this invocation ──

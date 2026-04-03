@@ -285,7 +285,7 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
     if (!res.ok) return `Scrape failed: HTTP ${res.status}`;
 
     const text = await res.text();
-    const content = text.substring(0, 8000);
+    const content = text.substring(0, 40000);
 
     // If extract instruction provided, use AI to pull specific data
     if (extract) {

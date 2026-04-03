@@ -373,8 +373,8 @@ async function scheduleAgentContinuation(params: {
         role: params.role,
         // Truncate tool results in message history to stay within QStash body limits (~1MB)
         messages: params.messages.map(m => {
-          if (m.role === 'tool' && m.content && m.content.length > 2000) {
-            return { ...m, content: m.content.substring(0, 2000) + '\n[...truncated for continuation]' };
+          if (m.role === 'tool' && m.content && m.content.length > 20000) {
+            return { ...m, content: m.content.substring(0, 20000) + '\n[...truncated for continuation]' };
           }
           return m;
         }),

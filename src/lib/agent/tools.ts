@@ -152,6 +152,20 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_weather_forecast',
+      description: 'Get the 14-day weather forecast for a specific city or location (returns dates, emojis, and min/max temperatures). Use this to add weather context to local events.',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string', description: 'City name (e.g. "Madrid", "Los Alcázares")' },
+        },
+        required: ['location'],
+      },
+    },
+  },
 ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -205,6 +219,9 @@ export async function executeTool(
         args.platform as string | undefined,
         toolCtx,
       );
+
+    case 'get_weather_forecast':
+      return executeGetWeatherForecast(args.location as string);
 
     default:
       return `Unknown tool: ${name}`;
@@ -482,4 +499,48 @@ Keep it authentic, not corporate. Match the tone of a confident, helpful expert.
   });
 
   return result.text;
+}
+
+// ─── get_weather_forecast ────────────────────────────────────────────────
+
+function getWeatherEmoji(code: number): string {
+  if (code === 0) return '☀️';
+  if (code === 1 || code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code >= 45 && code <= 48) return '🌫️';
+  if (code >= 51 && code <= 67) return '🌧️';
+  if (code >= 71 && code <= 77) return '❄️';
+  if (code >= 80 && code <= 82) return '🌦️';
+  if (code >= 85 && code <= 86) return '🌨️';
+  if (code >= 95 && code <= 99) return '⛈️';
+  return '🌤️';
+}
+
+async function executeGetWeatherForecast(location: string): Promise<string> {
+  try {
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+    const geoData = await geoRes.json();
+    if (!geoData.results?.[0]) return `Could not find map coordinates for ${location}`;
+
+    const loc = geoData.results[0];
+    const lat = loc.latitude;
+    const lon = loc.longitude;
+
+    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=14`);
+    const wData = await wRes.json();
+    if (!wData.daily) return `No weather data available for ${location}`;
+
+    const times = wData.daily.time; // array of "YYYY-MM-DD"
+    const codes = wData.daily.weather_code;
+    const max = wData.daily.temperature_2m_max;
+    const min = wData.daily.temperature_2m_min;
+
+    let forecast = `14-day Weather for ${loc.name} (${loc.admin1 || loc.country}):\n`;
+    for(let i = 0; i < times.length; i++){
+       forecast += `${times[i]}: ${getWeatherEmoji(codes[i])} ${Math.round(max[i])}°C / ${Math.round(min[i])}°C\n`;
+    }
+    return forecast;
+  } catch (err) {
+    return `Failed to fetch weather: ${err instanceof Error ? err.message : String(err)}`;
+  }
 }

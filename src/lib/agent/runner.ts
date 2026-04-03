@@ -97,7 +97,7 @@ export async function executeAgentTask(params: {
   // Load business context for tools
   const { data: biz } = await supabase
     .from('businesses')
-    .select('name, owner_phone, business_data')
+    .select('name, whatsapp_number, phone_number, business_data')
     .eq('id', params.businessId)
     .single();
 
@@ -111,7 +111,7 @@ export async function executeAgentTask(params: {
   const toolCtx: ToolContext = {
     businessId: params.businessId,
     businessName: biz?.name || undefined,
-    ownerPhone: biz?.owner_phone || undefined,
+    ownerPhone: biz?.whatsapp_number || biz?.phone_number || undefined,
     assistantName: assistant?.name || undefined,
   };
 

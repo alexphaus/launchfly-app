@@ -340,10 +340,13 @@ function buildSystemPrompt(
   industry: string,
   location: string,
 ): string {
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
   return `You are an autonomous AI agent working for ${toolCtx.businessName || 'a business'}.
 ${role ? `Your role: ${role}` : ''}
 ${industry ? `Industry: ${industry}` : ''}
 ${location ? `Location: ${location}` : ''}
+Current Date: ${today}
 
 You have access to tools to search the web, scrape pages, find local businesses, save leads to the CRM, query the database, draft content, and send reports to the business owner.
 

@@ -308,11 +308,13 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
     if (extract) {
       const { generateText } = await import('ai');
       const { openai } = await import('@ai-sdk/openai');
-        
-        const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const result = await generateText({
-          model: openai('gpt-4o-mini'),
-          system: `You are an expert data extractor. Current date: ${today}.\n\nRULES:\n1. Extract EXACTLY what is requested.\n2. Scan the ENTIRE document from top to bottom before answering.\n3. Do NOT truncate or skip items that match the criteria.\n4. If filtering by date, carefully calculate relative dates (like "next week") and strictly check the START DATES of every item.`,
+      const result = await generateText({
+        model: openai('gpt-4o-mini'),
+        system: 'Extract the requested information from the scraped content. Be concise and structured.',
+        messages: [{ role: 'user', content: `EXTRACT: ${extract}\n\nCONTENT:\n${content}` }],
+      });
+      return result.text;
+    }
 
     return content;
   } catch (err) {

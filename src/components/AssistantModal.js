@@ -89,6 +89,7 @@ const AUTOMATION_ACTIONS = [
   { id: 'post_social', label: 'Post to Social', icon: '📣', configFields: ['socialPlatform', 'socialMessage'] },
   { id: 'generate_report', label: 'Business Report', icon: '📊', configFields: ['reportType'] },
   { id: 'scrape_url', label: 'Scrape URL', icon: '🕸️', configFields: ['scrapeUrl', 'scrapeExtract'] },
+  { id: 'agent_task', label: 'Agent Task', icon: '🚀', configFields: ['agentGoal', 'agentRole'] },
 ];
 
 // ─── Default Actions per Event ───────────────────────────────────────────
@@ -2664,6 +2665,23 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                                         />
                                                       </div>
                                                     )}
+                                                    {branchActionDef?.configFields?.includes('agentGoal') && (
+                                                      <div className="space-y-1.5">
+                                                        <textarea
+                                                          value={branchAction.config?.agentGoal || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'agentGoal', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                                          rows={3}
+                                                          placeholder="Agent goal — e.g., Find 10 restaurants in KL..."
+                                                        />
+                                                        <input
+                                                          value={branchAction.config?.agentRole || ''}
+                                                          onChange={e => updateBranchStep(ruleIdx, actIdx, branch.key, branchIdx, 'agentRole', e.target.value)}
+                                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                                          placeholder="Agent role (optional)"
+                                                        />
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 );
                                               })}
@@ -3001,6 +3019,24 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                                           placeholder="What to extract — e.g., all service prices, contact info, job listings"
                                         />
                                         <p className="text-[9px] text-slate-400">Scrapes the URL via Apify and uses AI to extract structured data. Result in {'{aiResponse}'}.</p>
+                                      </div>
+                                    )}
+                                    {actionDef?.configFields?.includes('agentGoal') && (
+                                      <div className="space-y-1.5">
+                                        <textarea
+                                          value={action.config?.agentGoal || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'agentGoal', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs resize-none"
+                                          rows={3}
+                                          placeholder="e.g., Find 10 restaurants in KL that need renovation. Save them to CRM and send me a report."
+                                        />
+                                        <input
+                                          value={action.config?.agentRole || ''}
+                                          onChange={e => updateActionInRule(ruleIdx, actIdx, 'agentRole', e.target.value)}
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+                                          placeholder="Agent role (optional) — e.g., Lead Generation Specialist, Content Strategist"
+                                        />
+                                        <p className="text-[9px] text-slate-400">AI agent runs autonomously: searches web, scrapes sites, finds leads, saves to CRM, drafts content, and reports back via WhatsApp. Supports {'{variable}'} placeholders.</p>
                                       </div>
                                     )}
                                   </div>

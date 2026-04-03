@@ -101,6 +101,7 @@ export const AVAILABLE_ACTIONS = [
   { id: 'post_social', label: 'Post to Social Media', icon: '📣', desc: 'Publish a post to Facebook/Instagram via Meta Graph API. Use with generate_content or provide text directly.', configFields: ['socialPlatform', 'socialMessage'] },
   { id: 'generate_report', label: 'Generate Business Report', icon: '📊', desc: 'AI analyzes leads, bookings, revenue, and conversations. Sends summary to owner via WhatsApp.', configFields: ['reportType'] },
   { id: 'scrape_url', label: 'Scrape URL', icon: '🕸️', desc: 'Scrape a website for data (competitor prices, job listings, directory info). Result in {aiResponse}.', configFields: ['scrapeUrl', 'scrapeExtract'] },
+  { id: 'agent_task', label: 'Autonomous Agent Task', icon: '🚀', desc: 'Launch an AI agent that can search the web, scrape sites, find leads, save to CRM, draft content, and report back. Runs autonomously in the background.', configFields: ['agentGoal', 'agentRole'] },
 ] as const;
 
 // ─── Template Filling ────────────────────────────────────────────────────
@@ -1525,6 +1526,60 @@ CUSTOMER NAME: ${customerName}
 
       ctx.aiResponse = extraction.text.trim();
       return { ok: true, detail: `Scraped ${url}: "${(ctx.aiResponse as string).substring(0, 100)}..."` };
+    }
+
+    // ─── Autonomous Agent Task ────────────────────────────────────────────
+
+    case 'agent_task': {
+      const goal = (cfg.agentGoal as string) ? fillVars(cfg.agentGoal as string, ctx) : '';
+      const role = (cfg.agentRole as string) || undefined;
+
+      if (!goal) return { ok: false, detail: 'No agent goal specified' };
+
+      // Dispatch to agent runner via QStash (async — don't block the action chain)
+      const qstashToken = process.env.QSTASH_TOKEN;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+
+      if (!qstashToken) {
+        // Fallback: run inline (will work for quick tasks but may timeout on long ones)
+        try {
+          const { executeAgentTask } = await import('@/lib/agent/runner');
+          const result = await executeAgentTask({ businessId: ctx.businessId, goal, role });
+          ctx.aiResponse = result.result || `Agent ${result.status} after ${result.stepsUsed} steps`;
+          return { ok: result.status !== 'failed', detail: ctx.aiResponse as string };
+        } catch (err) {
+          return { ok: false, detail: `Agent error: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      }
+
+      // Preferred: dispatch via QStash for robust async execution
+      try {
+        const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+        const targetUrl = `${appUrl}/api/agent/run`;
+        const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${qstashToken}`,
+            'Content-Type': 'application/json',
+            'Upstash-Delay': '1s',
+            'Upstash-Retries': '1',
+          },
+          body: JSON.stringify({
+            businessId: ctx.businessId,
+            goal,
+            role,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          return { ok: false, detail: `Agent dispatch failed: ${res.status} ${errText.substring(0, 200)}` };
+        }
+
+        return { ok: true, detail: `Agent task dispatched: "${goal.substring(0, 80)}"` };
+      } catch (err) {
+        return { ok: false, detail: `Agent dispatch error: ${err instanceof Error ? err.message : String(err)}` };
+      }
     }
 
     default:

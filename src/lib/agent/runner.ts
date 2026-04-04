@@ -28,7 +28,7 @@ function getSupabase() {
 
 const MAX_STEPS_PER_INVOCATION = 5;   // Tools per serverless invocation (avoid timeout)
 const MAX_TOTAL_STEPS = 25;           // Hard cap across all continuations
-const AGENT_MODEL = 'gpt-4o-mini';    // Cost-effective for tool use
+const AGENT_MODEL = 'gpt-4o';         // Full model for better reasoning & date filtering
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — bail before Vercel's 60s hard kill
 const STALE_TASK_MINUTES = 5;         // Mark running tasks older than this as timed-out
 

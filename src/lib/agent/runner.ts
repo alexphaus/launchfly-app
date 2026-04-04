@@ -219,7 +219,22 @@ export async function executeAgentTask(params: {
 
           let toolResult: string;
           try {
-            toolResult = await executeTool(tc.function.name, toolArgs, toolCtx);
+            // Per-tool timeout: 45s max (leave headroom for wall-clock)
+            const toolTimeout = 45_000;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), toolTimeout);
+            try {
+              toolResult = await Promise.race([
+                executeTool(tc.function.name, toolArgs, toolCtx),
+                new Promise<string>((_, reject) => {
+                  controller.signal.addEventListener('abort', () =>
+                    reject(new Error(`Tool ${tc.function.name} timed out after ${toolTimeout / 1000}s`))
+                  );
+                }),
+              ]);
+            } finally {
+              clearTimeout(timer);
+            }
           } catch (toolErr) {
             toolResult = `Tool error: ${toolErr instanceof Error ? toolErr.message : String(toolErr)}`;
             console.warn(`[agent:${taskId}] Tool ${tc.function.name} threw:`, toolResult);
@@ -404,12 +419,26 @@ async function scheduleAgentContinuation(params: {
         goal: params.goal,
         role: params.role,
         // Truncate tool results in message history to stay within QStash body limits (~1MB)
-        messages: params.messages.map(m => {
-          if (m.role === 'tool' && m.content && m.content.length > 20000) {
-            return { ...m, content: m.content.substring(0, 20000) + '\n[...truncated for continuation]' };
+        // First pass: trim individual messages; second pass: cap total payload
+        messages: (() => {
+          const trimmed = params.messages.map(m => {
+            if (m.role === 'tool' && m.content && m.content.length > 15000) {
+              return { ...m, content: m.content.substring(0, 15000) + '\n[...truncated]' };
+            }
+            return m;
+          });
+          // If total serialized size > 800KB, aggressively trim oldest tool results
+          let serialized = JSON.stringify(trimmed);
+          if (serialized.length > 800_000) {
+            for (let i = 0; i < trimmed.length && serialized.length > 800_000; i++) {
+              if (trimmed[i].role === 'tool' && trimmed[i].content && trimmed[i].content!.length > 2000) {
+                trimmed[i] = { ...trimmed[i], content: trimmed[i].content!.substring(0, 2000) + '\n[...aggressively truncated]' };
+                serialized = JSON.stringify(trimmed);
+              }
+            }
           }
-          return m;
-        }),
+          return trimmed;
+        })(),
         stepsUsed: params.stepsUsed,
         toolLog: params.toolLog,
       }),

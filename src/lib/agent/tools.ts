@@ -421,11 +421,15 @@ async function executeSendReport(
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     const provider = await getWhatsAppProvider(toolCtx.businessId);
 
-    await provider.sendWhatsApp(
+    const result = await provider.sendWhatsApp(
       toolCtx.ownerPhone,
       `🤖 *Agent Report${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}*\n\n${message}`,
       toolCtx.businessId,
     );
+
+    if (!result.sent) {
+      return `Failed to send report: ${result.error || 'Unknown WhatsApp error'}`;
+    }
     return 'Report sent to business owner via WhatsApp.';
   } catch (err) {
     return `Failed to send report: ${err instanceof Error ? err.message : String(err)}`;

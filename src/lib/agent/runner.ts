@@ -340,7 +340,11 @@ function buildSystemPrompt(
   industry: string,
   location: string,
 ): string {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
   return `You are an autonomous AI agent working for ${toolCtx.businessName || 'a business'}.
+TODAY'S DATE: ${todayStr}
 ${role ? `Your role: ${role}` : ''}
 ${industry ? `Industry: ${industry}` : ''}
 ${location ? `Location: ${location}` : ''}

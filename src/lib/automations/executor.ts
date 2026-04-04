@@ -107,9 +107,20 @@ export const AVAILABLE_ACTIONS = [
 // ─── Template Filling ────────────────────────────────────────────────────
 
 function fillVars(template: string, ctx: EventContext): string {
+  // Inject built-in date/time variables so {date}, {today}, {month}, {year}, {dayOfWeek} always resolve
+  const now = new Date();
+  const builtins: Record<string, string> = {
+    date: now.toISOString().split('T')[0],           // "2026-04-04"
+    today: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), // "Friday, April 4, 2026"
+    month: now.toLocaleDateString('en-US', { month: 'long' }),  // "April"
+    year: String(now.getFullYear()),                  // "2026"
+    dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }), // "Friday"
+  };
+  const merged = { ...builtins, ...ctx }; // ctx overrides builtins if explicitly set
+
   return template.replace(/\{(\w+(?:\.\w+)*)\}/g, (_, path: string) => {
     const parts = path.split('.');
-    let val: unknown = ctx;
+    let val: unknown = merged;
     for (const p of parts) {
       if (val && typeof val === 'object') val = (val as Record<string, unknown>)[p];
       else return '';

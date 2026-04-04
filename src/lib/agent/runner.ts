@@ -26,11 +26,12 @@ function getSupabase() {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const MAX_STEPS_PER_INVOCATION = 15;  // Tools per serverless invocation (avoid timeout)
-const MAX_TOTAL_STEPS = 100;          // Hard cap across all continuations
+const MAX_STEPS_PER_INVOCATION = 8;   // Tools per serverless invocation (8 × ~3.5s + LLM overhead ≈ 40s, safe for 60s limit)
+const MAX_TOTAL_STEPS = 80;            // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';   // DeepSeek V3 — strong reasoning, tool use, low cost
-const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — bail before Vercel's 60s hard kill
-const STALE_TASK_MINUTES = 5;         // Mark running tasks older than this as timed-out
+const WALL_CLOCK_LIMIT_MS = 45_000;    // 45s — bail well before Vercel's 60s hard kill (LLM calls can take 10s+)
+const STALE_TASK_MINUTES = 5;          // Mark running tasks older than this as timed-out
+const BUDGET_WARNING_STEPS = 5;        // When this many steps remain, tell agent to wrap up
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -179,12 +180,51 @@ export async function executeAgentTask(params: {
         break; // Fall through to continuation logic below
       }
 
+      // ── Budget warning: inject a system nudge when steps are running low ──
+      const stepsRemaining = MAX_TOTAL_STEPS - stepsUsed;
+      const budgetMessages = stepsRemaining <= BUDGET_WARNING_STEPS
+        ? [...messages, {
+            role: 'system' as const,
+            content: `⚠️ You have ${stepsRemaining} tool calls remaining. You MUST call send_report NOW with whatever data you have collected so far. Do not make any more research calls.`,
+          }]
+        : messages;
+
       const completion = await client.chat.completions.create({
         model: AGENT_MODEL,
-        messages: messages as Parameters<typeof client.chat.completions.create>[0]['messages'],
+        messages: budgetMessages as Parameters<typeof client.chat.completions.create>[0]['messages'],
         tools: agentTools,
         tool_choice: 'auto',
       });
+
+      // ── Post-LLM wall-clock check: the API call itself may have taken 10s+ ──
+      if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
+        console.log(`[agent:${taskId}] Wall-clock limit hit after LLM call (${Math.round((Date.now() - startTime) / 1000)}s), saving state for continuation`);
+        // Save the assistant's response to messages so the continuation can pick up cleanly
+        const msg = completion.choices[0]?.message;
+        if (msg?.tool_calls?.length) {
+          const fnCalls = msg.tool_calls.filter(
+            (tc): tc is Extract<typeof tc, { type: 'function' }> => tc.type === 'function',
+          );
+          messages.push({
+            role: 'assistant',
+            content: msg.content || null,
+            tool_calls: fnCalls.map(tc => ({
+              id: tc.id,
+              type: 'function' as const,
+              function: { name: tc.function.name, arguments: tc.function.arguments },
+            })),
+          });
+          // Add placeholder tool results so the message history stays valid
+          for (const tc of fnCalls) {
+            messages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: 'Tool execution deferred to next continuation (time limit reached).',
+            });
+          }
+        }
+        break;
+      }
 
       const choice = completion.choices[0];
       const assistantMessage = choice.message;
@@ -223,35 +263,8 @@ export async function executeAgentTask(params: {
 
           let toolResult: string;
           try {
-            // Check if we have enough time to even attempt this tool
-            const timeElapsed = Date.now() - startTime;
-            const timeRemaining = WALL_CLOCK_LIMIT_MS - timeElapsed;
-            
-            if (timeRemaining < 5000) {
-              console.log(`[agent:${taskId}] Only ${timeRemaining}ms left, breaking before executing tool`);
-              const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
-              for (const unexecutedTc of fnCalls) {
-                if (!executedIds.has(unexecutedTc.id)) {
-                  messages.push({
-                    role: 'tool',
-                    tool_call_id: unexecutedTc.id,
-                    content: 'Tool skipped due to execution time limit. Agent will resume execution in a moment.',
-                  });
-                  toolLog.push({
-                    tool: unexecutedTc.function.name,
-                    args: {},
-                    result: 'Skipped (timeout)',
-                    timestamp: new Date().toISOString(),
-                  });
-                  stepsUsed++;
-                  stepsThisInvocation++;
-                }
-              }
-              break;
-            }
-
-            // Per-tool timeout: max 45s, but strictly bounded by remaining wall-clock
-            const toolTimeout = Math.min(timeRemaining - 1500, 45_000);
+            // Per-tool timeout: 45s max (leave headroom for wall-clock)
+            const toolTimeout = 45_000;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), toolTimeout);
             try {
@@ -348,8 +361,46 @@ export async function executeAgentTask(params: {
   // ── Budget exhausted for this invocation ──
 
   if (stepsUsed >= MAX_TOTAL_STEPS) {
-    // Hard cap reached — force completion
-    const summary = `Agent reached maximum ${MAX_TOTAL_STEPS} steps. Tools used:\n${toolLog.map(t => `- ${t.tool}: ${t.result.substring(0, 80)}`).join('\n')}`;
+    // Hard cap reached — force one final send_report attempt with collected data
+    console.log(`[agent:${taskId}] MAX_TOTAL_STEPS reached (${stepsUsed}), forcing send_report`);
+
+    // Try to get the agent to send a report with whatever it has
+    try {
+      const OpenAI = (await import('openai')).default;
+      const client = new OpenAI({
+        apiKey: process.env.DEEPSEEK_API_KEY,
+        baseURL: 'https://api.deepseek.com',
+      });
+      const agentTools = getToolsForAgent(params.enabledTools);
+      const forceCompletion = await client.chat.completions.create({
+        model: AGENT_MODEL,
+        messages: [
+          ...messages,
+          {
+            role: 'system' as const,
+            content: 'CRITICAL: You have run out of tool budget. You MUST call send_report RIGHT NOW with all the data you have collected. Format the report as best you can with available information. This is your FINAL action.',
+          },
+        ] as Parameters<typeof client.chat.completions.create>[0]['messages'],
+        tools: agentTools,
+        tool_choice: { type: 'function', function: { name: 'send_report' } },
+      });
+
+      const forcedMsg = forceCompletion.choices[0]?.message;
+      if (forcedMsg?.tool_calls?.length) {
+        for (const tc of forcedMsg.tool_calls) {
+          if (tc.type === 'function' && tc.function.name === 'send_report') {
+            const args = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>;
+            const result = await executeTool('send_report', args, toolCtx);
+            toolLog.push({ tool: 'send_report', args, result: result.substring(0, 500), timestamp: new Date().toISOString() });
+            console.log(`[agent:${taskId}] Forced send_report: ${result.substring(0, 100)}`);
+          }
+        }
+      }
+    } catch (forceErr) {
+      console.error(`[agent:${taskId}] Forced send_report failed:`, forceErr);
+    }
+
+    const summary = `Agent completed after ${stepsUsed} steps (budget exhausted, report sent).`;
 
     await saveTaskState(supabase, taskId, params.businessId, {
       status: 'completed',

@@ -28,7 +28,7 @@ function getSupabase() {
 
 const MAX_STEPS_PER_INVOCATION = 5;   // Tools per serverless invocation (avoid timeout)
 const MAX_TOTAL_STEPS = 25;           // Hard cap across all continuations
-const AGENT_MODEL = 'gpt-4o';         // Full model for better reasoning & date filtering
+const AGENT_MODEL = 'deepseek-chat';   // DeepSeek V3 — strong reasoning, tool use, low cost
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — bail before Vercel's 60s hard kill
 const STALE_TASK_MINUTES = 5;         // Mark running tasks older than this as timed-out
 
@@ -161,9 +161,12 @@ export async function executeAgentTask(params: {
   try {
     let stepsThisInvocation = 0;
 
-    // Instantiate OpenAI client once outside the loop
+    // Instantiate DeepSeek client (OpenAI-compatible API)
     const OpenAI = (await import('openai')).default;
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = new OpenAI({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: 'https://api.deepseek.com',
+    });
 
     while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
       // ── Wall-clock check: bail before Vercel kills us ──

@@ -223,8 +223,35 @@ export async function executeAgentTask(params: {
 
           let toolResult: string;
           try {
-            // Per-tool timeout: 45s max (leave headroom for wall-clock)
-            const toolTimeout = 45_000;
+            // Check if we have enough time to even attempt this tool
+            const timeElapsed = Date.now() - startTime;
+            const timeRemaining = WALL_CLOCK_LIMIT_MS - timeElapsed;
+            
+            if (timeRemaining < 5000) {
+              console.log(`[agent:${taskId}] Only ${timeRemaining}ms left, breaking before executing tool`);
+              const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
+              for (const unexecutedTc of fnCalls) {
+                if (!executedIds.has(unexecutedTc.id)) {
+                  messages.push({
+                    role: 'tool',
+                    tool_call_id: unexecutedTc.id,
+                    content: 'Tool skipped due to execution time limit. Agent will resume execution in a moment.',
+                  });
+                  toolLog.push({
+                    tool: unexecutedTc.function.name,
+                    args: {},
+                    result: 'Skipped (timeout)',
+                    timestamp: new Date().toISOString(),
+                  });
+                  stepsUsed++;
+                  stepsThisInvocation++;
+                }
+              }
+              break;
+            }
+
+            // Per-tool timeout: max 45s, but strictly bounded by remaining wall-clock
+            const toolTimeout = Math.min(timeRemaining - 1500, 45_000);
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), toolTimeout);
             try {

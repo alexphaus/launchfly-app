@@ -4,8 +4,9 @@
 
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+const deepseek = new OpenAI({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    baseURL: 'https://api.deepseek.com',
 });
 
 // Known FAQ topics that we can answer
@@ -69,8 +70,8 @@ export async function handleFAQ(
 
     // Use AI for complex questions
     try {
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+        const response = await deepseek.chat.completions.create({
+            model: 'deepseek-chat',
             messages: [
                 { role: 'system', content: buildFAQSystemPrompt(business) },
                 { role: 'user', content: question }

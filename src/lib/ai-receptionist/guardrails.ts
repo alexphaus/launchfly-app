@@ -1,5 +1,5 @@
 import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { deepseek, MINI_MODEL } from '@/lib/ai-provider';
 
 /**
  * AI Receptionist Guardrails
@@ -140,7 +140,7 @@ export class Guardrails {
             const recentHistory = history.slice(-3);
             
             const result = await generateText({
-                model: openai('gpt-4o-mini'),
+                model: deepseek(MINI_MODEL),
                 system: `You are an Intent Classifier for a service business bot.
                 Analyze the USER MESSAGE and classify their intent into exactly one category:
                 

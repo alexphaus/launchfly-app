@@ -13,7 +13,7 @@
 
 import { generateText, generateObject } from 'ai';
 import { z } from 'zod';
-import { openai } from '@ai-sdk/openai';
+import { deepseek, CHAT_MODEL, MINI_MODEL } from '@/lib/ai-provider';
 import { createClient } from '@supabase/supabase-js';
 import { receptionistTools } from '@/lib/ai-receptionist/tools';
 import {
@@ -304,7 +304,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
   // ── Call AI (Parallel text gen + intent classification) ──
   const [result, intentCheck] = await Promise.all([
     generateText({
-      model: openai('gpt-4o'),
+      model: deepseek(CHAT_MODEL),
       system: systemPrompt,
       messages: [...history, { role: 'user' as const, content: messageText }],
       tools,
@@ -315,7 +315,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
     
     // Smart Followup Check: Is this prospect completely dead?
     generateObject({
-      model: openai('gpt-4o-mini'),
+      model: deepseek(MINI_MODEL),
       schema: z.object({
         isDead: z.boolean().describe("True if prospect explicitly opted out ('stop', 'no'), or gave very brief dead-end replies to a pitch (e.g. 'ok', 'not now') without asking any questions."),
         reason: z.string().describe("Why you classified this as dead or active"),
@@ -343,7 +343,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
 
     if (toolResultsSummary) {
       const cont = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: systemPrompt + '\n\nYou just called tools and got results. Respond to the customer with the data now.',
         messages: [
           ...history,
@@ -538,7 +538,7 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
 
   // ── Generate follow-up using full conversation history ──
   const result = await generateText({
-    model: openai('gpt-4o-mini'),
+    model: deepseek(MINI_MODEL),
     system: systemPrompt,
     messages: [...history, { role: 'user' as const, content: '[SYSTEM: The customer has been inactive. Generate a follow-up message.]' }],
     tools,
@@ -561,7 +561,7 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
 
     if (toolResultsSummary) {
       const cont = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: systemPrompt + '\n\nYou just called tools. Now send the follow-up message to re-engage the customer.',
         messages: [
           ...history,

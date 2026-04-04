@@ -161,9 +161,9 @@ export async function POST(request: NextRequest) {
         let quoteAmount: number | undefined;
         let jobType: string | undefined;
         try {
-          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-          const extraction = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+          const deepseek = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: 'https://api.deepseek.com' });
+          const extraction = await deepseek.chat.completions.create({
+            model: 'deepseek-chat',
             temperature: 0,
             max_tokens: 150,
             messages: [{

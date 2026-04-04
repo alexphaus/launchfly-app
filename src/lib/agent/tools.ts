@@ -332,9 +332,9 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
     // If extract instruction provided, use AI to pull specific data
     if (extract) {
       const { generateText } = await import('ai');
-      const { openai } = await import('@ai-sdk/openai');
+      const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
       const result = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: 'Extract the requested information from the scraped content. Be concise and structured.',
         messages: [{ role: 'user', content: `EXTRACT: ${extract}\n\nCONTENT:\n${content}` }],
       });
@@ -513,7 +513,7 @@ async function executeDraftContent(
   toolCtx: ToolContext,
 ): Promise<string> {
   const { generateText } = await import('ai');
-  const { openai } = await import('@ai-sdk/openai');
+  const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
 
   const systemPrompt = `You are a world-class content creator for ${toolCtx.businessName || 'a service business'}.
 Create compelling ${type} content that drives engagement, leads, and sales.
@@ -522,7 +522,7 @@ Include relevant hashtags for social posts. Include a CTA.
 Keep it authentic, not corporate. Match the tone of a confident, helpful expert.`;
 
   const result = await generateText({
-    model: openai('gpt-4o-mini'),
+    model: deepseek(MINI_MODEL),
     system: systemPrompt,
     messages: [{ role: 'user', content: `Create ${type} about: ${topic}` }],
   });

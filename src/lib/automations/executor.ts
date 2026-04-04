@@ -797,9 +797,9 @@ CUSTOMER NAME: ${customerName}
       const systemPrompt = systemParts.join('\n');
 
       const { generateText } = await import('ai');
-      const { openai } = await import('@ai-sdk/openai');
+      const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
       const result = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: systemPrompt,
         messages: [{ role: 'user', content: prompt }],
       });
@@ -1291,9 +1291,9 @@ CUSTOMER NAME: ${customerName}
         : `Create content that would resonate with potential customers looking for ${industry || 'services'} in ${location || 'the area'}. Pick a trending angle.`;
 
       const { generateText } = await import('ai');
-      const { openai } = await import('@ai-sdk/openai');
+      const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
       const result = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       });
@@ -1440,10 +1440,10 @@ CUSTOMER NAME: ${customerName}
 
       // Ask AI to analyze and add insights
       const { generateText } = await import('ai');
-      const { openai } = await import('@ai-sdk/openai');
+      const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
 
       const analysisResult = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: 'You are a business analyst. Given the metrics below, provide 3 specific, actionable insights in 2-3 sentences each. Focus on what to improve and what\'s working. Be direct and practical. Format with emoji bullets.',
         messages: [{ role: 'user', content: metricsBlock }],
       });
@@ -1528,9 +1528,9 @@ CUSTOMER NAME: ${customerName}
 
       // Ask AI to extract the relevant info
       const { generateText } = await import('ai');
-      const { openai } = await import('@ai-sdk/openai');
+      const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
       const extraction = await generateText({
-        model: openai('gpt-4o-mini'),
+        model: deepseek(MINI_MODEL),
         system: 'You are a data extraction specialist. Extract and structure the requested information from the scraped web content below. Be precise and concise.',
         messages: [{ role: 'user', content: `INSTRUCTION: ${extractInstruction}\n\nSCRAPED CONTENT:\n${scrapedText.substring(0, 8000)}` }],
       });

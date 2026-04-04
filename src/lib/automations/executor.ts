@@ -1544,6 +1544,12 @@ CUSTOMER NAME: ${customerName}
     case 'agent_task': {
       const goal = (cfg.agentGoal as string) ? fillVars(cfg.agentGoal as string, ctx) : '';
       const role = (cfg.agentRole as string) || undefined;
+      // Which internal tools this agent can use.
+      // Explicit array → those tools; '*' or undefined from Launchfly internal → null (all tools)
+      // Default for client agents: [] (core tools only — no save_leads/search_google_maps)
+      const enabledTools: string[] | null = cfg.agentTools === '*' ? null
+        : Array.isArray(cfg.agentTools) ? (cfg.agentTools as string[])
+        : []; // safe default: core-only
 
       if (!goal) return { ok: false, detail: 'No agent goal specified' };
 
@@ -1555,7 +1561,7 @@ CUSTOMER NAME: ${customerName}
         // Fallback: run inline (will work for quick tasks but may timeout on long ones)
         try {
           const { executeAgentTask } = await import('@/lib/agent/runner');
-          const result = await executeAgentTask({ businessId: ctx.businessId, goal, role });
+          const result = await executeAgentTask({ businessId: ctx.businessId, goal, role, enabledTools });
           ctx.aiResponse = result.result || `Agent ${result.status} after ${result.stepsUsed} steps`;
           return { ok: result.status !== 'failed', detail: ctx.aiResponse as string };
         } catch (err) {
@@ -1579,6 +1585,7 @@ CUSTOMER NAME: ${customerName}
             businessId: ctx.businessId,
             goal,
             role,
+            enabledTools,
           }),
         });
 

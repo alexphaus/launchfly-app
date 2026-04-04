@@ -16,6 +16,31 @@ function getSupabase() {
   );
 }
 
+// ─── Tool Availability ──────────────────────────────────────────────────
+// Tools tagged 'core' are available to all agents.
+// Tools tagged 'internal' are only available when explicitly enabled.
+// Pass enabledTools=['save_leads','search_google_maps'] to opt-in.
+
+const CORE_TOOLS = new Set([
+  'search_web', 'scrape_page', 'send_report',
+  'query_database', 'draft_content', 'get_weather_forecast',
+]);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps']);
+
+/**
+ * Return the tool schemas to pass to the model.
+ * - If enabledTools is provided, core tools + only the listed internal tools are included.
+ * - If enabledTools is undefined/null, ALL tools are included (backwards compat for Launchfly).
+ */
+export function getToolsForAgent(enabledTools?: string[] | null) {
+  if (!enabledTools) return AGENT_TOOLS; // legacy: all tools
+  const extras = new Set(enabledTools);
+  return AGENT_TOOLS.filter(t => {
+    const name = t.function.name;
+    return CORE_TOOLS.has(name) || extras.has(name);
+  });
+}
+
 // ─── Tool JSON Schemas (for OpenAI) ─────────────────────────────────────
 
 export const AGENT_TOOLS = [

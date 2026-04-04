@@ -15,7 +15,7 @@
 //   scheduleAgentContinuation() → QStash → /api/agent/run → resume
 
 import { createClient } from '@supabase/supabase-js';
-import { AGENT_TOOLS, executeTool, type ToolContext } from './tools';
+import { AGENT_TOOLS, getToolsForAgent, executeTool, type ToolContext } from './tools';
 
 function getSupabase() {
   return createClient(
@@ -81,6 +81,7 @@ export async function executeAgentTask(params: {
   messages?: AgentMessage[];  // Restored messages (for continuations)
   stepsUsed?: number;
   toolLog?: ToolLogEntry[];
+  enabledTools?: string[] | null; // Internal tools to enable (e.g. ['save_leads']); null = all
 }): Promise<{
   status: 'completed' | 'continued' | 'failed';
   result?: string;
@@ -168,6 +169,9 @@ export async function executeAgentTask(params: {
       baseURL: 'https://api.deepseek.com',
     });
 
+    // Resolve which tools this agent can use
+    const agentTools = getToolsForAgent(params.enabledTools);
+
     while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
       // ── Wall-clock check: bail before Vercel kills us ──
       if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
@@ -178,7 +182,7 @@ export async function executeAgentTask(params: {
       const completion = await client.chat.completions.create({
         model: AGENT_MODEL,
         messages: messages as Parameters<typeof client.chat.completions.create>[0]['messages'],
-        tools: AGENT_TOOLS,
+        tools: agentTools,
         tool_choice: 'auto',
       });
 
@@ -322,6 +326,7 @@ export async function executeAgentTask(params: {
     messages,
     stepsUsed,
     toolLog,
+    enabledTools: params.enabledTools,
   });
 
   if (continued) {
@@ -392,6 +397,7 @@ async function scheduleAgentContinuation(params: {
   messages: AgentMessage[];
   stepsUsed: number;
   toolLog: ToolLogEntry[];
+  enabledTools?: string[] | null;
 }): Promise<boolean> {
   const qstashToken = process.env.QSTASH_TOKEN;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
@@ -441,6 +447,7 @@ async function scheduleAgentContinuation(params: {
         })(),
         stepsUsed: params.stepsUsed,
         toolLog: params.toolLog,
+        enabledTools: params.enabledTools,
       }),
     });
 

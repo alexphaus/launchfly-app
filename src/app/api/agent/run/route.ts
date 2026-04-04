@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const { taskId, businessId, goal, role, messages, stepsUsed, toolLog } = body;
+    const { taskId, businessId, goal, role, messages, stepsUsed, toolLog, enabledTools } = body;
 
     if (!businessId || !goal) {
       return NextResponse.json(
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       messages,
       stepsUsed,
       toolLog,
+      enabledTools,
     });
 
     console.log(`[agent/run] Task ${result.taskId}: ${result.status} (${result.stepsUsed} steps)`);

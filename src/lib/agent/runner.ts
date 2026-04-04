@@ -26,8 +26,8 @@ function getSupabase() {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const MAX_STEPS_PER_INVOCATION = 5;   // Tools per serverless invocation (avoid timeout)
-const MAX_TOTAL_STEPS = 25;           // Hard cap across all continuations
+const MAX_STEPS_PER_INVOCATION = 15;  // Tools per serverless invocation (avoid timeout)
+const MAX_TOTAL_STEPS = 100;          // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';   // DeepSeek V3 — strong reasoning, tool use, low cost
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — bail before Vercel's 60s hard kill
 const STALE_TASK_MINUTES = 5;         // Mark running tasks older than this as timed-out
@@ -264,6 +264,25 @@ export async function executeAgentTask(params: {
           // Check wall clock after each tool execution too
           if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
             console.log(`[agent:${taskId}] Wall-clock limit hit mid-step, breaking to schedule continuation`);
+            // We must append dummy results for the remaining unexecuted tool calls
+            const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
+            for (const unexecutedTc of fnCalls) {
+              if (!executedIds.has(unexecutedTc.id)) {
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: unexecutedTc.id,
+                  content: 'Tool skipped due to execution time limit. Agent will resume execution in a moment.',
+                });
+                toolLog.push({
+                  tool: unexecutedTc.function.name,
+                  args: {},
+                  result: 'Skipped (timeout)',
+                  timestamp: new Date().toISOString(),
+                });
+                stepsUsed++;
+                stepsThisInvocation++;
+              }
+            }
             break;
           }
         }

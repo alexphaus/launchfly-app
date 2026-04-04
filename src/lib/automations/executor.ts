@@ -109,28 +109,12 @@ export const AVAILABLE_ACTIONS = [
 function fillVars(template: string, ctx: EventContext): string {
   // Inject built-in date/time variables so {date}, {today}, {month}, {year}, {dayOfWeek} always resolve
   const now = new Date();
-
-  // Calculate next week's Monday and Sunday
-  const dayIdx = now.getDay(); // 0=Sun, 1=Mon, ...
-  const daysUntilMon = dayIdx === 0 ? 1 : 8 - dayIdx; // days until next Monday
-  const nextMon = new Date(now);
-  nextMon.setDate(now.getDate() + daysUntilMon);
-  const nextSun = new Date(nextMon);
-  nextSun.setDate(nextMon.getDate() + 6);
-
-  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const fmtShort = (d: Date) => d.toISOString().split('T')[0]; // "2026-04-06"
-
   const builtins: Record<string, string> = {
     date: now.toISOString().split('T')[0],           // "2026-04-04"
     today: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), // "Friday, April 4, 2026"
     month: now.toLocaleDateString('en-US', { month: 'long' }),  // "April"
     year: String(now.getFullYear()),                  // "2026"
     dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }), // "Friday"
-    nextMonday: fmtDate(nextMon),                     // "April 6, 2026"
-    nextSunday: fmtDate(nextSun),                     // "April 12, 2026"
-    nextMondayShort: fmtShort(nextMon),               // "2026-04-06"
-    nextSundayShort: fmtShort(nextSun),               // "2026-04-12"
   };
   const merged = { ...builtins, ...ctx }; // ctx overrides builtins if explicitly set
 

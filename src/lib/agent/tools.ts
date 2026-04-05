@@ -25,7 +25,7 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -143,7 +143,7 @@ export const AGENT_TOOLS = [
         properties: {
           table: {
             type: 'string',
-            enum: ['customers', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings'],
+            enum: ['customers', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers'],
             description: 'Which table to query',
           },
           filters: {
@@ -188,6 +188,58 @@ export const AGENT_TOOLS = [
           location: { type: 'string', description: 'City name (e.g. "Madrid", "Los Alcázares")' },
         },
         required: ['location'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'send_whatsapp',
+      description: 'Send a WhatsApp message to any phone number (supplier, employee, partner). Use this to contact suppliers with quote requests, send job updates to technicians, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: 'Phone number with country code (e.g. "+34612345678")' },
+          message: { type: 'string', description: 'The message to send' },
+        },
+        required: ['phone', 'message'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'manage_job',
+      description: 'Create or update a job/purchase order in the jobs table. Use to log new jobs from scope extraction, update status (draft/quoting/ready/blocked/completed), add materials, record quotes, or flag blockers.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['create', 'update'], description: 'Create a new job or update an existing one' },
+          jobId: { type: 'string', description: 'Job ID (required for update)' },
+          title: { type: 'string', description: 'Job title/name (e.g. "Smith HVAC repair")' },
+          status: { type: 'string', enum: ['draft', 'quoting', 'ready', 'blocked', 'completed'], description: 'Job status' },
+          description: { type: 'string', description: 'Raw description or scope of work' },
+          materials_needed: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                item: { type: 'string' },
+                qty: { type: 'number' },
+                unit: { type: 'string' },
+              },
+              required: ['item'],
+            },
+            description: 'List of materials needed',
+          },
+          blockers: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'List of blockers preventing job from starting',
+          },
+          metadata: { type: 'object', description: 'Extra data: job_date, address, technician, client_name, etc.' },
+        },
+        required: ['action'],
       },
     },
   },
@@ -247,6 +299,12 @@ export async function executeTool(
 
     case 'get_weather_forecast':
       return executeGetWeatherForecast(args.location as string);
+
+    case 'send_whatsapp':
+      return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx);
+
+    case 'manage_job':
+      return executeManageJob(args as Record<string, unknown>, toolCtx.businessId);
 
     default:
       return `Unknown tool: ${name}`;
@@ -463,7 +521,7 @@ async function executeSendReport(
 
 // ─── query_database ──────────────────────────────────────────────────────
 
-const ALLOWED_TABLES = new Set(['customers', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings']);
+const ALLOWED_TABLES = new Set(['customers', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers']);
 
 // Only allow simple column names in select (no subqueries, no functions)
 function sanitizeSelect(select: string): string {
@@ -572,4 +630,93 @@ async function executeGetWeatherForecast(location: string): Promise<string> {
   } catch (err) {
     return `Failed to fetch weather: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+// ─── send_whatsapp (message any phone via business instance) ─────────────
+
+async function executeSendWhatsApp(
+  phone: string,
+  message: string,
+  toolCtx: ToolContext,
+): Promise<string> {
+  if (!phone) return 'No phone number provided.';
+  if (!message) return 'No message provided.';
+
+  // Normalize phone
+  let normalized = phone.replace(/[^\d+]/g, '');
+  if (!normalized.startsWith('+')) normalized = '+' + normalized;
+
+  try {
+    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+    const provider = await getWhatsAppProvider(toolCtx.businessId);
+    const result = await provider.sendWhatsApp(
+      normalized,
+      message,
+      toolCtx.businessId,
+    );
+
+    if (!result.sent) {
+      return `Failed to send WhatsApp to ${normalized}: ${result.error || 'Unknown error'}`;
+    }
+    return `Message sent to ${normalized} via WhatsApp.`;
+  } catch (err) {
+    return `Failed to send WhatsApp: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ─── manage_job (create/update jobs table) ──────────────────────────────
+
+async function executeManageJob(
+  args: Record<string, unknown>,
+  businessId: string,
+): Promise<string> {
+  const supabase = getSupabase();
+  const action = args.action as string;
+
+  if (action === 'create') {
+    const row: Record<string, unknown> = {
+      business_id: businessId,
+      title: (args.title as string) || 'Untitled Job',
+      status: (args.status as string) || 'draft',
+      description: (args.description as string) || null,
+      materials_needed: args.materials_needed || [],
+      blockers: args.blockers || [],
+      metadata: args.metadata || {},
+    };
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .insert(row)
+      .select('id, title, status')
+      .single();
+
+    if (error) return `Failed to create job: ${error.message}`;
+    return `Job created: "${data.title}" (ID: ${data.id}, status: ${data.status})`;
+  }
+
+  if (action === 'update') {
+    const jobId = args.jobId as string;
+    if (!jobId) return 'jobId is required for update action.';
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (args.title) updates.title = args.title;
+    if (args.status) updates.status = args.status;
+    if (args.description) updates.description = args.description;
+    if (args.materials_needed) updates.materials_needed = args.materials_needed;
+    if (args.blockers) updates.blockers = args.blockers;
+    if (args.metadata) updates.metadata = args.metadata;
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .update(updates)
+      .eq('id', jobId)
+      .eq('business_id', businessId)
+      .select('id, title, status')
+      .single();
+
+    if (error) return `Failed to update job: ${error.message}`;
+    return `Job updated: "${data.title}" (status: ${data.status})`;
+  }
+
+  return `Unknown action: ${action}. Use "create" or "update".`;
 }

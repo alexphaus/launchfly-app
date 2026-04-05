@@ -395,7 +395,58 @@ export async function POST(request: NextRequest) {
       waInstanceId = inst?.id;
     }
 
-    // ─── Fire automation event ──────────────────────────────────────
+    // ─── PURCHASING OS ROUTING ──────────────────────────────────────
+    // Owner → Purchasing OS agent | Supplier → quote-processing agent | Customer → receptionist
+    {
+      const { data: biz } = await supabase
+        .from('businesses')
+        .select('whatsapp_notify_number, whatsapp_number, phone_number')
+        .eq('id', businessId)
+        .single();
+
+      const ownerPhones = [
+        biz?.whatsapp_notify_number,
+        biz?.whatsapp_number,
+        biz?.phone_number,
+      ]
+        .filter(Boolean)
+        .map((p: string) => p.replace(/[\s\-()]/g, '').replace(/^\+/, ''));
+
+      const senderNorm = customerPhone.replace(/^\+/, '');
+      const isOwner = ownerPhones.includes(senderNorm);
+
+      if (isOwner) {
+        console.log(`   👑 Owner message from +${customerPhone} → Purchasing OS agent`);
+        const dispatched = await dispatchAgentViaQStash({
+          businessId,
+          goal: `The business owner just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nProcess their request. They may be:\n- Describing a new job (create it with manage_job)\n- Asking about job status (query the jobs table)\n- Asking you to contact suppliers (use send_whatsapp)\n- Asking about materials or quotes\n\nAlways send_report back to the owner via WhatsApp when done.`,
+          role: 'You are the AI Purchasing Assistant. You help contractors manage jobs, track materials, and coordinate with suppliers. Be concise and action-oriented.',
+          enabledTools: ['send_whatsapp', 'manage_job'],
+        });
+        return NextResponse.json({ ok: true, routed: 'owner_agent', dispatched });
+      }
+
+      // Check if sender is a known supplier for this business
+      const { data: supplier } = await supabase
+        .from('suppliers')
+        .select('id, name, category')
+        .eq('business_id', businessId)
+        .or(`whatsapp_number.eq.${phoneWithPlus},whatsapp_number.eq.+${senderNorm}`)
+        .maybeSingle();
+
+      if (supplier) {
+        console.log(`   📦 Supplier "${supplier.name}" (+${customerPhone}) → quote-processing agent`);
+        const dispatched = await dispatchAgentViaQStash({
+          businessId,
+          goal: `Supplier "${supplier.name}" (category: ${supplier.category || 'general'}) replied via WhatsApp: "${messageText.substring(0, 500)}"\n\n1. Query open jobs needing materials (status IN ('quoting','blocked'))\n2. If this is a quote/price/availability reply, update the relevant job via manage_job (add to quotes_received)\n3. If all materials for a job now have quotes, update status to 'ready'\n4. send_report a summary to the business owner.`,
+          role: 'You are the AI Purchasing Assistant processing a supplier reply. Extract pricing, availability, and delivery info from their message. Update job records accurately.',
+          enabledTools: ['send_whatsapp', 'manage_job'],
+        });
+        return NextResponse.json({ ok: true, routed: 'supplier_agent', dispatched });
+      }
+    }
+
+    // ─── Fire automation event (customer → receptionist) ────────────
     const result = await fireEvent({
       businessId,
       event: 'inbound_whatsapp',
@@ -422,6 +473,50 @@ export async function POST(request: NextRequest) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+/** Dispatch an agent task via QStash (or inline fallback) */
+async function dispatchAgentViaQStash(payload: {
+  businessId: string;
+  goal: string;
+  role: string;
+  enabledTools: string[];
+}): Promise<boolean> {
+  const qstashToken = process.env.QSTASH_TOKEN;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+  if (!qstashToken) {
+    // Inline fallback (may timeout on long tasks)
+    try {
+      const { executeAgentTask } = await import('@/lib/agent/runner');
+      await executeAgentTask(payload);
+      return true;
+    } catch (err) {
+      console.error('   ❌ Inline agent fallback failed:', err);
+      return false;
+    }
+  }
+  try {
+    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+    const targetUrl = `${appUrl}/api/agent/run`;
+    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${qstashToken}`,
+        'Content-Type': 'application/json',
+        'Upstash-Delay': '1s',
+        'Upstash-Retries': '1',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.error(`   ❌ QStash dispatch failed: ${res.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('   ❌ QStash dispatch error:', err);
+    return false;
+  }
+}
 
 /** Resolve Evolution API credentials for a given instance name */
 async function resolveInstanceCreds(instName: string): Promise<{ baseUrl: string; apiKey: string; instanceName: string } | null> {

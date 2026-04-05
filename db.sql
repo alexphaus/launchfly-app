@@ -1,6 +1,11 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public._bot_message_ids (
+  message_id text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT _bot_message_ids_pkey PRIMARY KEY (message_id)
+);
 CREATE TABLE public.acquisition_campaigns (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -33,6 +38,20 @@ CREATE TABLE public.ad_campaigns (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT ad_campaigns_pkey PRIMARY KEY (id),
   CONSTRAINT ad_campaigns_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.agent_tasks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'running'::text CHECK (status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text, 'paused'::text])),
+  goal text NOT NULL,
+  role text,
+  steps_used integer NOT NULL DEFAULT 0,
+  tool_log jsonb DEFAULT '[]'::jsonb,
+  result text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT agent_tasks_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_tasks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.ai_activities (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -213,6 +232,24 @@ CREATE TABLE public.ai_usage (
   CONSTRAINT ai_usage_pkey PRIMARY KEY (id),
   CONSTRAINT ai_usage_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.assistants (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  name text NOT NULL DEFAULT 'AI Sales Assistant'::text,
+  tone text NOT NULL DEFAULT 'friendly'::text,
+  goal text NOT NULL DEFAULT 'book_consultation'::text,
+  system_prompt text,
+  custom_rules ARRAY DEFAULT '{}'::text[],
+  knowledge_base jsonb DEFAULT '{}'::jsonb,
+  tools_enabled ARRAY DEFAULT '{send_checkout_link,book_calendar,send_template,transfer_to_human}'::text[],
+  sequence_steps jsonb DEFAULT '[]'::jsonb,
+  trigger_config jsonb DEFAULT '{}'::jsonb,
+  active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT assistants_pkey PRIMARY KEY (id),
+  CONSTRAINT assistants_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.blast_transactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -390,6 +427,9 @@ CREATE TABLE public.businesses (
   blast_credits numeric DEFAULT 0,
   blast_credits_used numeric DEFAULT 0,
   slot_settings jsonb DEFAULT '{"slots": [{"id": "morning", "end": "11:00", "label": "9am - 11am", "start": "09:00"}, {"id": "early_afternoon", "end": "15:00", "label": "1pm - 3pm", "start": "13:00"}, {"id": "late_afternoon", "end": "17:00", "label": "3pm - 5pm", "start": "15:00"}], "days_ahead": 3, "buffer_hours": 2}'::jsonb,
+  whatsapp_template_feedback text,
+  prospecting_config jsonb,
+  outreach_paused boolean DEFAULT false,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT businesses_guarantee_id_fkey FOREIGN KEY (guarantee_id) REFERENCES public.revenue_guarantees(id),
@@ -568,10 +608,29 @@ CREATE TABLE public.customers (
   last_outbound_type text,
   last_outbound_at timestamp with time zone,
   last_service_record_id uuid,
+  last_interaction_context text,
+  wa_instance_id uuid,
+  ai_paused_until timestamp with time zone,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
   CONSTRAINT customers_last_service_record_id_fkey FOREIGN KEY (last_service_record_id) REFERENCES public.service_records(id),
+  CONSTRAINT customers_wa_instance_id_fkey FOREIGN KEY (wa_instance_id) REFERENCES public.whatsapp_instances(id),
   CONSTRAINT customers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
   CONSTRAINT customers_referred_by_fkey FOREIGN KEY (referred_by) REFERENCES public.customers(id)
+);
+CREATE TABLE public.demo_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  phone text NOT NULL,
+  owner_name text NOT NULL,
+  business_name text,
+  business_id text,
+  step text NOT NULL DEFAULT 'pending'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  completed_at timestamp with time zone,
+  outcome text,
+  stripe_session_id text,
+  fallback_sent boolean DEFAULT false,
+  CONSTRAINT demo_sessions_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.discount_codes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -776,7 +835,7 @@ CREATE TABLE public.hunter_prospects (
   notes text,
   source text DEFAULT 'manual'::text CHECK (source = ANY (ARRAY['facebook'::text, 'google_maps'::text, 'instagram'::text, 'referral'::text, 'manual'::text, 'other'::text])),
   pain_signals ARRAY DEFAULT '{}'::text[],
-  status text DEFAULT 'new'::text CHECK (status = ANY (ARRAY['new'::text, 'opener_sent'::text, 'replied'::text, 'preview_sent'::text, 'follow_up_1'::text, 'follow_up_2'::text, 'follow_up_3'::text, 'closed_won'::text, 'closed_lost'::text, 'archived'::text])),
+  status text DEFAULT 'new'::text CHECK (status = ANY (ARRAY['new'::text, 'opener_queued'::text, 'opener_sent'::text, 'replied'::text, 'preview_sent'::text, 'follow_up_1'::text, 'follow_up_2'::text, 'follow_up_3'::text, 'closed_won'::text, 'closed_lost'::text, 'archived'::text, 'no_whatsapp'::text])),
   preview_business_id uuid,
   preview_url text,
   created_at timestamp with time zone DEFAULT now(),
@@ -788,7 +847,10 @@ CREATE TABLE public.hunter_prospects (
   created_by uuid,
   email text,
   raw_context text,
+  priority integer NOT NULL DEFAULT 0,
+  wa_instance_id uuid,
   CONSTRAINT hunter_prospects_pkey PRIMARY KEY (id),
+  CONSTRAINT hunter_prospects_wa_instance_id_fkey FOREIGN KEY (wa_instance_id) REFERENCES public.whatsapp_instances(id),
   CONSTRAINT hunter_prospects_preview_business_id_fkey FOREIGN KEY (preview_business_id) REFERENCES public.businesses(id),
   CONSTRAINT hunter_prospects_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
@@ -1038,6 +1100,46 @@ CREATE TABLE public.public_metrics (
   metrics jsonb NOT NULL,
   last_updated timestamp with time zone DEFAULT now(),
   CONSTRAINT public_metrics_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.quote_chat_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  lead_id uuid NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])),
+  content text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT quote_chat_history_pkey PRIMARY KEY (id),
+  CONSTRAINT quote_chat_history_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.quote_leads(id)
+);
+CREATE TABLE public.quote_leads (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  phone text NOT NULL,
+  email text,
+  quote_amount numeric NOT NULL,
+  job_type text NOT NULL,
+  contractor_id text,
+  status text NOT NULL DEFAULT 'Open'::text CHECK (status = ANY (ARRAY['Open'::text, 'Called'::text, 'WhatsApp_Nurture'::text, 'Booked'::text, 'Lost'::text])),
+  call_sid text,
+  call_outcome text,
+  whatsapp_thread_id text,
+  stripe_payment_link text,
+  retell_call_id text,
+  next_action_time timestamp with time zone NOT NULL DEFAULT (now() + '48:00:00'::interval),
+  attempts integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  business_id uuid,
+  currency text NOT NULL DEFAULT 'USD'::text,
+  source text NOT NULL DEFAULT 'webhook'::text,
+  sequence_step integer NOT NULL DEFAULT 0,
+  sequence_paused boolean NOT NULL DEFAULT false,
+  paused_until timestamp with time zone,
+  timezone text NOT NULL DEFAULT 'America/New_York'::text,
+  last_reply_at timestamp with time zone,
+  sequence_completed boolean NOT NULL DEFAULT false,
+  breakup_reply text,
+  CONSTRAINT quote_leads_pkey PRIMARY KEY (id),
+  CONSTRAINT quote_leads_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.referrals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1397,6 +1499,19 @@ CREATE TABLE public.social_platform_accounts (
   CONSTRAINT social_platform_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT social_platform_accounts_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.sticker_scans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  customer_phone text NOT NULL,
+  source text DEFAULT 'warranty_sticker'::text,
+  scanned_at timestamp with time zone DEFAULT now(),
+  converted_to_customer boolean DEFAULT false,
+  customer_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT sticker_scans_pkey PRIMARY KEY (id),
+  CONSTRAINT sticker_scans_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT sticker_scans_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+);
 CREATE TABLE public.success_patterns (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid NOT NULL,
@@ -1494,4 +1609,23 @@ CREATE TABLE public.weekly_digests (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT weekly_digests_pkey PRIMARY KEY (id),
   CONSTRAINT weekly_digests_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.whatsapp_instances (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  label text NOT NULL DEFAULT ''::text,
+  provider text NOT NULL DEFAULT 'ultramsg'::text,
+  instance_id text,
+  token text,
+  base_url text,
+  api_key text,
+  instance_name text,
+  daily_limit integer NOT NULL DEFAULT 25,
+  sends_today integer NOT NULL DEFAULT 0,
+  last_reset_at timestamp with time zone NOT NULL DEFAULT now(),
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT whatsapp_instances_pkey PRIMARY KEY (id),
+  CONSTRAINT whatsapp_instances_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );

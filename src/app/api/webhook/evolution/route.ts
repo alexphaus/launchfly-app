@@ -421,7 +421,7 @@ export async function POST(request: NextRequest) {
           businessId,
           goal: `The business owner just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nProcess their request. They may be:\n- Describing a new job (create it with manage_job)\n- Asking about job status (query the jobs table)\n- Asking you to contact suppliers (use send_whatsapp)\n- Asking about materials or quotes\n\nAlways send_report back to the owner via WhatsApp when done.`,
           role: 'You are the AI Purchasing Assistant. You help contractors manage jobs, track materials, and coordinate with suppliers. Be concise and action-oriented.',
-          enabledTools: ['send_whatsapp', 'manage_job'],
+          enabledTools: ['manage_job', 'send_whatsapp', 'query_database', 'send_report'],
         });
         return NextResponse.json({ ok: true, routed: 'owner_agent', dispatched });
       }
@@ -440,7 +440,7 @@ export async function POST(request: NextRequest) {
           businessId,
           goal: `Supplier "${supplier.name}" (category: ${supplier.category || 'general'}) replied via WhatsApp: "${messageText.substring(0, 500)}"\n\n1. Query open jobs needing materials (status IN ('quoting','blocked'))\n2. If this is a quote/price/availability reply, update the relevant job via manage_job (add to quotes_received)\n3. If all materials for a job now have quotes, update status to 'ready'\n4. send_report a summary to the business owner.`,
           role: 'You are the AI Purchasing Assistant processing a supplier reply. Extract pricing, availability, and delivery info from their message. Update job records accurately.',
-          enabledTools: ['send_whatsapp', 'manage_job'],
+          enabledTools: ['manage_job', 'send_whatsapp', 'query_database', 'send_report'],
         });
         return NextResponse.json({ ok: true, routed: 'supplier_agent', dispatched });
       }

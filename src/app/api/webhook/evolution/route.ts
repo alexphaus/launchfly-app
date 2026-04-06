@@ -442,12 +442,6 @@ export async function POST(request: NextRequest) {
           enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report'];
         }
 
-        // ── Instant acknowledgment: owner gets a reply immediately, not after agent finishes ──
-        try {
-          const { sendWhatsApp } = await import('@/lib/evolution');
-          await sendWhatsApp(customerPhone, '⚡ Got it — working on it now…', businessId);
-        } catch { /* non-critical — agent will still send_report when done */ }
-
         const dispatched = await dispatchAgentViaQStash({
           businessId,
           goal: goalStr,

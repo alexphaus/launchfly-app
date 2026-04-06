@@ -228,6 +228,51 @@ export async function POST(request: NextRequest) {
       data.message?.extendedTextMessage?.text ||
       '';
 
+    // Handle documents and images without text
+    if (!messageText) {
+      const docMsg = data.message?.documentMessage || data.message?.documentWithCaptionMessage?.message?.documentMessage;
+      const imgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
+
+      if (docMsg) {
+        const fileName = docMsg.fileName || docMsg.title || 'a document';
+        const mimetype = docMsg.mimetype;
+        
+        let extractedText: string | null = null;
+        if (mimetype === 'application/pdf') {
+          console.log(`   📄 PDF detected from ${remoteJid}, extracting text...`);
+          try {
+            const instCreds = await resolveInstanceCreds(instanceName);
+            if (instCreds) {
+              const { extractTextFromDocument } = await import('@/lib/extract-document');
+              const text = await extractTextFromDocument({
+                baseUrl: instCreds.baseUrl,
+                apiKey: instCreds.apiKey,
+                instanceName: instCreds.instanceName,
+                message: data.message,
+                messageKey: data.key,
+                mimetype,
+                fileName,
+              });
+              if (text && text.trim().length > 0) {
+                extractedText = text;
+                console.log(`   📝 Extracted ${text.length} chars from PDF: "${text.substring(0, 100).replace(/\n/g, ' ')}..."`);
+              }
+            }
+          } catch (err) {
+            console.warn('   ⚠️ PDF extraction failed:', err);
+          }
+        }
+
+        if (extractedText) {
+          messageText = `[Supplier sent a PDF document: ${fileName}]\n\n--- PDF CONTENTS ---\n${extractedText}\n--- END PDF CONTENTS ---`;
+        } else {
+          messageText = `[Supplier sent a document: ${fileName} - I cannot read its contents yet. Ask the owner to review it manually.]`;
+        }
+      } else if (imgMsg) {
+        messageText = `[Supplier sent an image - I cannot describe it yet. Ask the owner to review it manually.]`;
+      }
+    }
+
     // ─── Voice Note Transcription ───────────────────────────────────
     const isAudioMessage = !!(data.message?.audioMessage);
     if (isAudioMessage && !messageText) {

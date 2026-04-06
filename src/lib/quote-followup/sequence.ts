@@ -111,6 +111,8 @@ async function resolveSequenceSteps(businessId: string | null): Promise<Sequence
       .select('sequence_steps')
       .eq('business_id', businessId)
       .eq('active', true)
+      .neq('name', 'Purchasing OS')
+      .limit(1)
       .maybeSingle();
 
     const dbSteps = assistant?.sequence_steps as DBSequenceStep[] | null;

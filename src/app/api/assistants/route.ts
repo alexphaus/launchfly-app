@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('business_id', businessId)
       .eq('active', true)
+      .neq('name', 'Purchasing OS')
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -147,6 +149,8 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('business_id', body.businessId)
         .eq('active', true)
+        .neq('name', 'Purchasing OS')
+        .limit(1)
         .maybeSingle();
       existing = data;
     }
@@ -264,12 +268,13 @@ export async function PUT(req: NextRequest) {
     const supabase = getSupabase();
 
     if (body.createNew) {
-      // Deactivate all current assistants for this business
+      // Deactivate all current customer-facing assistants (preserve internal ones like Purchasing OS)
       await supabase
         .from('assistants')
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('business_id', body.businessId)
-        .eq('active', true);
+        .eq('active', true)
+        .neq('name', 'Purchasing OS');
 
       // Create a new one
       const { data: newAssistant, error } = await supabase
@@ -307,12 +312,13 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ error: 'Assistant not found' }, { status: 404 });
       }
 
-      // Deactivate all current assistants
+      // Deactivate all current customer-facing assistants (preserve internal ones like Purchasing OS)
       await supabase
         .from('assistants')
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('business_id', body.businessId)
-        .eq('active', true);
+        .eq('active', true)
+        .neq('name', 'Purchasing OS');
 
       // Activate the chosen one
       const { data: switched, error } = await supabase

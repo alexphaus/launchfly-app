@@ -110,6 +110,8 @@ export async function executeAgentTask(params: {
     .select('name')
     .eq('business_id', params.businessId)
     .eq('active', true)
+    .neq('name', 'Purchasing OS')
+    .limit(1)
     .maybeSingle();
 
   // ownerPhone = where to deliver agent reports

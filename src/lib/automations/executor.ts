@@ -441,6 +441,8 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
             .select('system_prompt, knowledge_base, custom_rules, tone, goal, name')
             .eq('business_id', ctx.businessId)
             .eq('active', true)
+            .neq('name', 'Purchasing OS')
+            .limit(1)
             .maybeSingle();
 
           const assistantName = assistant?.name || 'the assistant';
@@ -776,7 +778,7 @@ CUSTOMER NAME: ${customerName}
       const supabase = getSupabase();
       const [{ data: biz }, { data: assistant }] = await Promise.all([
         supabase.from('businesses').select('name, industry, city, state').eq('id', ctx.businessId).single(),
-        supabase.from('assistants').select('system_prompt, knowledge_base, custom_rules, goal').eq('business_id', ctx.businessId).eq('active', true).maybeSingle(),
+        supabase.from('assistants').select('system_prompt, knowledge_base, custom_rules, goal').eq('business_id', ctx.businessId).eq('active', true).neq('name', 'Purchasing OS').limit(1).maybeSingle(),
       ]);
 
       const kb = assistant?.knowledge_base || {};
@@ -1257,7 +1259,7 @@ CUSTOMER NAME: ${customerName}
       const supabase = getSupabase();
       const [{ data: biz }, { data: assistant }] = await Promise.all([
         supabase.from('businesses').select('name, industry, city, state, business_data').eq('id', ctx.businessId).single(),
-        supabase.from('assistants').select('system_prompt, knowledge_base, tone, goal').eq('business_id', ctx.businessId).eq('active', true).maybeSingle(),
+        supabase.from('assistants').select('system_prompt, knowledge_base, tone, goal').eq('business_id', ctx.businessId).eq('active', true).neq('name', 'Purchasing OS').limit(1).maybeSingle(),
       ]);
 
       const bizName = biz?.name || 'the business';
@@ -1667,6 +1669,8 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
     .select('trigger_config')
     .eq('business_id', ctx.businessId)
     .eq('active', true)
+    .neq('name', 'Purchasing OS')
+    .limit(1)
     .maybeSingle();
 
   const triggerConfig = assistant?.trigger_config as { rules?: AutomationRule[] } | null;

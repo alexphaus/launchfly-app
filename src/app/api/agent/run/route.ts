@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const { taskId, businessId, goal, role, messages, stepsUsed, toolLog, enabledTools } = body;
+    const { taskId, businessId, goal, role, messages, stepsUsed, toolLog, enabledTools, ownerPhone } = body;
 
     if (!businessId || !goal) {
       return NextResponse.json(
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       businessId,
       goal,
       role,
+      ownerPhone,
       messages,
       stepsUsed,
       toolLog,

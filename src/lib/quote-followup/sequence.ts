@@ -111,7 +111,7 @@ async function resolveSequenceSteps(businessId: string | null): Promise<Sequence
       .select('sequence_steps')
       .eq('business_id', businessId)
       .eq('active', true)
-      .neq('name', 'Purchasing OS')
+      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")')
       .limit(1)
       .maybeSingle();
 

@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { AGENT_TOOLS, getToolsForAgent, executeTool, type ToolContext } from './tools';
+import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
 
 function getSupabase() {
   return createClient(
@@ -79,6 +80,7 @@ export async function executeAgentTask(params: {
   businessId: string;
   goal: string;
   role?: string;
+  ownerPhone?: string;    // Owner phone for memory loading
   messages?: AgentMessage[];  // Restored messages (for continuations)
   stepsUsed?: number;
   toolLog?: ToolLogEntry[];
@@ -110,7 +112,7 @@ export async function executeAgentTask(params: {
     .select('name')
     .eq('business_id', params.businessId)
     .eq('active', true)
-    .neq('name', 'Purchasing OS')
+    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")')
     .limit(1)
     .maybeSingle();
 
@@ -129,10 +131,64 @@ export async function executeAgentTask(params: {
     const industry = (bd?.industry || bd?.category || '') as string;
     const location = (bd?.city || bd?.location || '') as string;
 
+    // ── Load Memory Context (conversation history, recent tasks, active jobs) ──
+    const ownerPhoneNorm = (params.ownerPhone || toolCtx.ownerPhone || '').replace(/^\+/, '');
+    const [conversationHistory, recentTasks, activeJobs] = await Promise.all([
+      // 1. Recent owner↔agent conversations (last 8 days, up to 30 messages)
+      ownerPhoneNorm
+        ? getConversationHistory(ownerPhoneNorm, params.businessId)
+        : Promise.resolve([]),
+      // 2. Last 5 completed agent tasks (summaries)
+      supabase
+        .from('agent_tasks')
+        .select('goal, result, updated_at')
+        .eq('business_id', params.businessId)
+        .eq('status', 'completed')
+        .order('updated_at', { ascending: false })
+        .limit(5)
+        .then(r => r.data || []),
+      // 3. Active jobs for this business
+      supabase
+        .from('jobs')
+        .select('id, title, status, description, materials_needed, blockers, updated_at')
+        .eq('business_id', params.businessId)
+        .in('status', ['draft', 'quoting', 'ready', 'blocked'])
+        .order('updated_at', { ascending: false })
+        .limit(10)
+        .then(r => r.data || []),
+    ]);
+
+    // Build memory context string for the system prompt
+    let memoryContext = '';
+
+    if (conversationHistory.length > 0) {
+      memoryContext += '\n\n## RECENT CONVERSATION HISTORY (owner ↔ you)\n';
+      for (const msg of conversationHistory.slice(-20)) {
+        memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${msg.content}\n`;
+      }
+    }
+
+    if (recentTasks.length > 0) {
+      memoryContext += '\n\n## RECENT COMPLETED TASKS\n';
+      for (const t of recentTasks) {
+        const ago = Math.round((Date.now() - new Date(t.updated_at).getTime()) / 3600000);
+        memoryContext += `- [${ago}h ago] Goal: ${(t.goal as string)?.substring(0, 150)} → Result: ${(t.result as string)?.substring(0, 200)}\n`;
+      }
+    }
+
+    if (activeJobs.length > 0) {
+      memoryContext += '\n\n## ACTIVE JOBS/PURCHASE ORDERS\n';
+      for (const j of activeJobs) {
+        memoryContext += `- "${j.title}" (ID: ${j.id}, status: ${j.status})`;
+        if (j.blockers?.length) memoryContext += ` ⚠️ Blockers: ${j.blockers.join(', ')}`;
+        memoryContext += '\n';
+      }
+    }
+
     messages = [
       {
         role: 'system',
-        content: buildSystemPrompt(toolCtx, params.role, industry, location),
+        content: buildSystemPrompt(toolCtx, params.role, industry, location, memoryContext),
       },
       {
         role: 'user',
@@ -341,6 +397,20 @@ export async function executeAgentTask(params: {
           result: finalResult,
         });
 
+        // ── Persist conversation to chat_history for memory continuity ──
+        const ownerPhoneNorm = (params.ownerPhone || toolCtx.ownerPhone || '').replace(/^\+/, '');
+        if (ownerPhoneNorm) {
+          try {
+            // Save the owner's original message (goal) as 'user'
+            const userMsg = params.goal.replace(/^.*just sent this WhatsApp message:\s*"?/i, '').replace(/"?\s*\n\n(?:Review|Process)[\s\S]*$/, '').substring(0, 2000);
+            await saveMessage(ownerPhoneNorm, 'user', userMsg, params.businessId);
+            // Save the agent's final report as 'assistant'
+            await saveMessage(ownerPhoneNorm, 'assistant', finalResult.substring(0, 2000), params.businessId);
+          } catch (e) {
+            console.warn(`[agent:${taskId}] Failed to save conversation to history:`, e);
+          }
+        }
+
         return { status: 'completed', result: finalResult, taskId, stepsUsed, toolLog };
       }
     }
@@ -422,6 +492,7 @@ export async function executeAgentTask(params: {
     businessId: params.businessId,
     goal: params.goal,
     role: params.role,
+    ownerPhone: params.ownerPhone,
     messages,
     stepsUsed,
     toolLog,
@@ -461,27 +532,49 @@ function buildSystemPrompt(
   role: string | undefined,
   industry: string,
   location: string,
+  memoryContext?: string,
 ): string {
   const now = new Date();
   const todayStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  return `You are an autonomous AI agent working for ${toolCtx.businessName || 'a business'}.
+  // If a custom role/system_prompt was provided (from DB), use it as the primary identity
+  const identity = role
+    ? role
+    : `You are an autonomous AI agent working for ${toolCtx.businessName || 'a business'}.`;
+
+  return `${identity}
+
 TODAY'S DATE: ${todayStr}
-${role ? `Your role: ${role}` : ''}
-${industry ? `Industry: ${industry}` : ''}
-${location ? `Location: ${location}` : ''}
+BUSINESS: ${toolCtx.businessName || 'Unknown'}
+${industry ? `INDUSTRY: ${industry}` : ''}
+${location ? `LOCATION: ${location}` : ''}
 
-You have access to tools to search the web, scrape pages, find local businesses, save leads to the CRM, query the database, draft content, and send reports to the business owner.
+You have access to tools: search the web, scrape pages, find local businesses, save leads, query the database, draft content, send WhatsApp messages, manage jobs, delegate tasks, and send reports to the owner.
 
-RULES:
+## RULES
 1. Think step-by-step. Plan your approach before using tools.
 2. Use search_web to research before making decisions.
-3. Use scrape_page to get detailed info from specific URLs.
-4. Always save valuable leads using save_leads — don't just list them.
-5. When you're done, send_report your findings/results to the owner.
-6. Be efficient — minimize unnecessary tool calls.
-7. If a tool fails, try an alternative approach.
-8. When your task is complete, provide a clear summary of what you accomplished.
+3. Always save valuable leads using save_leads — don't just list them.
+4. When done, use send_report to deliver findings/results to the owner.
+5. Be efficient — minimize unnecessary tool calls.
+6. If a tool fails, try an alternative approach.
+7. When your task is complete, provide a clear summary.
+
+## MEMORY & CONTINUITY
+You have access to conversation history and recent task context below. Use this to:
+- Reference past conversations naturally ("As we discussed yesterday...")
+- Avoid re-doing work that was already completed
+- Follow up on pending items proactively
+- Provide strategic recommendations based on patterns you observe
+${memoryContext || '\n(No prior conversation history available — this is the first interaction.)'}
+
+## STRATEGIC THINKING
+When the owner asks a question or gives a task:
+- Consider the broader business context, not just the literal request
+- Proactively flag risks, opportunities, or follow-up actions
+- If you see patterns in past tasks (e.g. repeated supplier issues), mention them
+- Suggest improvements or optimizations when relevant
+- Be concise but insightful — act like a trusted Chief of Staff, not just a task executor
 
 IMPORTANT: When you have completed the task, respond with a final text message summarizing what you did and the results. Do NOT call any more tools after your work is done.`;
 }
@@ -493,6 +586,7 @@ async function scheduleAgentContinuation(params: {
   businessId: string;
   goal: string;
   role?: string;
+  ownerPhone?: string;
   messages: AgentMessage[];
   stepsUsed: number;
   toolLog: ToolLogEntry[];
@@ -547,6 +641,7 @@ async function scheduleAgentContinuation(params: {
         stepsUsed: params.stepsUsed,
         toolLog: params.toolLog,
         enabledTools: params.enabledTools,
+        ownerPhone: params.ownerPhone,
       }),
     });
 

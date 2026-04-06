@@ -416,14 +416,39 @@ export async function POST(request: NextRequest) {
       const isOwner = ownerPhones.includes(senderNorm);
 
       if (isOwner) {
-        console.log(`   👑 Owner message from +${customerPhone} → Purchasing OS agent`);
+        console.log(`   👑 Owner message from +${customerPhone} → Orchestrator`);
+        
+        // Try to fetch the "Chief of Staff" orchestrator assistant
+        const { data: orchestrator } = await supabase
+          .from('assistants')
+          .select('name, system_prompt, tools_enabled')
+          .eq('business_id', businessId)
+          .eq('name', 'Chief of Staff')
+          .maybeSingle();
+
+        let goalStr = '';
+        let rolePrompt = '';
+        let enabledTools: string[] = [];
+
+        if (orchestrator) {
+          goalStr = `The business owner/CEO just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nReview the request and determine the best course of action. If it is a task for the Purchasing or Marketing department, use delegate_task to dispatch it contextually. If it is a direct query (like querying database), handle it yourself. Always confirm receipt with the owner via send_report.`;
+          rolePrompt = orchestrator.system_prompt;
+          enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
+        } else {
+          // Fallback to the Purchasing OS explicitly as before
+          goalStr = `The business owner just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nProcess their request. They may be:\n- Describing a new job (create it with manage_job)\n- Asking about job status (query the jobs table)\n- Asking you to contact suppliers (use send_whatsapp)\n- Asking about materials or quotes\n\nAlways send_report back to the owner via WhatsApp when done.`;
+          rolePrompt = 'You are the AI Purchasing Assistant. You help contractors manage jobs, track materials, and coordinate with suppliers. Be concise and action-oriented.';
+          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report'];
+        }
+
         const dispatched = await dispatchAgentViaQStash({
           businessId,
-          goal: `The business owner just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nProcess their request. They may be:\n- Describing a new job (create it with manage_job)\n- Asking about job status (query the jobs table)\n- Asking you to contact suppliers (use send_whatsapp)\n- Asking about materials or quotes\n\nAlways send_report back to the owner via WhatsApp when done.`,
-          role: 'You are the AI Purchasing Assistant. You help contractors manage jobs, track materials, and coordinate with suppliers. Be concise and action-oriented.',
-          enabledTools: ['manage_job', 'send_whatsapp', 'query_database', 'send_report'],
+          goal: goalStr,
+          role: rolePrompt,
+          enabledTools,
+          ownerPhone: customerPhone,
         });
-        return NextResponse.json({ ok: true, routed: 'owner_agent', dispatched });
+        return NextResponse.json({ ok: true, routed: 'owner_agent', dispatched, orchestrator: !!orchestrator });
       }
 
       // Check if sender is a known supplier for this business
@@ -480,6 +505,7 @@ async function dispatchAgentViaQStash(payload: {
   goal: string;
   role: string;
   enabledTools: string[];
+  ownerPhone?: string;
 }): Promise<boolean> {
   const qstashToken = process.env.QSTASH_TOKEN;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';

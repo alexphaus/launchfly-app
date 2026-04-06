@@ -25,7 +25,7 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -206,6 +206,22 @@ export const AGENT_TOOLS = [
       },
     },
   },
+
+  {
+    type: 'function' as const,
+    function: {
+      name: 'delegate_task',
+      description: 'Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). Use this when the request requires specialized back-office capabilities. Do not wait for them to finish, just dispatch and then use send_report to the owner.',
+      parameters: {
+        type: 'object',
+        properties: {
+          assistantConfigName: { type: 'string', description: 'The exact name of the assistant config in the database (e.g. "Purchasing OS", "Marketing OS")' },
+          instruction: { type: 'string', description: 'A detailed prompt describing what the sub-agent needs to accomplish.' },
+        },
+        required: ['assistantConfigName', 'instruction'],
+      },
+    },
+  },
   {
     type: 'function' as const,
     function: {
@@ -302,6 +318,10 @@ export async function executeTool(
 
     case 'send_whatsapp':
       return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx);
+
+
+    case 'delegate_task':
+      return executeDelegateTask(args.assistantConfigName as string, args.instruction as string, toolCtx);
 
     case 'manage_job':
       return executeManageJob(args as Record<string, unknown>, toolCtx.businessId);
@@ -719,4 +739,53 @@ async function executeManageJob(
   }
 
   return `Unknown action: ${action}. Use "create" or "update".`;
+}
+
+
+// ─── delegate_task (orchestrator spins up sub-agent) ─────────────────────
+
+async function executeDelegateTask(
+  assistantConfigName: string,
+  instruction: string,
+  toolCtx: ToolContext,
+): Promise<string> {
+  try {
+    const supabase = getSupabase();
+    const { data: assistant } = await supabase
+      .from('assistants')
+      .select('system_prompt, tools_enabled')
+      .eq('business_id', toolCtx.businessId)
+      .eq('name', assistantConfigName)
+      .limit(1)
+      .maybeSingle();
+
+    if (!assistant) {
+      return `Failed: Could not find an assistant named "${assistantConfigName}". Available ones typically are "Purchasing OS", "Marketing OS", etc.`;
+    }
+
+    const { Client } = await import('@upstash/qstash');
+    const qstashToken = process.env.QSTASH_TOKEN;
+    if (!qstashToken) return 'Failed: QSTASH_TOKEN missing, cannot dispatch sub-agent.';
+    
+    const qstash = new Client({ token: qstashToken });
+    const pubUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.launchfly.ai';
+    const qstashUrl = pubUrl.endsWith('/') ? `${pubUrl}api/agent/run` : `${pubUrl}/api/agent/run`;
+
+    const rawTools = assistant.tools_enabled;
+    const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
+
+    await qstash.publishJSON({
+      url: qstashUrl,
+      body: {
+        businessId: toolCtx.businessId,
+        goal: `[DELEGATED TASK] ${instruction}`,
+        role: assistant.system_prompt,
+        enabledTools,
+      },
+    });
+
+    return `Successfully dispatched task to ${assistantConfigName}. The agent will work in the background.`;
+  } catch (err) {
+    return `Failed to delegate: ${err instanceof Error ? err.message : String(err)}`;
+  }
 }

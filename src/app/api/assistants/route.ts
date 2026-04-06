@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('business_id', businessId)
       .eq('active', true)
-      .neq('name', 'Purchasing OS')
+      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")')
       .limit(1)
       .maybeSingle();
 
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('business_id', body.businessId)
         .eq('active', true)
-        .neq('name', 'Purchasing OS')
+        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")')
         .limit(1)
         .maybeSingle();
       existing = data;
@@ -274,7 +274,7 @@ export async function PUT(req: NextRequest) {
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('business_id', body.businessId)
         .eq('active', true)
-        .neq('name', 'Purchasing OS');
+        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")');
 
       // Create a new one
       const { data: newAssistant, error } = await supabase
@@ -318,7 +318,7 @@ export async function PUT(req: NextRequest) {
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('business_id', body.businessId)
         .eq('active', true)
-        .neq('name', 'Purchasing OS');
+        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")');
 
       // Activate the chosen one
       const { data: switched, error } = await supabase

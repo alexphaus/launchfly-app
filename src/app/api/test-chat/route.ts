@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
         .select('system_prompt, knowledge_base, tools_enabled, custom_rules, tone, goal')
         .eq('business_id', businessId)
         .eq('active', true)
-        .neq('name', 'Purchasing OS')
+        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")')
         .limit(1)
         .maybeSingle(),
     ]);

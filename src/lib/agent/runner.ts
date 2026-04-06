@@ -116,13 +116,20 @@ export async function executeAgentTask(params: {
     .limit(1)
     .maybeSingle();
 
+  // Determine the name to use in the report. If the runner was given a specific role (e.g. Chief of Staff),
+  // try to infer the name from it, otherwise use the customer-facing assistant name or default.
+  let repName = assistant?.name;
+  if (params.role?.includes('Chief of Staff')) repName = 'Chief of Staff';
+  else if (params.role?.includes('Purchasing OS')) repName = 'Purchasing OS';
+  else if (params.role?.includes('Content & Growth OS')) repName = 'Content & Growth OS';
+
   // ownerPhone = where to deliver agent reports
   // Priority: whatsapp_notify_number (explicit) > whatsapp_number > phone_number
   const toolCtx: ToolContext = {
     businessId: params.businessId,
     businessName: biz?.name || undefined,
     ownerPhone: biz?.whatsapp_notify_number || biz?.whatsapp_number || biz?.phone_number || undefined,
-    assistantName: assistant?.name || undefined,
+    assistantName: repName,
   };
 
   // Build initial messages if this is a fresh task

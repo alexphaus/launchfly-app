@@ -112,7 +112,7 @@ export async function executeAgentTask(params: {
     .select('name')
     .eq('business_id', params.businessId)
     .eq('active', true)
-    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS")')
+    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
     .limit(1)
     .maybeSingle();
 

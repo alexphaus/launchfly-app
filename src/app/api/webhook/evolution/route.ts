@@ -431,15 +431,22 @@ export async function POST(request: NextRequest) {
         let enabledTools: string[] = [];
 
         if (orchestrator) {
-          goalStr = `The business owner/CEO just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nReview the request and determine the best course of action. If it is a task for the Purchasing or Marketing department, use delegate_task to dispatch it contextually. If it is a direct query (like querying database), handle it yourself. Always confirm receipt with the owner via send_report.`;
+          // Pass the raw message — the system_prompt already contains all orchestration instructions
+          goalStr = messageText.substring(0, 1000);
           rolePrompt = orchestrator.system_prompt;
           enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
         } else {
           // Fallback to the Purchasing OS explicitly as before
-          goalStr = `The business owner just sent this WhatsApp message: "${messageText.substring(0, 500)}"\n\nProcess their request. They may be:\n- Describing a new job (create it with manage_job)\n- Asking about job status (query the jobs table)\n- Asking you to contact suppliers (use send_whatsapp)\n- Asking about materials or quotes\n\nAlways send_report back to the owner via WhatsApp when done.`;
-          rolePrompt = 'You are the AI Purchasing Assistant. You help contractors manage jobs, track materials, and coordinate with suppliers. Be concise and action-oriented.';
+          goalStr = messageText.substring(0, 1000);
+          rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
           enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report'];
         }
+
+        // ── Instant acknowledgment: owner gets a reply immediately, not after agent finishes ──
+        try {
+          const { sendWhatsApp } = await import('@/lib/evolution');
+          await sendWhatsApp(customerPhone, '⚡ Got it — working on it now…', businessId);
+        } catch { /* non-critical — agent will still send_report when done */ }
 
         const dispatched = await dispatchAgentViaQStash({
           businessId,

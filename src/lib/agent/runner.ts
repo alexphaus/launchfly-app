@@ -163,8 +163,9 @@ export async function executeAgentTask(params: {
 
     if (conversationHistory.length > 0) {
       memoryContext += '\n\n## RECENT CONVERSATION HISTORY (owner ↔ you)\n';
-      for (const msg of conversationHistory.slice(-20)) {
-        memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${msg.content}\n`;
+      // Limit to last 10 turns to keep system prompt lean
+      for (const msg of conversationHistory.slice(-10)) {
+        memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${msg.content.substring(0, 300)}\n`;
       }
     }
 
@@ -172,7 +173,10 @@ export async function executeAgentTask(params: {
       memoryContext += '\n\n## RECENT COMPLETED TASKS\n';
       for (const t of recentTasks) {
         const ago = Math.round((Date.now() - new Date(t.updated_at).getTime()) / 3600000);
-        memoryContext += `- [${ago}h ago] Goal: ${(t.goal as string)?.substring(0, 150)} → Result: ${(t.result as string)?.substring(0, 200)}\n`;
+        // Skip delegated sub-task goals from the history shown to the orchestrator
+        const goalStr = (t.goal as string) || '';
+        if (goalStr.startsWith('[DELEGATED TASK]')) continue;
+        memoryContext += `- [${ago}h ago] ${goalStr.substring(0, 120)} → ${(t.result as string)?.substring(0, 150)}\n`;
       }
     }
 
@@ -398,13 +402,12 @@ export async function executeAgentTask(params: {
         });
 
         // ── Persist conversation to chat_history for memory continuity ──
+        // Skip delegated sub-tasks — only save direct owner↔agent conversations
         const ownerPhoneNorm = (params.ownerPhone || toolCtx.ownerPhone || '').replace(/^\+/, '');
-        if (ownerPhoneNorm) {
+        if (ownerPhoneNorm && !params.goal.startsWith('[DELEGATED TASK]')) {
           try {
-            // Save the owner's original message (goal) as 'user'
-            const userMsg = params.goal.replace(/^.*just sent this WhatsApp message:\s*"?/i, '').replace(/"?\s*\n\n(?:Review|Process)[\s\S]*$/, '').substring(0, 2000);
-            await saveMessage(ownerPhoneNorm, 'user', userMsg, params.businessId);
-            // Save the agent's final report as 'assistant'
+            // goal is now the raw owner WhatsApp message (no wrapper to strip)
+            await saveMessage(ownerPhoneNorm, 'user', params.goal.substring(0, 2000), params.businessId);
             await saveMessage(ownerPhoneNorm, 'assistant', finalResult.substring(0, 2000), params.businessId);
           } catch (e) {
             console.warn(`[agent:${taskId}] Failed to save conversation to history:`, e);

@@ -123,11 +123,12 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'send_report',
-      description: 'Send a formatted message/report to the business owner via WhatsApp. Use to deliver results, ask for approval, or provide updates.',
+      description: 'Send a formatted message/report to the business owner via WhatsApp. Use to deliver results, ask for approval, or provide updates. You can attach an image URL to make the report richer.',
       parameters: {
         type: 'object',
         properties: {
           message: { type: 'string', description: 'The message to send to the business owner' },
+          imageUrl: { type: 'string', description: 'Optional secure HTTPS URL of an image (e.g. graph, trending product photo) to attach to the report.' },
         },
         required: ['message'],
       },
@@ -201,6 +202,7 @@ export const AGENT_TOOLS = [
         properties: {
           phone: { type: 'string', description: 'Phone number with country code (e.g. "+34612345678")' },
           message: { type: 'string', description: 'The message to send' },
+          imageUrl: { type: 'string', description: 'Optional secure HTTPS URL of an image to attach to the message (e.g. materials, job site photo).' },
         },
         required: ['phone', 'message'],
       },
@@ -294,7 +296,7 @@ export async function executeTool(
       return executeSaveLeads(args.leads as Array<Record<string, string>>, toolCtx.businessId);
 
     case 'send_report':
-      return executeSendReport(args.message as string, toolCtx);
+      return executeSendReport(args.message as string, toolCtx, args.imageUrl as string | undefined);
 
     case 'query_database':
       return executeQueryDatabase(
@@ -317,7 +319,7 @@ export async function executeTool(
       return executeGetWeatherForecast(args.location as string);
 
     case 'send_whatsapp':
-      return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx);
+      return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx, args.imageUrl as string | undefined);
 
 
     case 'delegate_task':
@@ -517,6 +519,7 @@ async function executeSaveLeads(
 async function executeSendReport(
   message: string,
   toolCtx: ToolContext,
+  imageUrl?: string,
 ): Promise<string> {
   if (!toolCtx.ownerPhone) return 'Cannot send report — owner phone number not configured.';
 
@@ -524,11 +527,23 @@ async function executeSendReport(
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     const provider = await getWhatsAppProvider(toolCtx.businessId);
 
-    const result = await provider.sendWhatsApp(
-      toolCtx.ownerPhone,
-      `🤖 *Agent Report${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}*\n\n${message}`,
-      toolCtx.businessId,
-    );
+    const fullMessage = `🤖 *Agent Report${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}*\n\n${message}`;
+
+    let result;
+    if (imageUrl) {
+      result = await provider.sendImage(
+        toolCtx.ownerPhone,
+        imageUrl,
+        fullMessage,
+        toolCtx.businessId,
+      );
+    } else {
+      result = await provider.sendWhatsApp(
+        toolCtx.ownerPhone,
+        fullMessage,
+        toolCtx.businessId,
+      );
+    }
 
     if (!result.sent) {
       return `Failed to send report: ${result.error || 'Unknown WhatsApp error'}`;
@@ -658,6 +673,7 @@ async function executeSendWhatsApp(
   phone: string,
   message: string,
   toolCtx: ToolContext,
+  imageUrl?: string,
 ): Promise<string> {
   if (!phone) return 'No phone number provided.';
   if (!message) return 'No message provided.';
@@ -669,11 +685,22 @@ async function executeSendWhatsApp(
   try {
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     const provider = await getWhatsAppProvider(toolCtx.businessId);
-    const result = await provider.sendWhatsApp(
-      normalized,
-      message,
-      toolCtx.businessId,
-    );
+    
+    let result;
+    if (imageUrl) {
+      result = await provider.sendImage(
+        normalized,
+        imageUrl,
+        message,
+        toolCtx.businessId,
+      );
+    } else {
+      result = await provider.sendWhatsApp(
+        normalized,
+        message,
+        toolCtx.businessId,
+      );
+    }
 
     if (!result.sent) {
       return `Failed to send WhatsApp to ${normalized}: ${result.error || 'Unknown error'}`;

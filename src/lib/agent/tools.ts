@@ -763,26 +763,35 @@ async function executeDelegateTask(
       return `Failed: Could not find an assistant named "${assistantConfigName}". Available ones typically are "Purchasing OS", "Marketing OS", etc.`;
     }
 
-    const { Client } = await import('@upstash/qstash');
     const qstashToken = process.env.QSTASH_TOKEN;
     if (!qstashToken) return 'Failed: QSTASH_TOKEN missing, cannot dispatch sub-agent.';
-    
-    const qstash = new Client({ token: qstashToken });
-    const pubUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.launchfly.ai';
-    const qstashUrl = pubUrl.endsWith('/') ? `${pubUrl}api/agent/run` : `${pubUrl}/api/agent/run`;
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.launchfly.ai';
+    const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
+    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
 
     const rawTools = assistant.tools_enabled;
     const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
 
-    await qstash.publishJSON({
-      url: qstashUrl,
-      body: {
+    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${qstashToken}`,
+        'Content-Type': 'application/json',
+        'Upstash-Retries': '1',
+        'Upstash-Delay': '1s',
+      },
+      body: JSON.stringify({
         businessId: toolCtx.businessId,
         goal: `[DELEGATED TASK] ${instruction}`,
         role: assistant.system_prompt,
         enabledTools,
-      },
+      }),
     });
+
+    if (!res.ok) {
+      return `Failed: QStash returned ${res.status}`;
+    }
 
     return `Successfully dispatched task to ${assistantConfigName}. The agent will work in the background.`;
   } catch (err) {

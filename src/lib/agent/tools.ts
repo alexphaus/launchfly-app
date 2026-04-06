@@ -25,7 +25,7 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'analyze_inventory']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -261,7 +261,25 @@ export const AGENT_TOOLS = [
       },
     },
   },
-];
+    {
+      type: 'function' as const,
+      function: {
+        name: 'analyze_inventory',
+        description: 'Analyze a photo of current inventory/stall/van/shelf and compare it against the saved golden-state (fully stocked) reference photo. Identifies missing and low-stock items and drafts a purchase order. Can also save a new golden-state reference image or analyze a single image without comparison.',
+        parameters: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['compare', 'set_golden', 'analyze', 'list_golden'], description: 'compare: diff current vs golden. set_golden: save a new reference photo. analyze: describe a single image. list_golden: list saved reference photos.' },
+            imageUrl: { type: 'string', description: 'URL of the image to analyze or save as golden state.' },
+            label: { type: 'string', description: 'Label for the golden state image (e.g. "Market stall - jewelry section")' },
+            category: { type: 'string', description: 'Category: stall, van, shelf, expositor, workshop, etc.' },
+            goldenImageId: { type: 'string', description: 'Specific golden state image ID to compare against. If omitted, uses the most recent one.' },
+          },
+          required: ['action'],
+        },
+      },
+    },
+  ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
 
@@ -327,6 +345,9 @@ export async function executeTool(
 
     case 'manage_job':
       return executeManageJob(args as Record<string, unknown>, toolCtx.businessId);
+
+    case 'analyze_inventory':
+      return executeAnalyzeInventory(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -823,5 +844,105 @@ async function executeDelegateTask(
     return `Successfully dispatched task to ${assistantConfigName}. The agent will work in the background.`;
   } catch (err) {
     return `Failed to delegate: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ─── analyze_inventory (visual comparison via GPT-4o Vision) ─────────────
+
+async function executeAnalyzeInventory(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const action = args.action as string;
+  const imageUrl = args.imageUrl as string | undefined;
+  const label = args.label as string | undefined;
+  const category = args.category as string | undefined;
+  const goldenImageId = args.goldenImageId as string | undefined;
+
+  try {
+    const {
+      saveGoldenStateImage,
+      getGoldenStateImages,
+      compareInventoryImages,
+      analyzeInventoryImage,
+    } = await import('@/lib/vision-inventory');
+
+    switch (action) {
+      case 'set_golden': {
+        if (!imageUrl) return 'Error: imageUrl is required to save a golden state image.';
+        const result = await saveGoldenStateImage(toolCtx.businessId, imageUrl, label, category);
+        if (!result.success) return `Failed to save golden state: ${result.error}`;
+        return `Golden state image saved (id: ${result.id}). Label: "${label || 'default'}". The owner can now send post-market photos and I will compare against this reference.`;
+      }
+
+      case 'list_golden': {
+        const images = await getGoldenStateImages(toolCtx.businessId);
+        if (images.length === 0) return 'No golden state images saved yet. Ask the owner to send a photo of their fully stocked inventory and tell me to save it as the reference.';
+        const list = images.map((img: Record<string, unknown>, i: number) =>
+          `${i + 1}. [${img.label || 'No label'}] (${img.category || 'general'}) — saved ${new Date(img.created_at as string).toLocaleDateString()} — id: ${img.id}`
+        ).join('\n');
+        return `Golden state images:\n${list}`;
+      }
+
+      case 'analyze': {
+        if (!imageUrl) return 'Error: imageUrl is required to analyze an image.';
+        const businessName = toolCtx.businessName || 'this business';
+        const description = await analyzeInventoryImage(imageUrl, `Business: ${businessName}`);
+        return `Image analysis:\n${description}`;
+      }
+
+      case 'compare': {
+        if (!imageUrl) return 'Error: imageUrl is required for comparison (this should be the current/post-market photo).';
+
+        // Find the golden state to compare against
+        const goldens = await getGoldenStateImages(toolCtx.businessId);
+        if (goldens.length === 0) {
+          return 'No golden state reference image found. The owner needs to first send a photo of their fully stocked inventory and tell me to save it as the golden state reference. Then I can compare future photos against it.';
+        }
+
+        let goldenImage = goldens[0]; // most recent by default
+        if (goldenImageId) {
+          const specific = goldens.find((g: Record<string, unknown>) => g.id === goldenImageId);
+          if (specific) goldenImage = specific;
+        }
+
+        const diff = await compareInventoryImages({
+          currentImageUrl: imageUrl,
+          goldenImageUrl: goldenImage.image_url as string,
+          businessContext: toolCtx.businessName || undefined,
+        });
+
+        let report = `📊 *Inventory Comparison Report*\n`;
+        report += `Reference: "${goldenImage.label || 'Golden state'}"\n\n`;
+        report += `*Summary:* ${diff.summary}\n\n`;
+
+        if (diff.missingItems.length > 0) {
+          report += `*Missing Items:*\n`;
+          diff.missingItems.forEach((item) => {
+            report += `  ❌ ${item.item}${item.estimatedQty ? ` (×${item.estimatedQty})` : ''}${item.location ? ` — ${item.location}` : ''}\n`;
+          });
+          report += '\n';
+        }
+
+        if (diff.lowStockItems.length > 0) {
+          report += `*Low Stock:*\n`;
+          diff.lowStockItems.forEach((item) => {
+            report += `  ⚠️ ${item.item}${item.estimatedRemaining ? ` (~${item.estimatedRemaining} left)` : ''}${item.location ? ` — ${item.location}` : ''}\n`;
+          });
+          report += '\n';
+        }
+
+        if (diff.suggestedPO) {
+          report += `*Suggested Purchase Order:*\n${diff.suggestedPO}`;
+        }
+
+        return report;
+      }
+
+      default:
+        return `Unknown analyze_inventory action: ${action}. Use: compare, set_golden, analyze, or list_golden.`;
+    }
+  } catch (err) {
+    return `Inventory analysis failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 }

@@ -301,7 +301,10 @@ export async function POST(request: NextRequest) {
 
     const customerPhone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
 
-    if (!messageText.trim() || !customerPhone) {
+    // Allow image-only messages through (owner may send inventory photos with no caption)
+    const hasImage = !!(data.message?.imageMessage || data.message?.imageWithCaptionMessage);
+    const hasDocument = !!(data.message?.documentMessage || data.message?.documentWithCaptionMessage);
+    if ((!messageText.trim() && !hasImage && !hasDocument) || !customerPhone) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
@@ -462,6 +465,39 @@ export async function POST(request: NextRequest) {
 
       if (isOwner) {
         console.log(`   👑 Owner message from +${customerPhone} → Orchestrator`);
+
+        // ─── Handle owner image messages (inventory photos, etc.) ────
+        let ownerImageUrl: string | null = null;
+        const ownerImgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
+        if (ownerImgMsg) {
+          console.log(`   📸 Owner sent an image, downloading...`);
+          try {
+            const instCreds = await resolveInstanceCreds(instanceName);
+            if (instCreds) {
+              const { downloadAndStoreImage } = await import('@/lib/vision-inventory');
+              ownerImageUrl = await downloadAndStoreImage({
+                baseUrl: instCreds.baseUrl,
+                apiKey: instCreds.apiKey,
+                instanceName: instCreds.instanceName,
+                message: data.message,
+                messageKey: data.key,
+                businessId,
+              });
+              if (ownerImageUrl) {
+                console.log(`   📸 Owner image stored: ${ownerImageUrl}`);
+              }
+            }
+          } catch (err) {
+            console.warn('   ⚠️ Owner image download failed:', err);
+          }
+        }
+
+        // Also capture caption text from image messages
+        if (!messageText && ownerImgMsg) {
+          messageText = data.message?.imageMessage?.caption
+            || data.message?.imageWithCaptionMessage?.message?.imageMessage?.caption
+            || '';
+        }
         
         // Try to fetch the "Chief of Staff" orchestrator assistant
         const { data: orchestrator } = await supabase
@@ -478,13 +514,23 @@ export async function POST(request: NextRequest) {
         if (orchestrator) {
           // Pass the raw message — the system_prompt already contains all orchestration instructions
           goalStr = messageText.substring(0, 1000);
+          if (ownerImageUrl) {
+            goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;
+          }
           rolePrompt = orchestrator.system_prompt;
           enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
+          // Ensure analyze_inventory is always available for image-capable interactions
+          if (!enabledTools.includes('analyze_inventory')) {
+            enabledTools.push('analyze_inventory');
+          }
         } else {
           // Fallback to the Purchasing OS explicitly as before
           goalStr = messageText.substring(0, 1000);
+          if (ownerImageUrl) {
+            goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
+          }
           rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report'];
+          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory'];
         }
 
         const dispatched = await dispatchAgentViaQStash({

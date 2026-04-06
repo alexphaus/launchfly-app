@@ -243,11 +243,14 @@ export async function executeAgentTask(params: {
       }
 
       // ── Budget warning: inject a system nudge when steps are running low ──
-      const stepsRemaining = MAX_TOTAL_STEPS - stepsUsed;
-      const budgetMessages = stepsRemaining <= BUDGET_WARNING_STEPS
+      // Two-tier warning: per-invocation (approaching 8-step limit) AND global (80-step cap)
+      const stepsRemainingGlobal = MAX_TOTAL_STEPS - stepsUsed;
+      const stepsRemainingInvocation = MAX_STEPS_PER_INVOCATION - stepsThisInvocation;
+      const shouldWarn = stepsRemainingGlobal <= BUDGET_WARNING_STEPS || stepsRemainingInvocation <= 2;
+      const budgetMessages = shouldWarn
         ? [...messages, {
             role: 'system' as const,
-            content: `⚠️ You have ${stepsRemaining} tool calls remaining. You MUST call send_report NOW with whatever data you have collected so far. Do not make any more research calls.`,
+            content: `⚠️ URGENT: You only have ${Math.min(stepsRemainingGlobal, stepsRemainingInvocation)} tool calls left in this execution window. You MUST call send_report NOW with whatever data you have collected so far. Summarize your findings and deliver them to the owner. Do NOT make any more research calls.`,
           }]
         : messages;
 
@@ -391,6 +394,17 @@ export async function executeAgentTask(params: {
       } else {
         // Model returned a final text response — task is complete
         const finalResult = assistantMessage.content || 'Task completed (no output).';
+
+        // ── Safety net: if the agent never called send_report, deliver the result now ──
+        const agentCalledSendReport = toolLog.some(t => t.tool === 'send_report');
+        if (!agentCalledSendReport && toolCtx.ownerPhone && !params.goal.startsWith('[DELEGATED TASK]')) {
+          try {
+            await executeTool('send_report', { message: finalResult.substring(0, 3500) }, toolCtx);
+            console.log(`[agent:${taskId}] Auto-delivered final result via send_report (agent forgot to call it)`);
+          } catch (e) {
+            console.warn(`[agent:${taskId}] Auto send_report failed:`, e);
+          }
+        }
 
         await saveTaskState(supabase, taskId, params.businessId, {
           status: 'completed',

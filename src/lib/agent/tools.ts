@@ -545,8 +545,32 @@ async function executeSendReport(
   if (!toolCtx.ownerPhone) return 'Cannot send report — owner phone number not configured.';
 
   try {
-    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-    const provider = await getWhatsAppProvider(toolCtx.businessId);
+    // Reports go VIA the Launchfly central number (CEO assistant),
+    // NOT through the business's own WhatsApp instance.
+    // The business instance is for customer/supplier comms.
+    const launchflyInstance = process.env.LAUNCHFLY_INSTANCE_NAME;
+    let provider;
+
+    if (launchflyInstance) {
+      // Use the dedicated Launchfly Evolution instance
+      const evo = await import('@/lib/evolution');
+      const baseUrl = process.env.EVOLUTION_BASE_URL!;
+      const apiKey = process.env.EVOLUTION_API_KEY!;
+      const creds = { baseUrl, apiKey, instanceName: launchflyInstance };
+
+      provider = {
+        sendWhatsApp: async (to: string, body: string) => {
+          return evo.sendWhatsAppWithCreds(to, body, creds);
+        },
+        sendImage: async (to: string, imgUrl: string, caption?: string) => {
+          return evo.sendImageWithCreds(to, imgUrl, creds, caption);
+        },
+      };
+    } else {
+      // Fallback: use the business provider (may not work if business instance = owner phone)
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      provider = await getWhatsAppProvider(toolCtx.businessId);
+    }
 
     const fullMessage = `🤖 *Agent Report${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}*\n\n${message}`;
 

@@ -53,9 +53,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'no_data' });
     }
 
+    // ── CEO Assistant Instance ─────────────────────────────────────
+    // The Launchfly CEO number is a special-purpose instance that is NOT
+    // in the whatsapp_instances table.  It only serves as the AI CEO
+    // assistant channel — never for outreach.
+    const CEO_INSTANCE = process.env.LAUNCHFLY_INSTANCE_NAME;
+    const rawInstanceName = json.instance || json.instanceName || '';
+    const isCeoInstance = !!(CEO_INSTANCE && rawInstanceName === CEO_INSTANCE);
+
     // ── Handle outgoing messages (fromMe) ──────────────────────────
     if (data.key?.fromMe) {
-      const instanceName = json.instance || json.instanceName || '';
+      // Skip outgoing messages on the CEO instance entirely — they are
+      // either bot echoes or CEO assistant replies, never business outgoing.
+      if (isCeoInstance) {
+        return NextResponse.json({ ok: true, skipped: true, reason: 'ceo_outgoing' });
+      }
+
+      const instanceName = rawInstanceName;
       const remoteJid = data.key?.remoteJid || '';
       if (remoteJid.includes('@g.us')) {
         return NextResponse.json({ ok: true, skipped: true, reason: 'outgoing_group' });
@@ -215,7 +229,7 @@ export async function POST(request: NextRequest) {
     const remoteJid = data.key?.remoteJid || '';
     const messageId = data.key?.id || '';
     const pushname = data.pushName || '';
-    const instanceName = json.instance || json.instanceName || '';
+    const instanceName = rawInstanceName;
 
     // Skip group messages
     if (remoteJid.includes('@g.us')) {
@@ -312,7 +326,105 @@ export async function POST(request: NextRequest) {
     console.log(`   Message: ${messageText.substring(0, 100)}`);
     if (pushname) console.log(`   Name: ${pushname}`);
 
-    // ─── Resolve Business ID ────────────────────────────────────────
+    const supabase = getSupabase();
+
+    // ─── CEO Assistant Instance — special routing ───────────────────
+    // Messages arriving on the CEO number are ALWAYS from a business owner.
+    // Resolve business by matching the sender's phone to a business owner,
+    // then jump straight to the owner/Chief-of-Staff path.
+    if (isCeoInstance) {
+      console.log(`   🎯 CEO instance — resolving owner by phone`);
+      const senderNorm = customerPhone.replace(/^\+/, '');
+      const senderPlus = `+${senderNorm}`;
+
+      const { data: ownerBiz } = await supabase
+        .from('businesses')
+        .select('id')
+        .or(
+          `whatsapp_notify_number.eq.${senderPlus},whatsapp_notify_number.eq.${senderNorm},` +
+          `whatsapp_number.eq.${senderPlus},whatsapp_number.eq.${senderNorm},` +
+          `phone_number.eq.${senderPlus},phone_number.eq.${senderNorm}`
+        )
+        .limit(1)
+        .maybeSingle();
+
+      if (!ownerBiz?.id) {
+        console.log(`   ⚠️ CEO instance: sender +${customerPhone} is not a known business owner`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'ceo_unknown_sender' });
+      }
+
+      const businessId = ownerBiz.id;
+      console.log(`   🏢 CEO instance → business ${businessId}`);
+
+      // ── Handle owner image messages ────
+      let ownerImageUrl: string | null = null;
+      const ownerImgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
+      if (ownerImgMsg) {
+        console.log(`   📸 Owner sent an image, downloading...`);
+        try {
+          const instCreds = await resolveInstanceCreds(instanceName);
+          if (instCreds) {
+            const { downloadAndStoreImage } = await import('@/lib/vision-inventory');
+            ownerImageUrl = await downloadAndStoreImage({
+              baseUrl: instCreds.baseUrl,
+              apiKey: instCreds.apiKey,
+              instanceName: instCreds.instanceName,
+              message: data.message,
+              messageKey: data.key,
+              businessId,
+            });
+            if (ownerImageUrl) console.log(`   📸 Owner image stored: ${ownerImageUrl}`);
+          }
+        } catch (err) {
+          console.warn('   ⚠️ Owner image download failed:', err);
+        }
+      }
+
+      // Capture caption text
+      if (!messageText && ownerImgMsg) {
+        messageText = data.message?.imageMessage?.caption
+          || data.message?.imageWithCaptionMessage?.message?.imageMessage?.caption
+          || '';
+      }
+
+      // Fetch Chief of Staff
+      const { data: orchestrator } = await supabase
+        .from('assistants')
+        .select('name, system_prompt, tools_enabled')
+        .eq('business_id', businessId)
+        .eq('name', 'Chief of Staff')
+        .maybeSingle();
+
+      let goalStr = messageText.substring(0, 1000);
+      let rolePrompt: string;
+      let enabledTools: string[];
+
+      if (orchestrator) {
+        if (ownerImageUrl) {
+          goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;
+        }
+        rolePrompt = orchestrator.system_prompt;
+        enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
+        if (!enabledTools.includes('analyze_inventory')) enabledTools.push('analyze_inventory');
+      } else {
+        if (ownerImageUrl) {
+          goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
+        }
+        rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
+        enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory'];
+      }
+
+      const dispatched = await dispatchAgentViaQStash({
+        businessId,
+        goal: goalStr,
+        role: rolePrompt,
+        enabledTools,
+        ownerPhone: customerPhone,
+      });
+      return NextResponse.json({ ok: true, routed: 'ceo_owner_agent', dispatched, orchestrator: !!orchestrator });
+    }
+
+    // ─── Resolve Business ID (non-CEO instances) ────────────────────
     let businessId: string | null =
       request.nextUrl.searchParams.get('businessId') || null;
 
@@ -327,8 +439,6 @@ export async function POST(request: NextRequest) {
     if (!businessId) {
       businessId = await getLastBusinessId(customerPhone);
     }
-
-    const supabase = getSupabase();
 
     if (!businessId) {
       const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;

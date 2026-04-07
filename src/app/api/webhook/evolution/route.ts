@@ -315,16 +315,23 @@ export async function POST(request: NextRequest) {
 
     const customerPhone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
 
-    // Allow image-only messages through (owner may send inventory photos with no caption)
+    // Allow image-only and voice-only messages through
     const hasImage = !!(data.message?.imageMessage || data.message?.imageWithCaptionMessage);
     const hasDocument = !!(data.message?.documentMessage || data.message?.documentWithCaptionMessage);
-    if ((!messageText.trim() && !hasImage && !hasDocument) || !customerPhone) {
+    const hasAudio = !!(data.message?.audioMessage);
+    if ((!messageText.trim() && !hasImage && !hasDocument && !hasAudio) || !customerPhone) {
       return NextResponse.json({ ok: true, skipped: true });
+    }
+
+    // If voice note transcription failed, set a placeholder so the agent still sees it
+    if (hasAudio && !messageText.trim()) {
+      messageText = '[Voice note received but could not be transcribed]';
     }
 
     console.log(`\n🟢 Evolution Incoming: +${customerPhone}`);
     console.log(`   Message: ${messageText.substring(0, 100)}`);
     if (pushname) console.log(`   Name: ${pushname}`);
+    if (hasAudio) console.log(`   🎤 Audio message (transcribed: ${messageText !== '[Voice note received but could not be transcribed]'})`);
 
     const supabase = getSupabase();
 

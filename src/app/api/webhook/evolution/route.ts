@@ -363,6 +363,36 @@ export async function POST(request: NextRequest) {
       const businessId = ownerBiz.id;
       console.log(`   🏢 CEO instance → business ${businessId}`);
 
+      // ── Check for pending approval gates ──────────────────────────
+      // If an agent is waiting for owner approval, this reply resumes it
+      {
+        const { data: pendingApproval } = await supabase
+          .from('agent_pending_approvals')
+          .select('id, task_id, question')
+          .eq('business_id', businessId)
+          .is('response', null)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (pendingApproval && messageText.trim()) {
+          console.log(`   ✅ Approval response for task ${pendingApproval.task_id}: "${messageText.substring(0, 50)}"`);
+
+          // Record the response
+          await supabase.from('agent_pending_approvals').update({
+            response: messageText,
+            responded_at: new Date().toISOString(),
+          }).eq('id', pendingApproval.id);
+
+          // Resume the paused agent task
+          const { resumeTaskFromApproval } = await import('@/lib/agent/runner');
+          const resumed = await resumeTaskFromApproval(pendingApproval.task_id, messageText);
+
+          return NextResponse.json({ ok: true, routed: 'approval_response', resumed, taskId: pendingApproval.task_id });
+        }
+      }
+
       // ── Handle owner image messages ────
       let ownerImageUrl: string | null = null;
       const ownerImgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;

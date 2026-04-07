@@ -85,6 +85,8 @@ export async function executeAgentTask(params: {
   stepsUsed?: number;
   toolLog?: ToolLogEntry[];
   enabledTools?: string[] | null; // Internal tools to enable (e.g. ['save_leads']); null = all
+  parentTaskId?: string;  // If this is a sub-task, the parent task to resume on completion
+  approvalResponse?: string; // If resuming from an approval gate, the owner's response
 }): Promise<{
   status: 'completed' | 'continued' | 'failed';
   result?: string;
@@ -130,6 +132,7 @@ export async function executeAgentTask(params: {
     businessName: biz?.name || undefined,
     ownerPhone: biz?.whatsapp_notify_number || biz?.whatsapp_number || biz?.phone_number || undefined,
     assistantName: repName,
+    taskId,
   };
 
   // Build initial messages if this is a fresh task
@@ -216,6 +219,21 @@ export async function executeAgentTask(params: {
     stepsUsed,
     toolLog,
   });
+
+  // Save parent linkage if this is a sub-task
+  if (params.parentTaskId) {
+    await supabase.from('agent_tasks').update({
+      parent_task_id: params.parentTaskId,
+    }).eq('id', taskId);
+  }
+
+  // ── Inject approval response if resuming from an approval gate ──
+  if (params.approvalResponse && messages.length > 0) {
+    messages.push({
+      role: 'user',
+      content: `Owner's response to your approval request: "${params.approvalResponse}"`,
+    });
+  }
 
   // Auto-clean stale tasks from previous invocations that got killed by Vercel
   try {
@@ -373,6 +391,41 @@ export async function executeAgentTask(params: {
           stepsUsed++;
           stepsThisInvocation++;
 
+          // ── PAUSE SIGNAL: tool requested task suspension ──
+          if (toolResult.startsWith('__PAUSE__:')) {
+            console.log(`[agent:${taskId}] Tool ${tc.function.name} requested pause: ${toolResult.substring(0, 100)}`);
+
+            // Fill in dummy results for any remaining tool calls in this batch
+            const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
+            for (const unexecutedTc of fnCalls) {
+              if (!executedIds.has(unexecutedTc.id)) {
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: unexecutedTc.id,
+                  content: 'Skipped — task is pausing.',
+                });
+              }
+            }
+
+            // Save full state for resumption
+            const pauseType = toolResult.includes('waiting_approval') ? 'waiting_approval' : 'waiting_subtask';
+            await saveTaskState(supabase, taskId, params.businessId, {
+              status: pauseType,
+              goal: params.goal,
+              role: params.role,
+              stepsUsed,
+              toolLog,
+            });
+            // Also save messages + resume context
+            await supabase.from('agent_tasks').update({
+              messages: messages,
+              owner_phone: params.ownerPhone || toolCtx.ownerPhone,
+              enabled_tools: params.enabledTools || null,
+            }).eq('id', taskId);
+
+            return { status: 'completed' as const, result: toolResult, taskId, stepsUsed, toolLog };
+          }
+
           // Check wall clock after each tool execution too
           if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
             console.log(`[agent:${taskId}] Wall-clock limit hit mid-step, breaking to schedule continuation`);
@@ -434,6 +487,9 @@ export async function executeAgentTask(params: {
             console.warn(`[agent:${taskId}] Failed to save conversation to history:`, e);
           }
         }
+
+        // ── Resume parent task if this was a sub-task ──
+        await resumeParentIfNeeded(supabase, taskId, finalResult);
 
         return { status: 'completed', result: finalResult, taskId, stepsUsed, toolLog };
       }
@@ -573,19 +629,35 @@ BUSINESS: ${toolCtx.businessName || 'Unknown'}
 ${industry ? `INDUSTRY: ${industry}` : ''}
 ${location ? `LOCATION: ${location}` : ''}
 
-You have access to tools: search the web, scrape pages, find local businesses, save leads, query the database, draft content, send WhatsApp messages, manage jobs, delegate tasks, and send reports to the owner.
+You have access to tools: search the web, scrape pages, find local businesses, save leads, query the database, draft content, send WhatsApp messages, manage jobs, delegate tasks, request approval, search/save memory, and send reports to the owner.
 
 ## RULES
 1. Think step-by-step. Plan your approach before using tools.
-2. Use search_web to research before making decisions.
-3. Always save valuable leads using save_leads — don't just list them.
-4. When done, use send_report to deliver findings/results to the owner.
-5. Be efficient — minimize unnecessary tool calls.
-6. If a tool fails, try an alternative approach.
-7. When your task is complete, provide a clear summary.
+2. Use search_memory FIRST to check if you already know something relevant.
+3. Use search_web to research before making decisions.
+4. Always save valuable leads using save_leads — don't just list them.
+5. When done, use send_report to deliver findings/results to the owner.
+6. Be efficient — minimize unnecessary tool calls.
+7. If a tool fails, try an alternative approach.
+8. When your task is complete, provide a clear summary.
+9. Use save_memory to remember important insights, supplier info, decisions, and patterns.
+10. Use request_approval BEFORE taking costly or irreversible actions (placing orders, sending campaigns).
+
+## DELEGATION
+- Use delegate_task for fire-and-forget tasks (you don't need the result).
+- Use delegate_task_and_wait when you NEED the sub-agent's result to continue (e.g. "get quotes from Purchasing OS, then compare them").
+- Your task will pause and automatically resume with the sub-agent's result.
+
+## APPROVAL GATES
+- Use request_approval when you need owner sign-off before proceeding.
+- Your task will pause and resume with the owner's response.
+- Always include: what you want to do, estimated cost/impact, and clear options.
 
 ## MEMORY & CONTINUITY
-You have access to conversation history and recent task context below. Use this to:
+You have LONG-TERM MEMORY via search_memory and save_memory tools.
+- search_memory before making decisions — you may have relevant past learnings.
+- save_memory after discovering important facts (supplier reliability, pricing, owner preferences).
+You also have conversation history and recent task context below:
 - Reference past conversations naturally ("As we discussed yesterday...")
 - Avoid re-doing work that was already completed
 - Follow up on pending items proactively
@@ -714,4 +786,170 @@ async function saveTaskState(
     // Non-critical — don't crash the agent if state save fails
     console.warn(`[agent:${taskId}] Failed to save state:`, err);
   }
+}
+
+// ── Resume Parent Task (when sub-task completes) ─────────────────────────
+
+async function resumeParentIfNeeded(
+  supabase: ReturnType<typeof getSupabase>,
+  taskId: string,
+  subTaskResult: string,
+): Promise<void> {
+  try {
+    // Check if this task has a parent
+    const { data: task } = await supabase
+      .from('agent_tasks')
+      .select('parent_task_id')
+      .eq('id', taskId)
+      .maybeSingle();
+
+    if (!task?.parent_task_id) return;
+
+    const parentId = task.parent_task_id;
+    console.log(`[agent:${taskId}] Sub-task complete, resuming parent ${parentId}`);
+
+    // Load parent task state
+    const { data: parent } = await supabase
+      .from('agent_tasks')
+      .select('business_id, goal, role, steps_used, tool_log, messages, owner_phone, enabled_tools, status')
+      .eq('id', parentId)
+      .maybeSingle();
+
+    if (!parent || parent.status !== 'waiting_subtask') {
+      console.warn(`[agent:${taskId}] Parent ${parentId} not in waiting_subtask state (${parent?.status})`);
+      return;
+    }
+
+    // Parse stored messages
+    let parentMessages: AgentMessage[] = [];
+    try {
+      parentMessages = typeof parent.messages === 'string'
+        ? JSON.parse(parent.messages)
+        : parent.messages || [];
+    } catch { /* empty */ }
+
+    // Inject sub-task result into parent's conversation
+    parentMessages.push({
+      role: 'user',
+      content: `Sub-agent completed its task. Result:\n\n${subTaskResult.substring(0, 3000)}`,
+    });
+
+    // Resume parent via QStash
+    const qstashToken = process.env.QSTASH_TOKEN;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+    if (!qstashToken) {
+      console.warn(`[agent:${taskId}] Cannot resume parent — no QSTASH_TOKEN`);
+      return;
+    }
+
+    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+    const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
+
+    const enabledTools = parent.enabled_tools
+      ? (Array.isArray(parent.enabled_tools) ? parent.enabled_tools.map(String) : null)
+      : null;
+
+    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${qstashToken}`,
+        'Content-Type': 'application/json',
+        'Upstash-Delay': '2s',
+        'Upstash-Retries': '1',
+      },
+      body: JSON.stringify({
+        taskId: parentId,
+        businessId: parent.business_id,
+        goal: parent.goal,
+        role: parent.role,
+        messages: parentMessages,
+        stepsUsed: parent.steps_used,
+        toolLog: parent.tool_log || [],
+        enabledTools,
+        ownerPhone: parent.owner_phone,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[agent:${taskId}] Failed to resume parent via QStash: ${res.status}`);
+    } else {
+      console.log(`[agent:${taskId}] Parent ${parentId} resumed via QStash`);
+      await supabase.from('agent_tasks').update({
+        status: 'running',
+        updated_at: new Date().toISOString(),
+      }).eq('id', parentId);
+    }
+  } catch (err) {
+    console.error(`[agent:${taskId}] Error resuming parent:`, err);
+  }
+}
+
+// ── Resume Task from Approval (exported for webhook use) ─────────────────
+
+export async function resumeTaskFromApproval(
+  taskId: string,
+  approvalResponse: string,
+): Promise<boolean> {
+  const supabase = getSupabase();
+
+  const { data: task } = await supabase
+    .from('agent_tasks')
+    .select('business_id, goal, role, steps_used, tool_log, messages, owner_phone, enabled_tools, status')
+    .eq('id', taskId)
+    .maybeSingle();
+
+  if (!task || task.status !== 'waiting_approval') {
+    console.warn(`[agent:resume] Task ${taskId} not in waiting_approval state (${task?.status})`);
+    return false;
+  }
+
+  let messages: AgentMessage[] = [];
+  try {
+    messages = typeof task.messages === 'string'
+      ? JSON.parse(task.messages)
+      : task.messages || [];
+  } catch { /* empty */ }
+
+  const qstashToken = process.env.QSTASH_TOKEN;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+  if (!qstashToken) return false;
+
+  const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+  const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
+
+  const enabledTools = task.enabled_tools
+    ? (Array.isArray(task.enabled_tools) ? task.enabled_tools.map(String) : null)
+    : null;
+
+  const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${qstashToken}`,
+      'Content-Type': 'application/json',
+      'Upstash-Delay': '1s',
+      'Upstash-Retries': '1',
+    },
+    body: JSON.stringify({
+      taskId,
+      businessId: task.business_id,
+      goal: task.goal,
+      role: task.role,
+      messages,
+      stepsUsed: task.steps_used,
+      toolLog: task.tool_log || [],
+      enabledTools,
+      ownerPhone: task.owner_phone,
+      approvalResponse,
+    }),
+  });
+
+  if (!res.ok) return false;
+
+  await supabase.from('agent_tasks').update({
+    status: 'running',
+    updated_at: new Date().toISOString(),
+  }).eq('id', taskId);
+
+  console.log(`[agent:resume] Task ${taskId} resumed with approval: "${approvalResponse.substring(0, 50)}"`);
+  return true;
 }

@@ -24,8 +24,9 @@ function getSupabase() {
 const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
+  'search_memory', 'save_memory',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'analyze_inventory']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -279,6 +280,75 @@ export const AGENT_TOOLS = [
         },
       },
     },
+  // ── Await-able Delegation ──────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'delegate_task_and_wait',
+      description: 'Delegate a task to another AI assistant AND pause until it completes. When the sub-agent finishes, your task will automatically resume with its results. Use this when you NEED the result before continuing (e.g. "get quotes then compare").',
+      parameters: {
+        type: 'object',
+        properties: {
+          assistantConfigName: { type: 'string', description: 'The exact assistant name (e.g. "Purchasing OS", "Marketing OS")' },
+          instruction: { type: 'string', description: 'Detailed prompt for the sub-agent' },
+        },
+        required: ['assistantConfigName', 'instruction'],
+      },
+    },
+  },
+  // ── Approval Gate ──────────────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'request_approval',
+      description: 'Ask the business owner for approval before proceeding with a significant action (e.g. placing an order, sending a campaign, spending money). Sends a WhatsApp message and PAUSES your task until the owner replies. Your task will resume automatically with their response.',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'The approval question to ask the owner. Be specific about what you want to do and the cost/impact.' },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Suggested response options (e.g. ["Approve", "Reject", "Modify"]). Owner can also reply freely.',
+          },
+        },
+        required: ['question'],
+      },
+    },
+  },
+  // ── Semantic Memory ────────────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'search_memory',
+      description: 'Search the AI memory for past learnings, decisions, patterns, and supplier info relevant to a query. Uses semantic (meaning-based) search. Use this before making decisions to check if you already know something useful.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Natural language query (e.g. "best silver supplier", "owner prefers organic materials")' },
+          category: { type: 'string', description: 'Optional category filter: supplier, decision, pattern, preference, market_insight' },
+          limit: { type: 'number', description: 'Max results (default 5)' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'save_memory',
+      description: 'Save an important insight, decision, or learning to long-term memory. The AI will remember this across future conversations. Use for: supplier reliability notes, owner preferences, pricing patterns, market insights, what worked/failed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'The insight or fact to remember (be specific and concise)' },
+          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'general'], description: 'Memory category' },
+          importance: { type: 'number', description: 'Importance score 0.0-1.0 (default 0.5). Use 0.8+ for critical business decisions.' },
+        },
+        required: ['content', 'category'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -288,6 +358,7 @@ export interface ToolContext {
   businessName?: string;
   ownerPhone?: string;
   assistantName?: string;
+  taskId?: string; // Current agent task ID (needed for approval/delegation pause)
 }
 
 export async function executeTool(
@@ -348,6 +419,18 @@ export async function executeTool(
 
     case 'analyze_inventory':
       return executeAnalyzeInventory(args as Record<string, unknown>, toolCtx);
+
+    case 'delegate_task_and_wait':
+      return executeDelegateTaskAndWait(args.assistantConfigName as string, args.instruction as string, toolCtx);
+
+    case 'request_approval':
+      return executeRequestApproval(args.question as string, args.options as string[] | undefined, toolCtx);
+
+    case 'search_memory':
+      return executeSearchMemory(args.query as string, toolCtx.businessId, args.category as string | undefined, (args.limit as number) || 5);
+
+    case 'save_memory':
+      return executeSaveMemory(args.content as string, args.category as string, toolCtx.businessId, (args.importance as number) || 0.5);
 
     default:
       return `Unknown tool: ${name}`;
@@ -998,5 +1081,237 @@ async function executeAnalyzeInventory(
     }
   } catch (err) {
     return `Inventory analysis failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE: Await-able Delegation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Delegate a task to a sub-agent and PAUSE until it completes.
+ * Returns a special __PAUSE__ signal that the runner interprets
+ * to save state and stop looping.
+ */
+async function executeDelegateTaskAndWait(
+  assistantConfigName: string,
+  instruction: string,
+  toolCtx: ToolContext,
+): Promise<string> {
+  if (!toolCtx.taskId) return 'Failed: No task ID available (cannot pause without task context).';
+
+  try {
+    const supabase = getSupabase();
+    const { data: assistant } = await supabase
+      .from('assistants')
+      .select('system_prompt, tools_enabled')
+      .eq('business_id', toolCtx.businessId)
+      .eq('name', assistantConfigName)
+      .limit(1)
+      .maybeSingle();
+
+    if (!assistant) {
+      return `Failed: Could not find assistant "${assistantConfigName}".`;
+    }
+
+    const qstashToken = process.env.QSTASH_TOKEN;
+    if (!qstashToken) return 'Failed: QSTASH_TOKEN missing.';
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.launchfly.ai';
+    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+    const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
+
+    const rawTools = assistant.tools_enabled;
+    const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
+
+    // Create sub-task ID so we can link it
+    const subTaskId = crypto.randomUUID();
+
+    // Dispatch sub-agent with parent linkage
+    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${qstashToken}`,
+        'Content-Type': 'application/json',
+        'Upstash-Retries': '1',
+        'Upstash-Delay': '1s',
+      },
+      body: JSON.stringify({
+        taskId: subTaskId,
+        businessId: toolCtx.businessId,
+        goal: `[DELEGATED TASK] ${instruction}`,
+        role: assistant.system_prompt,
+        enabledTools,
+        ownerPhone: toolCtx.ownerPhone,
+        parentTaskId: toolCtx.taskId,
+      }),
+    });
+
+    if (!res.ok) return `Failed: QStash returned ${res.status}`;
+
+    // Return pause signal — runner will stop looping and set status
+    return `__PAUSE__:waiting_subtask:${subTaskId}:Delegated to ${assistantConfigName}. Task will resume when sub-agent completes.`;
+  } catch (err) {
+    return `Failed to delegate: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE: Approval Gates
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function executeRequestApproval(
+  question: string,
+  options: string[] | undefined,
+  toolCtx: ToolContext,
+): Promise<string> {
+  if (!toolCtx.taskId) return 'Failed: No task ID available (cannot pause without task context).';
+  if (!toolCtx.ownerPhone) return 'Failed: No owner phone configured — cannot request approval.';
+
+  try {
+    const supabase = getSupabase();
+
+    // Create approval record
+    const { data: approval, error } = await supabase
+      .from('agent_pending_approvals')
+      .insert({
+        task_id: toolCtx.taskId,
+        business_id: toolCtx.businessId,
+        question,
+        options: options || ['Approve', 'Reject'],
+      })
+      .select('id')
+      .single();
+
+    if (error || !approval) return `Failed to create approval: ${error?.message || 'unknown'}`;
+
+    // Send WhatsApp to owner
+    const optionsList = (options || ['Approve', 'Reject']).map((o, i) => `${i + 1}. ${o}`).join('\n');
+    const approvalMsg = `🔔 *Approval Required*${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}\n\n${question}\n\n*Reply with:*\n${optionsList}\n\n_(Or reply freely with your instructions)_`;
+
+    // Send via Launchfly CEO instance
+    const launchflyInstance = process.env.LAUNCHFLY_INSTANCE_NAME;
+    if (launchflyInstance) {
+      const evo = await import('@/lib/evolution');
+      const creds = {
+        baseUrl: process.env.EVOLUTION_BASE_URL!,
+        apiKey: process.env.EVOLUTION_API_KEY!,
+        instanceName: launchflyInstance,
+      };
+      await evo.sendWhatsAppWithCreds(toolCtx.ownerPhone, approvalMsg, creds);
+    } else {
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const provider = await getWhatsAppProvider(toolCtx.businessId);
+      await provider.sendWhatsApp(toolCtx.ownerPhone, approvalMsg, toolCtx.businessId);
+    }
+
+    // Mark task as waiting
+    await supabase.from('agent_tasks').update({
+      status: 'waiting_approval',
+      updated_at: new Date().toISOString(),
+    }).eq('id', toolCtx.taskId);
+
+    return `__PAUSE__:waiting_approval:${approval.id}:Approval request sent to owner. Task will resume when they reply.`;
+  } catch (err) {
+    return `Failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE: Semantic Memory (pgvector)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function getEmbedding(text: string): Promise<number[]> {
+  const OpenAI = (await import('openai')).default;
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const res = await client.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text.substring(0, 8000),
+  });
+  return res.data[0].embedding;
+}
+
+async function executeSearchMemory(
+  query: string,
+  businessId: string,
+  category?: string,
+  limit: number = 5,
+): Promise<string> {
+  try {
+    const supabase = getSupabase();
+    const embedding = await getEmbedding(query);
+
+    // Use Supabase RPC for vector similarity search
+    // Falls back to text search if RPC not available
+    let results: Array<{ content: string; category: string; importance_score: number; timestamp: string; similarity?: number }> = [];
+
+    try {
+      const { data, error } = await supabase.rpc('search_memories', {
+        query_embedding: embedding,
+        match_business_id: businessId,
+        match_category: category || null,
+        match_count: limit,
+      });
+
+      if (!error && data?.length > 0) {
+        results = data;
+      }
+    } catch {
+      // RPC not deployed yet — fall back to text search
+    }
+
+    // Fallback: simple text search if vector search returned nothing
+    if (results.length === 0) {
+      let q = supabase
+        .from('ai_memories')
+        .select('content, category, importance_score, timestamp')
+        .eq('business_id', businessId)
+        .eq('archived', false)
+        .order('importance_score', { ascending: false })
+        .limit(limit);
+
+      if (category) q = q.eq('category', category);
+      // Simple keyword matching as fallback
+      q = q.ilike('content', `%${query.split(' ').slice(0, 3).join('%')}%`);
+
+      const { data } = await q;
+      results = data || [];
+    }
+
+    if (results.length === 0) return 'No relevant memories found.';
+
+    return results.map((m, i) => {
+      const ago = Math.round((Date.now() - new Date(m.timestamp).getTime()) / 86400000);
+      return `${i + 1}. [${m.category}] (${ago}d ago, importance: ${m.importance_score})\n   ${m.content}`;
+    }).join('\n\n');
+  } catch (err) {
+    return `Memory search failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function executeSaveMemory(
+  content: string,
+  category: string,
+  businessId: string,
+  importance: number = 0.5,
+): Promise<string> {
+  try {
+    const supabase = getSupabase();
+    const embedding = await getEmbedding(content);
+
+    const { error } = await supabase.from('ai_memories').insert({
+      business_id: businessId,
+      content,
+      category,
+      embedding,
+      importance_score: Math.max(0, Math.min(1, importance)),
+      context: {},
+      metadata: { source: 'agent' },
+    });
+
+    if (error) return `Failed to save memory: ${error.message}`;
+    return `Memory saved: [${category}] "${content.substring(0, 80)}..." (importance: ${importance})`;
+  } catch (err) {
+    return `Failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 }

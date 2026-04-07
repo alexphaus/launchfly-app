@@ -268,6 +268,7 @@ export async function executeAgentTask(params: {
     const client = new OpenAI({
       apiKey: process.env.DEEPSEEK_API_KEY,
       baseURL: 'https://api.deepseek.com',
+      timeout: 40_000, // 40s — must finish before Vercel's 60s hard kill
     });
 
     // Resolve which tools this agent can use
@@ -511,6 +512,33 @@ export async function executeAgentTask(params: {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[agent:${taskId}] Fatal error at step ${stepsUsed}:`, errMsg);
 
+    // If the error is a timeout and we haven't done much work yet, retry via QStash
+    const isTimeout = errMsg.includes('timed out') || errMsg.includes('timeout') || errMsg.includes('ETIMEDOUT');
+    if (isTimeout && stepsUsed < 2) {
+      console.log(`[agent:${taskId}] LLM timeout on early step — scheduling retry via QStash`);
+      const retried = await scheduleAgentContinuation({
+        taskId,
+        businessId: params.businessId,
+        goal: params.goal,
+        role: params.role,
+        ownerPhone: params.ownerPhone,
+        messages,
+        stepsUsed,
+        toolLog,
+        enabledTools: params.enabledTools,
+      });
+      if (retried) {
+        await saveTaskState(supabase, taskId, params.businessId, {
+          status: 'running',
+          goal: params.goal,
+          role: params.role,
+          stepsUsed,
+          toolLog,
+        });
+        return { status: 'continued', taskId, stepsUsed, toolLog };
+      }
+    }
+
     await saveTaskState(supabase, taskId, params.businessId, {
       status: 'failed',
       goal: params.goal,
@@ -535,6 +563,7 @@ export async function executeAgentTask(params: {
       const client = new OpenAI({
         apiKey: process.env.DEEPSEEK_API_KEY,
         baseURL: 'https://api.deepseek.com',
+        timeout: 40_000,
       });
       const agentTools = getToolsForAgent(params.enabledTools);
       const forceCompletion = await client.chat.completions.create({

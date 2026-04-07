@@ -555,9 +555,9 @@ export async function POST(request: NextRequest) {
         console.log(`   📦 Supplier "${supplier.name}" (+${customerPhone}) → quote-processing agent`);
         const dispatched = await dispatchAgentViaQStash({
           businessId,
-          goal: `Supplier "${supplier.name}" (category: ${supplier.category || 'general'}) replied via WhatsApp: "${messageText.substring(0, 500)}"\n\n1. Query open jobs needing materials (status IN ('quoting','blocked'))\n2. If this is a quote/price/availability reply, update the relevant job via manage_job (add to quotes_received)\n3. If all materials for a job now have quotes, update status to 'ready'\n4. send_report a summary to the business owner.`,
-          role: 'You are the AI Purchasing Assistant processing a supplier reply. Extract pricing, availability, and delivery info from their message. Update job records accurately.',
-          enabledTools: ['manage_job', 'send_whatsapp', 'query_database', 'send_report'],
+          goal: `Supplier "${supplier.name}" (category: ${supplier.category || 'general'}) replied via WhatsApp: "${messageText.substring(0, 500)}"\n\nInstructions:\n1. Read the supplier's message carefully — extract pricing, availability, delivery times, minimum order quantities, warranty info, and any URLs.\n2. If they shared a website or catalog URL, use scrape_page to check their products and prices.\n3. Query open jobs needing materials (status IN ('quoting','blocked')) and update relevant jobs via manage_job.\n4. send_report to the business owner with a clear summary of what the supplier said, key info extracted, and your recommendations. Ask for owner approval before proceeding with any order.`,
+          role: 'You are the AI Purchasing Assistant processing a supplier reply. Extract pricing, availability, minimum orders, warranties, and delivery info from their message. If they share a URL, scrape it for product details. Always report back to the owner with clear actionable info and ask for approval before placing orders.',
+          enabledTools: ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'scrape_page', 'search_web'],
         });
         return NextResponse.json({ ok: true, routed: 'supplier_agent', dispatched });
       }

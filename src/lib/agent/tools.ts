@@ -726,6 +726,36 @@ async function executeSendWhatsApp(
     if (!result.sent) {
       return `Failed to send WhatsApp to ${normalized}: ${result.error || 'Unknown error'}`;
     }
+
+    // Auto-register as supplier if not already known
+    // This ensures when they reply, the webhook recognizes them as a supplier
+    if (normalized !== toolCtx.ownerPhone) {
+      try {
+        const supabase = getSupabase();
+        const { data: existing } = await supabase
+          .from('suppliers')
+          .select('id')
+          .eq('business_id', toolCtx.businessId)
+          .eq('whatsapp_number', normalized)
+          .maybeSingle();
+
+        if (!existing) {
+          // Try to extract a name from the message context
+          const nameMatch = message.match(/(?:Hola|Hi|Hello|Dear|Estimad[oa]s?)\s+([^,.\n!]+)/i);
+          const supplierName = nameMatch?.[1]?.trim() || `Supplier ${normalized}`;
+          await supabase.from('suppliers').insert({
+            business_id: toolCtx.businessId,
+            name: supplierName,
+            whatsapp_number: normalized,
+          });
+          console.log(`[send_whatsapp] Auto-registered supplier: ${supplierName} (${normalized})`);
+        }
+      } catch (err) {
+        // Non-fatal — supplier registration is best-effort
+        console.warn('[send_whatsapp] Auto-register supplier failed (non-fatal):', err);
+      }
+    }
+
     return `Message sent to ${normalized} via WhatsApp.`;
   } catch (err) {
     return `Failed to send WhatsApp: ${err instanceof Error ? err.message : String(err)}`;

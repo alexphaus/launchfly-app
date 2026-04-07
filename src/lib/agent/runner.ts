@@ -29,10 +29,23 @@ function getSupabase() {
 
 const MAX_STEPS_PER_INVOCATION = 8;   // Tools per serverless invocation (8 × ~3.5s + LLM overhead ≈ 40s, safe for 60s limit)
 const MAX_TOTAL_STEPS = 80;            // Hard cap across all continuations
-const AGENT_MODEL = 'deepseek-chat';   // DeepSeek V3 — strong reasoning, tool use, low cost
+const AGENT_MODEL = 'deepseek-chat';   // DeepSeek V3.2 — strong reasoning, tool use, low cost
 const WALL_CLOCK_LIMIT_MS = 45_000;    // 45s — bail well before Vercel's 60s hard kill (LLM calls can take 10s+)
 const STALE_TASK_MINUTES = 5;          // Mark running tasks older than this as timed-out
 const BUDGET_WARNING_STEPS = 5;        // When this many steps remain, tell agent to wrap up
+
+/**
+ * Safely truncate a string without splitting surrogate pairs (emoji).
+ * `.substring()` can cut a multi-byte emoji in half, producing an unpaired
+ * surrogate that breaks JSON serialization on strict parsers (DeepSeek V3.2).
+ */
+function safeSlice(str: string, maxLen: number): string {
+  if (!str || str.length <= maxLen) return str;
+  // Use Array.from to split by code points, not UTF-16 code units
+  const codePoints = Array.from(str);
+  if (codePoints.length <= maxLen) return str;
+  return codePoints.slice(0, maxLen).join('');
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -175,7 +188,7 @@ export async function executeAgentTask(params: {
       memoryContext += '\n\n## RECENT CONVERSATION HISTORY (owner ↔ you)\n';
       // Limit to last 10 turns to keep system prompt lean
       for (const msg of conversationHistory.slice(-10)) {
-        memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${msg.content.substring(0, 300)}\n`;
+        memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${safeSlice(msg.content, 300)}\n`;
       }
     }
 
@@ -186,7 +199,7 @@ export async function executeAgentTask(params: {
         // Skip delegated sub-task goals from the history shown to the orchestrator
         const goalStr = (t.goal as string) || '';
         if (goalStr.startsWith('[DELEGATED TASK]')) continue;
-        memoryContext += `- [${ago}h ago] ${goalStr.substring(0, 120)} → ${(t.result as string)?.substring(0, 150)}\n`;
+        memoryContext += `- [${ago}h ago] ${safeSlice(goalStr, 120)} → ${safeSlice((t.result as string) || '', 150)}\n`;
       }
     }
 
@@ -459,7 +472,7 @@ export async function executeAgentTask(params: {
         const agentCalledSendReport = toolLog.some(t => t.tool === 'send_report');
         if (!agentCalledSendReport && toolCtx.ownerPhone && !params.goal.startsWith('[DELEGATED TASK]')) {
           try {
-            await executeTool('send_report', { message: finalResult.substring(0, 3500) }, toolCtx);
+            await executeTool('send_report', { message: safeSlice(finalResult, 3500) }, toolCtx);
             console.log(`[agent:${taskId}] Auto-delivered final result via send_report (agent forgot to call it)`);
           } catch (e) {
             console.warn(`[agent:${taskId}] Auto send_report failed:`, e);
@@ -481,8 +494,8 @@ export async function executeAgentTask(params: {
         if (ownerPhoneNorm && !params.goal.startsWith('[DELEGATED TASK]')) {
           try {
             // goal is now the raw owner WhatsApp message (no wrapper to strip)
-            await saveMessage(ownerPhoneNorm, 'user', params.goal.substring(0, 2000), params.businessId);
-            await saveMessage(ownerPhoneNorm, 'assistant', finalResult.substring(0, 2000), params.businessId);
+            await saveMessage(ownerPhoneNorm, 'user', safeSlice(params.goal, 2000), params.businessId);
+            await saveMessage(ownerPhoneNorm, 'assistant', safeSlice(finalResult, 2000), params.businessId);
           } catch (e) {
             console.warn(`[agent:${taskId}] Failed to save conversation to history:`, e);
           }
@@ -718,7 +731,7 @@ async function scheduleAgentContinuation(params: {
         messages: (() => {
           const trimmed = params.messages.map(m => {
             if (m.role === 'tool' && m.content && m.content.length > 15000) {
-              return { ...m, content: m.content.substring(0, 15000) + '\n[...truncated]' };
+              return { ...m, content: safeSlice(m.content, 15000) + '\n[...truncated]' };
             }
             return m;
           });
@@ -727,7 +740,7 @@ async function scheduleAgentContinuation(params: {
           if (serialized.length > 800_000) {
             for (let i = 0; i < trimmed.length && serialized.length > 800_000; i++) {
               if (trimmed[i].role === 'tool' && trimmed[i].content && trimmed[i].content!.length > 2000) {
-                trimmed[i] = { ...trimmed[i], content: trimmed[i].content!.substring(0, 2000) + '\n[...aggressively truncated]' };
+                trimmed[i] = { ...trimmed[i], content: safeSlice(trimmed[i].content!, 2000) + '\n[...aggressively truncated]' };
                 serialized = JSON.stringify(trimmed);
               }
             }
@@ -831,7 +844,7 @@ async function resumeParentIfNeeded(
     // Inject sub-task result into parent's conversation
     parentMessages.push({
       role: 'user',
-      content: `Sub-agent completed its task. Result:\n\n${subTaskResult.substring(0, 3000)}`,
+      content: `Sub-agent completed its task. Result:\n\n${safeSlice(subTaskResult, 3000)}`,
     });
 
     // Resume parent via QStash

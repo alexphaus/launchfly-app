@@ -47,6 +47,41 @@ function safeSlice(str: string, maxLen: number): string {
   return codePoints.slice(0, maxLen).join('');
 }
 
+/**
+ * Strip unpaired surrogates from a string. Scraped web pages and truncated
+ * emoji can leave orphaned high/low surrogates that break DeepSeek V3.2's
+ * strict JSON parser ("unexpected end of hex escape").
+ */
+function sanitizeString(str: string | null | undefined): string {
+  if (!str) return str ?? '';
+  // eslint-disable-next-line no-control-regex
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = str.charCodeAt(i + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        result += str[i] + str[i + 1]; // valid pair
+        i++;
+      }
+      // else skip orphaned high surrogate
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      // skip orphaned low surrogate
+    } else {
+      result += str[i];
+    }
+  }
+  return result;
+}
+
+/** Sanitize all message content before sending to the LLM */
+function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
+  return msgs.map(m => ({
+    ...m,
+    content: typeof m.content === 'string' ? sanitizeString(m.content) : m.content,
+  }));
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────
 
 export interface AgentTask {
@@ -295,7 +330,7 @@ export async function executeAgentTask(params: {
 
       const completion = await client.chat.completions.create({
         model: AGENT_MODEL,
-        messages: budgetMessages as Parameters<typeof client.chat.completions.create>[0]['messages'],
+        messages: sanitizeMessages(budgetMessages) as Parameters<typeof client.chat.completions.create>[0]['messages'],
         tools: agentTools,
         tool_choice: 'auto',
       });
@@ -568,13 +603,13 @@ export async function executeAgentTask(params: {
       const agentTools = getToolsForAgent(params.enabledTools);
       const forceCompletion = await client.chat.completions.create({
         model: AGENT_MODEL,
-        messages: [
+        messages: sanitizeMessages([
           ...messages,
           {
             role: 'system' as const,
             content: 'CRITICAL: You have run out of tool budget. You MUST call send_report RIGHT NOW with all the data you have collected. Format the report as best you can with available information. This is your FINAL action.',
           },
-        ] as Parameters<typeof client.chat.completions.create>[0]['messages'],
+        ]) as Parameters<typeof client.chat.completions.create>[0]['messages'],
         tools: agentTools,
         tool_choice: { type: 'function', function: { name: 'send_report' } },
       });

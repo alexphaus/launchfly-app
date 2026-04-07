@@ -27,10 +27,10 @@ function getSupabase() {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const MAX_STEPS_PER_INVOCATION = 8;   // Tools per serverless invocation (8 × ~3.5s + LLM overhead ≈ 40s, safe for 60s limit)
+const MAX_STEPS_PER_INVOCATION = 5;   // Tools per serverless invocation (5 × ~5s + LLM overhead ≈ 35s, safe for 60s limit)
 const MAX_TOTAL_STEPS = 80;            // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';   // DeepSeek V3.2 — strong reasoning, tool use, low cost
-const WALL_CLOCK_LIMIT_MS = 45_000;    // 45s — bail well before Vercel's 60s hard kill (LLM calls can take 10s+)
+const WALL_CLOCK_LIMIT_MS = 35_000;    // 35s — bail early to leave 25s headroom for final LLM call + QStash continuation
 const STALE_TASK_MINUTES = 5;          // Mark running tasks older than this as timed-out
 const BUDGET_WARNING_STEPS = 5;        // When this many steps remain, tell agent to wrap up
 
@@ -303,7 +303,7 @@ export async function executeAgentTask(params: {
     const client = new OpenAI({
       apiKey: process.env.DEEPSEEK_API_KEY,
       baseURL: 'https://api.deepseek.com',
-      timeout: 40_000, // 40s — must finish before Vercel's 60s hard kill
+      timeout: 20_000, // 20s — must finish well before Vercel's 60s hard kill
     });
 
     // Resolve which tools this agent can use
@@ -598,7 +598,7 @@ export async function executeAgentTask(params: {
       const client = new OpenAI({
         apiKey: process.env.DEEPSEEK_API_KEY,
         baseURL: 'https://api.deepseek.com',
-        timeout: 40_000,
+        timeout: 20_000,
       });
       const agentTools = getToolsForAgent(params.enabledTools);
       const forceCompletion = await client.chat.completions.create({

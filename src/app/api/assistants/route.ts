@@ -333,6 +333,13 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
+      // Sync CRONs for the newly active assistant (creates its schedules, cleans up old ones)
+      try {
+        await syncDailyScheduleCrons(switched, body.businessId);
+      } catch (cronErr) {
+        console.error('[assistants] PUT CRON sync error (non-fatal):', cronErr);
+      }
+
       return NextResponse.json({ assistant: switched, ok: true });
     }
 

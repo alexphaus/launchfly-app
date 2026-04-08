@@ -176,6 +176,9 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error'
+  const [automationRules, setAutomationRules] = useState([]);
+  const [savingAutomations, setSavingAutomations] = useState(false);
+  const [automationSaveStatus, setAutomationSaveStatus] = useState(null); // 'saved' | 'error'
 
   // Assistant config state
   const [config, setConfig] = useState({
@@ -742,13 +745,53 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     setActivityDetail(null);
   };
 
+  // ── Load business-level automation rules ──────────────────────────────
+  const loadAutomations = useCallback(async () => {
+    if (!business?.id) return;
+    try {
+      const res = await fetch(`/api/business-automations?businessId=${business.id}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) setAutomationRules(data.rules || []);
+    } catch (err) {
+      console.error('Failed to load automations:', err);
+    }
+  }, [business?.id]);
+
+  // ── Save business-level automation rules ───────────────────────────────
+  const saveAutomations = async () => {
+    if (!business?.id) return;
+    setSavingAutomations(true);
+    setAutomationSaveStatus(null);
+    try {
+      const res = await fetch('/api/business-automations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: business.id, rules: automationRules }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setAutomationRules(data.rules);
+        setAutomationSaveStatus('saved');
+        setTimeout(() => setAutomationSaveStatus(null), 2000);
+      } else {
+        setAutomationSaveStatus('error');
+      }
+    } catch (err) {
+      console.error('Failed to save automations:', err);
+      setAutomationSaveStatus('error');
+    } finally {
+      setSavingAutomations(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       loadAssistant();
       loadActivity();
       loadAssistantList();
+      loadAutomations();
     }
-  }, [isOpen, loadAssistant, loadActivity, loadAssistantList]);
+  }, [isOpen, loadAssistant, loadActivity, loadAssistantList, loadAutomations]);
 
   // ── Save assistant config ──────────────────────────────────────────────
   const saveAssistant = async () => {
@@ -828,16 +871,11 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     });
   };
 
-  // ── Automation rule helpers ─────────────────────────────────────────────
-  const getRulesFrom = (cfg) => cfg.trigger_config?.rules || [];
-  const getRules = () => config.trigger_config?.rules || [];
+  // ── Automation rule helpers (business-level, independent of active assistant) ──
+  const getRules = () => automationRules;
 
   const setRules = (updater) => {
-    setConfig(prev => {
-      const prevRules = getRulesFrom(prev);
-      const rules = typeof updater === 'function' ? updater(prevRules) : updater;
-      return { ...prev, trigger_config: { ...prev.trigger_config, rules } };
-    });
+    setAutomationRules(prev => typeof updater === 'function' ? updater(prev) : updater);
   };
 
   const addRule = () => {
@@ -3072,34 +3110,65 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
         {/* ── Footer: Save Button ───────────────────────────────────────── */}
         <div className="px-5 py-4 border-t border-slate-100 shrink-0">
-          <button
-            onClick={saveAssistant}
-            disabled={saving}
-            className={`w-full py-3 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 ${
-              saveStatus === 'saved'
-                ? 'bg-emerald-100 text-emerald-700'
-                : saveStatus === 'error'
-                ? 'bg-red-100 text-red-700'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700'
-            } disabled:opacity-50`}
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                Saving...
-              </>
-            ) : saveStatus === 'saved' ? (
-              <>
-                <Check className="w-4 h-4" /> Saved!
-              </>
-            ) : saveStatus === 'error' ? (
-              'Failed to save — try again'
-            ) : (
-              <>
-                <Save className="w-4 h-4" /> Save Changes
-              </>
-            )}
-          </button>
+          {activeTab === 'triggers' ? (
+            <button
+              onClick={saveAutomations}
+              disabled={savingAutomations}
+              className={`w-full py-3 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 ${
+                automationSaveStatus === 'saved'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : automationSaveStatus === 'error'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              } disabled:opacity-50`}
+            >
+              {savingAutomations ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  Saving...
+                </>
+              ) : automationSaveStatus === 'saved' ? (
+                <>
+                  <Check className="w-4 h-4" /> Saved!
+                </>
+              ) : automationSaveStatus === 'error' ? (
+                'Failed to save — try again'
+              ) : (
+                <>
+                  <Save className="w-4 h-4" /> Save Automations
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={saveAssistant}
+              disabled={saving}
+              className={`w-full py-3 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 ${
+                saveStatus === 'saved'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : saveStatus === 'error'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              } disabled:opacity-50`}
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  Saving...
+                </>
+              ) : saveStatus === 'saved' ? (
+                <>
+                  <Check className="w-4 h-4" /> Saved!
+                </>
+              ) : saveStatus === 'error' ? (
+                'Failed to save — try again'
+              ) : (
+                <>
+                  <Save className="w-4 h-4" /> Save Changes
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

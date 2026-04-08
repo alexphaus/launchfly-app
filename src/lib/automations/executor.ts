@@ -1631,17 +1631,29 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
     }
   }
 
-  const { data: assistant } = await supabase
-    .from('assistants')
-    .select('trigger_config')
-    .eq('business_id', ctx.businessId)
-    .eq('active', true)
-    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
-    .limit(1)
+  // Business-level rules take priority. Fall back to active assistant's trigger_config
+  // only for businesses that haven't been migrated yet (automation_rules is empty).
+  const { data: bizData } = await supabase
+    .from('businesses')
+    .select('automation_rules')
+    .eq('id', ctx.businessId)
     .maybeSingle();
 
-  const triggerConfig = assistant?.trigger_config as { rules?: AutomationRule[] } | null;
-  const rules = triggerConfig?.rules || [];
+  let rules: AutomationRule[] = (bizData?.automation_rules as AutomationRule[]) || [];
+
+  if (rules.length === 0) {
+    // Legacy fallback: read from the active assistant's trigger_config.rules
+    const { data: assistant } = await supabase
+      .from('assistants')
+      .select('trigger_config')
+      .eq('business_id', ctx.businessId)
+      .eq('active', true)
+      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+      .limit(1)
+      .maybeSingle();
+    const triggerConfig = assistant?.trigger_config as { rules?: AutomationRule[] } | null;
+    rules = triggerConfig?.rules || [];
+  }
 
   // Filter to rules matching this event that are enabled
   const matchingRules = rules.filter(r =>

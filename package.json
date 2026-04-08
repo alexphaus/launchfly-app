@@ -9,6 +9,8 @@
     "lint": "next lint",
     "e2e:seed": "tsx scripts/e2e-seed.ts",
     "test:engine": "tsx scripts/tests/test-engine.ts",
+    "test:agent": "tsx scripts/tests/agent-runner.test.ts",
+    "test:agent:fast": "tsx scripts/tests/agent-runner.test.ts --no-e2e",
     "simulate": "node simulate-tally-form.js",
     "test:inngest": "node check-inngest.js",
     "test:quick": "node test-simulation.js quick",

@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     const ctx = {
       businessId,
       event: body.event || 'external_webhook',
+      ruleId: body.ruleId as string | undefined,
       phone: body.phone as string | undefined,
       customerName: body.name || body.customer_name,
       message: body.message,

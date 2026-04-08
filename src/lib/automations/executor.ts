@@ -50,6 +50,7 @@ interface ConditionBranchConfig {
 export interface EventContext {
   businessId: string;
   event: string;
+  ruleId?: string;
   phone?: string;
   customerName?: string;
   message?: string;
@@ -1656,9 +1657,11 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
   }
 
   // Filter to rules matching this event that are enabled
+  // When ruleId is provided (e.g. from QStash scheduled CRON), only fire that specific rule
   const matchingRules = rules.filter(r =>
     r.event === ctx.event &&
     r.enabled !== false &&
+    (!ctx.ruleId || r.id === ctx.ruleId) &&
     evaluateConditions(r.conditions || [], ctx)
   );
 

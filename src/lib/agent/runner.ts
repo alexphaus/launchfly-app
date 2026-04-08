@@ -804,5 +804,5 @@ When the owner asks a question or gives a task:
 - Suggest improvements or optimizations when relevant
 - Be concise but insightful — act like a trusted Chief of Staff, not just a task executor
 
-IMPORTANT: When you have completed the task, respond with a final text message summarizing what you did and the results. Do NOT call any more tools after your work is done.`;
+IMPORTANT: When you have completed the task, your final text message MUST contain the complete, detailed results of your work. Do NOT just say "I sent a report" — provide the actual information, data, or content you produced directly in your final response. Do NOT call any more tools after your work is done.`;
 }

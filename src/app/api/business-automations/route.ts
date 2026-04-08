@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Sync QStash CRONs and get back rules with updated qstashScheduleId values
-    const syncedRules = await syncBusinessCrons(body.businessId, body.rules, supabase);
+    const syncedRules = await syncBusinessCrons(body.businessId, body.rules);
 
     // Save to DB
     const { error: saveErr } = await supabase
@@ -126,8 +126,6 @@ export async function POST(req: NextRequest) {
 async function syncBusinessCrons(
   businessId: string,
   rules: AutomationRule[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: ReturnType<typeof createClient>,
 ): Promise<AutomationRule[]> {
   const qstashToken = process.env.QSTASH_TOKEN;
   if (!qstashToken) return rules;

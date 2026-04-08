@@ -63,7 +63,7 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'scrape_page',
-      description: 'Fetch and extract clean text content from a URL. Use after search_web to read a specific page in detail.',
+      description: 'Fetch and extract clean text content from a URL. Use after search_web to read a specific page in detail. Always provide the "extract" parameter when scraping listing/calendar pages to ensure ALL entries in the target date range are returned. Never invent or guess data not present in the scraped content.',
       parameters: {
         type: 'object',
         properties: {
@@ -511,7 +511,9 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
     if (!res.ok) return `Scrape failed: HTTP ${res.status}`;
 
     const text = await res.text();
-    const content = text.substring(0, 12000);
+    // Use a larger limit so paginated listing pages (e.g. medieval market calendars)
+    // are not truncated mid-list, which causes the agent to hallucinate missing entries.
+    const content = text.substring(0, 40000);
 
     // If extract instruction provided, use AI to pull specific data
     if (extract) {
@@ -519,7 +521,7 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
       const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
       const result = await generateText({
         model: deepseek(MINI_MODEL),
-        system: 'Extract the requested information from the scraped content. Be concise and structured.',
+        system: 'Extract the requested information from the scraped content. Be concise and structured. Include ALL matching items — do not truncate or summarize the list.',
         messages: [{ role: 'user', content: `EXTRACT: ${extract}\n\nCONTENT:\n${content}` }],
       });
       return result.text;

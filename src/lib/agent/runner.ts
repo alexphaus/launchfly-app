@@ -40,6 +40,7 @@ const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many st
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 15_000;       // Max time for a single tool execution
 const LLM_TIMEOUT_MS = 20_000;        // Max time for a single LLM call
+const LLM_MAX_RETRIES = 2;            // Exponential backoff retries for transient DeepSeek errors
 
 // ─── Utilities ───────────────────────────────────────────────────────────
 
@@ -200,12 +201,12 @@ export async function executeAgentTask(taskId: string): Promise<{
     updated_at: new Date().toISOString(),
   }).eq('id', taskId);
 
-  // Auto-clean stale tasks from previous invocations killed by Vercel
+  // Auto-clean stale tasks from previous invocations killed by Vercel or missed QStash
   try {
     await supabase
       .from('agent_tasks')
-      .update({ status: 'failed', result: 'Timed out: stuck in running state', updated_at: new Date().toISOString() })
-      .eq('status', 'running')
+      .update({ status: 'failed', result: 'Timed out: stuck in running or pending state', updated_at: new Date().toISOString() })
+      .in('status', ['running', 'pending'])
       .neq('id', taskId)
       .lt('updated_at', new Date(Date.now() - STALE_TASK_MINUTES * 60_000).toISOString());
   } catch { /* non-critical */ }
@@ -344,12 +345,31 @@ export async function executeAgentTask(taskId: string): Promise<{
           }]
         : messages;
 
-      const completion = await client.chat.completions.create({
-        model: AGENT_MODEL,
-        messages: sanitizeMessages(llmMessages) as Parameters<typeof client.chat.completions.create>[0]['messages'],
-        tools: agentTools,
-        tool_choice: 'auto',
-      });
+      let completion;
+      let llmErr: Error | null = null;
+
+      for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+        try {
+          completion = await client.chat.completions.create({
+            model: AGENT_MODEL,
+            messages: sanitizeMessages(llmMessages) as Parameters<typeof client.chat.completions.create>[0]['messages'],
+            tools: agentTools,
+            tool_choice: 'auto',
+          });
+          llmErr = null;
+          break; // Success
+        } catch (err: any) {
+          llmErr = err;
+          // Don't retry 400 Bad Request, these are formatting/validation errors
+          if (err?.status === 400 || attempt === LLM_MAX_RETRIES) break;
+          console.warn(`[agent:${taskId}] LLM transient error, retrying (${attempt + 1}/${LLM_MAX_RETRIES}):`, err.message);
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        }
+      }
+
+      if (llmErr || !completion) {
+        throw llmErr || new Error('LLM call failed unexpectedly');
+      }
 
       // ── Post-LLM wall-clock check ──
       if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
@@ -635,7 +655,7 @@ async function saveProgress(
 }
 
 /** Schedule a continuation via QStash — only sends the taskId. */
-async function scheduleContinuation(taskId: string): Promise<boolean> {
+async function scheduleContinuation(taskId: string, delaySecs = 0): Promise<boolean> {
   const qstashToken = process.env.QSTASH_TOKEN;
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai').replace(/\/$/, '');
 
@@ -647,15 +667,17 @@ async function scheduleContinuation(taskId: string): Promise<boolean> {
   try {
     const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
     const targetUrl = `${appUrl}/api/agent/run`;
+    
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${qstashToken}`,
+      'Content-Type': 'application/json',
+      'Upstash-Retries': '2',
+    };
+    if (delaySecs > 0) headers['Upstash-Delay'] = `${delaySecs}s`;
 
     const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${qstashToken}`,
-        'Content-Type': 'application/json',
-        'Upstash-Delay': '2s',
-        'Upstash-Retries': '2',
-      },
+      headers,
       body: JSON.stringify({ taskId }),
     });
 

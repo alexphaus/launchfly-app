@@ -402,8 +402,8 @@ export async function executeAgentTask(params: {
 
           let toolResult: string;
           try {
-            // Per-tool timeout: 45s max (leave headroom for wall-clock)
-            const toolTimeout = 45_000;
+            // Per-tool timeout: 15s max (a single tool shouldn't eat half the budget)
+            const toolTimeout = 15_000;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), toolTimeout);
             try {
@@ -423,22 +423,35 @@ export async function executeAgentTask(params: {
             console.warn(`[agent:${taskId}] Tool ${tc.function.name} threw:`, toolResult);
           }
 
-          // Record tool observation
+          // Record tool observation — cap at 8K to keep LLM context lean
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: toolResult,
+            content: safeSlice(toolResult, 8000),
           });
 
           toolLog.push({
             tool: tc.function.name,
             args: toolArgs,
-            result: toolResult.substring(0, 500),
+            result: safeSlice(toolResult, 500),
             timestamp: new Date().toISOString(),
           });
 
           stepsUsed++;
           stepsThisInvocation++;
+
+          // ── Periodic state save: protect against Vercel hard kills ──
+          // Save messages + step count to DB so QStash retry can recover
+          try {
+            await supabase.from('agent_tasks').update({
+              steps_used: stepsUsed,
+              tool_log: toolLog,
+              messages: messages,
+              owner_phone: params.ownerPhone || toolCtx.ownerPhone,
+              enabled_tools: params.enabledTools || null,
+              updated_at: new Date().toISOString(),
+            }).eq('id', taskId);
+          } catch { /* non-critical — don't let DB hiccup kill the loop */ }
 
           // ── PAUSE SIGNAL: tool requested task suspension ──
           if (toolResult.startsWith('__PAUSE__:')) {

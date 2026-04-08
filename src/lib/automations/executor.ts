@@ -1546,59 +1546,26 @@ CUSTOMER NAME: ${customerName}
     case 'agent_task': {
       const goal = (cfg.agentGoal as string) ? fillVars(cfg.agentGoal as string, ctx) : '';
       const role = (cfg.agentRole as string) || undefined;
-      // Which internal tools this agent can use.
-      // Explicit array → those tools; '*' or undefined from Launchfly internal → null (all tools)
-      // Default for client agents: [] (core tools only — no save_leads/search_google_maps)
       const enabledTools: string[] | null = cfg.agentTools === '*' ? null
         : Array.isArray(cfg.agentTools) ? (cfg.agentTools as string[])
-        : []; // safe default: core-only
+        : [];
 
       if (!goal) return { ok: false, detail: 'No agent goal specified' };
 
-      // Dispatch to agent runner via QStash (async — don't block the action chain)
-      const qstashToken = process.env.QSTASH_TOKEN;
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
-
-      if (!qstashToken) {
-        // Fallback: run inline (will work for quick tasks but may timeout on long ones)
-        try {
-          const { executeAgentTask } = await import('@/lib/agent/runner');
-          const result = await executeAgentTask({ businessId: ctx.businessId, goal, role, enabledTools });
-          ctx.aiResponse = result.result || `Agent ${result.status} after ${result.stepsUsed} steps`;
-          return { ok: result.status !== 'failed', detail: ctx.aiResponse as string };
-        } catch (err) {
-          return { ok: false, detail: `Agent error: ${err instanceof Error ? err.message : String(err)}` };
-        }
-      }
-
-      // Preferred: dispatch via QStash for robust async execution
       try {
-        const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
-        const targetUrl = `${appUrl}/api/agent/run`;
-        const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${qstashToken}`,
-            'Content-Type': 'application/json',
-            'Upstash-Delay': '1s',
-            'Upstash-Retries': '1',
-          },
-          body: JSON.stringify({
-            businessId: ctx.businessId,
-            goal,
-            role,
-            enabledTools,
-          }),
+        const { createAgentTask } = await import('@/lib/agent/runner');
+        const { taskId, dispatched } = await createAgentTask({
+          businessId: ctx.businessId,
+          goal,
+          role,
+          enabledTools,
         });
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          return { ok: false, detail: `Agent dispatch failed: ${res.status} ${errText.substring(0, 200)}` };
+        if (!dispatched) {
+          return { ok: false, detail: `Agent task created (${taskId}) but QStash dispatch failed` };
         }
-
         return { ok: true, detail: `Agent task dispatched: "${goal.substring(0, 80)}"` };
       } catch (err) {
-        return { ok: false, detail: `Agent dispatch error: ${err instanceof Error ? err.message : String(err)}` };
+        return { ok: false, detail: `Agent error: ${err instanceof Error ? err.message : String(err)}` };
       }
     }
 

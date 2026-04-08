@@ -3,54 +3,64 @@
 // Agent Run Endpoint — Starts or continues an autonomous agent task
 //
 // Called by:
-//   1. executor.ts `agent_task` action (initial dispatch)
-//   2. QStash continuation (agent loop resumes after serverless timeout)
-//   3. Direct API call (manual trigger from dashboard)
+//   1. QStash dispatch (new task or continuation — always carries taskId)
+//   2. Legacy callers that pass full params (backwards compat: creates task row)
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { executeAgentTask } from '@/lib/agent/runner';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow up to 60s for agent work
+export const maxDuration = 60;
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!,
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const { taskId, businessId, goal, role, messages, stepsUsed, toolLog, enabledTools, ownerPhone, parentTaskId, approvalResponse } = body;
+    let taskId: string;
 
-    if (!businessId || !goal) {
-      return NextResponse.json(
-        { error: 'Missing businessId or goal' },
-        { status: 400 },
-      );
+    if (body.taskId) {
+      // DB-driven path: QStash sent us just the taskId
+      taskId = body.taskId;
+    } else if (body.businessId && body.goal) {
+      // Legacy path: caller sent full params — create task row and run inline (no QStash)
+      console.log(`[agent/run] Legacy dispatch for ${body.businessId}: ${(body.goal as string).substring(0, 80)}`);
+      taskId = crypto.randomUUID();
+      const supabase = getSupabase();
+      await supabase.from('agent_tasks').insert({
+        id: taskId,
+        business_id: body.businessId,
+        status: 'pending',
+        goal: body.goal,
+        role: body.role || null,
+        messages: [],
+        steps_used: 0,
+        tool_log: [],
+        owner_phone: body.ownerPhone || null,
+        enabled_tools: body.enabledTools || null,
+        parent_task_id: body.parentTaskId || null,
+      });
+    } else {
+      return NextResponse.json({ error: 'Missing taskId or (businessId + goal)' }, { status: 400 });
     }
 
-    console.log(`[agent/run] ${taskId ? 'Resuming' : 'Starting'} task for ${businessId}: ${goal.substring(0, 80)}`);
-
-    const result = await executeAgentTask({
-      taskId,
-      businessId,
-      goal,
-      role,
-      ownerPhone,
-      messages,
-      stepsUsed,
-      toolLog,
-      enabledTools,
-      parentTaskId,
-      approvalResponse,
-    });
-
-    console.log(`[agent/run] Task ${result.taskId}: ${result.status} (${result.stepsUsed} steps)`);
+    console.log(`[agent/run] Executing task ${taskId}`);
+    const result = await executeAgentTask(taskId);
+    console.log(`[agent/run] Task ${taskId}: ${result.status} (${result.stepsUsed} steps)`);
 
     return NextResponse.json({
       status: result.status,
       taskId: result.taskId,
       stepsUsed: result.stepsUsed,
       result: result.result,
-      toolLog: result.toolLog?.map(t => ({ tool: t.tool, result: t.result.substring(0, 200) })),
     });
   } catch (err) {
     console.error('[agent/run] Error:', err);

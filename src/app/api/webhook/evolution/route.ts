@@ -738,7 +738,7 @@ export async function POST(request: NextRequest) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-/** Dispatch an agent task via QStash (or inline fallback) */
+/** Dispatch an agent task via QStash (DB-driven: creates task row, QStash carries only taskId) */
 async function dispatchAgentViaQStash(payload: {
   businessId: string;
   goal: string;
@@ -746,39 +746,18 @@ async function dispatchAgentViaQStash(payload: {
   enabledTools: string[];
   ownerPhone?: string;
 }): Promise<boolean> {
-  const qstashToken = process.env.QSTASH_TOKEN;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
-  if (!qstashToken) {
-    // Inline fallback (may timeout on long tasks)
-    try {
-      const { executeAgentTask } = await import('@/lib/agent/runner');
-      await executeAgentTask(payload);
-      return true;
-    } catch (err) {
-      console.error('   ❌ Inline agent fallback failed:', err);
-      return false;
-    }
-  }
   try {
-    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
-    const targetUrl = `${appUrl}/api/agent/run`;
-    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${qstashToken}`,
-        'Content-Type': 'application/json',
-        'Upstash-Delay': '1s',
-        'Upstash-Retries': '1',
-      },
-      body: JSON.stringify(payload),
+    const { createAgentTask } = await import('@/lib/agent/runner');
+    const { dispatched } = await createAgentTask({
+      businessId: payload.businessId,
+      goal: payload.goal,
+      role: payload.role,
+      ownerPhone: payload.ownerPhone,
+      enabledTools: payload.enabledTools,
     });
-    if (!res.ok) {
-      console.error(`   ❌ QStash dispatch failed: ${res.status}`);
-      return false;
-    }
-    return true;
+    return dispatched;
   } catch (err) {
-    console.error('   ❌ QStash dispatch error:', err);
+    console.error('   ❌ Agent dispatch failed:', err);
     return false;
   }
 }

@@ -424,6 +424,25 @@ export async function executeAgentTask(taskId: string): Promise<{
           } catch {
             toolArgs = {};
           }
+
+          // ── Payload Auto-Swap (Smart Report Delivery) ──
+          // If the LLM generates the beautiful formatted report in its standard text generation,
+          // but calls send_report with a brief summary, intercept and swap the payload.
+          // This avoids endless AI retries for formatting and immediately delivers what the user requested.
+          if (tc.function.name === 'send_report' && typeof toolArgs.message === 'string' && assistantMessage.content) {
+            const firstLine = toolArgs.message.split('\n')[0].trim();
+            const isSummary = /^(here|the|a|\*)?( )?(summary|overview|report|this)/i.test(firstLine) ||
+                              /^i('ve| have) (successfully |already )?(sent|delivered|compiled|generated|completed)/i.test(firstLine) ||
+                              /^(perfect|great)!/i.test(firstLine);
+
+            const contentIsLonger = assistantMessage.content.length > toolArgs.message.length;
+            // Also swap if the message is extremely short (e.g. "Report sent") and content is massive
+            if ((isSummary || toolArgs.message.length < 150) && contentIsLonger) {
+              console.log(`[agent:${taskId}] Intercepted summary report call, swapping payload with assistant text message`);
+              toolArgs.message = assistantMessage.content.trim();
+            }
+          }
+
           console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name}(${JSON.stringify(toolArgs).substring(0, 100)})`);
 
           let toolResult: string;
@@ -792,7 +811,7 @@ You have access to tools: search the web, scrape pages, find local businesses, s
 2. Use search_memory FIRST to check if you already know something relevant.
 3. Use search_web to research before making decisions.
 4. Always save valuable leads using save_leads — don't just list them.
-5. CRITICAL REPORTING RULE: You MUST use the \`send_report\` tool to deliver your final report to the owner. DO NOT USE IT TO SEND A SUMMARY OR STATUS UPDATE. The \`message\` parameter of \`send_report\` MUST CONTAIN THE EXACT REPORT FORMATTED AS REQUESTED. The text you pass to \`send_report\` IS the final message the owner receives.
+5. To deliver your final results, generate the full report matching the requested format perfectly, and send it to the owner using the \`send_report\` tool. Alternatively, you can omit the tool and just write the final report text in your conversational response, and I will deliver it.
 6. Be efficient — minimize unnecessary tool calls.
 7. If a tool fails, try an alternative approach.
 8. NEVER invent, guess, or hallucinate facts. Only report what you actually found in scraped/searched content.
@@ -831,5 +850,5 @@ When the owner asks a question or gives a task:
 - Suggest improvements or optimizations when relevant
 - Be concise but insightful — act like a trusted Chief of Staff, not just a task executor
 
-IMPORTANT: Your task is NOT complete until you call the \`send_report\` tool. Write the full, heavily-formatted report matching your task instructions EXACTLY into the \`message\` parameter of the \`send_report\` tool. Never just output the report in your text response.`;
+IMPORTANT: When your task is complete, always write the full, exact report. You may provide it inside the \`send_report\` tool, or simply as your final chat output without making any tool calls.`;
 }

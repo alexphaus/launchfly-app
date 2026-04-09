@@ -124,7 +124,7 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'send_report',
-      description: 'Send a formatted message/report to the business owner via WhatsApp. Use to deliver results, ask for approval, or provide updates. You can attach an image URL to make the report richer.',
+      description: 'Send a formatted message/report to the business owner via WhatsApp. THIS is the ONLY way to communicate or send a report to the owner. DO NOT summarize that you completed a report, you MUST put the actual full report text inside the "message" parameter, formatted exactly as requested by the user. You can attach an image URL to make the report richer.',
       parameters: {
         type: 'object',
         properties: {

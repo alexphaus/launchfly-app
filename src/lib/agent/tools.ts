@@ -452,26 +452,17 @@ async function executeSearchWeb(query: string): Promise<string> {
           query,
           max_results: 8,
           include_answer: true,
-          include_images: true,
-          include_image_descriptions: true,
         }),
       });
       if (res.ok) {
         const data = (await res.json()) as {
           answer?: string;
           results?: { title: string; url: string; content: string }[];
-          images?: { url: string; description?: string }[];
         };
         let output = '';
         if (data.answer) output += `**Summary:** ${data.answer}\n\n`;
         for (const r of data.results || []) {
           output += `- **${r.title}** (${r.url})\n  ${r.content?.substring(0, 300)}\n`;
-        }
-        if (data.images?.length) {
-          output += '\n**Images found:**\n';
-          for (const img of data.images.slice(0, 3)) {
-            output += `- ${img.description || 'Image'}: ${img.url}\n`;
-          }
         }
         return output || 'No results found.';
       }

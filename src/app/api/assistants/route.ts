@@ -567,6 +567,39 @@ async function syncDailyScheduleCrons(
       const data = await res.json();
       rule.scheduleConfig = { ...cfg, qstashScheduleId: data.scheduleId };
       console.log(`[cron] Created schedule ${data.scheduleId} for rule ${rule.id}: ${cron} ${tz}`);
+
+      // ── Immediate first-run if we missed this week's window ──────────────
+      try {
+        const nowUtc = Date.now();
+        const nowLocal = new Date(nowUtc + offset * 3600_000);
+        const localDay = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][nowLocal.getUTCDay()];
+        const localHour = nowLocal.getUTCHours();
+        const localMinute = nowLocal.getUTCMinutes();
+
+        const isTodayScheduled = days.map(d => d.toLowerCase()).includes(localDay);
+        const alreadyPassed = localHour > hour || (localHour === hour && localMinute > minute);
+
+        if (isTodayScheduled && alreadyPassed) {
+          console.log(`[cron] Today (${localDay}) is scheduled but ${hour}:${String(minute).padStart(2, '0')} already passed — firing immediately`);
+          const fireRes = await fetch(`${qstashBase}/v2/publish/${targetWithBiz}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${qstashToken}`,
+              'Content-Type': 'application/json',
+              'Upstash-Delay': '5s',
+              'Upstash-Retries': '1',
+            },
+            body: JSON.stringify({
+              businessId,
+              event: 'daily_schedule',
+              ruleId: rule.id,
+            }),
+          });
+          if (fireRes.ok) console.log(`[cron] Immediate first-run queued for rule ${rule.id}`);
+        }
+      } catch (e) {
+        console.warn('[cron] Immediate first-run check failed (non-fatal):', e);
+      }
     } else {
       console.error(`[cron] Failed to create schedule for rule ${rule.id}:`, await res.text());
     }

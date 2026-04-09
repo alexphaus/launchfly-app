@@ -1553,6 +1553,14 @@ CUSTOMER NAME: ${customerName}
 
       if (!goal) return { ok: false, detail: 'No agent goal specified' };
 
+      // Fetch owner phone for report routing
+      const { data: biz } = await getSupabase()
+        .from('businesses')
+        .select('phone_number, whatsapp_notify_number, whatsapp_number')
+        .eq('id', ctx.businessId)
+        .single();
+      const ownerPhone = biz?.whatsapp_notify_number || biz?.whatsapp_number || biz?.phone_number || undefined;
+
       try {
         const { createAgentTask } = await import('@/lib/agent/runner');
         const { taskId, dispatched } = await createAgentTask({
@@ -1560,6 +1568,7 @@ CUSTOMER NAME: ${customerName}
           goal,
           role,
           enabledTools,
+          ownerPhone,
         });
         if (!dispatched) {
           return { ok: false, detail: `Agent task created (${taskId}) but QStash dispatch failed` };

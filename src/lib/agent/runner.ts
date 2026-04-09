@@ -490,11 +490,9 @@ export async function executeAgentTask(taskId: string): Promise<{
         const calledSendReport = toolLog.some(t => t.tool === 'send_report');
         if (!calledSendReport && toolCtx.ownerPhone && !row.goal.startsWith('[DELEGATED TASK]')) {
           try {
-            const resultMsg = await executeTool('send_report', { message: safeSlice(finalResult, 3500) }, toolCtx);
-            toolLog.push({ tool: 'send_report (auto)', args: { message: 'auto' }, result: resultMsg, timestamp: new Date().toISOString() });
+            await executeTool('send_report', { message: safeSlice(finalResult, 3500) }, toolCtx);
           } catch (e) {
             console.warn(`[agent:${taskId}] Auto send_report failed:`, e);
-            toolLog.push({ tool: 'send_report (auto)', args: { message: 'auto' }, result: `Failed: ${e instanceof Error ? e.message : String(e)}`, timestamp: new Date().toISOString() });
           }
         }
 

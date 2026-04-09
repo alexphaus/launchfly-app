@@ -14,7 +14,11 @@
 // route is for a dedicated demo WhatsApp number.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/quote-followup/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+function getSupabase() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+}
 import { handleDemoReply } from '@/lib/demo/flow';
 import type { DemoSession } from '@/lib/demo/flow';
 

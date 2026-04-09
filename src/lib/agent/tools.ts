@@ -214,7 +214,7 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'delegate_task',
-      description: 'Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). Use this when the request requires specialized back-office capabilities. Do not wait for them to finish, just dispatch and then use send_report to the owner.',
+      description: 'DANGER: Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). ONLY use this if you ABSOLUTELY CANNOT do the task yourself (i.e., you lack the required tools). If you use this, the sub-agent will LOSE your custom report formatting rules. Therefore, DO NOT delegate if your main goal involves a specific output format.',
       parameters: {
         type: 'object',
         properties: {
@@ -285,7 +285,7 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'delegate_task_and_wait',
-      description: 'Delegate a task to another AI assistant AND pause until it completes. When the sub-agent finishes, your task will automatically resume with its results. Use this when you NEED the result before continuing (e.g. "get quotes then compare").',
+      description: 'DANGER: Delegate a task to another AI assistant AND pause until it completes. Similar to delegate_task, only use if you intrinsically lack the required tools. Any formatting guidelines in your initial prompt WILL NOT transfer to the sub-agent.',
       parameters: {
         type: 'object',
         properties: {

@@ -678,6 +678,15 @@ async function executeSendReport(
     if (!result.sent) {
       return `Failed to send report: ${result.error || 'Unknown WhatsApp error'}`;
     }
+
+    // Save outbound report to chat history so the agent remembers it later
+    try {
+      const { saveMessage } = await import('@/lib/ai-receptionist/history');
+      await saveMessage(toolCtx.ownerPhone, 'assistant', fullMessage, toolCtx.businessId);
+    } catch (e) {
+      console.warn('Failed to save outbound report to chat history:', e);
+    }
+
     return 'Report sent to business owner via WhatsApp.';
   } catch (err) {
     return `Failed to send report: ${err instanceof Error ? err.message : String(err)}`;

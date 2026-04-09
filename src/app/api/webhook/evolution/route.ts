@@ -436,6 +436,10 @@ export async function POST(request: NextRequest) {
       let rolePrompt: string;
       let enabledTools: string[];
 
+      // ── Save message to history so the agent has context ──
+      const { saveMessage } = await import('@/lib/ai-receptionist/history');
+      await saveMessage(customerPhone, 'user', messageText, businessId).catch(e => console.warn('Failed to save owner message to history:', e));
+
       if (orchestrator) {
         if (ownerImageUrl) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;

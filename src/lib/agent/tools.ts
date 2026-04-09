@@ -982,6 +982,7 @@ async function executeDelegateTask(
         goal: `[DELEGATED TASK] ${instruction}`,
         role: assistant.system_prompt,
         enabledTools,
+        ownerPhone: toolCtx.ownerPhone,
       }),
     });
 

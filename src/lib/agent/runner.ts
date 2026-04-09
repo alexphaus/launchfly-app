@@ -232,10 +232,15 @@ export async function executeAgentTask(taskId: string): Promise<{
     .limit(1)
     .maybeSingle();
 
-  let repName = assistant?.name;
-  if (row.role?.includes('Chief of Staff')) repName = 'Chief of Staff';
-  else if (row.role?.includes('Purchasing OS')) repName = 'Purchasing OS';
-  else if (row.role?.includes('Content & Growth OS')) repName = 'Content & Growth OS';
+  // Use custom role name for report header (e.g. "Trend Scout — Weekly..." → "Trend Scout")
+  // Fall back to well-known OS names, then to the active assistant name.
+  let repName: string | undefined;
+  if (row.role) {
+    // Extract short name: take everything before " — " or " - " or use the full role
+    const dashIdx = row.role.search(/\s[—–-]\s/);
+    repName = dashIdx > 0 ? row.role.substring(0, dashIdx).trim() : row.role.substring(0, 40).trim();
+  }
+  if (!repName) repName = assistant?.name;
 
   const toolCtx: ToolContext = {
     businessId: row.business_id,
@@ -487,10 +492,29 @@ export async function executeAgentTask(taskId: string): Promise<{
         const finalResult = assistantMessage.content || 'Task completed (no output).';
 
         // Safety net: auto-deliver if agent forgot send_report
-        const calledSendReport = toolLog.some(t => t.tool === 'send_report');
+        const calledSendReport = toolLog.some(t => t.tool === 'send_report' && !t.result.startsWith('REJECTED'));
         if (!calledSendReport && toolCtx.ownerPhone && !row.goal.startsWith('[DELEGATED TASK]')) {
+          // The finalResult is just conversational text (likely a summary). 
+          // Look for the last send_report call's argument in the messages array — that contains the actual formatted report.
+          let reportContent = '';
+          for (let mi = messages.length - 1; mi >= 0; mi--) {
+            const m = messages[mi];
+            if (m.role === 'assistant' && m.tool_calls) {
+              const srCall = m.tool_calls.find(tc => tc.function.name === 'send_report');
+              if (srCall) {
+                try {
+                  const parsed = JSON.parse(srCall.function.arguments);
+                  if (parsed.message && parsed.message.length > 100) {
+                    reportContent = parsed.message;
+                    break;
+                  }
+                } catch { /* skip */ }
+              }
+            }
+          }
           try {
-            await executeTool('send_report', { message: safeSlice(finalResult, 3500) }, toolCtx);
+            // Use extracted report if found, otherwise fall back to finalResult
+            await executeTool('send_report', { message: safeSlice(reportContent || finalResult, 3500) }, toolCtx);
           } catch (e) {
             console.warn(`[agent:${taskId}] Auto send_report failed:`, e);
           }

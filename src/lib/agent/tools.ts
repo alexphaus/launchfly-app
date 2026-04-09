@@ -128,7 +128,7 @@ export const AGENT_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          message: { type: 'string', description: 'The message to send to the business owner' },
+          message: { type: 'string', description: 'The FULL formatted report text to send. Must contain the actual report content (data, formatting, emojis). Summaries like "The report has been sent" will be REJECTED by the server and you will be forced to retry.' },
           imageUrl: { type: 'string', description: 'Optional secure HTTPS URL of an image (e.g. graph, trending product photo) to attach to the report.' },
         },
         required: ['message'],
@@ -622,12 +622,27 @@ async function executeSaveLeads(
 
 // ─── send_report ─────────────────────────────────────────────────────────
 
+// Summary phrases that indicate the LLM sent a meta-description instead of the actual report
+const SUMMARY_PATTERNS = [
+  /^the report has been (sent|delivered|completed|generated)/i,
+  /^i('ve| have) (successfully |already )?(sent|delivered|compiled|generated|completed|provided|created)/i,
+  /^(here'?s? a |the |a )?(summary|overview) of (what|my|the)/i,
+  /^(perfect|great)!?\s*(i('ve| have)|the report)/i,
+  /^report (sent|delivered) (successfully|to the)/i,
+];
+
 async function executeSendReport(
   message: string,
   toolCtx: ToolContext,
   imageUrl?: string,
 ): Promise<string> {
   if (!toolCtx.ownerPhone) return 'Cannot send report — owner phone number not configured.';
+
+  // SERVER-SIDE GUARD: Reject summary/status messages. Force LLM to retry with actual content.
+  const firstLine = message.split('\n')[0].trim();
+  if (SUMMARY_PATTERNS.some(p => p.test(firstLine))) {
+    return 'REJECTED: You sent a summary/status message instead of the actual report. The owner CANNOT see your conversational text. You MUST call send_report again with the FULL FORMATTED REPORT as the message parameter. Copy the exact report content (with emojis, headers, data) into the message field. Do NOT describe what you did — send the actual report text.';  
+  }
 
   try {
     // Reports go VIA the Launchfly central number (CEO assistant),

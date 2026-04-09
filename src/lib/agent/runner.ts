@@ -236,11 +236,6 @@ export async function executeAgentTask(taskId: string): Promise<{
   if (row.role?.includes('Chief of Staff')) repName = 'Chief of Staff';
   else if (row.role?.includes('Purchasing OS')) repName = 'Purchasing OS';
   else if (row.role?.includes('Content & Growth OS')) repName = 'Content & Growth OS';
-  else if (row.role && !row.role.startsWith('You are')) {
-    // Custom role like "Trend Scout — Weekly jewelry trend analyst"
-    // Use the role text up to the first dash/newline as the display name
-    repName = row.role.split(/[—\-\n]/)[0].trim() || repName;
-  }
 
   const toolCtx: ToolContext = {
     businessId: row.business_id,

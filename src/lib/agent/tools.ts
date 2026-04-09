@@ -124,11 +124,11 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'send_report',
-      description: 'Send a formatted message/report to the business owner via WhatsApp. THIS is the ONLY way to deliver your work to the owner.',
+      description: 'Send a formatted message/report to the business owner via WhatsApp. THIS is the ONLY way to communicate or send a report to the owner. DO NOT summarize that you completed a report, you MUST put the actual full report text inside the "message" parameter, formatted exactly as requested by the user. You can attach an image URL to make the report richer.',
       parameters: {
         type: 'object',
         properties: {
-          message: { type: 'string', description: 'THE FULL FINAL FORMATTED REPORT TEXT. This is pasted VERBATIM into WhatsApp. It must contain the actual report content (data, findings, formatted text), NOT a summary of what you did. If the user requested a specific format template, the message must follow that template exactly. Messages that merely describe what was done (e.g. "The report has been sent" or "I compiled the data") will be REJECTED.' },
+          message: { type: 'string', description: 'The message to send to the business owner' },
           imageUrl: { type: 'string', description: 'Optional secure HTTPS URL of an image (e.g. graph, trending product photo) to attach to the report.' },
         },
         required: ['message'],
@@ -628,18 +628,6 @@ async function executeSendReport(
   imageUrl?: string,
 ): Promise<string> {
   if (!toolCtx.ownerPhone) return 'Cannot send report — owner phone number not configured.';
-
-  // Guard: reject meta-summaries that describe the report instead of containing it
-  const summaryPatterns = [
-    /^the report has been (sent|delivered|completed)/i,
-    /^i('ve| have) (sent|delivered|compiled|provided|completed|included|created)/i,
-    /^(here'?s? a summary|summary of|i successfully)/i,
-    /^(report sent|successfully sent|the .+ report has been)/i,
-  ];
-  const firstLine = message.split('\n')[0].trim();
-  if (summaryPatterns.some(p => p.test(firstLine)) && message.length < 500) {
-    return 'REJECTED: You sent a summary/status message instead of the actual report. You MUST call send_report again with the FULL formatted report content as the message parameter. Include the actual data, findings, and formatting the user requested.';
-  }
 
   try {
     // Reports go VIA the Launchfly central number (CEO assistant),

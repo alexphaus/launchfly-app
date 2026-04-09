@@ -134,7 +134,7 @@ export const AGENT_TOOLS = [
         required: ['message'],
       },
     },
-  },
+  }, 
   {
     type: 'function' as const,
     function: {

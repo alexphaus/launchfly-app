@@ -1,29 +1,17 @@
 // src/lib/quote-followup/whatsapp.ts
-// ─── Twilio WhatsApp helper for Quote Follow-Up ───
+// ─── WhatsApp helper for Quote Follow-Up (Evolution API) ───
 
-import twilio from 'twilio';
-
-function getTwilioClient() {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  if (!sid || !token) throw new Error('Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN');
-  return twilio(sid, token);
-}
+import { getWhatsAppProvider } from '@/lib/whatsapp-provider';
 
 /**
- * Send a WhatsApp message via Twilio.
- * `to` should be plain E.164 ("+1234567890") — we add the "whatsapp:" prefix.
+ * Send a WhatsApp message via Evolution API (through whatsapp-provider).
+ * `to` should be plain E.164 ("+1234567890").
  */
-export async function sendWhatsApp(to: string, body: string): Promise<string> {
-  const client = getTwilioClient();
-  const from = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886"
-  if (!from) throw new Error('Missing TWILIO_WHATSAPP_FROM');
-
-  const msg = await client.messages.create({
-    from,
-    to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-    body,
-  });
-
-  return msg.sid;
+export async function sendWhatsApp(to: string, body: string, businessId?: string): Promise<string> {
+  const provider = await getWhatsAppProvider(businessId);
+  const result = await provider.sendWhatsApp(to, body, businessId);
+  if (!result.sent) {
+    throw new Error(result.error || 'WhatsApp send failed');
+  }
+  return result.id || 'sent';
 }

@@ -484,7 +484,7 @@ export async function processSequenceStep(lead: QuoteLead): Promise<ProcessResul
   if (currentStep.channel === 'whatsapp') {
     const message = currentStep.buildMessage(msgCtx);
     try {
-      await sendWhatsApp(lead.phone, message);
+      await sendWhatsApp(lead.phone, message, lead.business_id || undefined);
       action = `whatsapp_step_${currentStep.step}`;
 
       // Save to chat history
@@ -514,7 +514,7 @@ export async function processSequenceStep(lead: QuoteLead): Promise<ProcessResul
       // Fallback: send the missed-call text directly
       const fallbackMsg = currentStep.buildMessage(msgCtx);
       try {
-        await sendWhatsApp(lead.phone, fallbackMsg);
+        await sendWhatsApp(lead.phone, fallbackMsg, lead.business_id || undefined);
         action = `retell_failed_whatsapp_fallback_step_${currentStep.step}`;
       } catch {
         return { action: `retell_call_step_${currentStep.step}_failed` };

@@ -24,7 +24,7 @@ function getSupabase() {
 const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
-  'search_memory', 'save_memory',
+  'search_memory', 'save_memory', 'search_tasks',
 ]);
 const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web']);
 
@@ -342,10 +342,26 @@ export const AGENT_TOOLS = [
         type: 'object',
         properties: {
           content: { type: 'string', description: 'The insight or fact to remember (be specific and concise)' },
-          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'tool_recipe', 'general'], description: 'Memory category. Use tool_recipe to save working API call patterns for reuse.' },
+          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'tool_recipe', 'skill', 'general'], description: 'Memory category. Use "skill" to save proven multi-step workflows. Use "tool_recipe" to save working API call patterns.' },
           importance: { type: 'number', description: 'Importance score 0.0-1.0 (default 0.5). Use 0.8+ for critical business decisions.' },
         },
         required: ['content', 'category'],
+      },
+    },
+  },
+  // ── Task History Search ─────────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'search_tasks',
+      description: 'Search past completed agent tasks by keyword. Use when the owner asks about previous work, old suppliers, past reports, historical decisions, or anything you did before. Returns matching tasks with their goals and results.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search keywords (e.g. "marble supplier", "weekly report", "inventory check")' },
+          days: { type: 'number', description: 'How many days back to search (default: 30, max: 365)' },
+        },
+        required: ['query'],
       },
     },
   },
@@ -485,6 +501,9 @@ export async function executeTool(
 
     case 'search_memory':
       return executeSearchMemory(args.query as string, toolCtx.businessId, args.category as string | undefined, (args.limit as number) || 5);
+
+    case 'search_tasks':
+      return executeSearchTasks(args.query as string, toolCtx.businessId, (args.days as number) || 30);
 
     case 'save_memory':
       return executeSaveMemory(args.content as string, args.category as string, toolCtx.businessId, (args.importance as number) || 0.5);
@@ -1294,6 +1313,54 @@ async function executeRequestApproval(
     return `__PAUSE__:waiting_approval:${approval.id}:Approval request sent to owner. Task will resume when they reply.`;
   } catch (err) {
     return `Failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE: Task History Search
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function executeSearchTasks(
+  query: string,
+  businessId: string,
+  days: number = 30,
+): Promise<string> {
+  try {
+    const supabase = getSupabase();
+    const safeDays = Math.min(Math.max(1, days), 365);
+    const since = new Date(Date.now() - safeDays * 86400000).toISOString();
+
+    // Split query into keywords for flexible matching
+    const keywords = query.split(/\s+/).filter(w => w.length > 2).slice(0, 6);
+    if (keywords.length === 0) return 'Error: query too short. Provide meaningful search keywords.';
+
+    // Build OR condition: match keywords in goal or result
+    const patterns = keywords.map(k => {
+      const escaped = k.replace(/[%_]/g, '\\$&');
+      return `goal.ilike.%${escaped}%,result.ilike.%${escaped}%`;
+    });
+
+    const { data, error } = await supabase
+      .from('agent_tasks')
+      .select('goal, result, created_at, steps_used')
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('created_at', since)
+      .or(patterns.join(','))
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) return `Search failed: ${error.message}`;
+    if (!data?.length) return `No matching tasks found in the last ${safeDays} days.`;
+
+    return data.map((t, i) => {
+      const d = new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const goal = (t.goal || '').substring(0, 120);
+      const result = (t.result || '').substring(0, 250);
+      return `${i + 1}. [${d}] (${t.steps_used} steps)\n   Goal: ${goal}\n   Result: ${result}`;
+    }).join('\n\n');
+  } catch (err) {
+    return `Task search failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 

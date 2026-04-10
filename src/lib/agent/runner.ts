@@ -307,6 +307,31 @@ export async function executeAgentTask(taskId: string): Promise<{
       }
     }
 
+    // ── Skills auto-recall: inject relevant proven workflows ──
+    try {
+      const goalKeywords = (row.goal as string || '').split(/\s+/).filter(w => w.length > 3).slice(0, 5).join('%');
+      if (goalKeywords) {
+        const { data: skills } = await supabase
+          .from('ai_memories')
+          .select('content, importance_score')
+          .eq('business_id', row.business_id)
+          .eq('archived', false)
+          .in('category', ['skill', 'tool_recipe'])
+          .ilike('content', `%${goalKeywords}%`)
+          .order('importance_score', { ascending: false })
+          .limit(2);
+
+        if (skills?.length) {
+          memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
+          for (const s of skills) {
+            memoryContext += `${s.content}\n---\n`;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[agent:${taskId}] Skills recall failed (non-fatal):`, e);
+    }
+
     messages = [
       { role: 'system', content: buildSystemPrompt(toolCtx, row.role || undefined, industry, location, memoryContext) },
       { role: 'user', content: row.goal },
@@ -804,7 +829,7 @@ BUSINESS: ${toolCtx.businessName || 'Unknown'}
 ${industry ? `INDUSTRY: ${industry}` : ''}
 ${location ? `LOCATION: ${location}` : ''}
 
-You have access to tools: search the web, scrape pages, find local businesses, save leads, query the database, draft content, send WhatsApp messages, manage jobs, delegate tasks, request approval, search/save memory, call external APIs, request new integrations, and send reports to the owner.
+You have access to tools: search the web, scrape pages, find local businesses, save leads, query the database, draft content, send WhatsApp messages, manage jobs, delegate tasks, request approval, search/save memory, search past tasks, call external APIs, request new integrations, and send reports to the owner.
 
 ## RULES
 1. Think step-by-step. Plan your approach before using tools.
@@ -816,8 +841,20 @@ You have access to tools: search the web, scrape pages, find local businesses, s
 7. If a tool fails, try an alternative approach.
 8. NEVER invent, guess, or hallucinate facts. Only report what you actually found in scraped/searched content.
 9. NEVER hallucinate tool executions or actions you cannot perform. Offer to draft content instead.
-10. Use save_memory to remember important insights, supplier info, decisions, and patterns.
+10. MEMORY DISCIPLINE — After EVERY task completion:
+    a) Did you learn a new supplier, price, or contact? → save_memory (category: supplier or preference)
+    b) Did you complete a multi-step workflow (3+ tool calls)? → save_memory (category: skill) with this format:
+       SKILL: [short name]
+       TRIGGER: [when to use this skill]
+       STEPS:
+       1. [tool_name] — [what and why]
+       2. [tool_name] — [what and why]
+       TIPS: [what worked, what to avoid]
+    c) Did the owner correct you or express a preference? → save_memory (category: preference)
+    d) Did you discover something unexpected? → save_memory (category: pattern)
+    FORGETTING IS FAILURE. When in doubt, save.
 11. Use request_approval BEFORE taking costly or irreversible actions (placing orders, sending campaigns).
+12. Use search_tasks to look up past work when the owner asks about previous tasks, old reports, or historical decisions.
 
 ## DYNAMIC CAPABILITIES (call_api + request_integration)
 You are not limited to built-in tools. You can call ANY external REST API the owner has connected:

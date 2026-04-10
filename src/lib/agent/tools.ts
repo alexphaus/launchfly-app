@@ -26,7 +26,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -389,6 +389,23 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'browse_web',
+      description: 'Control a real cloud browser to perform actions on any website — click buttons, fill forms, log in, create accounts, post listings, upload files, and extract data. Powered by Browserbase + Stagehand. Use this when you need to INTERACT with a website (not just read it). For simple reading/searching, prefer search_web or scrape_page. For actions that cost money or are irreversible (placing orders, publishing listings), use request_approval first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: 'Natural language description of the full task to perform. Be specific: include URLs, what to click, what to type, what to extract. Example: "Go to etsy.com/your-shop/listings, click Add a listing, set title to Handmade Ceramic Mug, set price to $24.99, then click Publish."' },
+          url: { type: 'string', description: 'Starting URL to navigate to (e.g. "https://www.etsy.com"). If omitted, the agent starts from a blank page.' },
+          extract_schema: { type: 'object', description: 'Optional JSON schema describing the structured data to extract from the page after completing the task. Keys are field names, values are descriptions.' },
+          max_steps: { type: 'number', description: 'Maximum number of actions the browser agent can take (default: 20, max: 50). Increase for complex multi-page flows.' },
+        },
+        required: ['task'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -477,6 +494,9 @@ export async function executeTool(
 
     case 'request_integration':
       return executeRequestIntegration(args as Record<string, unknown>, toolCtx);
+
+    case 'browse_web':
+      return executeBrowseWeb(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -1599,4 +1619,132 @@ async function executeRequestIntegration(
   }
 
   return `Integration request sent to owner for "${displayName}" (ID: ${integration.id}). Status: pending. When the owner replies with the API key, it will be activated and available via call_api.`;
+}
+
+// ─── browse_web (Browserbase + Stagehand — real browser automation) ──────
+
+const BROWSE_WEB_TIMEOUT_MS = 120_000; // 2 min max per browser session
+const BROWSE_WEB_MAX_STEPS = 50;
+
+async function executeBrowseWeb(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const task = (args.task as string || '').trim();
+  const startUrl = (args.url as string) || '';
+  const extractSchema = args.extract_schema as Record<string, string> | undefined;
+  const maxSteps = Math.min(Math.max((args.max_steps as number) || 20, 1), BROWSE_WEB_MAX_STEPS);
+
+  if (!task) return 'Error: task is required — describe what you want the browser to do.';
+
+  const bbApiKey = process.env.BROWSERBASE_API_KEY;
+  const bbProjectId = process.env.BROWSERBASE_PROJECT_ID;
+  if (!bbApiKey || !bbProjectId) {
+    return 'Error: Browserbase is not configured. Set BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID environment variables.';
+  }
+
+  let stagehand: InstanceType<typeof import('@browserbasehq/stagehand').Stagehand> | null = null;
+
+  try {
+    const { Stagehand } = await import('@browserbasehq/stagehand');
+
+    console.log(`[browse_web] Starting browser session for: "${task.substring(0, 100)}" (business: ${toolCtx.businessId})`);
+
+    stagehand = new Stagehand({
+      env: 'BROWSERBASE',
+      apiKey: bbApiKey,
+      projectId: bbProjectId,
+      // Use Browserbase Model Gateway — routes through the single BB API key
+      model: 'google/gemini-2.5-flash',
+    });
+
+    await stagehand.init();
+
+    const sessionUrl = `https://browserbase.com/sessions/${stagehand.browserbaseSessionID}`;
+    console.log(`[browse_web] Session: ${sessionUrl}`);
+
+    // Navigate to starting URL if provided
+    const page = stagehand.context.pages()[0];
+    if (startUrl) {
+      await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeoutMs: 30_000 });
+    }
+
+    // Use the agent for multi-step task execution
+    const agent = stagehand.agent({
+      model: 'google/gemini-2.5-flash',
+    });
+
+    const abortTimeout = setTimeout(() => {
+      console.warn(`[browse_web] Session timed out after ${BROWSE_WEB_TIMEOUT_MS / 1000}s`);
+    }, BROWSE_WEB_TIMEOUT_MS);
+
+    let result: { message?: string; completed?: boolean; actions?: unknown[]; success?: boolean } = {};
+    try {
+      result = await Promise.race([
+        agent.execute(task),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Browser session timed out')), BROWSE_WEB_TIMEOUT_MS)
+        ),
+      ]);
+    } finally {
+      clearTimeout(abortTimeout);
+    }
+
+    // Extract structured data if schema provided
+    let extractedData: string | null = null;
+    if (extractSchema && Object.keys(extractSchema).length > 0) {
+      try {
+        const { z } = await import('zod');
+        const shape: Record<string, ReturnType<typeof z.string>> = {};
+        for (const [key, desc] of Object.entries(extractSchema)) {
+          shape[key] = z.string().describe(desc);
+        }
+        const schema = z.object(shape);
+        const data = await stagehand.extract(
+          `Extract the following fields from the current page: ${Object.keys(extractSchema).join(', ')}`,
+          schema,
+        );
+        extractedData = JSON.stringify(data, null, 2);
+      } catch (extractErr) {
+        extractedData = `Extraction failed: ${extractErr instanceof Error ? extractErr.message : String(extractErr)}`;
+      }
+    }
+
+    // Build response
+    const parts: string[] = [];
+    parts.push(`Browser session ${result.success ? 'completed successfully' : 'finished'}.`);
+    parts.push(`Session replay: ${sessionUrl}`);
+
+    if (result.message) {
+      parts.push(`\nAgent result: ${result.message}`);
+    }
+    if (result.actions && Array.isArray(result.actions)) {
+      parts.push(`Actions taken: ${result.actions.length}`);
+    }
+    if (extractedData) {
+      parts.push(`\nExtracted data:\n${extractedData}`);
+    }
+
+    // Get the final page URL
+    try {
+      const finalUrl = page.url();
+      parts.push(`\nFinal page: ${finalUrl}`);
+    } catch { /* page may be closed */ }
+
+    return parts.join('\n');
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[browse_web] Error:`, msg);
+
+    if (msg.includes('timed out')) {
+      return `Browser session timed out after ${BROWSE_WEB_TIMEOUT_MS / 1000}s. The task may have been too complex. Try breaking it into smaller steps.`;
+    }
+
+    return `Browser automation failed: ${msg}`;
+  } finally {
+    if (stagehand) {
+      try { await stagehand.close(); } catch { /* best effort cleanup */ }
+    }
+  }
 }

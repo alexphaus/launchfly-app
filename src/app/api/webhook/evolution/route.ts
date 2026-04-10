@@ -393,6 +393,49 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // ── Check for pending integration requests ────────────────────
+      // If the agent requested an API key and the owner replies with one, activate it
+      {
+        const { data: pendingIntegration } = await supabase
+          .from('business_integrations')
+          .select('id, service_name, config')
+          .eq('business_id', businessId)
+          .eq('status', 'pending')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const trimmed = messageText.trim();
+        const looksLikeApiKey = /^[a-zA-Z0-9_\-]{12,}$/.test(trimmed) || /^(sk|pk|ck|ak|key|token)[_\-]/i.test(trimmed);
+        const isSkip = /^skip$/i.test(trimmed);
+
+        if (pendingIntegration && (looksLikeApiKey || isSkip)) {
+          if (isSkip) {
+            console.log(`   ⏭️ Owner skipped integration "${pendingIntegration.service_name}"`);
+            await supabase.from('business_integrations').update({
+              status: 'revoked',
+              updated_at: new Date().toISOString(),
+            }).eq('id', pendingIntegration.id);
+
+            const { sendWhatsApp } = await import('@/lib/evolution');
+            await sendWhatsApp(customerPhone, `Got it — skipped "${(pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name}".`);
+            return NextResponse.json({ ok: true, routed: 'integration_skipped', service: pendingIntegration.service_name });
+          }
+
+          console.log(`   🔑 Owner provided API key for "${pendingIntegration.service_name}"`);
+          await supabase.from('business_integrations').update({
+            api_key_encrypted: trimmed, // TODO: encrypt at rest when vault is added
+            status: 'active',
+            updated_at: new Date().toISOString(),
+          }).eq('id', pendingIntegration.id);
+
+          const { sendWhatsApp } = await import('@/lib/evolution');
+          const displayName = (pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name;
+          await sendWhatsApp(customerPhone, `✅ *${displayName}* is now connected! Your AI agent can use it immediately.`);
+          return NextResponse.json({ ok: true, routed: 'integration_activated', service: pendingIntegration.service_name });
+        }
+      }
+
       // ── Handle owner image messages ────
       let ownerImageUrl: string | null = null;
       const ownerImgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
@@ -446,13 +489,15 @@ export async function POST(request: NextRequest) {
         }
         rolePrompt = orchestrator.system_prompt;
         enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
-        if (!enabledTools.includes('analyze_inventory')) enabledTools.push('analyze_inventory');
+        for (const t of ['analyze_inventory', 'call_api', 'request_integration']) {
+          if (!enabledTools.includes(t)) enabledTools.push(t);
+        }
       } else {
         if (ownerImageUrl) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
         }
         rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-        enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory'];
+        enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration'];
       }
 
       const dispatched = await dispatchAgentViaQStash({
@@ -617,6 +662,39 @@ export async function POST(request: NextRequest) {
       if (isOwner) {
         console.log(`   👑 Owner message from +${customerPhone} → Orchestrator`);
 
+        // ─── Check for pending integration API key replies ────────
+        {
+          const { data: pendingIntegration } = await supabase
+            .from('business_integrations')
+            .select('id, service_name, config')
+            .eq('business_id', businessId)
+            .eq('status', 'pending')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const trimmed = messageText.trim();
+          const looksLikeApiKey = /^[a-zA-Z0-9_\-]{12,}$/.test(trimmed) || /^(sk|pk|ck|ak|key|token)[_\-]/i.test(trimmed);
+          const isSkip = /^skip$/i.test(trimmed);
+
+          if (pendingIntegration && (looksLikeApiKey || isSkip)) {
+            if (isSkip) {
+              await supabase.from('business_integrations').update({ status: 'revoked', updated_at: new Date().toISOString() }).eq('id', pendingIntegration.id);
+              const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+              const provider = await getWhatsAppProvider(businessId);
+              await provider.sendWhatsApp(customerPhone, `Got it — skipped "${(pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name}".`, businessId);
+              return NextResponse.json({ ok: true, routed: 'integration_skipped', service: pendingIntegration.service_name });
+            }
+            console.log(`   🔑 Owner provided API key for "${pendingIntegration.service_name}"`);
+            await supabase.from('business_integrations').update({ api_key_encrypted: trimmed, status: 'active', updated_at: new Date().toISOString() }).eq('id', pendingIntegration.id);
+            const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+            const provider = await getWhatsAppProvider(businessId);
+            const displayName = (pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name;
+            await provider.sendWhatsApp(customerPhone, `✅ *${displayName}* is now connected! Your AI agent can use it immediately.`, businessId);
+            return NextResponse.json({ ok: true, routed: 'integration_activated', service: pendingIntegration.service_name });
+          }
+        }
+
         // ─── Handle owner image messages (inventory photos, etc.) ────
         let ownerImageUrl: string | null = null;
         const ownerImgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
@@ -670,9 +748,8 @@ export async function POST(request: NextRequest) {
           }
           rolePrompt = orchestrator.system_prompt;
           enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
-          // Ensure analyze_inventory is always available for image-capable interactions
-          if (!enabledTools.includes('analyze_inventory')) {
-            enabledTools.push('analyze_inventory');
+          for (const t of ['analyze_inventory', 'call_api', 'request_integration']) {
+            if (!enabledTools.includes(t)) enabledTools.push(t);
           }
         } else {
           // Fallback to the Purchasing OS explicitly as before
@@ -681,7 +758,7 @@ export async function POST(request: NextRequest) {
             goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
           }
           rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory'];
+          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration'];
         }
 
         const dispatched = await dispatchAgentViaQStash({

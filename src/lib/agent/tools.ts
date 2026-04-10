@@ -26,7 +26,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -337,15 +337,55 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'save_memory',
-      description: 'Save an important insight, decision, or learning to long-term memory. The AI will remember this across future conversations. Use for: supplier reliability notes, owner preferences, pricing patterns, market insights, what worked/failed.',
+      description: 'Save an important insight, decision, or learning to long-term memory. The AI will remember this across future conversations. Use for: supplier reliability notes, owner preferences, pricing patterns, market insights, API recipes, what worked/failed.',
       parameters: {
         type: 'object',
         properties: {
           content: { type: 'string', description: 'The insight or fact to remember (be specific and concise)' },
-          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'general'], description: 'Memory category' },
+          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'tool_recipe', 'general'], description: 'Memory category. Use tool_recipe to save working API call patterns for reuse.' },
           importance: { type: 'number', description: 'Importance score 0.0-1.0 (default 0.5). Use 0.8+ for critical business decisions.' },
         },
         required: ['content', 'category'],
+      },
+    },
+  },
+  // ── Dynamic API Calling ────────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'call_api',
+      description: 'Call any external REST API using credentials stored in the business integrations vault. Use this to interact with third-party services (video generators, design tools, analytics platforms, etc.) that the owner has connected. Always search_memory for "tool_recipe" first to check if you already know how to call a specific API. For POST/PUT/DELETE requests that cost money, use request_approval first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          service_name: { type: 'string', description: 'The integration service name (e.g. "creatomate", "elevenlabs"). Must match a configured integration.' },
+          path: { type: 'string', description: 'API endpoint path appended to the base URL (e.g. "/renders", "/v1/text-to-speech")' },
+          method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'HTTP method (default GET)' },
+          body: { type: 'object', description: 'JSON request body (for POST/PUT/PATCH)' },
+          query_params: { type: 'object', description: 'URL query parameters as key-value pairs' },
+          description: { type: 'string', description: 'Brief description of what this API call does (for audit logging)' },
+        },
+        required: ['service_name', 'path'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'request_integration',
+      description: 'Request the business owner to connect a new external service/API. Use when you discover a useful tool (via search_web) but the business has not connected it yet. Sends the owner a WhatsApp message explaining what the service does, why it would help, estimated cost, and a signup link. The owner can reply with the API key to activate it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          service_name: { type: 'string', description: 'Short identifier for the service (e.g. "creatomate", "elevenlabs")' },
+          display_name: { type: 'string', description: 'Human-readable service name (e.g. "Creatomate Video API")' },
+          signup_url: { type: 'string', description: 'URL where the owner can create an account and get an API key' },
+          base_url: { type: 'string', description: 'The API base URL (e.g. "https://api.creatomate.com/v1")' },
+          reason: { type: 'string', description: 'Why this integration would help the business (1-2 sentences)' },
+          estimated_cost: { type: 'string', description: 'Estimated monthly cost or per-use cost (e.g. "$9/mo", "~$0.10/video")' },
+          auth_type: { type: 'string', enum: ['bearer', 'basic', 'query_param', 'custom_header'], description: 'How the API key should be sent (default: bearer)' },
+        },
+        required: ['service_name', 'display_name', 'signup_url', 'base_url', 'reason'],
       },
     },
   },
@@ -431,6 +471,12 @@ export async function executeTool(
 
     case 'save_memory':
       return executeSaveMemory(args.content as string, args.category as string, toolCtx.businessId, (args.importance as number) || 0.5);
+
+    case 'call_api':
+      return executeCallApi(args as Record<string, unknown>, toolCtx);
+
+    case 'request_integration':
+      return executeRequestIntegration(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -1328,4 +1374,229 @@ async function executeSaveMemory(
   } catch (err) {
     return `Failed: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE: Dynamic API Calling (call_api + request_integration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CALL_API_TIMEOUT_MS = 30_000;
+const CALL_API_MAX_RESPONSE_BYTES = 50_000; // truncate large API responses
+
+async function executeCallApi(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const serviceName = (args.service_name as string || '').toLowerCase().trim();
+  const path = args.path as string || '';
+  const method = ((args.method as string) || 'GET').toUpperCase();
+  const body = args.body as Record<string, unknown> | undefined;
+  const queryParams = args.query_params as Record<string, string> | undefined;
+  const description = (args.description as string) || `${method} ${serviceName}${path}`;
+
+  if (!serviceName) return 'Error: service_name is required.';
+  if (!path) return 'Error: path is required.';
+
+  const supabase = getSupabase();
+
+  // ── Look up integration credentials ──
+  const { data: integration, error: lookupErr } = await supabase
+    .from('business_integrations')
+    .select('id, base_url, api_key_encrypted, auth_type, auth_header, config, status')
+    .eq('business_id', toolCtx.businessId)
+    .eq('service_name', serviceName)
+    .maybeSingle();
+
+  if (lookupErr) return `Failed to look up integration: ${lookupErr.message}`;
+
+  if (!integration) {
+    // List available integrations to help the agent
+    const { data: available } = await supabase
+      .from('business_integrations')
+      .select('service_name, description, status')
+      .eq('business_id', toolCtx.businessId)
+      .eq('status', 'active');
+
+    const list = available?.length
+      ? available.map(a => `• ${a.service_name} — ${a.description || 'no description'}`).join('\n')
+      : '(none configured)';
+
+    return `Integration "${serviceName}" not found for this business. Use request_integration to ask the owner to connect it.\n\nAvailable integrations:\n${list}`;
+  }
+
+  if (integration.status !== 'active') {
+    return `Integration "${serviceName}" exists but is ${integration.status}. Ask the owner to update it.`;
+  }
+
+  if (!integration.api_key_encrypted) {
+    return `Integration "${serviceName}" is configured but has no API key. Ask the owner to provide one.`;
+  }
+
+  // ── Build the request ──
+  let url = `${integration.base_url.replace(/\/$/, '')}${path.startsWith('/') ? path : '/' + path}`;
+
+  if (queryParams && Object.keys(queryParams).length > 0) {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(queryParams)) {
+      params.append(k, String(v));
+    }
+    url += `?${params.toString()}`;
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+
+  // Attach authentication
+  const apiKey = integration.api_key_encrypted; // TODO: decrypt when encryption is added
+  const authType = integration.auth_type || 'bearer';
+  const authHeader = integration.auth_header || 'Authorization';
+
+  switch (authType) {
+    case 'bearer':
+      headers[authHeader] = `Bearer ${apiKey}`;
+      break;
+    case 'basic':
+      headers[authHeader] = `Basic ${Buffer.from(apiKey).toString('base64')}`;
+      break;
+    case 'query_param':
+      url += (url.includes('?') ? '&' : '?') + `api_key=${encodeURIComponent(apiKey)}`;
+      break;
+    case 'custom_header':
+      headers[authHeader] = apiKey;
+      break;
+  }
+
+  // ── Execute the request ──
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CALL_API_TIMEOUT_MS);
+
+  try {
+    console.log(`[call_api] ${method} ${url} — ${description} (business: ${toolCtx.businessId})`);
+
+    const fetchOpts: RequestInit = {
+      method,
+      headers,
+      signal: controller.signal,
+    };
+    if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      fetchOpts.body = JSON.stringify(body);
+    }
+
+    const res = await fetch(url, fetchOpts);
+
+    const responseText = await res.text();
+    const truncated = responseText.length > CALL_API_MAX_RESPONSE_BYTES
+      ? responseText.substring(0, CALL_API_MAX_RESPONSE_BYTES) + '\n... (response truncated)'
+      : responseText;
+
+    // Try to parse as JSON for cleaner output
+    let output: string;
+    try {
+      const json = JSON.parse(responseText);
+      output = JSON.stringify(json, null, 2);
+      if (output.length > CALL_API_MAX_RESPONSE_BYTES) {
+        output = output.substring(0, CALL_API_MAX_RESPONSE_BYTES) + '\n... (truncated)';
+      }
+    } catch {
+      output = truncated;
+    }
+
+    if (!res.ok) {
+      return `API call failed (${res.status} ${res.statusText}):\n${output}`;
+    }
+
+    return `API call succeeded (${res.status}):\n${output}`;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      return `API call to ${serviceName} timed out after ${CALL_API_TIMEOUT_MS / 1000}s.`;
+    }
+    return `API call failed: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ─── request_integration (agent asks owner to connect a new service) ─────
+
+async function executeRequestIntegration(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const serviceName = (args.service_name as string || '').toLowerCase().trim();
+  const displayName = (args.display_name as string) || serviceName;
+  const signupUrl = args.signup_url as string;
+  const baseUrl = args.base_url as string;
+  const reason = args.reason as string;
+  const estimatedCost = (args.estimated_cost as string) || 'unknown';
+  const authType = (args.auth_type as string) || 'bearer';
+
+  if (!serviceName || !signupUrl || !baseUrl || !reason) {
+    return 'Error: service_name, signup_url, base_url, and reason are all required.';
+  }
+  if (!toolCtx.ownerPhone) {
+    return 'Failed: No owner phone configured — cannot send integration request.';
+  }
+
+  const supabase = getSupabase();
+
+  // ── Check if already exists ──
+  const { data: existing } = await supabase
+    .from('business_integrations')
+    .select('id, status, api_key_encrypted')
+    .eq('business_id', toolCtx.businessId)
+    .eq('service_name', serviceName)
+    .maybeSingle();
+
+  if (existing?.status === 'active' && existing.api_key_encrypted) {
+    return `Integration "${serviceName}" is already active. Use call_api to use it.`;
+  }
+
+  // ── Upsert a pending integration record ──
+  const { data: integration, error } = await supabase
+    .from('business_integrations')
+    .upsert({
+      business_id: toolCtx.businessId,
+      service_name: serviceName,
+      description: `${displayName} — ${reason}`,
+      base_url: baseUrl,
+      auth_type: authType,
+      status: 'pending',
+      requested_by: 'agent',
+      request_context: reason,
+      config: { signup_url: signupUrl, estimated_cost: estimatedCost, display_name: displayName },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'business_id,service_name' })
+    .select('id')
+    .single();
+
+  if (error) return `Failed to create integration request: ${error.message}`;
+
+  // ── Send WhatsApp message to owner ──
+  const msg = `🔌 *New Integration Request*${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}\n\n` +
+    `I found a service that could help your business:\n\n` +
+    `*${displayName}*\n` +
+    `${reason}\n\n` +
+    `💰 Estimated cost: ${estimatedCost}\n` +
+    `🔗 Sign up: ${signupUrl}\n\n` +
+    `To activate, sign up and reply with your API key.\n` +
+    `Or reply SKIP to ignore this suggestion.`;
+
+  try {
+    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+    const provider = await getWhatsAppProvider(toolCtx.businessId);
+    await provider.sendWhatsApp(toolCtx.ownerPhone, msg, toolCtx.businessId);
+  } catch (sendErr) {
+    // Try Evolution direct as fallback
+    try {
+      const evo = await import('@/lib/evolution');
+      const creds = await evo.getCredentials(toolCtx.businessId);
+      await evo.sendWhatsAppWithCreds(toolCtx.ownerPhone, msg, creds);
+    } catch {
+      return `Integration request saved (ID: ${integration.id}) but failed to notify owner via WhatsApp.`;
+    }
+  }
+
+  return `Integration request sent to owner for "${displayName}" (ID: ${integration.id}). Status: pending. When the owner replies with the API key, it will be activated and available via call_api.`;
 }

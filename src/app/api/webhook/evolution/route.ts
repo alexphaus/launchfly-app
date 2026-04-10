@@ -406,7 +406,9 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
 
         const trimmed = messageText.trim();
-        const looksLikeApiKey = /^[a-zA-Z0-9_\-]{12,}$/.test(trimmed) || /^(sk|pk|ck|ak|key|token)[_\-]/i.test(trimmed);
+        // API keys typically contain mixed case, digits, AND underscores/hyphens — require at least one non-alpha
+        const looksLikeApiKey = /^[a-zA-Z0-9_\-]{16,}$/.test(trimmed) && /[_\-\d]/.test(trimmed)
+          || /^(sk|pk|ck|ak|key|token|api)[_\-]/i.test(trimmed);
         const isSkip = /^skip$/i.test(trimmed);
 
         if (pendingIntegration && (looksLikeApiKey || isSkip)) {
@@ -418,7 +420,7 @@ export async function POST(request: NextRequest) {
             }).eq('id', pendingIntegration.id);
 
             const { sendWhatsApp } = await import('@/lib/evolution');
-            await sendWhatsApp(customerPhone, `Got it — skipped "${(pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name}".`);
+            await sendWhatsApp(customerPhone, `Got it — skipped "${(pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name}".`, businessId);
             return NextResponse.json({ ok: true, routed: 'integration_skipped', service: pendingIntegration.service_name });
           }
 
@@ -431,7 +433,7 @@ export async function POST(request: NextRequest) {
 
           const { sendWhatsApp } = await import('@/lib/evolution');
           const displayName = (pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name;
-          await sendWhatsApp(customerPhone, `✅ *${displayName}* is now connected! Your AI agent can use it immediately.`);
+          await sendWhatsApp(customerPhone, `✅ *${displayName}* is now connected! Your AI agent can use it immediately.`, businessId);
           return NextResponse.json({ ok: true, routed: 'integration_activated', service: pendingIntegration.service_name });
         }
       }
@@ -674,7 +676,8 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
           const trimmed = messageText.trim();
-          const looksLikeApiKey = /^[a-zA-Z0-9_\-]{12,}$/.test(trimmed) || /^(sk|pk|ck|ak|key|token)[_\-]/i.test(trimmed);
+          const looksLikeApiKey = /^[a-zA-Z0-9_\-]{16,}$/.test(trimmed) && /[_\-\d]/.test(trimmed)
+            || /^(sk|pk|ck|ak|key|token|api)[_\-]/i.test(trimmed);
           const isSkip = /^skip$/i.test(trimmed);
 
           if (pendingIntegration && (looksLikeApiKey || isSkip)) {

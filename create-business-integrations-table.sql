@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS business_integrations (
 
 CREATE INDEX idx_integrations_business ON business_integrations(business_id);
 CREATE INDEX idx_integrations_service ON business_integrations(business_id, service_name);
-CREATE UNIQUE INDEX idx_integrations_unique ON business_integrations(business_id, service_name);
+
+-- Must be a CONSTRAINT (not just an index) for Supabase upsert onConflict to work
+ALTER TABLE business_integrations ADD CONSTRAINT uq_integrations_business_service UNIQUE (business_id, service_name);
 
 -- RLS: service role only (agent backend runs as service role)
 ALTER TABLE business_integrations ENABLE ROW LEVEL SECURITY;

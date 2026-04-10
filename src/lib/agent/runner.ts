@@ -309,22 +309,31 @@ export async function executeAgentTask(taskId: string): Promise<{
 
     // ── Skills auto-recall: inject relevant proven workflows ──
     try {
-      const goalKeywords = (row.goal as string || '').split(/\s+/).filter(w => w.length > 3).slice(0, 5).join('%');
-      if (goalKeywords) {
+      const goalWords = (row.goal as string || '')
+        .split(/\s+/)
+        .filter(w => w.length > 3)
+        .map(w => w.replace(/[%_]/g, ''))
+        .filter(w => w.length > 2)
+        .slice(0, 4);
+
+      if (goalWords.length > 0) {
+        // OR-match: any keyword in content
+        const orFilter = goalWords.map(w => `content.ilike.%${w}%`).join(',');
+
         const { data: skills } = await supabase
           .from('ai_memories')
           .select('content, importance_score')
           .eq('business_id', row.business_id)
           .eq('archived', false)
           .in('category', ['skill', 'tool_recipe'])
-          .ilike('content', `%${goalKeywords}%`)
+          .or(orFilter)
           .order('importance_score', { ascending: false })
           .limit(2);
 
         if (skills?.length) {
           memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
           for (const s of skills) {
-            memoryContext += `${s.content}\n---\n`;
+            memoryContext += `${(s.content || '').substring(0, 600)}\n---\n`;
           }
         }
       }

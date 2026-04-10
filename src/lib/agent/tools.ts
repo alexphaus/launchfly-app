@@ -522,37 +522,54 @@ export async function executeTool(
   }
 }
 
-// ─── search_web (via Jina Reader / Tavily) ───────────────────────────────
+// ─── search_web (via Exa / Jina Reader fallback) ─────────────────────────
 
 async function executeSearchWeb(query: string): Promise<string> {
-  // Try Tavily first (structured search results), fall back to Jina
-  const tavilyKey = process.env.TAVILY_API_KEY;
-  if (tavilyKey) {
+  // Try Exa first (neural semantic search with rich content), fall back to Jina
+  const exaKey = process.env.EXA_API_KEY;
+  if (exaKey) {
     try {
-      const res = await fetch('https://api.tavily.com/search', {
+      const res = await fetch('https://api.exa.ai/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': exaKey,
+        },
         body: JSON.stringify({
-          api_key: tavilyKey,
           query,
-          max_results: 8,
-          include_answer: true,
+          type: 'auto',
+          numResults: 8,
+          contents: {
+            highlights: { numSentences: 3 },
+            text: { maxCharacters: 500 },
+          },
         }),
       });
       if (res.ok) {
         const data = (await res.json()) as {
-          answer?: string;
-          results?: { title: string; url: string; content: string }[];
+          results?: {
+            title: string;
+            url: string;
+            publishedDate?: string;
+            text?: string;
+            highlights?: string[];
+            summary?: string;
+          }[];
         };
         let output = '';
-        if (data.answer) output += `**Summary:** ${data.answer}\n\n`;
         for (const r of data.results || []) {
-          output += `- **${r.title}** (${r.url})\n  ${r.content?.substring(0, 300)}\n`;
+          const date = r.publishedDate ? ` (${r.publishedDate.split('T')[0]})` : '';
+          output += `- **${r.title}**${date} — ${r.url}\n`;
+          if (r.highlights?.length) {
+            output += `  ${r.highlights.join(' … ').substring(0, 400)}\n`;
+          } else if (r.text) {
+            output += `  ${r.text.substring(0, 400)}\n`;
+          }
         }
         return output || 'No results found.';
       }
     } catch (err) {
-      console.warn('[agent:search_web] Tavily failed, trying Jina:', err);
+      console.warn('[agent:search_web] Exa failed, trying Jina:', err);
     }
   }
 
@@ -569,7 +586,7 @@ async function executeSearchWeb(query: string): Promise<string> {
     console.warn('[agent:search_web] Jina failed:', err);
   }
 
-  return 'Search failed — no API keys configured. Set TAVILY_API_KEY in your environment.';
+  return 'Search failed — no API keys configured. Set EXA_API_KEY in your environment.';
 }
 
 // ─── scrape_page (via Jina Reader) ───────────────────────────────────────

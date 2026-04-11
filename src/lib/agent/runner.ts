@@ -637,7 +637,9 @@ export async function executeAgentTask(taskId: string): Promise<{
               analyze_inventory: '📦',
               request_approval: '👍',
               get_weather_forecast: '⛅',
-              search_tasks: '🔍'
+              search_tasks: '🔍',
+              manage_automation: '🤖',
+              run_code: '💻'
             };
             const icon = iconMap[tc.function.name] || '⚙️';
             // Fire-and-forget message, we don't want to block the agent loop
@@ -1225,6 +1227,33 @@ You can control a REAL cloud browser to interact with any website:
 - Be specific in your task description: include URLs, exact text to type, buttons to click.
 - For actions that cost money or are irreversible (publishing listings, placing orders), use request_approval FIRST.
 - After a successful browser workflow, save_memory with category "tool_recipe" so you remember the steps next time.
+
+## AUTOMATIONS (manage_automation)
+You can CREATE, UPDATE, DELETE, and LIST scheduled/event-driven automations directly from conversation:
+- When the owner says things like "every day at 8pm find 50 leads" or "when someone messages, auto-reply" → use manage_automation.
+- For scheduled tasks, parse the natural language into: hour (24h), minute, days, timezone, and the actions chain.
+- Common action types for automations:
+  - search_leads: config needs {searchQuery, searchLocation, maxResults, dailyCap}
+  - agent_task: config needs {agentGoal, agentRole} — spawns an autonomous agent
+  - notify_owner: config needs {message}
+  - send_whatsapp: config needs {message}
+  - stagger_outreach: staggers prospecting messages to found leads
+  - generate_report: generates business analytics
+  - ai_response: AI auto-responds using configured persona
+  - delay: config needs {hours} — pauses before next action
+- If the owner doesn't specify timezone, ASK. If they don't specify search query/location, ASK.
+- After creating an automation, confirm what was set up and when it will first run.
+- Use action=list to show owner their current automations before modifying.
+
+## CODE EXECUTION (run_code)
+You can WRITE AND EXECUTE JavaScript code on the fly:
+- Use run_code for data analysis, calculations, transformations, formatting, parsing, or any logic too complex to do in your head.
+- The code runs in a sandboxed VM — no filesystem, no network, no npm packages. Pure computation only.
+- Use console.log() to produce output. The last expression result is also captured.
+- Available globals: JSON, Math, Date, Array, Object, Map, Set, RegExp, Buffer, TextEncoder/TextDecoder, parseInt, parseFloat, encodeURIComponent, decodeURIComponent.
+- If you need external data, fetch it with search_web/scrape_page/query_database FIRST, then pass the data as a string literal into your code.
+- Max timeout: 10 seconds. Keep code focused and efficient.
+- Example uses: parse CSV data, calculate revenue projections, generate formatted reports, transform API responses, deduplicate lists, compute statistics.
 
 ## DELEGATION (USE WITH EXTREME CAUTION)
 - DELEGATION IS STRICTLY FORBIDDEN if you already have the tools (search_web, send_report, scrape) and instructions needed to complete the task yourself.

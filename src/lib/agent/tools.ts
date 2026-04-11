@@ -8,6 +8,7 @@
 //  2. An execute() handler that runs the tool and returns a string result
 
 import { createClient } from '@supabase/supabase-js';
+import { syncBusinessCrons } from '@/lib/automations/cron';
 
 function getSupabase() {
   return createClient(
@@ -26,7 +27,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'search_tasks',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -423,6 +424,77 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'run_code',
+      description: 'Execute JavaScript/Node.js code in a sandboxed environment. Use for data analysis, calculations, transformations, string processing, generating reports from raw data, testing API responses, or any computation the AI cannot do reliably in its head. The code runs in an isolated VM with no filesystem or network access. Use console.log() to produce output. The last expression value is also captured.',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'JavaScript code to execute. Use console.log() for output. Has access to JSON, Math, Date, Array, Object, Map, Set, RegExp, parseInt, parseFloat, encodeURIComponent, decodeURIComponent, Buffer, and TextEncoder/TextDecoder.' },
+          timeout_ms: { type: 'number', description: 'Max execution time in milliseconds (default: 5000, max: 10000)' },
+        },
+        required: ['code'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'manage_automation',
+      description: 'Create, update, delete, or list automated business workflows (automations). Use when the owner wants recurring scheduled tasks (e.g. "every day at 8pm find 50 leads") or event-triggered actions (e.g. "when a new lead comes in, send a WhatsApp"). This creates the same automations as the Automations tab in the assistant modal.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['create', 'update', 'delete', 'list'], description: 'Operation to perform' },
+          rule_id: { type: 'string', description: 'Rule ID (required for update/delete). Use list first to find IDs.' },
+          name: { type: 'string', description: 'Human-readable automation name (e.g. "Daily Lead Gen Austin Plumbers")' },
+          event: {
+            type: 'string',
+            enum: ['daily_schedule', 'inbound_whatsapp', 'missed_call', 'booking_created', 'booking_cancelled', 'payment_received', 'new_lead_created', 'prospect_found', 'job_completed', 'user_inactive', 'call_completed'],
+            description: 'Trigger event. Use daily_schedule for recurring timed tasks.',
+          },
+          enabled: { type: 'boolean', description: 'Whether the automation is active (default: true)' },
+          schedule: {
+            type: 'object',
+            description: 'Schedule config (required when event is daily_schedule)',
+            properties: {
+              hour: { type: 'number', description: 'Hour in 24h format (0-23)' },
+              minute: { type: 'number', description: 'Minute (0-59, default 0)' },
+              days: { type: 'array', items: { type: 'string' }, description: 'Days of week: mon, tue, wed, thu, fri, sat, sun. Default: all 7 days for "every day".' },
+              timezone: { type: 'string', description: 'IANA timezone (e.g. America/New_York, Asia/Singapore, Europe/London). Ask the owner if unknown.' },
+            },
+          },
+          actions: {
+            type: 'array',
+            description: 'Sequential actions to run when triggered. Common types: search_leads (config: {searchQuery, searchLocation, maxResults, dailyCap}), agent_task (config: {agentGoal, agentRole}), notify_owner (config: {message}), send_whatsapp (config: {message}), ai_response, delay (config: {hours}), stagger_outreach, generate_report.',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', description: 'Action type' },
+                config: { type: 'object', description: 'Action-specific configuration' },
+              },
+              required: ['type'],
+            },
+          },
+          conditions: {
+            type: 'array',
+            description: 'Optional IF conditions before actions fire',
+            items: {
+              type: 'object',
+              properties: {
+                field: { type: 'string', description: 'Field to check: message, customer.name, amount, etc.' },
+                op: { type: 'string', enum: ['contains', 'equals', 'gt', 'lt', 'exists', 'not_exists', 'not_equals', 'not_contains'] },
+                value: { type: 'string', description: 'Value to compare against' },
+              },
+            },
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -517,6 +589,12 @@ export async function executeTool(
 
     case 'browse_web':
       return executeBrowseWeb(args as Record<string, unknown>, toolCtx);
+
+    case 'manage_automation':
+      return executeManageAutomation(args as Record<string, unknown>, toolCtx.businessId);
+
+    case 'run_code':
+      return executeRunCode(args.code as string, (args.timeout_ms as number) || 5000);
 
     default:
       return `Unknown tool: ${name}`;
@@ -1741,6 +1819,243 @@ async function executeRequestIntegration(
   }
 
   return `Integration request sent to owner for "${displayName}" (ID: ${integration.id}). Status: pending. When the owner replies with the API key, it will be activated and available via call_api.`;
+}
+
+// ─── manage_automation ───────────────────────────────────────────────────
+
+async function executeManageAutomation(
+  args: Record<string, unknown>,
+  businessId: string,
+): Promise<string> {
+  const supabase = getSupabase();
+  const action = args.action as string;
+
+  // Load existing rules
+  const { data, error } = await supabase
+    .from('businesses')
+    .select('automation_rules')
+    .eq('id', businessId)
+    .maybeSingle();
+
+  if (error) return `Error loading automations: ${error.message}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rules: any[] = (data?.automation_rules as any[]) || [];
+
+  switch (action) {
+    case 'list': {
+      if (rules.length === 0) return 'No automations configured yet.';
+      return rules.map((r, i) => {
+        const cfg = r.scheduleConfig;
+        const sched = cfg
+          ? ` @ ${cfg.hour ?? 9}:${String(cfg.minute ?? 0).padStart(2, '0')} ${(cfg.days || []).join(',')} (${cfg.timezone || 'UTC'})`
+          : '';
+        return `${i + 1}. [${r.enabled !== false ? '✅' : '❌'}] "${r.name || r.id}" — ${r.event}${sched} — ${(r.actions || []).length} action(s)\n   ID: ${r.id}`;
+      }).join('\n');
+    }
+
+    case 'create': {
+      const ruleId = crypto.randomUUID();
+      const name = (args.name as string) || 'Untitled Automation';
+      const event = (args.event as string) || 'daily_schedule';
+      const enabled = args.enabled !== false;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const schedule = args.schedule as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actions = (args.actions as any[]) || [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const conditions = (args.conditions as any[]) || [];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const newRule: any = {
+        id: ruleId,
+        name,
+        event,
+        enabled,
+        actions,
+      };
+
+      if (conditions.length > 0) newRule.conditions = conditions;
+
+      if (event === 'daily_schedule' && schedule) {
+        newRule.scheduleConfig = {
+          hour: schedule.hour ?? 9,
+          minute: schedule.minute ?? 0,
+          days: schedule.days || ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+          timezone: schedule.timezone || 'America/New_York',
+        };
+      }
+
+      rules.push(newRule);
+
+      // Sync QStash cron schedules
+      const syncedRules = await syncBusinessCrons(businessId, rules);
+
+      const { error: saveErr } = await supabase
+        .from('businesses')
+        .update({ automation_rules: syncedRules })
+        .eq('id', businessId);
+
+      if (saveErr) return `Error saving automation: ${saveErr.message}`;
+
+      const cfg = newRule.scheduleConfig;
+      const schedInfo = cfg
+        ? `\nSchedule: ${cfg.hour}:${String(cfg.minute).padStart(2, '0')} on ${(cfg.days || []).join(', ')} (${cfg.timezone})`
+        : '';
+
+      return `✅ Automation created: "${name}"\nID: ${ruleId}\nTrigger: ${event}${schedInfo}\nActions: ${actions.map((a: { type: string }) => a.type).join(' → ')}\n\nThe automation is now LIVE and will run on schedule.`;
+    }
+
+    case 'update': {
+      const ruleId = args.rule_id as string;
+      if (!ruleId) return 'Error: rule_id is required for update. Use action=list to find rule IDs.';
+
+      const idx = rules.findIndex((r: { id: string }) => r.id === ruleId);
+      if (idx === -1) return `Error: automation with ID "${ruleId}" not found. Use action=list to see available automations.`;
+
+      const rule = rules[idx];
+      if (args.name) rule.name = args.name;
+      if (args.event) rule.event = args.event;
+      if (args.enabled !== undefined) rule.enabled = args.enabled;
+      if (args.actions) rule.actions = args.actions;
+      if (args.conditions) rule.conditions = args.conditions;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const schedule = args.schedule as any;
+      if (schedule && (args.event || rule.event) === 'daily_schedule') {
+        rule.scheduleConfig = {
+          ...rule.scheduleConfig,
+          ...(schedule.hour !== undefined && { hour: schedule.hour }),
+          ...(schedule.minute !== undefined && { minute: schedule.minute }),
+          ...(schedule.days && { days: schedule.days }),
+          ...(schedule.timezone && { timezone: schedule.timezone }),
+        };
+      }
+
+      rules[idx] = rule;
+
+      const syncedRules = await syncBusinessCrons(businessId, rules);
+
+      const { error: saveErr } = await supabase
+        .from('businesses')
+        .update({ automation_rules: syncedRules })
+        .eq('id', businessId);
+
+      if (saveErr) return `Error saving automation: ${saveErr.message}`;
+      return `✅ Automation updated: "${rule.name || ruleId}"`;
+    }
+
+    case 'delete': {
+      const ruleId = args.rule_id as string;
+      if (!ruleId) return 'Error: rule_id is required for delete. Use action=list to find rule IDs.';
+
+      const idx = rules.findIndex((r: { id: string }) => r.id === ruleId);
+      if (idx === -1) return `Error: automation with ID "${ruleId}" not found.`;
+
+      const name = rules[idx].name || ruleId;
+
+      // Disable first so syncBusinessCrons cleans up the QStash schedule
+      rules[idx].enabled = false;
+      await syncBusinessCrons(businessId, rules);
+
+      // Now remove from the array
+      const finalRules = rules.filter((r: { id: string }) => r.id !== ruleId);
+
+      const { error: saveErr } = await supabase
+        .from('businesses')
+        .update({ automation_rules: finalRules })
+        .eq('id', businessId);
+
+      if (saveErr) return `Error deleting automation: ${saveErr.message}`;
+      return `✅ Automation deleted: "${name}". QStash schedule removed.`;
+    }
+
+    default:
+      return `Unknown action: ${action}. Use: create, update, delete, list`;
+  }
+}
+
+// ─── run_code (Sandboxed JS execution via Node VM) ──────────────────────
+
+const RUN_CODE_MAX_TIMEOUT = 10_000; // 10s hard cap
+const RUN_CODE_MAX_OUTPUT = 8_000;   // 8KB max output
+
+async function executeRunCode(code: string, timeoutMs: number): Promise<string> {
+  const vm = await import('node:vm');
+
+  const effectiveTimeout = Math.min(Math.max(timeoutMs, 500), RUN_CODE_MAX_TIMEOUT);
+
+  // Capture console.log output
+  const logs: string[] = [];
+  const mockConsole = {
+    log: (...args: unknown[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+    warn: (...args: unknown[]) => logs.push('[warn] ' + args.map(a => String(a)).join(' ')),
+    error: (...args: unknown[]) => logs.push('[error] ' + args.map(a => String(a)).join(' ')),
+    info: (...args: unknown[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+  };
+
+  // Allowlisted globals — safe, no I/O
+  const sandbox = {
+    console: mockConsole,
+    JSON,
+    Math,
+    Date,
+    Array,
+    Object,
+    Map,
+    Set,
+    RegExp,
+    String,
+    Number,
+    Boolean,
+    parseInt,
+    parseFloat,
+    isNaN,
+    isFinite,
+    encodeURIComponent,
+    decodeURIComponent,
+    encodeURI,
+    decodeURI,
+    Buffer,
+    TextEncoder,
+    TextDecoder,
+    atob: globalThis.atob,
+    btoa: globalThis.btoa,
+    // Intentionally excluded: fetch, require, import, process, fs, child_process, etc.
+  };
+
+  const context = vm.createContext(sandbox, {
+    name: 'agent-sandbox',
+    codeGeneration: { strings: false, wasm: false },
+  });
+
+  try {
+    const script = new vm.Script(code, { filename: 'agent-code.js' });
+    const result = script.runInContext(context, { timeout: effectiveTimeout });
+
+    const parts: string[] = [];
+    if (logs.length > 0) {
+      parts.push('=== Console Output ===');
+      parts.push(logs.join('\n'));
+    }
+    if (result !== undefined) {
+      parts.push('=== Return Value ===');
+      parts.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
+    }
+
+    if (parts.length === 0) return '(No output produced. Use console.log() to print results.)';
+
+    const output = parts.join('\n');
+    if (output.length > RUN_CODE_MAX_OUTPUT) {
+      return output.substring(0, RUN_CODE_MAX_OUTPUT) + `\n... (truncated, ${output.length} chars total)`;
+    }
+    return output;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Script execution timed out')) {
+      return `Code execution timed out after ${effectiveTimeout}ms. Simplify the code or increase timeout_ms (max ${RUN_CODE_MAX_TIMEOUT}ms).`;
+    }
+    return `Code execution error: ${msg}`;
+  }
 }
 
 // ─── browse_web (Browserbase + Stagehand — real browser automation) ──────

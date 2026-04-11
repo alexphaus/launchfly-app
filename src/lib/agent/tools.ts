@@ -1723,8 +1723,7 @@ async function executeRequestIntegration(
     `${reason}\n\n` +
     `💰 Estimated cost: ${estimatedCost}\n` +
     `🔗 Sign up: ${signupUrl}\n\n` +
-    `To activate, sign up and reply with your API key.\n` +
-    `Or reply SKIP to ignore this suggestion.`;
+    `To activate, sign up and share the API key with me in our chat. I'll handle the rest.`;
 
   try {
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');

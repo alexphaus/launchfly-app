@@ -34,68 +34,6 @@ function getSupabase() {
   );
 }
 
-/**
- * Extract an API key from a message — supports bare keys AND natural language like
- * "Here is the api key 8BAx8P3UoJn8QSiKVRBnRg" or "my key: sk-abc123_xyz"
- */
-function extractApiKey(message: string): string | null {
-  const trimmed = message.trim();
-
-  // If the whole message is the key (original behaviour)
-  if (/^[a-zA-Z0-9_\-]{16,}$/.test(trimmed) && /[_\-\d]/.test(trimmed)) return trimmed;
-  if (/^(sk|pk|ck|ak|key|token|api)[_\-]/i.test(trimmed) && /^[a-zA-Z0-9_\-]+$/.test(trimmed)) return trimmed;
-
-  // Only extract from natural language if the message explicitly mentions an API key
-  if (!/\b(api[_\s-]?key|key|token|credential)\b/i.test(trimmed)) return null;
-
-  // Extract from natural language — find the longest token that looks like an API key
-  const tokens = trimmed.split(/[\s,;:]+/);
-  let best: string | null = null;
-  for (const tok of tokens) {
-    const clean = tok.replace(/^['"""'`]+|['"""'`]+$/g, ''); // strip quotes
-    if (clean.length < 16) continue;
-    if (!/^[a-zA-Z0-9_\-]+$/.test(clean)) continue;
-    if (!/[_\-\d]/.test(clean)) continue; // must have at least one non-alpha
-    if (!best || clean.length > best.length) best = clean;
-  }
-  return best;
-}
-
-/**
- * Match a message to the correct pending integration by checking if the
- * message mentions the service name. Returns null if no match (message
- * should NOT be intercepted — let it reach the agent instead).
- */
-function matchPendingIntegration(
-  message: string,
-  pending: { id: string; service_name: string; config: unknown }[],
-): typeof pending[0] | null {
-  if (!pending.length) return null;
-
-  const msgLower = message.toLowerCase();
-  const msgCompact = msgLower.replace(/[\s\-_.]+/g, ''); // "mail gun" → "mailgun"
-
-  const matched = pending.find(pi => {
-    const sn = pi.service_name.toLowerCase();
-    const snCompact = sn.replace(/[\s\-_.]+/g, '');
-    const cfg = pi.config as Record<string, string> | null;
-    const dn = (cfg?.display_name || '').toLowerCase();
-    // First meaningful word from display name (skip generic words)
-    const dnBrand = dn.split(/[\s.]+/).find(w => w.length > 2 && !['the', 'api', 'email', 'for', 'new'].includes(w)) || '';
-
-    return msgLower.includes(sn)
-      || msgCompact.includes(snCompact)   // "mail gun" → matches "mailgun"
-      || (dnBrand.length > 3 && msgLower.includes(dnBrand));
-  });
-  if (matched) return matched;
-
-  // Only auto-match if exactly 1 pending AND the message is JUST a key (no other text)
-  if (pending.length === 1 && /^[a-zA-Z0-9_\-]{16,}$/.test(message.trim())) return pending[0];
-
-  // Multiple pending or mixed message — don't guess, let the agent handle it
-  return null;
-}
-
 // ─── POST handler ────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -455,54 +393,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // ── Check for pending integration requests ────────────────────
-      // If the agent requested an API key and the owner replies with one, activate it
-      // IMPORTANT: Only intercept if the message clearly matches a specific pending service
-      {
-        const { data: pendingIntegrations } = await supabase
-          .from('business_integrations')
-          .select('id, service_name, config')
-          .eq('business_id', businessId)
-          .eq('status', 'pending')
-          .order('updated_at', { ascending: false });
-
-        const extractedKey = extractApiKey(messageText);
-        const isSkip = /^skip$/i.test(messageText.trim());
-
-        if (pendingIntegrations?.length && isSkip) {
-          // SKIP revokes the most recent pending integration
-          const target = pendingIntegrations[0];
-          console.log(`   ⏭️ Owner skipped integration "${target.service_name}"`);
-          await supabase.from('business_integrations').update({
-            status: 'revoked',
-            updated_at: new Date().toISOString(),
-          }).eq('id', target.id);
-
-          const { sendWhatsApp } = await import('@/lib/evolution');
-          await sendWhatsApp(customerPhone, `Got it — skipped "${(target.config as Record<string, string>)?.display_name || target.service_name}".`, businessId);
-          return NextResponse.json({ ok: true, routed: 'integration_skipped', service: target.service_name });
-        }
-
-        if (extractedKey && pendingIntegrations?.length) {
-          const target = matchPendingIntegration(messageText, pendingIntegrations);
-          if (target) {
-            console.log(`   🔑 Owner provided API key for "${target.service_name}"`);
-            await supabase.from('business_integrations').update({
-              api_key_encrypted: extractedKey,
-              status: 'active',
-              updated_at: new Date().toISOString(),
-            }).eq('id', target.id);
-
-            const { sendWhatsApp } = await import('@/lib/evolution');
-            const displayName = (target.config as Record<string, string>)?.display_name || target.service_name;
-            await sendWhatsApp(customerPhone, `✅ *${displayName}* is now connected! Your AI agent can use it immediately.`, businessId);
-            return NextResponse.json({ ok: true, routed: 'integration_activated', service: target.service_name });
-          }
-          // No match — message mentions a key but for a different/unknown service.
-          // Fall through so the agent receives the message and can handle it.
-          console.log(`   ⚠️ API key detected but no matching pending integration — passing to agent`);
-        }
-      }
+      // Integration API key handling is delegated to the agent — it uses
+      // request_integration(api_key=...) to activate services with full context.
 
       // ── Handle owner image messages ────
       let ownerImageUrl: string | null = null;
@@ -730,42 +622,8 @@ export async function POST(request: NextRequest) {
       if (isOwner) {
         console.log(`   👑 Owner message from +${customerPhone} → Orchestrator`);
 
-        // ─── Check for pending integration API key replies ────────
-        {
-          const { data: pendingIntegrations2 } = await supabase
-            .from('business_integrations')
-            .select('id, service_name, config')
-            .eq('business_id', businessId)
-            .eq('status', 'pending')
-            .order('updated_at', { ascending: false });
-
-          const extractedKey2 = extractApiKey(messageText);
-          const isSkip2 = /^skip$/i.test(messageText.trim());
-
-          if (pendingIntegrations2?.length && isSkip2) {
-            const target = pendingIntegrations2[0];
-            await supabase.from('business_integrations').update({ status: 'revoked', updated_at: new Date().toISOString() }).eq('id', target.id);
-            const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-            const provider = await getWhatsAppProvider(businessId);
-            await provider.sendWhatsApp(customerPhone, `Got it — skipped "${(target.config as Record<string, string>)?.display_name || target.service_name}".`, businessId);
-            return NextResponse.json({ ok: true, routed: 'integration_skipped', service: target.service_name });
-          }
-
-          if (extractedKey2 && pendingIntegrations2?.length) {
-            const target = matchPendingIntegration(messageText, pendingIntegrations2);
-            if (target) {
-              console.log(`   🔑 Owner provided API key for "${target.service_name}"`);
-              await supabase.from('business_integrations').update({ api_key_encrypted: extractedKey2, status: 'active', updated_at: new Date().toISOString() }).eq('id', target.id);
-              const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-              const provider = await getWhatsAppProvider(businessId);
-              const displayName = (target.config as Record<string, string>)?.display_name || target.service_name;
-              await provider.sendWhatsApp(customerPhone, `✅ *${displayName}* is now connected! Your AI agent can use it immediately.`, businessId);
-              return NextResponse.json({ ok: true, routed: 'integration_activated', service: target.service_name });
-            }
-            // No match — pass through to agent
-            console.log(`   ⚠️ API key detected but no matching pending integration — passing to agent`);
-          }
-        }
+        // Integration API key handling is delegated to the agent — it uses
+        // request_integration(api_key=...) to activate services with full context.
 
         // ─── Handle owner image messages (inventory photos, etc.) ────
         let ownerImageUrl: string | null = null;

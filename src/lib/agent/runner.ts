@@ -40,9 +40,9 @@ const WALL_CLOCK_LIMIT_MS = 45_000;   // 45s — Vercel Pro allows 60s, leaves 1
 const STALE_TASK_MINUTES = 5;         // Auto-fail tasks stuck longer than this
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
-const TOOL_TIMEOUT_MS = 15_000;       // Max time for a single tool execution
-const LLM_TIMEOUT_MS = 20_000;        // Max time for a single LLM call
-const LLM_MAX_RETRIES = 2;            // Exponential backoff retries for transient DeepSeek errors
+const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
+const LLM_TIMEOUT_MS = 15_000;        // Max time for a single LLM call (15s — DeepSeek is fast)
+const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)
 
 // ─── Context Compression ─────────────────────────────────────────────────
 
@@ -1185,9 +1185,9 @@ You have access to tools: search the web, scrape pages, find local businesses, s
 1. Think step-by-step. Plan your approach before using tools.
 2. Use search_memory FIRST to check if you already know something relevant.
 3. Use search_web to research before making decisions.
-4. Always save valuable leads using save_leads — don't just list them.
+4. Always save valuable leads using save_leads — don't just list them in text.
 5. To deliver your final results, generate the full report matching the requested format perfectly, and send it to the owner using the \`send_report\` tool. Alternatively, you can omit the tool and just write the final report text in your conversational response, and I will deliver it.
-6. Be efficient — minimize unnecessary tool calls.
+6. **BE EFFICIENT — minimize tool calls.** For lead generation, use search_google_maps (returns up to 50 leads in ONE call with phone/rating/reviews) instead of scraping individual websites. Always prefer bulk tools over manual scraping loops.
 7. If a tool fails, try an alternative approach.
 8. NEVER invent, guess, or hallucinate facts. Only report what you actually found in scraped/searched content.
 9. NEVER hallucinate tool executions or actions you cannot perform. Offer to draft content instead.

@@ -21,6 +21,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { getToolsForAgent, executeTool, type ToolContext } from './tools';
 import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
+import { getAgentProvider, type AgentProvider } from './provider';
 
 function getSupabase() {
   return createClient(
@@ -31,16 +32,32 @@ function getSupabase() {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const MAX_STEPS_PER_INVOCATION = 4;   // Conservative: 4 steps × ~7s = 28s + overhead ≈ 35s
+const MAX_STEPS_PER_INVOCATION = 8;   // 8 steps — safe with context compression; wall-clock is the real limiter
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
-const WALL_CLOCK_LIMIT_MS = 30_000;   // 30s — leaves 30s headroom for cleanup + QStash
+const WALL_CLOCK_LIMIT_MS = 45_000;   // 45s — Vercel Pro allows 60s, leaves 15s headroom
 const STALE_TASK_MINUTES = 5;         // Auto-fail tasks stuck longer than this
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 15_000;       // Max time for a single tool execution
 const LLM_TIMEOUT_MS = 20_000;        // Max time for a single LLM call
 const LLM_MAX_RETRIES = 2;            // Exponential backoff retries for transient DeepSeek errors
+
+// ─── Context Compression ─────────────────────────────────────────────────
+
+const CONTEXT_COMPRESS_THRESHOLD = 48_000; // Estimated tokens (~75% of DeepSeek 64K window)
+const CONTEXT_COMPRESS_KEEP_TAIL = 6;      // Messages to preserve at end (most recent context)
+const CHARS_PER_TOKEN = 3.5;               // Rough estimate for English/mixed content
+
+// ─── Parallel Tool Execution ─────────────────────────────────────────────
+// Read-only tools that can safely run in parallel (no side effects)
+const PARALLEL_SAFE_TOOLS = new Set([
+  'search_web', 'scrape_page', 'search_memory', 'search_tasks',
+  'query_database', 'get_weather_forecast', 'search_google_maps',
+]);
+
+// ─── Skill Auto-Creation ─────────────────────────────────────────────────
+const SKILL_AUTO_CREATE_MIN_TOOLS = 3; // Minimum tool calls to trigger skill extraction
 
 // ─── Utilities ───────────────────────────────────────────────────────────
 
@@ -79,6 +96,97 @@ function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
     ...m,
     content: typeof m.content === 'string' ? sanitizeString(m.content) : m.content,
   }));
+}
+
+/** Estimate token count from message array. */
+function estimateTokens(msgs: AgentMessage[]): number {
+  let chars = 0;
+  for (const m of msgs) {
+    if (m.content) chars += m.content.length;
+    if (m.tool_calls) {
+      for (const tc of m.tool_calls) {
+        chars += tc.function.name.length + tc.function.arguments.length;
+      }
+    }
+  }
+  return Math.ceil(chars / CHARS_PER_TOKEN);
+}
+
+/**
+ * Compress context when messages exceed the token threshold.
+ * Keeps: system prompt (first message) + last N messages.
+ * Summarizes everything in between into a single condensed message.
+ */
+async function compressContextIfNeeded(
+  messages: AgentMessage[],
+  client: InstanceType<typeof import('openai').default>,
+  taskId: string,
+  model: string = AGENT_MODEL,
+  threshold: number = CONTEXT_COMPRESS_THRESHOLD,
+): Promise<AgentMessage[]> {
+  const tokenEstimate = estimateTokens(messages);
+  if (tokenEstimate < threshold || messages.length <= CONTEXT_COMPRESS_KEEP_TAIL + 2) {
+    return messages; // No compression needed
+  }
+
+  console.log(`[agent:${taskId}] Context compression triggered: ~${tokenEstimate} tokens, ${messages.length} messages`);
+
+  // Keep: [system prompt, ...middle to compress..., last N messages]
+  const systemMsg = messages[0]; // Always the system prompt
+
+  // Find a safe split point — never break inside a tool-call/tool-result sequence.
+  // Walk backwards from the intended split to find a boundary that doesn't start with a tool message.
+  let splitIdx = messages.length - CONTEXT_COMPRESS_KEEP_TAIL;
+  while (splitIdx > 2 && messages[splitIdx]?.role === 'tool') {
+    splitIdx--; // Move back to include the assistant+tool_calls that owns these tool results
+  }
+
+  const tail = messages.slice(splitIdx);
+  const middle = messages.slice(1, splitIdx);
+
+  if (middle.length < 3) return messages; // Not enough to compress
+
+  // Build a condensed view of middle messages for the summarizer
+  const middleSummaryInput = middle.map(m => {
+    if (m.role === 'tool') {
+      return `[tool result for ${m.tool_call_id}]: ${safeSlice(m.content || '', 200)}`;
+    }
+    if (m.role === 'assistant' && m.tool_calls?.length) {
+      const calls = m.tool_calls.map(tc => `${tc.function.name}(${safeSlice(tc.function.arguments, 80)})`).join(', ');
+      return `[assistant called: ${calls}]${m.content ? ` + said: ${safeSlice(m.content, 200)}` : ''}`;
+    }
+    return `[${m.role}]: ${safeSlice(m.content || '', 300)}`;
+  }).join('\n');
+
+  try {
+    const summaryCompletion = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: 'Summarize this agent conversation history into key facts, decisions made, tool results obtained, and pending actions. Be concise but preserve ALL important data points (numbers, names, prices, URLs). Output only the summary, no preamble.' },
+        { role: 'user', content: middleSummaryInput },
+      ],
+      max_tokens: 1500,
+    });
+
+    const summary = summaryCompletion.choices[0]?.message?.content || '';
+    if (!summary) return messages; // Summarization failed, keep original
+
+    const compressedMessages: AgentMessage[] = [
+      systemMsg,
+      {
+        role: 'system',
+        content: `[CONTEXT SUMMARY — compressed from ${middle.length} earlier messages]\n${summary}`,
+      },
+      ...tail,
+    ];
+
+    const newTokens = estimateTokens(compressedMessages);
+    console.log(`[agent:${taskId}] Compressed: ${tokenEstimate} → ~${newTokens} tokens (${messages.length} → ${compressedMessages.length} messages)`);
+    return compressedMessages;
+  } catch (err) {
+    console.warn(`[agent:${taskId}] Context compression failed (non-fatal):`, err);
+    return messages; // Fall back to uncompressed
+  }
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -251,6 +359,13 @@ export async function executeAgentTask(taskId: string): Promise<{
   };
 
   // ── Build initial messages if this is a fresh task ──
+  // Restore recalled skill IDs from tool_log (persisted across continuations)
+  let recalledSkillIds: string[] = [];
+  const recalledEntry = toolLog.find(t => t.tool === '__recalled_skills__');
+  if (recalledEntry && Array.isArray(recalledEntry.args?.ids)) {
+    recalledSkillIds = recalledEntry.args.ids as string[];
+  }
+
   if (messages.length === 0) {
     const bd = biz?.business_data as Record<string, unknown> | null;
     const industry = (bd?.industry || bd?.category || '') as string;
@@ -308,6 +423,7 @@ export async function executeAgentTask(taskId: string): Promise<{
     }
 
     // ── Skills auto-recall: inject relevant proven workflows ──
+    recalledSkillIds = [];
     try {
       const goalWords = (row.goal as string || '')
         .split(/\s+/)
@@ -322,7 +438,7 @@ export async function executeAgentTask(taskId: string): Promise<{
 
         const { data: skills } = await supabase
           .from('ai_memories')
-          .select('content, importance_score')
+          .select('id, content, importance_score, use_count')
           .eq('business_id', row.business_id)
           .eq('archived', false)
           .in('category', ['skill', 'tool_recipe'])
@@ -331,6 +447,9 @@ export async function executeAgentTask(taskId: string): Promise<{
           .limit(2);
 
         if (skills?.length) {
+          recalledSkillIds = skills.map(s => s.id);
+          // Persist recalled skill IDs so continuations can track effectiveness
+          toolLog.push({ tool: '__recalled_skills__', args: { ids: recalledSkillIds } as Record<string, unknown>, result: 'ok', timestamp: new Date().toISOString() });
           memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
           for (const s of skills) {
             memoryContext += `${(s.content || '').substring(0, 600)}\n---\n`;
@@ -357,12 +476,11 @@ export async function executeAgentTask(taskId: string): Promise<{
   // ── Agent Loop ──
   const startTime = Date.now();
   try {
-    const OpenAI = (await import('openai')).default;
-    const client = new OpenAI({
-      apiKey: process.env.DEEPSEEK_API_KEY,
-      baseURL: 'https://api.deepseek.com',
-      timeout: LLM_TIMEOUT_MS,
-    });
+    const provider = await getAgentProvider(LLM_TIMEOUT_MS);
+    const client = provider.client;
+    const agentModel = provider.model;
+    // Dynamic compression threshold: 75% of the provider's context window
+    const compressThreshold = Math.floor(provider.contextWindow * 0.75);
     const agentTools = getToolsForAgent(row.enabled_tools);
     let stepsThisInvocation = 0;
 
@@ -372,6 +490,9 @@ export async function executeAgentTask(taskId: string): Promise<{
         console.log(`[agent:${taskId}] Wall-clock limit (${Math.round((Date.now() - startTime) / 1000)}s), scheduling continuation`);
         break;
       }
+
+      // ── Context compression — prevent blowing the context window ──
+      messages = await compressContextIfNeeded(messages, client, taskId, agentModel, compressThreshold);
 
       // ── Budget warning ──
       const stepsRemainingGlobal = MAX_TOTAL_STEPS - stepsUsed;
@@ -390,7 +511,7 @@ export async function executeAgentTask(taskId: string): Promise<{
       for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
         try {
           completion = await client.chat.completions.create({
-            model: AGENT_MODEL,
+            model: agentModel,
             messages: sanitizeMessages(llmMessages) as Parameters<typeof client.chat.completions.create>[0]['messages'],
             tools: agentTools,
             tool_choice: 'auto',
@@ -438,18 +559,25 @@ export async function executeAgentTask(taskId: string): Promise<{
 
       // ── Tool calls ──
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        const fnCalls = assistantMessage.tool_calls.filter(
-          (tc): tc is Extract<typeof tc, { type: 'function' }> => tc.type === 'function',
+        type FnToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
+        const fnCalls: FnToolCall[] = assistantMessage.tool_calls.filter(
+          (tc: { type: string }): tc is FnToolCall => tc.type === 'function',
         );
 
         messages.push({
           role: 'assistant',
           content: assistantMessage.content || null,
-          tool_calls: fnCalls.map(tc => ({
+          tool_calls: fnCalls.map((tc: FnToolCall) => ({
             id: tc.id, type: 'function' as const,
             function: { name: tc.function.name, arguments: tc.function.arguments },
           })),
         });
+
+        // ── Classify tool calls: parallel-safe vs sequential ──
+        const parallelCalls: FnToolCall[] = [];
+        const sequentialCalls: FnToolCall[] = [];
+        // Pre-parse all args once
+        const parsedArgs = new Map<string, Record<string, unknown>>();
 
         for (const tc of fnCalls) {
           let toolArgs: Record<string, unknown>;
@@ -460,9 +588,6 @@ export async function executeAgentTask(taskId: string): Promise<{
           }
 
           // ── Payload Auto-Swap (Smart Report Delivery) ──
-          // If the LLM generates the beautiful formatted report in its standard text generation,
-          // but calls send_report with a brief summary, intercept and swap the payload.
-          // This avoids endless AI retries for formatting and immediately delivers what the user requested.
           if (tc.function.name === 'send_report' && typeof toolArgs.message === 'string' && assistantMessage.content) {
             const firstLine = toolArgs.message.split('\n')[0].trim();
             const isSummary = /^(here|the|a|\*)?( )?(summary|overview|report|this)/i.test(firstLine) ||
@@ -470,22 +595,31 @@ export async function executeAgentTask(taskId: string): Promise<{
                               /^(perfect|great)!/i.test(firstLine);
 
             const contentIsLonger = assistantMessage.content.length > toolArgs.message.length;
-            // Also swap if the message is extremely short (e.g. "Report sent") and content is massive
             if ((isSummary || toolArgs.message.length < 150) && contentIsLonger) {
               console.log(`[agent:${taskId}] Intercepted summary report call, swapping payload with assistant text message`);
               toolArgs.message = assistantMessage.content.trim();
             }
           }
 
-          console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name}(${JSON.stringify(toolArgs).substring(0, 100)})`);
+          parsedArgs.set(tc.id, toolArgs);
 
+          if (PARALLEL_SAFE_TOOLS.has(tc.function.name) && fnCalls.length > 1) {
+            parallelCalls.push(tc);
+          } else {
+            sequentialCalls.push(tc);
+          }
+        }
+
+        // Helper: execute a single tool call with timeout
+        const runTool = async (tc: typeof fnCalls[0]): Promise<{ id: string; name: string; args: Record<string, unknown>; result: string }> => {
+          const toolArgs = parsedArgs.get(tc.id)!;
+          console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name}(${JSON.stringify(toolArgs).substring(0, 100)})`);
           let toolResult: string;
           try {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
             try {
               const toolPromise = executeTool(tc.function.name, toolArgs, toolCtx);
-              // Catch orphaned promise to prevent unhandled rejection if timeout wins the race
               toolPromise.catch(() => {});
               toolResult = await Promise.race([
                 toolPromise,
@@ -501,45 +635,85 @@ export async function executeAgentTask(taskId: string): Promise<{
           } catch (toolErr) {
             toolResult = `Tool error: ${toolErr instanceof Error ? toolErr.message : String(toolErr)}`;
           }
+          return { id: tc.id, name: tc.function.name, args: toolArgs, result: toolResult };
+        };
 
-          messages.push({ role: 'tool', tool_call_id: tc.id, content: safeSlice(toolResult, TOOL_RESULT_MAX) });
-          toolLog.push({ tool: tc.function.name, args: toolArgs, result: safeSlice(toolResult, 500), timestamp: new Date().toISOString() });
-          stepsUsed++;
-          stepsThisInvocation++;
+        // ── Execute parallel-safe tools concurrently ──
+        let shouldBreak = false;
+        let pauseResult: string | null = null;
 
-          // ── Save progress after EVERY step ──
+        if (parallelCalls.length > 0) {
+          console.log(`[agent:${taskId}] Running ${parallelCalls.length} tools in parallel: ${parallelCalls.map((tc: FnToolCall) => tc.function.name).join(', ')}`);
+          const results = await Promise.allSettled(parallelCalls.map((tc: FnToolCall) => runTool(tc)));
+
+          for (let i = 0; i < parallelCalls.length; i++) {
+            const settled = results[i];
+            const r = settled.status === 'fulfilled'
+              ? settled.value
+              : { id: parallelCalls[i].id, name: parallelCalls[i].function.name, args: parsedArgs.get(parallelCalls[i].id)!, result: `Tool error: ${(settled as PromiseRejectedResult).reason}` };
+
+            messages.push({ role: 'tool', tool_call_id: r.id, content: safeSlice(r.result, TOOL_RESULT_MAX) });
+            toolLog.push({ tool: r.name, args: r.args, result: safeSlice(r.result, 500), timestamp: new Date().toISOString() });
+            stepsUsed++;
+            stepsThisInvocation++;
+          }
+
           await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
 
-          // ── PAUSE SIGNAL ──
-          if (toolResult.startsWith('__PAUSE__:')) {
-            const pauseType = toolResult.includes('waiting_approval') ? 'waiting_approval' : 'waiting_subtask';
-            // Fill dummy results for remaining calls
-            const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
-            for (const unexecuted of fnCalls) {
-              if (!executedIds.has(unexecuted.id)) {
-                messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Skipped — task is pausing.' });
-              }
-            }
-            await supabase.from('agent_tasks').update({
-              status: pauseType, messages, steps_used: stepsUsed, tool_log: toolLog,
-              updated_at: new Date().toISOString(),
-            }).eq('id', taskId);
-            return { status: 'completed' as const, result: toolResult, taskId, stepsUsed };
-          }
-
-          // Wall-clock check after each tool
+          // Wall-clock check after parallel batch
           if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
-            const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
-            for (const unexecuted of fnCalls) {
-              if (!executedIds.has(unexecuted.id)) {
-                messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Deferred to next continuation.' });
-                // Don't increment stepsUsed — these weren't actually executed
-              }
+            // Defer any remaining sequential calls
+            for (const tc of sequentialCalls) {
+              messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Deferred to next continuation.' });
             }
             await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
-            break;
+            shouldBreak = true;
           }
         }
+
+        // ── Execute sequential tools one by one ──
+        if (!shouldBreak) {
+          for (const tc of sequentialCalls) {
+            const r = await runTool(tc);
+
+            messages.push({ role: 'tool', tool_call_id: r.id, content: safeSlice(r.result, TOOL_RESULT_MAX) });
+            toolLog.push({ tool: r.name, args: r.args, result: safeSlice(r.result, 500), timestamp: new Date().toISOString() });
+            stepsUsed++;
+            stepsThisInvocation++;
+
+            await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+
+            // ── PAUSE SIGNAL ──
+            if (r.result.startsWith('__PAUSE__:')) {
+              const pauseType = r.result.includes('waiting_approval') ? 'waiting_approval' : 'waiting_subtask';
+              const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
+              for (const unexecuted of fnCalls) {
+                if (!executedIds.has(unexecuted.id)) {
+                  messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Skipped — task is pausing.' });
+                }
+              }
+              await supabase.from('agent_tasks').update({
+                status: pauseType, messages, steps_used: stepsUsed, tool_log: toolLog,
+                updated_at: new Date().toISOString(),
+              }).eq('id', taskId);
+              return { status: 'completed' as const, result: r.result, taskId, stepsUsed };
+            }
+
+            // Wall-clock check after each sequential tool
+            if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
+              const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
+              for (const unexecuted of fnCalls) {
+                if (!executedIds.has(unexecuted.id)) {
+                  messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Deferred to next continuation.' });
+                }
+              }
+              await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+              shouldBreak = true;
+              break;
+            }
+          }
+        }
+        if (shouldBreak) break;
       } else {
         // ── Final text response — task complete ──
         const finalResult = assistantMessage.content || 'Task completed (no output).';
@@ -590,6 +764,14 @@ export async function executeAgentTask(taskId: string): Promise<{
         // Resume parent if sub-task
         await resumeParentIfNeeded(supabase, taskId, finalResult);
 
+        // ── Auto-create skill from successful multi-tool tasks ──
+        await autoCreateSkill(supabase, client, taskId, row.goal, row.business_id, toolLog, agentModel);
+
+        // ── Update skill effectiveness for recalled skills ──
+        if (recalledSkillIds.length > 0) {
+          await updateSkillEffectiveness(supabase, recalledSkillIds, true, taskId);
+        }
+
         return { status: 'completed', result: finalResult, taskId, stepsUsed };
       }
     }
@@ -611,6 +793,11 @@ export async function executeAgentTask(taskId: string): Promise<{
       updated_at: new Date().toISOString(),
     }).eq('id', taskId);
 
+    // Downgrade skill effectiveness on failure
+    if (recalledSkillIds.length > 0) {
+      await updateSkillEffectiveness(supabase, recalledSkillIds, false, taskId);
+    }
+
     return { status: 'failed', result: `Agent error: ${errMsg}`, taskId, stepsUsed };
   }
 
@@ -620,15 +807,14 @@ export async function executeAgentTask(taskId: string): Promise<{
     // Hard cap — force send_report with collected data
     console.log(`[agent:${taskId}] MAX_TOTAL_STEPS reached (${stepsUsed}), forcing send_report`);
     try {
-      const OpenAI = (await import('openai')).default;
-      const client = new OpenAI({ apiKey: process.env.DEEPSEEK_API_KEY, baseURL: 'https://api.deepseek.com', timeout: LLM_TIMEOUT_MS });
+      const forceProvider = await getAgentProvider(LLM_TIMEOUT_MS);
       const agentTools = getToolsForAgent(row.enabled_tools);
-      const forceCompletion = await client.chat.completions.create({
-        model: AGENT_MODEL,
+      const forceCompletion = await forceProvider.client.chat.completions.create({
+        model: forceProvider.model,
         messages: sanitizeMessages([...messages, {
           role: 'system' as const,
           content: 'CRITICAL: You have run out of tool budget. Call send_report NOW with all collected data. This is your FINAL action.',
-        }]) as Parameters<typeof client.chat.completions.create>[0]['messages'],
+        }]) as Parameters<typeof forceProvider.client.chat.completions.create>[0]['messages'],
         tools: agentTools,
         tool_choice: { type: 'function', function: { name: 'send_report' } },
       });
@@ -812,6 +998,125 @@ async function resumeParentIfNeeded(
     await scheduleContinuation(parentId);
   } catch (err) {
     console.error(`[agent:${taskId}] Error resuming parent:`, err);
+  }
+}
+
+/**
+ * Auto-create a reusable skill from successful multi-tool tasks.
+ * Only triggers when: task used 3+ tools, wasn't delegated, and no similar skill exists.
+ */
+async function autoCreateSkill(
+  supabase: ReturnType<typeof getSupabase>,
+  client: InstanceType<typeof import('openai').default>,
+  taskId: string,
+  goal: string,
+  businessId: string,
+  toolLog: ToolLogEntry[],
+  model: string = AGENT_MODEL,
+): Promise<void> {
+  try {
+    // Skip delegated tasks and tasks with few tool calls
+    if (goal.startsWith('[DELEGATED TASK]')) return;
+    const uniqueTools = new Set(toolLog.map(t => t.tool));
+    if (toolLog.length < SKILL_AUTO_CREATE_MIN_TOOLS) return;
+    // Skip if the agent already saved a skill during this task
+    if (toolLog.some(t => t.tool === 'save_memory' && String(t.args?.category) === 'skill')) return;
+
+    // Check if a similar skill already exists (avoid duplicates)
+    const goalWords = goal.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
+    if (goalWords.length === 0) return;
+    const orFilter = goalWords.map(w => `content.ilike.%${w.replace(/[%_]/g, '')}%`).join(',');
+
+    const { data: existing } = await supabase
+      .from('ai_memories')
+      .select('id')
+      .eq('business_id', businessId)
+      .in('category', ['skill', 'tool_recipe'])
+      .or(orFilter)
+      .limit(1);
+
+    if (existing?.length) return; // Similar skill already exists
+
+    // Generate skill document from tool log
+    const toolSequence = toolLog.map((t, i) =>
+      `${i + 1}. ${t.tool}(${JSON.stringify(t.args).substring(0, 120)}) → ${safeSlice(t.result, 100)}`
+    ).join('\n');
+
+    const skillCompletion = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: 'Create a concise reusable SKILL document from this completed agent task. Use this exact format:\n\nSKILL: [2-5 word name]\nTRIGGER: [when to use this skill]\nSTEPS:\n1. [tool_name] — [what and why]\n2. [tool_name] — [what and why]\nTIPS: [what worked, pitfalls to avoid]\n\nBe specific and actionable. Output ONLY the skill document.' },
+        { role: 'user', content: `Goal: ${goal}\n\nTool sequence:\n${toolSequence}` },
+      ],
+      max_tokens: 500,
+    });
+
+    const skillContent = skillCompletion.choices[0]?.message?.content?.trim();
+    if (!skillContent || skillContent.length < 30) return;
+
+    // Generate embedding and save
+    const OpenAILib = (await import('openai')).default;
+    const embeddingClient = new OpenAILib({ apiKey: process.env.OPENAI_API_KEY! });
+    const embeddingRes = await embeddingClient.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: skillContent.substring(0, 8000),
+    });
+    const embedding = embeddingRes.data[0]?.embedding;
+
+    await supabase.from('ai_memories').insert({
+      business_id: businessId,
+      content: skillContent,
+      category: 'skill',
+      importance_score: 0.7,
+      embedding: embedding || null,
+      use_count: 0,
+      metadata: { source: 'auto_skill', task_id: taskId, tools_used: Array.from(uniqueTools) },
+    });
+
+    console.log(`[agent:${taskId}] Auto-created skill from ${toolLog.length}-tool task`);
+  } catch (err) {
+    // Non-critical — don't fail the task
+    console.warn(`[agent:${taskId}] Auto-skill creation failed:`, err);
+  }
+}
+
+/**
+ * Update skill effectiveness based on task outcome.
+ * Success: increment use_count, nudge importance_score up.
+ * Failure: nudge importance_score down (don't remove — may work next time).
+ */
+async function updateSkillEffectiveness(
+  supabase: ReturnType<typeof getSupabase>,
+  skillIds: string[],
+  success: boolean,
+  taskId: string,
+): Promise<void> {
+  try {
+    for (const skillId of skillIds) {
+      const { data: skill } = await supabase
+        .from('ai_memories')
+        .select('importance_score, use_count')
+        .eq('id', skillId)
+        .maybeSingle();
+
+      if (!skill) continue;
+
+      const currentScore = skill.importance_score ?? 0.5;
+      const currentUseCount = skill.use_count ?? 0;
+
+      const newScore = success
+        ? Math.min(1.0, currentScore + 0.02)   // Small bump on success
+        : Math.max(0.1, currentScore - 0.05);  // Larger penalty on failure
+
+      await supabase.from('ai_memories').update({
+        importance_score: Math.round(newScore * 100) / 100,
+        use_count: currentUseCount + 1,
+        updated_at: new Date().toISOString(),
+      }).eq('id', skillId);
+    }
+    console.log(`[agent:${taskId}] Updated ${skillIds.length} skill(s) effectiveness (${success ? 'success' : 'failure'})`);
+  } catch (err) {
+    console.warn(`[agent:${taskId}] Skill effectiveness update failed:`, err);
   }
 }
 

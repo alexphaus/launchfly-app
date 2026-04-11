@@ -22,6 +22,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getToolsForAgent, executeTool, type ToolContext } from './tools';
 import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
 import { getAgentProvider, type AgentProvider } from './provider';
+import { sendWhatsApp } from '@/lib/evolution';
 
 function getSupabase() {
   return createClient(
@@ -614,6 +615,39 @@ export async function executeAgentTask(taskId: string): Promise<{
         const runTool = async (tc: typeof fnCalls[0]): Promise<{ id: string; name: string; args: Record<string, unknown>; result: string }> => {
           const toolArgs = parsedArgs.get(tc.id)!;
           console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name}(${JSON.stringify(toolArgs).substring(0, 100)})`);
+
+          // Live task updates (Hermes-style)
+          if (toolCtx.ownerPhone && !tc.function.name.startsWith('send_')) {
+            const agentName = row.role ? row.role : 'Agent';
+            const iconMap: Record<string, string> = {
+              request_integration: '🔌',
+              browse_web: '🌐',
+              scrape_page: '🕷️',
+              search_web: '🔍',
+              search_google_maps: '🗺️',
+              save_leads: '📥',
+              search_memory: '🧠',
+              save_memory: '💾',
+              delegate_task: '🔀',
+              delegate_task_and_wait: '⏳',
+              query_database: '🗄️',
+              call_api: '⚡',
+              draft_content: '📝',
+              manage_job: '📋',
+              analyze_inventory: '📦',
+              request_approval: '👍',
+              get_weather_forecast: '⛅',
+              search_tasks: '🔍'
+            };
+            const icon = iconMap[tc.function.name] || '⚙️';
+            // Fire-and-forget message, we don't want to block the agent loop
+            sendWhatsApp(
+              toolCtx.ownerPhone,
+              `_${icon} ${tc.function.name}..._`,
+              toolCtx.businessId || undefined
+            ).catch(() => {});
+          }
+
           let toolResult: string;
           try {
             const controller = new AbortController();

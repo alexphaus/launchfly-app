@@ -1685,6 +1685,17 @@ async function executeRequestIntegration(
     return `✅ Integration "${displayName}" is now ACTIVE (ID: ${integration.id}). You can use call_api with service_name="${serviceName}" immediately.`;
   }
 
+  // ── Guard: max 2 pending integrations at a time to prevent spam ──
+  const { count: pendingCount } = await supabase
+    .from('business_integrations')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', toolCtx.businessId)
+    .eq('status', 'pending');
+
+  if ((pendingCount ?? 0) >= 2) {
+    return `Cannot request another integration — there are already ${pendingCount} pending integration requests. Wait for the owner to respond to existing requests before requesting more.`;
+  }
+
   // ── No key provided — upsert a pending record and ask owner ──
   const { data: integration, error } = await supabase
     .from('business_integrations')

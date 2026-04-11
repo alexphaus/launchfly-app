@@ -389,17 +389,18 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'request_integration',
-      description: 'Request the business owner to connect a new external service/API. Use when you discover a useful tool (via search_web) but the business has not connected it yet. Sends the owner a WhatsApp message explaining what the service does, why it would help, estimated cost, and a signup link. The owner can reply with the API key to activate it.',
+      description: 'Connect a new external service/API. If the owner already provided an API key in the conversation, pass it in the api_key field to activate immediately. Otherwise, sends the owner a WhatsApp message asking for the key.',
       parameters: {
         type: 'object',
         properties: {
-          service_name: { type: 'string', description: 'Short identifier for the service (e.g. "creatomate", "elevenlabs")' },
+          service_name: { type: 'string', description: 'Short identifier for the service (e.g. "creatomate", "elevenlabs", "apollo")' },
           display_name: { type: 'string', description: 'Human-readable service name (e.g. "Creatomate Video API")' },
           signup_url: { type: 'string', description: 'URL where the owner can create an account and get an API key' },
           base_url: { type: 'string', description: 'The API base URL (e.g. "https://api.creatomate.com/v1")' },
           reason: { type: 'string', description: 'Why this integration would help the business (1-2 sentences)' },
           estimated_cost: { type: 'string', description: 'Estimated monthly cost or per-use cost (e.g. "$9/mo", "~$0.10/video")' },
           auth_type: { type: 'string', enum: ['bearer', 'basic', 'query_param', 'custom_header'], description: 'How the API key should be sent (default: bearer)' },
+          api_key: { type: 'string', description: 'If the owner already provided the API key in conversation, pass it here to activate the integration immediately without sending a WhatsApp request.' },
         },
         required: ['service_name', 'display_name', 'signup_url', 'base_url', 'reason'],
       },
@@ -1643,6 +1644,8 @@ async function executeRequestIntegration(
     return 'Failed: No owner phone configured — cannot send integration request.';
   }
 
+  const providedKey = (args.api_key as string || '').trim();
+
   const supabase = getSupabase();
 
   // ── Check if already exists ──
@@ -1657,7 +1660,32 @@ async function executeRequestIntegration(
     return `Integration "${serviceName}" is already active. Use call_api to use it.`;
   }
 
-  // ── Upsert a pending integration record ──
+  // ── If owner already provided the API key, activate immediately ──
+  if (providedKey) {
+    const { data: integration, error } = await supabase
+      .from('business_integrations')
+      .upsert({
+        business_id: toolCtx.businessId,
+        service_name: serviceName,
+        description: `${displayName} — ${reason}`,
+        base_url: baseUrl,
+        auth_type: authType,
+        api_key_encrypted: providedKey,
+        status: 'active',
+        requested_by: 'agent',
+        request_context: reason,
+        config: { signup_url: signupUrl, estimated_cost: estimatedCost, display_name: displayName },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'business_id,service_name' })
+      .select('id')
+      .single();
+
+    if (error) return `Failed to activate integration: ${error.message}`;
+
+    return `✅ Integration "${displayName}" is now ACTIVE (ID: ${integration.id}). You can use call_api with service_name="${serviceName}" immediately.`;
+  }
+
+  // ── No key provided — upsert a pending record and ask owner ──
   const { data: integration, error } = await supabase
     .from('business_integrations')
     .upsert({

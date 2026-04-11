@@ -34,6 +34,30 @@ function getSupabase() {
   );
 }
 
+/**
+ * Extract an API key from a message — supports bare keys AND natural language like
+ * "Here is the api key 8BAx8P3UoJn8QSiKVRBnRg" or "my key: sk-abc123_xyz"
+ */
+function extractApiKey(message: string): string | null {
+  const trimmed = message.trim();
+
+  // If the whole message is the key (original behaviour)
+  if (/^[a-zA-Z0-9_\-]{16,}$/.test(trimmed) && /[_\-\d]/.test(trimmed)) return trimmed;
+  if (/^(sk|pk|ck|ak|key|token|api)[_\-]/i.test(trimmed) && /^[a-zA-Z0-9_\-]+$/.test(trimmed)) return trimmed;
+
+  // Extract from natural language — find the longest token that looks like an API key
+  const tokens = trimmed.split(/[\s,;:]+/);
+  let best: string | null = null;
+  for (const tok of tokens) {
+    const clean = tok.replace(/^['"""'`]+|['"""'`]+$/g, ''); // strip quotes
+    if (clean.length < 16) continue;
+    if (!/^[a-zA-Z0-9_\-]+$/.test(clean)) continue;
+    if (!/[_\-\d]/.test(clean)) continue; // must have at least one non-alpha
+    if (!best || clean.length > best.length) best = clean;
+  }
+  return best;
+}
+
 // ─── POST handler ────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -405,13 +429,10 @@ export async function POST(request: NextRequest) {
           .limit(1)
           .maybeSingle();
 
-        const trimmed = messageText.trim();
-        // API keys typically contain mixed case, digits, AND underscores/hyphens — require at least one non-alpha
-        const looksLikeApiKey = /^[a-zA-Z0-9_\-]{16,}$/.test(trimmed) && /[_\-\d]/.test(trimmed)
-          || /^(sk|pk|ck|ak|key|token|api)[_\-]/i.test(trimmed);
-        const isSkip = /^skip$/i.test(trimmed);
+        const extractedKey = extractApiKey(messageText);
+        const isSkip = /^skip$/i.test(messageText.trim());
 
-        if (pendingIntegration && (looksLikeApiKey || isSkip)) {
+        if (pendingIntegration && (extractedKey || isSkip)) {
           if (isSkip) {
             console.log(`   ⏭️ Owner skipped integration "${pendingIntegration.service_name}"`);
             await supabase.from('business_integrations').update({
@@ -426,7 +447,7 @@ export async function POST(request: NextRequest) {
 
           console.log(`   🔑 Owner provided API key for "${pendingIntegration.service_name}"`);
           await supabase.from('business_integrations').update({
-            api_key_encrypted: trimmed, // TODO: encrypt at rest when vault is added
+            api_key_encrypted: extractedKey,
             status: 'active',
             updated_at: new Date().toISOString(),
           }).eq('id', pendingIntegration.id);
@@ -675,13 +696,11 @@ export async function POST(request: NextRequest) {
             .limit(1)
             .maybeSingle();
 
-          const trimmed = messageText.trim();
-          const looksLikeApiKey = /^[a-zA-Z0-9_\-]{16,}$/.test(trimmed) && /[_\-\d]/.test(trimmed)
-            || /^(sk|pk|ck|ak|key|token|api)[_\-]/i.test(trimmed);
-          const isSkip = /^skip$/i.test(trimmed);
+          const extractedKey2 = extractApiKey(messageText);
+          const isSkip2 = /^skip$/i.test(messageText.trim());
 
-          if (pendingIntegration && (looksLikeApiKey || isSkip)) {
-            if (isSkip) {
+          if (pendingIntegration && (extractedKey2 || isSkip2)) {
+            if (isSkip2) {
               await supabase.from('business_integrations').update({ status: 'revoked', updated_at: new Date().toISOString() }).eq('id', pendingIntegration.id);
               const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
               const provider = await getWhatsAppProvider(businessId);
@@ -689,7 +708,7 @@ export async function POST(request: NextRequest) {
               return NextResponse.json({ ok: true, routed: 'integration_skipped', service: pendingIntegration.service_name });
             }
             console.log(`   🔑 Owner provided API key for "${pendingIntegration.service_name}"`);
-            await supabase.from('business_integrations').update({ api_key_encrypted: trimmed, status: 'active', updated_at: new Date().toISOString() }).eq('id', pendingIntegration.id);
+            await supabase.from('business_integrations').update({ api_key_encrypted: extractedKey2, status: 'active', updated_at: new Date().toISOString() }).eq('id', pendingIntegration.id);
             const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
             const provider = await getWhatsAppProvider(businessId);
             const displayName = (pendingIntegration.config as Record<string, string>)?.display_name || pendingIntegration.service_name;

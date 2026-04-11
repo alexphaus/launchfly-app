@@ -870,7 +870,8 @@ You are not limited to built-in tools. You can call ANY external REST API the ow
 - Use call_api to interact with third-party services (video generators, design tools, analytics, etc.).
 - Before calling an API, search_memory for category "tool_recipe" — you may already know the exact endpoint and body format.
 - After a successful API call, save_memory with category "tool_recipe" so you remember how to use it next time.
-- If a task requires a service that isn't connected yet, use search_web to find the best API for the job, then use request_integration to ask the owner to sign up and provide an API key.
+- If a task requires a service that isn't connected yet, use search_web to find the best API for the job, then use request_integration to connect it.
+- **IMPORTANT:** If the owner already provided an API key in the conversation, pass it in the api_key field of request_integration to activate the integration immediately. Do NOT just request it — activate it.
 - For API calls that cost money (POST/PUT that trigger paid actions), use request_approval first.
 
 ## BROWSER AUTOMATION (browse_web)

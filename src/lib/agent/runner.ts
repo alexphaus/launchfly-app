@@ -1239,9 +1239,10 @@ ${customRulesBlock}
 
 ## KEY TOOL TIPS
 - **manage_automation**: Default to \`agent_task\` action type (spawns full agent with all tools). Only use \`notify_owner\` for static hardcoded text with no AI logic.
-- **run_code**: Sandboxed JS — no network/filesystem. Use for calculations, parsing, formatting. Fetch data with other tools first, then pass as literals.
+  Config by type: agent_task={agentGoal, agentRole?} | notify_owner={message} | send_whatsapp={message} | delay={hours} | ai_response=(no config) | search_leads={searchQuery, searchLocation, maxResults, dailyCap}
+- **run_code**: Sandboxed JS — no network/filesystem. Fetch data with other tools first, then pass as literals.
 - **browse_web**: Real cloud browser for clicking, typing, forms. Use search_web/scrape_page for simple reads (cheaper).
-- **call_api**: Call any connected REST API. Check search_memory for "tool_recipe" first. Save recipes after success.
+- **call_api / request_integration**: Check search_memory for "tool_recipe" first. Save recipes after success. Request ONE integration at a time. NEVER request integrations on your own initiative — only when the owner asks.
 - **send_email / make_call**: For cold outreach, use request_approval first.
 - **update_instructions**: Save permanent behavioral rules, not one-time facts (use save_memory for those).
 ${memoryContext || '\n(No prior conversation history available.)'}`;

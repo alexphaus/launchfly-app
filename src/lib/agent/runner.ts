@@ -383,7 +383,9 @@ export async function executeAgentTask(taskId: string): Promise<{
   const toolCtx: ToolContext = {
     businessId: row.business_id,
     businessName: biz?.name || undefined,
-    ownerPhone: row.owner_phone || biz?.whatsapp_notify_number || biz?.whatsapp_number || biz?.phone_number || undefined,
+    // ownerPhone = where to send reports/status. NEVER use whatsapp_number here
+    // because that's the business bot's own WhatsApp — sending there = self-message.
+    ownerPhone: row.owner_phone || biz?.whatsapp_notify_number || biz?.phone_number || undefined,
     assistantName: repName,
     taskId,
   };

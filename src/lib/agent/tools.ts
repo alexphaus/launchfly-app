@@ -2670,6 +2670,7 @@ async function executeBrowseWeb(
       projectId: bbProjectId,
       model: 'google/gemini-2.5-flash',
       verbose: 0,
+      disablePino: true,
     });
 
     await stagehand.init();

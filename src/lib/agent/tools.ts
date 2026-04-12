@@ -468,7 +468,7 @@ export const AGENT_TOOLS = [
           },
           actions: {
             type: 'array',
-            description: 'Sequential actions to run when triggered. Common types: search_leads (config: {searchQuery, searchLocation, maxResults, dailyCap}), agent_task (config: {agentGoal, agentRole}), notify_owner (config: {message}), send_whatsapp (config: {message}), ai_response, delay (config: {hours}), stagger_outreach, generate_report.',
+            description: 'Sequential actions to run when triggered. CRITICAL: Use `agent_task` (config: {agentGoal}) for ANYTHING requiring AI generation (insights, summaries, custom messages). Use `notify_owner` (config: {message}) ONLY for static, hardcoded text alerts. Other common types: search_leads (config: {searchQuery, searchLocation, maxResults, dailyCap}), send_whatsapp, ai_response, delay, stagger_outreach, generate_report.',
             items: {
               type: 'object',
               properties: {

@@ -1248,10 +1248,11 @@ You can control a REAL cloud browser to interact with any website:
 You can CREATE, UPDATE, DELETE, and LIST scheduled/event-driven automations directly from conversation:
 - When the owner says things like "every day at 8pm find 50 leads" or "when someone messages, auto-reply" → use manage_automation.
 - For scheduled tasks, parse the natural language into: hour (24h), minute, days, timezone, and the actions chain.
+- CRITICAL: If the user asks for AI-generated content (e.g., "send me a daily business insight", "summarize my emails", "give me a morning briefing"), you MUST use \`agent_task\`. DO NOT use \`notify_owner\` for these, because \`notify_owner\` only sends static, hardcoded text!
 - Common action types for automations:
+  - agent_task: config needs {agentGoal, agentRole} — spawns an autonomous AI agent to do research, summarize, or generate fresh content dynamically
+  - notify_owner: config needs {message} — ONLY for static, non-AI, hardcoded text alerts
   - search_leads: config needs {searchQuery, searchLocation, maxResults, dailyCap}
-  - agent_task: config needs {agentGoal, agentRole} — spawns an autonomous agent
-  - notify_owner: config needs {message}
   - send_whatsapp: config needs {message}
   - stagger_outreach: staggers prospecting messages to found leads
   - generate_report: generates business analytics

@@ -2546,6 +2546,8 @@ async function executeBrowseWeb(
   }
 
   let stagehand: InstanceType<typeof import('@browserbasehq/stagehand').Stagehand> | null = null;
+  const abortController = new AbortController();
+  let abortTimer: ReturnType<typeof setTimeout> | null = null;
 
   try {
     const { Stagehand } = await import('@browserbasehq/stagehand');
@@ -2556,8 +2558,8 @@ async function executeBrowseWeb(
       env: 'BROWSERBASE',
       apiKey: bbApiKey,
       projectId: bbProjectId,
-      // Use Browserbase Model Gateway — routes through the single BB API key
       model: 'google/gemini-2.5-flash',
+      verbose: 0,
     });
 
     await stagehand.init();
@@ -2571,26 +2573,23 @@ async function executeBrowseWeb(
       await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeoutMs: 30_000 });
     }
 
+    // Set up abort timer for proper cancellation
+    abortTimer = setTimeout(() => {
+      console.warn(`[browse_web] Aborting session after ${BROWSE_WEB_TIMEOUT_MS / 1000}s`);
+      abortController.abort();
+    }, BROWSE_WEB_TIMEOUT_MS);
+
     // Use the agent for multi-step task execution
     const agent = stagehand.agent({
       model: 'google/gemini-2.5-flash',
     });
 
-    const abortTimeout = setTimeout(() => {
-      console.warn(`[browse_web] Session timed out after ${BROWSE_WEB_TIMEOUT_MS / 1000}s`);
-    }, BROWSE_WEB_TIMEOUT_MS);
-
-    let result: { message?: string; completed?: boolean; actions?: unknown[]; success?: boolean } = {};
-    try {
-      result = await Promise.race([
-        agent.execute(task),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Browser session timed out')), BROWSE_WEB_TIMEOUT_MS)
-        ),
-      ]);
-    } finally {
-      clearTimeout(abortTimeout);
-    }
+    const result = await agent.execute({
+      instruction: task,
+      maxSteps,
+      page,
+      signal: abortController.signal,
+    });
 
     // Extract structured data if schema provided
     let extractedData: string | null = null;
@@ -2614,22 +2613,37 @@ async function executeBrowseWeb(
 
     // Build response
     const parts: string[] = [];
-    parts.push(`Browser session ${result.success ? 'completed successfully' : 'finished'}.`);
+    parts.push(`Browser session ${result.success ? 'completed successfully' : result.completed ? 'finished' : 'did not complete'}.`);
     parts.push(`Session replay: ${sessionUrl}`);
 
     if (result.message) {
       parts.push(`\nAgent result: ${result.message}`);
     }
-    if (result.actions && Array.isArray(result.actions)) {
-      parts.push(`Actions taken: ${result.actions.length}`);
+
+    if (result.actions && result.actions.length > 0) {
+      parts.push(`\nActions taken (${result.actions.length}):`);
+      for (const action of result.actions.slice(-10)) {
+        const timeStr = action.timeMs ? ` (${Math.round(action.timeMs)}ms)` : '';
+        const reasoning = action.reasoning ? ` — ${action.reasoning.substring(0, 120)}` : '';
+        parts.push(`  • ${action.type}${action.instruction ? `: ${action.instruction.substring(0, 100)}` : ''}${timeStr}${reasoning}`);
+      }
     }
+
     if (extractedData) {
       parts.push(`\nExtracted data:\n${extractedData}`);
     }
 
-    // Get the final page URL
+    // Token usage for cost tracking
+    if (result.usage) {
+      parts.push(`\nUsage: ${result.usage.input_tokens} input + ${result.usage.output_tokens} output tokens (${Math.round(result.usage.inference_time_ms / 1000)}s inference)`);
+    }
+
+    // Get the final page URL (agent may have navigated)
     try {
-      const finalUrl = page.url();
+      // Check all open pages — agent may have opened new tabs
+      const allPages = stagehand.context.pages();
+      const activePage = allPages[allPages.length - 1]; // most recently opened
+      const finalUrl = activePage.url();
       parts.push(`\nFinal page: ${finalUrl}`);
     } catch { /* page may be closed */ }
 
@@ -2639,12 +2653,13 @@ async function executeBrowseWeb(
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[browse_web] Error:`, msg);
 
-    if (msg.includes('timed out')) {
-      return `Browser session timed out after ${BROWSE_WEB_TIMEOUT_MS / 1000}s. The task may have been too complex. Try breaking it into smaller steps.`;
+    if (msg.includes('aborted') || msg.includes('timed out') || msg.includes('AbortError')) {
+      return `Browser session timed out after ${BROWSE_WEB_TIMEOUT_MS / 1000}s. The task may have been too complex. Try breaking it into smaller steps or increasing max_steps.`;
     }
 
     return `Browser automation failed: ${msg}`;
   } finally {
+    if (abortTimer) clearTimeout(abortTimer);
     if (stagehand) {
       try { await stagehand.close(); } catch { /* best effort cleanup */ }
     }

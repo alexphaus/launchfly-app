@@ -651,7 +651,7 @@ export async function executeTool(
       return executeRunCode(args.code as string, (args.timeout_ms as number) || 5000);
 
     case 'update_instructions':
-      return executeUpdateInstructions(args.rule as string, toolCtx.businessId, args.replace_rule_index as number | undefined);
+      return executeUpdateInstructions(args.rule as string, toolCtx.businessId, toolCtx.assistantName, args.replace_rule_index as number | undefined);
 
     case 'send_email':
       return executeSendEmail(args as Record<string, unknown>, toolCtx);
@@ -2048,6 +2048,7 @@ const MAX_CUSTOM_RULES = 50;
 async function executeUpdateInstructions(
   rule: string,
   businessId: string,
+  assistantName?: string,
   replaceIndex?: number,
 ): Promise<string> {
   const supabase = getSupabase();
@@ -2057,13 +2058,18 @@ async function executeUpdateInstructions(
   if (cleaned.length < 5) return 'Rule too short. Provide a clear, specific instruction (at least 5 characters).';
   if (cleaned.length > 300) return 'Rule too long. Keep it under 300 characters — be concise.';
 
-  // Fetch the active assistant for this business
-  const { data: assistant, error: fetchErr } = await supabase
+  // Try to find the specific assistant that is running (by name), else fall back to any active one
+  let query = supabase
     .from('assistants')
     .select('id, custom_rules')
     .eq('business_id', businessId)
-    .eq('active', true)
-    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+    .eq('active', true);
+
+  if (assistantName) {
+    query = query.eq('name', assistantName);
+  }
+
+  const { data: assistant, error: fetchErr } = await query
     .limit(1)
     .maybeSingle();
 

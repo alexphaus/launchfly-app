@@ -95,10 +95,11 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'save_leads',
-      description: 'Save one or more leads to the business leads database. Use after search_google_maps or manual research. Leads are stored per-business and can be reviewed, contacted, or promoted later.',
+      description: 'Save new leads or update existing leads in the business leads database. Use action="save" (default) after search_google_maps to store new leads. Use action="update" to change a lead\'s status, notes, or other fields.',
       parameters: {
         type: 'object',
         properties: {
+          action: { type: 'string', enum: ['save', 'update'], description: 'save = insert new leads (default). update = modify existing lead(s) by ID.' },
           leads: {
             type: 'array',
             items: {
@@ -117,10 +118,27 @@ export const AGENT_TOOLS = [
               },
               required: ['name', 'phone'],
             },
-            description: 'Array of leads to save',
+            description: 'Array of leads to save (for action=save)',
+          },
+          updates: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Lead UUID (required — get from query_database on leads table)' },
+                status: { type: 'string', enum: ['new', 'contacted', 'qualified', 'converted', 'lost', 'archived'], description: 'New status for the lead' },
+                notes: { type: 'string', description: 'Updated notes (replaces existing notes)' },
+                email: { type: 'string', description: 'Updated email' },
+                phone: { type: 'string', description: 'Updated phone' },
+                category: { type: 'string', description: 'Updated category' },
+                name: { type: 'string', description: 'Updated name' },
+              },
+              required: ['id'],
+            },
+            description: 'Array of lead updates (for action=update). Each must have an id.',
           },
         },
-        required: ['leads'],
+        required: [],
       },
     },
   },
@@ -581,8 +599,13 @@ export async function executeTool(
         toolCtx.businessId,
       );
 
-    case 'save_leads':
+    case 'save_leads': {
+      const action = (args.action as string) || 'save';
+      if (action === 'update') {
+        return executeUpdateLeads(args.updates as Array<Record<string, string>>, toolCtx.businessId);
+      }
       return executeSaveLeads(args.leads as Array<Record<string, string>>, toolCtx.businessId);
+    }
 
     case 'send_report':
       return executeSendReport(args.message as string, toolCtx, args.imageUrl as string | undefined);
@@ -809,7 +832,62 @@ async function executeSearchGoogleMaps(
   }
 }
 
-// ─── save_leads ──────────────────────────────────────────────────────────
+// ─── save_leads / update_leads ───────────────────────────────────────────
+
+const VALID_LEAD_STATUSES = new Set(['new', 'contacted', 'qualified', 'converted', 'lost', 'archived']);
+
+async function executeUpdateLeads(
+  updates: Array<Record<string, string>>,
+  businessId: string,
+): Promise<string> {
+  if (!updates?.length) return 'No updates provided. Pass an array of { id, status?, notes?, ... } objects.';
+
+  const supabase = getSupabase();
+  let updated = 0;
+  const errors: string[] = [];
+
+  for (const u of updates) {
+    if (!u.id) {
+      errors.push('Missing id for one update entry');
+      continue;
+    }
+
+    const fields: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (u.status !== undefined) {
+      if (!VALID_LEAD_STATUSES.has(u.status)) {
+        errors.push(`${u.id}: invalid status "${u.status}". Use: ${[...VALID_LEAD_STATUSES].join(', ')}`);
+        continue;
+      }
+      fields.status = u.status;
+    }
+    if (u.notes !== undefined) fields.notes = u.notes;
+    if (u.email !== undefined) fields.email = u.email || null;
+    if (u.phone !== undefined) fields.phone = u.phone || null;
+    if (u.category !== undefined) fields.category = u.category || null;
+    if (u.name !== undefined) fields.name = u.name;
+
+    if (Object.keys(fields).length <= 1) {
+      errors.push(`${u.id}: no fields to update`);
+      continue;
+    }
+
+    const { error } = await supabase
+      .from('leads')
+      .update(fields)
+      .eq('id', u.id)
+      .eq('business_id', businessId);
+
+    if (error) {
+      errors.push(`${u.id}: ${error.message}`);
+    } else {
+      updated++;
+    }
+  }
+
+  let result = `Updated ${updated} of ${updates.length} leads.`;
+  if (errors.length > 0) result += `\nErrors: ${errors.slice(0, 5).join('; ')}`;
+  return result;
+}
 
 async function executeSaveLeads(
   leads: Array<Record<string, string>>,

@@ -1249,23 +1249,19 @@ You can CREATE, UPDATE, DELETE, and LIST scheduled/event-driven automations dire
 - When the owner says things like "every day at 8pm find 50 leads" or "when someone messages, auto-reply" → use manage_automation.
 - For scheduled tasks, parse the natural language into: hour (24h), minute, days, timezone, and the actions chain.
 
-### ACTION TYPE SELECTION — CRITICAL
-Your DEFAULT action type should almost always be **agent_task**. It spawns a full autonomous AI agent with ALL tools (search_web, send_whatsapp, run_code, scrape_page, browse_web, etc.), making it far more flexible than hardcoded action types.
+### CRITICAL: Choose the right action type
+- **DEFAULT: use \`agent_task\`** for almost everything. The spawned agent has access to ALL tools: search_web, browse_web, run_code, search_google_maps, save_leads, send_whatsapp, query_database, and more. It is strictly more powerful than any fixed action type. Write an agentGoal that describes exactly what to do and how to report back.
+- **ONLY use \`notify_owner\`** for a completely static, hardcoded text alert with no AI logic — e.g., "ping me when payment received: ✅ Payment from {customerName}". Nothing else.
+- **ONLY use \`send_whatsapp\`** for a static template message to a known customer — no AI generation.
+- **DO NOT use \`notify_owner\`** when the owner wants insights, summaries, generated content, research, or anything dynamic. Use \`agent_task\` instead — the agent will generate the message itself and send it via send_whatsapp.
 
-Use `agent_task` for:
-- ANYTHING requiring AI intelligence: insights, summaries, research, personalized messages, content generation
-- Complex multi-step workflows: "find leads, research them, then send personalized outreach"
-- Tasks where the exact steps aren't predictable at creation time
-- Config: {agentGoal: "clear natural-language goal", agentRole: "optional role"}
-- The spawned agent has full access to search_web, send_whatsapp, run_code, scrape_page, browse_web, search_google_maps, save_leads, etc.
-
-Only use these simpler types when they're clearly a better fit:
-- `notify_owner` — ONLY for static hardcoded text alerts (e.g., "📞 Missed call from {phone}"). Never for anything requiring fresh AI generation.
-- `search_leads` — bulk lead search via Apify (config: {searchQuery, searchLocation, maxResults, dailyCap})
-- `delay` — pause between actions (config: {hours})
-- `ai_response` — auto-reply to inbound messages using the assistant persona
-
-When in doubt, use agent_task. It can do everything the other types can do, and more.
+### Action type reference (use agent_task unless the task is truly static)
+  - agent_task: config needs {agentGoal, agentRole?} — spawns a full AI agent with all tools. Use this for: insights, reports, lead gen, research, content, follow-ups, anything complex.
+  - notify_owner: config needs {message} — static hardcoded text ONLY. Supports {phone}, {customerName}, {businessName} vars.
+  - send_whatsapp: config needs {message} — static message to customer. Supports template vars.
+  - delay: config needs {hours} — pauses the action chain before the next step.
+  - ai_response: AI auto-responds to an inbound message using the configured persona.
+  - search_leads: config needs {searchQuery, searchLocation, maxResults, dailyCap} — Apify lead search. Prefer agent_task if you also need to do outreach or save/filter results.
 
 - If the owner doesn't specify timezone, ASK. If they don't specify search query/location, ASK.
 - After creating an automation, confirm what was set up and when it will first run.

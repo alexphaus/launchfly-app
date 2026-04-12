@@ -1386,10 +1386,25 @@ async function executeDelegateTaskAndWait(
     const rawTools = assistant.tools_enabled;
     const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
 
-    // Create sub-task ID so we can link it
+    // Create sub-task row in DB FIRST (so runner can find it)
     const subTaskId = crypto.randomUUID();
+    const { error: insertErr } = await supabase.from('agent_tasks').insert({
+      id: subTaskId,
+      business_id: toolCtx.businessId,
+      status: 'pending',
+      goal: `[DELEGATED TASK] ${instruction}`,
+      role: assistant.system_prompt,
+      messages: [],
+      steps_used: 0,
+      tool_log: [],
+      owner_phone: toolCtx.ownerPhone || null,
+      enabled_tools: enabledTools,
+      parent_task_id: toolCtx.taskId,
+    });
 
-    // Dispatch sub-agent with parent linkage
+    if (insertErr) return `Failed to create sub-task: ${insertErr.message}`;
+
+    // Dispatch sub-agent via QStash (only sends taskId — row already exists)
     const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
       method: 'POST',
       headers: {
@@ -1400,12 +1415,6 @@ async function executeDelegateTaskAndWait(
       },
       body: JSON.stringify({
         taskId: subTaskId,
-        businessId: toolCtx.businessId,
-        goal: `[DELEGATED TASK] ${instruction}`,
-        role: assistant.system_prompt,
-        enabledTools,
-        ownerPhone: toolCtx.ownerPhone,
-        parentTaskId: toolCtx.taskId,
       }),
     });
 

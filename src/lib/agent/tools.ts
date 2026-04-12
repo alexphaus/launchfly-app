@@ -95,7 +95,7 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'save_leads',
-      description: 'Save one or more leads to the business CRM database (hunter_prospects table). Use after search_google_maps or manual research.',
+      description: 'Save one or more leads to the business leads database. Use after search_google_maps or manual research. Leads are stored per-business and can be reviewed, contacted, or promoted later.',
       parameters: {
         type: 'object',
         properties: {
@@ -111,6 +111,9 @@ export const AGENT_TOOLS = [
                 address: { type: 'string', description: 'Address (optional)' },
                 category: { type: 'string', description: 'Business category (optional)' },
                 notes: { type: 'string', description: 'Extra context (optional)' },
+                rating: { type: 'string', description: 'Google rating e.g. "4.5" (optional)' },
+                reviews_count: { type: 'string', description: 'Number of Google reviews (optional)' },
+                google_maps_url: { type: 'string', description: 'Google Maps URL (optional)' },
               },
               required: ['name', 'phone'],
             },
@@ -776,48 +779,52 @@ async function executeSaveLeads(
   const supabase = getSupabase();
   let saved = 0;
   let skipped = 0;
+  const errors: string[] = [];
 
   for (const lead of leads) {
-    if (!lead.phone) { skipped++; continue; }
-
     // Normalize phone: strip everything except digits and leading +
-    let phone = lead.phone.replace(/[^\d+]/g, '');
-    // Remove duplicate + signs, ensure at most one leading +
+    let phone = (lead.phone || '').replace(/[^\d+]/g, '');
     phone = phone.replace(/^\++/, '+').replace(/(?!^)\+/g, '');
-    if (!phone || phone.length < 7) { skipped++; continue; }
+    if (phone && phone.length < 7) phone = ''; // too short
 
-    // Check for duplicates
-    const { data: existing } = await supabase
-      .from('hunter_prospects')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('phone', phone)
-      .maybeSingle();
+    // Must have at least a name
+    const name = lead.name || 'Unknown';
 
-    if (existing) { skipped++; continue; }
-
-    const { error } = await supabase.from('hunter_prospects').insert({
+    // Upsert: if same business + phone exists, skip (unique index handles this)
+    const row: Record<string, unknown> = {
       business_id: businessId,
-      phone,
-      name: lead.name || 'Unknown',
+      name,
+      phone: phone || null,
       email: lead.email || null,
       website: lead.website || null,
       address: lead.address || null,
       category: lead.category || null,
       notes: lead.notes || null,
+      source: 'agent',
       status: 'new',
-      source: 'agent_task',
-    });
+      rating: lead.rating ? parseFloat(lead.rating) : null,
+      reviews_count: lead.reviews_count ? parseInt(lead.reviews_count, 10) : null,
+      google_maps_url: lead.google_maps_url || null,
+    };
+
+    const { error } = await supabase.from('leads').insert(row);
 
     if (error) {
-      console.warn(`[agent:save_leads] Insert error for ${phone}:`, error.message);
-      skipped++;
+      if (error.code === '23505') {
+        // Duplicate (unique constraint on business_id + phone)
+        skipped++;
+      } else {
+        errors.push(`${name}: ${error.message}`);
+        skipped++;
+      }
     } else {
       saved++;
     }
   }
 
-  return `Saved ${saved} leads to CRM. Skipped ${skipped} (duplicates or missing phone).`;
+  let result = `Saved ${saved} leads. Skipped ${skipped} (duplicates or errors).`;
+  if (errors.length > 0) result += `\nErrors: ${errors.slice(0, 3).join('; ')}`;
+  return result;
 }
 
 // ─── send_report ─────────────────────────────────────────────────────────

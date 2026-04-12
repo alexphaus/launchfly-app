@@ -107,6 +107,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // ── Agent tool update / report echo filter ──────────────
+      // If a message looks like an agent-generated tool status update or report
+      // (e.g. "_🔍 search_web..._" or "🤖 *Agent Report*"), skip it to prevent
+      // feedback loops between WhatsApp instances.
+      const AGENT_ECHO_PATTERN = /^_[^\n]{1,60}\.\.\._$|^🤖 \*Agent Report/;
+      if (AGENT_ECHO_PATTERN.test(outText.trim())) {
+        return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo' });
+      }
+
       // Look up the DB instance ID for routing follow-ups to the correct instance
       let waInstanceId: string | undefined;
       if (instanceName) {
@@ -332,6 +341,17 @@ export async function POST(request: NextRequest) {
     console.log(`   Message: ${messageText.substring(0, 100)}`);
     if (pushname) console.log(`   Name: ${pushname}`);
     if (hasAudio) console.log(`   🎤 Audio message (transcribed: ${messageText !== '[Voice note received but could not be transcribed]'})`);
+
+    // ── Agent echo filter (incoming path) ─────────────────────────
+    // Prevent feedback loops: if this message looks like an agent-generated
+    // tool status update ("_🔍 search_web..._") or agent report ("🤖 *Agent Report*"),
+    // skip it. These are sent by the agent to the owner and should never trigger
+    // new agent tasks when received on another WhatsApp instance.
+    const AGENT_ECHO_RE = /^_[^\n]{1,60}\.\.\._$|^🤖 \*Agent Report/;
+    if (AGENT_ECHO_RE.test(messageText.trim())) {
+      console.log(`   🔁 Skipping agent echo: "${messageText.substring(0, 50)}"`);
+      return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo' });
+    }
 
     const supabase = getSupabase();
 

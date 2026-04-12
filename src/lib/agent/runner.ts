@@ -22,7 +22,18 @@ import { createClient } from '@supabase/supabase-js';
 import { getToolsForAgent, executeTool, type ToolContext } from './tools';
 import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
 import { getAgentProvider, type AgentProvider } from './provider';
-import { sendWhatsApp } from '@/lib/evolution';
+import { sendWhatsAppWithCreds, type EvolutionCredentials } from '@/lib/evolution';
+
+// ─── Launchfly CEO instance credentials (for tool updates & reports) ─────
+// All agent status messages must go through THIS instance so the webhook
+// correctly detects them as fromMe/bot_echo and doesn't re-process them.
+function getLaunchflyCreds(): EvolutionCredentials | null {
+  const baseUrl = process.env.EVOLUTION_BASE_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  const instanceName = process.env.LAUNCHFLY_INSTANCE_NAME;
+  if (!baseUrl || !apiKey || !instanceName) return null;
+  return { baseUrl, apiKey, instanceName };
+}
 
 function getSupabase() {
   return createClient(
@@ -642,12 +653,17 @@ export async function executeAgentTask(taskId: string): Promise<{
               run_code: '💻'
             };
             const icon = iconMap[tc.function.name] || '⚙️';
-            // Fire-and-forget message, we don't want to block the agent loop
-            sendWhatsApp(
-              toolCtx.ownerPhone,
-              `_${icon} ${tc.function.name}..._`,
-              toolCtx.businessId || undefined
-            ).catch(() => {});
+            // Fire-and-forget via the Launchfly CEO instance — NOT the business instance.
+            // Using the business instance would cause the OTHER WhatsApp instance's webhook
+            // to pick up the message as a new inbound, creating an infinite agent loop.
+            const creds = getLaunchflyCreds();
+            if (creds) {
+              sendWhatsAppWithCreds(
+                toolCtx.ownerPhone,
+                `_${icon} ${tc.function.name}..._`,
+                creds
+              ).catch(() => {});
+            }
           }
 
           let toolResult: string;

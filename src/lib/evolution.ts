@@ -265,7 +265,17 @@ export async function sendWhatsAppWithCreds(
   const number = normalizePhone(to);
   try {
     const json = await evoFetch(creds, `message/sendText/${creds.instanceName}`, { number, text: body });
-    if (json?.key?.id) return { sent: true, id: json.key.id };
+    if (json?.key?.id) {
+      // Track message ID so webhooks can filter bot echoes on other instances
+      try {
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_KEY!,
+        );
+        await supabase.from('_bot_message_ids').insert({ message_id: json.key.id });
+      } catch { /* non-fatal */ }
+      return { sent: true, id: json.key.id };
+    }
     return { sent: false, error: json?.error || json?.message || JSON.stringify(json) };
   } catch (err: any) {
     return { sent: false, error: err.message };

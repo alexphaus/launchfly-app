@@ -468,7 +468,7 @@ export const AGENT_TOOLS = [
           },
           actions: {
             type: 'array',
-            description: 'Sequential actions to run when triggered. CRITICAL: Use `agent_task` (config: {agentGoal}) for ANYTHING requiring AI generation (insights, summaries, custom messages). Use `notify_owner` (config: {message}) ONLY for static, hardcoded text alerts. Other common types: search_leads (config: {searchQuery, searchLocation, maxResults, dailyCap}), send_whatsapp, ai_response, delay, stagger_outreach, generate_report.',
+            description: 'Sequential actions. DEFAULT to `agent_task` (config: {agentGoal, agentRole}) — spawns a full AI agent with all tools (search_web, send_whatsapp, run_code, browse_web, etc.). It is the most flexible and powerful option. Only use simpler types when clearly better: `notify_owner` (static text only, config: {message}), `search_leads` (bulk Apify search, config: {searchQuery, searchLocation, maxResults}), `delay` (config: {hours}), `ai_response` (auto-reply to inbound messages).',
             items: {
               type: 'object',
               properties: {

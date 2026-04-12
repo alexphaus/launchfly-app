@@ -469,7 +469,7 @@ export async function POST(request: NextRequest) {
         }
         rolePrompt = orchestrator.system_prompt;
         enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
-        for (const t of ['analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'send_whatsapp', 'manage_automation', 'run_code', 'manage_job', 'delegate_task_and_wait', 'request_approval']) {
+        for (const t of ['analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'send_whatsapp', 'manage_automation', 'run_code', 'manage_job', 'delegate_task_and_wait', 'request_approval', 'update_instructions']) {
           if (!enabledTools.includes(t)) enabledTools.push(t);
         }
       } else {
@@ -477,7 +477,7 @@ export async function POST(request: NextRequest) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
         }
         rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-        enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code'];
+        enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code', 'update_instructions'];
       }
 
       const dispatched = await dispatchAgentViaQStash({
@@ -698,7 +698,7 @@ export async function POST(request: NextRequest) {
           }
           rolePrompt = orchestrator.system_prompt;
           enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
-          for (const t of ['analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'send_whatsapp', 'manage_automation', 'run_code', 'manage_job', 'delegate_task_and_wait', 'request_approval']) {
+          for (const t of ['analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'send_whatsapp', 'manage_automation', 'run_code', 'manage_job', 'delegate_task_and_wait', 'request_approval', 'update_instructions']) {
             if (!enabledTools.includes(t)) enabledTools.push(t);
           }
         } else {
@@ -708,7 +708,7 @@ export async function POST(request: NextRequest) {
             goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
           }
           rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code'];
+          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code', 'update_instructions'];
         }
 
         const dispatched = await dispatchAgentViaQStash({

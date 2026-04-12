@@ -345,7 +345,7 @@ export async function executeAgentTask(taskId: string): Promise<{
 
   const { data: assistant } = await supabase
     .from('assistants')
-    .select('name')
+    .select('name, custom_rules')
     .eq('business_id', row.business_id)
     .eq('active', true)
     .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
@@ -473,7 +473,7 @@ export async function executeAgentTask(taskId: string): Promise<{
     }
 
     messages = [
-      { role: 'system', content: buildSystemPrompt(toolCtx, row.role || undefined, industry, location, memoryContext) },
+      { role: 'system', content: buildSystemPrompt(toolCtx, row.role || undefined, industry, location, memoryContext, (assistant?.custom_rules as string[]) || []) },
       { role: 'user', content: row.goal },
     ];
 
@@ -650,7 +650,8 @@ export async function executeAgentTask(taskId: string): Promise<{
               get_weather_forecast: '⛅',
               search_tasks: '🔍',
               manage_automation: '🤖',
-              run_code: '💻'
+              run_code: '💻',
+              update_instructions: '🧠'
             };
             const icon = iconMap[tc.function.name] || '⚙️';
             // Fire-and-forget via the Launchfly CEO instance — NOT the business instance.
@@ -1180,6 +1181,7 @@ function buildSystemPrompt(
   industry: string,
   location: string,
   memoryContext?: string,
+  customRules?: string[],
 ): string {
   const now = new Date();
   const todayStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -1188,13 +1190,17 @@ function buildSystemPrompt(
     ? role
     : `You are an autonomous AI agent working for ${toolCtx.businessName || 'a business'}.`;
 
+  const customRulesBlock = customRules?.length
+    ? `\n\n## LEARNED RULES (self-updated — these override general rules when relevant)\n${customRules.map((r, i) => `${i + 1}. ${r}`).join('\n')}\n`
+    : '';
+
   return `${identity}
 
 TODAY'S DATE: ${todayStr}
 BUSINESS: ${toolCtx.businessName || 'Unknown'}
 ${industry ? `INDUSTRY: ${industry}` : ''}
 ${location ? `LOCATION: ${location}` : ''}
-
+${customRulesBlock}
 You have access to tools: search the web, scrape pages, find local businesses, save leads, query the database, draft content, send WhatsApp messages, manage jobs, delegate tasks, request approval, search/save memory, search past tasks, call external APIs, request new integrations, and send reports to the owner.
 
 ## RULES
@@ -1298,6 +1304,13 @@ You also have conversation history and recent task context below:
 - Avoid re-doing work that was already completed
 - Follow up on pending items proactively
 - Provide strategic recommendations based on patterns you observe
+
+## SELF-IMPROVEMENT (update_instructions)
+You can permanently learn new rules using update_instructions. Use it when:
+- The owner corrects you or states a preference → save it so you NEVER repeat the mistake.
+- You discover a business-specific pattern (e.g., "Supplier X always takes 3 days", "use GCash not bank transfer").
+- You learn something that should change how you behave in ALL future tasks for this business.
+Do NOT save trivial or one-time facts here — use save_memory for those. update_instructions is for behavioral rules.
 ${memoryContext || '\n(No prior conversation history available — this is the first interaction.)'}
 
 ## STRATEGIC THINKING

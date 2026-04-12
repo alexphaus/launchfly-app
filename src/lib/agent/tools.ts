@@ -27,7 +27,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'search_tasks',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -495,6 +495,22 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  // ── Update Instructions (self-improvement) ───────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'update_instructions',
+      description: 'Add a new learned rule to your own instructions. This permanently changes how you behave for this business. Use when: (1) the owner corrects you or states a preference ("always quote in PHP", "never contact suppliers on Sunday"), (2) you discover a pattern that should persist ("Supplier X is unreliable", "use GCash not bank transfer for Manila jobs"), (3) you learn a business-specific fact that affects decisions. Rules are capped at 50 — the oldest low-value rule is dropped if full. The owner can see and edit these rules in the Assistant settings UI.',
+      parameters: {
+        type: 'object',
+        properties: {
+          rule: { type: 'string', description: 'The rule to add. Be concise and specific (1-2 sentences max). Example: "Always ask for barangay when processing Manila permits."' },
+          replace_rule_index: { type: 'number', description: 'Optional: 0-based index of an existing rule to replace instead of appending. Use when updating/correcting a previous rule.' },
+        },
+        required: ['rule'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -595,6 +611,9 @@ export async function executeTool(
 
     case 'run_code':
       return executeRunCode(args.code as string, (args.timeout_ms as number) || 5000);
+
+    case 'update_instructions':
+      return executeUpdateInstructions(args.rule as string, toolCtx.businessId, args.replace_rule_index as number | undefined);
 
     default:
       return `Unknown tool: ${name}`;
@@ -1972,6 +1991,63 @@ async function executeManageAutomation(
     default:
       return `Unknown action: ${action}. Use: create, update, delete, list`;
   }
+}
+
+// ─── update_instructions (self-improvement via custom_rules) ─────────────
+
+const MAX_CUSTOM_RULES = 50;
+
+async function executeUpdateInstructions(
+  rule: string,
+  businessId: string,
+  replaceIndex?: number,
+): Promise<string> {
+  const supabase = getSupabase();
+
+  // Sanitize: strip any attempt to inject system-level overrides
+  const cleaned = rule.replace(/ignore previous|forget all|override system/gi, '[BLOCKED]').trim();
+  if (cleaned.length < 5) return 'Rule too short. Provide a clear, specific instruction (at least 5 characters).';
+  if (cleaned.length > 300) return 'Rule too long. Keep it under 300 characters — be concise.';
+
+  // Fetch the active assistant for this business
+  const { data: assistant, error: fetchErr } = await supabase
+    .from('assistants')
+    .select('id, custom_rules')
+    .eq('business_id', businessId)
+    .eq('active', true)
+    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+    .limit(1)
+    .maybeSingle();
+
+  if (fetchErr || !assistant) return `Failed to find active assistant: ${fetchErr?.message || 'none found'}`;
+
+  const rules: string[] = (assistant.custom_rules as string[]) || [];
+
+  if (typeof replaceIndex === 'number' && replaceIndex >= 0 && replaceIndex < rules.length) {
+    // Replace an existing rule
+    const old = rules[replaceIndex];
+    rules[replaceIndex] = cleaned;
+    const { error: saveErr } = await supabase
+      .from('assistants')
+      .update({ custom_rules: rules })
+      .eq('id', assistant.id);
+    if (saveErr) return `Failed to update rule: ${saveErr.message}`;
+    return `✅ Updated rule #${replaceIndex + 1}.\nOld: "${old}"\nNew: "${cleaned}"\n(${rules.length} rules total)`;
+  }
+
+  // Append new rule — drop oldest if over cap
+  if (rules.length >= MAX_CUSTOM_RULES) {
+    rules.shift(); // drop oldest
+  }
+  rules.push(cleaned);
+
+  const { error: saveErr } = await supabase
+    .from('assistants')
+    .update({ custom_rules: rules })
+    .eq('id', assistant.id);
+
+  if (saveErr) return `Failed to save rule: ${saveErr.message}`;
+  return `✅ Learned: "${cleaned}"\n(${rules.length}/${MAX_CUSTOM_RULES} rules. Owner can review/edit in Assistant settings → Custom Rules.)`;
 }
 
 // ─── run_code (Sandboxed JS execution via Node VM) ──────────────────────

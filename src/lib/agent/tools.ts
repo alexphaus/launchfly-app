@@ -2656,7 +2656,6 @@ async function executeBrowseWeb(
   }
 
   let stagehand: InstanceType<typeof import('@browserbasehq/stagehand').Stagehand> | null = null;
-  const abortController = new AbortController();
   let abortTimer: ReturnType<typeof setTimeout> | null = null;
 
   try {
@@ -2684,10 +2683,11 @@ async function executeBrowseWeb(
       await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeoutMs: 30_000 });
     }
 
-    // Set up abort timer for proper cancellation
-    abortTimer = setTimeout(() => {
-      console.warn(`[browse_web] Aborting session after ${BROWSE_WEB_TIMEOUT_MS / 1000}s`);
-      abortController.abort();
+    // Set up abort timer — close the session to force stop
+    const stagehandRef = stagehand;
+    abortTimer = setTimeout(async () => {
+      console.warn(`[browse_web] Closing session after ${BROWSE_WEB_TIMEOUT_MS / 1000}s timeout`);
+      try { await stagehandRef.close(); } catch {}
     }, BROWSE_WEB_TIMEOUT_MS);
 
     // Use the agent for multi-step task execution
@@ -2699,7 +2699,6 @@ async function executeBrowseWeb(
       instruction: task,
       maxSteps,
       page,
-      signal: abortController.signal,
     });
 
     // Extract structured data if schema provided

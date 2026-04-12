@@ -416,15 +416,15 @@ export const AGENT_TOOLS = [
         type: 'object',
         properties: {
           service_name: { type: 'string', description: 'Short identifier for the service (e.g. "creatomate", "elevenlabs", "apollo")' },
-          display_name: { type: 'string', description: 'Human-readable service name (e.g. "Creatomate Video API")' },
-          signup_url: { type: 'string', description: 'URL where the owner can create an account and get an API key' },
-          base_url: { type: 'string', description: 'The API base URL (e.g. "https://api.creatomate.com/v1")' },
-          reason: { type: 'string', description: 'Why this integration would help the business (1-2 sentences)' },
+          display_name: { type: 'string', description: 'Human-readable service name (e.g. "Creatomate Video API"). Required for new requests; optional if activating.' },
+          signup_url: { type: 'string', description: 'URL where the owner can create an account and get an API key. Required for new requests; optional if activating a pending request.' },
+          base_url: { type: 'string', description: 'The API base URL (e.g. "https://api.creatomate.com/v1"). Required for new requests; optional if activating a pending request.' },
+          reason: { type: 'string', description: 'Why this integration would help the business (1-2 sentences). Required for new requests; optional if activating a pending request.' },
           estimated_cost: { type: 'string', description: 'Estimated monthly cost or per-use cost (e.g. "$9/mo", "~$0.10/video")' },
           auth_type: { type: 'string', enum: ['bearer', 'basic', 'query_param', 'custom_header'], description: 'How the API key should be sent (default: bearer)' },
-          api_key: { type: 'string', description: 'If the owner already provided the API key in conversation, pass it here to activate the integration immediately without sending a WhatsApp request.' },
+          api_key: { type: 'string', description: 'If the owner already provided the API key in conversation, pass it here to activate the integration immediately.' },
         },
-        required: ['service_name', 'display_name', 'signup_url', 'base_url', 'reason'],
+        required: ['service_name'],
       },
     },
   },
@@ -1956,8 +1956,8 @@ async function executeRequestIntegration(
   const estimatedCost = (args.estimated_cost as string) || 'unknown';
   const authType = (args.auth_type as string) || 'bearer';
 
-  if (!serviceName || !signupUrl || !baseUrl || !reason) {
-    return 'Error: service_name, signup_url, base_url, and reason are all required.';
+  if (!serviceName) {
+    return 'Error: service_name is required.';
   }
   if (!toolCtx.ownerPhone) {
     return 'Failed: No owner phone configured — cannot send integration request.';
@@ -1970,13 +1970,37 @@ async function executeRequestIntegration(
   // ── Check if already exists ──
   const { data: existing } = await supabase
     .from('business_integrations')
-    .select('id, status, api_key_encrypted')
+    .select('id, status, api_key_encrypted, display_name')
     .eq('business_id', toolCtx.businessId)
     .eq('service_name', serviceName)
     .maybeSingle();
 
   if (existing?.status === 'active' && existing.api_key_encrypted) {
     return `Integration "${serviceName}" is already active. Use call_api to use it.`;
+  }
+
+  // ── If activating an EXISTING pending request ──
+  if (existing?.status === 'pending' && providedKey) {
+    const { data: integration, error } = await supabase
+      .from('business_integrations')
+      .update({
+        api_key_encrypted: providedKey,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select('id')
+      .single();
+
+    if (error) return `Failed to activate integration: ${error.message}`;
+
+    const resolvedName = (existing as any).display_name || existing.id || displayName;
+    return `✅ Integration "${resolvedName}" is now ACTIVE (ID: ${integration.id}). You can use call_api with service_name="${serviceName}" immediately.`;
+  }
+
+  // ── Make fields required ONLY for new requests ──
+  if (!signupUrl || !baseUrl || !reason) {
+    return 'Error: For new integrations, signup_url, base_url, and reason are required. If you are activating an existing pending integration, provide api_key and service_name.';
   }
 
   // ── If owner already provided the API key, activate immediately ──

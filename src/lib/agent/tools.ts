@@ -2044,19 +2044,27 @@ async function executeRequestIntegration(
     `🔗 Sign up: ${signupUrl}\n\n` +
     `To activate, sign up and share the API key with me in our chat. I'll handle the rest.`;
 
+  // Send via Launchfly CEO instance (same as send_report / request_approval)
+  // to prevent feedback loops — business instance messages can echo back as
+  // incoming on the CEO webhook and trigger new agent tasks.
   try {
-    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
-    const provider = await getWhatsAppProvider(toolCtx.businessId);
-    await provider.sendWhatsApp(toolCtx.ownerPhone, msg, toolCtx.businessId);
-  } catch (sendErr) {
-    // Try Evolution direct as fallback
-    try {
+    const launchflyInstance = process.env.LAUNCHFLY_INSTANCE_NAME;
+    if (launchflyInstance) {
       const evo = await import('@/lib/evolution');
-      const creds = await evo.getCredentials(toolCtx.businessId);
+      const creds = {
+        baseUrl: process.env.EVOLUTION_BASE_URL!,
+        apiKey: process.env.EVOLUTION_API_KEY!,
+        instanceName: launchflyInstance,
+      };
       await evo.sendWhatsAppWithCreds(toolCtx.ownerPhone, msg, creds);
-    } catch {
-      return `Integration request saved (ID: ${integration.id}) but failed to notify owner via WhatsApp.`;
+    } else {
+      // Fallback: use the business provider if CEO instance not configured
+      const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+      const provider = await getWhatsAppProvider(toolCtx.businessId);
+      await provider.sendWhatsApp(toolCtx.ownerPhone, msg, toolCtx.businessId);
     }
+  } catch {
+    return `Integration request saved (ID: ${integration.id}) but failed to notify owner via WhatsApp.`;
   }
 
   return `Integration request sent to owner for "${displayName}" (ID: ${integration.id}). Status: pending. When the owner replies with the API key, it will be activated and available via call_api.`;

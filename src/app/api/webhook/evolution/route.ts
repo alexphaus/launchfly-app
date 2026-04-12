@@ -108,10 +108,11 @@ export async function POST(request: NextRequest) {
       }
 
       // ── Agent tool update / report echo filter ──────────────
-      // If a message looks like an agent-generated tool status update or report
-      // (e.g. "_🔍 search_web..._" or "🤖 *Agent Report*"), skip it to prevent
-      // feedback loops between WhatsApp instances.
-      const AGENT_ECHO_PATTERN = /^_[^\n]{1,60}\.\.\._$|^🤖 \*Agent Report/;
+      // If a message looks like an agent-generated tool status update, report,
+      // integration request, or approval request, skip it to prevent feedback
+      // loops between WhatsApp instances.
+      // Matches: _🔍 search_web..._  |  _🔍 search_web: query text_  |  🤖 *Agent Report  |  🔌 *New Integration  |  🔔 *Approval Required
+      const AGENT_ECHO_PATTERN = /^_[^\n]{1,120}_$|^🤖 \*Agent Report|^🔌 \*New Integration|^🔔 \*Approval Required/;
       if (AGENT_ECHO_PATTERN.test(outText.trim())) {
         return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo' });
       }
@@ -344,10 +345,10 @@ export async function POST(request: NextRequest) {
 
     // ── Agent echo filter (incoming path) ─────────────────────────
     // Prevent feedback loops: if this message looks like an agent-generated
-    // tool status update ("_🔍 search_web..._") or agent report ("🤖 *Agent Report*"),
-    // skip it. These are sent by the agent to the owner and should never trigger
-    // new agent tasks when received on another WhatsApp instance.
-    const AGENT_ECHO_RE = /^_[^\n]{1,60}\.\.\._$|^🤖 \*Agent Report/;
+    // tool status update, report, integration request, or approval request,
+    // skip it. These should never trigger new agent tasks.
+    // Matches: _🔍 search_web..._  |  _🔍 search_web: query text_  |  🤖 *Agent Report  |  🔌 *New Integration  |  🔔 *Approval Required
+    const AGENT_ECHO_RE = /^_[^\n]{1,120}_$|^🤖 \*Agent Report|^🔌 \*New Integration|^🔔 \*Approval Required/;
     if (AGENT_ECHO_RE.test(messageText.trim())) {
       console.log(`   🔁 Skipping agent echo: "${messageText.substring(0, 50)}"`);
       return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo' });
@@ -478,6 +479,26 @@ export async function POST(request: NextRequest) {
         }
         rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
         enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call'];
+      }
+
+      // ── Dedup guard: skip if an agent task is already running recently ──
+      // Prevents cascading tasks when multiple messages arrive in quick
+      // succession (e.g. agent echoes that slip past filters, or rapid taps).
+      const DEDUP_WINDOW_SECS = 15;
+      const recentCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
+      const { data: recentTask } = await supabase
+        .from('agent_tasks')
+        .select('id, status, created_at')
+        .eq('business_id', businessId)
+        .in('status', ['pending', 'running'])
+        .gte('created_at', recentCutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentTask) {
+        console.log(`   ⏳ Dedup: skipping dispatch — task ${recentTask.id} already ${recentTask.status} (created ${recentTask.created_at})`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'dedup_recent_task', existingTaskId: recentTask.id });
       }
 
       const dispatched = await dispatchAgentViaQStash({

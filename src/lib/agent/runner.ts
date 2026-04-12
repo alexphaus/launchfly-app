@@ -356,9 +356,21 @@ export async function executeAgentTask(taskId: string): Promise<{
   // Fall back to well-known OS names, then to the active assistant name.
   let repName: string | undefined;
   if (row.role) {
-    // Extract short name: take everything before " — " or " - " or use the full role
+    // Extract a short display name from the role string.
+    // Patterns: "You are the AI Chief of Staff" → "Chief of Staff"
+    //           "Trend Scout — Weekly..." → "Trend Scout"
     const dashIdx = row.role.search(/\s[—–-]\s/);
-    repName = dashIdx > 0 ? row.role.substring(0, dashIdx).trim() : row.role.substring(0, 40).trim();
+    if (dashIdx > 0 && dashIdx < 60) {
+      repName = row.role.substring(0, dashIdx).trim();
+    } else {
+      // Try to extract role title from "You are the [ROLE] for ..."
+      const roleMatch = row.role.match(/You are (?:the |an? )?(?:AI )?(.+?)(?:\s+for\s|\s+working\s|\.\s|\n)/i);
+      if (roleMatch) {
+        repName = roleMatch[1].trim().substring(0, 40);
+      } else {
+        repName = row.role.substring(0, 30).trim();
+      }
+    }
   }
   if (!repName) repName = assistant?.name;
 

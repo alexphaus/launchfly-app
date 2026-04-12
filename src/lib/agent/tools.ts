@@ -149,8 +149,8 @@ export const AGENT_TOOLS = [
         properties: {
           table: {
             type: 'string',
-            enum: ['customers', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers'],
-            description: 'Which table to query',
+            enum: ['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers'],
+            description: 'Which table to query. Use "leads" for agent-generated leads (from save_leads / search_google_maps). Use "hunter_prospects" for Launchfly sales pipeline only.',
           },
           filters: {
             type: 'object',
@@ -904,7 +904,7 @@ async function executeSendReport(
 
 // ─── query_database ──────────────────────────────────────────────────────
 
-const ALLOWED_TABLES = new Set(['customers', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers']);
+const ALLOWED_TABLES = new Set(['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers']);
 
 // Only allow simple column names in select (no subqueries, no functions)
 function sanitizeSelect(select: string): string {

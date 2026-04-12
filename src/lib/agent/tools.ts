@@ -149,8 +149,8 @@ export const AGENT_TOOLS = [
         properties: {
           table: {
             type: 'string',
-            enum: ['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers'],
-            description: 'Which table to query. Use "leads" for agent-generated leads (from save_leads / search_google_maps). Use "hunter_prospects" for Launchfly sales pipeline only.',
+            enum: ['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers', 'assistants', 'agent_tasks'],
+            description: 'Which table to query. Use "leads" for agent-generated leads (from save_leads / search_google_maps). Use "assistants" to see available specialized agents.',
           },
           filters: {
             type: 'object',
@@ -945,7 +945,7 @@ async function executeSendReport(
 
 // ─── query_database ──────────────────────────────────────────────────────
 
-const ALLOWED_TABLES = new Set(['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers']);
+const ALLOWED_TABLES = new Set(['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers', 'assistants', 'agent_tasks']);
 
 // Only allow simple column names in select (no subqueries, no functions)
 function sanitizeSelect(select: string): string {

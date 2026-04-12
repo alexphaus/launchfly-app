@@ -154,7 +154,7 @@ export const AGENT_TOOLS = [
           },
           filters: {
             type: 'object',
-            description: 'Key-value filters to apply (column: value)',
+            description: 'Filters object. Simple values = equality (column: value). For operators, use: {"column": {"gte": "2025-01-01"}} or {"column": {"lte": 100}} or {"column": {"ilike": "%keyword%"}}. Supported operators: gte, lte, gt, lt, ilike, neq.',
           },
           limit: { type: 'number', description: 'Max rows to return (default 25)' },
           select: { type: 'string', description: 'Columns to select (comma-separated, default *)' },
@@ -233,11 +233,11 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'manage_job',
-      description: 'Create or update a job/purchase order in the jobs table. Use to log new jobs from scope extraction, update status (draft/quoting/ready/blocked/completed), add materials, record quotes, or flag blockers.',
+      description: 'Create, update, list, or delete jobs/purchase orders in the jobs table. Use to log new jobs from scope extraction, update status, add materials, record quotes, or flag blockers.',
       parameters: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['create', 'update'], description: 'Create a new job or update an existing one' },
+          action: { type: 'string', enum: ['create', 'update', 'list', 'delete'], description: 'Create, update, list, or delete a job' },
           jobId: { type: 'string', description: 'Job ID (required for update)' },
           title: { type: 'string', description: 'Job title/name (e.g. "Smith HVAC repair")' },
           status: { type: 'string', enum: ['draft', 'quoting', 'ready', 'blocked', 'completed'], description: 'Job status' },
@@ -968,12 +968,33 @@ async function executeQueryDatabase(
 
   let query = supabase.from(table).select(sanitizeSelect(select)).eq('business_id', businessId);
 
-  // Apply safe filters
+  // Apply safe filters (supports equality + comparison operators)
   if (filters) {
     for (const [key, value] of Object.entries(filters)) {
-      // Only allow simple equality filters — prevent injection
-      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        query = query.eq(key, value);
+      const safeKey = key.replace(/[^a-zA-Z0-9_]/g, '');
+      if (!safeKey) continue;
+
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        // Operator-style: { column: { gte: "2025-01-01" } }
+        const ops = value as Record<string, unknown>;
+        for (const [op, opVal] of Object.entries(ops)) {
+          if (typeof opVal !== 'string' && typeof opVal !== 'number') continue;
+          switch (op) {
+            case 'gte': query = query.gte(safeKey, opVal); break;
+            case 'lte': query = query.lte(safeKey, opVal); break;
+            case 'gt': query = query.gt(safeKey, opVal); break;
+            case 'lt': query = query.lt(safeKey, opVal); break;
+            case 'neq': query = query.neq(safeKey, opVal); break;
+            case 'ilike': {
+              // Sanitize LIKE pattern — only allow % wildcards
+              const pattern = String(opVal).replace(/[^a-zA-Z0-9%_ @.-]/g, '');
+              query = query.ilike(safeKey, pattern);
+              break;
+            }
+          }
+        }
+      } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        query = query.eq(safeKey, value);
       }
     }
   }
@@ -1132,6 +1153,8 @@ async function executeSendWhatsApp(
 
 // ─── manage_job (create/update jobs table) ──────────────────────────────
 
+const VALID_JOB_STATUSES = new Set(['draft', 'quoting', 'ready', 'blocked', 'completed']);
+
 async function executeManageJob(
   args: Record<string, unknown>,
   businessId: string,
@@ -1139,11 +1162,39 @@ async function executeManageJob(
   const supabase = getSupabase();
   const action = args.action as string;
 
+  if (action === 'list') {
+    const statusFilter = args.status as string | undefined;
+    let query = supabase
+      .from('jobs')
+      .select('id, title, status, description, materials_needed, blockers, updated_at')
+      .eq('business_id', businessId)
+      .order('updated_at', { ascending: false })
+      .limit(20);
+
+    if (statusFilter && VALID_JOB_STATUSES.has(statusFilter)) {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data, error } = await query;
+    if (error) return `Failed to list jobs: ${error.message}`;
+    if (!data?.length) return 'No jobs found.';
+
+    return data.map((j, i) => {
+      const blockerStr = j.blockers?.length ? ` ⚠️ Blockers: ${j.blockers.join(', ')}` : '';
+      return `${i + 1}. "${j.title}" (ID: ${j.id}, status: ${j.status})${blockerStr}`;
+    }).join('\n');
+  }
+
   if (action === 'create') {
+    const status = (args.status as string) || 'draft';
+    if (!VALID_JOB_STATUSES.has(status)) {
+      return `Invalid status "${status}". Use: ${[...VALID_JOB_STATUSES].join(', ')}`;
+    }
+
     const row: Record<string, unknown> = {
       business_id: businessId,
       title: (args.title as string) || 'Untitled Job',
-      status: (args.status as string) || 'draft',
+      status,
       description: (args.description as string) || null,
       materials_needed: args.materials_needed || [],
       blockers: args.blockers || [],
@@ -1164,10 +1215,14 @@ async function executeManageJob(
     const jobId = args.jobId as string;
     if (!jobId) return 'jobId is required for update action.';
 
+    if (args.status && !VALID_JOB_STATUSES.has(args.status as string)) {
+      return `Invalid status "${args.status}". Use: ${[...VALID_JOB_STATUSES].join(', ')}`;
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (args.title) updates.title = args.title;
-    if (args.status) updates.status = args.status;
-    if (args.description) updates.description = args.description;
+    if (args.title !== undefined) updates.title = args.title;
+    if (args.status !== undefined) updates.status = args.status;
+    if (args.description !== undefined) updates.description = args.description;
     if (args.materials_needed) updates.materials_needed = args.materials_needed;
     if (args.blockers) updates.blockers = args.blockers;
     if (args.metadata) updates.metadata = args.metadata;
@@ -1184,7 +1239,23 @@ async function executeManageJob(
     return `Job updated: "${data.title}" (status: ${data.status})`;
   }
 
-  return `Unknown action: ${action}. Use "create" or "update".`;
+  if (action === 'delete') {
+    const jobId = args.jobId as string;
+    if (!jobId) return 'jobId is required for delete action.';
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .delete()
+      .eq('id', jobId)
+      .eq('business_id', businessId)
+      .select('id, title')
+      .single();
+
+    if (error) return `Failed to delete job: ${error.message}`;
+    return `Job deleted: "${data.title}" (ID: ${data.id})`;
+  }
+
+  return `Unknown action: ${action}. Use "create", "update", "list", or "delete".`;
 }
 
 
@@ -1219,6 +1290,24 @@ async function executeDelegateTask(
     const rawTools = assistant.tools_enabled;
     const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
 
+    // Create sub-task row in DB so fire-and-forget tasks are still tracked
+    const subTaskId = crypto.randomUUID();
+    const { error: insertErr } = await supabase.from('agent_tasks').insert({
+      id: subTaskId,
+      business_id: toolCtx.businessId,
+      status: 'pending',
+      goal: `[DELEGATED TASK] ${instruction}`,
+      role: assistant.system_prompt,
+      messages: [],
+      steps_used: 0,
+      tool_log: [],
+      owner_phone: toolCtx.ownerPhone || null,
+      enabled_tools: enabledTools,
+      parent_task_id: toolCtx.taskId || null,
+    });
+
+    if (insertErr) return `Failed to create sub-task: ${insertErr.message}`;
+
     const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
       method: 'POST',
       headers: {
@@ -1227,20 +1316,14 @@ async function executeDelegateTask(
         'Upstash-Retries': '1',
         'Upstash-Delay': '1s',
       },
-      body: JSON.stringify({
-        businessId: toolCtx.businessId,
-        goal: `[DELEGATED TASK] ${instruction}`,
-        role: assistant.system_prompt,
-        enabledTools,
-        ownerPhone: toolCtx.ownerPhone,
-      }),
+      body: JSON.stringify({ taskId: subTaskId }),
     });
 
     if (!res.ok) {
       return `Failed: QStash returned ${res.status}`;
     }
 
-    return `Successfully dispatched task to ${assistantConfigName}. The agent will work in the background.`;
+    return `Successfully dispatched task to ${assistantConfigName} (task ID: ${subTaskId}). The agent will work in the background.`;
   } catch (err) {
     return `Failed to delegate: ${err instanceof Error ? err.message : String(err)}`;
   }
@@ -1708,7 +1791,11 @@ async function executeCallApi(
   };
 
   // Attach authentication
-  const apiKey = integration.api_key_encrypted; // TODO: decrypt when encryption is added
+  // SECURITY TODO: api_key_encrypted is currently stored in PLAINTEXT.
+  // Implement AES-256-GCM encryption using a ENCRYPTION_KEY env var before storing,
+  // and decrypt here before use. See: https://nodejs.org/api/crypto.html#cryptocipher
+  const apiKey = integration.api_key_encrypted;
+  if (!apiKey) return `Integration "${serviceName}" has no API key configured.`;
   const authType = integration.auth_type || 'bearer';
   const authHeader = integration.auth_header || 'Authorization';
 
@@ -2208,12 +2295,22 @@ async function executeMakeCall(
 
   // If using default agent, build voice-optimized system prompt from assistant config
   if (defaultAgentId && defaultFromNumber) {
-    const { data: assistant } = await supabase
+    // Find the business's customer-facing assistant (the one with a receptionist-style goal)
+    // Prefer matching by toolCtx.assistantName if available, otherwise find the main receptionist
+    let assistantQuery = supabase
       .from('assistants')
       .select('system_prompt, knowledge_base, custom_rules, tone, goal, name')
       .eq('business_id', toolCtx.businessId)
-      .eq('active', true)
-      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+      .eq('active', true);
+
+    if (toolCtx.assistantName) {
+      assistantQuery = assistantQuery.eq('name', toolCtx.assistantName);
+    } else {
+      // Find the receptionist: has a goal set (book_consultation, close_sale, etc.)
+      assistantQuery = assistantQuery.not('goal', 'is', null);
+    }
+
+    const { data: assistant } = await assistantQuery
       .limit(1)
       .maybeSingle();
 

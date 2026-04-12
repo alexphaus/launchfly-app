@@ -52,6 +52,12 @@ const STALE_TASK_MINUTES = 5;         // Auto-fail tasks stuck longer than this
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
+// Some tools legitimately need more time (e.g. Apify actor runs, browser automation)
+const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
+  search_google_maps: 55_000,  // Apify actor runs take 30-50s
+  browse_web: 125_000,         // Browserbase sessions up to 2 min
+  make_call: 30_000,           // Retell API call setup
+};
 const LLM_TIMEOUT_MS = 15_000;        // Max time for a single LLM call (15s — DeepSeek is fast)
 const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)
 
@@ -348,7 +354,7 @@ export async function executeAgentTask(taskId: string): Promise<{
     .select('name, custom_rules')
     .eq('business_id', row.business_id)
     .eq('active', true)
-    .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+    .not('goal', 'is', null)
     .limit(1)
     .maybeSingle();
 
@@ -683,8 +689,9 @@ export async function executeAgentTask(taskId: string): Promise<{
 
           let toolResult: string;
           try {
+            const toolTimeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
+            const timer = setTimeout(() => controller.abort(), toolTimeout);
             try {
               const toolPromise = executeTool(tc.function.name, toolArgs, toolCtx);
               toolPromise.catch(() => {});
@@ -692,7 +699,7 @@ export async function executeAgentTask(taskId: string): Promise<{
                 toolPromise,
                 new Promise<string>((_, reject) => {
                   controller.signal.addEventListener('abort', () =>
-                    reject(new Error(`Tool ${tc.function.name} timed out after ${TOOL_TIMEOUT_MS / 1000}s`))
+                    reject(new Error(`Tool ${tc.function.name} timed out after ${toolTimeout / 1000}s`))
                   );
                 }),
               ]);

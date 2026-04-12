@@ -27,7 +27,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'search_tasks',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -514,6 +514,41 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  // ── Send Email ─────────────────────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'send_email',
+      description: 'Send an email on behalf of the business. Use for outreach, follow-ups, quotes, appointment confirmations, etc. The email is sent from the business\'s configured sender address via Resend. IMPORTANT: For cold outreach to new contacts, use request_approval first to get owner confirmation before sending.',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Recipient email address' },
+          subject: { type: 'string', description: 'Email subject line' },
+          body: { type: 'string', description: 'Email body (plain text — newlines will be converted to <br> for HTML rendering)' },
+          reply_to: { type: 'string', description: 'Optional reply-to email address (defaults to business sender)' },
+        },
+        required: ['to', 'subject', 'body'],
+      },
+    },
+  },
+  // ── Make Call (Retell AI voice call) ───────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'make_call',
+      description: 'Trigger an AI voice call to a phone number using Retell AI. The call uses the business\'s active assistant configuration (knowledge base, pricing, FAQ, tone, goal) to have an intelligent phone conversation. Use for lead follow-up, appointment reminders, reactivation, review collection. IMPORTANT: For cold calls to new contacts, use request_approval first to get owner confirmation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: 'Phone number to call (E.164 format preferred, e.g. +14155551234)' },
+          customer_name: { type: 'string', description: 'Name of the person being called (used in conversation)' },
+          purpose: { type: 'string', description: 'Purpose/context of the call (e.g. "Follow up on HVAC quote for duct cleaning", "Book consultation for roof repair"). This shapes the call conversation.' },
+        },
+        required: ['phone', 'purpose'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -617,6 +652,12 @@ export async function executeTool(
 
     case 'update_instructions':
       return executeUpdateInstructions(args.rule as string, toolCtx.businessId, args.replace_rule_index as number | undefined);
+
+    case 'send_email':
+      return executeSendEmail(args as Record<string, unknown>, toolCtx);
+
+    case 'make_call':
+      return executeMakeCall(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -2055,6 +2096,235 @@ async function executeUpdateInstructions(
 
   if (saveErr) return `Failed to save rule: ${saveErr.message}`;
   return `✅ Learned: "${cleaned}"\n(${rules.length}/${MAX_CUSTOM_RULES} rules. Owner can review/edit in Assistant settings → Custom Rules.)`;
+}
+
+// ─── send_email (via Resend) ─────────────────────────────────────────────
+
+async function executeSendEmail(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const to = (args.to as string || '').trim();
+  const subject = (args.subject as string || '').trim();
+  const body = (args.body as string || '').trim();
+  const replyTo = (args.reply_to as string || '').trim() || undefined;
+
+  if (!to) return 'Error: "to" email address is required.';
+  if (!subject) return 'Error: "subject" is required.';
+  if (!body) return 'Error: "body" is required.';
+
+  // Basic email validation
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return `Error: "${to}" is not a valid email address.`;
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) return 'Error: RESEND_API_KEY is not configured.';
+
+  const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.FROM_EMAIL || 'hello@launchfly.ai';
+  const senderName = toolCtx.businessName || 'Launchfly';
+
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(resendApiKey);
+
+    await resend.emails.send({
+      from: `${senderName} <${fromEmail}>`,
+      to,
+      subject,
+      html: body.replace(/\n/g, '<br>'),
+      ...(replyTo ? { reply_to: replyTo } : {}),
+    });
+
+    return `✅ Email sent to ${to}\nSubject: ${subject}`;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Failed to send email: ${msg}`;
+  }
+}
+
+// ─── make_call (Retell AI voice call) ────────────────────────────────────
+
+async function executeMakeCall(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const rawPhone = (args.phone as string || '').trim();
+  const customerName = (args.customer_name as string || '').trim() || 'there';
+  const purpose = (args.purpose as string || '').trim();
+
+  if (!rawPhone) return 'Error: "phone" number is required.';
+  if (!purpose) return 'Error: "purpose" is required — describe why you are calling.';
+
+  const phoneNorm = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`;
+
+  const retellApiKey = process.env.RETELL_API_KEY;
+  if (!retellApiKey) return 'Error: RETELL_API_KEY is not configured.';
+
+  const supabase = getSupabase();
+
+  // Load business context
+  const { data: biz } = await supabase
+    .from('businesses')
+    .select('name, business_data')
+    .eq('id', toolCtx.businessId)
+    .single();
+  const bizName = biz?.name || toolCtx.businessName || 'the team';
+  const bizConfig = (biz?.business_data || {}) as Record<string, unknown>;
+
+  // Determine Retell agent mode
+  const defaultAgentId = process.env.RETELL_DEFAULT_AGENT_ID || '';
+  const defaultFromNumber = process.env.RETELL_DEFAULT_FROM_NUMBER || '';
+  const fallbackAgentId = process.env.RETELL_AGENT_ID || '';
+  const fallbackFromNumber = process.env.RETELL_FROM_NUMBER || '';
+
+  let agentId = defaultAgentId || fallbackAgentId;
+  let fromNumber = defaultFromNumber || fallbackFromNumber;
+
+  if (!agentId || !fromNumber) {
+    return 'Error: Missing Retell agent ID or from number. Configure RETELL_DEFAULT_AGENT_ID + RETELL_DEFAULT_FROM_NUMBER env vars.';
+  }
+
+  const dynamicVars: Record<string, string> = {
+    customer_name: customerName,
+    business_name: bizName,
+    contractor_name: (bizConfig.ownerName as string) || '',
+  };
+
+  // If using default agent, build voice-optimized system prompt from assistant config
+  if (defaultAgentId && defaultFromNumber) {
+    const { data: assistant } = await supabase
+      .from('assistants')
+      .select('system_prompt, knowledge_base, custom_rules, tone, goal, name')
+      .eq('business_id', toolCtx.businessId)
+      .eq('active', true)
+      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+      .limit(1)
+      .maybeSingle();
+
+    const assistantName = assistant?.name || 'the assistant';
+    const tone = assistant?.tone || 'friendly';
+    const goal = assistant?.goal || 'book_consultation';
+    const ownerName = (bizConfig.ownerName as string) || 'the owner';
+    const niche = (bizConfig.niche as string) || 'General Service';
+
+    let voicePrompt = `You are ${assistantName}, an AI phone agent calling on behalf of ${bizName}.
+You are on a VOICE CALL — not text. Speak naturally like a real person on the phone.
+
+VOICE RULES (CRITICAL):
+- Keep every response to 1-2 SHORT sentences. This is a phone call, not a presentation.
+- Be conversational. Use natural speech patterns, contractions, brief pauses.
+- NEVER use emojis, bullet points, numbered lists, or any text formatting.
+- NEVER read out URLs, links, or long text.
+- Sound warm, confident, and human. Not scripted or robotic.
+- Match the prospect's energy. If they're short, be short. If they're chatty, be chattier.
+
+YOUR IDENTITY:
+- Name: ${assistantName}
+- Calling from: ${bizName}
+- Tone: ${tone}
+- Owner: ${ownerName}
+- Industry: ${niche}
+
+CALL PURPOSE: ${purpose}
+CUSTOMER NAME: ${customerName}
+
+`;
+
+    // Extract knowledge from Brain tab
+    if (assistant?.knowledge_base) {
+      const kb = assistant.knowledge_base as Record<string, unknown[]>;
+      if ((kb.pricing as { service: string; price: string; unit: string }[])?.length) {
+        voicePrompt += 'PRICING KNOWLEDGE (use naturally in conversation, don\'t list them):\n';
+        voicePrompt += (kb.pricing as { service: string; price: string; unit: string }[])
+          .map(p => `${p.service}: ${p.price}/${p.unit}`)
+          .join(', ') + '\n\n';
+      }
+      if ((kb.faq as { q: string; a: string }[])?.length) {
+        voicePrompt += 'KEY ANSWERS (paraphrase naturally, don\'t read verbatim):\n';
+        voicePrompt += (kb.faq as { q: string; a: string }[])
+          .slice(0, 6)
+          .map(f => `If asked "${f.q}" → ${f.a}`)
+          .join('\n') + '\n\n';
+      }
+      if ((kb.objections as { trigger: string; response: string }[])?.length) {
+        voicePrompt += 'OBJECTION RESPONSES (adapt to voice naturally):\n';
+        voicePrompt += (kb.objections as { trigger: string; response: string }[])
+          .map(o => `"${o.trigger}" → ${o.response}`)
+          .join('\n') + '\n\n';
+      }
+    }
+
+    if ((assistant?.custom_rules as string[])?.length) {
+      voicePrompt += 'RULES:\n' + (assistant!.custom_rules as string[]).map((r: string) => `- ${r}`).join('\n') + '\n\n';
+    }
+
+    // Call flow based on goal
+    const goalInstructions: Record<string, string> = {
+      close_sale: `CALL FLOW:
+1. Quick intro — say who you are and why you're calling (one sentence).
+2. Ask ONE qualifying question to hook them into conversation.
+3. If they engage, give a brief pitch (2-3 sentences max) focused on their biggest pain point.
+4. Handle objections with confidence — don't fold at the first "no". Push back once with value.
+5. Drive to action: "Want me to send you more details on WhatsApp right now?"
+6. If they say not interested TWICE, respect it. End warmly.`,
+      book_consultation: `CALL FLOW:
+1. Quick intro — say who you are and why you're calling (one sentence).
+2. Ask about their current situation — what are they dealing with?
+3. Based on their answer, explain how you can help (2 sentences max).
+4. Push for a booking: "I've got Thursday or Friday open — which works better?"
+5. If they hesitate, offer to send details on WhatsApp.`,
+      collect_review: `CALL FLOW:
+1. Quick intro — remind them of the recent service.
+2. Ask if everything went well.
+3. If happy: "Would you mind leaving us a quick review? I can text you the link."
+4. If issue: "I'm sorry to hear that. Let me have the owner reach out."`,
+      reactivate: `CALL FLOW:
+1. Quick intro — mention you haven't connected in a while.
+2. Ask if they have any upcoming projects or needs.
+3. Mention any current availability or seasonal relevance.
+4. Push for next step: schedule a visit, send a quote, or follow up on WhatsApp.`,
+    };
+
+    voicePrompt += (goalInstructions[goal] || goalInstructions.book_consultation) + '\n\n';
+    voicePrompt += `CRITICAL: When someone says "not interested" the first time, push back ONCE with a quick value prop. Only back off if they say no a second time.`;
+
+    dynamicVars.system_prompt = voicePrompt;
+    agentId = defaultAgentId;
+    fromNumber = defaultFromNumber;
+  }
+
+  try {
+    const retellRes = await fetch('https://api.retellai.com/v2/create-phone-call', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${retellApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from_number: fromNumber,
+        to_number: phoneNorm,
+        agent_id: agentId,
+        retell_llm_dynamic_variables: dynamicVars,
+        metadata: {
+          business_id: toolCtx.businessId,
+          source: 'agent_tool',
+          task_id: toolCtx.taskId || null,
+        },
+      }),
+    });
+
+    if (!retellRes.ok) {
+      const errBody = await retellRes.text();
+      return `Retell API error ${retellRes.status}: ${errBody.substring(0, 200)}`;
+    }
+
+    const retellData = (await retellRes.json()) as { call_id?: string };
+    return `✅ Voice call triggered to ${phoneNorm} (${customerName})\nCall ID: ${retellData.call_id || 'unknown'}\nPurpose: ${purpose}`;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Failed to trigger voice call: ${msg}`;
+  }
 }
 
 // ─── run_code (Sandboxed JS execution via Node VM) ──────────────────────

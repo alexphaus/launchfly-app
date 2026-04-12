@@ -663,7 +663,9 @@ export async function executeAgentTask(taskId: string): Promise<{
               search_tasks: '🔍',
               manage_automation: '🤖',
               run_code: '💻',
-              update_instructions: '🧠'
+              update_instructions: '🧠',
+              send_email: '📧',
+              make_call: '📞'
             };
             const icon = iconMap[tc.function.name] || '⚙️';
             // Fire-and-forget via the Launchfly CEO instance — NOT the business instance.

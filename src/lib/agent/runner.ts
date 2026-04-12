@@ -674,6 +674,36 @@ export async function executeAgentTask(taskId: string): Promise<{
               make_call: '📞'
             };
             const icon = iconMap[tc.function.name] || '⚙️';
+
+            // Build a short hint from args so the owner knows what's happening
+            const a = toolArgs;
+            let hint = '';
+            switch (tc.function.name) {
+              case 'search_web':        hint = (a.query as string || '').substring(0, 40); break;
+              case 'scrape_page':       { const u = (a.url as string || ''); hint = u.replace(/^https?:\/\/(www\.)?/, '').substring(0, 35); break; }
+              case 'search_google_maps': hint = `${(a.query as string || '').substring(0, 25)}${a.location ? ` in ${(a.location as string).substring(0, 15)}` : ''}`; break;
+              case 'save_leads':        { const action = (a.action as string) || 'save'; const count = (a.leads as unknown[] || a.updates as unknown[] || []).length; hint = action === 'update' ? `updating ${count} leads` : `${count} leads`; break; }
+              case 'query_database':    hint = `${a.table || ''}${a.filters ? ' (filtered)' : ''}`; break;
+              case 'search_tasks':      hint = (a.query as string || '').substring(0, 40); break;
+              case 'search_memory':     hint = (a.query as string || '').substring(0, 40); break;
+              case 'save_memory':       hint = `[${a.category || '?'}] ${(a.content as string || '').substring(0, 30)}`; break;
+              case 'draft_content':     hint = `${a.type || ''}: ${(a.topic as string || '').substring(0, 30)}`; break;
+              case 'manage_job':        hint = `${a.action || ''}${a.title ? ` "${(a.title as string).substring(0, 25)}"` : ''}`; break;
+              case 'manage_automation': hint = `${a.action || ''}${a.name ? ` "${(a.name as string).substring(0, 25)}"` : ''}`; break;
+              case 'call_api':          hint = `${(a.method as string || 'GET')} ${a.service_name || ''}${(a.path as string || '').substring(0, 20)}`; break;
+              case 'delegate_task':
+              case 'delegate_task_and_wait': hint = (a.assistantConfigName as string || '').substring(0, 30); break;
+              case 'browse_web':        hint = (a.url as string || (a.task as string || '').substring(0, 35)).replace(/^https?:\/\/(www\.)?/, '').substring(0, 35); break;
+              case 'run_code':          hint = (a.code as string || '').split('\n')[0].substring(0, 35); break;
+              case 'request_integration': hint = (a.display_name as string || a.service_name as string || '').substring(0, 30); break;
+              case 'analyze_inventory': hint = (a.action as string || ''); break;
+              case 'update_instructions': hint = (a.rule as string || '').substring(0, 35); break;
+              case 'make_call':         hint = (a.phone as string || '').substring(0, 15); break;
+              case 'request_approval':  hint = (a.question as string || '').substring(0, 35); break;
+              case 'get_weather_forecast': hint = (a.location as string || '').substring(0, 25); break;
+            }
+            const statusMsg = hint ? `_${icon} ${tc.function.name}: ${hint}_` : `_${icon} ${tc.function.name}..._`;
+
             // Fire-and-forget via the Launchfly CEO instance — NOT the business instance.
             // Using the business instance would cause the OTHER WhatsApp instance's webhook
             // to pick up the message as a new inbound, creating an infinite agent loop.
@@ -681,7 +711,7 @@ export async function executeAgentTask(taskId: string): Promise<{
             if (creds) {
               sendWhatsAppWithCreds(
                 toolCtx.ownerPhone,
-                `_${icon} ${tc.function.name}..._`,
+                statusMsg,
                 creds
               ).catch(() => {});
             }

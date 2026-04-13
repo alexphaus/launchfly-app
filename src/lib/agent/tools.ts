@@ -1798,7 +1798,8 @@ async function executeSearchMemory(
       // RPC not deployed yet — fall back to text search
     }
 
-    // Fallback: simple text search if vector search returned nothing
+    // Fallback: text search if vector search returned nothing
+    // No hardcoded stop words — just filter by word length (works in any language)
     if (results.length === 0) {
       let q = supabase
         .from('ai_memories')
@@ -1809,17 +1810,39 @@ async function executeSearchMemory(
         .limit(limit);
 
       if (category) q = q.eq('category', category);
-      // Simple keyword matching as fallback
-      q = q.ilike('content', `%${query.split(' ').slice(0, 3).join('%')}%`);
+      
+      // Extract meaningful words (>2 chars) — language-agnostic
+      const words = query
+        .replace(/[%_'"\\]/g, ' ')
+        .split(/\s+/)
+        .map(w => w.trim())
+        .filter(w => w.length > 2)
+        .slice(0, 5);
+        
+      if (words.length > 0) {
+        const orFilter = words.map(w => `content.ilike.%${w}%`).join(',');
+        q = q.or(orFilter);
+      }
 
       const { data } = await q;
-      results = data || [];
+      // Also alias created_at/timestamp properly
+      results = (data || []).map((row: any) => ({
+        ...row,
+        timestamp: row.timestamp || row.created_at || new Date().toISOString()
+      }));
+    } else {
+      // Map RPC data if needed
+      results = results.map((row: any) => ({
+        ...row,
+        timestamp: row.timestamp || row.created_at || new Date().toISOString()
+      }));
     }
 
     if (results.length === 0) return 'No relevant memories found.';
 
     return results.map((m, i) => {
-      const ago = Math.round((Date.now() - new Date(m.timestamp).getTime()) / 86400000);
+      const ts = m.timestamp ? new Date(m.timestamp).getTime() : Date.now();
+      const ago = isNaN(ts) ? 0 : Math.round((Date.now() - ts) / 86400000);
       return `${i + 1}. [${m.category}] (${ago}d ago, importance: ${m.importance_score})\n   ${m.content}`;
     }).join('\n\n');
   } catch (err) {

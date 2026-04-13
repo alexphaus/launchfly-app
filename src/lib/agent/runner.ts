@@ -467,37 +467,36 @@ export async function executeAgentTask(taskId: string): Promise<{
       }
     }
 
-    // ── Skills auto-recall: inject relevant proven workflows ──
+    // ── Skills auto-recall: semantic search via embeddings (language-agnostic) ──
     recalledSkillIds = [];
     try {
-      const goalWords = (row.goal as string || '')
-        .split(/\s+/)
-        .filter(w => w.length > 3)
-        .map(w => w.replace(/[%_]/g, ''))
-        .filter(w => w.length > 2)
-        .slice(0, 4);
+      const goalText = (row.goal as string || '').trim();
+      if (goalText.length > 2) {
+        // Generate embedding for the goal — works in any language
+        const OpenAIEmbed = (await import('openai')).default;
+        const embedClient = new OpenAIEmbed({ apiKey: process.env.OPENAI_API_KEY! });
+        const embRes = await embedClient.embeddings.create({
+          model: 'text-embedding-3-small',
+          input: goalText.substring(0, 8000),
+        });
+        const goalEmbedding = embRes.data[0]?.embedding;
 
-      if (goalWords.length > 0) {
-        // OR-match: any keyword in content
-        const orFilter = goalWords.map(w => `content.ilike.%${w}%`).join(',');
+        if (goalEmbedding) {
+          // Use dedicated RPC with similarity threshold (language-agnostic)
+          const { data: skills, error: rpcErr } = await supabase.rpc('search_skills', {
+            query_embedding: goalEmbedding,
+            match_business_id: row.business_id,
+            match_count: 2,
+            min_similarity: 0.3,
+          });
 
-        const { data: skills } = await supabase
-          .from('ai_memories')
-          .select('id, content, importance_score, use_count')
-          .eq('business_id', row.business_id)
-          .eq('archived', false)
-          .in('category', ['skill', 'tool_recipe'])
-          .or(orFilter)
-          .order('importance_score', { ascending: false })
-          .limit(2);
-
-        if (skills?.length) {
-          recalledSkillIds = skills.map(s => s.id);
-          // Persist recalled skill IDs so continuations can track effectiveness
-          toolLog.push({ tool: '__recalled_skills__', args: { ids: recalledSkillIds } as Record<string, unknown>, result: 'ok', timestamp: new Date().toISOString() });
-          memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
-          for (const s of skills) {
-            memoryContext += `${(s.content || '').substring(0, 600)}\n---\n`;
+          if (!rpcErr && skills?.length) {
+            recalledSkillIds = skills.map((s: any) => s.id);
+            toolLog.push({ tool: '__recalled_skills__', args: { ids: recalledSkillIds } as Record<string, unknown>, result: 'ok', timestamp: new Date().toISOString() });
+            memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
+            for (const s of skills) {
+              memoryContext += `${((s as any).content || '').substring(0, 600)}\n---\n`;
+            }
           }
         }
       }
@@ -1147,18 +1146,25 @@ async function autoCreateSkill(
     // Skip if the agent already saved a skill during this task
     if (toolLog.some(t => t.tool === 'save_memory' && String(t.args?.category) === 'skill')) return;
 
-    // Check if a similar skill already exists (avoid duplicates)
-    const goalWords = goal.split(/\s+/).filter(w => w.length > 3).slice(0, 3);
-    if (goalWords.length === 0) return;
-    const orFilter = goalWords.map(w => `content.ilike.%${w.replace(/[%_]/g, '')}%`).join(',');
+    // Check if a similar skill already exists (avoid duplicates) — semantic search
+    const goalTrimmed = goal.trim();
+    if (goalTrimmed.length < 3) return;
 
-    const { data: existing } = await supabase
-      .from('ai_memories')
-      .select('id')
-      .eq('business_id', businessId)
-      .in('category', ['skill', 'tool_recipe'])
-      .or(orFilter)
-      .limit(1);
+    const OpenAIEmbed = (await import('openai')).default;
+    const embedClient = new OpenAIEmbed({ apiKey: process.env.OPENAI_API_KEY! });
+    const embRes = await embedClient.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: goalTrimmed.substring(0, 8000),
+    });
+    const goalEmbedding = embRes.data[0]?.embedding;
+    if (!goalEmbedding) return;
+
+    const { data: existing } = await supabase.rpc('search_skills', {
+      query_embedding: goalEmbedding,
+      match_business_id: businessId,
+      match_count: 1,
+      min_similarity: 0.55, // High threshold — only skip if very similar skill exists
+    });
 
     if (existing?.length) return; // Similar skill already exists
 
@@ -1179,10 +1185,8 @@ async function autoCreateSkill(
     const skillContent = skillCompletion.choices[0]?.message?.content?.trim();
     if (!skillContent || skillContent.length < 30) return;
 
-    // Generate embedding and save
-    const OpenAILib = (await import('openai')).default;
-    const embeddingClient = new OpenAILib({ apiKey: process.env.OPENAI_API_KEY! });
-    const embeddingRes = await embeddingClient.embeddings.create({
+    // Generate embedding and save (reuse the embed client from dedup check)
+    const embeddingRes = await embedClient.embeddings.create({
       model: 'text-embedding-3-small',
       input: skillContent.substring(0, 8000),
     });

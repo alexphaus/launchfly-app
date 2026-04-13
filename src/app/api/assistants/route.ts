@@ -423,6 +423,7 @@ interface ScheduleConfig {
   days?: string[];       // ['mon','tue','wed','thu','fri','sat','sun']
   timezone?: string;     // e.g. 'America/New_York'
   qstashScheduleId?: string;
+  _lastCron?: string;
 }
 
 interface AutomationRule {
@@ -505,6 +506,19 @@ async function syncDailyScheduleCrons(
       continue;
     }
 
+    // Skip recreating if cron hasn't changed and existing schedule is still valid
+    if (cfg.qstashScheduleId && cfg._lastCron === cron) {
+      try {
+        const checkRes = await fetch(`${qstashBase}/v2/schedules/${cfg.qstashScheduleId}`, {
+          headers: { Authorization: `Bearer ${qstashToken}` },
+        });
+        if (checkRes.ok) {
+          console.log(`[cron] Schedule ${cfg.qstashScheduleId} unchanged for rule ${rule.id}, skipping`);
+          continue;
+        }
+      } catch { /* schedule gone — recreate below */ }
+    }
+
     // Delete ALL existing QStash schedules for this rule (prevents duplicates)
     // We can't rely solely on cfg.qstashScheduleId because the frontend may
     // have a stale copy. Instead, list all schedules and delete any that match
@@ -565,7 +579,7 @@ async function syncDailyScheduleCrons(
 
     if (res.ok) {
       const data = await res.json();
-      rule.scheduleConfig = { ...cfg, qstashScheduleId: data.scheduleId };
+      rule.scheduleConfig = { ...cfg, qstashScheduleId: data.scheduleId, _lastCron: cron };
       console.log(`[cron] Created schedule ${data.scheduleId} for rule ${rule.id}: ${cron} ${tz}`);
     } else {
       console.error(`[cron] Failed to create schedule for rule ${rule.id}:`, await res.text());

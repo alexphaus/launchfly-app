@@ -4,6 +4,7 @@ export interface ScheduleConfig {
   days?: string[];
   timezone?: string;
   qstashScheduleId?: string;
+  _lastCron?: string;
 }
 
 export interface AutomationRule {
@@ -76,6 +77,20 @@ export async function syncBusinessCrons(
       continue;
     }
 
+    // Skip recreating if cron hasn't changed and existing schedule is still valid
+    if (cfg.qstashScheduleId && cfg._lastCron === cron) {
+      // Verify the schedule still exists in QStash
+      try {
+        const checkRes = await fetch(`${qstashBase}/v2/schedules/${cfg.qstashScheduleId}`, {
+          headers: { Authorization: `Bearer ${qstashToken}` },
+        });
+        if (checkRes.ok) {
+          console.log(`[biz-cron] Schedule ${cfg.qstashScheduleId} unchanged for rule ${rule.id}, skipping`);
+          continue;
+        }
+      } catch { /* schedule gone — recreate below */ }
+    }
+
     // Clean up any stale schedules for this rule across QStash
     try {
       const listRes = await fetch(`${qstashBase}/v2/schedules`, {
@@ -131,7 +146,7 @@ export async function syncBusinessCrons(
 
     if (res.ok) {
       const data = await res.json();
-      rule.scheduleConfig = { ...cfg, qstashScheduleId: data.scheduleId };
+      rule.scheduleConfig = { ...cfg, qstashScheduleId: data.scheduleId, _lastCron: cron };
       console.log(`[biz-cron] Created schedule ${data.scheduleId} for rule ${rule.id}: ${cron} (${tz})`);
     } else {
       console.error(`[biz-cron] Failed to create schedule for rule ${rule.id}:`, await res.text());

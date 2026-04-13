@@ -1545,7 +1545,7 @@ CUSTOMER NAME: ${customerName}
     // ─── Autonomous Agent Task ────────────────────────────────────────────
 
     case 'agent_task': {
-      const goal = (cfg.agentGoal as string) ? fillVars(cfg.agentGoal as string, ctx) : '';
+      let goal = (cfg.agentGoal as string) ? fillVars(cfg.agentGoal as string, ctx) : '';
       const role = (cfg.agentRole as string) || undefined;
       const enabledTools: string[] | null = cfg.agentTools === '*' ? null
         : Array.isArray(cfg.agentTools) ? (cfg.agentTools as string[])
@@ -1553,13 +1553,25 @@ CUSTOMER NAME: ${customerName}
 
       if (!goal) return { ok: false, detail: 'No agent goal specified' };
 
+      // Auto-inject event context so the agent knows what triggered it
+      const contextParts: string[] = [];
+      if (ctx.phone) contextParts.push(`Customer phone: ${ctx.phone}`);
+      if (ctx.customerName) contextParts.push(`Customer name: ${ctx.customerName}`);
+      if (ctx.message) contextParts.push(`Their message: "${ctx.message}"`);
+      if (ctx.event) contextParts.push(`Trigger event: ${ctx.event}`);
+      if (ctx.metadata?.pushname && !ctx.customerName) contextParts.push(`WhatsApp name: ${ctx.metadata.pushname}`);
+      if (ctx.amount) contextParts.push(`Amount: ${ctx.amount}`);
+      if (contextParts.length > 0) {
+        goal += `\n\nEvent context:\n${contextParts.join('\n')}`;
+      }
+
       // Fetch owner phone for report routing
       const { data: biz } = await getSupabase()
         .from('businesses')
         .select('phone_number, whatsapp_notify_number, whatsapp_number')
         .eq('id', ctx.businessId)
         .single();
-      const ownerPhone = biz?.whatsapp_notify_number || biz?.whatsapp_number || biz?.phone_number || undefined;
+      const ownerPhone = biz?.whatsapp_notify_number || biz?.phone_number || undefined;
 
       try {
         const { createAgentTask } = await import('@/lib/agent/runner');

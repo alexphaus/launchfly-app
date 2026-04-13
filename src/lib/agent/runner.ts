@@ -57,6 +57,7 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   search_google_maps: 55_000,  // Apify actor runs take 30-50s
   browse_web: 125_000,         // Browserbase sessions up to 2 min
   make_call: 30_000,           // Retell API call setup
+  send_voice_note: 30_000,    // TTS generation + upload + send
 };
 const LLM_TIMEOUT_MS = 15_000;        // Max time for a single LLM call (15s — DeepSeek is fast)
 const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)

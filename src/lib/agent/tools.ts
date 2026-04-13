@@ -236,6 +236,22 @@ export const AGENT_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'send_voice_note',
+      description: 'Send a WhatsApp voice note to any phone number. Converts your text to a natural-sounding voice message using AI text-to-speech, then delivers it as a WhatsApp audio message. Use when a personal, warm touch is more effective than text — e.g. follow-ups, greetings, objection handling, or when the owner asks you to "send a voice note".',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: 'Phone number with country code (e.g. "+34612345678")' },
+          text: { type: 'string', description: 'The message to speak in the voice note. Write naturally as if speaking aloud — use contractions, pauses, warm tone.' },
+        },
+        required: ['phone', 'text'],
+      },
+    },
+  },
+
+  {
+    type: 'function' as const,
+    function: {
       name: 'delegate_task',
       description: 'DANGER: Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). ONLY use this if you ABSOLUTELY CANNOT do the task yourself (i.e., you lack the required tools). If you use this, the sub-agent will LOSE your custom report formatting rules. Therefore, DO NOT delegate if your main goal involves a specific output format.',
       parameters: {
@@ -634,6 +650,8 @@ export async function executeTool(
     case 'send_whatsapp':
       return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx, args.imageUrl as string | undefined, args.delay_minutes as number | undefined);
 
+    case 'send_voice_note':
+      return executeSendVoiceNote(args.phone as string, args.text as string, toolCtx);
 
     case 'delegate_task':
       return executeDelegateTask(args.assistantConfigName as string, args.instruction as string, toolCtx);
@@ -1286,6 +1304,74 @@ async function executeSendWhatsApp(
   }
 }
 
+// ─── send_voice_note (TTS → WhatsApp audio) ─────────────────────────────
+
+async function executeSendVoiceNote(
+  phone: string,
+  text: string,
+  toolCtx: ToolContext,
+): Promise<string> {
+  if (!phone) return 'No phone number provided.';
+  if (!text) return 'No text provided for voice note.';
+
+  let normalized = phone.replace(/[^\d+]/g, '');
+  if (!normalized.startsWith('+')) normalized = '+' + normalized;
+
+  try {
+    // 1. Generate audio via OpenAI TTS
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const ttsResponse = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: 'nova',
+      input: text,
+      response_format: 'opus',
+    });
+
+    const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+
+    // 2. Upload to Supabase storage
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
+
+    const bucket = 'voice-notes';
+    await supabase.storage.createBucket(bucket, {
+      public: true,
+      allowedMimeTypes: ['audio/ogg', 'audio/opus', 'audio/mpeg'],
+      fileSizeLimit: 10 * 1024 * 1024,
+    });
+
+    const filename = `${toolCtx.businessId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ogg`;
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(filename, audioBuffer, {
+        contentType: 'audio/ogg',
+        cacheControl: '86400',
+      });
+
+    if (uploadError) {
+      return `Failed to upload voice note: ${uploadError.message}`;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filename);
+
+    // 3. Send via WhatsApp
+    const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+    const provider = await getWhatsAppProvider(toolCtx.businessId);
+    const result = await provider.sendVoiceNote(normalized, publicUrl, toolCtx.businessId);
+
+    if (!result.sent) {
+      return `Failed to send voice note to ${normalized}: ${result.error || 'Unknown error'}`;
+    }
+
+    return `Voice note sent to ${normalized} via WhatsApp.`;
+  } catch (err) {
+    return `Failed to send voice note: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
 
 // ─── manage_job (create/update jobs table) ──────────────────────────────
 

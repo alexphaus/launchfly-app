@@ -226,6 +226,7 @@ export const AGENT_TOOLS = [
           phone: { type: 'string', description: 'Phone number with country code (e.g. "+34612345678")' },
           message: { type: 'string', description: 'The message to send' },
           imageUrl: { type: 'string', description: 'Optional secure HTTPS URL of an image to attach to the message (e.g. materials, job site photo).' },
+          delay_minutes: { type: 'number', description: 'Optional delay in minutes before sending the message (e.g., 10 for a 10 min delay, max 60). Use this to simulate natural human pacing when sending multiple outreach messages or to set a reminder.' },
         },
         required: ['phone', 'message'],
       },
@@ -631,7 +632,7 @@ export async function executeTool(
       return executeGetWeatherForecast(args.location as string);
 
     case 'send_whatsapp':
-      return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx, args.imageUrl as string | undefined);
+      return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx, args.imageUrl as string | undefined, args.delay_minutes as number | undefined);
 
 
     case 'delegate_task':
@@ -1162,6 +1163,7 @@ async function executeSendWhatsApp(
   message: string,
   toolCtx: ToolContext,
   imageUrl?: string,
+  delayMinutes?: number,
 ): Promise<string> {
   if (!phone) return 'No phone number provided.';
   if (!message) return 'No message provided.';
@@ -1174,28 +1176,9 @@ async function executeSendWhatsApp(
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     const provider = await getWhatsAppProvider(toolCtx.businessId);
     
-    let result;
-    if (imageUrl) {
-      result = await provider.sendImage(
-        normalized,
-        imageUrl,
-        message,
-        toolCtx.businessId,
-      );
-    } else {
-      result = await provider.sendWhatsApp(
-        normalized,
-        message,
-        toolCtx.businessId,
-      );
-    }
-
-    if (!result.sent) {
-      return `Failed to send WhatsApp to ${normalized}: ${result.error || 'Unknown error'}`;
-    }
-
     // Auto-register as supplier if not already known
     // This ensures when they reply, the webhook recognizes them as a supplier
+    // We do this BEFORE the delay so that memory reflects it now
     if (normalized !== toolCtx.ownerPhone) {
       try {
         const supabase = getSupabase();
@@ -1223,11 +1206,86 @@ async function executeSendWhatsApp(
       }
     }
 
+    // Save to chat history immediately (visible as pending/delayed if needed, though right now we just insert it)
+    try {
+      const supabase = getSupabase();
+      await supabase.from('chat_history').insert({
+        business_id: toolCtx.businessId,
+        customer_phone: normalized,
+        message: message,
+        direction: 'outbound',
+      });
+    } catch (err) {
+      console.warn('[send_whatsapp] Failed to save chat history (non-fatal):', err);
+    }
+
+    // If delay is requested and valid, route to QStash scheduler instead of sending now
+    if (delayMinutes && delayMinutes > 0 && delayMinutes <= 120) {
+      const qstashToken = process.env.QSTASH_TOKEN;
+      if (qstashToken) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+        const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+        const targetUrl = `${appUrl}/api/internal/delayed-whatsapp`;
+        
+        try {
+          const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${qstashToken}`,
+              'Content-Type': 'application/json',
+              'Upstash-Delay': `${delayMinutes}m`, // Format: "10m", "5s"
+            },
+            body: JSON.stringify({
+              businessId: toolCtx.businessId,
+              phone: normalized,
+              message,
+              imageUrl,
+            }),
+          });
+          
+          if (!res.ok) {
+            const errText = await res.text();
+            console.error(`[send_whatsapp] QStash delay error: ${errText}`);
+            return `Failed to schedule message delay: QStash returned ${res.status}`;
+          }
+          
+          return `Successfully scheduled message to ${normalized} with a ${delayMinutes} minute delay. The delivery will happen in the background.`;
+        } catch (err: any) {
+          console.error('[send_whatsapp] QStash fetch error:', err);
+          return `Failed to schedule message delay: ${err.message}`;
+        }
+      } else {
+        console.warn('[send_whatsapp] QSTASH_TOKEN not set, falling back to immediate send');
+      }
+    }
+
+    // Immediate send (default)
+    let result;
+    if (imageUrl) {
+      result = await provider.sendImage(
+        normalized,
+        imageUrl,
+        message,
+        toolCtx.businessId,
+      );
+    } else {
+      result = await provider.sendWhatsApp(
+        normalized,
+        message,
+        toolCtx.businessId,
+      );
+    }
+
+    if (!result.sent) {
+      return `Failed to send WhatsApp to ${normalized}: ${result.error || 'Unknown error'}`;
+    }
+
     return `Message sent to ${normalized} via WhatsApp.`;
   } catch (err) {
     return `Failed to send WhatsApp: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
+
 
 // ─── manage_job (create/update jobs table) ──────────────────────────────
 

@@ -27,7 +27,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'search_tasks',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -584,6 +584,24 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  // ── Post to Social Media (PostBolt) ────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'post_social',
+      description: 'Publish or schedule a social media post to one or more platforms (LinkedIn, Twitter/X, Facebook, Instagram, TikTok, YouTube, Threads, Pinterest, Bluesky, Telegram, Reddit, Google Business, Snapchat). Uses PostBolt integration. The business must have a PostBolt API key configured in integrations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'The post text/caption. Each platform has character limits (e.g. Twitter 280 chars). Keep it concise.' },
+          platforms: { type: 'array', items: { type: 'string' }, description: 'Array of platform names to post to. Options: "linkedin", "twitter", "facebook", "instagram", "tiktok", "youtube", "pinterest", "threads", "bluesky", "telegram", "reddit", "google", "snapchat"' },
+          media_url: { type: 'string', description: 'Optional HTTPS URL of an image or video to attach to the post.' },
+          scheduled_for: { type: 'string', description: 'Optional ISO 8601 datetime to schedule the post for a future time (e.g. "2026-04-14T09:00:00Z"). If omitted, publishes immediately.' },
+        },
+        required: ['content', 'platforms'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -700,6 +718,9 @@ export async function executeTool(
 
     case 'make_call':
       return executeMakeCall(args as Record<string, unknown>, toolCtx);
+
+    case 'post_social':
+      return executePostSocial(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -2713,6 +2734,88 @@ CUSTOMER NAME: ${customerName}
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return `Failed to trigger voice call: ${msg}`;
+  }
+}
+
+// ─── post_social (PostBolt — multi-platform social publishing) ──────────
+
+const VALID_PLATFORMS = new Set([
+  'linkedin', 'twitter', 'facebook', 'instagram', 'tiktok',
+  'youtube', 'pinterest', 'threads', 'bluesky', 'telegram',
+  'reddit', 'google', 'snapchat',
+]);
+
+async function executePostSocial(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const content = (args.content as string || '').trim();
+  const platforms = args.platforms as string[] | undefined;
+  const mediaUrl = args.media_url as string | undefined;
+  const scheduledFor = args.scheduled_for as string | undefined;
+
+  if (!content) return 'Error: post content is required.';
+  if (!platforms?.length) return 'Error: at least one platform is required.';
+
+  // Validate platforms
+  const invalid = platforms.filter(p => !VALID_PLATFORMS.has(p.toLowerCase()));
+  if (invalid.length) return `Error: unknown platforms: ${invalid.join(', ')}. Valid: ${[...VALID_PLATFORMS].join(', ')}`;
+
+  const normalizedPlatforms = platforms.map(p => p.toLowerCase());
+
+  // Look up PostBolt credentials from business_integrations
+  const supabase = getSupabase();
+  const { data: integration } = await supabase
+    .from('business_integrations')
+    .select('api_key_encrypted, base_url, config, status')
+    .eq('business_id', toolCtx.businessId)
+    .eq('service_name', 'postbolt')
+    .maybeSingle();
+
+  if (!integration) {
+    return 'PostBolt is not configured for this business. Ask the owner to add their PostBolt API key in Settings → Integrations (service name: "postbolt").';
+  }
+
+  if (integration.status === 'inactive') {
+    return 'PostBolt integration is inactive. Ask the owner to re-activate it in Settings → Integrations.';
+  }
+
+  const apiKey = integration.api_key_encrypted;
+  if (!apiKey) return 'PostBolt API key is missing. Ask the owner to update the integration.';
+
+  const baseUrl = (integration.base_url || 'https://postbolt.dev/api/v1').replace(/\/$/, '');
+
+  // Build request body
+  const postBody: Record<string, unknown> = {
+    content,
+    platforms: normalizedPlatforms,
+  };
+  if (mediaUrl) postBody.media_url = mediaUrl;
+  if (scheduledFor) postBody.scheduled_for = scheduledFor;
+
+  try {
+    const res = await fetch(`${baseUrl}/posts`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(postBody),
+    });
+
+    const data = await res.json() as Record<string, unknown>;
+
+    if (!res.ok) {
+      const errMsg = (data.message || data.error || `HTTP ${res.status}`) as string;
+      return `PostBolt error: ${errMsg}`;
+    }
+
+    const postId = data.id || 'unknown';
+    const status = data.status || 'pending';
+    const scheduled = scheduledFor ? ` (scheduled for ${scheduledFor})` : '';
+    return `✅ Social post created${scheduled}\nPost ID: ${postId}\nStatus: ${status}\nPlatforms: ${normalizedPlatforms.join(', ')}\nContent: "${content.substring(0, 80)}${content.length > 80 ? '...' : ''}"`;
+  } catch (err) {
+    return `Failed to publish social post: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 

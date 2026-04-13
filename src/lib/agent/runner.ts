@@ -44,10 +44,10 @@ function getSupabase() {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const MAX_STEPS_PER_INVOCATION = 8;   // 8 steps — safe with context compression; wall-clock is the real limiter
+const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps (biggest perf win)
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
-const WALL_CLOCK_LIMIT_MS = 45_000;   // 45s — Vercel Pro allows 60s, leaves 15s headroom
+const WALL_CLOCK_LIMIT_MS = 55_000;   // 55s — Vercel Pro allows 60s, 5s is enough for cleanup
 const STALE_TASK_MINUTES = 5;         // Auto-fail tasks stuck longer than this
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
@@ -72,6 +72,7 @@ const CHARS_PER_TOKEN = 3.5;               // Rough estimate for English/mixed c
 const PARALLEL_SAFE_TOOLS = new Set([
   'search_web', 'scrape_page', 'search_memory', 'search_tasks',
   'query_database', 'get_weather_forecast', 'search_google_maps',
+  'save_memory', 'save_leads', 'draft_content',
 ]);
 
 // ─── Skill Auto-Creation ─────────────────────────────────────────────────
@@ -404,27 +405,39 @@ export async function executeAgentTask(taskId: string): Promise<{
     const location = (bd?.city || bd?.location || '') as string;
 
     const ownerPhoneNorm = (toolCtx.ownerPhone || '').replace(/^\+/, '');
-    const [conversationHistory, recentTasks, activeJobs] = await Promise.all([
-      ownerPhoneNorm
-        ? getConversationHistory(ownerPhoneNorm, row.business_id)
-        : Promise.resolve([]),
-      supabase
-        .from('agent_tasks')
-        .select('goal, result, updated_at')
-        .eq('business_id', row.business_id)
-        .eq('status', 'completed')
-        .order('updated_at', { ascending: false })
-        .limit(5)
-        .then(r => r.data || []),
-      supabase
-        .from('jobs')
-        .select('id, title, status, description, materials_needed, blockers, updated_at')
-        .eq('business_id', row.business_id)
-        .in('status', ['draft', 'quoting', 'ready', 'blocked'])
-        .order('updated_at', { ascending: false })
-        .limit(10)
-        .then(r => r.data || []),
-    ]);
+
+    // Lazy context: only load heavy queries for goals that likely need them.
+    // Simple goals (send_whatsapp, single action) skip conversation history, jobs, etc.
+    const goalLower = (row.goal || '').toLowerCase();
+    const needsFullContext = goalLower.length > 200
+      || /report|insight|analyz|review|follow.?up|prospect|lead|campaign|schedule|plan|strateg|morning|daily|inventory|job|supplier|purchase/i.test(goalLower);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contextPromises = needsFullContext
+      ? [
+          ownerPhoneNorm
+            ? getConversationHistory(ownerPhoneNorm, row.business_id)
+            : Promise.resolve([]),
+          Promise.resolve(supabase
+            .from('agent_tasks')
+            .select('goal, result, updated_at')
+            .eq('business_id', row.business_id)
+            .eq('status', 'completed')
+            .order('updated_at', { ascending: false })
+            .limit(5)
+            .then(r => r.data || [])),
+          Promise.resolve(supabase
+            .from('jobs')
+            .select('id, title, status, description, materials_needed, blockers, updated_at')
+            .eq('business_id', row.business_id)
+            .in('status', ['draft', 'quoting', 'ready', 'blocked'])
+            .order('updated_at', { ascending: false })
+            .limit(10)
+            .then(r => r.data || [])),
+        ] as const
+      : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([])] as const;
+
+    const [conversationHistory, recentTasks, activeJobs] = await Promise.all(contextPromises);
 
     let memoryContext = '';
 
@@ -779,6 +792,7 @@ export async function executeAgentTask(taskId: string): Promise<{
 
         // ── Execute sequential tools one by one ──
         if (!shouldBreak) {
+          let seqSinceLastSave = 0;
           for (const tc of sequentialCalls) {
             const r = await runTool(tc);
 
@@ -786,8 +800,13 @@ export async function executeAgentTask(taskId: string): Promise<{
             toolLog.push({ tool: r.name, args: r.args, result: safeSlice(r.result, 500), timestamp: new Date().toISOString() });
             stepsUsed++;
             stepsThisInvocation++;
+            seqSinceLastSave++;
 
-            await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+            // Batch saves: every 2 sequential tools, or on pause/break
+            if (seqSinceLastSave >= 2) {
+              await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+              seqSinceLastSave = 0;
+            }
 
             // ── PAUSE SIGNAL ──
             if (r.result.startsWith('__PAUSE__:')) {

@@ -693,7 +693,7 @@ export async function executeTool(
       return executeSearchTasks(args.query as string, toolCtx.businessId, (args.days as number) || 30);
 
     case 'save_memory':
-      return executeSaveMemory(args.content as string, args.category as string, toolCtx.businessId, (args.importance as number) || 0.5);
+      return executeSaveMemory(args.content as string, args.category as string, toolCtx, (args.importance as number) || 0.5);
 
     case 'call_api':
       return executeCallApi(args as Record<string, unknown>, toolCtx);
@@ -1960,24 +1960,37 @@ async function executeSearchMemory(
 async function executeSaveMemory(
   content: string,
   category: string,
-  businessId: string,
+  toolCtx: ToolContext,
   importance: number = 0.5,
 ): Promise<string> {
   try {
     const supabase = getSupabase();
     const embedding = await getEmbedding(content);
+    const clampedImportance = Math.max(0, Math.min(1, importance));
 
     const { error } = await supabase.from('ai_memories').insert({
-      business_id: businessId,
+      business_id: toolCtx.businessId,
       content,
       category,
       embedding,
-      importance_score: Math.max(0, Math.min(1, importance)),
+      importance_score: clampedImportance,
       context: {},
       metadata: { source: 'agent' },
     });
 
     if (error) return `Failed to save memory: ${error.message}`;
+
+    // ── Auto-alert owner on high-value strategic insights ──
+    if (category === 'strategic_insight' && clampedImportance >= 0.8 && toolCtx.ownerPhone) {
+      try {
+        const alertMsg = `💡 *Strategic Insight — ${toolCtx.businessName || 'Your Business'}*\n\n${content.substring(0, 800)}\n\n_Your AI agent flagged this as high-confidence. Reply to discuss._`;
+        await executeSendWhatsApp(toolCtx.ownerPhone, alertMsg, toolCtx);
+        console.log(`[save_memory] Auto-alerted owner about strategic insight`);
+      } catch (alertErr) {
+        console.warn('[save_memory] Auto-alert failed (non-fatal):', alertErr);
+      }
+    }
+
     return `Memory saved: [${category}] "${content.substring(0, 80)}..." (importance: ${importance})`;
   } catch (err) {
     return `Failed: ${err instanceof Error ? err.message : String(err)}`;

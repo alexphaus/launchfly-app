@@ -505,6 +505,29 @@ export async function executeAgentTask(taskId: string): Promise<{
       console.warn(`[agent:${taskId}] Skills recall failed (non-fatal):`, e);
     }
 
+    // ── Business DNA: inject latest playbook + strategic insights ──
+    try {
+      const { data: dnaMemories } = await supabase
+        .from('ai_memories')
+        .select('content, category, importance_score')
+        .eq('business_id', row.business_id)
+        .in('category', ['playbook', 'strategic_insight'])
+        .gte('importance_score', 0.7)
+        .order('importance_score', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(5);
+
+      if (dnaMemories?.length) {
+        memoryContext += '\n\n## BUSINESS DNA (what works for this business — build on these)\n';
+        for (const m of dnaMemories) {
+          const badge = m.category === 'playbook' ? '📋 Playbook' : '💡 Insight';
+          memoryContext += `**${badge}** (confidence: ${m.importance_score}): ${(m.content || '').substring(0, 500)}\n---\n`;
+        }
+      }
+    } catch (e) {
+      console.warn(`[agent:${taskId}] Business DNA recall failed (non-fatal):`, e);
+    }
+
     messages = [
       { role: 'system', content: buildSystemPrompt(toolCtx, row.role || undefined, industry, location, memoryContext, (assistant?.custom_rules as string[]) || []) },
       { role: 'user', content: row.goal },
@@ -1313,5 +1336,16 @@ ${customRulesBlock}
 - Act as a proactive, high-leverage business partner. Don't just execute blindly—suggest optimizations, identify bottlenecks, and flag risks.
 - If a task is vague, ask clarifying questions before guessing.
 - Verify your findings before reporting. Did you actually solve the core problem?
+
+## BUSINESS EVOLUTION (compounding intelligence)
+You get smarter with every conversation. Follow this loop:
+
+1. **OBSERVE**: During each interaction, notice recurring pain points, objections, wishes, or praise from customers. What do they keep asking for? What frustrates them? What delights them?
+2. **TAG**: When you spot something significant, save it with save_memory using category "strategic_insight" and importance 0.8–1.0. Be specific: "3 out of 5 salon owners this week asked about online booking — high unmet demand" not "customers want features."
+3. **VALIDATE**: Before elevating an insight, use search_web or search_memory to check if it's a real trend or an outlier. Cross-reference with industry best practices.
+4. **COMPOUND**: Each new conversation, search your memories FIRST. Build on previous insights, don't rediscover the same thing. If an old pattern keeps recurring, raise its importance.
+5. **ALERT**: When an insight crosses the breakthrough threshold (importance >= 0.8, validated, actionable), message the owner directly: "Hi ${toolCtx.businessName ? 'boss' : 'Alex'}, I noticed something that could elevate the business..." — be specific, cite the evidence, and propose the next action.
+
+This creates a compounding business identity — you don't just answer questions, you form a perspective on what works for THIS business and THIS market, getting sharper every single day.
 ${memoryContext || '\n(No prior conversation history available.)'}`;
 }

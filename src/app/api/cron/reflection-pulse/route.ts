@@ -31,14 +31,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Hard cap: never dispatch more than this per CRON run (credit safety)
+  const MAX_REFLECTIONS_PER_RUN = 20;
+
   try {
     // Get all active businesses with a CEO agent configured
     const { data: businesses, error } = await supabase
       .from('businesses')
       .select('id, name, whatsapp_notify_number, phone_number')
-      .eq('active', true);
+      .eq('active', true)
+      .limit(MAX_REFLECTIONS_PER_RUN);
 
-    if (error || !businesses?.length) {
+    if (error) {
+      console.error('[reflection-pulse] Query error:', error.message);
+      return NextResponse.json({ message: 'Query error', error: error.message }, { status: 500 });
+    }
+
+    if (!businesses?.length) {
       return NextResponse.json({ message: 'No active businesses', count: 0 });
     }
 
@@ -61,7 +70,7 @@ THEN SYNTHESIZE:
 - What are the top 3 things that WORK for this business right now?
 
 FINALLY DECIDE:
-- If you found a genuine breakthrough (a new revenue opportunity, a recurring unmet need, a competitive gap) → save_memory with category "strategic_insight" and importance 0.9, then send a brief WhatsApp to the owner: "Hi, quick weekly insight from your AI..."
+- If you found a genuine breakthrough (a new revenue opportunity, a recurring unmet need, a competitive gap) → save_memory with category "strategic_insight" and importance 0.9. The system will auto-alert the owner — do NOT send a separate WhatsApp yourself.
 - If you found useful patterns but nothing groundbreaking → save_memory with category "playbook" summarizing the top working strategies. Do NOT message the owner.
 - If nothing notable → silently terminate. No noise.
 

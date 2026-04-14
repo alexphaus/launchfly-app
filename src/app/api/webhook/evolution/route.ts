@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       // integration request, or approval request, skip it to prevent feedback
       // loops between WhatsApp instances.
       // Matches: _🔍 search_web..._  |  _🔍 search_web: query text_  |  🤖 *Agent Report  |  🔌 *New Integration  |  🔔 *Approval Required
-      const AGENT_ECHO_PATTERN = /^_[^\n]{1,120}_$|^🤖 \*Agent Report|^🔌 \*New Integration|^🔔 \*Approval Required/;
+      const AGENT_ECHO_PATTERN = /^_[^\n]{1,120}_$|^🤖 \*Agent Report|^🔌 \*New Integration|^🔔 \*Approval Required|^💡 \*Strategic Insight/;
       if (AGENT_ECHO_PATTERN.test(outText.trim())) {
         return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo' });
       }

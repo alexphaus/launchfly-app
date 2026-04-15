@@ -1328,36 +1328,6 @@ async function executeSendWhatsApp(
   try {
     const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
     const provider = await getWhatsAppProvider(toolCtx.businessId);
-    
-    // Auto-register as supplier if not already known
-    // This ensures when they reply, the webhook recognizes them as a supplier
-    // We do this BEFORE the delay so that memory reflects it now
-    if (normalized !== toolCtx.ownerPhone) {
-      try {
-        const supabase = getSupabase();
-        const { data: existing } = await supabase
-          .from('suppliers')
-          .select('id')
-          .eq('business_id', toolCtx.businessId)
-          .eq('whatsapp_number', normalized)
-          .maybeSingle();
-
-        if (!existing) {
-          // Try to extract a name from the message context
-          const nameMatch = message.match(/(?:Hola|Hi|Hello|Dear|Estimad[oa]s?)\s+([^,.\n!]+)/i);
-          const supplierName = nameMatch?.[1]?.trim() || `Supplier ${normalized}`;
-          await supabase.from('suppliers').insert({
-            business_id: toolCtx.businessId,
-            name: supplierName,
-            whatsapp_number: normalized,
-          });
-          console.log(`[send_whatsapp] Auto-registered supplier: ${supplierName} (${normalized})`);
-        }
-      } catch (err) {
-        // Non-fatal — supplier registration is best-effort
-        console.warn('[send_whatsapp] Auto-register supplier failed (non-fatal):', err);
-      }
-    }
 
     // Save to chat history immediately (visible as pending/delayed if needed, though right now we just insert it)
     try {

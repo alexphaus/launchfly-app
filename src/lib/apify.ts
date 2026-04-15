@@ -57,8 +57,9 @@ export async function searchGoogleMaps(opts: {
   location: string;
   maxResults?: number;
   businessId?: string;
+  timeoutMs?: number;
 }): Promise<ScrapedLead[]> {
-  const { query, location, maxResults = 50, businessId } = opts;
+  const { query, location, maxResults = 50, businessId, timeoutMs } = opts;
   const token = await getApifyToken(businessId);
 
   const searchTerms = [`${query} in ${location}`];
@@ -91,7 +92,11 @@ export async function searchGoogleMaps(opts: {
   const datasetId = run.data.defaultDatasetId;
 
   // Step 2: Wait for run to finish (poll with waitForFinish — Apify long-polls up to the specified seconds)
-  const waitSecs = 50; // Stay under Vercel 60s limit
+  // Base waitSecs on the dynamic timeoutMs if provided, capping at 50s for Vercel 60s limit
+  let waitSecs = 50; 
+  if (timeoutMs) {
+    waitSecs = Math.max(1, Math.floor(Math.min(timeoutMs - 2000, 50000) / 1000));
+  }
   const waitRes = await fetch(
     `${APIFY_BASE}/actor-runs/${runId}?token=${encodeURIComponent(token)}&waitForFinish=${waitSecs}`,
   );

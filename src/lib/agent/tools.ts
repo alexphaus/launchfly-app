@@ -660,6 +660,7 @@ export async function executeTool(
   name: string,
   args: Record<string, unknown>,
   toolCtx: ToolContext,
+  timeoutMs?: number,
 ): Promise<string> {
   switch (name) {
     case 'search_web':
@@ -674,6 +675,7 @@ export async function executeTool(
         args.location as string,
         (args.maxResults as number) || 10,
         toolCtx.businessId,
+        timeoutMs,
       );
 
     case 'save_leads': {
@@ -894,6 +896,7 @@ async function executeSearchGoogleMaps(
   location: string,
   maxResults: number,
   businessId: string,
+  timeoutMs?: number,
 ): Promise<string> {
   try {
     const { searchGoogleMaps } = await import('@/lib/apify');
@@ -902,6 +905,7 @@ async function executeSearchGoogleMaps(
       location,
       maxResults: Math.min(maxResults, 50),
       businessId,
+      timeoutMs,
     });
 
     if (!leads.length) return 'No businesses found on Google Maps for that query.';

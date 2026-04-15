@@ -862,11 +862,15 @@ export async function executeAgentTask(taskId: string): Promise<{
           } else {
             executedToolCalls.add(callKey);
             try {
-              const toolTimeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
+              const defaultMaxTimeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
+              // Compute exact time remaining for Vercel wall-clock limit, minus small buffer
+              const remainingTimeMs = Math.max(0, WALL_CLOCK_LIMIT_MS - (Date.now() - startTime) - 1000);
+              const toolTimeout = Math.min(defaultMaxTimeout, remainingTimeMs);
+              
               const controller = new AbortController();
               const timer = setTimeout(() => controller.abort(), toolTimeout);
               try {
-                const toolPromise = executeTool(tc.function.name, toolArgs, toolCtx);
+                const toolPromise = executeTool(tc.function.name, toolArgs, toolCtx, toolTimeout);
                 toolPromise.catch(() => {});
                 toolResult = await Promise.race([
                   toolPromise,

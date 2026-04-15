@@ -799,7 +799,7 @@ export async function executeAgentTask(taskId: string): Promise<{
             // Using the business instance would cause the OTHER WhatsApp instance's webhook
             // to pick up the message as a new inbound, creating an infinite agent loop.
             const creds = getLaunchflyCreds();
-            if (creds) {
+            if (creds && !toolCtx.ownerPhone?.startsWith('test-chat')) {
               sendWhatsAppWithCreds(
                 toolCtx.ownerPhone,
                 statusMsg,

@@ -1024,6 +1024,11 @@ async function executeSendReport(
 ): Promise<string> {
   if (!toolCtx.ownerPhone) return 'Cannot send report — owner phone number not configured.';
 
+  if (toolCtx.ownerPhone.startsWith('test-chat')) {
+    const fullMsg = `🤖 *Agent Report${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}*\n\n${message}`;
+    return `[TEST] Would send report:\n${fullMsg.substring(0, 300)}...`;
+  }
+
   try {
     // Reports go VIA the Launchfly central number (CEO assistant),
     // NOT through the business's own WhatsApp instance.

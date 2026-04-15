@@ -1311,6 +1311,11 @@ async function executeSendWhatsApp(
   if (!phone) return 'No phone number provided.';
   if (!message) return 'No message provided.';
 
+  // Test mode: if the phone is a test-chat placeholder, skip actual sending
+  if (phone === 'test-chat-lead' || phone.startsWith('test-chat')) {
+    return `[TEST] Would send to ${phone}: "${message.substring(0, 200)}"`;
+  }
+
   // Normalize phone
   let normalized = phone.replace(/[^\d+]/g, '');
   if (!normalized.startsWith('+')) normalized = '+' + normalized;

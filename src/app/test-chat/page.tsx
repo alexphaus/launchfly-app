@@ -3,14 +3,15 @@
 import { useState, useRef, useEffect } from 'react';
 
 const BUSINESS_ID = '06203464-2b76-4468-8d2e-6630ab0ed71a';
-const TEST_PHONE = 'test-chat-user';
+const TEST_PHONE = 'test-chat-lead';
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
   toolsCalled?: string[];
+  stepsUsed?: number;
 }
 
 export default function TestChatPage() {
@@ -59,7 +60,7 @@ export default function TestChatPage() {
           timestamp: new Date(),
         }]);
       } else {
-        // Send each bubble as a separate message with a slight delay visual
+        // Show each bubble the agent would have sent via WhatsApp
         const bubbles: string[] = data.bubbles || [data.reply];
         for (let i = 0; i < bubbles.length; i++) {
           const aiMsg: Message = {
@@ -68,8 +69,18 @@ export default function TestChatPage() {
             content: bubbles[i],
             timestamp: new Date(),
             toolsCalled: i === 0 ? data.toolsCalled : undefined,
+            stepsUsed: i === 0 ? data.stepsUsed : undefined,
           };
           setMessages(prev => [...prev, aiMsg]);
+        }
+        // Show agent metadata as a system note
+        if (data.stepsUsed || data.status) {
+          setMessages(prev => [...prev, {
+            id: `${Date.now()}-meta`,
+            role: 'system',
+            content: `Agent: ${data.status} in ${data.stepsUsed} steps | Tools: ${(data.toolsCalled || []).join(', ') || 'none'}`,
+            timestamp: new Date(),
+          }]);
         }
       }
     } catch (err) {
@@ -115,9 +126,9 @@ export default function TestChatPage() {
           color: 'white', fontWeight: 700, fontSize: 18,
         }}>A</div>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#e9edef', fontWeight: 600, fontSize: 16 }}>Alex from Launchfly</div>
+          <div style={{ color: '#e9edef', fontWeight: 600, fontSize: 16 }}>Agent Test Chat</div>
           <div style={{ color: '#8696a0', fontSize: 12 }}>
-            {loading ? 'typing...' : 'Test Mode — No WhatsApp'}
+            {loading ? 'agent running...' : 'Simulates new lead via WhatsApp'}
           </div>
         </div>
         <button
@@ -136,14 +147,24 @@ export default function TestChatPage() {
       }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', color: '#8696a0', marginTop: 60, fontSize: 14, lineHeight: 1.6 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
-            <div style={{ fontWeight: 600, color: '#e9edef', marginBottom: 4 }}>AI Chat Tester</div>
-            <div>Messages go through the same AI brain<br/>but skip UltraMsg entirely.</div>
-            <div style={{ marginTop: 8, fontSize: 12 }}>Type a message below to start.</div>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>�</div>
+            <div style={{ fontWeight: 600, color: '#e9edef', marginBottom: 4 }}>Agent Test Chat</div>
+            <div>Runs the REAL agent pipeline.<br/>Messages are intercepted — nothing sent to WhatsApp.</div>
+            <div style={{ marginTop: 8, fontSize: 12 }}>Type a message as a new lead would.</div>
           </div>
         )}
 
         {messages.map(msg => (
+          msg.role === 'system' ? (
+            <div key={msg.id} style={{
+              textAlign: 'center', color: '#8696a0', fontSize: 11,
+              margin: '4px 0', padding: '2px 8px',
+              background: '#1a2328', borderRadius: 6, display: 'inline-block',
+              width: '100%',
+            }}>
+              {msg.content}
+            </div>
+          ) : (
           <div key={msg.id} style={{
             display: 'flex',
             justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
@@ -168,9 +189,15 @@ export default function TestChatPage() {
                     🔧 {msg.toolsCalled.join(', ')}
                   </span>
                 )}
+                {msg.stepsUsed != null && (
+                  <span style={{ marginLeft: 6, color: '#f0b429' }}>
+                    ⚡ {msg.stepsUsed} steps
+                  </span>
+                )}
               </div>
             </div>
           </div>
+          )
         ))}
 
         {loading && (

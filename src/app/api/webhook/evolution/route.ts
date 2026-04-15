@@ -742,27 +742,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, routed: 'owner_agent', dispatched, orchestrator: !!orchestrator });
       }
 
-      // Check if sender is a known supplier for this business
-      const { data: supplier } = await supabase
-        .from('suppliers')
-        .select('id, name, category')
-        .eq('business_id', businessId)
-        .or(`whatsapp_number.eq.${phoneWithPlus},whatsapp_number.eq.+${senderNorm}`)
-        .maybeSingle();
-
-      if (supplier) {
-        console.log(`   📦 Supplier "${supplier.name}" (+${customerPhone}) → quote-processing agent`);
-        const dispatched = await dispatchAgentViaQStash({
-          businessId,
-          goal: `Supplier "${supplier.name}" (category: ${supplier.category || 'general'}) replied via WhatsApp: "${messageText.substring(0, 500)}"\n\nInstructions:\n1. Read the supplier's message carefully — extract pricing, availability, delivery times, minimum order quantities, warranty info, and any URLs.\n2. If they shared a website or catalog URL, use scrape_page to check their products and prices.\n3. Query open jobs needing materials (status IN ('quoting','blocked')) and update relevant jobs via manage_job.\n4. send_report to the business owner with a clear summary of what the supplier said, key info extracted, and your recommendations. Ask for owner approval before proceeding with any order.`,
-          role: 'You are the AI Purchasing Assistant processing a supplier reply. Extract pricing, availability, minimum orders, warranties, and delivery info from their message. If they share a URL, scrape it for product details. Always report back to the owner with clear actionable info and ask for approval before placing orders.',
-          enabledTools: ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'scrape_page', 'search_web'],
-        });
-        return NextResponse.json({ ok: true, routed: 'supplier_agent', dispatched });
-      }
+      // ─── Supplier routing removed ───
+      // We now let all non-owner messages flow through to fireEvent('inbound_whatsapp').
+      // This allows the single Receptionist/Agent Prompt to identify the contact type natively.
     }
 
-    // ─── Fire automation event (customer → receptionist) ────────────
+    // ─── Fire automation event (customer & supplier → receptionist/agent) ────────────
     const result = await fireEvent({
       businessId,
       event: 'inbound_whatsapp',

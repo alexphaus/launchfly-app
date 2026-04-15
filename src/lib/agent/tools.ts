@@ -161,7 +161,17 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'query_database',
-      description: 'Query the business database for analytics. Can query customers, leads, bookings, conversations. Use for generating insights and reports.',
+      description: `Query the business database. IMPORTANT — use ONLY these columns per table:
+• leads: id, name, phone, email, website, address, category, notes, source, status, rating, reviews_count, google_maps_url, created_at, updated_at
+• customers: id, email, first_name, last_name, phone, name, total_spent, order_count, status, source, notes, tags, is_repeat_customer, created_at
+• hunter_prospects: id, business_name, owner_name, service_type, area, whatsapp_number, website_url, email, status, priority, notes, created_at
+• quote_leads: id, name, phone, email, quote_amount, job_type, status, source, currency, attempts, created_at
+• chat_history: id, phone, business_id, role, content, created_at
+• bookings: id, customer_id, slot_date, slot_time, status, booking_type, customer_name, customer_phone, estimate, notes, created_at
+• jobs: id, title, status, description, materials_needed, blockers, updated_at
+• assistants: name, goal, active, custom_rules, tools_enabled
+• agent_tasks: id, status, goal, result, steps_used, created_at, updated_at
+Do NOT guess columns. If unsure, select * with limit 1 first.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1133,22 +1143,26 @@ async function executeDraftContent(
   platform: string | undefined,
   toolCtx: ToolContext,
 ): Promise<string> {
-  const { generateText } = await import('ai');
-  const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
+  try {
+    const { generateText } = await import('ai');
+    const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
 
-  const systemPrompt = `You are a world-class content creator for ${toolCtx.businessName || 'a service business'}.
+    const systemPrompt = `You are a world-class content creator for ${toolCtx.businessName || 'a service business'}.
 Create compelling ${type} content that drives engagement, leads, and sales.
 ${platform ? `Target platform: ${platform}. Optimize format, length, and style for ${platform}.` : ''}
 Include relevant hashtags for social posts. Include a CTA.
 Keep it authentic, not corporate. Match the tone of a confident, helpful expert.`;
 
-  const result = await generateText({
-    model: deepseek(MINI_MODEL),
-    system: systemPrompt,
-    messages: [{ role: 'user', content: `Create ${type} about: ${topic}` }],
-  });
+    const result = await generateText({
+      model: deepseek(MINI_MODEL),
+      system: systemPrompt,
+      messages: [{ role: 'user', content: `Create ${type} about: ${topic}` }],
+    });
 
-  return result.text;
+    return result.text;
+  } catch (err) {
+    return `Failed to draft content: ${err instanceof Error ? err.message : String(err)}`;
+  }
 }
 
 // ─── get_weather_forecast ────────────────────────────────────────────────

@@ -552,6 +552,27 @@ export async function executeAgentTask(taskId: string): Promise<{
     const agentTools = getToolsForAgent(row.enabled_tools);
     let stepsThisInvocation = 0;
 
+    // ── Continuation awareness: if resuming, inject a nudge so the LLM doesn't redo work ──
+    const isContinuation = stepsUsed > 0 && messages.length > 2;
+    if (isContinuation) {
+      // Count how many times we've continued (each continuation adds ≤ MAX_STEPS_PER_INVOCATION)
+      const continuationRound = Math.floor(stepsUsed / MAX_STEPS_PER_INVOCATION) + 1;
+      const stepsLeft = MAX_TOTAL_STEPS - stepsUsed;
+      messages.push({
+        role: 'system',
+        content: `⚡ CONTINUATION (round ${continuationRound}): You ran out of time in the previous round. You have used ${stepsUsed} steps so far with ${stepsLeft} remaining.\n\nCRITICAL: Do NOT repeat tool calls you already made — their results are in the conversation above. Summarize what you have and deliver your answer NOW via send_report. Only make new tool calls if absolutely essential and you have NOT tried them before.`,
+      });
+    }
+
+    // ── Duplicate tool call tracker ──
+    const executedToolCalls = new Set<string>();
+    // Seed with existing tool_log entries (from previous invocations)
+    for (const entry of toolLog) {
+      if (entry.tool && entry.tool !== '__recalled_skills__') {
+        executedToolCalls.add(`${entry.tool}:${JSON.stringify(entry.args)}`);
+      }
+    }
+
     while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
       // ── Wall-clock check ──
       if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
@@ -616,7 +637,7 @@ export async function executeAgentTask(taskId: string): Promise<{
             })),
           });
           for (const tc of fnCalls) {
-            messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Deferred to next continuation.' });
+            messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Skipped — ran out of time this round. Do NOT retry this call. Move on and deliver your results with what you have.' });
           }
           await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
         }
@@ -756,26 +777,41 @@ export async function executeAgentTask(taskId: string): Promise<{
           }
 
           let toolResult: string;
-          try {
-            const toolTimeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), toolTimeout);
+
+          // ── Duplicate tool call detection ──
+          // Side-effect tools (send_whatsapp, send_report, etc.) are allowed to repeat
+          const IDEMPOTENT_TOOLS = new Set([
+            'search_web', 'scrape_page', 'search_memory', 'search_tasks',
+            'query_database', 'get_weather_forecast', 'search_google_maps',
+            'call_api', 'run_code',
+          ]);
+          const callKey = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
+          if (IDEMPOTENT_TOOLS.has(tc.function.name) && executedToolCalls.has(callKey)) {
+            console.log(`[agent:${taskId}] Blocked duplicate tool call: ${tc.function.name}`);
+            toolResult = `Duplicate call blocked — you already called ${tc.function.name} with these exact arguments earlier. Use the previous result from the conversation. Do NOT retry.`;
+          } else {
+            executedToolCalls.add(callKey);
             try {
-              const toolPromise = executeTool(tc.function.name, toolArgs, toolCtx);
-              toolPromise.catch(() => {});
-              toolResult = await Promise.race([
-                toolPromise,
-                new Promise<string>((_, reject) => {
-                  controller.signal.addEventListener('abort', () =>
-                    reject(new Error(`Tool ${tc.function.name} timed out after ${toolTimeout / 1000}s`))
-                  );
-                }),
-              ]);
-            } finally {
-              clearTimeout(timer);
+              const toolTimeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), toolTimeout);
+              try {
+                const toolPromise = executeTool(tc.function.name, toolArgs, toolCtx);
+                toolPromise.catch(() => {});
+                toolResult = await Promise.race([
+                  toolPromise,
+                  new Promise<string>((_, reject) => {
+                    controller.signal.addEventListener('abort', () =>
+                      reject(new Error(`Tool ${tc.function.name} timed out after ${toolTimeout / 1000}s`))
+                    );
+                  }),
+                ]);
+              } finally {
+                clearTimeout(timer);
+              }
+            } catch (toolErr) {
+              toolResult = `Tool error: ${toolErr instanceof Error ? toolErr.message : String(toolErr)}`;
             }
-          } catch (toolErr) {
-            toolResult = `Tool error: ${toolErr instanceof Error ? toolErr.message : String(toolErr)}`;
           }
           return { id: tc.id, name: tc.function.name, args: toolArgs, result: toolResult };
         };
@@ -806,7 +842,7 @@ export async function executeAgentTask(taskId: string): Promise<{
           if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
             // Defer any remaining sequential calls
             for (const tc of sequentialCalls) {
-              messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Deferred to next continuation.' });
+              messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Skipped — ran out of time this round. Do NOT retry this call. Move on and deliver your results with what you have.' });
             }
             await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
             shouldBreak = true;
@@ -852,7 +888,7 @@ export async function executeAgentTask(taskId: string): Promise<{
               const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
               for (const unexecuted of fnCalls) {
                 if (!executedIds.has(unexecuted.id)) {
-                  messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Deferred to next continuation.' });
+                  messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Skipped — ran out of time this round. Do NOT retry this call. Move on and deliver your results with what you have.' });
                 }
               }
               await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
@@ -1311,6 +1347,17 @@ ${customRulesBlock}
 6. Save valuable leads with save_leads — don't just list them in text.
 7. Use request_approval BEFORE costly or irreversible actions (orders, campaigns, outreach to new contacts).
 8. Deliver final results via send_report, or write the full report in your last message.
+
+## PROPORTIONALITY
+- Match your response to the request. Simple greetings ("Hello", "Hi") get a brief friendly reply — do NOT launch campaigns, create automations, or do deep analysis unless asked.
+- For vague messages, respond conversationally and ask what they need help with — max 1-2 tool calls.
+- Only go deep (5+ tools) when the goal explicitly requires research, outreach, analysis, or multi-step work.
+
+## FAILURE RECOVERY
+- If scrape_page fails 2 times in a row, STOP scraping. The sites are likely down or blocking. Use search_web instead, or report what you have.
+- If query_database returns a column error, do NOT guess again. Instead query with select "*" and limit 1 to discover the real columns, then retry.
+- If call_api returns 404, the path is likely wrong. Check search_memory for "tool_recipe" with the service name before trying more paths.
+- NEVER call the same tool with the same arguments twice. If it failed once it will fail again.
 
 ## MEMORY
 - search_memory before decisions — you may have relevant past learnings.

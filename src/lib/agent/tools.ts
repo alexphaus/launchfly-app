@@ -161,30 +161,43 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'query_database',
-      description: `Query the business database. IMPORTANT — use ONLY these columns per table:
+      description: `Query or update the business database. IMPORTANT — use ONLY these columns per table:
 • leads: id, name, phone, email, website, address, category, notes, source, status, rating, reviews_count, google_maps_url, created_at, updated_at
-• customers: id, email, first_name, last_name, phone, name, total_spent, order_count, status, source, notes, tags, is_repeat_customer, created_at
-• hunter_prospects: id, business_name, owner_name, service_type, area, whatsapp_number, website_url, email, status, priority, notes, created_at
-• quote_leads: id, name, phone, email, quote_amount, job_type, status, source, currency, attempts, created_at
-• chat_history: id, phone, business_id, role, content, created_at
-• bookings: id, customer_id, slot_date, slot_time, status, booking_type, customer_name, customer_phone, estimate, notes, created_at
-• jobs: id, title, status, description, materials_needed, blockers, updated_at
+• customers: id, email, first_name, last_name, phone, name, total_spent, order_count, status, source, notes, tags, is_repeat_customer, building_name, area, referral_code, blast_optout, created_at
+• service_records: id, customer_id, service_type, service_name, appliance_type, units_serviced, service_details, amount, currency, payment_status, address, building_name, area, warranty_days, warranty_expires_at, warranty_claimed, next_service_due_at, reminder_sent, feedback_score, feedback_status, feedback_text, service_date, created_at
+• bookings: id, customer_id, slot_date, slot_time, status, booking_type, customer_name, customer_phone, customer_address, estimate, notes, created_at
+• products: id, name, description, price, compare_at_price, inventory_count, sales_count, conversion_rate, image_url, status, metadata, created_at
+• sales: id, product_id, amount, currency, customer_email, customer_name, stripe_session_id, payment_status, order_id, created_at
+• jobs: id, title, status, description, materials_needed, blockers, metadata, updated_at
+• suppliers: id, name, whatsapp_number, email, category, notes, avg_response_hours, created_at
+• chat_history: id, phone, role, content, created_at
 • assistants: name, goal, active, custom_rules, tools_enabled
 • agent_tasks: id, status, goal, result, steps_used, created_at, updated_at
+• businesses: id, name, phone_number, whatsapp_number, booking_url, blast_credits, blast_credits_used, slot_settings, plan_tier, ai_agent_enabled, prospecting_config, outreach_paused, total_revenue, total_leads, created_at (READ-ONLY)
+• business_integrations: id, service_name, description, base_url, auth_type, status, config, requested_by, created_at (READ-ONLY)
 Do NOT guess columns. If unsure, select * with limit 1 first.`,
       parameters: {
         type: 'object',
         properties: {
+          action: {
+            type: 'string',
+            enum: ['select', 'update', 'insert', 'delete'],
+            description: 'Operation type. Default: select. Use update to modify existing rows, insert to add new rows, delete to remove rows. businesses and business_integrations are READ-ONLY (select only).',
+          },
           table: {
             type: 'string',
-            enum: ['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers', 'assistants', 'agent_tasks'],
-            description: 'Which table to query. Use "leads" for agent-generated leads (from save_leads / search_google_maps). Use "assistants" to see available specialized agents.',
+            enum: ['customers', 'leads', 'chat_history', 'bookings', 'jobs', 'suppliers', 'assistants', 'agent_tasks', 'service_records', 'products', 'sales', 'businesses', 'business_integrations'],
+            description: 'Which table to query/update. Use "leads" for agent-generated leads. Use "service_records" for service history. Use "businesses" to check own config (read-only).',
           },
           filters: {
             type: 'object',
-            description: 'Filters object. Simple values = equality (column: value). For operators, use: {"column": {"gte": "2025-01-01"}} or {"column": {"lte": 100}} or {"column": {"ilike": "%keyword%"}}. Supported operators: gte, lte, gt, lt, ilike, neq.',
+            description: 'For select: filter rows. For update/delete: match rows to modify (REQUIRED). Simple values = equality (column: value). Operators: {"column": {"gte": "2025-01-01"}} — supports gte, lte, gt, lt, ilike, neq.',
           },
-          limit: { type: 'number', description: 'Max rows to return (default 25)' },
+          data: {
+            type: 'object',
+            description: 'For insert: the row to insert (column: value pairs). For update: the columns to change (column: newValue). Not used for select/delete.',
+          },
+          limit: { type: 'number', description: 'Max rows to return for select (default 25), or max rows to update/delete (default 1, max 50)' },
           select: { type: 'string', description: 'Columns to select (comma-separated, default *)' },
         },
         required: ['table'],
@@ -659,8 +672,10 @@ export async function executeTool(
 
     case 'query_database':
       return executeQueryDatabase(
+        (args.action as string) || 'select',
         args.table as string,
         args.filters as Record<string, unknown> | undefined,
+        args.data as Record<string, unknown> | undefined,
         (args.limit as number) || 25,
         (args.select as string) || '*',
         toolCtx.businessId,
@@ -1075,19 +1090,71 @@ async function executeSendReport(
 
 // ─── query_database ──────────────────────────────────────────────────────
 
-const ALLOWED_TABLES = new Set(['customers', 'leads', 'hunter_prospects', 'quote_leads', 'chat_history', 'bookings', 'jobs', 'suppliers', 'assistants', 'agent_tasks']);
+const ALLOWED_TABLES = new Set([
+  'customers', 'leads', 'chat_history', 'bookings', 'jobs', 'suppliers',
+  'assistants', 'agent_tasks', 'service_records', 'products', 'sales',
+  'businesses', 'business_integrations',
+]);
+const READ_ONLY_TABLES = new Set(['businesses', 'business_integrations', 'agent_tasks', 'chat_history', 'sales']);
 
 // Only allow simple column names in select (no subqueries, no functions)
 function sanitizeSelect(select: string): string {
   if (!select || select === '*') return '*';
-  // Split by comma, keep only valid column names (letters, digits, underscores)
   const cols = select.split(',').map(c => c.trim()).filter(c => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(c));
   return cols.length > 0 ? cols.join(',') : '*';
 }
 
+// Sanitize data object — only allow safe column names and primitive values
+function sanitizeData(data: Record<string, unknown>): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const safeKey = key.replace(/[^a-zA-Z0-9_]/g, '');
+    if (!safeKey) continue;
+    // Allow primitives, arrays, and plain objects (for jsonb columns)
+    if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+      safe[safeKey] = value;
+    }
+  }
+  return safe;
+}
+
+// Apply filters to a Supabase query builder
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyFilters(query: any, filters: Record<string, unknown>) {
+  let q = query;
+  for (const [key, value] of Object.entries(filters)) {
+    const safeKey = key.replace(/[^a-zA-Z0-9_]/g, '');
+    if (!safeKey) continue;
+
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const ops = value as Record<string, unknown>;
+      for (const [op, opVal] of Object.entries(ops)) {
+        if (typeof opVal !== 'string' && typeof opVal !== 'number') continue;
+        switch (op) {
+          case 'gte': q = q.gte(safeKey, opVal); break;
+          case 'lte': q = q.lte(safeKey, opVal); break;
+          case 'gt': q = q.gt(safeKey, opVal); break;
+          case 'lt': q = q.lt(safeKey, opVal); break;
+          case 'neq': q = q.neq(safeKey, opVal); break;
+          case 'ilike': {
+            const pattern = String(opVal).replace(/[^a-zA-Z0-9%_ @.-]/g, '');
+            q = q.ilike(safeKey, pattern);
+            break;
+          }
+        }
+      }
+    } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      q = q.eq(safeKey, value);
+    }
+  }
+  return q;
+}
+
 async function executeQueryDatabase(
+  action: string,
   table: string,
   filters: Record<string, unknown> | undefined,
+  data: Record<string, unknown> | undefined,
   limit: number,
   select: string,
   businessId: string,
@@ -1095,46 +1162,67 @@ async function executeQueryDatabase(
   if (!ALLOWED_TABLES.has(table)) return `Table "${table}" not allowed. Use: ${[...ALLOWED_TABLES].join(', ')}`;
 
   const supabase = getSupabase();
+  const effectiveAction = action || 'select';
 
-  let query = supabase.from(table).select(sanitizeSelect(select)).eq('business_id', businessId);
-
-  // Apply safe filters (supports equality + comparison operators)
-  if (filters) {
-    for (const [key, value] of Object.entries(filters)) {
-      const safeKey = key.replace(/[^a-zA-Z0-9_]/g, '');
-      if (!safeKey) continue;
-
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        // Operator-style: { column: { gte: "2025-01-01" } }
-        const ops = value as Record<string, unknown>;
-        for (const [op, opVal] of Object.entries(ops)) {
-          if (typeof opVal !== 'string' && typeof opVal !== 'number') continue;
-          switch (op) {
-            case 'gte': query = query.gte(safeKey, opVal); break;
-            case 'lte': query = query.lte(safeKey, opVal); break;
-            case 'gt': query = query.gt(safeKey, opVal); break;
-            case 'lt': query = query.lt(safeKey, opVal); break;
-            case 'neq': query = query.neq(safeKey, opVal); break;
-            case 'ilike': {
-              // Sanitize LIKE pattern — only allow % wildcards
-              const pattern = String(opVal).replace(/[^a-zA-Z0-9%_ @.-]/g, '');
-              query = query.ilike(safeKey, pattern);
-              break;
-            }
-          }
-        }
-      } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        query = query.eq(safeKey, value);
-      }
-    }
+  // Block writes on read-only tables
+  if (effectiveAction !== 'select' && READ_ONLY_TABLES.has(table)) {
+    return `Table "${table}" is read-only. You can only use action: "select".`;
   }
 
-  const { data, error } = await query.limit(Math.min(limit, 100)).order('created_at', { ascending: false });
+  // ─── SELECT ───
+  if (effectiveAction === 'select') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase.from(table).select(sanitizeSelect(select)).eq('business_id', businessId);
+    if (filters) query = applyFilters(query, filters);
+    const { data: rows, error } = await query.limit(Math.min(limit, 100)).order('created_at', { ascending: false });
+    if (error) return `Query error: ${error.message}`;
+    if (!rows?.length) return `No results in ${table} matching those filters.`;
+    return `${rows.length} rows:\n${JSON.stringify(rows, null, 2).substring(0, 6000)}`;
+  }
 
-  if (error) return `Query error: ${error.message}`;
-  if (!data?.length) return `No results in ${table} matching those filters.`;
+  // ─── INSERT ───
+  if (effectiveAction === 'insert') {
+    if (!data || Object.keys(data).length === 0) return 'Error: "data" object is required for insert.';
+    const safeData = sanitizeData(data);
+    // Always inject business_id for tenant isolation
+    safeData.business_id = businessId;
+    const { data: inserted, error } = await supabase.from(table).insert(safeData).select();
+    if (error) return `Insert error: ${error.message}`;
+    return `Inserted 1 row:\n${JSON.stringify(inserted?.[0], null, 2).substring(0, 3000)}`;
+  }
 
-  return `${data.length} rows:\n${JSON.stringify(data, null, 2).substring(0, 6000)}`;
+  // ─── UPDATE ───
+  if (effectiveAction === 'update') {
+    if (!data || Object.keys(data).length === 0) return 'Error: "data" object is required for update.';
+    if (!filters || Object.keys(filters).length === 0) return 'Error: "filters" are required for update to avoid overwriting all rows.';
+    const safeData = sanitizeData(data);
+    // Never allow changing business_id
+    delete safeData.business_id;
+    delete safeData.id;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase.from(table).update(safeData).eq('business_id', businessId);
+    query = applyFilters(query, filters);
+    const maxRows = Math.min(limit || 1, 50);
+    const { data: updated, error } = await query.limit(maxRows).select();
+    if (error) return `Update error: ${error.message}`;
+    if (!updated?.length) return `No rows matched the filters — nothing updated.`;
+    return `Updated ${updated.length} row(s):\n${JSON.stringify(updated, null, 2).substring(0, 3000)}`;
+  }
+
+  // ─── DELETE ───
+  if (effectiveAction === 'delete') {
+    if (!filters || Object.keys(filters).length === 0) return 'Error: "filters" are required for delete to avoid deleting all rows.';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase.from(table).delete().eq('business_id', businessId);
+    query = applyFilters(query, filters);
+    const maxRows = Math.min(limit || 1, 50);
+    const { data: deleted, error } = await query.limit(maxRows).select();
+    if (error) return `Delete error: ${error.message}`;
+    if (!deleted?.length) return `No rows matched the filters — nothing deleted.`;
+    return `Deleted ${deleted.length} row(s).`;
+  }
+
+  return `Unknown action "${effectiveAction}". Use: select, update, insert, delete.`;
 }
 
 // ─── draft_content ───────────────────────────────────────────────────────

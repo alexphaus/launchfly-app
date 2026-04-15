@@ -743,6 +743,7 @@ export async function executeAgentTask(taskId: string): Promise<{
               case 'search_google_maps': hint = `"${(a.query as string || '').substring(0, 40)}"${a.location ? ` in ${a.location as string}` : ''}${a.maxResults ? ` (max ${a.maxResults})` : ''}`; break;
               case 'save_leads':        { const action = (a.action as string) || 'save'; const count = (a.leads as unknown[] || a.updates as unknown[] || []).length; hint = action === 'update' ? `updating ${count} lead(s)` : `saving ${count} lead(s)`; break; }
               case 'query_database': {
+                const act = (a.action as string) || 'SELECT';
                 const tbl = (a.table as string) || '';
                 const sel = (a.select as string) || '*';
                 const lim = a.limit ? ` limit ${a.limit}` : '';
@@ -756,7 +757,9 @@ export async function executeAgentTask(taskId: string): Promise<{
                     return `${k}="${String(v).substring(0, 20)}"`;
                   }).join(', ');
                 }
-                hint = `SELECT ${sel === '*' ? '*' : sel.substring(0, 30)} FROM ${tbl}${filterDesc}${lim}`;
+                hint = act === 'select' || act === 'SELECT'
+                  ? `SELECT ${sel === '*' ? '*' : sel.substring(0, 30)} FROM ${tbl}${filterDesc}${lim}`
+                  : `${act.toUpperCase()} ${tbl}${filterDesc}`;
                 break;
               }
               case 'search_tasks':      hint = `"${(a.query as string || '').substring(0, 60)}"`; break;

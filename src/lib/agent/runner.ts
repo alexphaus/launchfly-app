@@ -734,33 +734,62 @@ export async function executeAgentTask(taskId: string): Promise<{
             };
             const icon = iconMap[tc.function.name] || '⚙️';
 
-            // Build a short hint from args so the owner knows what's happening
+            // Build a more descriptive hint from args so the owner understands what's happening
             const a = toolArgs;
             let hint = '';
             switch (tc.function.name) {
-              case 'search_web':        hint = (a.query as string || '').substring(0, 40); break;
-              case 'scrape_page':       { const u = (a.url as string || ''); hint = u.replace(/^https?:\/\/(www\.)?/, '').substring(0, 35); break; }
-              case 'search_google_maps': hint = `${(a.query as string || '').substring(0, 25)}${a.location ? ` in ${(a.location as string).substring(0, 15)}` : ''}`; break;
-              case 'save_leads':        { const action = (a.action as string) || 'save'; const count = (a.leads as unknown[] || a.updates as unknown[] || []).length; hint = action === 'update' ? `updating ${count} leads` : `${count} leads`; break; }
-              case 'query_database':    hint = `${a.table || ''}${a.filters ? ' (filtered)' : ''}`; break;
-              case 'search_tasks':      hint = (a.query as string || '').substring(0, 40); break;
-              case 'search_memory':     hint = (a.query as string || '').substring(0, 40); break;
-              case 'save_memory':       hint = `[${a.category || '?'}] ${(a.content as string || '').substring(0, 30)}`; break;
-              case 'draft_content':     hint = `${a.type || ''}: ${(a.topic as string || '').substring(0, 30)}`; break;
-              case 'manage_job':        hint = `${a.action || ''}${a.title ? ` "${(a.title as string).substring(0, 25)}"` : ''}`; break;
-              case 'manage_automation': hint = `${a.action || ''}${a.name ? ` "${(a.name as string).substring(0, 25)}"` : ''}`; break;
-              case 'call_api':          hint = `${(a.method as string || 'GET')} ${a.service_name || ''}${(a.path as string || '').substring(0, 20)}`; break;
+              case 'search_web':        hint = `"${(a.query as string || '').substring(0, 80)}"`; break;
+              case 'scrape_page':       { const u = (a.url as string || ''); hint = u.replace(/^https?:\/\/(www\.)?/, '').substring(0, 60); if (a.extract) hint += ` → extracting: ${(a.extract as string).substring(0, 40)}`; break; }
+              case 'search_google_maps': hint = `"${(a.query as string || '').substring(0, 40)}"${a.location ? ` in ${a.location as string}` : ''}${a.maxResults ? ` (max ${a.maxResults})` : ''}`; break;
+              case 'save_leads':        { const action = (a.action as string) || 'save'; const count = (a.leads as unknown[] || a.updates as unknown[] || []).length; hint = action === 'update' ? `updating ${count} lead(s)` : `saving ${count} lead(s)`; break; }
+              case 'query_database': {
+                const tbl = (a.table as string) || '';
+                const sel = (a.select as string) || '*';
+                const lim = a.limit ? ` limit ${a.limit}` : '';
+                let filterDesc = '';
+                if (a.filters && typeof a.filters === 'object') {
+                  filterDesc = ' where ' + Object.entries(a.filters as Record<string, unknown>).map(([k, v]) => {
+                    if (typeof v === 'object' && v !== null) {
+                      const ops = Object.entries(v as Record<string, unknown>);
+                      return ops.map(([op, val]) => `${k} ${op} "${String(val).substring(0, 20)}"`).join(', ');
+                    }
+                    return `${k}="${String(v).substring(0, 20)}"`;
+                  }).join(', ');
+                }
+                hint = `SELECT ${sel === '*' ? '*' : sel.substring(0, 30)} FROM ${tbl}${filterDesc}${lim}`;
+                break;
+              }
+              case 'search_tasks':      hint = `"${(a.query as string || '').substring(0, 60)}"`; break;
+              case 'search_memory':     hint = `"${(a.query as string || '').substring(0, 60)}"${a.category ? ` [${a.category}]` : ''}`; break;
+              case 'save_memory':       hint = `[${a.category || '?'}] "${(a.content as string || '').substring(0, 50)}"`; break;
+              case 'draft_content':     hint = `${a.type || 'content'}${a.platform ? ` for ${a.platform}` : ''}: ${(a.topic as string || '').substring(0, 50)}`; break;
+              case 'manage_job':        hint = `${a.action || ''}${a.title ? ` "${(a.title as string).substring(0, 40)}"` : ''}${a.status ? ` → ${a.status}` : ''}`; break;
+              case 'manage_automation': hint = `${a.action || 'list'}${a.name ? ` "${(a.name as string).substring(0, 40)}"` : ''}${a.trigger ? ` (${a.trigger})` : ''}`; break;
+              case 'call_api':          hint = `${(a.method as string || 'GET')} ${a.service_name || ''}${a.path as string || ''}`; break;
               case 'delegate_task':
-              case 'delegate_task_and_wait': hint = (a.assistantConfigName as string || '').substring(0, 30); break;
-              case 'browse_web':        hint = (a.url as string || (a.task as string || '').substring(0, 35)).replace(/^https?:\/\/(www\.)?/, '').substring(0, 35); break;
-              case 'run_code':          hint = (a.code as string || '').split('\n')[0].substring(0, 35); break;
-              case 'request_integration': hint = (a.display_name as string || a.service_name as string || '').substring(0, 30); break;
+              case 'delegate_task_and_wait': hint = `→ ${(a.assistantConfigName as string || 'agent')}: ${(a.goal as string || '').substring(0, 50)}`; break;
+              case 'browse_web':        hint = (a.task as string || a.url as string || '').substring(0, 60); break;
+              case 'run_code': {
+                const code = (a.code as string || '');
+                // Extract the first comment or meaningful line as purpose
+                const lines = code.split('\n').filter(l => l.trim());
+                const commentLine = lines.find(l => /^\s*\/\//.test(l));
+                hint = (commentLine || lines[0] || '').replace(/^\s*\/\/\s*/, '').substring(0, 60);
+                break;
+              }
+              case 'request_integration': hint = `requesting "${a.display_name || a.service_name || '?'}" integration`; break;
               case 'analyze_inventory': hint = (a.action as string || ''); break;
-              case 'update_instructions': hint = (a.rule as string || '').substring(0, 35); break;
-              case 'make_call':         hint = (a.phone as string || '').substring(0, 15); break;
-              case 'request_approval':  hint = (a.question as string || '').substring(0, 35); break;
-              case 'get_weather_forecast': hint = (a.location as string || '').substring(0, 25); break;
+              case 'update_instructions': hint = `"${(a.rule as string || '').substring(0, 60)}"`; break;
+              case 'send_email':        hint = `→ ${(a.to as string || '').substring(0, 30)}${a.subject ? `: ${(a.subject as string).substring(0, 40)}` : ''}`; break;
+              case 'make_call':         hint = `→ ${(a.phone as string || '')}${a.purpose ? ` (${(a.purpose as string).substring(0, 30)})` : ''}`; break;
+              case 'request_approval':  hint = `"${(a.question as string || '').substring(0, 60)}"`; break;
+              case 'get_weather_forecast': hint = (a.location as string || ''); break;
+              case 'send_whatsapp':     hint = `→ ${(a.phone as string || '').substring(0, 15)}`; break;
+              case 'send_voice_note':   hint = `→ ${(a.phone as string || '').substring(0, 15)}`; break;
+              case 'post_social':       hint = `${(a.platform as string || 'social')}: ${(a.content as string || '').substring(0, 40)}`; break;
             }
+            // Cap hint length for WhatsApp readability
+            if (hint.length > 120) hint = hint.substring(0, 117) + '...';
             const statusMsg = hint ? `_${icon} ${tc.function.name}: ${hint}_` : `_${icon} ${tc.function.name}..._`;
 
             // Fire-and-forget via the Launchfly CEO instance — NOT the business instance.

@@ -25,7 +25,7 @@ function getSupabase() {
 const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
-  'search_memory', 'save_memory', 'search_tasks',
+  'search_memory', 'save_memory', 'validate_memory', 'search_tasks',
 ]);
 const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social']);
 
@@ -415,6 +415,23 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
   {
     type: 'function' as const,
     function: {
+      name: 'validate_memory',
+      description: 'Mark a past memory as validated (it worked) or invalidated (it was wrong). Use when you confirm or disprove a saved strategy, supplier note, price, or pattern. Validated memories get an importance boost; invalidated ones get archived. Helps the memory system learn what actually works.',
+      parameters: {
+        type: 'object',
+        properties: {
+          memory_content_snippet: { type: 'string', description: 'A snippet from the memory content (will match via text search)' },
+          outcome: { type: 'string', enum: ['validated', 'invalidated', 'superseded'], description: 'validated = confirmed correct/useful, invalidated = wrong/outdated, superseded = replaced by newer info' },
+          reason: { type: 'string', description: 'Brief reason for the validation (e.g. "Supplier confirmed 15% discount still active")' },
+        },
+        required: ['memory_content_snippet', 'outcome'],
+      },
+    },
+  },
+  // ── Task History Search (search_tasks) ─────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
       name: 'search_tasks',
       description: 'Search past completed agent tasks by keyword. Use when the owner asks about previous work, old suppliers, past reports, historical decisions, or anything you did before. Returns matching tasks with their goals and results.',
       parameters: {
@@ -563,7 +580,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'update_instructions',
-      description: 'Add a new learned rule to your own instructions. This permanently changes how you behave for this business. Use when: (1) the owner corrects you or states a preference ("always quote in PHP", "never contact suppliers on Sunday"), (2) you discover a pattern that should persist ("Supplier X is unreliable", "use GCash not bank transfer for Manila jobs"), (3) you learn a business-specific fact that affects decisions. Rules are capped at 50 — the oldest low-value rule is dropped if full. The owner can see and edit these rules in the Assistant settings UI.',
+      description: 'Add a new learned rule to your own instructions. This permanently changes how you behave for this business. Use when: (1) the owner corrects you or states a preference ("always quote in PHP", "never contact suppliers on Sunday"), (2) you discover a pattern that should persist ("Supplier X is unreliable", "use GCash not bank transfer for Manila jobs"), (3) you learn a business-specific fact that affects decisions. Rules are capped at 15 — when full, similar rules are merged or the least specific is dropped. The owner can see and edit these rules in the Assistant settings UI.',
       parameters: {
         type: 'object',
         properties: {
@@ -721,6 +738,9 @@ export async function executeTool(
 
     case 'save_memory':
       return executeSaveMemory(args.content as string, args.category as string, toolCtx, (args.importance as number) || 0.5);
+
+    case 'validate_memory':
+      return executeValidateMemory(args.memory_content_snippet as string, args.outcome as string, toolCtx.businessId, args.reason as string | undefined);
 
     case 'call_api':
       return executeCallApi(args as Record<string, unknown>, toolCtx);
@@ -2081,6 +2101,78 @@ async function executeSaveMemory(
   }
 }
 
+// ─── validate_memory (outcome tracking) ──────────────────────────────────
+
+async function executeValidateMemory(
+  snippet: string,
+  outcome: string,
+  businessId: string,
+  reason?: string,
+): Promise<string> {
+  if (!snippet || snippet.length < 10) return 'Error: memory_content_snippet must be at least 10 characters long to ensure an accurate match.';
+  if (!['validated', 'invalidated', 'superseded'].includes(outcome)) {
+    return 'Error: outcome must be "validated", "invalidated", or "superseded".';
+  }
+
+  const supabase = getSupabase();
+
+  // Find the memory by content snippet
+  const { data: matches, error: findErr } = await supabase
+    .from('ai_memories')
+    .select('id, content, importance_score, category')
+    .eq('business_id', businessId)
+    .eq('archived', false)
+    .ilike('content', `%${snippet.replace(/[%_'"\\]/g, ' ').substring(0, 100)}%`)
+    .limit(3);
+
+  if (findErr) return `Search failed: ${findErr.message}`;
+  if (!matches?.length) return `No matching memory found for: "${snippet.substring(0, 60)}"`;
+
+  const mem = matches[0]; // Best match
+
+  const now = new Date().toISOString();
+
+  if (outcome === 'validated') {
+    // Boost importance by 0.1 (max 1.0)
+    const newScore = Math.min(1.0, Math.round((mem.importance_score + 0.1) * 100) / 100);
+    // Fetch existing metadata to avoid overwriting
+    const { data: full } = await supabase.from('ai_memories').select('metadata').eq('id', mem.id).single();
+    const existingMeta = (full?.metadata as Record<string, unknown>) || {};
+    const { error } = await supabase
+      .from('ai_memories')
+      .update({
+        outcome: 'validated',
+        validated_at: now,
+        importance_score: newScore,
+        updated_at: now,
+        metadata: { ...existingMeta, validated_reason: reason || 'confirmed by agent', validated_at: now },
+      })
+      .eq('id', mem.id);
+    if (error) return `Update failed: ${error.message}`;
+    return `✅ Memory validated (importance ${mem.importance_score} → ${newScore}): "${mem.content.substring(0, 80)}"`;
+  }
+
+  if (outcome === 'invalidated' || outcome === 'superseded') {
+    // Archive the memory — it's no longer accurate
+    const { data: full } = await supabase.from('ai_memories').select('metadata').eq('id', mem.id).single();
+    const existingMeta = (full?.metadata as Record<string, unknown>) || {};
+    const { error } = await supabase
+      .from('ai_memories')
+      .update({
+        outcome,
+        validated_at: now,
+        archived: true,
+        updated_at: now,
+        metadata: { ...existingMeta, invalidated_reason: reason || `${outcome} by agent`, invalidated_at: now },
+      })
+      .eq('id', mem.id);
+    if (error) return `Update failed: ${error.message}`;
+    return `🗑️ Memory ${outcome} and archived: "${mem.content.substring(0, 80)}"${reason ? ` (${reason})` : ''}`;
+  }
+
+  return 'Unknown outcome.';
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FEATURE: Dynamic API Calling (call_api + request_integration)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2617,7 +2709,7 @@ async function executeManageAutomation(
 
 // ─── update_instructions (self-improvement via custom_rules) ─────────────
 
-const MAX_CUSTOM_RULES = 50;
+const MAX_CUSTOM_RULES = 15;
 
 async function executeUpdateInstructions(
   rule: string,
@@ -2663,10 +2755,50 @@ async function executeUpdateInstructions(
     return `✅ Updated rule #${replaceIndex + 1}.\nOld: "${old}"\nNew: "${cleaned}"\n(${rules.length} rules total)`;
   }
 
-  // Append new rule — drop oldest if over cap
+  // At capacity — find most similar existing rule to merge with, or drop the least specific one
   if (rules.length >= MAX_CUSTOM_RULES) {
-    rules.shift(); // drop oldest
+    // Find the most similar existing rule (simple word-overlap heuristic — no LLM call needed)
+    const newWords = new Set(cleaned.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    let bestOverlap = 0;
+    let bestIdx = 0;
+
+    for (let i = 0; i < rules.length; i++) {
+      const ruleWords = rules[i].toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      const overlap = ruleWords.filter(w => newWords.has(w)).length;
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestIdx = i;
+      }
+    }
+
+    if (bestOverlap >= 2) {
+      // Merge: keep the new rule, drop the overlapping old one (new supersedes old)
+      const dropped = rules[bestIdx];
+      rules[bestIdx] = cleaned;
+      const { error: saveErr } = await supabase
+        .from('assistants')
+        .update({ custom_rules: rules })
+        .eq('id', assistant.id);
+      if (saveErr) return `Failed to save rule: ${saveErr.message}`;
+      return `✅ Learned: "${cleaned}"\n(Merged with similar rule #${bestIdx + 1}: "${dropped}")\n(${rules.length}/${MAX_CUSTOM_RULES} rules)`;
+    } else {
+      // No similar rule — drop the shortest (least specific) rule
+      let shortestIdx = 0;
+      for (let i = 1; i < rules.length; i++) {
+        if (rules[i].length < rules[shortestIdx].length) shortestIdx = i;
+      }
+      const dropped = rules[shortestIdx];
+      rules.splice(shortestIdx, 1);
+      rules.push(cleaned);
+      const { error: saveErr } = await supabase
+        .from('assistants')
+        .update({ custom_rules: rules })
+        .eq('id', assistant.id);
+      if (saveErr) return `Failed to save rule: ${saveErr.message}`;
+      return `✅ Learned: "${cleaned}"\n(Dropped least specific rule: "${dropped}" to stay within ${MAX_CUSTOM_RULES} limit)\n(${rules.length}/${MAX_CUSTOM_RULES} rules)`;
+    }
   }
+
   rules.push(cleaned);
 
   const { error: saveErr } = await supabase

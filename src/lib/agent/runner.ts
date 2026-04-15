@@ -73,7 +73,7 @@ const CHARS_PER_TOKEN = 3.5;               // Rough estimate for English/mixed c
 const PARALLEL_SAFE_TOOLS = new Set([
   'search_web', 'scrape_page', 'search_memory', 'search_tasks',
   'query_database', 'get_weather_forecast', 'search_google_maps',
-  'save_memory', 'save_leads', 'draft_content',
+  'save_memory', 'save_leads', 'draft_content', 'validate_memory',
 ]);
 
 // ─── Skill Auto-Creation ─────────────────────────────────────────────────
@@ -499,29 +499,67 @@ export async function executeAgentTask(taskId: string): Promise<{
               memoryContext += `${((s as any).content || '').substring(0, 600)}\n---\n`;
             }
           }
+
+          // ── Auto-inject relevant memories (eliminates "agent forgot to search" problem) ──
+          try {
+            const { data: autoMemories, error: memErr } = await supabase.rpc('search_memories', {
+              query_embedding: goalEmbedding,
+              match_business_id: row.business_id,
+              match_category: null,
+              match_count: 5,
+            });
+
+            if (!memErr && autoMemories?.length) {
+              // Only inject memories with reasonable similarity (> 0.25)
+              const relevant = autoMemories.filter((m: any) => (m.similarity || 0) > 0.25);
+              if (relevant.length > 0) {
+                memoryContext += '\n\n## AUTO-RECALLED MEMORIES (relevant to this goal — no need to search_memory for these)\n';
+                for (const m of relevant) {
+                  const cat = (m as any).category || 'general';
+                  const imp = (m as any).importance_score || 0.5;
+                  const sim = ((m as any).similarity || 0).toFixed(2);
+                  memoryContext += `- [${cat}] (importance: ${imp}, relevance: ${sim}) ${((m as any).content || '').substring(0, 400)}\n`;
+                }
+                // Track auto-recall for last_recalled_at updates
+                const recalledIds = relevant.map((m: any) => m.id).filter(Boolean);
+                if (recalledIds.length > 0) {
+                  try {
+                    await supabase.rpc('touch_recalled_memories', { memory_ids: recalledIds });
+                  } catch { /* columns not yet migrated — non-fatal */ }
+                }
+              }
+            }
+          } catch (memAutoErr) {
+            console.warn(`[agent:${taskId}] Auto-recall memories failed (non-fatal):`, memAutoErr);
+          }
         }
       }
     } catch (e) {
       console.warn(`[agent:${taskId}] Skills recall failed (non-fatal):`, e);
     }
 
-    // ── Business DNA: inject latest playbook + strategic insights ──
+    // ── Business DNA: inject playbooks (these may not overlap with auto-recall since they're category-filtered) ──
     try {
       const { data: dnaMemories } = await supabase
         .from('ai_memories')
-        .select('content, category, importance_score')
+        .select('id, content, category, importance_score')
         .eq('business_id', row.business_id)
-        .in('category', ['playbook', 'strategic_insight'])
-        .gte('importance_score', 0.7)
+        .eq('category', 'playbook')
+        .eq('archived', false)
+        .gte('importance_score', 0.5)
         .order('importance_score', { ascending: false })
         .order('updated_at', { ascending: false })
-        .limit(5);
+        .limit(3);
 
       if (dnaMemories?.length) {
-        memoryContext += '\n\n## BUSINESS DNA (what works for this business — build on these)\n';
+        memoryContext += '\n\n## BUSINESS PLAYBOOKS (proven strategies for this business)\n';
         for (const m of dnaMemories) {
-          const badge = m.category === 'playbook' ? '📋 Playbook' : '💡 Insight';
-          memoryContext += `**${badge}** (confidence: ${m.importance_score}): ${(m.content || '').substring(0, 500)}\n---\n`;
+          memoryContext += `📋 (confidence: ${m.importance_score}): ${(m.content || '').substring(0, 500)}\n---\n`;
+        }
+        // Touch playbook recall too
+        const playbookIds = dnaMemories.map(m => m.id).filter(Boolean);
+        if (playbookIds.length > 0) {
+          try { await supabase.rpc('touch_recalled_memories', { memory_ids: playbookIds }); } catch { /* non-fatal */ }
         }
       }
     } catch (e) {
@@ -1399,8 +1437,10 @@ ${customRulesBlock}
 - NEVER call the same tool with the same arguments twice. If it failed once it will fail again.
 
 ## MEMORY
-- search_memory before decisions — you may have relevant past learnings.
+- Relevant memories are AUTO-INJECTED into your context above — check them before calling search_memory.
+- Only call search_memory if you need memories on a DIFFERENT topic than your current goal.
 - save_memory after discovering important facts (contacts, prices, preferences, patterns).
+- validate_memory when you confirm or disprove a past memory (boosts validated ones, archives wrong ones).
 - After multi-step workflows (3+ tools), save the workflow as a skill: SKILL name, TRIGGER, STEPS, TIPS.
 - If the owner corrects you → save_memory (preference) AND update_instructions to permanently learn the rule.
 

@@ -29,6 +29,33 @@ export default function TestChatPage() {
     inputRef.current?.focus();
   }, []);
 
+  const [statusText, setStatusText] = useState('');
+
+  async function pollForResult(taskId: string) {
+    const pollUrl = `/api/test-chat?taskId=${taskId}&phone=${TEST_PHONE}&businessId=${BUSINESS_ID}`;
+    const maxAttempts = 60; // poll for up to 2 minutes
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const res = await fetch(pollUrl);
+        const data = await res.json();
+
+        if (data.status === 'pending' || data.status === 'running') {
+          const tools = (data.toolsSoFar || []) as string[];
+          const lastTool = tools.length > 0 ? tools[tools.length - 1] : '';
+          setStatusText(`step ${data.stepsUsed || 0}${lastTool ? ` — ${lastTool}` : ''}...`);
+          continue;
+        }
+
+        // Done (completed or failed)
+        return data;
+      } catch {
+        continue; // network hiccup, retry
+      }
+    }
+    return { error: 'Timed out waiting for agent' };
+  }
+
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
@@ -43,14 +70,31 @@ export default function TestChatPage() {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
+    setStatusText('dispatching...');
 
     try {
+      // Step 1: Dispatch (instant)
       const res = await fetch('/api/test-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, phone: TEST_PHONE, businessId: BUSINESS_ID }),
       });
-      const data = await res.json();
+      const dispatch = await res.json();
+
+      if (dispatch.error) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `[Error: ${dispatch.error}]`,
+          timestamp: new Date(),
+        }]);
+        return;
+      }
+
+      setStatusText('agent running...');
+
+      // Step 2: Poll for result
+      const data = await pollForResult(dispatch.taskId);
 
       if (data.error) {
         setMessages(prev => [...prev, {
@@ -60,8 +104,7 @@ export default function TestChatPage() {
           timestamp: new Date(),
         }]);
       } else {
-        // Show each bubble the agent would have sent via WhatsApp
-        const bubbles: string[] = data.bubbles || [data.reply];
+        const bubbles: string[] = data.bubbles || [data.reply || '[No response]'];
         for (let i = 0; i < bubbles.length; i++) {
           const aiMsg: Message = {
             id: `${Date.now()}-${i}`,
@@ -73,7 +116,6 @@ export default function TestChatPage() {
           };
           setMessages(prev => [...prev, aiMsg]);
         }
-        // Show agent metadata as a system note
         if (data.stepsUsed || data.status) {
           setMessages(prev => [...prev, {
             id: `${Date.now()}-meta`,
@@ -92,6 +134,7 @@ export default function TestChatPage() {
       }]);
     } finally {
       setLoading(false);
+      setStatusText('');
       inputRef.current?.focus();
     }
   }
@@ -128,7 +171,7 @@ export default function TestChatPage() {
         <div style={{ flex: 1 }}>
           <div style={{ color: '#e9edef', fontWeight: 600, fontSize: 16 }}>Agent Test Chat</div>
           <div style={{ color: '#8696a0', fontSize: 12 }}>
-            {loading ? 'agent running...' : 'Simulates new lead via WhatsApp'}
+            {loading ? (statusText || 'agent running...') : 'Simulates new lead via WhatsApp'}
           </div>
         </div>
         <button

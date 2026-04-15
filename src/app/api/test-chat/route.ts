@@ -1,15 +1,16 @@
 // src/app/api/test-chat/route.ts
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Chat API — simulates a new WhatsApp lead hitting the agent pipeline.
-// Runs the REAL agent (same as production) but synchronously, extracting
-// what it would have sent via send_whatsapp / send_report from the tool_log.
+// POST = dispatches task (returns taskId instantly)
+// GET  = polls task status (returns result when done)
+// Runs the REAL agent via QStash, same as production.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { saveMessage } from '@/lib/ai-receptionist/history';
 
-export const maxDuration = 60;
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 function getSupabase() {
@@ -19,6 +20,7 @@ function getSupabase() {
   );
 }
 
+// ── POST: create task and dispatch (returns immediately) ──
 export async function POST(request: NextRequest) {
   try {
     const { message, phone, businessId } = await request.json();
@@ -30,17 +32,16 @@ export async function POST(request: NextRequest) {
     const testPhone = phone || 'test-chat-lead';
     const supabase = getSupabase();
 
-    // Save the user message to chat_history (agent reads this for context)
+    // Save user message to chat_history (agent reads this for context)
     await saveMessage(testPhone, 'user', message, businessId);
 
-    // Fetch the automation rules to get agent goal/role (same as production)
+    // Fetch automation rules to get agent goal/role
     const { data: rules } = await supabase
       .from('automation_rules')
       .select('name, steps')
       .eq('business_id', businessId)
       .eq('active', true);
 
-    // Find the first rule with an agent_task step (like the one in the UI)
     let agentGoal = '';
     let agentRole = '';
     if (rules?.length) {
@@ -56,7 +57,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build the goal with event context (same as executor.ts does)
     let goal = agentGoal || 'A new lead sent a WhatsApp message. Read the chat_history for context, identify who they are (lead, customer, or supplier), and respond appropriately via send_whatsapp.';
     const contextParts: string[] = [
       `Customer phone: ${testPhone}`,
@@ -73,82 +73,100 @@ export async function POST(request: NextRequest) {
       .single();
     const ownerPhone = biz?.whatsapp_notify_number || biz?.phone_number || undefined;
 
-    // Create the agent task (DB row only — no QStash dispatch)
-    const taskId = crypto.randomUUID();
-    const { error: insertErr } = await supabase.from('agent_tasks').insert({
-      id: taskId,
-      business_id: businessId,
-      status: 'pending',
+    // Create task and dispatch via QStash (same as production)
+    const { createAgentTask } = await import('@/lib/agent/runner');
+    const { taskId, dispatched } = await createAgentTask({
+      businessId,
       goal,
-      role: agentRole || null,
-      messages: [],
-      steps_used: 0,
-      tool_log: [],
-      result: null,
-      owner_phone: ownerPhone || null,
-      enabled_tools: null, // all tools
+      role: agentRole || undefined,
+      ownerPhone,
     });
 
-    if (insertErr) {
-      return NextResponse.json({ error: `Failed to create task: ${insertErr.message}` }, { status: 500 });
+    if (!dispatched) {
+      return NextResponse.json({ error: 'Task created but QStash dispatch failed' }, { status: 500 });
     }
 
-    // Execute the agent SYNCHRONOUSLY (same function QStash would call)
-    const { executeAgentTask } = await import('@/lib/agent/runner');
-    const result = await executeAgentTask(taskId);
-
-    // Extract what the agent would have sent via WhatsApp from tool_log
-    const { data: taskRow } = await supabase
-      .from('agent_tasks')
-      .select('tool_log, result')
-      .eq('id', taskId)
-      .single();
-
-    const toolLog = (taskRow?.tool_log || []) as Array<{
-      tool: string;
-      args: Record<string, unknown>;
-      result: string;
-    }>;
-
-    // Collect all outbound messages (send_whatsapp, send_report, send_voice_note)
-    const outboundMessages: string[] = [];
-    const toolsCalled: string[] = [];
-    for (const entry of toolLog) {
-      toolsCalled.push(entry.tool);
-      if (entry.tool === 'send_whatsapp' || entry.tool === 'send_report') {
-        const msg = (entry.args?.message as string) || '';
-        if (msg) outboundMessages.push(msg);
-      }
-      if (entry.tool === 'send_voice_note') {
-        outboundMessages.push('🎤 [Voice Note]');
-      }
-    }
-
-    // Fallback: if agent didn't send_whatsapp, use the task result
-    if (outboundMessages.length === 0 && taskRow?.result) {
-      outboundMessages.push(taskRow.result);
-    }
-    if (outboundMessages.length === 0) {
-      outboundMessages.push('[Agent completed but produced no outbound message]');
-    }
-
-    // Save the agent's outbound to chat_history (for continuity)
-    for (const msg of outboundMessages) {
-      await saveMessage(testPhone, 'assistant', msg, businessId);
-    }
-
-    return NextResponse.json({
-      reply: outboundMessages.join('\n\n'),
-      bubbles: outboundMessages,
-      toolsCalled: [...new Set(toolsCalled)],
-      taskId,
-      status: result.status,
-      stepsUsed: result.stepsUsed,
-    });
+    return NextResponse.json({ taskId, status: 'dispatched' });
   } catch (error) {
-    console.error('Test chat error:', error);
-    return NextResponse.json({ error: 'Agent execution failed' }, { status: 500 });
+    console.error('Test chat POST error:', error);
+    return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
+}
+
+// ── GET: poll task status and extract results ──
+export async function GET(request: NextRequest) {
+  const taskId = request.nextUrl.searchParams.get('taskId');
+  if (!taskId) {
+    return NextResponse.json({ error: 'taskId required' }, { status: 400 });
+  }
+
+  const supabase = getSupabase();
+  const { data: task, error } = await supabase
+    .from('agent_tasks')
+    .select('status, steps_used, tool_log, result')
+    .eq('id', taskId)
+    .single();
+
+  if (error || !task) {
+    return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+  }
+
+  // Still running — return status for polling
+  if (task.status === 'pending' || task.status === 'running') {
+    // Extract live tool progress so far
+    const toolLog = (task.tool_log || []) as Array<{ tool: string }>;
+    const toolsSoFar = toolLog.map(e => e.tool);
+    return NextResponse.json({
+      status: task.status,
+      stepsUsed: task.steps_used || 0,
+      toolsSoFar,
+    });
+  }
+
+  // Completed or failed — extract outbound messages
+  const toolLog = (task.tool_log || []) as Array<{
+    tool: string;
+    args: Record<string, unknown>;
+    result: string;
+  }>;
+
+  const outboundMessages: string[] = [];
+  const toolsCalled: string[] = [];
+  for (const entry of toolLog) {
+    toolsCalled.push(entry.tool);
+    if (entry.tool === 'send_whatsapp' || entry.tool === 'send_report') {
+      const msg = (entry.args?.message as string) || '';
+      if (msg) outboundMessages.push(msg);
+    }
+    if (entry.tool === 'send_voice_note') {
+      outboundMessages.push('🎤 [Voice Note]');
+    }
+  }
+
+  if (outboundMessages.length === 0 && task.result) {
+    outboundMessages.push(task.result);
+  }
+  if (outboundMessages.length === 0) {
+    outboundMessages.push('[Agent completed but produced no outbound message]');
+  }
+
+  // Save outbound to chat_history for conversational continuity
+  const phone = request.nextUrl.searchParams.get('phone') || 'test-chat-lead';
+  const businessId = request.nextUrl.searchParams.get('businessId');
+  if (businessId) {
+    for (const msg of outboundMessages) {
+      await saveMessage(phone, 'assistant', msg, businessId);
+    }
+  }
+
+  return NextResponse.json({
+    status: task.status,
+    reply: outboundMessages.join('\n\n'),
+    bubbles: outboundMessages,
+    toolsCalled: [...new Set(toolsCalled)],
+    stepsUsed: task.steps_used || 0,
+    result: task.result,
+  });
 }
 
 // Clear chat history for test phone

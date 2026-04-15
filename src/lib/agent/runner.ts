@@ -1405,6 +1405,7 @@ ${customRulesBlock}
 - **run_code**: Sandboxed JS — no network/filesystem. Fetch data with other tools first, then pass as literals.
 - **browse_web**: Real cloud browser for clicking, typing, forms. Use search_web/scrape_page for simple reads (cheaper).
 - **call_api / request_integration**: Check search_memory for "tool_recipe" first. Save recipes after success. Request ONE integration at a time. NEVER request integrations on your own initiative — only when the owner asks.
+- **request_integration (webhook mode)**: When the owner says "set up a webhook for X" or "I connected X, wake up when it fires", use request_integration with webhook=true and webhook_instructions describing what to do when events arrive. This generates a URL the owner pastes into the external service settings.
 - **send_email / make_call**: For cold outreach, use request_approval first.
 - **update_instructions**: Save permanent behavioral rules, not one-time facts (use save_memory for those).
 

@@ -438,18 +438,20 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'request_integration',
-      description: 'Connect a new external service/API. If the owner already provided an API key in the conversation, pass it in the api_key field to activate immediately. Otherwise, sends the owner a WhatsApp message asking for the key.',
+      description: 'Connect a new external service/API. If the owner already provided an API key in the conversation, pass it in the api_key field to activate immediately. Otherwise, sends the owner a WhatsApp message asking for the key. For WEBHOOK integrations (Retell, Zapier, Stripe, etc.), set webhook=true — this generates a webhook URL the owner can paste into the external service so the agent wakes up when events arrive.',
       parameters: {
         type: 'object',
         properties: {
-          service_name: { type: 'string', description: 'Short identifier for the service (e.g. "creatomate", "elevenlabs", "apollo")' },
-          display_name: { type: 'string', description: 'Human-readable service name (e.g. "Creatomate Video API"). Required for new requests; optional if activating.' },
-          signup_url: { type: 'string', description: 'URL where the owner can create an account and get an API key. Required for new requests; optional if activating a pending request.' },
-          base_url: { type: 'string', description: 'The API base URL (e.g. "https://api.creatomate.com/v1"). Required for new requests; optional if activating a pending request.' },
-          reason: { type: 'string', description: 'Why this integration would help the business (1-2 sentences). Required for new requests; optional if activating a pending request.' },
-          estimated_cost: { type: 'string', description: 'Estimated monthly cost or per-use cost (e.g. "$9/mo", "~$0.10/video")' },
+          service_name: { type: 'string', description: 'Short identifier for the service (e.g. "creatomate", "elevenlabs", "retell_webhook")' },
+          display_name: { type: 'string', description: 'Human-readable service name (e.g. "Retell Post-Call Webhook"). Required for new requests.' },
+          signup_url: { type: 'string', description: 'URL where the owner can create an account and get an API key. Required for new API requests; optional for webhook-only.' },
+          base_url: { type: 'string', description: 'The API base URL (e.g. "https://api.creatomate.com/v1"). Required for API integrations; optional for webhook-only.' },
+          reason: { type: 'string', description: 'Why this integration would help the business (1-2 sentences). Required for new requests.' },
+          estimated_cost: { type: 'string', description: 'Estimated monthly cost or per-use cost (e.g. "$9/mo", "free")' },
           auth_type: { type: 'string', enum: ['bearer', 'basic', 'query_param', 'custom_header'], description: 'How the API key should be sent (default: bearer)' },
-          api_key: { type: 'string', description: 'If the owner already provided the API key in conversation, pass it here to activate the integration immediately.' },
+          api_key: { type: 'string', description: 'If the owner already provided the API key in conversation, pass it here to activate immediately.' },
+          webhook: { type: 'boolean', description: 'Set to true to generate a webhook URL. The agent will automatically wake up when this service sends events to the URL.' },
+          webhook_instructions: { type: 'string', description: 'Instructions for the agent on what to do when a webhook event arrives (e.g. "When a call ends, check the sentiment. If positive, save as lead and follow up via WhatsApp."). Saved so the agent knows how to handle events.' },
         },
         required: ['service_name'],
       },
@@ -2170,6 +2172,8 @@ async function executeRequestIntegration(
   const reason = args.reason as string;
   const estimatedCost = (args.estimated_cost as string) || 'unknown';
   const authType = (args.auth_type as string) || 'bearer';
+  const isWebhook = Boolean(args.webhook);
+  const webhookInstructions = (args.webhook_instructions as string) || '';
 
   if (!serviceName) {
     return 'Error: service_name is required.';
@@ -2181,6 +2185,87 @@ async function executeRequestIntegration(
   const providedKey = (args.api_key as string || '').trim();
 
   const supabase = getSupabase();
+
+  // ── WEBHOOK MODE: generate a secret + URL and register ──
+  if (isWebhook) {
+    // Check if webhook already exists for this service
+    const { data: existing } = await supabase
+      .from('business_integrations')
+      .select('id, config, status')
+      .eq('business_id', toolCtx.businessId)
+      .eq('service_name', serviceName)
+      .maybeSingle();
+
+    if (existing?.status === 'active') {
+      const existingSecret = (existing.config as Record<string, unknown>)?.webhook_secret;
+      if (existingSecret) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+        const webhookUrl = `${appUrl}/api/webhook/agent?key=${existingSecret}`;
+        return `Webhook already active for "${displayName}".\n\n🔗 Webhook URL:\n${webhookUrl}\n\nPaste this URL in the ${displayName} settings.`;
+      }
+    }
+
+    // Generate a cryptographically random webhook secret
+    const webhookSecret = crypto.randomUUID();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai';
+    const webhookUrl = `${appUrl}/api/webhook/agent?key=${webhookSecret}`;
+
+    const config: Record<string, unknown> = {
+      webhook_secret: webhookSecret,
+      display_name: displayName,
+      webhook_url: webhookUrl,
+    };
+    if (webhookInstructions) config.instructions = webhookInstructions;
+    if (signupUrl) config.signup_url = signupUrl;
+    if (estimatedCost !== 'unknown') config.estimated_cost = estimatedCost;
+
+    const { error } = await supabase.from('business_integrations').upsert({
+      business_id: toolCtx.businessId,
+      service_name: serviceName,
+      description: `${displayName}${reason ? ` — ${reason}` : ''}`,
+      base_url: baseUrl || '',
+      auth_type: authType,
+      api_key_encrypted: providedKey || null,
+      status: 'active',
+      requested_by: 'agent',
+      request_context: reason || 'Webhook integration',
+      config,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'business_id,service_name' });
+
+    if (error) return `Failed to create webhook integration: ${error.message}`;
+
+    // Send the webhook URL to the owner
+    const msg = `🔗 *Webhook Ready: ${displayName}*${toolCtx.assistantName ? ` — ${toolCtx.assistantName}` : ''}\n\n` +
+      `I've set up a webhook so I can wake up when ${displayName} sends events.\n\n` +
+      `📋 *Paste this URL in your ${displayName} settings:*\n${webhookUrl}\n\n` +
+      (webhookInstructions ? `📌 *When events arrive, I will:* ${webhookInstructions.substring(0, 200)}\n\n` : '') +
+      (signupUrl ? `🔗 Service dashboard: ${signupUrl}\n` : '') +
+      `_Once configured, I'll automatically process incoming events._`;
+
+    try {
+      const launchflyInstance = process.env.LAUNCHFLY_INSTANCE_NAME;
+      if (launchflyInstance) {
+        const evo = await import('@/lib/evolution');
+        const creds = {
+          baseUrl: process.env.EVOLUTION_BASE_URL!,
+          apiKey: process.env.EVOLUTION_API_KEY!,
+          instanceName: launchflyInstance,
+        };
+        await evo.sendWhatsAppWithCreds(toolCtx.ownerPhone, msg, creds);
+      } else {
+        const { getWhatsAppProvider } = await import('@/lib/whatsapp-provider');
+        const provider = await getWhatsAppProvider(toolCtx.businessId);
+        await provider.sendWhatsApp(toolCtx.ownerPhone, msg, toolCtx.businessId);
+      }
+    } catch {
+      // Still return the URL even if WhatsApp fails
+    }
+
+    return `✅ Webhook integration "${displayName}" is ACTIVE.\n\nWebhook URL: ${webhookUrl}\n\nThe owner has been sent this URL. When ${displayName} sends events to this URL, I will wake up and ${webhookInstructions || 'analyze the event and take appropriate action'}.`;
+  }
+
+  // ── STANDARD API MODE (existing logic) ──
 
   // ── Check if already exists ──
   const { data: existing } = await supabase

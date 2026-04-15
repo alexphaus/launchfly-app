@@ -868,7 +868,12 @@ export async function executeAgentTask(taskId: string): Promise<{
             stepsThisInvocation++;
           }
 
-          await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+          // Save immediately after parallel batch — prevents losing all progress on crash
+          try {
+            await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+          } catch (saveErr) {
+            console.error(`[agent:${taskId}] Failed to save progress after parallel batch:`, saveErr);
+          }
 
           // Wall-clock check after parallel batch
           if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
@@ -893,11 +898,13 @@ export async function executeAgentTask(taskId: string): Promise<{
             stepsThisInvocation++;
             seqSinceLastSave++;
 
-            // Batch saves: every 2 sequential tools, or on pause/break
-            if (seqSinceLastSave >= 2) {
+            // Save after every tool — prevents losing progress on crash
+            try {
               await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
-              seqSinceLastSave = 0;
+            } catch (saveErr) {
+              console.error(`[agent:${taskId}] Failed to save progress:`, saveErr);
             }
+            seqSinceLastSave = 0;
 
             // ── PAUSE SIGNAL ──
             if (r.result.startsWith('__PAUSE__:')) {

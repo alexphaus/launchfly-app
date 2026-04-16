@@ -818,8 +818,8 @@ async function executeSearchWeb(
         type: 'auto',
         numResults: 5,
         contents: {
-          highlights: { numSentences: 2 },
-          text: { maxCharacters: 1000 },
+          highlights: { numSentences: 3 },
+          text: { maxCharacters: 2000 },
           summary: true,
           livecrawl: 'fallback',
         },

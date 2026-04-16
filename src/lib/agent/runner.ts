@@ -50,7 +50,7 @@ const AGENT_MODEL = 'deepseek-chat';
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — Vercel Pro allows 60s, 10s gives a robust buffer for DB saves & QStash
 const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
-const TOOL_RESULT_MAX = 4000;         // Max chars per tool result stored in messages
+const TOOL_RESULT_MAX = 12000;        // Max chars per tool result stored in messages (accommodates 5 deep Exa results)
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
 // Some tools legitimately need more time (e.g. Apify actor runs, browser automation)
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {

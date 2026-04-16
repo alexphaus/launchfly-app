@@ -343,17 +343,6 @@ export async function POST(request: NextRequest) {
     if (pushname) console.log(`   Name: ${pushname}`);
     if (hasAudio) console.log(`   🎤 Audio message (transcribed: ${messageText !== '[Voice note received but could not be transcribed]'})`);
 
-    // ── Agent echo filter (incoming path) ─────────────────────────
-    // Prevent feedback loops: if this message looks like an agent-generated
-    // tool status update, report, integration request, or approval request,
-    // skip it. These should never trigger new agent tasks.
-    // Matches: _🔍 search_web..._  |  _🔍 search_web: query text_  |  🤖 *Agent Report  |  🔌 *New Integration  |  🔔 *Approval Required
-    const AGENT_ECHO_RE = /^_[^\n]{1,120}_$|^🤖 \*Agent Report|^🔌 \*New Integration|^🔔 \*Approval Required/;
-    if (AGENT_ECHO_RE.test(messageText.trim())) {
-      console.log(`   🔁 Skipping agent echo: "${messageText.substring(0, 50)}"`);
-      return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo' });
-    }
-
     const supabase = getSupabase();
 
     // ─── CEO Assistant Instance — special routing ───────────────────
@@ -384,14 +373,22 @@ export async function POST(request: NextRequest) {
       const businessId = ownerBiz.id;
       console.log(`   🏢 CEO instance → business ${businessId}`);
 
-      // ── Filter out agent status/tool update messages reflected back ──
-      // When the agent sends status messages like "_🔍 search_web: query_" to the owner,
-      // WhatsApp may reflect them back as incoming messages. These must NOT create new tasks.
-      const TOOL_STATUS_PATTERN = /^_[^\n]{1,200}_$/;
-      const AGENT_REPORT_PATTERN = /^🤖\s|^🔌\s|^🔔\s|^💡\s|^🛑\s/;
-      if (TOOL_STATUS_PATTERN.test(messageText.trim()) || AGENT_REPORT_PATTERN.test(messageText.trim())) {
-        console.log(`   🔇 CEO instance: filtered agent status echo: "${messageText.substring(0, 60)}"`);
-        return NextResponse.json({ ok: true, skipped: true, reason: 'agent_status_echo' });
+      // ── Bot echo filter: skip messages sent by our own API ──────────
+      // Every message the agent sends is tracked in `_bot_message_ids`.
+      // When WhatsApp reflects self-chat messages back as incoming, the
+      // message ID will match — this is the deterministic, future-proof filter.
+      const msgId = data.key?.id;
+      if (msgId) {
+        const { data: botMsg } = await supabase
+          .from('_bot_message_ids')
+          .delete()
+          .eq('message_id', msgId)
+          .select('message_id')
+          .maybeSingle();
+        if (botMsg) {
+          console.log(`   🔇 CEO instance: filtered bot echo by message ID: ${msgId}`);
+          return NextResponse.json({ ok: true, skipped: true, reason: 'bot_echo' });
+        }
       }
 
       // ── Check for pending approval gates ──────────────────────────

@@ -487,8 +487,30 @@ export async function POST(request: NextRequest) {
       const { saveMessage } = await import('@/lib/ai-receptionist/history');
       await saveMessage(customerPhone, 'user', messageText, businessId).catch(e => console.warn('Failed to save owner message to history:', e));
 
-      // ── "Stop" detection: cancel any running/pending agent tasks ──
       const trimmed = messageText.trim().toLowerCase().replace(/[^a-z\s]/g, '');
+
+      // ── "Panic" detection: global kill switch for runaways ──
+      const isEmergencyStop = /^(emergency stop|panic|kill all|stop everything|shut down everything)$/.test(trimmed);
+      if (isEmergencyStop) {
+        const { emergencyStopAllTasks } = await import('@/lib/agent/runner');
+        const count = await emergencyStopAllTasks();
+        const { sendWhatsAppWithCreds } = await import('@/lib/evolution');
+        const creds = {
+          baseUrl: process.env.EVOLUTION_BASE_URL!,
+          apiKey: process.env.EVOLUTION_API_KEY!,
+          instanceName: process.env.LAUNCHFLY_INSTANCE_NAME!,
+        };
+        if (creds.baseUrl && creds.apiKey && creds.instanceName) {
+          await sendWhatsAppWithCreds(
+            customerPhone,
+            `☢️ *EMERGENCY STOP EXECUTED*\n\nPurged ${count} active agent tasks globally. All agent operations are now halted.`,
+            creds
+          ).catch(() => {});
+        }
+        return NextResponse.json({ ok: true, routed: 'emergency_stop', count });
+      }
+
+      // ── "Stop" detection: cancel any running/pending agent tasks ──
       const isStopRequest = /^(stop|cancel|abort|halt|enough|stop it|stop that|cancel that|nevermind|never mind|nvm|quit|shut up)$/.test(trimmed);
       if (isStopRequest) {
         const { cancelRunningTasks } = await import('@/lib/agent/runner');

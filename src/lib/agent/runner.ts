@@ -1206,6 +1206,32 @@ export async function cancelRunningTasks(
   return ids.length;
 }
 
+// ─── EMERGENCY KILL SWITCH: Stop everything globally ─────────────────────
+
+export async function emergencyStopAllTasks(): Promise<number> {
+  const supabase = getSupabase();
+
+  // Wipe the queue by marking every single active task as failed
+  const { data: tasks, error } = await supabase
+    .from('agent_tasks')
+    .update({
+      status: 'failed',
+      result: 'EMERGENCY STOP - Global kill switch activated',
+      updated_at: new Date().toISOString(),
+    })
+    .in('status', ['pending', 'running'])
+    .select('id');
+
+  if (error) {
+    console.error('[agent:emergency-stop] Failed to stop tasks:', error);
+    return 0;
+  }
+
+  const count = tasks?.length || 0;
+  console.log(`[agent:emergency-stop] 🛑 SYSTEM PURGE: Killed ${count} running/pending tasks globally.`);
+  return count;
+}
+
 // ─── Resume a completed task (user said "Continue") ──────────────────────
 
 export async function resumeCompletedTask(

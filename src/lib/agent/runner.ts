@@ -59,7 +59,7 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   make_call: 30_000,           // Retell API call setup
   send_voice_note: 30_000,    // TTS generation + upload + send
 };
-const LLM_TIMEOUT_MS = 15_000;        // Max time for a single LLM call (15s — DeepSeek is fast)
+const LLM_TIMEOUT_MS = 40_000;        // Max time for a single LLM call (40s — DeepSeek needs time for large contexts)
 const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)
 
 // ─── Context Compression ─────────────────────────────────────────────────
@@ -649,9 +649,10 @@ export async function executeAgentTask(taskId: string): Promise<{
 
     while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
       // ── Wall-clock check for LLM call ──
-      // If we don't have enough time for another LLM API call (plus ~2s buffer), break and schedule continuation NOW
-      if (Date.now() - startTime > (WALL_CLOCK_LIMIT_MS - LLM_TIMEOUT_MS - 2000)) {
-        console.log(`[agent:${taskId}] Not enough time for next LLM call (${Math.round((Date.now() - startTime) / 1000)}s elapsed), scheduling continuation`);
+      // Need at least 10s for an LLM call + 3s for saves. If we're past that, break.
+      const elapsedBeforeLLM = Date.now() - startTime;
+      if (elapsedBeforeLLM > (WALL_CLOCK_LIMIT_MS - 13_000)) {
+        console.log(`[agent:${taskId}] Not enough time for next LLM call (${Math.round(elapsedBeforeLLM / 1000)}s elapsed), scheduling continuation`);
         break;
       }
 
@@ -674,10 +675,10 @@ export async function executeAgentTask(taskId: string): Promise<{
 
       for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
         try {
-          // Dynamic LLM timeout: never exceed remaining wall-clock budget
+          // Dynamic LLM timeout: use remaining wall-clock budget (minus buffer for DB saves)
           const elapsedMs = Date.now() - startTime;
           const remainingMs = WALL_CLOCK_LIMIT_MS - elapsedMs - 3000; // 3s buffer for saves
-          const llmTimeout = Math.min(LLM_TIMEOUT_MS, Math.max(remainingMs, 5000)); // at least 5s
+          const llmTimeout = Math.max(remainingMs, 5000); // at least 5s, no upper cap beyond wall clock
           const llmAbort = new AbortController();
           const llmTimer = setTimeout(() => llmAbort.abort(), llmTimeout);
           try {
@@ -709,6 +710,19 @@ export async function executeAgentTask(taskId: string): Promise<{
       if (llmErr || !completion) {
         // If aborted due to wall-clock, break to continuation instead of throwing
         if (llmErr?.name === 'AbortError' || llmErr?.message?.includes('abort')) {
+          // Safety: if LLM keeps timing out with 0 progress, don't loop forever
+          if (stepsThisInvocation === 0) {
+            console.warn(`[agent:${taskId}] LLM aborted with 0 steps this invocation — DeepSeek too slow for context size. Failing task.`);
+            await supabase.from('agent_tasks').update({
+              status: 'failed',
+              result: 'LLM call consistently exceeds time limit. Context may be too large. Try a simpler request.',
+              messages,
+              steps_used: stepsUsed,
+              tool_log: toolLog,
+              updated_at: new Date().toISOString(),
+            }).eq('id', taskId);
+            return { status: 'failed' as const, result: 'LLM timeout', taskId, stepsUsed };
+          }
           await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
           break;
         }

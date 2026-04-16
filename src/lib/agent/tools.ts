@@ -825,8 +825,10 @@ async function executeSearchWeb(
         },
       };
       if (category) body.category = category;
-      if (startPublishedDate) body.startPublishedDate = startPublishedDate;
-      if (domains?.length) body.includeDomains = domains;
+      // Exa restriction: company & people categories don't support date/domain filters
+      const restrictedCategory = category === 'company' || category === 'people';
+      if (startPublishedDate && !restrictedCategory) body.startPublishedDate = startPublishedDate;
+      if (domains?.length && !restrictedCategory) body.includeDomains = domains;
       if (excludeDomains?.length) body.excludeDomains = excludeDomains;
 
       const res = await fetch('https://api.exa.ai/search', {
@@ -865,6 +867,9 @@ async function executeSearchWeb(
         }
         return output || 'No results found.';
       }
+      // Log Exa error for debugging
+      const errBody = await res.text().catch(() => '');
+      console.warn(`[agent:search_web] Exa returned ${res.status}: ${errBody.substring(0, 200)}`);
     } catch (err) {
       console.warn('[agent:search_web] Exa failed, trying Jina:', err);
     }

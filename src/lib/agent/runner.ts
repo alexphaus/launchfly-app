@@ -47,10 +47,10 @@ function getSupabase() {
 const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps (biggest perf win)
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
-const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — Vercel Pro allows 60s, 10s gives a robust buffer for DB saves & QStash
+const WALL_CLOCK_LIMIT_MS = 55_000;   // 55s (Vercel max is 60s, 5s buffer to save state)
 const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
-const TOOL_RESULT_MAX = 12000;        // Max chars per tool result stored in messages (accommodates 5 deep Exa results)
+const TOOL_RESULT_MAX = 6000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
 // Some tools legitimately need more time (e.g. Apify actor runs, browser automation)
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
@@ -59,13 +59,13 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   make_call: 30_000,           // Retell API call setup
   send_voice_note: 30_000,    // TTS generation + upload + send
 };
-const LLM_TIMEOUT_MS = 40_000;        // Max time for a single LLM call (40s — DeepSeek needs time for large contexts)
+const LLM_TIMEOUT_MS = 48_000;        // Max time for a single LLM call (48s — give DeepSeek maximum possible runway)
 const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)
 
 // ─── Context Compression ─────────────────────────────────────────────────
 
-const CONTEXT_COMPRESS_THRESHOLD = 15_000; // Estimated tokens (aggressive to avoid strict Vercel wall-clock limits)
-const CONTEXT_COMPRESS_KEEP_TAIL = 6;      // Messages to preserve at end (most recent context)
+const CONTEXT_COMPRESS_THRESHOLD = 8_000;  // Estimated tokens (highly aggressive to keep TTFT low)
+const CONTEXT_COMPRESS_KEEP_TAIL = 4;      // Messages to preserve at end (most recent context)
 const CHARS_PER_TOKEN = 3.5;               // Rough estimate for English/mixed content
 
 // ─── Parallel Tool Execution ─────────────────────────────────────────────

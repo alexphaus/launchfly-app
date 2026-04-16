@@ -816,10 +816,10 @@ async function executeSearchWeb(
       const body: Record<string, unknown> = {
         query,
         type: 'auto',
-        numResults: 5,
+        numResults: 4,
         contents: {
           highlights: { numSentences: 3 },
-          text: { maxCharacters: 2000 },
+          text: { maxCharacters: 1000 },
           summary: true,
           livecrawl: 'fallback',
         },

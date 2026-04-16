@@ -117,6 +117,20 @@ export async function getWhatsAppProvider(businessId?: string): Promise<WhatsApp
     };
   }
 
+  // ── 3. If Evolution env vars are set, prefer Evolution over UltraMsg ──
+  if (process.env.EVOLUTION_BASE_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE) {
+    const evo = await import('@/lib/evolution');
+    return {
+      name: 'evolution',
+      sendWhatsApp: evo.sendWhatsApp,
+      sendVoiceNote: evo.sendVoiceNote,
+      sendImage: evo.sendImage,
+      checkHasWhatsApp: evo.checkHasWhatsApp,
+      sendTypingPresence: evo.sendTypingPresence,
+      markAsRead: evo.markAsRead,
+    };
+  }
+
   const ultra = await import('@/lib/ultramsg');
   return {
     name: 'ultramsg',

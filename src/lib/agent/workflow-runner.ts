@@ -59,6 +59,16 @@ const CONTEXT_COMPRESS_THRESHOLD = 8_000;
 const CONTEXT_COMPRESS_KEEP_TAIL = 4;
 const CHARS_PER_TOKEN = 3.5;
 
+/** Read provider API key from env. Safe outside context.run() — env vars are constant per deployment. */
+function getProviderApiKey(): string {
+  const p = process.env.AGENT_PROVIDER || 'deepseek';
+  switch (p) {
+    case 'openai': return process.env.OPENAI_API_KEY!;
+    case 'openrouter': return process.env.OPENROUTER_API_KEY!;
+    default: return process.env.DEEPSEEK_API_KEY!;
+  }
+}
+
 const PARALLEL_SAFE_TOOLS = new Set([
   'search_web', 'scrape_page', 'search_memory', 'search_tasks',
   'query_database', 'get_weather_forecast', 'search_google_maps',
@@ -425,7 +435,13 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   const supabase = getSupabase();
 
   // ─── Step: Init — Load task and build context ───
+  // NOTE: taskId validation MUST happen inside context.run(), not before it.
+  // The Upstash SDK auth check requires at least one context.run() to be called.
   const initResult = await context.run('init', async () => {
+    if (!taskId) {
+      throw new Error('[agent/workflow-run] Missing taskId in workflow payload');
+    }
+
     const { data: task, error: loadErr } = await supabase
       .from('agent_tasks')
       .select('*')
@@ -522,7 +538,6 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
     return {
       done: false as const,
-      row,
       toolCtx,
       messages,
       stepsUsed,
@@ -542,35 +557,28 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   let { toolCtx, messages, stepsUsed, toolLog, recalledSkillIds } = initResult;
   const { enabledTools, goal, parentTaskId } = initResult;
 
-  // Get provider config for context.call()
+  // Get provider config for context.call() — API key is read from env vars via getProviderApiKey()
   const providerConfig = await context.run('resolve-provider', async () => {
     const provider = await getAgentProvider();
-    // Extract the config we need for HTTP calls
-    // We need to get the API key and base URL from the provider
     const providerName = process.env.AGENT_PROVIDER || 'deepseek';
-    let apiKey: string;
     let baseURL: string;
     let model: string;
 
     switch (providerName) {
       case 'openai':
-        apiKey = process.env.OPENAI_API_KEY!;
         baseURL = 'https://api.openai.com/v1';
         model = process.env.AGENT_OPENAI_MODEL || 'gpt-4o';
         break;
       case 'openrouter':
-        apiKey = process.env.OPENROUTER_API_KEY!;
         baseURL = 'https://openrouter.ai/api/v1';
         model = process.env.AGENT_OPENROUTER_MODEL || 'deepseek/deepseek-chat';
         break;
       default: // deepseek
-        apiKey = process.env.DEEPSEEK_API_KEY!;
         baseURL = 'https://api.deepseek.com';
         model = 'deepseek-chat';
     }
 
     return {
-      apiKey,
       baseURL,
       model,
       contextWindow: provider.contextWindow,
@@ -598,7 +606,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     messages = await context.run(`compress-${loopIteration}`, async () => {
       return compressContext({
         messages,
-        apiKey: providerConfig.apiKey,
+        apiKey: getProviderApiKey(),
         baseURL: providerConfig.baseURL,
         model: providerConfig.model,
         taskId,
@@ -642,7 +650,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       url: `${providerConfig.baseURL}/chat/completions`,
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${providerConfig.apiKey}`,
+        'Authorization': `Bearer ${getProviderApiKey()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -664,7 +672,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           url: `${providerConfig.baseURL}/chat/completions`,
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${providerConfig.apiKey}`,
+            'Authorization': `Bearer ${getProviderApiKey()}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1019,7 +1027,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       const forceResult = await fetch(`${providerConfig.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${providerConfig.apiKey}`,
+          'Authorization': `Bearer ${getProviderApiKey()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1162,7 +1170,7 @@ async function autoCreateSkill(
   goal: string,
   businessId: string,
   toolLog: ToolLogEntry[],
-  providerConfig: { apiKey: string; baseURL: string; model: string },
+  providerConfig: { baseURL: string; model: string },
 ): Promise<void> {
   try {
     if (goal.startsWith('[DELEGATED TASK]')) return;
@@ -1195,7 +1203,7 @@ async function autoCreateSkill(
     ).join('\n');
 
     const OpenAI = (await import('openai')).default;
-    const client = new OpenAI({ apiKey: providerConfig.apiKey, baseURL: providerConfig.baseURL });
+    const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: providerConfig.baseURL });
     const skillCompletion = await client.chat.completions.create({
       model: providerConfig.model,
       messages: [

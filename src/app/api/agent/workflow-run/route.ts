@@ -12,18 +12,14 @@ import { runAgentWorkflow, type WorkflowPayload } from '@/lib/agent/workflow-run
 
 export const { POST } = serve<WorkflowPayload>(
   async (context) => {
-    const { taskId } = context.requestPayload;
+    // IMPORTANT: Do NOT return before calling context.run().
+    // The Upstash SDK auth check runs our handler with a disabled context
+    // and requires at least one context.run() call to authenticate.
+    const taskId = context.requestPayload?.taskId;
 
-    if (!taskId) {
-      console.error('[agent/workflow-run] Missing taskId in payload');
-      return;
-    }
+    console.log(`[agent/workflow-run] Payload taskId: ${taskId || 'MISSING'}`);
 
-    console.log(`[agent/workflow-run] Starting workflow for task ${taskId}`);
-
-    await runAgentWorkflow(context, taskId);
-
-    console.log(`[agent/workflow-run] Workflow completed for task ${taskId}`);
+    await runAgentWorkflow(context, taskId!);
   },
   {
     failureFunction: async ({ context, failStatus, failResponse }) => {
@@ -31,7 +27,9 @@ export const { POST } = serve<WorkflowPayload>(
 
       // Try to mark the task as failed in DB
       try {
-        const { taskId } = context.requestPayload;
+        const taskId = context.requestPayload?.taskId;
+        console.log(`[agent/workflow-run] failureFunction taskId: ${taskId || 'MISSING'}`);
+
         if (taskId) {
           const { createClient } = await import('@supabase/supabase-js');
           const supabase = createClient(

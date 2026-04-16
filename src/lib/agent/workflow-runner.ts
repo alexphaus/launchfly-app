@@ -626,7 +626,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       : messages;
 
     // ── LLM call via context.call() — offloaded to Upstash, no Vercel timeout ──
-    const llmResult = await context.call<{
+    type LlmResponseBody = {
       choices: Array<{
         message: {
           content: string | null;
@@ -637,7 +637,8 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           }>;
         };
       }>;
-    }>(`llm-${loopIteration}`, {
+    };
+    let llmResult = await context.call<LlmResponseBody>(`llm-${loopIteration}`, {
       url: `${providerConfig.baseURL}/chat/completions`,
       method: 'POST',
       headers: {
@@ -650,7 +651,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         tools: agentTools,
         tool_choice: 'auto',
       }),
-      timeout: 120, // 2 minutes — plenty for DeepSeek
+      timeout: '2m',
     });
 
     if (llmResult.status < 200 || llmResult.status >= 300) {
@@ -672,7 +673,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
             tools: agentTools,
             tool_choice: 'auto',
           }),
-          timeout: 120,
+          timeout: '2m',
         });
         if (retryResult.status < 200 || retryResult.status >= 300) {
           // Fatal — fail the task
@@ -686,8 +687,8 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           });
           return;
         }
-        // Use retry result
-        Object.assign(llmResult, retryResult);
+        // Use retry result (reassign, don't mutate — step results may be frozen)
+        llmResult = retryResult;
       } else {
         await context.run(`fail-llm-${loopIteration}`, async () => {
           await supabase.from('agent_tasks').update({
@@ -839,6 +840,8 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           messages.push({ role: 'tool', tool_call_id: r.id, content: safeSlice(r.result, TOOL_RESULT_MAX) });
           toolLog.push({ tool: r.name, args: r.args, result: safeSlice(r.result, 500), timestamp: new Date().toISOString() });
           stepsUsed++;
+          // Keep dedup set in sync outside context.run() so it survives replays
+          executedToolCalls.add(`${r.name}:${JSON.stringify(r.args)}`);
         }
       }
 
@@ -854,6 +857,8 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         messages.push({ role: 'tool', tool_call_id: result.id, content: safeSlice(result.result, TOOL_RESULT_MAX) });
         toolLog.push({ tool: result.name, args: result.args, result: safeSlice(result.result, 500), timestamp: new Date().toISOString() });
         stepsUsed++;
+        // Keep dedup set in sync outside context.run() so it survives replays
+        executedToolCalls.add(`${result.name}:${JSON.stringify(result.args)}`);
 
         // ── PAUSE: Approval gate ──
         if (result.result.startsWith('__PAUSE__:')) {
@@ -938,6 +943,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     } else {
       // ── No tool calls — task complete ──
       const finalResult = assistantMessage.content || 'Task completed (no output).';
+
+      // Push final assistant message into conversation history
+      messages.push({ role: 'assistant', content: finalResult });
 
       await context.run('complete', async () => {
         // Auto-deliver if agent forgot send_report

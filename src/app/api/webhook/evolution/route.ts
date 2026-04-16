@@ -345,6 +345,30 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
+    // ── Bot echo / Agent loop filter (Global Incoming) ────────────
+    // 1. Database check: Did our system send this message?
+    const msgId = data.key?.id;
+    if (msgId) {
+      const { data: botMsg } = await supabase
+        .from('_bot_message_ids')
+        .delete()
+        .eq('message_id', msgId)
+        .select('message_id')
+        .maybeSingle();
+      if (botMsg) {
+        console.log(`   🔇 Filtered bot echo by message ID: ${msgId}`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'bot_echo_global' });
+      }
+    }
+
+    // 2. Pattern check: Does it look exactly like an agent status or report?
+    // This catches messages that somehow bypassed the DB check (e.g. sent manually via DB/UI or latency)
+    const AGENT_ECHO_RE = /^_[^\n]{1,200}_$|^🤖 \*Agent Report|^🔌 \*New Integration|^🔔 \*Approval Required/;
+    if (AGENT_ECHO_RE.test(messageText.trim())) {
+      console.log(`   🔁 Skipping agent echo pattern: "${messageText.substring(0, 60)}"`);
+      return NextResponse.json({ ok: true, skipped: true, reason: 'agent_echo_global' });
+    }
+
     // ─── CEO Assistant Instance — special routing ───────────────────
     // Messages arriving on the CEO number are ALWAYS from a business owner.
     // Resolve business by matching the sender's phone to a business owner,
@@ -382,24 +406,6 @@ export async function POST(request: NextRequest) {
 
       const businessId = ownerBiz.id;
       console.log(`   🏢 CEO instance → business ${businessId}`);
-
-      // ── Bot echo filter: skip messages sent by our own API ──────────
-      // Every message the agent sends is tracked in `_bot_message_ids`.
-      // When WhatsApp reflects self-chat messages back as incoming, the
-      // message ID will match — this is the deterministic, future-proof filter.
-      const msgId = data.key?.id;
-      if (msgId) {
-        const { data: botMsg } = await supabase
-          .from('_bot_message_ids')
-          .delete()
-          .eq('message_id', msgId)
-          .select('message_id')
-          .maybeSingle();
-        if (botMsg) {
-          console.log(`   🔇 CEO instance: filtered bot echo by message ID: ${msgId}`);
-          return NextResponse.json({ ok: true, skipped: true, reason: 'bot_echo' });
-        }
-      }
 
       // ── Check for pending approval gates ──────────────────────────
       // If an agent is waiting for owner approval, this reply resumes it

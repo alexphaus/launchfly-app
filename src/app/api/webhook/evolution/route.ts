@@ -354,12 +354,14 @@ export async function POST(request: NextRequest) {
       const senderNorm = customerPhone.replace(/^\+/, '');
       const senderPlus = `+${senderNorm}`;
 
+      // Match sender to a business by OWNER phone fields only.
+      // Deliberately exclude whatsapp_number — that's the bot's own number,
+      // not the owner. Matching on it would let self-chat echoes resolve.
       const { data: ownerBiz } = await supabase
         .from('businesses')
-        .select('id')
+        .select('id, whatsapp_number')
         .or(
           `whatsapp_notify_number.eq.${senderPlus},whatsapp_notify_number.eq.${senderNorm},` +
-          `whatsapp_number.eq.${senderPlus},whatsapp_number.eq.${senderNorm},` +
           `phone_number.eq.${senderPlus},phone_number.eq.${senderNorm}`
         )
         .limit(1)
@@ -368,6 +370,14 @@ export async function POST(request: NextRequest) {
       if (!ownerBiz?.id) {
         console.log(`   ⚠️ CEO instance: sender +${customerPhone} is not a known business owner`);
         return NextResponse.json({ ok: true, skipped: true, reason: 'ceo_unknown_sender' });
+      }
+
+      // Guard: if sender's phone IS the business bot's WhatsApp number, this
+      // is a self-chat echo (bot → bot). Never create a task for it.
+      const bizWhatsApp = (ownerBiz.whatsapp_number || '').replace(/^\+/, '');
+      if (bizWhatsApp && senderNorm === bizWhatsApp) {
+        console.log(`   🔇 CEO instance: self-chat echo from bot number +${senderNorm}`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'ceo_self_chat' });
       }
 
       const businessId = ownerBiz.id;

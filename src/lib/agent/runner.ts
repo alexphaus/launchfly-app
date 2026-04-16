@@ -396,12 +396,25 @@ export async function executeAgentTask(taskId: string): Promise<{
   }
   if (!repName) repName = assistant?.name;
 
+  // Resolve owner phone — where to send reports/status.
+  // NEVER route to the bot's own WhatsApp number; that causes self-chat loops.
+  const botWhatsApp = (biz?.whatsapp_number || '').replace(/^\+/, '');
+  let resolvedOwnerPhone = row.owner_phone || biz?.whatsapp_notify_number || biz?.phone_number || undefined;
+  if (resolvedOwnerPhone && botWhatsApp && resolvedOwnerPhone.replace(/^\+/, '') === botWhatsApp) {
+    // Current value is the bot's number — skip to phone_number or give up
+    const altPhone = (biz?.phone_number || '').replace(/^\+/, '');
+    resolvedOwnerPhone = (altPhone && altPhone !== botWhatsApp) ? biz!.phone_number! : undefined;
+    if (resolvedOwnerPhone) {
+      console.warn(`[agent] ownerPhone was bot number, falling back to phone_number: ${resolvedOwnerPhone}`);
+    } else {
+      console.warn(`[agent] ownerPhone was bot number — no safe fallback, reports will be skipped`);
+    }
+  }
+
   const toolCtx: ToolContext = {
     businessId: row.business_id,
     businessName: biz?.name || undefined,
-    // ownerPhone = where to send reports/status. NEVER use whatsapp_number here
-    // because that's the business bot's own WhatsApp — sending there = self-message.
-    ownerPhone: row.owner_phone || biz?.whatsapp_notify_number || biz?.phone_number || undefined,
+    ownerPhone: resolvedOwnerPhone,
     assistantName: repName,
     taskId,
   };

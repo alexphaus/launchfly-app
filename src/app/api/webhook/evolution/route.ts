@@ -384,6 +384,16 @@ export async function POST(request: NextRequest) {
       const businessId = ownerBiz.id;
       console.log(`   🏢 CEO instance → business ${businessId}`);
 
+      // ── Filter out agent status/tool update messages reflected back ──
+      // When the agent sends status messages like "_🔍 search_web: query_" to the owner,
+      // WhatsApp may reflect them back as incoming messages. These must NOT create new tasks.
+      const TOOL_STATUS_PATTERN = /^_[^\n]{1,200}_$/;
+      const AGENT_REPORT_PATTERN = /^🤖\s|^🔌\s|^🔔\s|^💡\s|^🛑\s/;
+      if (TOOL_STATUS_PATTERN.test(messageText.trim()) || AGENT_REPORT_PATTERN.test(messageText.trim())) {
+        console.log(`   🔇 CEO instance: filtered agent status echo: "${messageText.substring(0, 60)}"`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'agent_status_echo' });
+      }
+
       // ── Check for pending approval gates ──────────────────────────
       // If an agent is waiting for owner approval, this reply resumes it
       {
@@ -539,7 +549,7 @@ export async function POST(request: NextRequest) {
       // ── Dedup guard: skip if an agent task is already running recently ──
       // Prevents cascading tasks when multiple messages arrive in quick
       // succession (e.g. agent echoes that slip past filters, or rapid taps).
-      const DEDUP_WINDOW_SECS = 15;
+      const DEDUP_WINDOW_SECS = 120;
       const recentCutoff = new Date(Date.now() - DEDUP_WINDOW_SECS * 1000).toISOString();
       const { data: recentTask } = await supabase
         .from('agent_tasks')

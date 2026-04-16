@@ -79,13 +79,14 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'search_google_maps',
-      description: 'Search Google Maps for local businesses. Returns name, phone, rating, reviews, address, website. Use for lead generation and competitor research.',
+      description: 'Search Google Maps for local businesses. Returns name, phone, rating, review count, address, website. Optionally fetches actual review text (set reviewsPerPlace > 0). Use for lead generation and competitor research.',
       parameters: {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Business type (e.g. "plumber", "restaurant")' },
           location: { type: 'string', description: 'City, state or area (e.g. "Kuala Lumpur", "Austin, TX")' },
           maxResults: { type: 'number', description: 'Max results to return (default 10, max 50)' },
+          reviewsPerPlace: { type: 'number', description: 'Number of reviews to fetch per business (0 = none, max 10). Use when you need review content for analysis.' },
         },
         required: ['query', 'location'],
       },
@@ -676,6 +677,7 @@ export async function executeTool(
         (args.maxResults as number) || 10,
         toolCtx.businessId,
         timeoutMs,
+        (args.reviewsPerPlace as number) || 0,
       );
 
     case 'save_leads': {
@@ -897,6 +899,7 @@ async function executeSearchGoogleMaps(
   maxResults: number,
   businessId: string,
   timeoutMs?: number,
+  reviewsPerPlace?: number,
 ): Promise<string> {
   try {
     const { searchGoogleMaps } = await import('@/lib/apify');
@@ -906,6 +909,7 @@ async function executeSearchGoogleMaps(
       maxResults: Math.min(maxResults, 50),
       businessId,
       timeoutMs,
+      reviewsPerPlace: Math.min(reviewsPerPlace || 0, 10),
     });
 
     if (!leads.length) return 'No businesses found on Google Maps for that query.';
@@ -915,6 +919,12 @@ async function executeSearchGoogleMaps(
       output += `- **${l.title}** | ${l.phone || 'No phone'} | ⭐${l.rating || 'N/A'} (${l.reviewsCount || 0} reviews)\n`;
       if (l.address) output += `  📍 ${l.address}\n`;
       if (l.website) output += `  🌐 ${l.website}\n`;
+      if (l.reviews?.length) {
+        output += `  📝 Recent reviews:\n`;
+        for (const rev of l.reviews) {
+          output += `    - ⭐${rev.stars} (${rev.publishedAtDate}): "${rev.text?.substring(0, 200) || 'No text'}"\n`;
+        }
+      }
       output += '\n';
     }
     return output;

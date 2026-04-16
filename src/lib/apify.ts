@@ -10,6 +10,13 @@ import { createClient } from '@supabase/supabase-js';
 
 const APIFY_BASE = 'https://api.apify.com/v2';
 
+export interface ScrapedReview {
+  text: string;
+  stars: number;
+  publishedAtDate: string;
+  reviewerName: string;
+}
+
 export interface ScrapedLead {
   title: string;
   phone: string;
@@ -20,6 +27,7 @@ export interface ScrapedLead {
   city: string;
   categoryName: string;
   placeId: string;
+  reviews?: ScrapedReview[];
 }
 
 /** Get Apify API token from business config or env fallback */
@@ -58,8 +66,9 @@ export async function searchGoogleMaps(opts: {
   maxResults?: number;
   businessId?: string;
   timeoutMs?: number;
+  reviewsPerPlace?: number;
 }): Promise<ScrapedLead[]> {
-  const { query, location, maxResults = 50, businessId, timeoutMs } = opts;
+  const { query, location, maxResults = 50, businessId, timeoutMs, reviewsPerPlace = 0 } = opts;
   const token = await getApifyToken(businessId);
 
   const searchTerms = [`${query} in ${location}`];
@@ -78,6 +87,10 @@ export async function searchGoogleMaps(opts: {
         includeHistogram: false,
         includeOpeningHours: false,
         includePeopleAlsoSearch: false,
+        ...(reviewsPerPlace > 0 ? {
+          maxReviews: reviewsPerPlace,
+          reviewsSort: 'newest',
+        } : {}),
       }),
     },
   );
@@ -135,6 +148,14 @@ export async function searchGoogleMaps(opts: {
       city: (r.city as string) || location,
       categoryName: (r.categoryName as string) || query,
       placeId: (r.placeId as string) || '',
+      reviews: Array.isArray(r.reviews)
+        ? (r.reviews as Record<string, unknown>[]).slice(0, reviewsPerPlace || 0).map(rev => ({
+            text: (rev.text as string) || '',
+            stars: Number(rev.stars) || 0,
+            publishedAtDate: (rev.publishedAtDate as string) || '',
+            reviewerName: (rev.name as string) || '',
+          }))
+        : undefined,
     });
   }
 

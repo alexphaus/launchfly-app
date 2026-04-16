@@ -50,11 +50,15 @@ export const AGENT_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'search_web',
-      description: 'Search the web for information. Returns top results with titles, URLs, and snippets. Use for market research, finding leads, trending topics, competitor analysis.',
+      description: 'Search the web for information. Returns top results with titles, URLs, summaries, and snippets. Use for market research, finding leads, trending topics, competitor analysis. Supports category filtering and date ranges.',
       parameters: {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'The search query' },
+          category: { type: 'string', enum: ['company', 'news', 'people', 'research paper', 'personal site', 'financial report'], description: 'Optional category to focus results. Use "company" for business searches, "people" for LinkedIn profiles, "news" for recent articles.' },
+          freshness: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Only return results published within this time window. Use for time-sensitive queries.' },
+          domains: { type: 'array', items: { type: 'string' }, description: 'Optional list of domains to restrict results to (e.g. ["linkedin.com", "crunchbase.com"])' },
+          excludeDomains: { type: 'array', items: { type: 'string' }, description: 'Optional list of domains to exclude from results' },
         },
         required: ['query'],
       },
@@ -665,7 +669,13 @@ export async function executeTool(
 ): Promise<string> {
   switch (name) {
     case 'search_web':
-      return executeSearchWeb(args.query as string);
+      return executeSearchWeb(
+        args.query as string,
+        args.category as string | undefined,
+        args.freshness as string | undefined,
+        args.domains as string[] | undefined,
+        args.excludeDomains as string[] | undefined,
+      );
 
     case 'scrape_page':
       return executeScrapePage(args.url as string, args.extract as string | undefined);
@@ -780,26 +790,52 @@ export async function executeTool(
 
 // ─── search_web (via Exa / Jina Reader fallback) ─────────────────────────
 
-async function executeSearchWeb(query: string): Promise<string> {
+async function executeSearchWeb(
+  query: string,
+  category?: string,
+  freshness?: string,
+  domains?: string[],
+  excludeDomains?: string[],
+): Promise<string> {
   // Try Exa first (neural semantic search with rich content), fall back to Jina
   const exaKey = process.env.EXA_API_KEY;
   if (exaKey) {
     try {
+      // Build date filter from freshness shorthand
+      let startPublishedDate: string | undefined;
+      if (freshness) {
+        const now = new Date();
+        const offsets: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
+        const days = offsets[freshness];
+        if (days) {
+          now.setDate(now.getDate() - days);
+          startPublishedDate = now.toISOString();
+        }
+      }
+
+      const body: Record<string, unknown> = {
+        query,
+        type: 'auto',
+        numResults: 10,
+        contents: {
+          highlights: { numSentences: 3 },
+          text: { maxCharacters: 2000 },
+          summary: true,
+          livecrawl: 'fallback',
+        },
+      };
+      if (category) body.category = category;
+      if (startPublishedDate) body.startPublishedDate = startPublishedDate;
+      if (domains?.length) body.includeDomains = domains;
+      if (excludeDomains?.length) body.excludeDomains = excludeDomains;
+
       const res = await fetch('https://api.exa.ai/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': exaKey,
         },
-        body: JSON.stringify({
-          query,
-          type: 'auto',
-          numResults: 8,
-          contents: {
-            highlights: { numSentences: 3 },
-            text: { maxCharacters: 500 },
-          },
-        }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const data = (await res.json()) as {
@@ -807,6 +843,7 @@ async function executeSearchWeb(query: string): Promise<string> {
             title: string;
             url: string;
             publishedDate?: string;
+            author?: string;
             text?: string;
             highlights?: string[];
             summary?: string;
@@ -815,11 +852,15 @@ async function executeSearchWeb(query: string): Promise<string> {
         let output = '';
         for (const r of data.results || []) {
           const date = r.publishedDate ? ` (${r.publishedDate.split('T')[0]})` : '';
-          output += `- **${r.title}**${date} — ${r.url}\n`;
+          const author = r.author ? ` — by ${r.author}` : '';
+          output += `- **${r.title}**${date}${author}\n  ${r.url}\n`;
+          if (r.summary) {
+            output += `  Summary: ${r.summary}\n`;
+          }
           if (r.highlights?.length) {
-            output += `  ${r.highlights.join(' … ').substring(0, 400)}\n`;
+            output += `  ${r.highlights.join(' … ').substring(0, 600)}\n`;
           } else if (r.text) {
-            output += `  ${r.text.substring(0, 400)}\n`;
+            output += `  ${r.text.substring(0, 600)}\n`;
           }
         }
         return output || 'No results found.';
@@ -861,19 +902,59 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
     return 'Error: Invalid URL format';
   }
 
+  // Try Exa /contents first (livecrawl, better quality), fall back to Jina
+  const exaKey = process.env.EXA_API_KEY;
+  if (exaKey) {
+    try {
+      const res = await fetch('https://api.exa.ai/contents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': exaKey,
+        },
+        body: JSON.stringify({
+          urls: [url],
+          text: { maxCharacters: 40000 },
+          summary: true,
+          livecrawl: 'fallback',
+          livecrawlTimeout: 15000,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          results?: { text?: string; summary?: string; title?: string }[];
+        };
+        const page = data.results?.[0];
+        if (page?.text) {
+          const content = page.text.substring(0, 40000);
+          if (extract) {
+            const { generateText } = await import('ai');
+            const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
+            const result = await generateText({
+              model: deepseek(MINI_MODEL),
+              system: 'Extract the requested information from the scraped content. Be concise and structured. Include ALL matching items — do not truncate or summarize the list.',
+              messages: [{ role: 'user', content: `EXTRACT: ${extract}\n\nCONTENT:\n${content}` }],
+            });
+            return result.text;
+          }
+          return content;
+        }
+      }
+    } catch (err) {
+      console.warn('[agent:scrape_page] Exa /contents failed, trying Jina:', err);
+    }
+  }
+
+  // Fallback: Jina Reader
   try {
-    // Jina Reader: prefix URL with r.jina.ai to get clean markdown
     const res = await fetch(`https://r.jina.ai/${url}`, {
       headers: { Accept: 'text/plain' },
     });
     if (!res.ok) return `Scrape failed: HTTP ${res.status}`;
 
     const text = await res.text();
-    // Use a larger limit so paginated listing pages (e.g. medieval market calendars)
-    // are not truncated mid-list, which causes the agent to hallucinate missing entries.
     const content = text.substring(0, 40000);
 
-    // If extract instruction provided, use AI to pull specific data
     if (extract) {
       const { generateText } = await import('ai');
       const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');

@@ -50,6 +50,8 @@ const AGENT_MODEL = 'deepseek-chat';
 const WALL_CLOCK_LIMIT_MS = 55_000;   // 55s (Vercel max is 60s, 5s buffer to save state)
 const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
+const RESEARCH_SOFT_CAP = 8;          // After this many search/scrape steps, nudge to wrap up
+const RESEARCH_HARD_CAP = 14;         // After this many, forcefully demand send_report
 const TOOL_RESULT_MAX = 6000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
 // Some tools legitimately need more time (e.g. Apify actor runs, browser automation)
@@ -623,13 +625,21 @@ export async function executeAgentTask(taskId: string): Promise<{
       // Count how many times we've continued (each continuation adds ≤ MAX_STEPS_PER_INVOCATION)
       const continuationRound = Math.floor(stepsUsed / MAX_STEPS_PER_INVOCATION) + 1;
       const stepsLeft = MAX_TOTAL_STEPS - stepsUsed;
+
+      // Count research-type tool calls from previous invocations
+      const researchTools = new Set(['search_web', 'scrape_page', 'search_google_maps']);
+      const researchSteps = toolLog.filter(t => researchTools.has(t.tool)).length;
       
-      let contMessage = `⚡ CONTINUATION (round ${continuationRound}): Server execution paused to prevent timeouts. You are now in a fresh continuation round. You have used ${stepsUsed} steps so far with ${stepsLeft} remaining.\n\n`;
+      let contMessage = `⚡ CONTINUATION (round ${continuationRound}): Server execution paused to prevent timeouts. You have used ${stepsUsed} steps (${researchSteps} research calls) with ${stepsLeft} remaining.\n\n`;
       
       if (stepsLeft <= BUDGET_WARNING_STEPS) {
         contMessage += `CRITICAL BUDGET WARNING: You only have ${stepsLeft} steps left. Summarize what you have and deliver your answer NOW via send_report.`;
+      } else if (researchSteps >= RESEARCH_HARD_CAP) {
+        contMessage += `🛑 RESEARCH COMPLETE: You have made ${researchSteps} research calls — that is MORE than enough data. You MUST now synthesize your findings and call send_report immediately. Do NOT make any more search_web or scrape_page calls.`;
+      } else if (researchSteps >= RESEARCH_SOFT_CAP) {
+        contMessage += `⚠️ You have made ${researchSteps} research calls. You likely have enough data now. Unless you are missing critical information, you should synthesize your findings and call send_report. Prefer wrapping up over making more searches.`;
       } else {
-        contMessage += `Please review the conversation above and CONTINUE your task exactly where you left off. If you had skipped or paused tool calls, you may retry them or proceed with the next logical step to fulfill the user's ultimate goal. Do not stop early if the task is incomplete.`;
+        contMessage += `Continue your task where you left off. If you have gathered enough research data, synthesize and call send_report. Otherwise, continue researching.`;
       }
 
       messages.push({
@@ -659,15 +669,24 @@ export async function executeAgentTask(taskId: string): Promise<{
       // ── Context compression — prevent blowing the context window ──
       messages = await compressContextIfNeeded(messages, client, taskId, agentModel, compressThreshold);
 
-      // ── Budget warning ──
+      // ── Budget warning + research cap ──
       const stepsRemainingGlobal = MAX_TOTAL_STEPS - stepsUsed;
       const stepsRemainingInvocation = MAX_STEPS_PER_INVOCATION - stepsThisInvocation;
+      const currentResearchSteps = toolLog.filter(t => ['search_web', 'scrape_page', 'search_google_maps'].includes(t.tool)).length;
       const shouldWarn = stepsRemainingGlobal <= BUDGET_WARNING_STEPS || stepsRemainingInvocation <= 1;
-      const llmMessages = shouldWarn
-        ? [...messages, {
-            role: 'system' as const,
-            content: `⚠️ URGENT: You only have ${Math.min(stepsRemainingGlobal, stepsRemainingInvocation)} tool calls left. You MUST call send_report NOW with whatever data you have. Do NOT make more research calls.`,
-          }]
+      const researchExhausted = currentResearchSteps >= RESEARCH_HARD_CAP;
+
+      let warningMessage = '';
+      if (shouldWarn) {
+        warningMessage = `⚠️ URGENT: You only have ${Math.min(stepsRemainingGlobal, stepsRemainingInvocation)} tool calls left. You MUST call send_report NOW with whatever data you have. Do NOT make more research calls.`;
+      } else if (researchExhausted) {
+        warningMessage = `🛑 RESEARCH COMPLETE (${currentResearchSteps} research calls made). You have gathered enough data. Call send_report NOW to deliver your findings. Do NOT call search_web or scrape_page again.`;
+      } else if (currentResearchSteps >= RESEARCH_SOFT_CAP) {
+        warningMessage = `⚠️ You've made ${currentResearchSteps} research calls. Consider wrapping up and calling send_report unless you are missing critical data.`;
+      }
+
+      const llmMessages = warningMessage
+        ? [...messages, { role: 'system' as const, content: warningMessage }]
         : messages;
 
       let completion;

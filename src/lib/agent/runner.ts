@@ -48,7 +48,7 @@ const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps 
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — Vercel Pro allows 60s, 10s gives a robust buffer for DB saves & QStash
-const STALE_TASK_MINUTES = 10;        // Auto-fail tasks stuck longer than this (generous: allows QStash retries)
+const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
@@ -674,16 +674,31 @@ export async function executeAgentTask(taskId: string): Promise<{
 
       for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
         try {
-          completion = await client.chat.completions.create({
-            model: agentModel,
-            messages: sanitizeMessages(llmMessages) as Parameters<typeof client.chat.completions.create>[0]['messages'],
-            tools: agentTools,
-            tool_choice: 'auto',
-          });
+          // Dynamic LLM timeout: never exceed remaining wall-clock budget
+          const elapsedMs = Date.now() - startTime;
+          const remainingMs = WALL_CLOCK_LIMIT_MS - elapsedMs - 3000; // 3s buffer for saves
+          const llmTimeout = Math.min(LLM_TIMEOUT_MS, Math.max(remainingMs, 5000)); // at least 5s
+          const llmAbort = new AbortController();
+          const llmTimer = setTimeout(() => llmAbort.abort(), llmTimeout);
+          try {
+            completion = await client.chat.completions.create({
+              model: agentModel,
+              messages: sanitizeMessages(llmMessages) as Parameters<typeof client.chat.completions.create>[0]['messages'],
+              tools: agentTools,
+              tool_choice: 'auto',
+            }, { signal: llmAbort.signal });
+          } finally {
+            clearTimeout(llmTimer);
+          }
           llmErr = null;
           break; // Success
         } catch (err: any) {
           llmErr = err;
+          // Abort errors are wall-clock timeouts, don't retry
+          if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+            console.warn(`[agent:${taskId}] LLM aborted (wall-clock limit), scheduling continuation`);
+            break;
+          }
           // Don't retry 400 Bad Request, these are formatting/validation errors
           if (err?.status === 400 || attempt === LLM_MAX_RETRIES) break;
           console.warn(`[agent:${taskId}] LLM transient error, retrying (${attempt + 1}/${LLM_MAX_RETRIES}):`, err.message);
@@ -692,6 +707,11 @@ export async function executeAgentTask(taskId: string): Promise<{
       }
 
       if (llmErr || !completion) {
+        // If aborted due to wall-clock, break to continuation instead of throwing
+        if (llmErr?.name === 'AbortError' || llmErr?.message?.includes('abort')) {
+          await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+          break;
+        }
         throw llmErr || new Error('LLM call failed unexpectedly');
       }
 

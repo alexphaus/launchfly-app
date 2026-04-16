@@ -55,7 +55,7 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   send_voice_note: 60_000,
 };
 
-const CONTEXT_COMPRESS_THRESHOLD = 8_000;
+const CONTEXT_COMPRESS_THRESHOLD = 20_000;
 const CONTEXT_COMPRESS_KEEP_TAIL = 4;
 const CHARS_PER_TOKEN = 3.5;
 
@@ -582,7 +582,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       baseURL,
       model,
       contextWindow: provider.contextWindow,
-      compressThreshold: Math.min(Math.floor(provider.contextWindow * 0.75), CONTEXT_COMPRESS_THRESHOLD),
+      compressThreshold: Math.min(Math.floor(provider.contextWindow * 0.5), CONTEXT_COMPRESS_THRESHOLD),
     };
   });
 

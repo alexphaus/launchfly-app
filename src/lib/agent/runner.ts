@@ -253,7 +253,7 @@ interface TaskRow {
 // ─── Public API ──────────────────────────────────────────────────────────
 
 /**
- * Create a new agent task in the DB and dispatch it via QStash.
+ * Create a new agent task in the DB and dispatch it via Upstash Workflow.
  * Returns the task ID immediately (non-blocking).
  */
 export async function createAgentTask(params: {
@@ -288,8 +288,8 @@ export async function createAgentTask(params: {
     return { taskId, dispatched: false };
   }
 
-  // Dispatch via QStash — only the taskId
-  const dispatched = await scheduleContinuation(taskId);
+  // Dispatch via Upstash Workflow
+  const dispatched = await triggerAgentWorkflow(taskId);
 
   return { taskId, dispatched };
 }
@@ -1357,24 +1357,39 @@ export async function resumeTaskFromApproval(
     return false;
   }
 
-  // Inject owner's response into saved messages
+  // Try Upstash Workflow notify (the workflow is waiting on waitForEvent)
+  const qstashToken = process.env.QSTASH_TOKEN;
+  if (qstashToken) {
+    try {
+      const { Client } = await import('@upstash/workflow');
+      const client = new Client({ token: qstashToken });
+      await client.notify({
+        eventId: `approval-${taskId}`,
+        eventData: { response: approvalResponse },
+      });
+      console.log(`[agent:resume] Task ${taskId} notified via workflow: "${approvalResponse.substring(0, 50)}"`);
+      return true;
+    } catch (err) {
+      console.warn(`[agent:resume] Workflow notify failed, falling back to legacy:`, err);
+    }
+  }
+
+  // Fallback: legacy QStash continuation (for tasks started before migration)
   const messages: AgentMessage[] = Array.isArray(task.messages) ? task.messages : [];
   messages.push({
     role: 'user',
     content: `Owner's response to your approval request: "${approvalResponse}"`,
   });
 
-  // Save updated messages and reset status
   await supabase.from('agent_tasks').update({
     status: 'pending',
     messages,
     updated_at: new Date().toISOString(),
   }).eq('id', taskId);
 
-  // Wake up via QStash
   const dispatched = await scheduleContinuation(taskId);
   if (dispatched) {
-    console.log(`[agent:resume] Task ${taskId} resumed with approval: "${approvalResponse.substring(0, 50)}"`);
+    console.log(`[agent:resume] Task ${taskId} resumed via legacy QStash: "${approvalResponse.substring(0, 50)}"`);
   }
   return dispatched;
 }
@@ -1442,6 +1457,34 @@ async function scheduleContinuation(taskId: string, delaySecs = 0): Promise<bool
   }
 }
 
+/** Trigger agent workflow via Upstash Workflow client.trigger(). */
+async function triggerAgentWorkflow(taskId: string): Promise<boolean> {
+  const qstashToken = process.env.QSTASH_TOKEN;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai').replace(/\/$/, '');
+
+  if (!qstashToken) {
+    console.warn('[agent] No QSTASH_TOKEN — cannot trigger workflow');
+    return false;
+  }
+
+  try {
+    const { Client } = await import('@upstash/workflow');
+    const client = new Client({ token: qstashToken });
+    await client.trigger({
+      url: `${appUrl}/api/agent/workflow-run`,
+      body: { taskId },
+      retries: 3,
+    });
+    console.log(`[agent:${taskId}] Workflow triggered`);
+    return true;
+  } catch (err) {
+    console.error('[agent] Workflow trigger failed:', err);
+    // Fallback to legacy QStash
+    console.warn(`[agent:${taskId}] Falling back to legacy QStash continuation`);
+    return scheduleContinuation(taskId);
+  }
+}
+
 /** Resume parent task when a sub-task completes. */
 async function resumeParentIfNeeded(
   supabase: ReturnType<typeof getSupabase>,
@@ -1479,7 +1522,8 @@ async function resumeParentIfNeeded(
       updated_at: new Date().toISOString(),
     }).eq('id', parentId);
 
-    await scheduleContinuation(parentId);
+    // Trigger workflow for parent (with legacy fallback)
+    await triggerAgentWorkflow(parentId);
   } catch (err) {
     console.error(`[agent:${taskId}] Error resuming parent:`, err);
   }

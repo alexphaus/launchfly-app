@@ -25,6 +25,7 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.87.1",
+    "@upstash/workflow": "^1.2.0",
     "@vercel/analytics": "^1.5.0",
     "@vercel/og": "^0.8.6",
     "ai": "^6.0.49",

@@ -47,7 +47,7 @@ function getSupabase() {
 const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps (biggest perf win)
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
-const WALL_CLOCK_LIMIT_MS = 55_000;   // 55s — Vercel Pro allows 60s, 5s is enough for cleanup
+const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — Vercel Pro allows 60s, 10s gives a robust buffer for DB saves & QStash
 const STALE_TASK_MINUTES = 5;         // Auto-fail tasks stuck longer than this
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
@@ -590,15 +590,24 @@ export async function executeAgentTask(taskId: string): Promise<{
     const agentTools = getToolsForAgent(row.enabled_tools);
     let stepsThisInvocation = 0;
 
-    // ── Continuation awareness: if resuming, inject a nudge so the LLM doesn't redo work ──
+    // ── Continuation awareness: if resuming, inject a nudge so the LLM knows it's a new round ──
     const isContinuation = stepsUsed > 0 && messages.length > 2;
     if (isContinuation) {
       // Count how many times we've continued (each continuation adds ≤ MAX_STEPS_PER_INVOCATION)
       const continuationRound = Math.floor(stepsUsed / MAX_STEPS_PER_INVOCATION) + 1;
       const stepsLeft = MAX_TOTAL_STEPS - stepsUsed;
+      
+      let contMessage = `⚡ CONTINUATION (round ${continuationRound}): Server execution paused to prevent timeouts. You are now in a fresh continuation round. You have used ${stepsUsed} steps so far with ${stepsLeft} remaining.\n\n`;
+      
+      if (stepsLeft <= BUDGET_WARNING_STEPS) {
+        contMessage += `CRITICAL BUDGET WARNING: You only have ${stepsLeft} steps left. Summarize what you have and deliver your answer NOW via send_report.`;
+      } else {
+        contMessage += `Please review the conversation above and CONTINUE your task exactly where you left off. If you had skipped or paused tool calls, you may retry them or proceed with the next logical step to fulfill the user's ultimate goal. Do not stop early if the task is incomplete.`;
+      }
+
       messages.push({
         role: 'system',
-        content: `⚡ CONTINUATION (round ${continuationRound}): You ran out of time in the previous round. You have used ${stepsUsed} steps so far with ${stepsLeft} remaining.\n\nCRITICAL: Do NOT repeat tool calls you already made — their results are in the conversation above. Summarize what you have and deliver your answer NOW via send_report. Only make new tool calls if absolutely essential and you have NOT tried them before.`,
+        content: contMessage,
       });
     }
 
@@ -612,9 +621,10 @@ export async function executeAgentTask(taskId: string): Promise<{
     }
 
     while (stepsThisInvocation < MAX_STEPS_PER_INVOCATION && stepsUsed < MAX_TOTAL_STEPS) {
-      // ── Wall-clock check ──
-      if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
-        console.log(`[agent:${taskId}] Wall-clock limit (${Math.round((Date.now() - startTime) / 1000)}s), scheduling continuation`);
+      // ── Wall-clock check for LLM call ──
+      // If we don't have enough time for another LLM API call (plus ~2s buffer), break and schedule continuation NOW
+      if (Date.now() - startTime > (WALL_CLOCK_LIMIT_MS - LLM_TIMEOUT_MS - 2000)) {
+        console.log(`[agent:${taskId}] Not enough time for next LLM call (${Math.round((Date.now() - startTime) / 1000)}s elapsed), scheduling continuation`);
         break;
       }
 
@@ -675,7 +685,7 @@ export async function executeAgentTask(taskId: string): Promise<{
             })),
           });
           for (const tc of fnCalls) {
-            messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Skipped — ran out of time this round. Do NOT retry this call. Move on and deliver your results with what you have.' });
+            messages.push({ role: 'tool', tool_call_id: tc.id, content: 'System Execution Time Limit hit. This tool call was safely aborted before completion. The agent is being moved to a continuation round. Please re-evaluate if you still need this tool output and retry it in the next message if necessary.' });
           }
           await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
         }
@@ -918,10 +928,10 @@ export async function executeAgentTask(taskId: string): Promise<{
           }
 
           // Wall-clock check after parallel batch
-          if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
+          if (Date.now() - startTime > (WALL_CLOCK_LIMIT_MS - 3000)) {
             // Defer any remaining sequential calls
             for (const tc of sequentialCalls) {
-              messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Skipped — ran out of time this round. Do NOT retry this call. Move on and deliver your results with what you have.' });
+              messages.push({ role: 'tool', tool_call_id: tc.id, content: 'System Execution Time Limit hit. This tool call was safely aborted before completion. The agent is being moved to a continuation round. Please re-evaluate if you still need this tool output and retry it in the next message if necessary.' });
             }
             await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
             shouldBreak = true;
@@ -964,12 +974,12 @@ export async function executeAgentTask(taskId: string): Promise<{
               return { status: 'completed' as const, result: r.result, taskId, stepsUsed };
             }
 
-            // Wall-clock check after each sequential tool
-            if (Date.now() - startTime > WALL_CLOCK_LIMIT_MS) {
+            // Wall-clock check after each sequential tool (leave 3s buffer to safely save and schedule)
+            if (Date.now() - startTime > (WALL_CLOCK_LIMIT_MS - 3000)) {
               const executedIds = new Set(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id));
               for (const unexecuted of fnCalls) {
                 if (!executedIds.has(unexecuted.id)) {
-                  messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'Skipped — ran out of time this round. Do NOT retry this call. Move on and deliver your results with what you have.' });
+                  messages.push({ role: 'tool', tool_call_id: unexecuted.id, content: 'System Execution Time Limit hit. This tool call was safely aborted before completion. The agent is being moved to a continuation round. Please re-evaluate if you still need this tool output and retry it in the next message if necessary.' });
                 }
               }
               await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);

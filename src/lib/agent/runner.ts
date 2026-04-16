@@ -50,7 +50,7 @@ const AGENT_MODEL = 'deepseek-chat';
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — Vercel Pro allows 60s, 10s gives a robust buffer for DB saves & QStash
 const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
-const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
+const TOOL_RESULT_MAX = 4000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
 // Some tools legitimately need more time (e.g. Apify actor runs, browser automation)
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
@@ -64,7 +64,7 @@ const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek err
 
 // ─── Context Compression ─────────────────────────────────────────────────
 
-const CONTEXT_COMPRESS_THRESHOLD = 48_000; // Estimated tokens (~75% of DeepSeek 64K window)
+const CONTEXT_COMPRESS_THRESHOLD = 15_000; // Estimated tokens (aggressive to avoid strict Vercel wall-clock limits)
 const CONTEXT_COMPRESS_KEEP_TAIL = 6;      // Messages to preserve at end (most recent context)
 const CHARS_PER_TOKEN = 3.5;               // Rough estimate for English/mixed content
 
@@ -612,8 +612,8 @@ export async function executeAgentTask(taskId: string): Promise<{
     const provider = await getAgentProvider(LLM_TIMEOUT_MS);
     const client = provider.client;
     const agentModel = provider.model;
-    // Dynamic compression threshold: 75% of the provider's context window
-    const compressThreshold = Math.floor(provider.contextWindow * 0.75);
+    // Dynamic compression threshold: cap at CONTEXT_COMPRESS_THRESHOLD for fast response times
+    const compressThreshold = Math.min(Math.floor(provider.contextWindow * 0.75), CONTEXT_COMPRESS_THRESHOLD);
     const agentTools = getToolsForAgent(row.enabled_tools);
     let stepsThisInvocation = 0;
 

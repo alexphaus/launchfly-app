@@ -48,7 +48,7 @@ const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps 
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
 const WALL_CLOCK_LIMIT_MS = 50_000;   // 50s — Vercel Pro allows 60s, 10s gives a robust buffer for DB saves & QStash
-const STALE_TASK_MINUTES = 5;         // Auto-fail tasks stuck longer than this
+const STALE_TASK_MINUTES = 10;        // Auto-fail tasks stuck longer than this (generous: allows QStash retries)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const TOOL_RESULT_MAX = 8000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
@@ -245,6 +245,7 @@ interface TaskRow {
   owner_phone: string | null;
   enabled_tools: string[] | null;
   parent_task_id: string | null;
+  updated_at?: string | null;
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────
@@ -321,6 +322,19 @@ export async function executeAgentTask(taskId: string): Promise<{
   if (row.status === 'completed' || row.status === 'failed') {
     console.log(`[agent:${taskId}] Already ${row.status}, skipping`);
     return { status: row.status as 'completed' | 'failed', result: row.result || undefined, taskId, stepsUsed: row.steps_used };
+  }
+
+  // Guard against concurrent execution: if QStash fires while a previous invocation
+  // is still running (race condition), bail out and let the first invocation finish.
+  if (row.status === 'running') {
+    const updatedAgo = Date.now() - new Date(row.updated_at || 0).getTime();
+    if (updatedAgo < STALE_TASK_MINUTES * 60_000) {
+      console.log(`[agent:${taskId}] Task is already running (updated ${Math.round(updatedAgo / 1000)}s ago), skipping duplicate invocation`);
+      return { status: 'continued' as const, taskId, stepsUsed: row.steps_used };
+    }
+    // If it's been stuck in 'running' longer than STALE_TASK_MINUTES, it was likely
+    // killed by Vercel without saving. Safe to resume.
+    console.log(`[agent:${taskId}] Task stuck in 'running' for ${Math.round(updatedAgo / 60000)}min, resuming`);
   }
 
   // Mark as running
@@ -1054,12 +1068,18 @@ export async function executeAgentTask(taskId: string): Promise<{
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(`[agent:${taskId}] Fatal error at step ${stepsUsed}:`, errMsg);
 
-    // On timeout with low step count, retry via QStash
-    const isTimeout = errMsg.includes('timed out') || errMsg.includes('timeout') || errMsg.includes('ETIMEDOUT');
+    // On timeout, always try to continue via QStash instead of failing
+    const isTimeout = errMsg.includes('timed out') || errMsg.includes('timeout') || errMsg.includes('ETIMEDOUT')
+      || errMsg.includes('ECONNRESET') || errMsg.includes('network') || errMsg.includes('502')
+      || errMsg.includes('503') || errMsg.includes('504') || errMsg.includes('rate limit');
     if (isTimeout) {
-      console.log(`[agent:${taskId}] Timeout — scheduling retry`);
-      await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
-      const retried = await scheduleContinuation(taskId);
+      console.log(`[agent:${taskId}] Transient error — saving progress and scheduling continuation`);
+      await supabase.from('agent_tasks').update({
+        messages, steps_used: stepsUsed, tool_log: toolLog,
+        status: 'pending',
+        updated_at: new Date().toISOString(),
+      }).eq('id', taskId);
+      const retried = await scheduleContinuation(taskId, 3);
       if (retried) return { status: 'continued', taskId, stepsUsed };
     }
 
@@ -1114,19 +1134,116 @@ export async function executeAgentTask(taskId: string): Promise<{
     return { status: 'completed', result: summary, taskId, stepsUsed };
   }
 
-  // Save progress and schedule continuation — QStash only gets the taskId
-  await saveProgress(supabase, taskId, messages, stepsUsed, toolLog);
+  // Save progress and reset status to 'pending' so the QStash continuation picks it up
+  // CRITICAL: must set status='pending' BEFORE scheduling, otherwise the continuation
+  // may see status='running' and create a race condition, or the stale-task cleaner
+  // may nuke it between invocations.
+  await supabase.from('agent_tasks').update({
+    messages,
+    steps_used: stepsUsed,
+    tool_log: toolLog,
+    status: 'pending',
+    updated_at: new Date().toISOString(),
+  }).eq('id', taskId);
+
   const continued = await scheduleContinuation(taskId);
 
   if (!continued) {
-    const partial = `Agent paused after ${stepsUsed} steps (continuation failed).`;
-    await supabase.from('agent_tasks').update({
-      status: 'failed', result: partial, updated_at: new Date().toISOString(),
-    }).eq('id', taskId);
-    return { status: 'failed', result: partial, taskId, stepsUsed };
+    // QStash failed — try once more with a small delay
+    console.warn(`[agent:${taskId}] First continuation attempt failed, retrying in 2s...`);
+    const retried = await scheduleContinuation(taskId, 2);
+    if (!retried) {
+      const partial = `Agent paused after ${stepsUsed} steps (continuation failed).`;
+      await supabase.from('agent_tasks').update({
+        status: 'failed', result: partial, updated_at: new Date().toISOString(),
+      }).eq('id', taskId);
+      return { status: 'failed', result: partial, taskId, stepsUsed };
+    }
   }
 
   return { status: 'continued', taskId, stepsUsed };
+}
+
+// ─── Cancel all running/pending tasks for a business ─────────────────────
+
+export async function cancelRunningTasks(
+  businessId: string,
+  reason: string = 'Cancelled by owner',
+): Promise<number> {
+  const supabase = getSupabase();
+
+  const { data: tasks } = await supabase
+    .from('agent_tasks')
+    .select('id, status')
+    .eq('business_id', businessId)
+    .in('status', ['pending', 'running'])
+    .order('updated_at', { ascending: false })
+    .limit(10);
+
+  if (!tasks?.length) return 0;
+
+  const ids = tasks.map(t => t.id);
+  await supabase.from('agent_tasks').update({
+    status: 'failed',
+    result: reason,
+    updated_at: new Date().toISOString(),
+  }).in('id', ids);
+
+  console.log(`[agent:cancel] Cancelled ${ids.length} tasks for business ${businessId}: ${ids.join(', ')}`);
+  return ids.length;
+}
+
+// ─── Resume a completed task (user said "Continue") ──────────────────────
+
+export async function resumeCompletedTask(
+  taskId: string,
+  userMessage: string,
+): Promise<boolean> {
+  const supabase = getSupabase();
+
+  const { data: task } = await supabase
+    .from('agent_tasks')
+    .select('status, messages, steps_used')
+    .eq('id', taskId)
+    .maybeSingle();
+
+  if (!task) {
+    console.warn(`[agent:resume-completed] Task ${taskId} not found`);
+    return false;
+  }
+
+  // Only resume tasks that are completed (not failed — those may have bad state)
+  if (task.status !== 'completed') {
+    console.warn(`[agent:resume-completed] Task ${taskId} is ${task.status}, not 'completed'`);
+    return false;
+  }
+
+  // Check step budget — if already at max, can't continue
+  if ((task.steps_used || 0) >= MAX_TOTAL_STEPS) {
+    console.warn(`[agent:resume-completed] Task ${taskId} already exhausted step budget (${task.steps_used}/${MAX_TOTAL_STEPS})`);
+    return false;
+  }
+
+  // Inject the user's message and reset status to pending
+  const messages: AgentMessage[] = Array.isArray(task.messages) ? task.messages : [];
+  messages.push({
+    role: 'user',
+    content: `The owner says: "${userMessage}"\n\nPlease continue where you left off. Review the conversation above, check what work is still incomplete, and keep going until the original goal is fully achieved. Then deliver a final report via send_report.`,
+  });
+
+  await supabase.from('agent_tasks').update({
+    status: 'pending',
+    result: null,
+    messages,
+    updated_at: new Date().toISOString(),
+  }).eq('id', taskId);
+
+  // Wake up via QStash
+  const dispatched = await scheduleContinuation(taskId);
+  if (dispatched) {
+    console.log(`[agent:resume-completed] Task ${taskId} resumed (${task.steps_used} steps used so far)`);
+  }
+  return dispatched;
 }
 
 // ─── Resume from Approval Gate (exported for webhook use) ────────────────

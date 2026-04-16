@@ -464,6 +464,61 @@ export async function POST(request: NextRequest) {
       const { saveMessage } = await import('@/lib/ai-receptionist/history');
       await saveMessage(customerPhone, 'user', messageText, businessId).catch(e => console.warn('Failed to save owner message to history:', e));
 
+      // ── "Stop" detection: cancel any running/pending agent tasks ──
+      const trimmed = messageText.trim().toLowerCase().replace(/[^a-z\s]/g, '');
+      const isStopRequest = /^(stop|cancel|abort|halt|enough|stop it|stop that|cancel that|nevermind|never mind|nvm|quit|shut up)$/.test(trimmed);
+      if (isStopRequest) {
+        const { cancelRunningTasks } = await import('@/lib/agent/runner');
+        const cancelled = await cancelRunningTasks(businessId, 'Cancelled by owner');
+        console.log(`   🛑 Stop: cancelled ${cancelled} task(s) for business ${businessId}`);
+        // Send confirmation via Launchfly instance
+        const { sendWhatsAppWithCreds } = await import('@/lib/evolution');
+        const creds = {
+          baseUrl: process.env.EVOLUTION_BASE_URL!,
+          apiKey: process.env.EVOLUTION_API_KEY!,
+          instanceName: process.env.LAUNCHFLY_INSTANCE_NAME!,
+        };
+        if (creds.baseUrl && creds.apiKey && creds.instanceName) {
+          await sendWhatsAppWithCreds(
+            customerPhone,
+            cancelled > 0 ? `🛑 Stopped ${cancelled} running task${cancelled > 1 ? 's' : ''}. What would you like me to do instead?` : `No tasks were running. What can I help with?`,
+            creds,
+          ).catch(() => {});
+        }
+        return NextResponse.json({ ok: true, routed: 'stop_tasks', cancelled });
+      }
+
+      // ── "Continue" detection: resume the last task instead of creating a new one ──
+      const isContinueRequest = /^(continue|keep going|go on|finish it|carry on|resume|next|dont stop|continue the task|continue last task|continue that)$/.test(trimmed);
+      if (isContinueRequest) {
+        // Look for the most recent task that was completed or is still running/pending
+        const { data: lastTask } = await supabase
+          .from('agent_tasks')
+          .select('id, status, goal, steps_used, updated_at')
+          .eq('business_id', businessId)
+          .in('status', ['completed', 'pending', 'running'])
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastTask) {
+          if (lastTask.status === 'pending' || lastTask.status === 'running') {
+            // Task is still in-flight, let it finish
+            console.log(`   ⏳ Continue: task ${lastTask.id} is already ${lastTask.status}, no action needed`);
+            return NextResponse.json({ ok: true, routed: 'continue_existing', taskId: lastTask.id });
+          }
+          // Task completed — re-open it as a continuation
+          console.log(`   🔄 Continue: resuming completed task ${lastTask.id} (${lastTask.steps_used} steps used)`);
+          const { resumeCompletedTask } = await import('@/lib/agent/runner');
+          const resumed = await resumeCompletedTask(lastTask.id, messageText);
+          if (resumed) {
+            return NextResponse.json({ ok: true, routed: 'continue_last_task', taskId: lastTask.id });
+          }
+          // Fall through to create a new task if resume failed
+          console.warn(`   ⚠️ Continue: resume failed for task ${lastTask.id}, creating new task`);
+        }
+      }
+
       if (orchestrator) {
         if (ownerImageUrl) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;

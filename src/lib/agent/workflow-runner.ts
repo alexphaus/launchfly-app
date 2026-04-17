@@ -287,7 +287,7 @@ export async function buildInitialMessages(
           .eq('business_id', row.business_id)
           .eq('status', 'completed')
           .order('updated_at', { ascending: false })
-          .limit(5)
+          .limit(10)
           .then(r => r.data || [])),
         Promise.resolve(supabase
           .from('jobs')
@@ -307,8 +307,8 @@ export async function buildInitialMessages(
 
   if (conversationHistory.length > 0) {
     memoryContext += '\n\n## RECENT CONVERSATION HISTORY (owner ↔ you)\n';
-    for (const msg of conversationHistory.slice(-10)) {
-      memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${safeSlice(msg.content, 300)}\n`;
+    for (const msg of conversationHistory.slice(-20)) {
+      memoryContext += `${msg.role === 'user' ? 'OWNER' : 'YOU'}: ${safeSlice(msg.content, 800)}\n`;
     }
   }
 
@@ -318,7 +318,7 @@ export async function buildInitialMessages(
       const ago = Math.round((Date.now() - new Date(t.updated_at).getTime()) / 3600000);
       const goalStr = (t.goal as string) || '';
       if (goalStr.startsWith('[DELEGATED TASK]')) continue;
-      memoryContext += `- [${ago}h ago] ${safeSlice(goalStr, 120)} → ${safeSlice((t.result as string) || '', 150)}\n`;
+      memoryContext += `- [${ago}h ago] ${safeSlice(goalStr, 200)} → ${safeSlice((t.result as string) || '', 600)}\n`;
     }
   }
 

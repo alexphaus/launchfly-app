@@ -215,17 +215,20 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'draft_content',
-      description: 'Use AI to draft content: social media posts, email campaigns, video scripts, ad copy, blog articles. Provide type and topic.',
+      description: 'Use AI to draft high-quality content: social media posts, email campaigns, video scripts, ad copy, blog articles. Pulls business context (services, pricing, location) automatically. For ads and social posts, request multiple variations to A/B test.',
       parameters: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: ['social_post', 'email', 'video_script', 'ad_copy', 'blog', 'sms', 'whatsapp_template'],
+            enum: ['social_post', 'email', 'video_script', 'ad_copy', 'blog', 'sms', 'whatsapp_template', 'google_ad', 'caption'],
             description: 'Type of content to generate',
           },
-          topic: { type: 'string', description: 'Topic, angle, or specific instructions for the content' },
-          platform: { type: 'string', description: 'Target platform (instagram, facebook, tiktok, linkedin, email)' },
+          topic: { type: 'string', description: 'Topic, angle, or specific instructions for the content. Be detailed — include the offer, pain point, or hook.' },
+          platform: { type: 'string', description: 'Target platform (instagram, facebook, tiktok, linkedin, youtube, google, twitter/x, email). Affects format, length, hashtags, and tone.' },
+          tone: { type: 'string', description: 'Desired tone/voice: casual, professional, funny, urgent, educational, inspirational, bold. Default: confident and helpful.' },
+          audience: { type: 'string', description: 'Target audience (e.g. "homeowners in Sydney", "property managers", "small business owners"). Helps tailor the message.' },
+          variations: { type: 'number', description: 'Number of content variations to generate (default 1, max 5). Use 2-3 for A/B testing ads and social posts.' },
         },
         required: ['type', 'topic'],
       },
@@ -717,12 +720,7 @@ export async function executeTool(
       );
 
     case 'draft_content':
-      return executeDraftContent(
-        args.type as string,
-        args.topic as string,
-        args.platform as string | undefined,
-        toolCtx,
-      );
+      return executeDraftContent(args as Record<string, unknown>, toolCtx);
 
     case 'get_weather_forecast':
       return executeGetWeatherForecast(args.location as string);
@@ -1499,20 +1497,70 @@ async function executeQueryDatabase(
 // ─── draft_content ───────────────────────────────────────────────────────
 
 async function executeDraftContent(
-  type: string,
-  topic: string,
-  platform: string | undefined,
+  args: Record<string, unknown>,
   toolCtx: ToolContext,
 ): Promise<string> {
+  const type = (args.type as string) || 'social_post';
+  const topic = (args.topic as string) || '';
+  const platform = args.platform as string | undefined;
+  const tone = (args.tone as string) || 'confident and helpful';
+  const audience = args.audience as string | undefined;
+  const variations = Math.min(Math.max((args.variations as number) || 1, 1), 5);
+
+  if (!topic) return 'Error: "topic" is required.';
+
+  // Pull business context for richer content
+  let bizContext = '';
+  try {
+    const supabase = getSupabase();
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('name, business_data')
+      .eq('id', toolCtx.businessId)
+      .single();
+    if (biz?.business_data) {
+      const bd = biz.business_data as Record<string, unknown>;
+      const parts: string[] = [];
+      if (bd.industry || bd.category) parts.push(`Industry: ${bd.industry || bd.category}`);
+      if (bd.services) parts.push(`Services: ${bd.services}`);
+      if (bd.city || bd.location) parts.push(`Location: ${bd.city || bd.location}`);
+      if (bd.usp || bd.unique_selling_point) parts.push(`USP: ${bd.usp || bd.unique_selling_point}`);
+      if (parts.length > 0) bizContext = `\nBusiness details: ${parts.join('. ')}.`;
+    }
+  } catch { /* non-fatal */ }
+
+  const platformGuides: Record<string, string> = {
+    instagram: 'Instagram: visual-first, use line breaks for readability, 3-5 relevant hashtags at the end, max ~2200 chars but keep punchy (under 300 ideal). Use emojis strategically.',
+    facebook: 'Facebook: conversational, storytelling works well, 1-3 hashtags max, can be longer (300-600 chars). Ask a question to drive comments.',
+    tiktok: 'TikTok: ultra-casual, trend-aware, hook in first 2 seconds, use popular sounds/formats references, keep caption short (150 chars).',
+    linkedin: 'LinkedIn: professional but personable, use line breaks and white space, start with a bold hook, 1300-1700 chars ideal, 3-5 hashtags.',
+    youtube: 'YouTube: optimize title (60 chars), description (first 2 lines are key), include timestamps and CTAs, keywords naturally placed.',
+    google: 'Google Ads: strict limits — headline max 30 chars (up to 15 headlines), description max 90 chars (up to 4). Focus on keywords, benefits, and clear CTA.',
+    'twitter/x': 'Twitter/X: max 280 chars, be punchy and opinionated, 1-2 hashtags, threads for longer content.',
+    email: 'Email: compelling subject line (under 50 chars), preview text matters, clear single CTA, mobile-friendly short paragraphs.',
+  };
+  const platformGuide = platform ? (platformGuides[platform.toLowerCase()] || `Target platform: ${platform}. Optimize format, length, and style accordingly.`) : '';
+
   try {
     const { generateText } = await import('ai');
     const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
 
-    const systemPrompt = `You are a world-class content creator for ${toolCtx.businessName || 'a service business'}.
-Create compelling ${type} content that drives engagement, leads, and sales.
-${platform ? `Target platform: ${platform}. Optimize format, length, and style for ${platform}.` : ''}
-Include relevant hashtags for social posts. Include a CTA.
-Keep it authentic, not corporate. Match the tone of a confident, helpful expert.`;
+    const systemPrompt = `You are a world-class content creator and performance marketer for ${toolCtx.businessName || 'a service business'}.${bizContext}
+
+CREATE: ${type} content.
+${platformGuide}
+Tone: ${tone}.
+${audience ? `Target audience: ${audience}.` : ''}
+${variations > 1 ? `Generate ${variations} distinct variations. Label them VARIATION 1, VARIATION 2, etc. Each should have a different hook/angle but same core message.` : ''}
+
+Rules:
+- Lead with a hook that stops the scroll (pain point, bold claim, or question).
+- Focus on benefits and outcomes, not features.
+- Include a clear CTA.
+- For social posts: include relevant hashtags.
+- For ads: keep copy tight, benefit-driven, urgency where appropriate.
+- Keep it authentic and human — never corporate or generic.
+- Match the tone of a confident expert who genuinely wants to help.`;
 
     const result = await generateText({
       model: deepseek(MINI_MODEL),

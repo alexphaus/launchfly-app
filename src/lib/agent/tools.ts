@@ -203,7 +203,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
             description: 'For insert: the row to insert (column: value pairs). For update: the columns to change (column: newValue). Not used for select/delete.',
           },
           limit: { type: 'number', description: 'Max rows to return for select (default 25), or max rows to update/delete (default 1, max 50)' },
-          select: { type: 'string', description: 'Columns to select (comma-separated, default *)' },
+          select: { type: 'string', description: 'Columns to select (comma-separated, default *). Also supports COUNT(*) as alias for totals and column, COUNT(*) as alias for grouped counts.' },
         },
         required: ['table'],
       },
@@ -1222,11 +1222,48 @@ const ALLOWED_TABLES = new Set([
 ]);
 const READ_ONLY_TABLES = new Set(['businesses', 'business_integrations', 'agent_tasks', 'chat_history', 'sales']);
 
-// Only allow simple column names in select (no subqueries, no functions)
-function sanitizeSelect(select: string): string {
-  if (!select || select === '*') return '*';
-  const cols = select.split(',').map(c => c.trim()).filter(c => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(c));
-  return cols.length > 0 ? cols.join(',') : '*';
+type ParsedSelect =
+  | { kind: 'all' }
+  | { kind: 'columns'; columns: string }
+  | { kind: 'count'; alias: string }
+  | { kind: 'groupCount'; column: string; alias: string }
+  | { kind: 'invalid'; reason: string };
+
+// Only allow simple column names plus a small set of safe aggregate shapes.
+function parseSelect(select: string): ParsedSelect {
+  if (!select || select === '*') return { kind: 'all' };
+
+  const normalized = select.trim().replace(/\s+/g, ' ');
+
+  const countMatch = normalized.match(/^COUNT\(\*\)(?: as ([a-zA-Z_][a-zA-Z0-9_]*))?$/i);
+  if (countMatch) {
+    return { kind: 'count', alias: countMatch[1] || 'count' };
+  }
+
+  const groupCountMatch = normalized.match(
+    /^([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*COUNT\(\*\)(?: as ([a-zA-Z_][a-zA-Z0-9_]*))?$/i,
+  );
+  if (groupCountMatch) {
+    return {
+      kind: 'groupCount',
+      column: groupCountMatch[1],
+      alias: groupCountMatch[2] || 'count',
+    };
+  }
+
+  const cols = normalized
+    .split(',')
+    .map(c => c.trim())
+    .filter(c => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(c));
+
+  if (cols.length > 0 && cols.length === normalized.split(',').length) {
+    return { kind: 'columns', columns: cols.join(',') };
+  }
+
+  return {
+    kind: 'invalid',
+    reason: 'Unsupported select expression. Use plain column names, COUNT(*) as alias, or column, COUNT(*) as alias.',
+  };
 }
 
 // Sanitize data object — only allow safe column names and primitive values
@@ -1296,8 +1333,82 @@ async function executeQueryDatabase(
 
   // ─── SELECT ───
   if (effectiveAction === 'select') {
+    const parsedSelect = parseSelect(select);
+    if (parsedSelect.kind === 'invalid') return parsedSelect.reason;
+
+    if (parsedSelect.kind === 'count') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let countQuery: any = supabase
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId);
+      if (filters) countQuery = applyFilters(countQuery, filters);
+      const { count, error } = await countQuery;
+      if (error) return `Query error: ${error.message}`;
+      return JSON.stringify({ [parsedSelect.alias]: count ?? 0 }, null, 2);
+    }
+
+    if (parsedSelect.kind === 'groupCount') {
+      const grouped = new Map<string, { value: string | null; count: number }>();
+      const pageSize = 1000;
+      let from = 0;
+      let truncated = false;
+
+      while (true) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let pageQuery: any = supabase
+          .from(table)
+          .select(parsedSelect.column)
+          .eq('business_id', businessId);
+        if (filters) pageQuery = applyFilters(pageQuery, filters);
+
+        const { data: batch, error } = await pageQuery.range(from, from + pageSize - 1);
+        if (error) return `Query error: ${error.message}`;
+        if (!batch?.length) break;
+
+        for (const row of batch as Array<Record<string, unknown>>) {
+          const rawValue = row[parsedSelect.column];
+          const key = rawValue === null || rawValue === undefined ? '__null__' : String(rawValue);
+          const existing = grouped.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            grouped.set(key, {
+              value: rawValue === null || rawValue === undefined ? null : String(rawValue),
+              count: 1,
+            });
+          }
+        }
+
+        if (batch.length < pageSize) break;
+        from += pageSize;
+        if (from >= 5000) {
+          truncated = true;
+          break;
+        }
+      }
+
+      const rows = Array.from(grouped.values())
+        .sort((left, right) => right.count - left.count)
+        .map(entry => ({
+          [parsedSelect.column]: entry.value,
+          [parsedSelect.alias]: entry.count,
+        }));
+
+      if (!rows.length) return `No results in ${table} matching those filters.`;
+
+      const outputRows = rows.slice(0, Math.min(limit, 100));
+      const warning = truncated
+        ? '\nWarning: grouped counts truncated after scanning 5000 matching rows.'
+        : '';
+      return `${rows.length} grouped row(s):\n${JSON.stringify(outputRows, null, 2).substring(0, 6000)}${warning}`;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query: any = supabase.from(table).select(sanitizeSelect(select)).eq('business_id', businessId);
+    let query: any = supabase
+      .from(table)
+      .select(parsedSelect.kind === 'columns' ? parsedSelect.columns : '*')
+      .eq('business_id', businessId);
     if (filters) query = applyFilters(query, filters);
     const { data: rows, error } = await query.limit(Math.min(limit, 100)).order('created_at', { ascending: false });
     if (error) return `Query error: ${error.message}`;

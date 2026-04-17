@@ -283,6 +283,20 @@ async function dispatchAction(action: Action, ctx: EventContext): Promise<{ ok: 
 
     case 'send_whatsapp': {
       if (!ctx.phone || !cfg.message) return { ok: false, detail: 'Missing phone or message' };
+
+      // Check outreach pause for send_whatsapp within daily_schedule events
+      if (ctx.event === 'daily_schedule' && ctx.businessId) {
+        const supabase = getSupabase();
+        const { data: biz } = await supabase
+          .from('businesses')
+          .select('outreach_paused')
+          .eq('id', ctx.businessId)
+          .single();
+        if (biz?.outreach_paused) {
+          return { ok: true, detail: 'Outreach paused — send_whatsapp skipped' };
+        }
+      }
+
       const msg = fillVars(cfg.message as string, ctx);
 
       // Use pinned WhatsApp instance if this prospect was assigned one (multi-instance outreach)
@@ -822,6 +836,20 @@ CUSTOMER NAME: ${customerName}
       const searchQuery = (cfg.searchQuery as string) || '';
       const searchLocation = (cfg.searchLocation as string) || '';
       if (!searchQuery || !searchLocation) return { ok: false, detail: 'Missing searchQuery or searchLocation' };
+
+      // Check outreach pause for search_leads within daily_schedule events
+      if (ctx.event === 'daily_schedule' && ctx.businessId) {
+        const supabase = getSupabase();
+        const { data: biz } = await supabase
+          .from('businesses')
+          .select('outreach_paused')
+          .eq('id', ctx.businessId)
+          .single();
+        if (biz?.outreach_paused) {
+          return { ok: true, detail: 'Outreach paused — search_leads skipped' };
+        }
+      }
+
       const maxResults = Number(cfg.searchMaxResults) || 50;
 
       const { searchGoogleMaps } = await import('@/lib/apify');
@@ -1606,8 +1634,12 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
   const supabase = getSupabase();
 
   // ── Pause check for outbound events (prospecting, scheduled outreach) ──
-  // Inbound events (inbound_whatsapp, payment_received) should ALWAYS be processed
-  const OUTBOUND_EVENTS = new Set(['prospect_found', 'daily_schedule', 'user_inactive']);
+  // Inbound events (inbound_whatsapp, payment_received) should ALWAYS be processed.
+  // NOTE: daily_schedule is NOT paused here — it can contain agent_task or
+  // notify_owner actions (internal reports) that should run even when outreach
+  // is paused. Individual outbound actions (send_whatsapp, search_leads) handle
+  // their own pause logic.
+  const OUTBOUND_EVENTS = new Set(['prospect_found', 'user_inactive']);
   if (OUTBOUND_EVENTS.has(ctx.event) && ctx.businessId) {
     const { data: biz } = await supabase
       .from('businesses')

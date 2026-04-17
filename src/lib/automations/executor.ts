@@ -708,7 +708,10 @@ CUSTOMER NAME: ${customerName}
 
       const { Resend } = await import('resend');
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.FROM_EMAIL || 'hello@launchfly.ai';
+      const { data: business } = await supabase.from("businesses").select("business_data").eq("id", ctx.businessId).single();
+        const businessEmail = (business?.business_data as Record<string, unknown>)?.email as string | undefined;
+
+        const fromEmail = process.env.SENDGRID_FROM_EMAIL || process.env.FROM_EMAIL || "hello@launchfly.ai";
       const filledSubject = fillVars(subject, ctx);
       const filledBody = fillVars(body, ctx);
 
@@ -716,7 +719,8 @@ CUSTOMER NAME: ${customerName}
         from: `${ctx.businessName || 'Launchfly'} <${fromEmail}>`,
         to: toEmail,
         subject: filledSubject,
-        html: filledBody.replace(/\n/g, '<br>'),
+        html: filledBody.replace(/\n/g, "<br>"),
+          ...(businessEmail ? { reply_to: businessEmail } : {}),
       });
       return { ok: true, detail: `Email sent to ${toEmail}: ${filledSubject}` };
     }

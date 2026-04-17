@@ -758,29 +758,33 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   }, [business?.id]);
 
   // ── Save business-level automation rules ───────────────────────────────
-  const saveAutomations = async () => {
+  const saveAutomations = async (rulesToSave, { quiet } = {}) => {
     if (!business?.id) return;
-    setSavingAutomations(true);
-    setAutomationSaveStatus(null);
+    if (!quiet) {
+      setSavingAutomations(true);
+      setAutomationSaveStatus(null);
+    }
     try {
       const res = await fetch('/api/business-automations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId: business.id, rules: automationRules }),
+        body: JSON.stringify({ businessId: business.id, rules: rulesToSave || automationRules }),
       });
       const data = await res.json();
       if (res.ok && data.ok) {
         setAutomationRules(data.rules);
-        setAutomationSaveStatus('saved');
-        setTimeout(() => setAutomationSaveStatus(null), 2000);
-      } else {
+        if (!quiet) {
+          setAutomationSaveStatus('saved');
+          setTimeout(() => setAutomationSaveStatus(null), 2000);
+        }
+      } else if (!quiet) {
         setAutomationSaveStatus('error');
       }
     } catch (err) {
       console.error('Failed to save automations:', err);
-      setAutomationSaveStatus('error');
+      if (!quiet) setAutomationSaveStatus('error');
     } finally {
-      setSavingAutomations(false);
+      if (!quiet) setSavingAutomations(false);
     }
   };
 
@@ -2167,7 +2171,12 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                         </div>
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => updateRule(ruleIdx, 'enabled', rule.enabled === false)}
+                            onClick={() => {
+                              const updated = [...automationRules];
+                              updated[ruleIdx] = { ...updated[ruleIdx], enabled: updated[ruleIdx].enabled === false };
+                              setAutomationRules(updated);
+                              saveAutomations(updated, { quiet: true });
+                            }}
                             className="p-1"
                           >
                             {rule.enabled !== false
@@ -3112,7 +3121,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         <div className="px-5 py-4 border-t border-slate-100 shrink-0">
           {activeTab === 'triggers' ? (
             <button
-              onClick={saveAutomations}
+              onClick={() => saveAutomations()}
               disabled={savingAutomations}
               className={`w-full py-3 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 ${
                 automationSaveStatus === 'saved'

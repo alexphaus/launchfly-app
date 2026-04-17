@@ -196,7 +196,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
           },
           filters: {
             type: 'object',
-            description: 'For select: filter rows. For update/delete: match rows to modify (REQUIRED). Simple values = equality (column: value). Operators: {"column": {"gte": "2025-01-01"}} — supports gte, lte, gt, lt, ilike, neq, in (array), is (null/true/false/"not null"). Use {"column": {"is": "not null"}} to find rows where a column has a value.',
+            description: 'For select: filter rows. For update/delete: match rows to modify (REQUIRED). Simple values = equality (column: value). Operators: {"column": {"gte": "2025-01-01"}} — supports gte, lte, gt, lt, ilike, neq, in (array), is (null/true/false/"not null").',
           },
           data: {
             type: 'object',
@@ -1309,18 +1309,18 @@ function applyFilters(query: any, filters: Record<string, unknown>) {
           else if (opVal === false || opVal === 'false') q = q.is(safeKey, false);
           continue;
         }
-        // All other operators require string/number — special-case neq:null
-        if (op === 'neq' && (opVal === null || opVal === 'null')) {
-          q = q.not(safeKey, 'is', null);
+        if (op === 'neq') {
+          if (opVal === null || opVal === 'null') q = q.not(safeKey, 'is', null);
+          else q = q.neq(safeKey, opVal);
           continue;
         }
+        // All other operators require string/number
         if (typeof opVal !== 'string' && typeof opVal !== 'number') continue;
         switch (op) {
           case 'gte': q = q.gte(safeKey, opVal); break;
           case 'lte': q = q.lte(safeKey, opVal); break;
           case 'gt': q = q.gt(safeKey, opVal); break;
           case 'lt': q = q.lt(safeKey, opVal); break;
-          case 'neq': q = q.neq(safeKey, opVal); break;
           case 'ilike': {
             const pattern = String(opVal).replace(/[^a-zA-Z0-9%_ @.-]/g, '');
             q = q.ilike(safeKey, pattern);

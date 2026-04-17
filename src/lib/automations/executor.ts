@@ -1687,6 +1687,7 @@ export async function fireEvent(ctx: EventContext): Promise<{ fired: number; res
   );
 
   if (matchingRules.length === 0) {
+    console.log(`[automation] No matching rules for event=${ctx.event} ruleId=${ctx.ruleId || 'any'} business=${ctx.businessId} (${rules.length} total rules)`);
     return { fired: 0, results: [] };
   }
 

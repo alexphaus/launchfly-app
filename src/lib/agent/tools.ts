@@ -545,7 +545,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
             type: 'object',
             description: 'Schedule config (required when event is daily_schedule)',
             properties: {
-              hour: { type: 'number', description: 'Hour in 24h format (0-23)' },
+              hour: { type: 'number', description: 'Hour in LOCAL time, 24h format (0-23). 3 AM = 3, 8 PM = 20. Do NOT convert to UTC — the system handles timezone conversion automatically.' },
               minute: { type: 'number', description: 'Minute (0-59, default 0)' },
               days: { type: 'array', items: { type: 'string' }, description: 'Days of week: mon, tue, wed, thu, fri, sat, sun. Default: all 7 days for "every day".' },
               timezone: { type: 'string', description: 'IANA timezone (e.g. America/New_York, Asia/Singapore, Europe/London). Ask the owner if unknown.' },
@@ -2710,9 +2710,11 @@ async function executeManageAutomation(
       if (conditions.length > 0) newRule.conditions = conditions;
 
       if (event === 'daily_schedule' && schedule) {
+        const rawHour = typeof schedule.hour === 'number' ? schedule.hour : 9;
+        const clampedHour = Math.max(0, Math.min(23, Math.round(rawHour)));
         newRule.scheduleConfig = {
-          hour: schedule.hour ?? 9,
-          minute: schedule.minute ?? 0,
+          hour: clampedHour,
+          minute: Math.max(0, Math.min(59, Math.round(schedule.minute ?? 0))),
           days: schedule.days || ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
           timezone: schedule.timezone || 'America/New_York',
         };

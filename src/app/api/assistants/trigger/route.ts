@@ -67,6 +67,8 @@ export async function POST(req: NextRequest) {
 
     const result = await fireEvent(ctx);
 
+    console.log(`[trigger] ${ctx.event} for ${businessId}: fired=${result.fired}, results=${JSON.stringify(result.results).substring(0, 200)}`);
+
     return NextResponse.json({
       ok: true,
       event: ctx.event,

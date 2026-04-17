@@ -30,13 +30,17 @@ export async function syncBusinessCrons(
   const updatedRules: AutomationRule[] = JSON.parse(JSON.stringify(rules));
   const scheduleRules = updatedRules.filter(r => r.event === 'daily_schedule');
 
-  const tzOffsets: Record<string, number> = {
-    'Pacific/Honolulu': -10, 'America/Los_Angeles': -8, 'America/Denver': -7,
-    'America/Chicago': -6, 'America/New_York': -5, 'America/Sao_Paulo': -3,
-    'Europe/London': 0, 'Europe/Madrid': 1, 'Europe/Istanbul': 3,
-    'Asia/Dubai': 4, 'Asia/Kolkata': 5.5, 'Asia/Bangkok': 7,
-    'Asia/Singapore': 8, 'Asia/Tokyo': 9, 'Australia/Sydney': 11,
-  };
+  // Dynamically compute timezone offset using Intl (handles DST correctly)
+  function getTzOffsetHours(tz: string): number {
+    try {
+      const now = new Date();
+      const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
+      const localStr = now.toLocaleString('en-US', { timeZone: tz });
+      return (new Date(localStr).getTime() - new Date(utcStr).getTime()) / 3_600_000;
+    } catch {
+      return 0; // unknown timezone — treat as UTC
+    }
+  }
   const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 
   for (const rule of scheduleRules) {
@@ -46,7 +50,7 @@ export async function syncBusinessCrons(
     const days = cfg.days || ['mon', 'tue', 'wed', 'thu', 'fri'];
     const tz = cfg.timezone || 'America/New_York';
 
-    const offset = tzOffsets[tz] ?? 0;
+    const offset = getTzOffsetHours(tz);
     let utcHour = hour - offset;
     let dayShift = 0;
     if (utcHour < 0) { utcHour += 24; dayShift = -1; }

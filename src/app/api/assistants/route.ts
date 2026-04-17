@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       .select('*')
       .eq('business_id', businessId)
       .eq('active', true)
-      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+      .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('business_id', body.businessId)
         .eq('active', true)
-        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       existing = data;
@@ -268,13 +268,12 @@ export async function PUT(req: NextRequest) {
     const supabase = getSupabase();
 
     if (body.createNew) {
-      // Deactivate all current customer-facing assistants (preserve internal ones like Purchasing OS)
+      // Deactivate all currently active assistants
       await supabase
         .from('assistants')
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('business_id', body.businessId)
-        .eq('active', true)
-        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")');
+        .eq('active', true);
 
       // Create a new one
       const { data: newAssistant, error } = await supabase
@@ -312,13 +311,12 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ error: 'Assistant not found' }, { status: 404 });
       }
 
-      // Deactivate all current customer-facing assistants (preserve internal ones like Purchasing OS)
+      // Deactivate all currently active assistants
       await supabase
         .from('assistants')
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('business_id', body.businessId)
-        .eq('active', true)
-        .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")');
+        .eq('active', true);
 
       // Activate the chosen one
       const { data: switched, error } = await supabase

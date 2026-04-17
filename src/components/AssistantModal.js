@@ -180,7 +180,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [savingAutomations, setSavingAutomations] = useState(false);
   const [automationSaveStatus, setAutomationSaveStatus] = useState(null); // 'saved' | 'error'
   const [automationsDirty, setAutomationsDirty] = useState(false);
-  const [automationsDirty, setAutomationsDirty] = useState(false);
 
   // Assistant config state
   const [config, setConfig] = useState({

@@ -179,7 +179,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const [automationRules, setAutomationRules] = useState([]);
   const [savingAutomations, setSavingAutomations] = useState(false);
   const [automationSaveStatus, setAutomationSaveStatus] = useState(null); // 'saved' | 'error'
-  const [automationsDirty, setAutomationsDirty] = useState(false);
 
   // Assistant config state
   const [config, setConfig] = useState({
@@ -752,10 +751,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     try {
       const res = await fetch(`/api/business-automations?businessId=${business.id}`, { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok) {
-        setAutomationRules(data.rules || []);
-        setAutomationsDirty(false);
-      }
+      if (res.ok) setAutomationRules(data.rules || []);
     } catch (err) {
       console.error('Failed to load automations:', err);
     }
@@ -775,7 +771,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
       const data = await res.json();
       if (res.ok && data.ok) {
         setAutomationRules(data.rules);
-        setAutomationsDirty(false);
         setAutomationSaveStatus('saved');
         setTimeout(() => setAutomationSaveStatus(null), 2000);
       } else {
@@ -881,7 +876,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
 
   const setRules = (updater) => {
     setAutomationRules(prev => typeof updater === 'function' ? updater(prev) : updater);
-    setAutomationsDirty(true);
   };
 
   const addRule = () => {
@@ -3115,7 +3109,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
         </div>
 
         {/* ── Footer: Save Button ───────────────────────────────────────── */}
-        {activeTab !== 'activity' && (
         <div className="px-5 py-4 border-t border-slate-100 shrink-0">
           {activeTab === 'triggers' ? (
             <button
@@ -3126,8 +3119,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                   ? 'bg-emerald-100 text-emerald-700'
                   : automationSaveStatus === 'error'
                   ? 'bg-red-100 text-red-700'
-                  : automationsDirty
-                  ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'
                   : 'bg-emerald-600 text-white hover:bg-emerald-700'
               } disabled:opacity-50`}
             >
@@ -3142,10 +3133,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
                 </>
               ) : automationSaveStatus === 'error' ? (
                 'Failed to save — try again'
-              ) : automationsDirty ? (
-                <>
-                  <Save className="w-4 h-4" /> Save Automations (unsaved changes)
-                </>
               ) : (
                 <>
                   <Save className="w-4 h-4" /> Save Automations
@@ -3183,7 +3170,6 @@ export default function AssistantModal({ isOpen, onClose, business }) {
             </button>
           )}
         </div>
-        )}
       </div>
     </div>
   );

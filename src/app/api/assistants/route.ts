@@ -15,6 +15,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+const NO_CACHE = { 'Cache-Control': 'private, no-cache, no-store, must-revalidate' };
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ assistants: assistants || [] });
+      return NextResponse.json({ assistants: assistants || [] }, { headers: NO_CACHE });
     }
 
     const { data: assistant, error } = await supabase
@@ -82,10 +84,10 @@ export async function GET(req: NextRequest) {
           sequence_steps: [],
           trigger_config: { whatsapp_webhook: true, missed_call: true },
         },
-      });
+      }, { headers: NO_CACHE });
     }
 
-    return NextResponse.json({ assistant });
+    return NextResponse.json({ assistant }, { headers: NO_CACHE });
   } catch (err) {
     console.error('[assistants] GET unexpected error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

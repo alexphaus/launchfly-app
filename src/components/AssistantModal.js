@@ -456,7 +456,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     if (!business?.id) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/assistants?businessId=${business.id}`, { cache: 'no-store' });
+      const res = await fetch(`/api/assistants?businessId=${business.id}&_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
 
       if (data.assistant) {
@@ -476,7 +476,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const loadAssistantList = useCallback(async () => {
     if (!business?.id) return;
     try {
-      const res = await fetch(`/api/assistants?businessId=${business.id}&list=true`, { cache: 'no-store' });
+      const res = await fetch(`/api/assistants?businessId=${business.id}&list=true&_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       setAssistantList(data.assistants || []);
     } catch (err) {
@@ -693,7 +693,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
     if (!business?.id) return;
     setLoadingActivity(true);
     try {
-      const res = await fetch(`/api/assistants/activity?businessId=${business.id}`, { cache: 'no-store' });
+      const res = await fetch(`/api/assistants/activity?businessId=${business.id}&_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       setActivityLog(data.activities || []);
     } catch (err) {
@@ -749,7 +749,7 @@ export default function AssistantModal({ isOpen, onClose, business }) {
   const loadAutomations = useCallback(async () => {
     if (!business?.id) return;
     try {
-      const res = await fetch(`/api/business-automations?businessId=${business.id}`, { cache: 'no-store' });
+      const res = await fetch(`/api/business-automations?businessId=${business.id}&_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) setAutomationRules(data.rules || []);
     } catch (err) {

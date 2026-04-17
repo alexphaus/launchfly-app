@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+const NO_CACHE = { 'Cache-Control': 'private, no-cache, no-store, must-revalidate' };
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -138,10 +140,10 @@ export async function GET(req: NextRequest) {
     // Sort all events by newest first
     events.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    return NextResponse.json({ activities: events.slice(0, 50) });
+    return NextResponse.json({ activities: events.slice(0, 50) }, { headers: NO_CACHE });
   } catch (err) {
     console.error('[assistants/activity] unexpected error:', err);
-    return NextResponse.json({ activities: [] });
+    return NextResponse.json({ activities: [] }, { headers: NO_CACHE });
   }
 }
 

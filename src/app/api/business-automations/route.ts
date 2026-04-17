@@ -16,6 +16,8 @@ import type { AutomationRule } from '@/lib/automations/cron';
 
 export const dynamic = 'force-dynamic';
 
+const NO_CACHE = { 'Cache-Control': 'private, no-cache, no-store, must-revalidate' };
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ rules: (data?.automation_rules as AutomationRule[]) || [] });
+    return NextResponse.json({ rules: (data?.automation_rules as AutomationRule[]) || [] }, { headers: NO_CACHE });
   } catch (err) {
     console.error('[business-automations] GET unexpected error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

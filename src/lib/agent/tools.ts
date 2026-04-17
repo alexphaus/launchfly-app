@@ -196,13 +196,15 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
           },
           filters: {
             type: 'object',
-            description: 'For select: filter rows. For update/delete: match rows to modify (REQUIRED). Simple values = equality (column: value). Operators: {"column": {"gte": "2025-01-01"}} — supports gte, lte, gt, lt, ilike, neq.',
+            description: 'For select: filter rows. For update/delete: match rows to modify (REQUIRED). Simple values = equality (column: value). Operators: {"column": {"gte": "2025-01-01"}} — supports gte, lte, gt, lt, ilike, neq, in (array), is (null/true/false).',
           },
           data: {
             type: 'object',
             description: 'For insert: the row to insert (column: value pairs). For update: the columns to change (column: newValue). Not used for select/delete.',
           },
-          limit: { type: 'number', description: 'Max rows to return for select (default 25), or max rows to update/delete (default 1, max 50)' },
+          limit: { type: 'number', description: 'Max rows to return for select (default 25, max 100). For update/delete: max rows (default 1, max 50). The response always includes total_matching so you know if more rows exist beyond the limit.' },
+          offset: { type: 'number', description: 'Skip this many rows before returning results (for pagination). Use with limit to page through large result sets.' },
+          order_by: { type: 'string', description: 'Column to sort by (default: created_at). Prefix with - for ascending, e.g. "-created_at" = oldest first. Default is newest first (descending).' },
           select: { type: 'string', description: 'Columns to select (comma-separated, default *). Also supports COUNT(*) as alias for totals and column, COUNT(*) as alias for grouped counts.' },
         },
         required: ['table'],
@@ -710,6 +712,8 @@ export async function executeTool(
         (args.limit as number) || 25,
         (args.select as string) || '*',
         toolCtx.businessId,
+        (args.offset as number) || 0,
+        (args.order_by as string) || 'created_at',
       );
 
     case 'draft_content':
@@ -1291,6 +1295,20 @@ function applyFilters(query: any, filters: Record<string, unknown>) {
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       const ops = value as Record<string, unknown>;
       for (const [op, opVal] of Object.entries(ops)) {
+        // Handle operators that accept non-primitive values first
+        if (op === 'in') {
+          if (Array.isArray(opVal)) {
+            q = q.in(safeKey, opVal.filter((v: unknown) => typeof v === 'string' || typeof v === 'number'));
+          }
+          continue;
+        }
+        if (op === 'is') {
+          if (opVal === null || opVal === 'null') q = q.is(safeKey, null);
+          else if (opVal === true || opVal === 'true') q = q.is(safeKey, true);
+          else if (opVal === false || opVal === 'false') q = q.is(safeKey, false);
+          continue;
+        }
+        // All other operators require string/number
         if (typeof opVal !== 'string' && typeof opVal !== 'number') continue;
         switch (op) {
           case 'gte': q = q.gte(safeKey, opVal); break;
@@ -1320,6 +1338,8 @@ async function executeQueryDatabase(
   limit: number,
   select: string,
   businessId: string,
+  offset: number = 0,
+  orderBy: string = 'created_at',
 ): Promise<string> {
   if (!ALLOWED_TABLES.has(table)) return `Table "${table}" not allowed. Use: ${[...ALLOWED_TABLES].join(', ')}`;
 
@@ -1404,16 +1424,26 @@ async function executeQueryDatabase(
       return `${rows.length} grouped row(s):\n${JSON.stringify(outputRows, null, 2).substring(0, 6000)}${warning}`;
     }
 
+    // Parse order_by: prefix '-' means ascending (oldest first), default descending
+    const ascending = orderBy.startsWith('-');
+    const orderColumn = (ascending ? orderBy.slice(1) : orderBy).replace(/[^a-zA-Z0-9_]/g, '') || 'created_at';
+    const safeLimit = Math.min(limit, 100);
+    const safeOffset = Math.max(0, Math.floor(offset));
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query: any = supabase
       .from(table)
-      .select(parsedSelect.kind === 'columns' ? parsedSelect.columns : '*')
+      .select(parsedSelect.kind === 'columns' ? parsedSelect.columns : '*', { count: 'exact' })
       .eq('business_id', businessId);
     if (filters) query = applyFilters(query, filters);
-    const { data: rows, error } = await query.limit(Math.min(limit, 100)).order('created_at', { ascending: false });
+    const { data: rows, count: totalMatching, error } = await query
+      .order(orderColumn, { ascending })
+      .range(safeOffset, safeOffset + safeLimit - 1);
     if (error) return `Query error: ${error.message}`;
-    if (!rows?.length) return `No results in ${table} matching those filters.`;
-    return `${rows.length} rows:\n${JSON.stringify(rows, null, 2).substring(0, 6000)}`;
+    if (!rows?.length) return `No results in ${table} matching those filters. (total_matching: 0)`;
+    const total = totalMatching ?? rows.length;
+    const meta = `Showing ${rows.length} of ${total} total matching rows (offset: ${safeOffset}, limit: ${safeLimit}, order: ${orderColumn} ${ascending ? 'asc' : 'desc'}).`;
+    return `${meta}\n${JSON.stringify(rows, null, 2).substring(0, 6000)}`;
   }
 
   // ─── INSERT ───

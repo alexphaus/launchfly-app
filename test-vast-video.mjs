@@ -4,12 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 const apiKey = process.env.VASTAI_API_KEY;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const persistentInstanceId = process.env.VAST_INSTANCE_ID;
 
 if (!apiKey) { console.error('Missing VASTAI_API_KEY'); process.exit(1); }
+if (!persistentInstanceId) { console.error('Missing VAST_INSTANCE_ID in .env — rent an instance on vast.ai and add it'); process.exit(1); }
 
 const COMFYUI_PORT = 8188;
 const POLL_INTERVAL = 10_000;
-const MAX_WAIT = 600_000; // 10 min
+const BOOT_TIMEOUT = 300_000;   // 5 min for stopped→running boot
+const COMFYUI_TIMEOUT = 600_000; // 10 min for ComfyUI health
+const GEN_TIMEOUT = 600_000;    // 10 min for video generation
 const BUSINESS_ID = '06203464-2b76-4468-8d2e-6630ab0ed71a';
 
 const vastBase = 'https://console.vast.ai/api/v0';
@@ -30,33 +34,63 @@ const steps = 20;
 const cfgScale = 7;
 const numFrames = Math.round(duration * 24);
 
-let instanceId = null;
-
 function elapsed(start) { return ((Date.now() - start) / 1000).toFixed(1); }
 
-async function destroyInstance() {
-  if (!instanceId) return;
-  console.log(`\n🗑️  Destroying instance ${instanceId}...`);
+async function getInstanceInfo() {
+  const res = await fetch(vastUrl(`/instances/${persistentInstanceId}/`), { headers: vastHeaders });
+  if (!res.ok) throw new Error(`Failed to get instance: HTTP ${res.status}`);
+  const body = await res.json();
+  return body.instances || body;
+}
+
+async function setInstanceState(state) {
+  const res = await fetch(vastUrl(`/instances/${persistentInstanceId}/`), {
+    method: 'PUT',
+    headers: vastHeaders,
+    body: JSON.stringify({ state }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Failed to set state to ${state}: HTTP ${res.status} — ${err}`);
+  }
+  return res.json();
+}
+
+async function stopInstance() {
+  console.log(`\n⏹️  Stopping instance ${persistentInstanceId} (preserving disk)...`);
   try {
-    await fetch(vastUrl(`/instances/${instanceId}/`), { method: 'DELETE', headers: vastHeaders });
-    console.log('   ✅ Instance destroyed');
+    await setInstanceState('stopped');
+    console.log('   ✅ Instance stopped — disk preserved, no GPU charges');
   } catch (e) {
-    console.error('   ❌ Failed to destroy:', e.message);
+    console.error('   ❌ Failed to stop:', e.message);
   }
 }
 
-// Cleanup on ctrl+c
+// Cleanup on ctrl+c — stop instead of destroy
 process.on('SIGINT', async () => {
-  console.log('\n\n⚠️  Interrupted! Cleaning up...');
-  await destroyInstance();
+  console.log('\n\n⚠️  Interrupted! Stopping instance...');
+  await stopInstance();
   process.exit(1);
 });
+
+function extractIpPort(inst) {
+  const ports = inst.ports || {};
+  const comfyPort = ports[`${COMFYUI_PORT}/tcp`]?.[0];
+  if (!comfyPort) return null;
+  const pip = inst.public_ipaddr;
+  const isPublic = pip && !pip.startsWith('192.168.') && !pip.startsWith('10.') && !pip.startsWith('172.') && pip !== '127.0.0.1';
+  return {
+    ip: isPublic ? pip : comfyPort.HostIp,
+    port: parseInt(comfyPort.HostPort),
+  };
+}
 
 async function main() {
   const t0 = Date.now();
   console.log('══════════════════════════════════════════════════');
-  console.log('  Vast.ai + LTX Video 2.3 — End-to-End Test');
+  console.log('  Vast.ai + LTX Video — Start/Generate/Stop Test');
   console.log('══════════════════════════════════════════════════\n');
+  console.log(`  Instance ID: ${persistentInstanceId}`);
   console.log(`  Prompt: "${prompt}"`);
   console.log(`  Duration: ${duration}s (${numFrames} frames @ 24fps)`);
   console.log(`  Resolution: ${width}x${height}, Steps: ${steps}, CFG: ${cfgScale}\n`);
@@ -66,135 +100,83 @@ async function main() {
   const userRes = await fetch(vastUrl('/users/current/'), { headers: { Accept: 'application/json' } });
   const user = await userRes.json();
   console.log(`   Balance: $${(user.credit || 0).toFixed(2)}`);
-  if ((user.credit || 0) < 0.50) {
-    console.error('   ❌ Balance too low (need ~$0.50 minimum). Add credit at cloud.vast.ai/billing');
+  if ((user.credit || 0) < 0.25) {
+    console.error('   ❌ Balance too low');
     process.exit(1);
   }
 
-  // ── Step 2: Check for existing instance ──
-  console.log(`\n🔍 Step 2: Checking for existing instances... [${elapsed(t0)}s]`);
-  const listRes = await fetch(vastUrl('/instances/?owner=me'), { headers: vastHeaders });
-  const listBody = await listRes.json();
-  const instances = listBody.instances || [];
-  const label = `launchfly-comfyui-${BUSINESS_ID.substring(0, 8)}`;
-  
-  let instanceIp = null;
-  let instancePort = null;
-  
-  const existing = instances.find(i => i.label === label && i.actual_status === 'running');
-  if (existing) {
-    instanceId = existing.id;
-    const ports = existing.ports || {};
-    const comfyPort = ports[`${COMFYUI_PORT}/tcp`]?.[0];
-    if (comfyPort) {
-      instanceIp = existing.public_ipaddr || comfyPort.HostIp;
-      instancePort = parseInt(comfyPort.HostPort);
-    }
-    console.log(`   ♻️  Found existing instance ${instanceId} at ${instanceIp}:${instancePort}`);
-  } else {
-    console.log(`   No existing instance. Will create one.`);
+  // ── Step 2: Check instance state & start if needed ──
+  console.log(`\n🔍 Step 2: Checking instance state... [${elapsed(t0)}s]`);
+  let inst = await getInstanceInfo();
+  console.log(`   Status: ${inst.actual_status} | State: ${inst.cur_state}`);
 
-    // ── Step 3: Find cheapest RTX 4090 ──
-    console.log(`\n🔎 Step 3: Searching for RTX 4090 offers... [${elapsed(t0)}s]`);
-    const searchQ = encodeURIComponent(JSON.stringify({
-      gpu_name: { eq: 'RTX 4090' }, num_gpus: { eq: 1 }, disk_space: { gte: 40 },
-      reliability2: { gte: 0.9 }, inet_down: { gte: 100 },
-      order: [['dph_total', 'asc']], type: 'on-demand', limit: 10,
-    }));
-    const searchRes = await fetch(vastUrl(`/bundles/?q=${searchQ}`), { headers: vastHeaders });
-    if (!searchRes.ok) {
-      console.error(`   ❌ Search failed: HTTP ${searchRes.status}`);
-      console.error(await searchRes.text());
-      process.exit(1);
-    }
-    const offers = (await searchRes.json()).offers || [];
-    if (!offers.length) {
-      console.error('   ❌ No RTX 4090 offers available right now');
-      process.exit(1);
-    }
+  let conn = null;
 
-    console.log(`   ✅ Found ${offers.length} offers. Cheapest: $${offers[0].dph_total?.toFixed(4)}/hr`);
+  if (inst.actual_status === 'running') {
+    conn = extractIpPort(inst);
+    if (conn) console.log(`   ✅ Already running at ${conn.ip}:${conn.port}`);
 
-    // ── Step 4: Create instance (try multiple offers) ──
-    console.log(`\n🚀 Step 4: Creating instance... [${elapsed(t0)}s]`);
-    let created = null;
-    for (let i = 0; i < Math.min(offers.length, 5); i++) {
-      const offer = offers[i];
-      console.log(`   Trying offer #${i+1}: ID ${offer.id}, $${offer.dph_total?.toFixed(4)}/hr...`);
-      const createRes = await fetch(vastUrl(`/asks/${offer.id}/`), {
-        method: 'PUT',
-        headers: vastHeaders,
-        body: JSON.stringify({
-          client_id: 'me',
-          image: 'yanwk/comfyui-boot:cu126-megapak',
-          disk: 40,
-          label,
-          onstart: 'bash -c "mkdir -p /root/ComfyUI/models/checkpoints && cd /root/ComfyUI/models/checkpoints && if [ ! -f ltx-video-2-1-0.2-dev.safetensors ]; then wget -q https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2-1-0.2-dev.safetensors; fi && cd /root/ComfyUI && python main.py --listen 0.0.0.0 --port 8188"',
-          env: { '-p': `${COMFYUI_PORT}:${COMFYUI_PORT}` },
-        }),
-      });
+  } else if (inst.actual_status === 'stopped' || inst.actual_status === 'exited') {
+    console.log(`   🚀 Starting instance...`);
+    await setInstanceState('running');
 
-      if (createRes.ok) {
-        created = await createRes.json();
-        console.log(`   ✅ Instance created: ID ${created.new_contract}`);
-        break;
-      } else {
-        const errBody = await createRes.text();
-        console.log(`   ⚠️  Offer ${offer.id} failed: ${errBody.substring(0, 100)}`);
+    const bootStart = Date.now();
+    while (Date.now() - bootStart < BOOT_TIMEOUT) {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL));
+      inst = await getInstanceInfo();
+      process.stdout.write(` [${inst.actual_status}]`);
+
+      if (inst.actual_status === 'running') {
+        conn = extractIpPort(inst);
+        if (conn) {
+          console.log(`\n   ✅ Instance booted at ${conn.ip}:${conn.port} [${elapsed(t0)}s]`);
+          break;
+        }
+      }
+      if (inst.actual_status === 'error') {
+        console.error(`\n   ❌ Instance error: ${inst.status_msg}`);
+        process.exit(1);
       }
     }
 
-    if (!created) {
-      console.error('   ❌ All offers failed. Try again in a minute.');
-      process.exit(1);
-    }
-    instanceId = created.new_contract;
-
-    // ── Step 5: Wait for instance to be running ──
-    console.log(`\n⏳ Step 5: Waiting for instance to start... [${elapsed(t0)}s]`);
-    const startTime = Date.now();
-    while (Date.now() - startTime < MAX_WAIT) {
+  } else if (inst.actual_status === 'loading') {
+    console.log(`   ⏳ Instance is still loading (Docker pull in progress)...`);
+    const loadStart = Date.now();
+    while (Date.now() - loadStart < BOOT_TIMEOUT) {
       await new Promise(r => setTimeout(r, POLL_INTERVAL));
-      try {
-        const statusRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
-        if (!statusRes.ok) { process.stdout.write('.'); continue; }
-        const instBody = await statusRes.json();
-        const inst = instBody.instances || instBody;
-        process.stdout.write(` [${inst.actual_status || inst.status_msg || '?'}]`);
-        
-        if (inst.actual_status === 'running') {
-          const ports = inst.ports || {};
-          const comfyPort = ports[`${COMFYUI_PORT}/tcp`]?.[0];
-          if (comfyPort) {
-            instanceIp = inst.public_ipaddr || comfyPort.HostIp;
-            instancePort = parseInt(comfyPort.HostPort);
-            console.log(`\n   ✅ Instance running at ${instanceIp}:${instancePort} [${elapsed(t0)}s]`);
-            break;
-          }
-        }
-        if (inst.actual_status === 'exited' || inst.actual_status === 'error') {
-          console.error(`\n   ❌ Instance failed: ${inst.actual_status}`);
-          await destroyInstance();
-          process.exit(1);
-        }
-      } catch (e) { process.stdout.write('!'); }
-    }
+      inst = await getInstanceInfo();
+      process.stdout.write(` [${inst.actual_status}]`);
 
-    if (!instanceIp || !instancePort) {
-      console.error(`\n   ❌ Instance didn't start within ${MAX_WAIT/1000}s`);
-      await destroyInstance();
-      process.exit(1);
+      if (inst.actual_status === 'running') {
+        conn = extractIpPort(inst);
+        if (conn) {
+          console.log(`\n   ✅ Instance ready at ${conn.ip}:${conn.port} [${elapsed(t0)}s]`);
+          break;
+        }
+      }
+      if (inst.actual_status === 'error' || inst.actual_status === 'exited') {
+        console.error(`\n   ❌ Instance failed: ${inst.actual_status}`);
+        process.exit(1);
+      }
     }
+  } else {
+    console.error(`   ❌ Unexpected instance state: ${inst.actual_status}`);
+    process.exit(1);
   }
 
-  // ── Step 6: Wait for ComfyUI health ──
-  const comfyBase = `http://${instanceIp}:${instancePort}`;
-  console.log(`\n🏥 Step 6: Waiting for ComfyUI to be healthy at ${comfyBase}... [${elapsed(t0)}s]`);
-  console.log('   (This may take a few minutes — downloading 9.5GB LTX model on first boot)');
-  
+  if (!conn) {
+    console.error(`\n   ❌ Could not get IP/port within timeout`);
+    process.exit(1);
+  }
+
+  // ── Step 3: Wait for ComfyUI health ──
+  const comfyBase = `http://${conn.ip}:${conn.port}`;
+  console.log(`\n🏥 Step 3: Waiting for ComfyUI at ${comfyBase}... [${elapsed(t0)}s]`);
+  console.log('   (Model loading may take 1-2 min on warm boot, longer on first boot)');
+
   const healthStart = Date.now();
   let comfyReady = false;
-  while (Date.now() - healthStart < 600_000) { // 10 min for model download
+  while (Date.now() - healthStart < COMFYUI_TIMEOUT) {
     try {
       const hRes = await fetch(`${comfyBase}/system_stats`, { signal: AbortSignal.timeout(5000) });
       if (hRes.ok) {
@@ -209,55 +191,26 @@ async function main() {
   }
 
   if (!comfyReady) {
-    console.error(`\n   ❌ ComfyUI not responding after 10 minutes`);
-    await destroyInstance();
+    console.error(`\n   ❌ ComfyUI not responding after ${COMFYUI_TIMEOUT/1000}s`);
+    await stopInstance();
     process.exit(1);
   }
 
-  // ── Step 7: Submit LTX workflow ──
-  console.log(`\n🎬 Step 7: Submitting LTX Video workflow... [${elapsed(t0)}s]`);
+  // ── Step 4: Submit LTX workflow ──
+  console.log(`\n🎬 Step 4: Submitting LTX Video workflow... [${elapsed(t0)}s]`);
   const clientId = crypto.randomUUID();
 
   const workflow = {
-    '1': {
-      class_type: 'CheckpointLoaderSimple',
-      inputs: { ckpt_name: 'ltx-video-2-1-0.2-dev.safetensors' },
-    },
-    '2': {
-      class_type: 'CLIPTextEncode',
-      inputs: { text: prompt, clip: ['1', 1] },
-    },
-    '3': {
-      class_type: 'CLIPTextEncode',
-      inputs: { text: negativePrompt, clip: ['1', 1] },
-    },
-    '4': {
-      class_type: 'EmptyLatentImage',
-      inputs: { width, height, batch_size: numFrames },
-    },
-    '5': {
-      class_type: 'KSampler',
-      inputs: {
-        model: ['1', 0],
-        positive: ['2', 0],
-        negative: ['3', 0],
-        latent_image: ['4', 0],
-        seed: Math.floor(Math.random() * 2147483647),
-        steps,
-        cfg: cfgScale,
-        sampler_name: 'euler',
-        scheduler: 'normal',
-        denoise: 1.0,
-      },
-    },
-    '6': {
-      class_type: 'VAEDecode',
-      inputs: { samples: ['5', 0], vae: ['1', 2] },
-    },
-    '8': {
-      class_type: 'SaveAnimatedWEBP',
-      inputs: { images: ['6', 0], filename_prefix: 'ltx_output', fps: 24, quality: 90, method: 'default' },
-    },
+    "3": { "class_type": "LTXVConditioning", "inputs": { "positive": ["1", 0], "negative": ["2", 0] } },
+    "4": { "class_type": "LTXVScheduler", "inputs": { "latent": ["5", 0], "steps": steps, "sigmas": ["4", 0] } },
+    "5": { "class_type": "EmptyLTXVLatentVideo", "inputs": { "width": width, "height": height, "length": numFrames, "batch_size": 1 } },
+    "6": { "class_type": "SamplerCustom", "inputs": { "model": ["8", 0], "positive": ["3", 0], "negative": ["3", 1], "sampler": ["7", 0], "sigmas": ["4", 0], "latent_image": ["5", 0] } },
+    "7": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" } },
+    "8": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltxv-2b-0.9.8-distilled-fp8.safetensors" } },
+    "9": { "class_type": "VAEDecode", "inputs": { "samples": ["6", 0], "vae": ["8", 2] } },
+    "10": { "class_type": "SaveAnimatedWEBP", "inputs": { "images": ["9", 0], "filename_prefix": "ltx_output", "fps": 24, "quality": 90, "method": "default" } },
+    "1": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["8", 1] } },
+    "2": { "class_type": "CLIPTextEncode", "inputs": { "text": negativePrompt, "clip": ["8", 1] } }
   };
 
   const queueRes = await fetch(`${comfyBase}/prompt`, {
@@ -270,7 +223,7 @@ async function main() {
     const errText = await queueRes.text();
     console.error(`   ❌ ComfyUI rejected workflow: HTTP ${queueRes.status}`);
     console.error(`   ${errText.substring(0, 500)}`);
-    await destroyInstance();
+    await stopInstance();
     process.exit(1);
   }
 
@@ -278,12 +231,12 @@ async function main() {
   const promptId = queueData.prompt_id;
   console.log(`   ✅ Queued! Prompt ID: ${promptId}`);
 
-  // ── Step 8: Poll for completion ──
-  console.log(`\n⏳ Step 8: Waiting for video generation... [${elapsed(t0)}s]`);
+  // ── Step 5: Poll for completion ──
+  console.log(`\n⏳ Step 5: Waiting for video generation... [${elapsed(t0)}s]`);
   const pollStart = Date.now();
   let outputUrl = null;
 
-  while (Date.now() - pollStart < MAX_WAIT) {
+  while (Date.now() - pollStart < GEN_TIMEOUT) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
     try {
       const histRes = await fetch(`${comfyBase}/history/${promptId}`, { signal: AbortSignal.timeout(10000) });
@@ -304,19 +257,19 @@ async function main() {
   }
 
   if (!outputUrl) {
-    console.error(`\n   ❌ Generation timed out after ${MAX_WAIT/1000}s`);
-    await destroyInstance();
+    console.error(`\n   ❌ Generation timed out after ${GEN_TIMEOUT/1000}s`);
+    await stopInstance();
     process.exit(1);
   }
 
   console.log(`\n   ✅ Video ready! [${elapsed(t0)}s]`);
 
-  // ── Step 9: Download + upload to Supabase ──
-  console.log(`\n📥 Step 9: Downloading and uploading to Supabase... [${elapsed(t0)}s]`);
+  // ── Step 6: Download + upload to Supabase ──
+  console.log(`\n📥 Step 6: Downloading and uploading to Supabase... [${elapsed(t0)}s]`);
   const mediaRes = await fetch(outputUrl);
   if (!mediaRes.ok) {
     console.error(`   ❌ Download failed: HTTP ${mediaRes.status}`);
-    await destroyInstance();
+    await stopInstance();
     process.exit(1);
   }
   const mediaBuffer = await mediaRes.arrayBuffer();
@@ -329,19 +282,19 @@ async function main() {
     const { error: uploadError } = await supabase.storage
       .from('generated-media')
       .upload(filename, mediaBuffer, { contentType: 'image/webp' });
-    
+
     if (uploadError) {
       console.error(`   ❌ Upload failed: ${uploadError.message}`);
     } else {
       const { data } = supabase.storage.from('generated-media').getPublicUrl(filename);
-      console.log(`   ✅ Uploaded! Permanent URL: ${data.publicUrl}`);
+      console.log(`   ✅ Uploaded! URL: ${data.publicUrl}`);
     }
   } else {
     console.log('   ⚠️  No Supabase keys — skipping upload');
   }
 
-  // ── Step 10: Destroy instance ──
-  await destroyInstance();
+  // ── Step 7: Stop instance (preserve disk, stop GPU charges) ──
+  await stopInstance();
 
   // ── Final balance ──
   const finalUser = await fetch(vastUrl('/users/current/'), { headers: { Accept: 'application/json' } }).then(r => r.json());
@@ -357,6 +310,6 @@ async function main() {
 
 main().catch(async (err) => {
   console.error('\n💥 Unexpected error:', err);
-  await destroyInstance();
+  await stopInstance();
   process.exit(1);
 });

@@ -3488,7 +3488,8 @@ async function executePostSocial(
         if (mediaRes.ok) {
           const blob = await mediaRes.blob();
           const formData = new FormData();
-          formData.append('file', blob, 'media' + (mediaUrl.includes('.mp4') ? '.mp4' : '.jpg'));
+          const ext = mediaUrl.match(/\.(mp4|webp|png|jpg|jpeg|gif)$/i)?.[1] || 'jpg';
+          formData.append('file', blob, `media.${ext}`);
           const uploadRes = await fetch(`${baseUrl}/upload`, {
             method: 'POST',
             headers: { 'Authorization': apiKey },
@@ -3730,16 +3731,16 @@ async function executeGenerateVideo(
       const offer = offers[0];
       const offerId = offer.id as number;
 
-      // Create instance with ComfyUI + LTX template
+      // Create instance with ComfyUI + LTX template + bash script to download model
       const createRes = await fetch(`${vastBase}/asks/${offerId}/`, {
         method: 'PUT',
         headers: vastHeaders,
         body: JSON.stringify({
           client_id: 'me',
           image: 'yanwk/comfyui-boot:cu128-cn',
-          disk: 20,
+          disk: 25,
           label,
-          onstart: 'cd /root && python main.py --listen 0.0.0.0 --port 8188',
+          onstart: 'bash -c "mkdir -p /root/ComfyUI/models/checkpoints && cd /root/ComfyUI/models/checkpoints && if [ ! -f ltx-video-2-1-0.2-dev.safetensors ]; then wget -q --show-progress https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2-1-0.2-dev.safetensors; fi && cd /root/ComfyUI && python main.py --listen 0.0.0.0 --port 8188"',
           env: { '-p': `${VASTAI_COMFYUI_PORT}:${VASTAI_COMFYUI_PORT}` },
         }),
       });
@@ -3895,29 +3896,39 @@ async function executeGenerateVideo(
     }
 
     if (!outputUrl) {
-      return `Video generation timed out after ${VASTAI_MAX_WAIT_MS / 1000}s. Prompt ID: ${promptId}. The instance may still be processing.`;
+      // Cleanup on failure to prevent credit drain
+      await fetch(`${vastBase}/instances/${instanceId}/`, { method: 'DELETE', headers: vastHeaders }).catch(() => {});
+      return `Video generation timed out after ${VASTAI_MAX_WAIT_MS / 1000}s. Prompt ID: ${promptId}. The instance was destroyed to save costs.`;
     }
 
-    // Schedule auto-destroy after idle period (fire and forget)
-    scheduleVastAutoDestroy(instanceId!, vastHeaders, VASTAI_IDLE_DESTROY_MS).catch(() => {});
+    // ── Step 5: Download and store permanently ──
+    // Vercel kills background tasks, so we MUST secure the buffer, upload it, and destroy the instance synchronously.
+    const mediaRes = await fetch(outputUrl);
+    if (!mediaRes.ok) throw new Error(`Failed to download output from ComfyUI: HTTP ${mediaRes.status}`);
+    const mediaBuffer = await mediaRes.arrayBuffer();
 
-    return `✅ Video generated via Vast.ai + LTX Video\nInstance: ${instanceId} (RTX 4090)\nVideo URL: ${outputUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nSteps: ${steps}, CFG: ${cfgScale}\n\n⚠️ URL is only accessible while the Vast.ai instance is running. Download or re-upload to permanent storage before the instance shuts down (auto-destroys after ${VASTAI_IDLE_DESTROY_MS / 60000} min idle).`;
-  } catch (err) {
-    return `Video generation failed: ${err instanceof Error ? err.message : String(err)}`;
-  }
-}
+    const supabase = getSupabase();
+    await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
 
-// Auto-destroy Vast instance after idle period
-async function scheduleVastAutoDestroy(instanceId: number, headers: Record<string, string>, delayMs: number) {
-  await new Promise(r => setTimeout(r, delayMs));
-  try {
-    await fetch(`https://cloud.vast.ai/api/v0/instances/${instanceId}/`, {
-      method: 'DELETE',
-      headers,
-    });
-    console.log(`[generate_video] Auto-destroyed Vast.ai instance ${instanceId} after ${delayMs / 60000} min idle`);
+    const filename = `${toolCtx.businessId}/ltx-${Date.now()}.webp`;
+    const { error: uploadError } = await supabase.storage
+      .from('generated-media')
+      .upload(filename, mediaBuffer, { contentType: 'image/webp' });
+
+    if (uploadError) throw new Error(`Failed to upload to permanent storage: ${uploadError.message}`);
+
+    const { data: publicUrlData } = supabase.storage.from('generated-media').getPublicUrl(filename);
+    const permanentUrl = publicUrlData.publicUrl;
+
+    // ── Step 6: Synchronously destroy instance to guarantee no runaway costs ──
+    await fetch(`${vastBase}/instances/${instanceId}/`, { method: 'DELETE', headers: vastHeaders }).catch(() => {});
+
+    return `✅ Video generated via Vast.ai + LTX Video\nVideo URL: ${permanentUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nSteps: ${steps}, CFG: ${cfgScale}\n\n(Instance ${instanceId} was destroyed immediately to save costs.)`;
   } catch (err) {
-    console.error(`[generate_video] Failed to auto-destroy instance ${instanceId}:`, err);
+    if (instanceId) {
+      await fetch(`https://cloud.vast.ai/api/v0/instances/${instanceId}/`, { method: 'DELETE', headers: vastHeaders }).catch(() => {});
+    }
+    return `Video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance destroyed to save costs.`;
   }
 }
 

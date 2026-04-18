@@ -3728,7 +3728,7 @@ async function executeGenerateVideo(
     // If no running instance, create one
     if (!instanceId || !instanceIp) {
       // Search for cheapest RTX 4090 offer
-      const searchQ = encodeURIComponent(JSON.stringify({gpu_name:'RTX 4090',num_gpus:1,disk_space:25,reliability2:{gte:0.9},inet_down:{gte:100},order:[['dph_total','asc']],type:'on-demand',limit:1}));
+      const searchQ = encodeURIComponent(JSON.stringify({gpu_name:{eq:'RTX 4090'},num_gpus:{eq:1},disk_space:{gte:40},reliability2:{gte:0.9},inet_down:{gte:100},order:[['dph_total','asc']],type:'on-demand',limit:5}));
       const searchRes = await fetch(vastUrl(`/bundles/?q=${searchQ}`), {
         headers: vastHeaders,
       });
@@ -3736,28 +3736,28 @@ async function executeGenerateVideo(
       const offers = (await searchRes.json() as { offers?: Array<Record<string, unknown>> }).offers || [];
       if (!offers.length) return 'No available RTX 4090 instances on Vast.ai right now. Try again later or use generate_media for video instead.';
 
-      const offer = offers[0];
-      const offerId = offer.id as number;
-
-      // Create instance with ComfyUI + LTX template + bash script to download model
-      const createRes = await fetch(vastUrl(`/asks/${offerId}/`), {
-        method: 'PUT',
-        headers: vastHeaders,
-        body: JSON.stringify({
-          client_id: 'me',
-          image: 'yanwk/comfyui-boot:cu128-cn',
-          disk: 25,
-          label,
-          onstart: 'bash -c "mkdir -p /root/ComfyUI/models/checkpoints && cd /root/ComfyUI/models/checkpoints && if [ ! -f ltx-video-2-1-0.2-dev.safetensors ]; then wget -q --show-progress https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2-1-0.2-dev.safetensors; fi && cd /root/ComfyUI && python main.py --listen 0.0.0.0 --port 8188"',
-          env: { '-p': `${VASTAI_COMFYUI_PORT}:${VASTAI_COMFYUI_PORT}` },
-        }),
-      });
-
-      if (!createRes.ok) {
-        const errBody = await createRes.text();
-        return `Vast.ai error creating instance: HTTP ${createRes.status} — ${errBody.substring(0, 200)}`;
+      // Try multiple offers in case the cheapest was snatched
+      let created: { new_contract: number } | null = null;
+      for (const offer of offers.slice(0, 5)) {
+        const createRes = await fetch(vastUrl(`/asks/${offer.id as number}/`), {
+          method: 'PUT',
+          headers: vastHeaders,
+          body: JSON.stringify({
+            client_id: 'me',
+            image: 'yanwk/comfyui-boot:cu126-megapak',
+            disk: 40,
+            label,
+            onstart: 'bash -c "mkdir -p /root/ComfyUI/models/checkpoints && cd /root/ComfyUI/models/checkpoints && if [ ! -f ltx-video-2-1-0.2-dev.safetensors ]; then wget -q https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2-1-0.2-dev.safetensors; fi && cd /root/ComfyUI && python main.py --listen 0.0.0.0 --port 8188"',
+            env: { '-p': `${VASTAI_COMFYUI_PORT}:${VASTAI_COMFYUI_PORT}` },
+          }),
+        });
+        if (createRes.ok) {
+          created = await createRes.json() as { new_contract: number };
+          break;
+        }
       }
-      const created = await createRes.json() as { new_contract: number };
+
+      if (!created) return 'All Vast.ai RTX 4090 offers were unavailable. Try again in a minute or use generate_media for video instead.';
       instanceId = created.new_contract;
 
       // Wait for instance to be running
@@ -3768,7 +3768,8 @@ async function executeGenerateVideo(
           headers: vastHeaders,
         });
         if (!statusRes.ok) continue;
-        const inst = await statusRes.json() as Record<string, unknown>;
+        const statusBody = await statusRes.json() as Record<string, unknown>;
+        const inst = (statusBody.instances || statusBody) as Record<string, unknown>;
 
         if (inst.actual_status === 'running') {
           const ports = inst.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;

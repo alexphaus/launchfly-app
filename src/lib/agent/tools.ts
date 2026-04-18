@@ -27,7 +27,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'validate_memory', 'search_tasks',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video', 'generate_long_video']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -690,11 +690,39 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
         properties: {
           prompt: { type: 'string', description: 'Detailed description of the video scene AND audio. Include subject, action, camera movement, lighting, style, and sound/music description.' },
           negative_prompt: { type: 'string', description: 'What to avoid (e.g. "blurry, distorted faces, low quality, cartoon").' },
-          duration: { type: 'number', description: 'Video duration in seconds (2-10). Default 5.' },
+          duration: { type: 'number', description: 'Video duration in seconds (2-20). Default 5. LTX 2.3 supports up to 20s natively.' },
           width: { type: 'number', description: 'Video width. Default 768. Use 768x512 (landscape) or 544x960 (portrait 9:16).' },
           height: { type: 'number', description: 'Video height. Default 512.' },
         },
         required: ['prompt'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'generate_long_video',
+      description: 'Generate a long-form video (up to 60s) by composing multiple scenes into one stitched video. Each scene is generated as a 5-20s clip using LTX Video 2.3, then all clips are concatenated with ffmpeg into a single MP4. Perfect for YouTube shorts, promo videos, and social content. Costs ~$0.04-0.20 depending on total duration. Has 1-3 min cold start if GPU is stopped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          scenes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                prompt: { type: 'string', description: 'Detailed description of this scene including visuals, camera movement, lighting, and audio/sound.' },
+                duration: { type: 'number', description: 'Scene duration in seconds (5-20). Default 15.' },
+              },
+              required: ['prompt'],
+            },
+            description: 'Array of scene descriptions (2-6 scenes). Each becomes one video clip, then all clips are stitched into one video.',
+          },
+          negative_prompt: { type: 'string', description: 'What to avoid across all scenes (e.g. "blurry, distorted, low quality").' },
+          width: { type: 'number', description: 'Video width for all scenes. Default 768.' },
+          height: { type: 'number', description: 'Video height for all scenes. Default 512.' },
+        },
+        required: ['scenes'],
       },
     },
   },
@@ -834,6 +862,9 @@ export async function executeTool(
 
     case 'generate_video':
       return executeGenerateVideo(args as Record<string, unknown>, toolCtx);
+
+    case 'generate_long_video':
+      return executeGenerateLongVideo(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -3687,7 +3718,7 @@ async function executeGenerateVideo(
   if (!prompt) return 'Error: prompt is required.';
 
   const negativePrompt = (args.negative_prompt as string) || 'blurry, distorted, low quality, watermark, cartoon';
-  const duration = Math.min(Math.max((args.duration as number) || 5, 2), 10);
+  const duration = Math.min(Math.max((args.duration as number) || 5, 2), 20);
   const width = (args.width as number) || 768;
   const height = (args.height as number) || 512;
   const numFrames = Math.round(duration * 24 / 8) * 8 + 1; // LTX requires length = 8n+1
@@ -3907,6 +3938,271 @@ async function executeGenerateVideo(
   } catch (err) {
     await stopInstance();
     return `Video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance stopped.`;
+  }
+}
+
+// ─── Shared LTX 2.3 workflow builder ────────────────────────────────────
+
+function buildLTX23Workflow(params: {
+  prompt: string;
+  negativePrompt: string;
+  width: number;
+  height: number;
+  numFrames: number;
+  filenamePrefix?: string;
+}): Record<string, Record<string, unknown>> {
+  return {
+    '1':  { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: LTX23_CHECKPOINT } },
+    '2':  { class_type: 'LoraLoaderModelOnly', inputs: { model: ['1', 0], lora_name: LTX23_DISTILLED_LORA, strength_model: 0.5 } },
+    '3':  { class_type: 'LTXAVTextEncoderLoader', inputs: { text_encoder: LTX23_TEXT_ENCODER, ckpt_name: LTX23_CHECKPOINT, device: 'default' } },
+    '4':  { class_type: 'CLIPTextEncode', inputs: { text: params.prompt, clip: ['3', 0] } },
+    '5':  { class_type: 'CLIPTextEncode', inputs: { text: params.negativePrompt, clip: ['3', 0] } },
+    '6':  { class_type: 'EmptyLTXVLatentVideo', inputs: { width: params.width, height: params.height, length: params.numFrames, batch_size: 1 } },
+    '7':  { class_type: 'LTXVAudioVAELoader', inputs: { ckpt_name: LTX23_CHECKPOINT } },
+    '8':  { class_type: 'LTXVEmptyLatentAudio', inputs: { frames_number: params.numFrames, frame_rate: 24, batch_size: 1, audio_vae: ['7', 0] } },
+    '9':  { class_type: 'LTXVConcatAVLatent', inputs: { video_latent: ['6', 0], audio_latent: ['8', 0] } },
+    '10': { class_type: 'LTXVConditioning', inputs: { positive: ['4', 0], negative: ['5', 0], frame_rate: 24 } },
+    '11': { class_type: 'CFGGuider', inputs: { model: ['2', 0], positive: ['10', 0], negative: ['10', 1], cfg: 1 } },
+    '12': { class_type: 'RandomNoise', inputs: { noise_seed: Math.floor(Math.random() * 2 ** 32) } },
+    '13': { class_type: 'KSamplerSelect', inputs: { sampler_name: 'euler_ancestral_cfg_pp' } },
+    '14': { class_type: 'ManualSigmas', inputs: { sigmas: LTX23_DISTILLED_SIGMAS } },
+    '15': { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['12', 0], guider: ['11', 0], sampler: ['13', 0], sigmas: ['14', 0], latent_image: ['9', 0] } },
+    '16': { class_type: 'LTXVSeparateAVLatent', inputs: { av_latent: ['15', 0] } },
+    '17': { class_type: 'LTXVTiledVAEDecode', inputs: { vae: ['1', 2], latents: ['16', 0], horizontal_tiles: 2, vertical_tiles: 2, overlap: 6, last_frame_fix: false } },
+    '18': { class_type: 'LTXVAudioVAEDecode', inputs: { samples: ['16', 1], audio_vae: ['7', 0] } },
+    '19': { class_type: 'CreateVideo', inputs: { images: ['17', 0], audio: ['18', 0], fps: 24 } },
+    '20': { class_type: 'SaveVideo', inputs: { video: ['19', 0], filename_prefix: params.filenamePrefix || 'ltx_output', format: 'auto', codec: 'auto' } },
+  };
+}
+
+// ─── Shared: submit ComfyUI workflow and wait for output ────────────────
+
+async function submitAndWaitForOutput(
+  comfyBase: string,
+  workflow: Record<string, Record<string, unknown>>,
+  timeoutMs: number = VASTAI_GEN_TIMEOUT_MS,
+): Promise<{ filename: string; subfolder: string; type: string }> {
+  const clientId = crypto.randomUUID();
+  const queueRes = await fetch(`${comfyBase}/prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: workflow, client_id: clientId }),
+  });
+  if (!queueRes.ok) {
+    const errText = await queueRes.text();
+    throw new Error(`ComfyUI rejected workflow: HTTP ${queueRes.status} — ${errText.substring(0, 300)}`);
+  }
+  const { prompt_id: promptId } = await queueRes.json() as { prompt_id: string };
+
+  const pollStart = Date.now();
+  while (Date.now() - pollStart < timeoutMs) {
+    await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
+    try {
+      const histRes = await fetch(`${comfyBase}/history/${promptId}`, { signal: AbortSignal.timeout(10000) });
+      if (!histRes.ok) continue;
+      const history = await histRes.json() as Record<string, {
+        status?: { status_str?: string };
+        outputs?: Record<string, {
+          images?: Array<{ filename: string; subfolder: string; type: string }>;
+          videos?: Array<{ filename: string; subfolder: string; type: string }>;
+        }>;
+      }>;
+      const entry = history[promptId];
+      if (!entry) continue;
+      if (entry.status?.status_str === 'error') throw new Error(`Generation failed. Prompt ID: ${promptId}`);
+      if (!entry.outputs) continue;
+      for (const nodeOutput of Object.values(entry.outputs)) {
+        const files = nodeOutput.videos || nodeOutput.images;
+        if (files?.length) return files[0];
+      }
+    } catch (e) {
+      if ((e as Error).message.includes('Generation failed')) throw e;
+    }
+  }
+  throw new Error(`Generation timed out after ${timeoutMs / 1000}s`);
+}
+
+// ─── generate_long_video (multi-scene stitch via Vast.ai) ───────────────
+
+async function executeGenerateLongVideo(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const apiKey = process.env.VASTAI_API_KEY;
+  if (!apiKey) return 'Error: VASTAI_API_KEY environment variable is not set.';
+  const instanceId = process.env.VAST_INSTANCE_ID;
+  if (!instanceId) return 'Error: VAST_INSTANCE_ID environment variable is not set.';
+
+  const scenes = args.scenes as Array<{ prompt: string; duration?: number }>;
+  if (!scenes?.length || scenes.length < 2) return 'Error: scenes array must have at least 2 scenes.';
+  if (scenes.length > 6) return 'Error: maximum 6 scenes per video.';
+
+  const negativePrompt = (args.negative_prompt as string) || 'blurry, distorted, low quality, watermark, cartoon';
+  const width = (args.width as number) || 768;
+  const height = (args.height as number) || 512;
+
+  const vastBase = 'https://console.vast.ai/api/v0';
+  const authParam = `api_key=${encodeURIComponent(apiKey)}`;
+  const vastUrl = (path: string) => {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${vastBase}${path}${sep}${authParam}`;
+  };
+  const vastHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+
+  const stopInstance = async () => {
+    await fetch(vastUrl(`/instances/${instanceId}/`), {
+      method: 'PUT', headers: vastHeaders,
+      body: JSON.stringify({ state: 'stopped' }),
+    }).catch(() => {});
+  };
+
+  const extractIpPort = (inst: Record<string, unknown>): { ip: string; port: number } | null => {
+    const ports = inst.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;
+    const mapping = ports?.[`${VASTAI_COMFYUI_PORT}/tcp`]?.[0];
+    if (!mapping) return null;
+    const ip = (inst.public_ipaddr as string) || mapping.HostIp;
+    if (!ip || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) return null;
+    return { ip, port: parseInt(mapping.HostPort) };
+  };
+
+  try {
+    // ── Step 1: Ensure instance is running ──
+    const infoRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
+    if (!infoRes.ok) return `Vast.ai error: HTTP ${infoRes.status} fetching instance ${instanceId}`;
+    const infoBody = await infoRes.json() as Record<string, unknown>;
+    let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
+    let status = inst.actual_status as string;
+
+    if (status === 'stopped' || status === 'offline' || status === 'exited') {
+      const startRes = await fetch(vastUrl(`/instances/${instanceId}/`), {
+        method: 'PUT', headers: vastHeaders,
+        body: JSON.stringify({ state: 'running' }),
+      });
+      if (!startRes.ok) return `Failed to start instance ${instanceId}: HTTP ${startRes.status}`;
+
+      const bootStart = Date.now();
+      while (Date.now() - bootStart < VASTAI_BOOT_TIMEOUT_MS) {
+        await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
+        const pollRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
+        if (!pollRes.ok) continue;
+        const pollBody = await pollRes.json() as Record<string, unknown>;
+        inst = (pollBody.instances || pollBody) as Record<string, unknown>;
+        status = inst.actual_status as string;
+        if (status === 'running') break;
+        if (status === 'error') return `Instance ${instanceId} failed to start.`;
+      }
+      if (status !== 'running') return `Instance ${instanceId} did not start within ${VASTAI_BOOT_TIMEOUT_MS / 1000}s.`;
+    } else if (status !== 'running') {
+      return `Instance ${instanceId} is in unexpected state: ${status}`;
+    }
+
+    const conn = extractIpPort(inst);
+    if (!conn) return `Cannot determine public IP/port for instance ${instanceId}.`;
+    const comfyBase = `http://${conn.ip}:${conn.port}`;
+
+    // ── Step 2: Wait for ComfyUI to be healthy ──
+    const healthStart = Date.now();
+    let comfyReady = false;
+    while (Date.now() - healthStart < VASTAI_COMFYUI_TIMEOUT_MS) {
+      try {
+        const hRes = await fetch(`${comfyBase}/system_stats`, { signal: AbortSignal.timeout(5000) });
+        if (hRes.ok) { comfyReady = true; break; }
+      } catch { /* not ready yet */ }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+    if (!comfyReady) {
+      await stopInstance();
+      return `ComfyUI not responding at ${comfyBase} after ${VASTAI_COMFYUI_TIMEOUT_MS / 1000}s. Instance stopped.`;
+    }
+
+    // ── Step 3: Generate each scene sequentially ──
+    const clipFilenames: string[] = [];
+    let totalDuration = 0;
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      const sceneDuration = Math.min(Math.max(scene.duration || 15, 5), 20);
+      const sceneFrames = Math.round(sceneDuration * 24 / 8) * 8 + 1;
+      totalDuration += sceneDuration;
+
+      const workflow = buildLTX23Workflow({
+        prompt: scene.prompt,
+        negativePrompt,
+        width,
+        height,
+        numFrames: sceneFrames,
+        filenamePrefix: `scene_${String(i + 1).padStart(2, '0')}`,
+      });
+
+      const output = await submitAndWaitForOutput(comfyBase, workflow);
+      clipFilenames.push(output.filename);
+    }
+
+    // ── Step 4: Concatenate clips via ffmpeg endpoint ──
+    let finalFilename: string;
+    try {
+      const concatRes = await fetch(`${comfyBase}/concat_videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: clipFilenames }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (!concatRes.ok) {
+        const errText = await concatRes.text();
+        throw new Error(`Concat failed: HTTP ${concatRes.status} — ${errText.substring(0, 200)}`);
+      }
+      const concatData = await concatRes.json() as { filename: string };
+      finalFilename = concatData.filename;
+    } catch (concatErr) {
+      // Fallback: upload individual clips if concat fails
+      const supabase = getSupabase();
+      await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
+      const urls: string[] = [];
+      for (const clip of clipFilenames) {
+        const clipUrl = `${comfyBase}/view?filename=${encodeURIComponent(clip)}&type=output`;
+        const clipRes = await fetch(clipUrl);
+        if (!clipRes.ok) continue;
+        const clipBuffer = await clipRes.arrayBuffer();
+        const clipName = `${toolCtx.businessId}/ltx-${Date.now()}-${clip}`;
+        await supabase.storage.from('generated-media').upload(clipName, clipBuffer, { contentType: 'video/mp4' });
+        const { data } = supabase.storage.from('generated-media').getPublicUrl(clipName);
+        urls.push(data.publicUrl);
+      }
+      await stopInstance();
+      return `⚠️ Generated ${clipFilenames.length} clips but concat failed (${concatErr instanceof Error ? concatErr.message : String(concatErr)}).\nIndividual clip URLs:\n${urls.map((u, i) => `Scene ${i + 1}: ${u}`).join('\n')}\nYou can stitch these together in any video editor.\nInstance stopped.`;
+    }
+
+    // ── Step 5: Download final video and upload to Supabase ──
+    const finalUrl = `${comfyBase}/view?filename=${encodeURIComponent(finalFilename)}&type=output`;
+    const mediaRes = await fetch(finalUrl);
+    if (!mediaRes.ok) {
+      await stopInstance();
+      return `Failed to download concatenated video: HTTP ${mediaRes.status}. Instance stopped.`;
+    }
+    const mediaBuffer = await mediaRes.arrayBuffer();
+
+    const supabase = getSupabase();
+    await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
+
+    const filename = `${toolCtx.businessId}/ltx-long-${Date.now()}.mp4`;
+    const { error: uploadError } = await supabase.storage
+      .from('generated-media')
+      .upload(filename, mediaBuffer, { contentType: 'video/mp4' });
+
+    if (uploadError) {
+      await stopInstance();
+      return `Video generated but upload failed: ${uploadError.message}. Instance stopped.`;
+    }
+
+    const { data: publicUrlData } = supabase.storage.from('generated-media').getPublicUrl(filename);
+
+    // ── Step 6: Stop instance ──
+    await stopInstance();
+
+    return `✅ Long video generated via Vast.ai + LTX Video 2.3\nVideo URL: ${publicUrlData.publicUrl}\nScenes: ${scenes.length} clips stitched\nTotal duration: ~${totalDuration}s\nResolution: ${width}x${height}\nInstance ${instanceId} stopped (disk preserved).`;
+  } catch (err) {
+    await stopInstance();
+    return `Long video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance stopped.`;
   }
 }
 

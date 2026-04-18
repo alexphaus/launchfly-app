@@ -24,14 +24,18 @@ const vastUrl = (path) => {
 };
 const vastHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
 
+// LTX 2.3 model filenames (must be pre-downloaded on Vast.ai instance)
+const LTX23_CHECKPOINT = 'ltx-2.3-22b-dev-fp8.safetensors';
+const LTX23_DISTILLED_LORA = 'ltx-2.3-22b-distilled-lora-384-1.1.safetensors';
+const LTX23_TEXT_ENCODER = 'comfy_gemma_3_12B_it.safetensors';
+const LTX23_DISTILLED_SIGMAS = '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0';
+
 // Test params
-const prompt = 'A professional plumber fixing a kitchen sink, clean bright workshop, smooth camera pan, cinematic lighting';
-const negativePrompt = 'blurry, distorted, low quality, watermark';
+const prompt = 'A professional plumber fixing a kitchen sink, clean bright workshop, smooth camera pan, cinematic lighting. The sound of running water and metal tools clinking.';
+const negativePrompt = 'blurry, distorted, low quality, watermark, cartoon';
 const duration = 5;
 const width = 768;
 const height = 512;
-const steps = 20;
-const cfgScale = 7;
 const numFrames = Math.round(duration * 24 / 8) * 8 + 1; // LTX requires length = 8n+1
 
 function elapsed(start) { return ((Date.now() - start) / 1000).toFixed(1); }
@@ -88,12 +92,12 @@ function extractIpPort(inst) {
 async function main() {
   const t0 = Date.now();
   console.log('══════════════════════════════════════════════════');
-  console.log('  Vast.ai + LTX Video — Start/Generate/Stop Test');
+  console.log('  Vast.ai + LTX Video 2.3 — Start/Generate/Stop Test');
   console.log('══════════════════════════════════════════════════\n');
   console.log(`  Instance ID: ${persistentInstanceId}`);
   console.log(`  Prompt: "${prompt}"`);
   console.log(`  Duration: ${duration}s (${numFrames} frames @ 24fps)`);
-  console.log(`  Resolution: ${width}x${height}, Steps: ${steps}, CFG: ${cfgScale}\n`);
+  console.log(`  Resolution: ${width}x${height}, Model: LTX 2.3 distilled (8 steps)\n`);
 
   // ── Step 1: Check balance ──
   console.log('📊 Step 1: Checking balance...');
@@ -196,22 +200,51 @@ async function main() {
     process.exit(1);
   }
 
-  // ── Step 4: Submit LTX workflow ──
-  console.log(`\n🎬 Step 4: Submitting LTX Video workflow... [${elapsed(t0)}s]`);
+  // ── Step 4: Submit LTX 2.3 workflow ──
+  console.log(`\n🎬 Step 4: Submitting LTX Video 2.3 workflow... [${elapsed(t0)}s]`);
   const clientId = crypto.randomUUID();
 
   const workflow = {
-    "1": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["11", 0] } },
-    "2": { "class_type": "CLIPTextEncode", "inputs": { "text": negativePrompt, "clip": ["11", 0] } },
-    "3": { "class_type": "LTXVConditioning", "inputs": { "positive": ["1", 0], "negative": ["2", 0], "frame_rate": 24.0 } },
-    "4": { "class_type": "LTXVScheduler", "inputs": { "steps": steps, "max_shift": 2.05, "base_shift": 0.95, "stretch": true, "terminal": 0.1, "latent": ["5", 0] } },
-    "5": { "class_type": "EmptyLTXVLatentVideo", "inputs": { "width": width, "height": height, "length": numFrames, "batch_size": 1 } },
-    "6": { "class_type": "SamplerCustom", "inputs": { "model": ["8", 0], "add_noise": true, "noise_seed": Math.floor(Math.random() * 2**32), "cfg": cfgScale, "positive": ["3", 0], "negative": ["3", 1], "sampler": ["7", 0], "sigmas": ["4", 0], "latent_image": ["5", 0] } },
-    "7": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" } },
-    "8": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltxv-2b-0.9.8-distilled.safetensors" } },
-    "9": { "class_type": "VAEDecode", "inputs": { "samples": ["6", 0], "vae": ["8", 2] } },
-    "10": { "class_type": "SaveAnimatedWEBP", "inputs": { "images": ["9", 0], "filename_prefix": "ltx_output", "fps": 24.0, "lossless": false, "quality": 90, "method": "default" } },
-    "11": { "class_type": "CLIPLoader", "inputs": { "clip_name": "t5xxl_fp16.safetensors", "type": "ltxv" } }
+    // Load model checkpoint (FP8 for VRAM efficiency)
+    "1":  { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": LTX23_CHECKPOINT } },
+    // Apply distilled LoRA (enables 8-step generation)
+    "2":  { "class_type": "LoraLoaderModelOnly", "inputs": { "model": ["1", 0], "lora_name": LTX23_DISTILLED_LORA, "strength_model": 0.5 } },
+    // Load Gemma 3 text encoder
+    "3":  { "class_type": "LTXAVTextEncoderLoader", "inputs": { "text_encoder": LTX23_TEXT_ENCODER, "ckpt_name": LTX23_CHECKPOINT, "device": "default" } },
+    // Encode positive prompt
+    "4":  { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["3", 0] } },
+    // Encode negative prompt
+    "5":  { "class_type": "CLIPTextEncode", "inputs": { "text": negativePrompt, "clip": ["3", 0] } },
+    // Empty video latent
+    "6":  { "class_type": "EmptyLTXVLatentVideo", "inputs": { "width": width, "height": height, "length": numFrames, "batch_size": 1 } },
+    // Audio VAE loader
+    "7":  { "class_type": "LTXVAudioVAELoader", "inputs": { "ckpt_name": LTX23_CHECKPOINT } },
+    // Empty audio latent
+    "8":  { "class_type": "LTXVEmptyLatentAudio", "inputs": { "frames_number": numFrames, "frame_rate": 24, "batch_size": 1, "audio_vae": ["7", 0] } },
+    // Concat video + audio latents
+    "9":  { "class_type": "LTXVConcatAVLatent", "inputs": { "video_latent": ["6", 0], "audio_latent": ["8", 0] } },
+    // Conditioning
+    "10": { "class_type": "LTXVConditioning", "inputs": { "positive": ["4", 0], "negative": ["5", 0], "frame_rate": 24 } },
+    // CFG guider (cfg=1 for distilled)
+    "11": { "class_type": "CFGGuider", "inputs": { "model": ["2", 0], "positive": ["10", 0], "negative": ["10", 1], "cfg": 1 } },
+    // Random noise
+    "12": { "class_type": "RandomNoise", "inputs": { "noise_seed": Math.floor(Math.random() * 2**32) } },
+    // Sampler selection
+    "13": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler_ancestral_cfg_pp" } },
+    // Manual sigma schedule (8 steps, optimized for distilled)
+    "14": { "class_type": "ManualSigmas", "inputs": { "sigmas": LTX23_DISTILLED_SIGMAS } },
+    // Advanced sampler
+    "15": { "class_type": "SamplerCustomAdvanced", "inputs": { "noise": ["12", 0], "guider": ["11", 0], "sampler": ["13", 0], "sigmas": ["14", 0], "latent_image": ["9", 0] } },
+    // Separate audio/video latents
+    "16": { "class_type": "LTXVSeparateAVLatent", "inputs": { "av_latent": ["15", 0] } },
+    // Decode video (tiled for memory efficiency)
+    "17": { "class_type": "LTXVTiledVAEDecode", "inputs": { "vae": ["1", 2], "latents": ["16", 0], "horizontal_tiles": 2, "vertical_tiles": 2, "overlap": 6, "last_frame_fix": false } },
+    // Decode audio
+    "18": { "class_type": "LTXVAudioVAEDecode", "inputs": { "samples": ["16", 1], "audio_vae": ["7", 0] } },
+    // Create video (combine video frames + audio)
+    "19": { "class_type": "CreateVideo", "inputs": { "images": ["17", 0], "audio": ["18", 0], "fps": 24 } },
+    // Save video
+    "20": { "class_type": "SaveVideo", "inputs": { "video": ["19", 0], "filename_prefix": "ltx_output", "format": "auto", "codec": "auto" } },
   };
 
   const queueRes = await fetch(`${comfyBase}/prompt`, {
@@ -247,8 +280,9 @@ async function main() {
       if (!entry?.outputs) { process.stdout.write('⏳'); continue; }
 
       for (const nodeOutput of Object.values(entry.outputs)) {
-        if (nodeOutput.images?.length) {
-          const file = nodeOutput.images[0];
+        const files = nodeOutput.videos || nodeOutput.images;
+        if (files?.length) {
+          const file = files[0];
           outputUrl = `${comfyBase}/view?filename=${encodeURIComponent(file.filename)}&subfolder=${encodeURIComponent(file.subfolder || '')}&type=${file.type || 'output'}`;
           break;
         }
@@ -279,10 +313,10 @@ async function main() {
   if (supabaseUrl && supabaseServiceKey) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
-    const filename = `${BUSINESS_ID}/ltx-test-${Date.now()}.webp`;
+    const filename = `${BUSINESS_ID}/ltx-test-${Date.now()}.mp4`;
     const { error: uploadError } = await supabase.storage
       .from('generated-media')
-      .upload(filename, mediaBuffer, { contentType: 'image/webp' });
+      .upload(filename, mediaBuffer, { contentType: 'video/mp4' });
 
     if (uploadError) {
       console.error(`   ❌ Upload failed: ${uploadError.message}`);

@@ -684,17 +684,15 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'generate_video',
-      description: 'Generate a video using LTX Video v0.9.8 (distilled) on a budget GPU via Vast.ai + ComfyUI. Costs ~$0.002/video. Uses a persistent instance (start→generate→stop). Has 1-3 min cold start if stopped. Faster than v0.9.5 (8 steps vs 20). Requires VASTAI_API_KEY and VAST_INSTANCE_ID env vars.',
+      description: 'Generate a video with audio using LTX Video 2.3 (22B distilled) on a GPU via Vast.ai + ComfyUI. Costs ~$0.01/video. 8 denoising steps. Native audio generation (speech, music, ambient). Supports 9:16 portrait. Uses a persistent instance (start→generate→stop). Has 1-3 min cold start if stopped. Requires VASTAI_API_KEY and VAST_INSTANCE_ID env vars + 32GB+ VRAM GPU.',
       parameters: {
         type: 'object',
         properties: {
-          prompt: { type: 'string', description: 'Detailed description of the video scene. Include subject, action, camera movement, lighting, style.' },
-          negative_prompt: { type: 'string', description: 'What to avoid (e.g. "blurry, distorted faces, low quality").' },
+          prompt: { type: 'string', description: 'Detailed description of the video scene AND audio. Include subject, action, camera movement, lighting, style, and sound/music description.' },
+          negative_prompt: { type: 'string', description: 'What to avoid (e.g. "blurry, distorted faces, low quality, cartoon").' },
           duration: { type: 'number', description: 'Video duration in seconds (2-10). Default 5.' },
-          width: { type: 'number', description: 'Video width. Default 768. Use 768x512 (landscape) or 512x768 (portrait).' },
+          width: { type: 'number', description: 'Video width. Default 768. Use 768x512 (landscape) or 544x960 (portrait 9:16).' },
           height: { type: 'number', description: 'Video height. Default 512.' },
-          steps: { type: 'number', description: 'Inference steps (4-50). More steps = better quality but slower. Default 8 (distilled model). Use 20+ for non-distilled models.' },
-          cfg_scale: { type: 'number', description: 'Guidance scale (1-20). Higher = more prompt-adherent. Default 7.' },
         },
         required: ['prompt'],
       },
@@ -3655,17 +3653,25 @@ async function executeGenerateMedia(
   }
 }
 
-// ─── generate_video (Vast.ai + ComfyUI + LTX Video) ────────────────────
+// ─── generate_video (Vast.ai + ComfyUI + LTX Video 2.3) ────────────────
 // Uses persistent Start→Generate→Stop lifecycle:
 //   - VAST_INSTANCE_ID in env points to a pre-rented instance with models on disk
 //   - Start the instance (if stopped), wait for ComfyUI, run workflow, download, upload, stop
 //   - Stopping preserves disk (models cached) but halts GPU billing
+// LTX 2.3 requirements: 32GB+ VRAM, ComfyUI-LTXVideo custom nodes, Gemma 3 text encoder
 
 const VASTAI_COMFYUI_PORT = 8188;
 const VASTAI_POLL_INTERVAL_MS = 10_000;
 const VASTAI_BOOT_TIMEOUT_MS = 300_000;   // 5 min for stopped→running
 const VASTAI_COMFYUI_TIMEOUT_MS = 600_000; // 10 min for ComfyUI health
 const VASTAI_GEN_TIMEOUT_MS = 600_000;     // 10 min for generation
+
+// LTX 2.3 model filenames (must be pre-downloaded on the Vast.ai instance)
+const LTX23_CHECKPOINT = 'ltx-2.3-22b-dev-fp8.safetensors';
+const LTX23_DISTILLED_LORA = 'ltx-2.3-22b-distilled-lora-384-1.1.safetensors';
+const LTX23_TEXT_ENCODER = 'comfy_gemma_3_12B_it.safetensors';
+// Distilled sigma schedule (8 steps, optimized for distilled LoRA)
+const LTX23_DISTILLED_SIGMAS = '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0';
 
 async function executeGenerateVideo(
   args: Record<string, unknown>,
@@ -3680,12 +3686,10 @@ async function executeGenerateVideo(
   const prompt = (args.prompt as string || '').trim();
   if (!prompt) return 'Error: prompt is required.';
 
-  const negativePrompt = (args.negative_prompt as string) || 'blurry, distorted, low quality, watermark';
+  const negativePrompt = (args.negative_prompt as string) || 'blurry, distorted, low quality, watermark, cartoon';
   const duration = Math.min(Math.max((args.duration as number) || 5, 2), 10);
   const width = (args.width as number) || 768;
   const height = (args.height as number) || 512;
-  const steps = Math.min(Math.max((args.steps as number) || 8, 4), 50);
-  const cfgScale = Math.min(Math.max((args.cfg_scale as number) || 1, 1), 20);
   const numFrames = Math.round(duration * 24 / 8) * 8 + 1; // LTX requires length = 8n+1
 
   const vastBase = 'https://console.vast.ai/api/v0';
@@ -3768,20 +3772,49 @@ async function executeGenerateVideo(
       return `ComfyUI not responding at ${comfyBase} after ${VASTAI_COMFYUI_TIMEOUT_MS / 1000}s. Instance stopped.`;
     }
 
-    // ── Step 3: Submit LTX Video workflow ──
+    // ── Step 3: Submit LTX 2.3 workflow (distilled, with audio) ──
     const clientId = crypto.randomUUID();
     const workflow: Record<string, Record<string, unknown>> = {
-      '1':  { class_type: 'CLIPTextEncode', inputs: { text: prompt, clip: ['11', 0] } },
-      '2':  { class_type: 'CLIPTextEncode', inputs: { text: negativePrompt, clip: ['11', 0] } },
-      '3':  { class_type: 'LTXVConditioning', inputs: { positive: ['1', 0], negative: ['2', 0], frame_rate: 24.0 } },
-      '4':  { class_type: 'LTXVScheduler', inputs: { steps, max_shift: 2.05, base_shift: 0.95, stretch: true, terminal: 0.1, latent: ['5', 0] } },
-      '5':  { class_type: 'EmptyLTXVLatentVideo', inputs: { width, height, length: numFrames, batch_size: 1 } },
-      '6':  { class_type: 'SamplerCustom', inputs: { model: ['8', 0], add_noise: true, noise_seed: Math.floor(Math.random() * 2 ** 32), cfg: cfgScale, positive: ['3', 0], negative: ['3', 1], sampler: ['7', 0], sigmas: ['4', 0], latent_image: ['5', 0] } },
-      '7':  { class_type: 'KSamplerSelect', inputs: { sampler_name: 'euler' } },
-      '8':  { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'ltxv-2b-0.9.8-distilled.safetensors' } },
-      '9':  { class_type: 'VAEDecode', inputs: { samples: ['6', 0], vae: ['8', 2] } },
-      '10': { class_type: 'SaveAnimatedWEBP', inputs: { images: ['9', 0], filename_prefix: 'ltx_output', fps: 24.0, lossless: false, quality: 90, method: 'default' } },
-      '11': { class_type: 'CLIPLoader', inputs: { clip_name: 't5xxl_fp16.safetensors', type: 'ltxv' } },
+      // Load model checkpoint (FP8 for VRAM efficiency)
+      '1':  { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: LTX23_CHECKPOINT } },
+      // Apply distilled LoRA (enables 8-step generation)
+      '2':  { class_type: 'LoraLoaderModelOnly', inputs: { model: ['1', 0], lora_name: LTX23_DISTILLED_LORA, strength_model: 0.5 } },
+      // Load Gemma 3 text encoder
+      '3':  { class_type: 'LTXAVTextEncoderLoader', inputs: { text_encoder: LTX23_TEXT_ENCODER, ckpt_name: LTX23_CHECKPOINT, device: 'default' } },
+      // Encode positive prompt
+      '4':  { class_type: 'CLIPTextEncode', inputs: { text: prompt, clip: ['3', 0] } },
+      // Encode negative prompt
+      '5':  { class_type: 'CLIPTextEncode', inputs: { text: negativePrompt, clip: ['3', 0] } },
+      // Empty video latent
+      '6':  { class_type: 'EmptyLTXVLatentVideo', inputs: { width, height, length: numFrames, batch_size: 1 } },
+      // Audio VAE loader
+      '7':  { class_type: 'LTXVAudioVAELoader', inputs: { ckpt_name: LTX23_CHECKPOINT } },
+      // Empty audio latent
+      '8':  { class_type: 'LTXVEmptyLatentAudio', inputs: { frames_number: numFrames, frame_rate: 24, batch_size: 1, audio_vae: ['7', 0] } },
+      // Concat video + audio latents
+      '9':  { class_type: 'LTXVConcatAVLatent', inputs: { video_latent: ['6', 0], audio_latent: ['8', 0] } },
+      // Conditioning
+      '10': { class_type: 'LTXVConditioning', inputs: { positive: ['4', 0], negative: ['5', 0], frame_rate: 24 } },
+      // CFG guider (cfg=1 for distilled)
+      '11': { class_type: 'CFGGuider', inputs: { model: ['2', 0], positive: ['10', 0], negative: ['10', 1], cfg: 1 } },
+      // Random noise
+      '12': { class_type: 'RandomNoise', inputs: { noise_seed: Math.floor(Math.random() * 2 ** 32) } },
+      // Sampler selection
+      '13': { class_type: 'KSamplerSelect', inputs: { sampler_name: 'euler_ancestral_cfg_pp' } },
+      // Manual sigma schedule (8 steps, optimized for distilled)
+      '14': { class_type: 'ManualSigmas', inputs: { sigmas: LTX23_DISTILLED_SIGMAS } },
+      // Advanced sampler
+      '15': { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['12', 0], guider: ['11', 0], sampler: ['13', 0], sigmas: ['14', 0], latent_image: ['9', 0] } },
+      // Separate audio/video latents
+      '16': { class_type: 'LTXVSeparateAVLatent', inputs: { av_latent: ['15', 0] } },
+      // Decode video (tiled for memory efficiency)
+      '17': { class_type: 'LTXVTiledVAEDecode', inputs: { vae: ['1', 2], latents: ['16', 0], horizontal_tiles: 2, vertical_tiles: 2, overlap: 6, last_frame_fix: false } },
+      // Decode audio
+      '18': { class_type: 'LTXVAudioVAEDecode', inputs: { samples: ['16', 1], audio_vae: ['7', 0] } },
+      // Create video (combine video frames + audio)
+      '19': { class_type: 'CreateVideo', inputs: { images: ['17', 0], audio: ['18', 0], fps: 24 } },
+      // Save video
+      '20': { class_type: 'SaveVideo', inputs: { video: ['19', 0], filename_prefix: 'ltx_output', format: 'auto', codec: 'auto' } },
     };
 
     const queueRes = await fetch(`${comfyBase}/prompt`, {
@@ -3810,7 +3843,10 @@ async function executeGenerateVideo(
         if (!histRes.ok) continue;
         const history = await histRes.json() as Record<string, {
           status?: { status_str?: string };
-          outputs?: Record<string, { images?: Array<{ filename: string; subfolder: string; type: string }> }>;
+          outputs?: Record<string, {
+            images?: Array<{ filename: string; subfolder: string; type: string }>;
+            videos?: Array<{ filename: string; subfolder: string; type: string }>;
+          }>;
         }>;
         const entry = history[promptId];
         if (!entry) continue;
@@ -3823,8 +3859,10 @@ async function executeGenerateVideo(
 
         if (!entry.outputs) continue;
         for (const nodeOutput of Object.values(entry.outputs)) {
-          if (nodeOutput.images?.length) {
-            const file = nodeOutput.images[0];
+          // SaveVideo outputs 'videos', SaveAnimatedWEBP outputs 'images'
+          const files = nodeOutput.videos || nodeOutput.images;
+          if (files?.length) {
+            const file = files[0];
             outputUrl = `${comfyBase}/view?filename=${encodeURIComponent(file.filename)}&subfolder=${encodeURIComponent(file.subfolder || '')}&type=${file.type || 'output'}`;
             break;
           }
@@ -3849,10 +3887,10 @@ async function executeGenerateVideo(
     const supabase = getSupabase();
     await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
 
-    const filename = `${toolCtx.businessId}/ltx-${Date.now()}.webp`;
+    const filename = `${toolCtx.businessId}/ltx-${Date.now()}.mp4`;
     const { error: uploadError } = await supabase.storage
       .from('generated-media')
-      .upload(filename, mediaBuffer, { contentType: 'image/webp' });
+      .upload(filename, mediaBuffer, { contentType: 'video/mp4' });
 
     if (uploadError) {
       await stopInstance();
@@ -3865,7 +3903,7 @@ async function executeGenerateVideo(
     // ── Step 6: Stop instance (preserve disk, halt GPU charges) ──
     await stopInstance();
 
-    return `✅ Video generated via Vast.ai + LTX Video\nVideo URL: ${permanentUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nSteps: ${steps}, CFG: ${cfgScale}\nInstance ${instanceId} stopped (disk preserved).`;
+    return `✅ Video generated via Vast.ai + LTX Video 2.3 (with audio)\nVideo URL: ${permanentUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nModel: LTX 2.3 distilled (8 steps)\nInstance ${instanceId} stopped (disk preserved).`;
   } catch (err) {
     await stopInstance();
     return `Video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance stopped.`;

@@ -3648,7 +3648,8 @@ async function executeGenerateMedia(
       return `Error: unsupported media_type "${mediaType}". Use "image", "video", or "audio".`;
     }
   } catch (err) {
-    return `Media generation failed: ${err instanceof Error ? err.message : String(err)}`;
+    const errMsg = err instanceof Error ? err.message : (typeof err === 'object' ? JSON.stringify(err) : String(err));
+    return `Media generation failed: ${errMsg}`;
   } finally {
     try { await runware.disconnect(); } catch { /* best effort */ }
   }
@@ -3721,8 +3722,8 @@ async function executeGenerateVideo(
     let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
     let status = inst.actual_status as string;
 
-    if (status === 'stopped' || status === 'offline') {
-      // Start the instance
+    if (status === 'stopped' || status === 'offline' || status === 'exited') {
+      // Start the instance (exited = container stopped, also restartable)
       const startRes = await fetch(vastUrl(`/instances/${instanceId}/`), {
         method: 'PUT', headers: vastHeaders,
         body: JSON.stringify({ state: 'running' }),
@@ -3739,7 +3740,7 @@ async function executeGenerateVideo(
         inst = (pollBody.instances || pollBody) as Record<string, unknown>;
         status = inst.actual_status as string;
         if (status === 'running') break;
-        if (status === 'exited' || status === 'error') {
+        if (status === 'error') {
           return `Instance ${instanceId} failed to start (status: ${status}).`;
         }
       }

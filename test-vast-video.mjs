@@ -208,7 +208,7 @@ async function main() {
     "5": { "class_type": "EmptyLTXVLatentVideo", "inputs": { "width": width, "height": height, "length": numFrames, "batch_size": 1 } },
     "6": { "class_type": "SamplerCustom", "inputs": { "model": ["8", 0], "add_noise": true, "noise_seed": Math.floor(Math.random() * 2**32), "cfg": cfgScale, "positive": ["3", 0], "negative": ["3", 1], "sampler": ["7", 0], "sigmas": ["4", 0], "latent_image": ["5", 0] } },
     "7": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" } },
-    "8": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltx-video-2b-v0.9.5.safetensors" } },
+    "8": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltxv-2b-0.9.8-distilled.safetensors" } },
     "9": { "class_type": "VAEDecode", "inputs": { "samples": ["6", 0], "vae": ["8", 2] } },
     "10": { "class_type": "SaveAnimatedWEBP", "inputs": { "images": ["9", 0], "filename_prefix": "ltx_output", "fps": 24.0, "lossless": false, "quality": 90, "method": "default" } },
     "11": { "class_type": "CLIPLoader", "inputs": { "clip_name": "t5xxl_fp16.safetensors", "type": "ltxv" } }

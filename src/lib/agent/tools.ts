@@ -660,14 +660,14 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'generate_media',
-      description: 'Generate images, videos, or audio using AI via Runware.ai. Supports 200+ models including FLUX, Stable Diffusion, Wan2.7, PixVerse, ElevenLabs, etc. Extremely fast (sub-second for images) and cheap ($0.0006/image). Returns public URLs valid for 7 days. Use this for social media visuals, ad creatives, thumbnails, promotional videos, background music, voice-overs. Requires RUNWARE_API_KEY env var.',
+      description: 'Generate images, videos, or audio using AI via Runware.ai. Images use Wan2.7 (excellent text rendering, $0.03/image). Videos use PixVerse V6 (cinematic, native audio, 1080p, ~$0.22/5s). Supports 200+ models. Returns public URLs valid for 7 days. Use for social media visuals, ad creatives, thumbnails, promotional videos, voice-overs. Requires RUNWARE_API_KEY env var.',
       parameters: {
         type: 'object',
         properties: {
           media_type: { type: 'string', enum: ['image', 'video', 'audio'], description: 'Type of media to generate.' },
           prompt: { type: 'string', description: 'Detailed description of what to generate. Be specific — include style, composition, colors, mood. For audio: describe the genre/mood.' },
           negative_prompt: { type: 'string', description: 'What to avoid in the output (e.g. "blurry, low quality, text, watermark"). Images only.' },
-          model: { type: 'string', description: 'Specific model AIR ID (e.g. "runware:100@1" for FLUX Schnell, "civitai:4201@501240" for Realistic Vision). Leave empty for default (FLUX Schnell for images).' },
+          model: { type: 'string', description: 'Specific model AIR ID. Leave empty for defaults: "alibaba:wan@2.7-image" (images, great text), "pixverse:1@8" (video, PixVerse V6). Other options: "runware:100@1" (FLUX Schnell, fast/cheap images), "alibaba:wan@2.7" (Wan2.7 video).' },
           width: { type: 'number', description: 'Image/video width in px. Default 1024. Common: 1024x1024 (square), 1024x576 (landscape 16:9), 576x1024 (portrait 9:16 for stories/reels).' },
           height: { type: 'number', description: 'Image/video height in px. Default 1024.' },
           num_results: { type: 'number', description: 'Number of variations to generate (1-4). Default 1.' },
@@ -684,7 +684,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'generate_video',
-      description: 'Generate a video using LTX Video on a budget GPU via Vast.ai + ComfyUI. Costs ~$0.002/video. Uses a persistent instance (start→generate→stop) to preserve disk and avoid re-downloading models. Has 1-3 min cold start if stopped. Requires VASTAI_API_KEY and VAST_INSTANCE_ID env vars.',
+      description: 'Generate a video using LTX Video v0.9.8 (distilled) on a budget GPU via Vast.ai + ComfyUI. Costs ~$0.002/video. Uses a persistent instance (start→generate→stop). Has 1-3 min cold start if stopped. Faster than v0.9.5 (8 steps vs 20). Requires VASTAI_API_KEY and VAST_INSTANCE_ID env vars.',
       parameters: {
         type: 'object',
         properties: {
@@ -693,7 +693,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
           duration: { type: 'number', description: 'Video duration in seconds (2-10). Default 5.' },
           width: { type: 'number', description: 'Video width. Default 768. Use 768x512 (landscape) or 512x768 (portrait).' },
           height: { type: 'number', description: 'Video height. Default 512.' },
-          steps: { type: 'number', description: 'Inference steps (10-50). More steps = better quality but slower. Default 20.' },
+          steps: { type: 'number', description: 'Inference steps (4-50). More steps = better quality but slower. Default 8 (distilled model). Use 20+ for non-distilled models.' },
           cfg_scale: { type: 'number', description: 'Guidance scale (1-20). Higher = more prompt-adherent. Default 7.' },
         },
         required: ['prompt'],
@@ -3580,7 +3580,7 @@ async function executeGenerateMedia(
     if (mediaType === 'image') {
       const params: Record<string, unknown> = {
         positivePrompt: prompt,
-        model: model || 'runware:100@1', // FLUX Schnell default
+        model: model || 'alibaba:wan@2.7-image', // Wan2.7 Image — multilingual text rendering, high quality
         width,
         height,
         numberResults: numResults,
@@ -3605,7 +3605,7 @@ async function executeGenerateMedia(
       // Runware video inference via raw task API (SDK videoInference)
       const params: Record<string, unknown> = {
         positivePrompt: prompt,
-        model: model || 'runware:101@1', // Default video model
+        model: model || 'pixverse:1@8', // PixVerse V6 — multi-shot, native audio, 1080p, text rendering
         width: width || 768,
         height: height || 512,
         includeCost: true,
@@ -3684,8 +3684,8 @@ async function executeGenerateVideo(
   const duration = Math.min(Math.max((args.duration as number) || 5, 2), 10);
   const width = (args.width as number) || 768;
   const height = (args.height as number) || 512;
-  const steps = Math.min(Math.max((args.steps as number) || 20, 10), 50);
-  const cfgScale = Math.min(Math.max((args.cfg_scale as number) || 7, 1), 20);
+  const steps = Math.min(Math.max((args.steps as number) || 8, 4), 50);
+  const cfgScale = Math.min(Math.max((args.cfg_scale as number) || 1, 1), 20);
   const numFrames = Math.round(duration * 24 / 8) * 8 + 1; // LTX requires length = 8n+1
 
   const vastBase = 'https://console.vast.ai/api/v0';
@@ -3778,7 +3778,7 @@ async function executeGenerateVideo(
       '5':  { class_type: 'EmptyLTXVLatentVideo', inputs: { width, height, length: numFrames, batch_size: 1 } },
       '6':  { class_type: 'SamplerCustom', inputs: { model: ['8', 0], add_noise: true, noise_seed: Math.floor(Math.random() * 2 ** 32), cfg: cfgScale, positive: ['3', 0], negative: ['3', 1], sampler: ['7', 0], sigmas: ['4', 0], latent_image: ['5', 0] } },
       '7':  { class_type: 'KSamplerSelect', inputs: { sampler_name: 'euler' } },
-      '8':  { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'ltx-video-2b-v0.9.5.safetensors' } },
+      '8':  { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: 'ltxv-2b-0.9.8-distilled.safetensors' } },
       '9':  { class_type: 'VAEDecode', inputs: { samples: ['6', 0], vae: ['8', 2] } },
       '10': { class_type: 'SaveAnimatedWEBP', inputs: { images: ['9', 0], filename_prefix: 'ltx_output', fps: 24.0, lossless: false, quality: 90, method: 'default' } },
       '11': { class_type: 'CLIPLoader', inputs: { clip_name: 't5xxl_fp16.safetensors', type: 'ltxv' } },

@@ -32,7 +32,7 @@ const width = 768;
 const height = 512;
 const steps = 20;
 const cfgScale = 7;
-const numFrames = Math.round(duration * 24);
+const numFrames = Math.round(duration * 24 / 8) * 8 + 1; // LTX requires length = 8n+1
 
 function elapsed(start) { return ((Date.now() - start) / 1000).toFixed(1); }
 
@@ -201,16 +201,17 @@ async function main() {
   const clientId = crypto.randomUUID();
 
   const workflow = {
-    "3": { "class_type": "LTXVConditioning", "inputs": { "positive": ["1", 0], "negative": ["2", 0] } },
-    "4": { "class_type": "LTXVScheduler", "inputs": { "latent": ["5", 0], "steps": steps, "sigmas": ["4", 0] } },
+    "1": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["11", 0] } },
+    "2": { "class_type": "CLIPTextEncode", "inputs": { "text": negativePrompt, "clip": ["11", 0] } },
+    "3": { "class_type": "LTXVConditioning", "inputs": { "positive": ["1", 0], "negative": ["2", 0], "frame_rate": 24.0 } },
+    "4": { "class_type": "LTXVScheduler", "inputs": { "steps": steps, "max_shift": 2.05, "base_shift": 0.95, "stretch": true, "terminal": 0.1, "latent": ["5", 0] } },
     "5": { "class_type": "EmptyLTXVLatentVideo", "inputs": { "width": width, "height": height, "length": numFrames, "batch_size": 1 } },
-    "6": { "class_type": "SamplerCustom", "inputs": { "model": ["8", 0], "positive": ["3", 0], "negative": ["3", 1], "sampler": ["7", 0], "sigmas": ["4", 0], "latent_image": ["5", 0] } },
+    "6": { "class_type": "SamplerCustom", "inputs": { "model": ["8", 0], "add_noise": true, "noise_seed": Math.floor(Math.random() * 2**32), "cfg": cfgScale, "positive": ["3", 0], "negative": ["3", 1], "sampler": ["7", 0], "sigmas": ["4", 0], "latent_image": ["5", 0] } },
     "7": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" } },
-    "8": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltxv-2b-0.9.8-distilled-fp8.safetensors" } },
+    "8": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltx-video-2b-v0.9.5.safetensors" } },
     "9": { "class_type": "VAEDecode", "inputs": { "samples": ["6", 0], "vae": ["8", 2] } },
-    "10": { "class_type": "SaveAnimatedWEBP", "inputs": { "images": ["9", 0], "filename_prefix": "ltx_output", "fps": 24, "quality": 90, "method": "default" } },
-    "1": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["8", 1] } },
-    "2": { "class_type": "CLIPTextEncode", "inputs": { "text": negativePrompt, "clip": ["8", 1] } }
+    "10": { "class_type": "SaveAnimatedWEBP", "inputs": { "images": ["9", 0], "filename_prefix": "ltx_output", "fps": 24.0, "lossless": false, "quality": 90, "method": "default" } },
+    "11": { "class_type": "CLIPLoader", "inputs": { "clip_name": "t5xxl_fp16.safetensors", "type": "ltxv" } }
   };
 
   const queueRes = await fetch(`${comfyBase}/prompt`, {

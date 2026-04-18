@@ -27,7 +27,7 @@ const CORE_TOOLS = new Set([
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'validate_memory', 'search_tasks',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -636,21 +636,68 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
       },
     },
   },
-  // ── Post to Social Media (PostBolt) ────────────────────────────────────
+  // ── Post to Social Media (Postiz) ──────────────────────────────────────
   {
     type: 'function' as const,
     function: {
       name: 'post_social',
-      description: 'Publish or schedule a social media post to one or more platforms (LinkedIn, Twitter/X, Facebook, Instagram, TikTok, YouTube, Threads, Pinterest, Bluesky, Telegram, Reddit, Google Business, Snapchat). Uses PostBolt integration. The business must have a PostBolt API key configured in integrations.',
+      description: 'Publish or schedule a social media post to one or more platforms via Postiz. Supports 32 platforms: LinkedIn, Twitter/X, Facebook, Instagram, TikTok, YouTube, Threads, Pinterest, Bluesky, Telegram, Reddit, Google Business, Mastodon, Discord, Slack, Medium, WordPress, Hashnode, Dev.to, Dribbble, Nostr, VK, Kick, Warpcast, Lemmy. The business must have a Postiz integration configured (service_name: "postiz").',
       parameters: {
         type: 'object',
         properties: {
           content: { type: 'string', description: 'The post text/caption. Each platform has character limits (e.g. Twitter 280 chars). Keep it concise.' },
-          platforms: { type: 'array', items: { type: 'string' }, description: 'Array of platform names to post to. Options: "linkedin", "twitter", "facebook", "instagram", "tiktok", "youtube", "pinterest", "threads", "bluesky", "telegram", "reddit", "google", "snapchat"' },
-          media_url: { type: 'string', description: 'Optional HTTPS URL of an image or video to attach to the post.' },
-          scheduled_for: { type: 'string', description: 'Optional ISO 8601 datetime to schedule the post for a future time (e.g. "2026-04-14T09:00:00Z"). If omitted, publishes immediately.' },
+          platforms: { type: 'array', items: { type: 'string' }, description: 'Array of platform type identifiers to post to. Options: "x", "linkedin", "linkedin-page", "facebook", "instagram", "instagram-standalone", "tiktok", "youtube", "pinterest", "threads", "bluesky", "telegram", "reddit", "google", "mastodon", "discord", "slack", "medium", "wordpress", "hashnode", "devto", "dribbble", "nostr", "vk", "kick", "warpcast", "lemmy"' },
+          media_url: { type: 'string', description: 'Optional HTTPS URL of an image or video to attach. For images, will auto-upload to Postiz first.' },
+          scheduled_for: { type: 'string', description: 'Optional ISO 8601 datetime to schedule the post (e.g. "2026-04-14T09:00:00Z"). If omitted, publishes immediately.' },
+          platform_settings: { type: 'object', description: 'Optional per-platform settings. Keys are platform types, values are setting objects. E.g. {"x": {"who_can_reply_post": "everyone"}, "instagram": {"post_type": "reel"}, "medium": {"title": "...", "tags": [{"value": "tech", "label": "Tech"}]}}' },
         },
         required: ['content', 'platforms'],
+      },
+    },
+  },
+  // ── Generate Media (Runware.ai — images, video, audio) ────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'generate_media',
+      description: 'Generate images, videos, or audio using AI via Runware.ai. Supports 200+ models including FLUX, Stable Diffusion, Wan2.7, PixVerse, ElevenLabs, etc. Extremely fast (sub-second for images) and cheap ($0.0006/image). Returns public URLs valid for 7 days. Use this for social media visuals, ad creatives, thumbnails, promotional videos, background music, voice-overs. Requires RUNWARE_API_KEY env var.',
+      parameters: {
+        type: 'object',
+        properties: {
+          media_type: { type: 'string', enum: ['image', 'video', 'audio'], description: 'Type of media to generate.' },
+          prompt: { type: 'string', description: 'Detailed description of what to generate. Be specific — include style, composition, colors, mood. For audio: describe the genre/mood.' },
+          negative_prompt: { type: 'string', description: 'What to avoid in the output (e.g. "blurry, low quality, text, watermark"). Images only.' },
+          model: { type: 'string', description: 'Specific model AIR ID (e.g. "runware:100@1" for FLUX Schnell, "civitai:4201@501240" for Realistic Vision). Leave empty for default (FLUX Schnell for images).' },
+          width: { type: 'number', description: 'Image/video width in px. Default 1024. Common: 1024x1024 (square), 1024x576 (landscape 16:9), 576x1024 (portrait 9:16 for stories/reels).' },
+          height: { type: 'number', description: 'Image/video height in px. Default 1024.' },
+          num_results: { type: 'number', description: 'Number of variations to generate (1-4). Default 1.' },
+          seed_image: { type: 'string', description: 'URL of a reference image for img-to-img or video-from-image generation.' },
+          strength: { type: 'number', description: 'How much the seed_image influences output (0.0-1.0). Higher = more influence. Default 0.7. Only for img-to-img.' },
+          duration: { type: 'number', description: 'Duration in seconds for video or audio generation.' },
+        },
+        required: ['media_type', 'prompt'],
+      },
+    },
+  },
+  // ── Generate Video Budget (Vast.ai + ComfyUI + LTX) ───────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'generate_video',
+      description: 'Generate a video using LTX Video 2.3 on a budget GPU via Vast.ai + ComfyUI. Costs ~$0.01-0.03/video vs $0.20+ on managed APIs. Best for batch video generation or when cost matters more than speed. Has 2-5 min cold start if no instance is running. Requires VASTAI_API_KEY env var. Use generate_media for quick one-off videos (faster but pricier).',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Detailed description of the video scene. Include subject, action, camera movement, lighting, style.' },
+          negative_prompt: { type: 'string', description: 'What to avoid (e.g. "blurry, distorted faces, low quality").' },
+          duration: { type: 'number', description: 'Video duration in seconds (2-10). Default 5.' },
+          width: { type: 'number', description: 'Video width. Default 768. Use 768x512 (landscape) or 512x768 (portrait).' },
+          height: { type: 'number', description: 'Video height. Default 512.' },
+          seed_image: { type: 'string', description: 'Optional URL of a reference image to animate (image-to-video).' },
+          steps: { type: 'number', description: 'Inference steps (10-50). More steps = better quality but slower. Default 30.' },
+          cfg_scale: { type: 'number', description: 'Guidance scale (1-20). Higher = more prompt-adherent. Default 7.' },
+        },
+        required: ['prompt'],
       },
     },
   },
@@ -784,6 +831,12 @@ export async function executeTool(
 
     case 'post_social':
       return executePostSocial(args as Record<string, unknown>, toolCtx);
+
+    case 'generate_media':
+      return executeGenerateMedia(args as Record<string, unknown>, toolCtx);
+
+    case 'generate_video':
+      return executeGenerateVideo(args as Record<string, unknown>, toolCtx);
 
     default:
       return `Unknown tool: ${name}`;
@@ -3345,13 +3398,21 @@ CUSTOMER NAME: ${customerName}
   }
 }
 
-// ─── post_social (PostBolt — multi-platform social publishing) ──────────
+// ─── post_social (Postiz — multi-platform social publishing) ─────────────
 
-const VALID_PLATFORMS = new Set([
-  'linkedin', 'twitter', 'facebook', 'instagram', 'tiktok',
-  'youtube', 'pinterest', 'threads', 'bluesky', 'telegram',
-  'reddit', 'google', 'snapchat',
+const POSTIZ_PLATFORMS = new Set([
+  'x', 'linkedin', 'linkedin-page', 'facebook', 'instagram',
+  'instagram-standalone', 'tiktok', 'youtube', 'pinterest', 'threads',
+  'bluesky', 'telegram', 'reddit', 'google', 'mastodon', 'discord',
+  'slack', 'medium', 'wordpress', 'hashnode', 'devto', 'dribbble',
+  'nostr', 'vk', 'kick', 'warpcast', 'lemmy',
 ]);
+
+// Map common aliases to Postiz platform types
+const PLATFORM_ALIASES: Record<string, string> = {
+  twitter: 'x', googlebusiness: 'google', gmb: 'google',
+  'dev.to': 'devto', farcaster: 'warpcast',
+};
 
 async function executePostSocial(
   args: Record<string, unknown>,
@@ -3361,69 +3422,502 @@ async function executePostSocial(
   const platforms = args.platforms as string[] | undefined;
   const mediaUrl = args.media_url as string | undefined;
   const scheduledFor = args.scheduled_for as string | undefined;
+  const platformSettings = args.platform_settings as Record<string, Record<string, unknown>> | undefined;
 
   if (!content) return 'Error: post content is required.';
   if (!platforms?.length) return 'Error: at least one platform is required.';
 
-  // Validate platforms
-  const invalid = platforms.filter(p => !VALID_PLATFORMS.has(p.toLowerCase()));
-  if (invalid.length) return `Error: unknown platforms: ${invalid.join(', ')}. Valid: ${[...VALID_PLATFORMS].join(', ')}`;
+  // Normalize & validate platforms
+  const normalized = platforms.map(p => {
+    const lower = p.toLowerCase().trim();
+    return PLATFORM_ALIASES[lower] || lower;
+  });
+  const invalid = normalized.filter(p => !POSTIZ_PLATFORMS.has(p));
+  if (invalid.length) return `Error: unknown platforms: ${invalid.join(', ')}. Valid: ${[...POSTIZ_PLATFORMS].join(', ')}`;
 
-  const normalizedPlatforms = platforms.map(p => p.toLowerCase());
-
-  // Look up PostBolt credentials from business_integrations
+  // Look up Postiz credentials
   const supabase = getSupabase();
   const { data: integration } = await supabase
     .from('business_integrations')
     .select('api_key_encrypted, base_url, config, status')
     .eq('business_id', toolCtx.businessId)
-    .eq('service_name', 'postbolt')
+    .eq('service_name', 'postiz')
     .maybeSingle();
 
   if (!integration) {
-    return 'PostBolt is not configured for this business. Ask the owner to add their PostBolt API key in Settings → Integrations (service name: "postbolt").';
+    return 'Postiz is not configured for this business. Ask the owner to add their Postiz API key in Settings → Integrations (service name: "postiz").';
   }
-
   if (integration.status === 'inactive') {
-    return 'PostBolt integration is inactive. Ask the owner to re-activate it in Settings → Integrations.';
+    return 'Postiz integration is inactive. Ask the owner to re-activate it in Settings → Integrations.';
+  }
+  const apiKey = integration.api_key_encrypted;
+  if (!apiKey) return 'Postiz API key is missing. Ask the owner to update the integration.';
+  const baseUrl = (integration.base_url || 'https://api.postiz.com/public/v1').replace(/\/$/, '');
+
+  // Fetch available integrations (connected channels)
+  let integrations: Array<{ id: string; providerIdentifier: string; name?: string }>;
+  try {
+    const intRes = await fetch(`${baseUrl}/integrations`, {
+      headers: { 'Authorization': apiKey },
+    });
+    if (!intRes.ok) return `Postiz error fetching integrations: HTTP ${intRes.status}`;
+    const intData = await intRes.json() as Array<{ id: string; providerIdentifier: string; name?: string }>;
+    integrations = intData;
+  } catch (err) {
+    return `Failed to fetch Postiz integrations: ${err instanceof Error ? err.message : String(err)}`;
   }
 
-  const apiKey = integration.api_key_encrypted;
-  if (!apiKey) return 'PostBolt API key is missing. Ask the owner to update the integration.';
+  // Match requested platforms to connected integrations
+  const posts: Array<Record<string, unknown>> = [];
+  const unmatched: string[] = [];
 
-  const baseUrl = (integration.base_url || 'https://postbolt.dev/api/v1').replace(/\/$/, '');
+  for (const platform of normalized) {
+    const match = integrations.find(i => i.providerIdentifier === platform);
+    if (!match) { unmatched.push(platform); continue; }
 
-  // Build request body
-  const postBody: Record<string, unknown> = {
-    content,
-    platforms: normalizedPlatforms,
+    const settings: Record<string, unknown> = { __type: platform };
+    if (platformSettings?.[platform]) Object.assign(settings, platformSettings[platform]);
+
+    const postValue: Record<string, unknown> = { content, image: [] };
+
+    // Upload media if provided
+    if (mediaUrl) {
+      try {
+        // Download media then upload to Postiz
+        const mediaRes = await fetch(mediaUrl);
+        if (mediaRes.ok) {
+          const blob = await mediaRes.blob();
+          const formData = new FormData();
+          formData.append('file', blob, 'media' + (mediaUrl.includes('.mp4') ? '.mp4' : '.jpg'));
+          const uploadRes = await fetch(`${baseUrl}/upload`, {
+            method: 'POST',
+            headers: { 'Authorization': apiKey },
+            body: formData,
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json() as { id: string; path: string };
+            postValue.image = [{ id: uploadData.id, path: uploadData.path }];
+          }
+        }
+      } catch { /* continue without media */ }
+    }
+
+    posts.push({
+      integration: { id: match.id },
+      value: [postValue],
+      settings,
+    });
+  }
+
+  if (!posts.length) {
+    return `No connected channels found for: ${normalized.join(', ')}. Connected channels: ${integrations.map(i => `${i.providerIdentifier} (${i.name || i.id})`).join(', ') || 'none'}. Ask the owner to connect these platforms in Postiz settings.`;
+  }
+
+  // Create the post
+  const body: Record<string, unknown> = {
+    type: scheduledFor ? 'schedule' : 'now',
+    date: scheduledFor || new Date().toISOString(),
+    shortLink: false,
+    tags: [],
+    posts,
   };
-  if (mediaUrl) postBody.media_url = mediaUrl;
-  if (scheduledFor) postBody.scheduled_for = scheduledFor;
 
   try {
     const res = await fetch(`${baseUrl}/posts`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': apiKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(postBody),
+      body: JSON.stringify(body),
     });
-
     const data = await res.json() as Record<string, unknown>;
-
     if (!res.ok) {
-      const errMsg = (data.message || data.error || `HTTP ${res.status}`) as string;
-      return `PostBolt error: ${errMsg}`;
+      const errMsg = (data.message || data.error || JSON.stringify(data) || `HTTP ${res.status}`) as string;
+      return `Postiz error: ${errMsg}`;
     }
 
     const postId = data.id || 'unknown';
-    const status = data.status || 'pending';
+    const status = data.status || (scheduledFor ? 'scheduled' : 'published');
     const scheduled = scheduledFor ? ` (scheduled for ${scheduledFor})` : '';
-    return `✅ Social post created${scheduled}\nPost ID: ${postId}\nStatus: ${status}\nPlatforms: ${normalizedPlatforms.join(', ')}\nContent: "${content.substring(0, 80)}${content.length > 80 ? '...' : ''}"`;
+    const postedTo = posts.map(p => (p.settings as Record<string, unknown>).__type).join(', ');
+    const warn = unmatched.length ? `\n⚠️ No connected channel for: ${unmatched.join(', ')}` : '';
+    return `✅ Social post created${scheduled}\nPost ID: ${postId}\nStatus: ${status}\nPlatforms: ${postedTo}\nContent: "${content.substring(0, 80)}${content.length > 80 ? '...' : ''}"${warn}`;
   } catch (err) {
     return `Failed to publish social post: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ─── generate_media (Runware.ai — images, video, audio) ─────────────────
+
+const RUNWARE_TIMEOUT_MS = 120_000; // 2 min for video/audio
+
+async function executeGenerateMedia(
+  args: Record<string, unknown>,
+  _toolCtx: ToolContext,
+): Promise<string> {
+  const apiKey = process.env.RUNWARE_API_KEY;
+  if (!apiKey) return 'Error: RUNWARE_API_KEY environment variable is not set. Add it to your .env file — get one free at https://my.runware.ai/';
+
+  const mediaType = (args.media_type as string || 'image').toLowerCase();
+  const prompt = (args.prompt as string || '').trim();
+  const negativePrompt = args.negative_prompt as string | undefined;
+  const model = args.model as string | undefined;
+  const width = (args.width as number) || 1024;
+  const height = (args.height as number) || 1024;
+  const numResults = Math.min(Math.max((args.num_results as number) || 1, 1), 4);
+  const seedImage = args.seed_image as string | undefined;
+  const strength = args.strength as number | undefined;
+  const duration = args.duration as number | undefined;
+
+  if (!prompt) return 'Error: prompt is required.';
+
+  const { Runware } = await import('@runware/sdk-js');
+  const runware = new Runware({ apiKey, timeoutDuration: RUNWARE_TIMEOUT_MS });
+  await runware.ensureConnection();
+
+  try {
+    if (mediaType === 'image') {
+      const params: Record<string, unknown> = {
+        positivePrompt: prompt,
+        model: model || 'runware:100@1', // FLUX Schnell default
+        width,
+        height,
+        numberResults: numResults,
+        outputType: 'URL' as const,
+        outputFormat: 'WEBP' as const,
+        includeCost: true,
+      };
+      if (negativePrompt) params.negativePrompt = negativePrompt;
+      if (seedImage) {
+        params.seedImage = seedImage;
+        params.strength = strength ?? 0.7;
+      }
+
+      const images = await runware.imageInference(params as Parameters<typeof runware.imageInference>[0]);
+      if (!images?.length) return 'No images were generated. Try a different prompt or model.';
+
+      const totalCost = images.reduce((sum, img) => sum + (img.cost || 0), 0);
+      const urls = images.map((img, i) => `${i + 1}. ${img.imageURL}`).join('\n');
+      return `✅ Generated ${images.length} image(s) (cost: $${totalCost.toFixed(4)})\n\n${urls}`;
+
+    } else if (mediaType === 'video') {
+      // Runware video inference via raw task API (SDK videoInference)
+      const params: Record<string, unknown> = {
+        positivePrompt: prompt,
+        model: model || 'runware:101@1', // Default video model
+        width: width || 768,
+        height: height || 512,
+        includeCost: true,
+        outputType: 'URL' as const,
+      };
+      if (seedImage) {
+        params.inputs = { image: seedImage };
+      }
+      if (duration) params.duration = duration;
+
+      // Use videoInference if available, else fall back to generic call
+      const videos = await (runware as unknown as Record<string, CallableFunction>).videoInference(params);
+      const videoArr = Array.isArray(videos) ? videos : [videos];
+      if (!videoArr.length) return 'No video was generated. Try a different prompt or model.';
+
+      const totalCost = videoArr.reduce((sum: number, v: Record<string, unknown>) => sum + ((v.cost as number) || 0), 0);
+      const urls = videoArr.map((v: Record<string, unknown>, i: number) => `${i + 1}. ${v.videoURL || v.imageURL || 'no URL'}`).join('\n');
+      return `✅ Generated video (cost: $${totalCost.toFixed(4)})\n\n${urls}`;
+
+    } else if (mediaType === 'audio') {
+      const params: Record<string, unknown> = {
+        positivePrompt: prompt,
+        model: model || 'elevenlabs:1@1',
+        outputType: 'URL' as const,
+        outputFormat: 'MP3' as const,
+        includeCost: true,
+        numberResults: 1,
+      };
+      if (duration) params.duration = duration;
+
+      const audio = await (runware as unknown as Record<string, CallableFunction>).audioInference(params);
+      const audioArr = Array.isArray(audio) ? audio : [audio];
+      if (!audioArr.length) return 'No audio was generated. Try a different prompt or model.';
+
+      const totalCost = audioArr.reduce((sum: number, a: Record<string, unknown>) => sum + ((a.cost as number) || 0), 0);
+      const urls = audioArr.map((a: Record<string, unknown>, i: number) => `${i + 1}. ${a.audioURL || 'no URL'}`).join('\n');
+      return `✅ Generated audio (cost: $${totalCost.toFixed(4)})\n\n${urls}`;
+
+    } else {
+      return `Error: unsupported media_type "${mediaType}". Use "image", "video", or "audio".`;
+    }
+  } catch (err) {
+    return `Media generation failed: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    try { await runware.disconnect(); } catch { /* best effort */ }
+  }
+}
+
+// ─── generate_video (Vast.ai + ComfyUI + LTX Video 2.3) ────────────────
+
+const VASTAI_TEMPLATE_HASH = 'comfyui-ltx'; // Tag for finding our template
+const VASTAI_COMFYUI_PORT = 8188;
+const VASTAI_POLL_INTERVAL_MS = 5_000;
+const VASTAI_MAX_WAIT_MS = 300_000; // 5 min total timeout
+const VASTAI_IDLE_DESTROY_MS = 600_000; // 10 min idle → destroy
+
+async function executeGenerateVideo(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const apiKey = process.env.VASTAI_API_KEY;
+  if (!apiKey) return 'Error: VASTAI_API_KEY environment variable is not set. Get one at https://cloud.vast.ai/';
+
+  const prompt = (args.prompt as string || '').trim();
+  if (!prompt) return 'Error: prompt is required.';
+
+  const negativePrompt = (args.negative_prompt as string) || 'blurry, distorted, low quality, watermark';
+  const duration = Math.min(Math.max((args.duration as number) || 5, 2), 10);
+  const width = (args.width as number) || 768;
+  const height = (args.height as number) || 512;
+  const seedImage = args.seed_image as string | undefined;
+  const steps = Math.min(Math.max((args.steps as number) || 30, 10), 50);
+  const cfgScale = Math.min(Math.max((args.cfg_scale as number) || 7, 1), 20);
+
+  const vastHeaders = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+  const vastBase = 'https://cloud.vast.ai/api/v0';
+
+  // ── Step 1: Find or create a running ComfyUI instance ──
+  let instanceId: number | null = null;
+  let instanceIp: string | null = null;
+  let instancePort: number | null = null;
+
+  try {
+    // Check for existing running instance tagged for this business
+    const listRes = await fetch(`${vastBase}/instances?owner=me`, {
+      headers: vastHeaders,
+    });
+    if (!listRes.ok) return `Vast.ai error listing instances: HTTP ${listRes.status}`;
+    const instances = (await listRes.json() as { instances?: Array<Record<string, unknown>> }).instances || [];
+
+    // Find a running ComfyUI instance with our label
+    const label = `launchfly-comfyui-${toolCtx.businessId.substring(0, 8)}`;
+    const running = instances.find((inst: Record<string, unknown>) =>
+      inst.label === label && inst.actual_status === 'running',
+    );
+
+    if (running) {
+      instanceId = running.id as number;
+      // Extract connection info
+      const ports = running.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;
+      const comfyPort = ports?.[`${VASTAI_COMFYUI_PORT}/tcp`]?.[0];
+      if (comfyPort) {
+        instanceIp = running.public_ipaddr as string || comfyPort.HostIp;
+        instancePort = parseInt(comfyPort.HostPort);
+      }
+    }
+
+    // If no running instance, create one
+    if (!instanceId || !instanceIp) {
+      // Search for cheapest RTX 4090 offer
+      const searchRes = await fetch(`${vastBase}/bundles?q={"gpu_name":"RTX 4090","num_gpus":1,"disk_space":20,"reliability2":{"gte":0.9},"inet_down":{"gte":100},"order":[["dph_total","asc"]],"type":"on-demand","limit":1}`, {
+        headers: vastHeaders,
+      });
+      if (!searchRes.ok) return `Vast.ai error searching offers: HTTP ${searchRes.status}`;
+      const offers = (await searchRes.json() as { offers?: Array<Record<string, unknown>> }).offers || [];
+      if (!offers.length) return 'No available RTX 4090 instances on Vast.ai right now. Try again later or use generate_media for video instead.';
+
+      const offer = offers[0];
+      const offerId = offer.id as number;
+
+      // Create instance with ComfyUI + LTX template
+      const createRes = await fetch(`${vastBase}/asks/${offerId}/`, {
+        method: 'PUT',
+        headers: vastHeaders,
+        body: JSON.stringify({
+          client_id: 'me',
+          image: 'yanwk/comfyui-boot:cu128-cn',
+          disk: 20,
+          label,
+          onstart: 'cd /root && python main.py --listen 0.0.0.0 --port 8188',
+          env: { '-p': `${VASTAI_COMFYUI_PORT}:${VASTAI_COMFYUI_PORT}` },
+        }),
+      });
+
+      if (!createRes.ok) {
+        const errBody = await createRes.text();
+        return `Vast.ai error creating instance: HTTP ${createRes.status} — ${errBody.substring(0, 200)}`;
+      }
+      const created = await createRes.json() as { new_contract: number };
+      instanceId = created.new_contract;
+
+      // Wait for instance to be running
+      const startTime = Date.now();
+      while (Date.now() - startTime < VASTAI_MAX_WAIT_MS) {
+        await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
+        const statusRes = await fetch(`${vastBase}/instances/${instanceId}`, {
+          headers: vastHeaders,
+        });
+        if (!statusRes.ok) continue;
+        const inst = await statusRes.json() as Record<string, unknown>;
+
+        if (inst.actual_status === 'running') {
+          const ports = inst.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;
+          const comfyPort = ports?.[`${VASTAI_COMFYUI_PORT}/tcp`]?.[0];
+          if (comfyPort) {
+            instanceIp = inst.public_ipaddr as string || comfyPort.HostIp;
+            instancePort = parseInt(comfyPort.HostPort);
+            break;
+          }
+        }
+        if (inst.actual_status === 'exited' || inst.actual_status === 'error') {
+          return `Vast.ai instance failed to start (status: ${inst.actual_status}). Try again or use generate_media for video.`;
+        }
+      }
+
+      if (!instanceIp || !instancePort) {
+        return `Vast.ai instance did not become ready within ${VASTAI_MAX_WAIT_MS / 1000}s. Instance ID: ${instanceId}. It may still be loading — try again in a minute.`;
+      }
+    }
+  } catch (err) {
+    return `Vast.ai error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+
+  // ── Step 2: Wait for ComfyUI to be healthy ──
+  const comfyBase = `http://${instanceIp}:${instancePort}`;
+  const healthStart = Date.now();
+  let comfyReady = false;
+
+  while (Date.now() - healthStart < 120_000) { // 2 min for ComfyUI boot
+    try {
+      const hRes = await fetch(`${comfyBase}/system_stats`, { signal: AbortSignal.timeout(5000) });
+      if (hRes.ok) { comfyReady = true; break; }
+    } catch { /* not ready yet */ }
+    await new Promise(r => setTimeout(r, 5000));
+  }
+
+  if (!comfyReady) {
+    return `ComfyUI is not responding at ${comfyBase} after 2 minutes. Instance ${instanceId} may still be loading models. Try again in a minute.`;
+  }
+
+  // ── Step 3: Submit LTX Video workflow ──
+  const numFrames = Math.round(duration * 24); // 24fps
+  const clientId = crypto.randomUUID();
+
+  const workflow: Record<string, Record<string, unknown>> = {
+    '1': {
+      class_type: 'CheckpointLoaderSimple',
+      inputs: { ckpt_name: 'ltx-video-2-1-0.2-dev.safetensors' },
+    },
+    '2': {
+      class_type: 'CLIPTextEncode',
+      inputs: { text: prompt, clip: ['1', 1] },
+    },
+    '3': {
+      class_type: 'CLIPTextEncode',
+      inputs: { text: negativePrompt, clip: ['1', 1] },
+    },
+    '4': {
+      class_type: 'EmptyLatentImage',
+      inputs: { width, height, batch_size: numFrames },
+    },
+    '5': {
+      class_type: 'KSampler',
+      inputs: {
+        model: ['1', 0],
+        positive: ['2', 0],
+        negative: ['3', 0],
+        latent_image: seedImage ? ['7', 0] : ['4', 0],
+        seed: Math.floor(Math.random() * 2147483647),
+        steps,
+        cfg: cfgScale,
+        sampler_name: 'euler',
+        scheduler: 'normal',
+        denoise: seedImage ? 0.75 : 1.0,
+      },
+    },
+    '6': {
+      class_type: 'VAEDecode',
+      inputs: { samples: ['5', 0], vae: ['1', 2] },
+    },
+    '8': {
+      class_type: 'SaveAnimatedWEBP',
+      inputs: { images: ['6', 0], filename_prefix: 'ltx_output', fps: 24, quality: 90, method: 'default' },
+    },
+  };
+
+  // If seed_image provided, add an image loader node
+  if (seedImage) {
+    workflow['7'] = {
+      class_type: 'LoadImage',
+      inputs: { image: seedImage },
+    };
+  }
+
+  try {
+    const queueRes = await fetch(`${comfyBase}/prompt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: workflow, client_id: clientId }),
+    });
+
+    if (!queueRes.ok) {
+      const errText = await queueRes.text();
+      return `ComfyUI error submitting workflow: HTTP ${queueRes.status} — ${errText.substring(0, 300)}`;
+    }
+
+    const queueData = await queueRes.json() as { prompt_id: string };
+    const promptId = queueData.prompt_id;
+
+    // ── Step 4: Poll for completion ──
+    const pollStart = Date.now();
+    let outputUrl: string | null = null;
+
+    while (Date.now() - pollStart < VASTAI_MAX_WAIT_MS) {
+      await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
+
+      const histRes = await fetch(`${comfyBase}/history/${promptId}`, { signal: AbortSignal.timeout(10000) });
+      if (!histRes.ok) continue;
+      const history = await histRes.json() as Record<string, { outputs?: Record<string, { images?: Array<{ filename: string; subfolder: string; type: string }> }> }>;
+
+      const entry = history[promptId];
+      if (!entry?.outputs) continue;
+
+      // Find the output image/video
+      for (const nodeOutput of Object.values(entry.outputs)) {
+        if (nodeOutput.images?.length) {
+          const file = nodeOutput.images[0];
+          outputUrl = `${comfyBase}/view?filename=${encodeURIComponent(file.filename)}&subfolder=${encodeURIComponent(file.subfolder || '')}&type=${file.type || 'output'}`;
+          break;
+        }
+      }
+      if (outputUrl) break;
+    }
+
+    if (!outputUrl) {
+      return `Video generation timed out after ${VASTAI_MAX_WAIT_MS / 1000}s. Prompt ID: ${promptId}. The instance may still be processing.`;
+    }
+
+    // Schedule auto-destroy after idle period (fire and forget)
+    scheduleVastAutoDestroy(instanceId!, vastHeaders, VASTAI_IDLE_DESTROY_MS).catch(() => {});
+
+    return `✅ Video generated via Vast.ai + LTX Video\nInstance: ${instanceId} (RTX 4090)\nVideo URL: ${outputUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nSteps: ${steps}, CFG: ${cfgScale}\n\n⚠️ URL is only accessible while the Vast.ai instance is running. Download or re-upload to permanent storage before the instance shuts down (auto-destroys after ${VASTAI_IDLE_DESTROY_MS / 60000} min idle).`;
+  } catch (err) {
+    return `Video generation failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// Auto-destroy Vast instance after idle period
+async function scheduleVastAutoDestroy(instanceId: number, headers: Record<string, string>, delayMs: number) {
+  await new Promise(r => setTimeout(r, delayMs));
+  try {
+    await fetch(`https://cloud.vast.ai/api/v0/instances/${instanceId}/`, {
+      method: 'DELETE',
+      headers,
+    });
+    console.log(`[generate_video] Auto-destroyed Vast.ai instance ${instanceId} after ${delayMs / 60000} min idle`);
+  } catch (err) {
+    console.error(`[generate_video] Failed to auto-destroy instance ${instanceId}:`, err);
   }
 }
 

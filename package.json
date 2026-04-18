@@ -24,6 +24,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.19",
     "@browserbasehq/stagehand": "^3.2.1",
+    "@runware/sdk-js": "^1.2.9",
     "@sendgrid/mail": "^8.1.6",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",

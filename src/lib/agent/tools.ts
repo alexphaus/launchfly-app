@@ -3681,12 +3681,19 @@ async function executeGenerateVideo(
   const steps = Math.min(Math.max((args.steps as number) || 30, 10), 50);
   const cfgScale = Math.min(Math.max((args.cfg_scale as number) || 7, 1), 20);
 
+  // Vast.ai uses api_key query param, not Bearer token
   const vastHeaders = {
-    'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
-  const vastBase = 'https://cloud.vast.ai/api/v0';
+  const vastBase = 'https://console.vast.ai/api/v0';
+  const authParam = `api_key=${encodeURIComponent(apiKey)}`;
+
+  // Helper to append auth to URL
+  const vastUrl = (path: string) => {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${vastBase}${path}${sep}${authParam}`;
+  };
 
   // ── Step 1: Find or create a running ComfyUI instance ──
   let instanceId: number | null = null;
@@ -3695,7 +3702,7 @@ async function executeGenerateVideo(
 
   try {
     // Check for existing running instance tagged for this business
-    const listRes = await fetch(`${vastBase}/instances?owner=me`, {
+    const listRes = await fetch(vastUrl('/instances/?owner=me'), {
       headers: vastHeaders,
     });
     if (!listRes.ok) return `Vast.ai error listing instances: HTTP ${listRes.status}`;
@@ -3721,7 +3728,8 @@ async function executeGenerateVideo(
     // If no running instance, create one
     if (!instanceId || !instanceIp) {
       // Search for cheapest RTX 4090 offer
-      const searchRes = await fetch(`${vastBase}/bundles?q={"gpu_name":"RTX 4090","num_gpus":1,"disk_space":20,"reliability2":{"gte":0.9},"inet_down":{"gte":100},"order":[["dph_total","asc"]],"type":"on-demand","limit":1}`, {
+      const searchQ = encodeURIComponent(JSON.stringify({gpu_name:'RTX 4090',num_gpus:1,disk_space:25,reliability2:{gte:0.9},inet_down:{gte:100},order:[['dph_total','asc']],type:'on-demand',limit:1}));
+      const searchRes = await fetch(vastUrl(`/bundles/?q=${searchQ}`), {
         headers: vastHeaders,
       });
       if (!searchRes.ok) return `Vast.ai error searching offers: HTTP ${searchRes.status}`;
@@ -3732,7 +3740,7 @@ async function executeGenerateVideo(
       const offerId = offer.id as number;
 
       // Create instance with ComfyUI + LTX template + bash script to download model
-      const createRes = await fetch(`${vastBase}/asks/${offerId}/`, {
+      const createRes = await fetch(vastUrl(`/asks/${offerId}/`), {
         method: 'PUT',
         headers: vastHeaders,
         body: JSON.stringify({
@@ -3756,7 +3764,7 @@ async function executeGenerateVideo(
       const startTime = Date.now();
       while (Date.now() - startTime < VASTAI_MAX_WAIT_MS) {
         await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
-        const statusRes = await fetch(`${vastBase}/instances/${instanceId}`, {
+        const statusRes = await fetch(vastUrl(`/instances/${instanceId}/`), {
           headers: vastHeaders,
         });
         if (!statusRes.ok) continue;
@@ -3897,7 +3905,7 @@ async function executeGenerateVideo(
 
     if (!outputUrl) {
       // Cleanup on failure to prevent credit drain
-      await fetch(`${vastBase}/instances/${instanceId}/`, { method: 'DELETE', headers: vastHeaders }).catch(() => {});
+      await fetch(vastUrl(`/instances/${instanceId}/`), { method: 'DELETE', headers: vastHeaders }).catch(() => {});
       return `Video generation timed out after ${VASTAI_MAX_WAIT_MS / 1000}s. Prompt ID: ${promptId}. The instance was destroyed to save costs.`;
     }
 
@@ -3921,12 +3929,12 @@ async function executeGenerateVideo(
     const permanentUrl = publicUrlData.publicUrl;
 
     // ── Step 6: Synchronously destroy instance to guarantee no runaway costs ──
-    await fetch(`${vastBase}/instances/${instanceId}/`, { method: 'DELETE', headers: vastHeaders }).catch(() => {});
+    await fetch(vastUrl(`/instances/${instanceId}/`), { method: 'DELETE', headers: vastHeaders }).catch(() => {});
 
     return `✅ Video generated via Vast.ai + LTX Video\nVideo URL: ${permanentUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nSteps: ${steps}, CFG: ${cfgScale}\n\n(Instance ${instanceId} was destroyed immediately to save costs.)`;
   } catch (err) {
     if (instanceId) {
-      await fetch(`https://cloud.vast.ai/api/v0/instances/${instanceId}/`, { method: 'DELETE', headers: vastHeaders }).catch(() => {});
+      await fetch(vastUrl(`/instances/${instanceId}/`), { method: 'DELETE', headers: vastHeaders }).catch(() => {});
     }
     return `Video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance destroyed to save costs.`;
   }

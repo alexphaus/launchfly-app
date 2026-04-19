@@ -569,10 +569,7 @@ export async function POST(request: NextRequest) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;
         }
         rolePrompt = orchestrator.system_prompt;
-        enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
-        for (const t of ['analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'send_whatsapp', 'manage_automation', 'run_code', 'manage_job', 'delegate_task_and_wait', 'request_approval', 'update_instructions', 'send_email', 'make_call', 'generate_media', 'generate_video']) {
-          if (!enabledTools.includes(t)) enabledTools.push(t);
-        }
+        enabledTools = null; // All tools — orchestrator's system_prompt guides which to use
       } else {
         if (ownerImageUrl) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
@@ -818,10 +815,7 @@ export async function POST(request: NextRequest) {
             goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;
           }
           rolePrompt = orchestrator.system_prompt;
-          enabledTools = Array.isArray(orchestrator.tools_enabled) ? orchestrator.tools_enabled.map(String) : ['delegate_task', 'query_database', 'send_report'];
-          for (const t of ['analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'send_whatsapp', 'manage_automation', 'run_code', 'manage_job', 'delegate_task_and_wait', 'request_approval', 'update_instructions', 'send_email', 'make_call', 'generate_media', 'generate_video']) {
-            if (!enabledTools.includes(t)) enabledTools.push(t);
-          }
+          enabledTools = null; // All tools — orchestrator's system_prompt guides which to use
         } else {
           // Fallback to the Purchasing OS explicitly as before
           goalStr = messageText.substring(0, 1000);

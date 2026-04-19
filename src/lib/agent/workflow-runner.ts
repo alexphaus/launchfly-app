@@ -882,8 +882,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         let result: { id: string; name: string; args: Record<string, unknown>; result: string };
 
         if (VIDEO_TOOLS.has(tc.function.name)) {
-          // ── Offload video tools via context.call() ──
-          // Upstash makes the HTTP request and waits up to 30min — no Vercel timeout limit
+          // ── Offload video tools via phased context.call() loop ──
+          // Each call handles one phase (boot → scene × N → finalize).
+          // State is passed between calls — each fits within Vercel's 800s maxDuration.
           const toolArgs = parsedArgs.get(tc.id)!;
           const callKey = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
           if (executedToolCalls.has(callKey)) {
@@ -894,28 +895,48 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
             // Send WhatsApp status ONCE (durable step — won't re-fire on Upstash replays)
             await context.run(`video-notify-${loopIteration}-${i}`, async () => {
               sendToolStatus(toolCtx, tc.function.name, toolArgs);
-              // Give fire-and-forget fetch a moment to send before step returns
               await new Promise(r => setTimeout(r, 1500));
             });
 
-            console.log(`[agent:${taskId}] Calling video-generate endpoint for ${tc.function.name}`);
+            console.log(`[agent:${taskId}] Starting phased video generation for ${tc.function.name}`);
             const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai').replace(/\/$/, '');
-            const callResult = await context.call<{ result: string }>(`video-${loopIteration}-${i}`, {
-              url: `${appUrl}/api/agent/video-generate`,
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ toolName: tc.function.name, args: toolArgs, toolCtx }),
-              retries: 2,
-              timeout: '30m',
-            });
-            console.log(`[agent:${taskId}] video-generate returned status=${callResult.status}`);
-            const toolResult = callResult.status >= 200 && callResult.status < 300
-              ? (callResult.body?.result ?? `Video tool returned status ${callResult.status}`)
-              : `Video tool HTTP error ${callResult.status}: ${JSON.stringify(callResult.body).substring(0, 300)}`;
-            result = { id: tc.id, name: tc.function.name, args: toolArgs, result: toolResult };
+            let videoState: Record<string, unknown> | undefined;
+            let videoResult: string | undefined;
+
+            // Loop through phases: boot → scene(s) → finalize
+            // Max 20 steps = 1 boot + up to 6 scenes + 1 finalize + safety margin
+            for (let step = 0; step < 20 && !videoResult; step++) {
+              const callResult = await context.call<{ done: boolean; result?: string; state?: Record<string, unknown> }>(
+                `video-${loopIteration}-${i}-s${step}`,
+                {
+                  url: `${appUrl}/api/agent/video-generate`,
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ toolName: tc.function.name, args: toolArgs, toolCtx, state: videoState }),
+                  retries: 1,
+                  timeout: '15m',
+                },
+              );
+
+              console.log(`[agent:${taskId}] video phase ${step} status=${callResult.status} done=${callResult.body?.done}`);
+
+              if (callResult.status >= 200 && callResult.status < 300) {
+                if (callResult.body?.done) {
+                  videoResult = callResult.body.result ?? 'Video generation completed (no result text).';
+                } else {
+                  videoState = callResult.body?.state;
+                }
+              } else {
+                videoResult = `Video tool HTTP error ${callResult.status}: ${JSON.stringify(callResult.body).substring(0, 300)}`;
+              }
+            }
+
+            if (!videoResult) videoResult = 'Video generation failed: exceeded maximum phases (20).';
+
+            result = { id: tc.id, name: tc.function.name, args: toolArgs, result: videoResult };
           }
         } else {
           // ── Normal tool via context.run() ──

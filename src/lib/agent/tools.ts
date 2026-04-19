@@ -3704,15 +3704,192 @@ const LTX23_TEXT_ENCODER = 'comfy_gemma_3_12B_it.safetensors';
 // Distilled sigma schedule (8 steps, optimized for distilled LoRA)
 const LTX23_DISTILLED_SIGMAS = '1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0';
 
+// ─── Shared Vast.ai helpers (exported for phased video-generate endpoint) ──
+
+function vastApiUrl(path: string): string {
+  const apiKey = process.env.VASTAI_API_KEY!;
+  const sep = path.includes('?') ? '&' : '?';
+  return `https://console.vast.ai/api/v0${path}${sep}api_key=${encodeURIComponent(apiKey)}`;
+}
+const vastApiHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+
+function extractIpPort(inst: Record<string, unknown>): { ip: string; port: number } | null {
+  const ports = inst.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;
+  const mapping = ports?.[`${VASTAI_COMFYUI_PORT}/tcp`]?.[0];
+  if (!mapping) return null;
+  const ip = (inst.public_ipaddr as string) || mapping.HostIp;
+  if (!ip || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) return null;
+  return { ip, port: parseInt(mapping.HostPort) };
+}
+
+/**
+ * Boot a Vast.ai instance and wait for ComfyUI to be healthy.
+ * Handles stopped, stopping, offline, exited states.
+ * Returns { comfyBase } on success, or { error } on failure.
+ */
+export async function vastBoot(instanceId: string): Promise<{ comfyBase: string } | { error: string }> {
+  const infoRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
+  if (!infoRes.ok) return { error: `Vast.ai error: HTTP ${infoRes.status} fetching instance ${instanceId}` };
+  const infoBody = await infoRes.json() as Record<string, unknown>;
+  let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
+  let status = inst.actual_status as string;
+
+  if (!status) return { error: `Instance ${instanceId} not found or destroyed.` };
+
+  // If stopping, wait for it to finish before restarting
+  if (status === 'stopping') {
+    const stopWaitStart = Date.now();
+    while (Date.now() - stopWaitStart < 120_000) {
+      await new Promise(r => setTimeout(r, 5_000));
+      const pollRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
+      if (!pollRes.ok) continue;
+      const pollBody = await pollRes.json() as Record<string, unknown>;
+      inst = (pollBody.instances || pollBody) as Record<string, unknown>;
+      status = inst.actual_status as string;
+      if (status !== 'stopping') break;
+    }
+    if (status === 'stopping') return { error: `Instance ${instanceId} stuck in 'stopping' state.` };
+  }
+
+  if (status === 'stopped' || status === 'offline' || status === 'exited') {
+    const startRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), {
+      method: 'PUT', headers: vastApiHeaders,
+      body: JSON.stringify({ state: 'running' }),
+    });
+    if (!startRes.ok) return { error: `Failed to start instance ${instanceId}: HTTP ${startRes.status}` };
+
+    const bootStart = Date.now();
+    while (Date.now() - bootStart < VASTAI_BOOT_TIMEOUT_MS) {
+      await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
+      const pollRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
+      if (!pollRes.ok) continue;
+      const pollBody = await pollRes.json() as Record<string, unknown>;
+      inst = (pollBody.instances || pollBody) as Record<string, unknown>;
+      status = inst.actual_status as string;
+      if (status === 'running') break;
+      if (status === 'error') return { error: `Instance ${instanceId} failed to start.` };
+    }
+    if (status !== 'running') return { error: `Instance ${instanceId} did not start within ${VASTAI_BOOT_TIMEOUT_MS / 1000}s.` };
+  } else if (status !== 'running') {
+    return { error: `Instance ${instanceId} is in unexpected state: ${status}` };
+  }
+
+  const conn = extractIpPort(inst);
+  if (!conn) return { error: `Cannot determine public IP/port for instance ${instanceId}.` };
+  const comfyBase = `http://${conn.ip}:${conn.port}`;
+
+  // Wait for ComfyUI to be healthy
+  const healthStart = Date.now();
+  let comfyReady = false;
+  while (Date.now() - healthStart < VASTAI_COMFYUI_TIMEOUT_MS) {
+    try {
+      const hRes = await fetch(`${comfyBase}/system_stats`, { signal: AbortSignal.timeout(5000) });
+      if (hRes.ok) { comfyReady = true; break; }
+    } catch { /* not ready yet */ }
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  if (!comfyReady) {
+    await vastStop(instanceId);
+    return { error: `ComfyUI not responding at ${comfyBase} after ${VASTAI_COMFYUI_TIMEOUT_MS / 1000}s. Instance stopped.` };
+  }
+
+  return { comfyBase };
+}
+
+/**
+ * Generate a single video clip via ComfyUI. Instance must already be running.
+ * Returns { filename } on success, or { error } on failure.
+ */
+export async function vastGenerateClip(comfyBase: string, params: {
+  prompt: string;
+  negativePrompt: string;
+  width: number;
+  height: number;
+  numFrames: number;
+  filenamePrefix?: string;
+}): Promise<{ filename: string } | { error: string }> {
+  try {
+    const workflow = buildLTX23Workflow(params);
+    const output = await submitAndWaitForOutput(comfyBase, workflow);
+    return { filename: output.filename };
+  } catch (err) {
+    return { error: `Scene generation failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+/**
+ * Concatenate clips, upload to Supabase, return public URL.
+ * Falls back to individual clip upload if concat fails.
+ */
+export async function vastFinalizeVideo(comfyBase: string, clipFilenames: string[], businessId: string): Promise<{ url: string } | { error: string }> {
+  const supabase = getSupabase();
+  await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
+
+  let finalFilename: string;
+  let isSingle = clipFilenames.length === 1;
+
+  if (!isSingle) {
+    try {
+      const concatRes = await fetch(`${comfyBase}/concat_videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: clipFilenames }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (!concatRes.ok) throw new Error(`Concat HTTP ${concatRes.status}`);
+      const concatData = await concatRes.json() as { filename: string };
+      finalFilename = concatData.filename;
+    } catch (concatErr) {
+      // Fallback: upload individual clips
+      const urls: string[] = [];
+      for (const clip of clipFilenames) {
+        const clipUrl = `${comfyBase}/view?filename=${encodeURIComponent(clip)}&type=output`;
+        const clipRes = await fetch(clipUrl);
+        if (!clipRes.ok) continue;
+        const clipBuffer = await clipRes.arrayBuffer();
+        const clipName = `${businessId}/ltx-${Date.now()}-${clip}`;
+        await supabase.storage.from('generated-media').upload(clipName, clipBuffer, { contentType: 'video/mp4' });
+        const { data } = supabase.storage.from('generated-media').getPublicUrl(clipName);
+        urls.push(data.publicUrl);
+      }
+      if (urls.length === 0) return { error: `Concat failed and no clips could be uploaded.` };
+      return { url: urls[0], error: `Concat failed (${concatErr instanceof Error ? concatErr.message : String(concatErr)}). Individual clips: ${urls.join(' | ')}` } as { url: string };
+    }
+  } else {
+    finalFilename = clipFilenames[0];
+  }
+
+  const viewUrl = `${comfyBase}/view?filename=${encodeURIComponent(finalFilename)}&type=output`;
+  const mediaRes = await fetch(viewUrl);
+  if (!mediaRes.ok) return { error: `Failed to download video: HTTP ${mediaRes.status}` };
+  const mediaBuffer = await mediaRes.arrayBuffer();
+
+  const filename = `${businessId}/ltx-${isSingle ? '' : 'long-'}${Date.now()}.mp4`;
+  const { error: uploadError } = await supabase.storage
+    .from('generated-media')
+    .upload(filename, mediaBuffer, { contentType: 'video/mp4' });
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` };
+
+  const { data } = supabase.storage.from('generated-media').getPublicUrl(filename);
+  return { url: data.publicUrl };
+}
+
+/** Stop a Vast.ai instance (preserves disk, halts GPU charges). */
+export async function vastStop(instanceId: string): Promise<void> {
+  await fetch(vastApiUrl(`/instances/${instanceId}/`), {
+    method: 'PUT', headers: vastApiHeaders,
+    body: JSON.stringify({ state: 'stopped' }),
+  }).catch(() => {});
+}
+
 async function executeGenerateVideo(
   args: Record<string, unknown>,
   toolCtx: ToolContext,
 ): Promise<string> {
   const apiKey = process.env.VASTAI_API_KEY;
   if (!apiKey) return 'Error: VASTAI_API_KEY environment variable is not set.';
-
   const instanceId = process.env.VAST_INSTANCE_ID;
-  if (!instanceId) return 'Error: VAST_INSTANCE_ID environment variable is not set. Rent a Vast.ai instance first.';
+  if (!instanceId) return 'Error: VAST_INSTANCE_ID environment variable is not set.';
 
   const prompt = (args.prompt as string || '').trim();
   if (!prompt) return 'Error: prompt is required.';
@@ -3721,226 +3898,22 @@ async function executeGenerateVideo(
   const duration = Math.min(Math.max((args.duration as number) || 5, 2), 20);
   const width = (args.width as number) || 768;
   const height = (args.height as number) || 512;
-  const numFrames = Math.round(duration * 24 / 8) * 8 + 1; // LTX requires length = 8n+1
-
-  const vastBase = 'https://console.vast.ai/api/v0';
-  const authParam = `api_key=${encodeURIComponent(apiKey)}`;
-  const vastUrl = (path: string) => {
-    const sep = path.includes('?') ? '&' : '?';
-    return `${vastBase}${path}${sep}${authParam}`;
-  };
-  const vastHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-
-  // Helper to stop instance (preserves disk, stops GPU charges)
-  const stopInstance = async () => {
-    await fetch(vastUrl(`/instances/${instanceId}/`), {
-      method: 'PUT', headers: vastHeaders,
-      body: JSON.stringify({ state: 'stopped' }),
-    }).catch(() => {});
-  };
-
-  // Helper to extract public IP and ComfyUI port from instance info
-  const extractIpPort = (inst: Record<string, unknown>): { ip: string; port: number } | null => {
-    const ports = inst.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;
-    const mapping = ports?.[`${VASTAI_COMFYUI_PORT}/tcp`]?.[0];
-    if (!mapping) return null;
-    const ip = (inst.public_ipaddr as string) || mapping.HostIp;
-    if (!ip || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) return null;
-    return { ip, port: parseInt(mapping.HostPort) };
-  };
+  const numFrames = Math.round(duration * 24 / 8) * 8 + 1;
 
   try {
-    // ── Step 1: Ensure instance is running ──
-    const infoRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
-    if (!infoRes.ok) return `Vast.ai error: HTTP ${infoRes.status} fetching instance ${instanceId}`;
-    const infoBody = await infoRes.json() as Record<string, unknown>;
-    let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
-    let status = inst.actual_status as string;
+    const boot = await vastBoot(instanceId);
+    if ('error' in boot) return boot.error;
 
-    if (!status) {
-      return `Instance ${instanceId} not found or destroyed. Run setup-vast-gpu.mjs to create a new one.`;
-    }
+    const clip = await vastGenerateClip(boot.comfyBase, { prompt, negativePrompt, width, height, numFrames });
+    if ('error' in clip) { await vastStop(instanceId); return clip.error; }
 
-    if (status === 'stopped' || status === 'offline' || status === 'exited') {
-      // Start the instance (exited = container stopped, also restartable)
-      const startRes = await fetch(vastUrl(`/instances/${instanceId}/`), {
-        method: 'PUT', headers: vastHeaders,
-        body: JSON.stringify({ state: 'running' }),
-      });
-      if (!startRes.ok) return `Failed to start instance ${instanceId}: HTTP ${startRes.status}`;
+    const upload = await vastFinalizeVideo(boot.comfyBase, [clip.filename], toolCtx.businessId);
+    await vastStop(instanceId);
+    if ('error' in upload && !('url' in upload)) return upload.error;
 
-      // Poll until running
-      const bootStart = Date.now();
-      while (Date.now() - bootStart < VASTAI_BOOT_TIMEOUT_MS) {
-        await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
-        const pollRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
-        if (!pollRes.ok) continue;
-        const pollBody = await pollRes.json() as Record<string, unknown>;
-        inst = (pollBody.instances || pollBody) as Record<string, unknown>;
-        status = inst.actual_status as string;
-        if (status === 'running') break;
-        if (status === 'error') {
-          return `Instance ${instanceId} failed to start (status: ${status}).`;
-        }
-      }
-      if (status !== 'running') return `Instance ${instanceId} did not start within ${VASTAI_BOOT_TIMEOUT_MS / 1000}s.`;
-    } else if (status !== 'running') {
-      return `Instance ${instanceId} is in unexpected state: ${status}`;
-    }
-
-    const conn = extractIpPort(inst);
-    if (!conn) return `Cannot determine public IP/port for instance ${instanceId}.`;
-    const comfyBase = `http://${conn.ip}:${conn.port}`;
-
-    // ── Step 2: Wait for ComfyUI to be healthy ──
-    const healthStart = Date.now();
-    let comfyReady = false;
-    while (Date.now() - healthStart < VASTAI_COMFYUI_TIMEOUT_MS) {
-      try {
-        const hRes = await fetch(`${comfyBase}/system_stats`, { signal: AbortSignal.timeout(5000) });
-        if (hRes.ok) { comfyReady = true; break; }
-      } catch { /* not ready yet */ }
-      await new Promise(r => setTimeout(r, 5000));
-    }
-    if (!comfyReady) {
-      await stopInstance();
-      return `ComfyUI not responding at ${comfyBase} after ${VASTAI_COMFYUI_TIMEOUT_MS / 1000}s. Instance stopped.`;
-    }
-
-    // ── Step 3: Submit LTX 2.3 workflow (distilled, with audio) ──
-    const clientId = crypto.randomUUID();
-    const workflow: Record<string, Record<string, unknown>> = {
-      // Load model checkpoint (FP8 for VRAM efficiency)
-      '1':  { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: LTX23_CHECKPOINT } },
-      // Apply distilled LoRA (enables 8-step generation)
-      '2':  { class_type: 'LoraLoaderModelOnly', inputs: { model: ['1', 0], lora_name: LTX23_DISTILLED_LORA, strength_model: 0.5 } },
-      // Load Gemma 3 text encoder
-      '3':  { class_type: 'LTXAVTextEncoderLoader', inputs: { text_encoder: LTX23_TEXT_ENCODER, ckpt_name: LTX23_CHECKPOINT, device: 'default' } },
-      // Encode positive prompt
-      '4':  { class_type: 'CLIPTextEncode', inputs: { text: prompt, clip: ['3', 0] } },
-      // Encode negative prompt
-      '5':  { class_type: 'CLIPTextEncode', inputs: { text: negativePrompt, clip: ['3', 0] } },
-      // Empty video latent
-      '6':  { class_type: 'EmptyLTXVLatentVideo', inputs: { width, height, length: numFrames, batch_size: 1 } },
-      // Audio VAE loader
-      '7':  { class_type: 'LTXVAudioVAELoader', inputs: { ckpt_name: LTX23_CHECKPOINT } },
-      // Empty audio latent
-      '8':  { class_type: 'LTXVEmptyLatentAudio', inputs: { frames_number: numFrames, frame_rate: 24, batch_size: 1, audio_vae: ['7', 0] } },
-      // Concat video + audio latents
-      '9':  { class_type: 'LTXVConcatAVLatent', inputs: { video_latent: ['6', 0], audio_latent: ['8', 0] } },
-      // Conditioning
-      '10': { class_type: 'LTXVConditioning', inputs: { positive: ['4', 0], negative: ['5', 0], frame_rate: 24 } },
-      // CFG guider (cfg=1 for distilled)
-      '11': { class_type: 'CFGGuider', inputs: { model: ['2', 0], positive: ['10', 0], negative: ['10', 1], cfg: 1 } },
-      // Random noise
-      '12': { class_type: 'RandomNoise', inputs: { noise_seed: Math.floor(Math.random() * 2 ** 32) } },
-      // Sampler selection
-      '13': { class_type: 'KSamplerSelect', inputs: { sampler_name: 'euler_ancestral_cfg_pp' } },
-      // Manual sigma schedule (8 steps, optimized for distilled)
-      '14': { class_type: 'ManualSigmas', inputs: { sigmas: LTX23_DISTILLED_SIGMAS } },
-      // Advanced sampler
-      '15': { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['12', 0], guider: ['11', 0], sampler: ['13', 0], sigmas: ['14', 0], latent_image: ['9', 0] } },
-      // Separate audio/video latents
-      '16': { class_type: 'LTXVSeparateAVLatent', inputs: { av_latent: ['15', 0] } },
-      // Decode video (tiled for memory efficiency)
-      '17': { class_type: 'LTXVTiledVAEDecode', inputs: { vae: ['1', 2], latents: ['16', 0], horizontal_tiles: 2, vertical_tiles: 2, overlap: 6, last_frame_fix: false } },
-      // Decode audio
-      '18': { class_type: 'LTXVAudioVAEDecode', inputs: { samples: ['16', 1], audio_vae: ['7', 0] } },
-      // Create video (combine video frames + audio)
-      '19': { class_type: 'CreateVideo', inputs: { images: ['17', 0], audio: ['18', 0], fps: 24 } },
-      // Save video
-      '20': { class_type: 'SaveVideo', inputs: { video: ['19', 0], filename_prefix: 'ltx_output', format: 'auto', codec: 'auto' } },
-    };
-
-    const queueRes = await fetch(`${comfyBase}/prompt`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: workflow, client_id: clientId }),
-    });
-
-    if (!queueRes.ok) {
-      const errText = await queueRes.text();
-      await stopInstance();
-      return `ComfyUI rejected workflow: HTTP ${queueRes.status} — ${errText.substring(0, 300)}`;
-    }
-
-    const queueData = await queueRes.json() as { prompt_id: string };
-    const promptId = queueData.prompt_id;
-
-    // ── Step 4: Poll for completion ──
-    const pollStart = Date.now();
-    let outputUrl: string | null = null;
-
-    while (Date.now() - pollStart < VASTAI_GEN_TIMEOUT_MS) {
-      await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
-      try {
-        const histRes = await fetch(`${comfyBase}/history/${promptId}`, { signal: AbortSignal.timeout(10000) });
-        if (!histRes.ok) continue;
-        const history = await histRes.json() as Record<string, {
-          status?: { status_str?: string };
-          outputs?: Record<string, {
-            images?: Array<{ filename: string; subfolder: string; type: string }>;
-            videos?: Array<{ filename: string; subfolder: string; type: string }>;
-          }>;
-        }>;
-        const entry = history[promptId];
-        if (!entry) continue;
-
-        // Check for error
-        if (entry.status?.status_str === 'error') {
-          await stopInstance();
-          return `Video generation failed on ComfyUI. Prompt ID: ${promptId}. Instance stopped.`;
-        }
-
-        if (!entry.outputs) continue;
-        for (const nodeOutput of Object.values(entry.outputs)) {
-          // SaveVideo outputs 'videos', SaveAnimatedWEBP outputs 'images'
-          const files = nodeOutput.videos || nodeOutput.images;
-          if (files?.length) {
-            const file = files[0];
-            outputUrl = `${comfyBase}/view?filename=${encodeURIComponent(file.filename)}&subfolder=${encodeURIComponent(file.subfolder || '')}&type=${file.type || 'output'}`;
-            break;
-          }
-        }
-        if (outputUrl) break;
-      } catch { /* retry */ }
-    }
-
-    if (!outputUrl) {
-      await stopInstance();
-      return `Video generation timed out after ${VASTAI_GEN_TIMEOUT_MS / 1000}s. Instance stopped.`;
-    }
-
-    // ── Step 5: Download and upload to Supabase ──
-    const mediaRes = await fetch(outputUrl);
-    if (!mediaRes.ok) {
-      await stopInstance();
-      return `Failed to download video from ComfyUI: HTTP ${mediaRes.status}. Instance stopped.`;
-    }
-    const mediaBuffer = await mediaRes.arrayBuffer();
-
-    const supabase = getSupabase();
-    await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
-
-    const filename = `${toolCtx.businessId}/ltx-${Date.now()}.mp4`;
-    const { error: uploadError } = await supabase.storage
-      .from('generated-media')
-      .upload(filename, mediaBuffer, { contentType: 'video/mp4' });
-
-    if (uploadError) {
-      await stopInstance();
-      return `Video generated but upload failed: ${uploadError.message}. Instance stopped.`;
-    }
-
-    const { data: publicUrlData } = supabase.storage.from('generated-media').getPublicUrl(filename);
-    const permanentUrl = publicUrlData.publicUrl;
-
-    // ── Step 6: Stop instance (preserve disk, halt GPU charges) ──
-    await stopInstance();
-
-    return `✅ Video generated via Vast.ai + LTX Video 2.3 (with audio)\nVideo URL: ${permanentUrl}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nModel: LTX 2.3 distilled (8 steps)\nInstance ${instanceId} stopped (disk preserved).`;
+    return `✅ Video generated via Vast.ai + LTX Video 2.3 (with audio)\nVideo URL: ${(upload as { url: string }).url}\nResolution: ${width}x${height}\nFrames: ${numFrames} (~${duration}s at 24fps)\nModel: LTX 2.3 distilled (8 steps)\nInstance ${instanceId} stopped (disk preserved).`;
   } catch (err) {
-    await stopInstance();
+    await vastStop(instanceId);
     return `Video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance stopped.`;
   }
 }
@@ -4045,85 +4018,10 @@ async function executeGenerateLongVideo(
   const width = (args.width as number) || 768;
   const height = (args.height as number) || 512;
 
-  const vastBase = 'https://console.vast.ai/api/v0';
-  const authParam = `api_key=${encodeURIComponent(apiKey)}`;
-  const vastUrl = (path: string) => {
-    const sep = path.includes('?') ? '&' : '?';
-    return `${vastBase}${path}${sep}${authParam}`;
-  };
-  const vastHeaders = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-
-  const stopInstance = async () => {
-    await fetch(vastUrl(`/instances/${instanceId}/`), {
-      method: 'PUT', headers: vastHeaders,
-      body: JSON.stringify({ state: 'stopped' }),
-    }).catch(() => {});
-  };
-
-  const extractIpPort = (inst: Record<string, unknown>): { ip: string; port: number } | null => {
-    const ports = inst.ports as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined;
-    const mapping = ports?.[`${VASTAI_COMFYUI_PORT}/tcp`]?.[0];
-    if (!mapping) return null;
-    const ip = (inst.public_ipaddr as string) || mapping.HostIp;
-    if (!ip || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) return null;
-    return { ip, port: parseInt(mapping.HostPort) };
-  };
-
   try {
-    // ── Step 1: Ensure instance is running ──
-    const infoRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
-    if (!infoRes.ok) return `Vast.ai error: HTTP ${infoRes.status} fetching instance ${instanceId}`;
-    const infoBody = await infoRes.json() as Record<string, unknown>;
-    let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
-    let status = inst.actual_status as string;
+    const boot = await vastBoot(instanceId);
+    if ('error' in boot) return boot.error;
 
-    if (!status) {
-      return `Instance ${instanceId} not found or destroyed. Run setup-vast-gpu.mjs to create a new one.`;
-    }
-
-    if (status === 'stopped' || status === 'offline' || status === 'exited') {
-      const startRes = await fetch(vastUrl(`/instances/${instanceId}/`), {
-        method: 'PUT', headers: vastHeaders,
-        body: JSON.stringify({ state: 'running' }),
-      });
-      if (!startRes.ok) return `Failed to start instance ${instanceId}: HTTP ${startRes.status}`;
-
-      const bootStart = Date.now();
-      while (Date.now() - bootStart < VASTAI_BOOT_TIMEOUT_MS) {
-        await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
-        const pollRes = await fetch(vastUrl(`/instances/${instanceId}/`), { headers: vastHeaders });
-        if (!pollRes.ok) continue;
-        const pollBody = await pollRes.json() as Record<string, unknown>;
-        inst = (pollBody.instances || pollBody) as Record<string, unknown>;
-        status = inst.actual_status as string;
-        if (status === 'running') break;
-        if (status === 'error') return `Instance ${instanceId} failed to start.`;
-      }
-      if (status !== 'running') return `Instance ${instanceId} did not start within ${VASTAI_BOOT_TIMEOUT_MS / 1000}s.`;
-    } else if (status !== 'running') {
-      return `Instance ${instanceId} is in unexpected state: ${status}`;
-    }
-
-    const conn = extractIpPort(inst);
-    if (!conn) return `Cannot determine public IP/port for instance ${instanceId}.`;
-    const comfyBase = `http://${conn.ip}:${conn.port}`;
-
-    // ── Step 2: Wait for ComfyUI to be healthy ──
-    const healthStart = Date.now();
-    let comfyReady = false;
-    while (Date.now() - healthStart < VASTAI_COMFYUI_TIMEOUT_MS) {
-      try {
-        const hRes = await fetch(`${comfyBase}/system_stats`, { signal: AbortSignal.timeout(5000) });
-        if (hRes.ok) { comfyReady = true; break; }
-      } catch { /* not ready yet */ }
-      await new Promise(r => setTimeout(r, 5000));
-    }
-    if (!comfyReady) {
-      await stopInstance();
-      return `ComfyUI not responding at ${comfyBase} after ${VASTAI_COMFYUI_TIMEOUT_MS / 1000}s. Instance stopped.`;
-    }
-
-    // ── Step 3: Generate each scene sequentially ──
     const clipFilenames: string[] = [];
     let totalDuration = 0;
 
@@ -4133,7 +4031,7 @@ async function executeGenerateLongVideo(
       const sceneFrames = Math.round(sceneDuration * 24 / 8) * 8 + 1;
       totalDuration += sceneDuration;
 
-      const workflow = buildLTX23Workflow({
+      const clip = await vastGenerateClip(boot.comfyBase, {
         prompt: scene.prompt,
         negativePrompt,
         width,
@@ -4141,75 +4039,17 @@ async function executeGenerateLongVideo(
         numFrames: sceneFrames,
         filenamePrefix: `scene_${String(i + 1).padStart(2, '0')}`,
       });
-
-      const output = await submitAndWaitForOutput(comfyBase, workflow);
-      clipFilenames.push(output.filename);
+      if ('error' in clip) { await vastStop(instanceId); return clip.error; }
+      clipFilenames.push(clip.filename);
     }
 
-    // ── Step 4: Concatenate clips via ffmpeg endpoint ──
-    let finalFilename: string;
-    try {
-      const concatRes = await fetch(`${comfyBase}/concat_videos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: clipFilenames }),
-        signal: AbortSignal.timeout(120_000),
-      });
-      if (!concatRes.ok) {
-        const errText = await concatRes.text();
-        throw new Error(`Concat failed: HTTP ${concatRes.status} — ${errText.substring(0, 200)}`);
-      }
-      const concatData = await concatRes.json() as { filename: string };
-      finalFilename = concatData.filename;
-    } catch (concatErr) {
-      // Fallback: upload individual clips if concat fails
-      const supabase = getSupabase();
-      await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
-      const urls: string[] = [];
-      for (const clip of clipFilenames) {
-        const clipUrl = `${comfyBase}/view?filename=${encodeURIComponent(clip)}&type=output`;
-        const clipRes = await fetch(clipUrl);
-        if (!clipRes.ok) continue;
-        const clipBuffer = await clipRes.arrayBuffer();
-        const clipName = `${toolCtx.businessId}/ltx-${Date.now()}-${clip}`;
-        await supabase.storage.from('generated-media').upload(clipName, clipBuffer, { contentType: 'video/mp4' });
-        const { data } = supabase.storage.from('generated-media').getPublicUrl(clipName);
-        urls.push(data.publicUrl);
-      }
-      await stopInstance();
-      return `⚠️ Generated ${clipFilenames.length} clips but concat failed (${concatErr instanceof Error ? concatErr.message : String(concatErr)}).\nIndividual clip URLs:\n${urls.map((u, i) => `Scene ${i + 1}: ${u}`).join('\n')}\nYou can stitch these together in any video editor.\nInstance stopped.`;
-    }
+    const upload = await vastFinalizeVideo(boot.comfyBase, clipFilenames, toolCtx.businessId);
+    await vastStop(instanceId);
+    if ('error' in upload && !('url' in upload)) return upload.error;
 
-    // ── Step 5: Download final video and upload to Supabase ──
-    const finalUrl = `${comfyBase}/view?filename=${encodeURIComponent(finalFilename)}&type=output`;
-    const mediaRes = await fetch(finalUrl);
-    if (!mediaRes.ok) {
-      await stopInstance();
-      return `Failed to download concatenated video: HTTP ${mediaRes.status}. Instance stopped.`;
-    }
-    const mediaBuffer = await mediaRes.arrayBuffer();
-
-    const supabase = getSupabase();
-    await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
-
-    const filename = `${toolCtx.businessId}/ltx-long-${Date.now()}.mp4`;
-    const { error: uploadError } = await supabase.storage
-      .from('generated-media')
-      .upload(filename, mediaBuffer, { contentType: 'video/mp4' });
-
-    if (uploadError) {
-      await stopInstance();
-      return `Video generated but upload failed: ${uploadError.message}. Instance stopped.`;
-    }
-
-    const { data: publicUrlData } = supabase.storage.from('generated-media').getPublicUrl(filename);
-
-    // ── Step 6: Stop instance ──
-    await stopInstance();
-
-    return `✅ Long video generated via Vast.ai + LTX Video 2.3\nVideo URL: ${publicUrlData.publicUrl}\nScenes: ${scenes.length} clips stitched\nTotal duration: ~${totalDuration}s\nResolution: ${width}x${height}\nInstance ${instanceId} stopped (disk preserved).`;
+    return `✅ Long video generated via Vast.ai + LTX Video 2.3\nVideo URL: ${(upload as { url: string }).url}\nScenes: ${scenes.length} clips stitched\nTotal duration: ~${totalDuration}s\nResolution: ${width}x${height}\nInstance ${instanceId} stopped (disk preserved).`;
   } catch (err) {
-    await stopInstance();
+    await vastStop(instanceId);
     return `Long video generation failed: ${err instanceof Error ? err.message : String(err)}. Instance stopped.`;
   }
 }

@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { executeAgentTask } from '@/lib/agent/runner';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function getSupabase() {
   return createClient(

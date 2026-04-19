@@ -47,7 +47,7 @@ function getSupabase() {
 const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps (biggest perf win)
 const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
 const AGENT_MODEL = 'deepseek-chat';
-const WALL_CLOCK_LIMIT_MS = 55_000;   // 55s (Vercel max is 60s, 5s buffer to save state)
+const WALL_CLOCK_LIMIT_MS = 290_000;  // 290s (Vercel Pro w/ Fluid Compute default is 300s, 10s buffer)
 const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
 const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
 const RESEARCH_SOFT_CAP = 8;          // After this many search/scrape steps, nudge to wrap up
@@ -60,6 +60,8 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   browse_web: 125_000,         // Browserbase sessions up to 2 min
   make_call: 30_000,           // Retell API call setup
   send_voice_note: 30_000,    // TTS generation + upload + send
+  generate_video: 55_000,      // Vast.ai boot + generate (capped by Vercel 60s — prefer workflow-runner)
+  generate_long_video: 55_000, // Multi-scene (capped by Vercel 60s — prefer workflow-runner)
 };
 const LLM_TIMEOUT_MS = 48_000;        // Max time for a single LLM call (48s — give DeepSeek maximum possible runway)
 const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)

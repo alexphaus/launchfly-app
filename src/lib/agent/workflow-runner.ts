@@ -53,6 +53,10 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   browse_web: 180_000,
   make_call: 60_000,
   send_voice_note: 60_000,
+  // Video tools are offloaded via context.call() to /api/agent/video-generate,
+  // so these timeouts only apply if somehow run via context.run() fallback
+  generate_video: 55_000,
+  generate_long_video: 55_000,
 };
 
 const CONTEXT_COMPRESS_THRESHOLD = 20_000;

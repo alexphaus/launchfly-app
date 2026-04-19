@@ -10,6 +10,8 @@
 import { serve } from '@upstash/workflow/nextjs';
 import { runAgentWorkflow, type WorkflowPayload } from '@/lib/agent/workflow-runner';
 
+export const maxDuration = 800; // 13 min — Pro plan max with Fluid Compute
+
 export const { POST } = serve<WorkflowPayload>(
   async (context) => {
     // IMPORTANT: Do NOT return before calling context.run().

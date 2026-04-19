@@ -3728,7 +3728,24 @@ function extractIpPort(inst: Record<string, unknown>): { ip: string; port: numbe
  * Returns { comfyBase } on success, or { error } on failure.
  */
 export async function vastBoot(instanceId: string): Promise<{ comfyBase: string } | { error: string }> {
-  const infoRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
+  // Helper: fetch with retry on 429/5xx (Vast.ai rate limits)
+  const fetchWithRetry = async (url: string, init?: RequestInit, maxRetries = 3): Promise<Response> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const res = await fetch(url, init);
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt < maxRetries) {
+          const delay = Math.min(5000 * 2 ** attempt, 30_000); // 5s, 10s, 20s
+          console.log(`[vastBoot] HTTP ${res.status} on attempt ${attempt + 1}, retrying in ${delay / 1000}s...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+      }
+      return res;
+    }
+    return fetch(url, init); // unreachable but satisfies TS
+  };
+
+  const infoRes = await fetchWithRetry(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
   if (!infoRes.ok) return { error: `Vast.ai error: HTTP ${infoRes.status} fetching instance ${instanceId}` };
   const infoBody = await infoRes.json() as Record<string, unknown>;
   let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
@@ -3736,23 +3753,25 @@ export async function vastBoot(instanceId: string): Promise<{ comfyBase: string 
 
   if (!status) return { error: `Instance ${instanceId} not found or destroyed.` };
 
-  // If stopping, wait for it to finish before restarting
-  if (status === 'stopping') {
-    const stopWaitStart = Date.now();
-    while (Date.now() - stopWaitStart < 120_000) {
-      await new Promise(r => setTimeout(r, 5_000));
-      const pollRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
+  // If stopping/loading/starting, wait for it to finish transitioning
+  if (status === 'stopping' || status === 'loading' || status === 'starting') {
+    console.log(`[vastBoot] Instance ${instanceId} in '${status}' state, waiting...`);
+    const waitStart = Date.now();
+    while (Date.now() - waitStart < VASTAI_BOOT_TIMEOUT_MS) {
+      await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
+      const pollRes = await fetchWithRetry(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
       if (!pollRes.ok) continue;
       const pollBody = await pollRes.json() as Record<string, unknown>;
       inst = (pollBody.instances || pollBody) as Record<string, unknown>;
       status = inst.actual_status as string;
-      if (status !== 'stopping') break;
+      if (status === 'running' || status === 'stopped' || status === 'offline' || status === 'exited') break;
+      if (status === 'error') return { error: `Instance ${instanceId} entered error state.` };
     }
-    if (status === 'stopping') return { error: `Instance ${instanceId} stuck in 'stopping' state.` };
+    // If it transitioned to running while we waited, great — skip the start call
   }
 
   if (status === 'stopped' || status === 'offline' || status === 'exited') {
-    const startRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), {
+    const startRes = await fetchWithRetry(vastApiUrl(`/instances/${instanceId}/`), {
       method: 'PUT', headers: vastApiHeaders,
       body: JSON.stringify({ state: 'running' }),
     });
@@ -3761,7 +3780,7 @@ export async function vastBoot(instanceId: string): Promise<{ comfyBase: string 
     const bootStart = Date.now();
     while (Date.now() - bootStart < VASTAI_BOOT_TIMEOUT_MS) {
       await new Promise(r => setTimeout(r, VASTAI_POLL_INTERVAL_MS));
-      const pollRes = await fetch(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
+      const pollRes = await fetchWithRetry(vastApiUrl(`/instances/${instanceId}/`), { headers: vastApiHeaders });
       if (!pollRes.ok) continue;
       const pollBody = await pollRes.json() as Record<string, unknown>;
       inst = (pollBody.instances || pollBody) as Record<string, unknown>;

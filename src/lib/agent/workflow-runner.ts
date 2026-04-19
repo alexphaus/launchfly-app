@@ -606,6 +606,20 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   while (stepsUsed < MAX_TOTAL_STEPS) {
     loopIteration++;
 
+    // ── Cancellation check: abort if task was killed externally ──
+    const taskAlive = await context.run(`alive-${loopIteration}`, async () => {
+      const { data } = await supabase
+        .from('agent_tasks')
+        .select('status')
+        .eq('id', taskId)
+        .single();
+      return data?.status === 'running';
+    });
+    if (!taskAlive) {
+      console.log(`[agent:${taskId}] Task no longer running — aborting workflow`);
+      return; // Workflow exits cleanly; Upstash marks it as complete
+    }
+
     // ── Context compression step ──
     messages = await context.run(`compress-${loopIteration}`, async () => {
       return compressContext({
@@ -869,15 +883,22 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
         if (VIDEO_TOOLS.has(tc.function.name)) {
           // ── Offload video tools via context.call() ──
-          // Upstash makes the HTTP request and waits up to 2h — no Vercel timeout limit
+          // Upstash makes the HTTP request and waits up to 30min — no Vercel timeout limit
           const toolArgs = parsedArgs.get(tc.id)!;
           const callKey = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
           if (executedToolCalls.has(callKey)) {
             result = { id: tc.id, name: tc.function.name, args: toolArgs, result: `Duplicate call blocked — you already called ${tc.function.name} with these exact arguments.` };
           } else {
             executedToolCalls.add(callKey);
-            console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name} via context.call() (offloaded)`);
-            sendToolStatus(toolCtx, tc.function.name, toolArgs);
+
+            // Send WhatsApp status ONCE (durable step — won't re-fire on Upstash replays)
+            await context.run(`video-notify-${loopIteration}-${i}`, async () => {
+              sendToolStatus(toolCtx, tc.function.name, toolArgs);
+              // Give fire-and-forget fetch a moment to send before step returns
+              await new Promise(r => setTimeout(r, 1500));
+            });
+
+            console.log(`[agent:${taskId}] Calling video-generate endpoint for ${tc.function.name}`);
             const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai').replace(/\/$/, '');
             const callResult = await context.call<{ result: string }>(`video-${loopIteration}-${i}`, {
               url: `${appUrl}/api/agent/video-generate`,
@@ -887,8 +908,10 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({ toolName: tc.function.name, args: toolArgs, toolCtx }),
+              retries: 2,
               timeout: '30m',
             });
+            console.log(`[agent:${taskId}] video-generate returned status=${callResult.status}`);
             const toolResult = callResult.status >= 200 && callResult.status < 300
               ? (callResult.body?.result ?? `Video tool returned status ${callResult.status}`)
               : `Video tool HTTP error ${callResult.status}: ${JSON.stringify(callResult.body).substring(0, 300)}`;

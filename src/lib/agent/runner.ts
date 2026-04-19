@@ -1284,6 +1284,23 @@ export async function emergencyStopAllTasks(): Promise<number> {
 
   const count = tasks?.length || 0;
   console.log(`[agent:emergency-stop] 🛑 SYSTEM PURGE: Killed ${count} running/pending tasks globally.`);
+
+  // Cancel all Upstash workflow runs so they stop replaying
+  try {
+    const qstashToken = process.env.QSTASH_TOKEN;
+    if (qstashToken) {
+      const { Client } = await import('@upstash/workflow');
+      const client = new Client({ token: qstashToken });
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai').replace(/\/$/, '');
+      const { cancelled } = await client.cancel({
+        urlStartingWith: `${appUrl}/api/agent/workflow-run`,
+      });
+      console.log(`[agent:emergency-stop] 🛑 Cancelled ${cancelled} Upstash workflow runs.`);
+    }
+  } catch (wfErr) {
+    console.error('[agent:emergency-stop] Failed to cancel Upstash workflows:', wfErr);
+  }
+
   return count;
 }
 

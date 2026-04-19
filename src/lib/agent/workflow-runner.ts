@@ -857,14 +857,49 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         }
       }
 
+      // Video tools that must be offloaded via context.call() to avoid 800s timeout
+      const VIDEO_TOOLS = new Set(['generate_video', 'generate_long_video']);
+
       // ── Execute sequential tools ──
       let paused = false;
       for (let i = 0; i < sequentialCalls.length; i++) {
         const tc = sequentialCalls[i];
 
-        const result = await context.run(`tool-seq-${loopIteration}-${i}`, async () => {
-          return runToolInStep(tc, `s${i}`);
-        });
+        let result: { id: string; name: string; args: Record<string, unknown>; result: string };
+
+        if (VIDEO_TOOLS.has(tc.function.name)) {
+          // ── Offload video tools via context.call() ──
+          // Upstash makes the HTTP request and waits up to 2h — no Vercel timeout limit
+          const toolArgs = parsedArgs.get(tc.id)!;
+          const callKey = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
+          if (executedToolCalls.has(callKey)) {
+            result = { id: tc.id, name: tc.function.name, args: toolArgs, result: `Duplicate call blocked — you already called ${tc.function.name} with these exact arguments.` };
+          } else {
+            executedToolCalls.add(callKey);
+            console.log(`[agent:${taskId}] Step ${stepsUsed + 1}: ${tc.function.name} via context.call() (offloaded)`);
+            sendToolStatus(toolCtx, tc.function.name, toolArgs);
+            const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.launchfly.ai').replace(/\/$/, '');
+            const callResult = await context.call<{ result: string }>(`video-${loopIteration}-${i}`, {
+              url: `${appUrl}/api/agent/video-generate`,
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ toolName: tc.function.name, args: toolArgs, toolCtx }),
+              timeout: '30m',
+            });
+            const toolResult = callResult.status >= 200 && callResult.status < 300
+              ? (callResult.body?.result ?? `Video tool returned status ${callResult.status}`)
+              : `Video tool HTTP error ${callResult.status}: ${JSON.stringify(callResult.body).substring(0, 300)}`;
+            result = { id: tc.id, name: tc.function.name, args: toolArgs, result: toolResult };
+          }
+        } else {
+          // ── Normal tool via context.run() ──
+          result = await context.run(`tool-seq-${loopIteration}-${i}`, async () => {
+            return runToolInStep(tc, `s${i}`);
+          });
+        }
 
         messages.push({ role: 'tool', tool_call_id: result.id, content: safeSlice(result.result, TOOL_RESULT_MAX) });
         toolLog.push({ tool: result.name, args: result.args, result: safeSlice(result.result, 500), timestamp: new Date().toISOString() });

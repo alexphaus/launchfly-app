@@ -3757,6 +3757,10 @@ async function executeGenerateVideo(
     let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
     let status = inst.actual_status as string;
 
+    if (!status) {
+      return `Instance ${instanceId} not found or destroyed. Run setup-vast-gpu.mjs to create a new one.`;
+    }
+
     if (status === 'stopped' || status === 'offline' || status === 'exited') {
       // Start the instance (exited = container stopped, also restartable)
       const startRes = await fetch(vastUrl(`/instances/${instanceId}/`), {
@@ -4072,6 +4076,10 @@ async function executeGenerateLongVideo(
     const infoBody = await infoRes.json() as Record<string, unknown>;
     let inst = (infoBody.instances || infoBody) as Record<string, unknown>;
     let status = inst.actual_status as string;
+
+    if (!status) {
+      return `Instance ${instanceId} not found or destroyed. Run setup-vast-gpu.mjs to create a new one.`;
+    }
 
     if (status === 'stopped' || status === 'offline' || status === 'exited') {
       const startRes = await fetch(vastUrl(`/instances/${instanceId}/`), {

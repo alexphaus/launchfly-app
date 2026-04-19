@@ -481,7 +481,7 @@ export async function POST(request: NextRequest) {
 
       let goalStr = messageText.substring(0, 1000);
       let rolePrompt: string;
-      let enabledTools: string[];
+      let enabledTools: string[] | null = null;
 
       // ── Save message to history so the agent has context ──
       const { saveMessage } = await import('@/lib/ai-receptionist/history');
@@ -578,7 +578,7 @@ export async function POST(request: NextRequest) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
         }
         rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-        enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'generate_media', 'generate_video'];
+        enabledTools = null;
       }
 
       // ── Dedup guard: skip if an agent task is already running recently ──
@@ -809,7 +809,7 @@ export async function POST(request: NextRequest) {
 
         let goalStr = '';
         let rolePrompt = '';
-        let enabledTools: string[] = [];
+        let enabledTools: string[] | null = null;
 
         if (orchestrator) {
           // Pass the raw message — the system_prompt already contains all orchestration instructions
@@ -829,7 +829,7 @@ export async function POST(request: NextRequest) {
             goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
           }
           rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
-          enabledTools = ['manage_job', 'send_whatsapp', 'query_database', 'send_report', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'search_google_maps', 'save_leads', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'generate_media', 'generate_video'];
+          enabledTools = null;
         }
 
         const dispatched = await dispatchAgentViaQStash({
@@ -880,7 +880,7 @@ async function dispatchAgentViaQStash(payload: {
   businessId: string;
   goal: string;
   role: string;
-  enabledTools: string[];
+  enabledTools: string[] | null;
   ownerPhone?: string;
 }): Promise<boolean> {
   try {

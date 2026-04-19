@@ -159,17 +159,21 @@ async function main() {
   if (!instanceId) {
     console.log('🔍 Step 1: Finding cheapest GPU ≥ ' + MIN_VRAM_GB + 'GB VRAM...');
     
-    const searchRes = await fetch(vastUrl('/bundles/'), { headers: HEADERS });
+    // Use Vast.ai search query format — the unfiltered /bundles/ returns very few results
+    const searchQuery = encodeURIComponent(JSON.stringify({
+      gpu_ram: { gte: String(MIN_VRAM_GB * 1024) },
+      rentable: { eq: true },
+      order: [['dph_total', 'asc']],
+      type: 'on-demand',
+    }));
+    const searchRes = await fetch(vastUrl(`/bundles/?q=${searchQuery}`), { headers: HEADERS });
     if (!searchRes.ok) throw new Error(`Search failed: HTTP ${searchRes.status}`);
     const { offers } = await searchRes.json();
 
-    // Filter and sort
+    // Filter for disk space and price (search already filtered VRAM and rentable)
     let candidates = offers.filter(o =>
-      o.gpu_ram >= MIN_VRAM_GB * 1024 &&
       o.disk_space >= MIN_DISK_GB &&
-      o.dph_total <= MAX_PRICE_PER_HR &&
-      o.rentable &&
-      o.verified
+      o.dph_total <= MAX_PRICE_PER_HR
     );
 
     if (specificOffer) {
@@ -203,7 +207,7 @@ async function main() {
       headers: HEADERS,
       body: JSON.stringify({
         client_id: 'me',
-        image: 'pytorch/pytorch_2.5.1-cuda12.4-cudnn9-runtime',
+        image: 'pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime',
         disk: MIN_DISK_GB,
         onstart: ONSTART_SCRIPT,
         env: { '-p 8188:8188': '1' },
@@ -233,10 +237,13 @@ async function main() {
     const body = await res.json();
     inst = body.instances || body;
     const status = inst.actual_status;
+    const statusMsg = inst.status_msg || '';
     const hasPorts = !!inst.ports;
     process.stdout.write(`\r   [${i + 1}] ${status} | ports=${hasPorts}   `);
     if (status === 'running' && hasPorts) break;
-    if (status === 'error') throw new Error('Instance entered error state');
+    if (status === 'error' || statusMsg.includes('Error response')) {
+      throw new Error(`Instance error: ${statusMsg.substring(0, 200)}`);
+    }
   }
   if (inst?.actual_status !== 'running') throw new Error('Instance did not start within 10 min');
   
@@ -288,18 +295,17 @@ async function main() {
 
   // ── Step 4: Install ComfyUI (if not present) ──
   console.log('📦 Step 4: Checking ComfyUI installation...');
-  try {
-    const check = ssh('test -f /workspace/ComfyUI/main.py && echo "exists" || echo "missing"');
-    if (check.includes('missing')) {
-      console.log('   Installing ComfyUI...');
-      ssh('cd /workspace && pip install comfyui 2>&1 | tail -3 && comfy --workspace /workspace/ComfyUI install 2>&1 | tail -3', { timeout: 300000 });
-    } else {
-      console.log('   ✅ ComfyUI already installed');
-    }
-  } catch (e) {
-    console.log('   Installing ComfyUI via pip...');
-    ssh('pip install comfyui 2>&1 | tail -3', { timeout: 120000 });
+  const comfyCheck = ssh('test -f /workspace/ComfyUI/main.py && echo "exists" || echo "missing"');
+  if (comfyCheck.includes('missing')) {
+    console.log('   Installing ComfyUI via git...');
+    ssh('cd /workspace && git clone https://github.com/comfyanonymous/ComfyUI.git 2>&1 | tail -5', { timeout: 120000 });
+    ssh('cd /workspace/ComfyUI && pip install -r requirements.txt 2>&1 | tail -5', { timeout: 300000 });
+    console.log('   ✅ ComfyUI installed');
+  } else {
+    console.log('   ✅ ComfyUI already installed');
   }
+  // Ensure model directories exist
+  ssh('mkdir -p /workspace/ComfyUI/models/{checkpoints,loras,text_encoders}');
   console.log('');
 
   // ── Step 5: Install custom nodes ──
@@ -321,9 +327,9 @@ async function main() {
   // Video concat extension
   console.log('   Installing video-concat extension...');
   ssh('mkdir -p /workspace/ComfyUI/custom_nodes/comfyui-video-concat');
-  // Write the extension file via heredoc
-  const escapedExt = CONCAT_EXTENSION.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
-  ssh(`echo "${escapedExt}" > /workspace/ComfyUI/custom_nodes/comfyui-video-concat/__init__.py`);
+  // Write via base64 to avoid shell escaping issues with Python code
+  const b64Ext = Buffer.from(CONCAT_EXTENSION).toString('base64');
+  ssh(`echo '${b64Ext}' | base64 -d > /workspace/ComfyUI/custom_nodes/comfyui-video-concat/__init__.py`);
   console.log('   ✅ Custom nodes installed\n');
 
   // ── Step 6: Download models ──

@@ -760,6 +760,10 @@ export async function POST(request: NextRequest) {
       if (isOwner) {
         console.log(`   👑 Owner message from +${customerPhone} → Orchestrator`);
 
+        // Save owner message to chat_history for conversation continuity
+        const { saveMessage } = await import('@/lib/ai-receptionist/history');
+        await saveMessage(customerPhone, 'user', messageText, businessId).catch(e => console.warn('Failed to save owner message to history:', e));
+
         // Integration API key handling is delegated to the agent — it uses
         // request_integration(api_key=...) to activate services with full context.
 

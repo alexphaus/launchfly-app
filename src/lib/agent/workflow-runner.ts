@@ -280,29 +280,30 @@ export async function buildInitialMessages(
   const needsFullContext = goalLower.length > 200
     || /report|insight|analyz|review|follow.?up|prospect|lead|campaign|schedule|plan|strateg|morning|daily|inventory|job|supplier|purchase/i.test(goalLower);
 
-  const contextPromises = needsFullContext
-    ? [
-        ownerPhoneNorm
-          ? getConversationHistory(ownerPhoneNorm, row.business_id)
-          : Promise.resolve([]),
-        Promise.resolve(supabase
-          .from('agent_tasks')
-          .select('goal, result, updated_at')
-          .eq('business_id', row.business_id)
-          .eq('status', 'completed')
-          .order('updated_at', { ascending: false })
-          .limit(10)
-          .then(r => r.data || [])),
-        Promise.resolve(supabase
+  // ALWAYS fetch conversation history and recent tasks so the agent doesn't get amnesia
+  const contextPromises = [
+    ownerPhoneNorm
+      ? getConversationHistory(ownerPhoneNorm, row.business_id)
+      : Promise.resolve([]),
+    supabase
+      .from('agent_tasks')
+      .select('goal, result, updated_at')
+      .eq('business_id', row.business_id)
+      .eq('status', 'completed')
+      .order('updated_at', { ascending: false })
+      .limit(10)
+      .then(r => r.data || []),
+    needsFullContext
+      ? supabase
           .from('jobs')
           .select('id, title, status, description, materials_needed, blockers, updated_at')
           .eq('business_id', row.business_id)
           .in('status', ['draft', 'quoting', 'ready', 'blocked'])
           .order('updated_at', { ascending: false })
           .limit(10)
-          .then(r => r.data || [])),
-      ] as const
-    : [Promise.resolve([]), Promise.resolve([]), Promise.resolve([])] as const;
+          .then(r => r.data || [])
+      : Promise.resolve([]),
+  ] as const;
 
   const [conversationHistory, recentTasks, activeJobs] = await Promise.all(contextPromises);
 

@@ -1886,13 +1886,13 @@ Rules for scratch_pad:
   Config by type: agent_task={agentGoal, agentRole?} | notify_owner={message} | send_whatsapp={message} | delay={hours} | ai_response=(no config) | search_leads={searchQuery, searchLocation, maxResults, dailyCap}
 - **run_code**: Sandboxed JS — no network/filesystem. Fetch data with other tools first, then pass as literals.
 - **execute_python**: Full cloud Python sandbox (E2B) — has network, pip, filesystem. Use for data analysis, chart generation, web scraping, file processing, complex calculations. Install any package with packages param. Use print() for output. Charts auto-upload.
-- **process_document**: Extracts text/tables from PDF, Excel, CSV, Word, PPTX files. Give it a URL. Use extract param to filter for specific info.
+- **process_document**: Extracts text/tables from PDF, Excel, CSV, Word, PPTX files. Give it a URL. Use extract param to filter for specific info. ALWAYS try this when a supplier sends a document — you CAN read PDFs.
 - **knowledge_base**: Persistent searchable document library. Add SOPs, manuals, price lists. Search with natural language.
 - **browse_web**: Real cloud browser for clicking, typing, forms. Use search_web/scrape_page for simple reads (cheaper).
 - **manage_calendar**: Google Calendar integration — list events, check availability, create/update/delete events. Requires google_calendar integration.
 - **process_payment**: Stripe integration — create payment links, send invoices, check balance. Requires stripe integration. Use request_approval before sending invoices.
 - **generate_document**: Create PDFs (reports, invoices, proposals), Excel spreadsheets, PowerPoint presentations. Use # headings, - bullets, --- slide breaks.
-- **analyze_image**: GPT-4o vision — read text from photos, analyze receipts, screenshots, product photos, handwriting. Use extract_schema for structured extraction.
+- **analyze_image**: GPT-4o vision — read text from photos, analyze receipts, screenshots, charts, product photos, handwriting. Use extract_schema for structured extraction. This is the DEFAULT for any attached image. Only use analyze_inventory if the owner explicitly mentions inventory/stock/shelf.
 - **deep_research**: Multi-source research engine. Decomposes questions, runs parallel searches, synthesizes report with citations. Use for market analysis, competitor research.
 - **translate**: Translate text between any languages. Uses DeepL (high quality) or AI fallback. Good for multilingual customer support.
 - **manage_project**: Lightweight project tracking with subtasks, priorities, assignees, deadlines. Projects group related tasks.

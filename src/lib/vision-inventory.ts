@@ -91,6 +91,83 @@ export async function downloadAndStoreImage(input: DownloadImageInput): Promise<
   }
 }
 
+// ─── Download document/image from Evolution and upload to Supabase ────────
+
+interface DownloadMediaInput {
+  baseUrl: string;
+  apiKey: string;
+  instanceName: string;
+  message: Record<string, unknown>;
+  messageKey: Record<string, unknown>;
+  businessId: string;
+  fileName?: string;
+  mimetype?: string;
+}
+
+/**
+ * Download any media (document, image, etc.) from Evolution and upload to Supabase Storage.
+ * Returns the public URL of the uploaded file.
+ */
+export async function downloadAndStoreMedia(input: DownloadMediaInput): Promise<string | null> {
+  const { baseUrl, apiKey, instanceName, message, messageKey, businessId, fileName, mimetype } = input;
+
+  try {
+    // 1. Download base64 via Evolution
+    const url = `${baseUrl.replace(/\/$/, '')}/chat/getBase64FromMediaMessage/${instanceName}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+      body: JSON.stringify({ message: { key: messageKey, message } }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[media] Evolution media download failed: ${res.status}`);
+      return null;
+    }
+
+    const json = await res.json();
+    const base64Data = json.base64 || json.mediaBase64 || json.data;
+    if (!base64Data) {
+      console.warn('[media] No base64 data in Evolution response');
+      return null;
+    }
+
+    // 2. Upload to Supabase Storage
+    const supabase = getSupabase();
+    const bucket = 'inventory-images';
+
+    // Determine file extension and content type
+    const ext = fileName?.split('.').pop()?.toLowerCase() || (mimetype === 'application/pdf' ? 'pdf' : 'bin');
+    const contentType = mimetype || 'application/octet-stream';
+
+    // Ensure bucket exists (idempotent)
+    await supabase.storage.createBucket(bucket, { public: true });
+
+    const buffer = Buffer.from(base64Data, 'base64');
+    const safeName = (fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${businessId}/${Date.now()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, buffer, {
+        contentType,
+        cacheControl: '86400',
+      });
+
+    if (uploadError) {
+      console.error('[media] Upload error:', uploadError);
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+    console.log(`[media] File stored: ${publicUrl}`);
+    return publicUrl;
+  } catch (err) {
+    console.error('[media] Failed to download/store media:', err);
+    return null;
+  }
+}
+
 // ─── Save / retrieve golden state images ─────────────────────────────────
 
 export async function saveGoldenStateImage(

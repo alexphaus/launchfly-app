@@ -253,6 +253,10 @@ export async function POST(request: NextRequest) {
       '';
 
     // Handle documents and images without text
+    // Note: media download deferred until businessId is resolved (needed for storage path)
+    let pendingSupplierDoc: { fileName: string; mimetype: string } | null = null;
+    let pendingSupplierImg: { mimetype: string } | null = null;
+
     if (!messageText) {
       const docMsg = data.message?.documentMessage || data.message?.documentWithCaptionMessage?.message?.documentMessage;
       const imgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
@@ -262,6 +266,8 @@ export async function POST(request: NextRequest) {
         const mimetype = docMsg.mimetype;
         
         let extractedText: string | null = null;
+
+        // Try inline text extraction for PDFs (doesn't need businessId)
         if (mimetype === 'application/pdf') {
           console.log(`   📄 PDF detected from ${remoteJid}, extracting text...`);
           try {
@@ -290,10 +296,13 @@ export async function POST(request: NextRequest) {
         if (extractedText) {
           messageText = `[Supplier sent a PDF document: ${fileName}]\n\n--- PDF CONTENTS ---\n${extractedText}\n--- END PDF CONTENTS ---`;
         } else {
-          messageText = `[Supplier sent a document: ${fileName} - I cannot read its contents yet. Ask the owner to review it manually.]`;
+          // Mark for deferred download — will store to Supabase after businessId is resolved
+          pendingSupplierDoc = { fileName, mimetype };
+          messageText = `[Supplier sent a document: ${fileName}]`;
         }
       } else if (imgMsg) {
-        messageText = `[Supplier sent an image - I cannot describe it yet. Ask the owner to review it manually.]`;
+        pendingSupplierImg = { mimetype: imgMsg.mimetype };
+        messageText = `[Supplier sent an image]`;
       }
     }
 
@@ -566,13 +575,13 @@ export async function POST(request: NextRequest) {
 
       if (orchestrator) {
         if (ownerImageUrl) {
-          goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;
+          goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. Use analyze_image tool to describe what you see. If the owner explicitly mentions inventory, shelf, stall, or stock, use analyze_inventory instead to compare against the golden state. If the owner says to save it as a reference, use set_golden action.`;
         }
         rolePrompt = orchestrator.system_prompt;
         enabledTools = null; // All tools — orchestrator's system_prompt guides which to use
       } else {
         if (ownerImageUrl) {
-          goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
+          goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_image tool to describe it. If the message mentions inventory or stock, use analyze_inventory instead.`;
         }
         rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
         enabledTools = null;
@@ -672,6 +681,60 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`   🏢 Business: ${businessId}`);
+
+    // ─── Deferred supplier media download (now that businessId is resolved) ──
+    if (pendingSupplierDoc) {
+      try {
+        const instCreds = await resolveInstanceCreds(instanceName);
+        if (instCreds) {
+          const { downloadAndStoreMedia } = await import('@/lib/vision-inventory');
+          const supplierDocUrl = await downloadAndStoreMedia({
+            baseUrl: instCreds.baseUrl,
+            apiKey: instCreds.apiKey,
+            instanceName: instCreds.instanceName,
+            message: data.message,
+            messageKey: data.key,
+            businessId,
+            fileName: pendingSupplierDoc.fileName,
+            mimetype: pendingSupplierDoc.mimetype,
+          });
+          if (supplierDocUrl) {
+            console.log(`   📎 Supplier doc stored: ${supplierDocUrl}`);
+            messageText = `[Supplier sent a document: ${pendingSupplierDoc.fileName}]\n[DOCUMENT URL: ${supplierDocUrl}]\nUse process_document tool to extract and read the contents of this file.`;
+          } else {
+            messageText = `[Supplier sent a document: ${pendingSupplierDoc.fileName} - The file could not be downloaded. Ask the owner to review it manually.]`;
+          }
+        }
+      } catch (err) {
+        console.warn('   ⚠️ Supplier doc download failed:', err);
+      }
+    }
+
+    if (pendingSupplierImg) {
+      try {
+        const instCreds = await resolveInstanceCreds(instanceName);
+        if (instCreds) {
+          const { downloadAndStoreMedia } = await import('@/lib/vision-inventory');
+          const supplierImgUrl = await downloadAndStoreMedia({
+            baseUrl: instCreds.baseUrl,
+            apiKey: instCreds.apiKey,
+            instanceName: instCreds.instanceName,
+            message: data.message,
+            messageKey: data.key,
+            businessId,
+            mimetype: pendingSupplierImg.mimetype,
+          });
+          if (supplierImgUrl) {
+            console.log(`   📸 Supplier image stored: ${supplierImgUrl}`);
+            messageText = `[Supplier sent an image]\n[ATTACHED IMAGE: ${supplierImgUrl}]\nUse analyze_image tool to describe what the supplier sent.`;
+          } else {
+            messageText = `[Supplier sent an image - The image could not be downloaded. Ask the owner to review it manually.]`;
+          }
+        }
+      } catch (err) {
+        console.warn('   ⚠️ Supplier image download failed:', err);
+      }
+    }
 
     // ─── Ensure customer record exists (upsert on business_id+phone) ──
     const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
@@ -837,7 +900,7 @@ export async function POST(request: NextRequest) {
           // Pass the raw message — the system_prompt already contains all orchestration instructions
           goalStr = messageText.substring(0, 1000);
           if (ownerImageUrl) {
-            goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. If this looks like an inventory/stall/shelf/van photo, use analyze_inventory tool to compare it against the golden state. If the owner says to save it as a reference, use set_golden action. If unclear, use analyze action to describe what you see, then ask the owner what they want to do with it.`;
+            goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner attached an image. Use analyze_image tool to describe what you see. If the owner explicitly mentions inventory, shelf, stall, or stock, use analyze_inventory instead to compare against the golden state. If the owner says to save it as a reference, use set_golden action.`;
           }
           rolePrompt = orchestrator.system_prompt;
           enabledTools = null; // All tools — orchestrator's system_prompt guides which to use
@@ -845,7 +908,7 @@ export async function POST(request: NextRequest) {
           // Fallback to the Purchasing OS explicitly as before
           goalStr = messageText.substring(0, 1000);
           if (ownerImageUrl) {
-            goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_inventory tool to process it.`;
+            goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_image tool to describe it. If the message mentions inventory or stock, use analyze_inventory instead.`;
           }
           rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
           enabledTools = null;

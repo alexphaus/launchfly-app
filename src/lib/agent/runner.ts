@@ -330,24 +330,27 @@ export async function executeAgentTask(taskId: string): Promise<{
     return { status: row.status as 'completed' | 'failed', result: row.result || undefined, taskId, stepsUsed: row.steps_used };
   }
 
-  // Guard against concurrent execution: if QStash fires while a previous invocation
-  // is still running (race condition), bail out and let the first invocation finish.
-  if (row.status === 'running') {
-    const updatedAgo = Date.now() - new Date(row.updated_at || 0).getTime();
-    if (updatedAgo < STALE_TASK_MINUTES * 60_000) {
-      console.log(`[agent:${taskId}] Task is already running (updated ${Math.round(updatedAgo / 1000)}s ago), skipping duplicate invocation`);
+  // Guard against concurrent execution: try to claim the task using DB-level constraint
+  const { data: claimedTask, error: claimErr } = await supabase
+    .from('agent_tasks')
+    .update({
+      status: 'running',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+    // Only claim if it's pending OR if it's been stuck in running state for too long
+    .or(`status.eq.pending,and(status.eq.running,updated_at.lt.${new Date(Date.now() - STALE_TASK_MINUTES * 60_000).toISOString()})`)
+    .select('id')
+    .single();
+
+  if (claimErr || !claimedTask) {
+    if (claimErr?.code === 'PGRST116') {
+      // 0 rows updated -> someone else claimed it, or it was recently started
+      console.log(`[agent:${taskId}] Task is already claimed by another worker, skipping duplicate invocation`);
       return { status: 'continued' as const, taskId, stepsUsed: row.steps_used };
     }
-    // If it's been stuck in 'running' longer than STALE_TASK_MINUTES, it was likely
-    // killed by Vercel without saving. Safe to resume.
-    console.log(`[agent:${taskId}] Task stuck in 'running' for ${Math.round(updatedAgo / 60000)}min, resuming`);
+    throw new Error(`Failed to claim task ${taskId} for running: ${claimErr?.message}`);
   }
-
-  // Mark as running
-  await supabase.from('agent_tasks').update({
-    status: 'running',
-    updated_at: new Date().toISOString(),
-  }).eq('id', taskId);
 
   // Auto-clean stale tasks from previous invocations killed by Vercel or missed QStash
   try {
@@ -981,7 +984,7 @@ export async function executeAgentTask(taskId: string): Promise<{
             try {
               const defaultMaxTimeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
               // Compute exact time remaining for Vercel wall-clock limit, minus small buffer
-              const remainingTimeMs = Math.max(0, WALL_CLOCK_LIMIT_MS - (Date.now() - startTime) - 1000);
+              const remainingTimeMs = Math.max(1000, WALL_CLOCK_LIMIT_MS - (Date.now() - startTime) - 1000);
               const toolTimeout = Math.min(defaultMaxTimeout, remainingTimeMs);
               
               const controller = new AbortController();

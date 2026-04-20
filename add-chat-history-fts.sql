@@ -63,8 +63,8 @@ RETURNS TABLE (
 DECLARE
   safe_query TEXT;
 BEGIN
-  -- Escape ILIKE metacharacters to prevent injection via wildcard manipulation
-  safe_query := replace(replace(replace(search_query, '\', '\\'), '%', '\%'), '_', '\_');
+  -- Escape ILIKE metacharacters to prevent injection via wildcard manipulation (requires 4 backslashes for a literal backslash in plpgsql)
+  safe_query := replace(replace(replace(search_query, '\', '\\\\'), '%', '\%'), '_', '\_');
   RETURN QUERY
   SELECT
     ch.id,

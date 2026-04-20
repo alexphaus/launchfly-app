@@ -2410,18 +2410,18 @@ async function executeSearchConversations(
           results = data;
         }
       } catch {
-        // RPC not deployed — raw query fallback
+        // RPC not deployed — raw query fallback. Use parameterized `ilike` from Supabase JS
         const since = new Date(Date.now() - safeDays * 86400000).toISOString();
-        const keywords = query.split(/\s+/).filter(w => w.length > 2).slice(0, 4);
-        if (keywords.length === 0) return 'Error: no meaningful search terms.';
-
-        const orFilter = keywords.map(k => `content.ilike.%${k.replace(/[%_'"\\]/g, ' ')}%`).join(',');
+        // Since we can't easily do a multi-word OR dynamically with Supabase JS `.ilike()` without `.or()`,
+        // and `.or()` is vulnerable to injection if manually concatenated, we do a single simpler wildcard search for safety.
+        const safeFallbackQuery = query.replace(/[%_\\]/g, ' '); // Strip wildcards from the fallback query
+        
         const { data, error } = await supabase
           .from('chat_history')
           .select('id, phone, role, content, created_at')
           .eq('business_id', businessId)
           .gte('created_at', since)
-          .or(orFilter)
+          .ilike('content', `%${safeFallbackQuery}%`)
           .order('created_at', { ascending: false })
           .limit(safeLimit);
 

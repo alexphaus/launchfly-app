@@ -107,6 +107,18 @@ async function mcpHttpRequest(
   apiKey?: string,
   extraHeaders?: Record<string, string>,
 ): Promise<McpJsonRpcResponse> {
+  // SSRF Protection: Require https:// (or http:// for explicit localhost if allowed, but strict URL parsing)
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(serverUrl);
+  } catch {
+    throw new Error('Invalid MCP server URL');
+  }
+  
+  if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+    throw new Error('MCP server URL must use https:// protocol for external servers');
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

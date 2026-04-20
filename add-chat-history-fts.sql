@@ -60,7 +60,11 @@ RETURNS TABLE (
   content TEXT,
   created_at TIMESTAMPTZ
 ) AS $$
+DECLARE
+  safe_query TEXT;
 BEGIN
+  -- Escape ILIKE metacharacters to prevent injection via wildcard manipulation
+  safe_query := replace(replace(replace(search_query, '\', '\\'), '%', '\%'), '_', '\_');
   RETURN QUERY
   SELECT
     ch.id,
@@ -70,7 +74,7 @@ BEGIN
     ch.created_at
   FROM chat_history ch
   WHERE
-    ch.content ILIKE '%' || search_query || '%'
+    ch.content ILIKE '%' || safe_query || '%'
     AND ch.created_at >= NOW() - (days_back || ' days')::INTERVAL
     AND (match_business_id IS NULL OR ch.business_id = match_business_id)
     AND (match_phone IS NULL OR ch.phone = match_phone)

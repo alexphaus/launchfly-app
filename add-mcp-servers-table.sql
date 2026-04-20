@@ -20,6 +20,11 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
 -- Index for fast lookups by business
 CREATE INDEX IF NOT EXISTS idx_mcp_servers_business ON mcp_servers(business_id);
 
+-- Unique constraint: only one enabled server per name per business
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_servers_unique_name
+  ON mcp_servers(business_id, name)
+  WHERE enabled = true;
+
 -- RLS: service role only
 ALTER TABLE mcp_servers ENABLE ROW LEVEL SECURITY;
 

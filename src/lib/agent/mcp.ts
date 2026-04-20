@@ -37,6 +37,12 @@ interface McpServerConfig {
   cached_at?: string;
 }
 
+/** Extended config stored in serverMap — includes the original (untruncated) tool name */
+interface McpToolMapping {
+  server: McpServerConfig;
+  originalToolName: string;
+}
+
 interface McpToolDefinition {
   name: string;
   description?: string;
@@ -82,12 +88,12 @@ const MCP_TOOL_PREFIX = 'mcp_'; // Prefix for MCP tools to avoid name collisions
 
 // ─── JSON-RPC Helpers ────────────────────────────────────────────────────
 
-let rpcIdCounter = 1;
-
 function buildJsonRpc(method: string, params?: Record<string, unknown>): McpJsonRpcRequest {
+  // Use random IDs — module-level counters aren't safe in serverless/edge
+  const id = Math.floor(Math.random() * 2_147_483_647) + 1;
   return {
     jsonrpc: '2.0',
-    id: rpcIdCounter++,
+    id,
     method,
     params,
   };
@@ -172,11 +178,11 @@ async function parseSseResponse(response: Response, expectedId: number): Promise
  */
 export async function discoverMcpTools(businessId: string): Promise<{
   tools: McpToolSchema[];
-  serverMap: Map<string, McpServerConfig>;
+  serverMap: Map<string, McpToolMapping>;
 }> {
   const supabase = getSupabase();
   const tools: McpToolSchema[] = [];
-  const serverMap = new Map<string, McpServerConfig>();
+  const serverMap = new Map<string, McpToolMapping>();
 
   try {
     const { data: servers, error } = await supabase
@@ -235,7 +241,7 @@ export async function discoverMcpTools(businessId: string): Promise<{
           });
 
           // Map the prefixed name back to the server + original tool name
-          serverMap.set(safeName, server);
+          serverMap.set(safeName, { server, originalToolName: tool.name });
         }
 
         console.log(`[mcp] Discovered ${mcpTools.length} tools from "${server.name}" (${server.url})`);
@@ -292,16 +298,14 @@ async function listToolsFromServer(server: McpServerConfig): Promise<McpToolDefi
 export async function executeMcpTool(
   prefixedToolName: string,
   args: Record<string, unknown>,
-  serverMap: Map<string, McpServerConfig>,
+  serverMap: Map<string, McpToolMapping>,
 ): Promise<string> {
-  const server = serverMap.get(prefixedToolName);
-  if (!server) {
+  const mapping = serverMap.get(prefixedToolName);
+  if (!mapping) {
     return `MCP tool error: No server found for tool "${prefixedToolName}". The MCP server may have been disconnected.`;
   }
 
-  // Extract original tool name from the prefixed name
-  // Format: mcp_{serverName}__{originalToolName}
-  const originalToolName = extractOriginalToolName(prefixedToolName, server.name);
+  const { server, originalToolName } = mapping;
 
   try {
     const response = await mcpHttpRequest(
@@ -334,21 +338,22 @@ export async function executeMcpTool(
   }
 }
 
-function extractOriginalToolName(prefixedName: string, serverName: string): string {
-  const serverSlug = serverName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const prefix = `${MCP_TOOL_PREFIX}${serverSlug}__`;
-  if (prefixedName.startsWith(prefix)) {
-    return prefixedName.substring(prefix.length);
-  }
-  // Fallback: strip the generic mcp_ prefix and first __ segment
-  const withoutPrefix = prefixedName.replace(/^mcp_/, '');
-  const doubleUnderIdx = withoutPrefix.indexOf('__');
-  return doubleUnderIdx >= 0 ? withoutPrefix.substring(doubleUnderIdx + 2) : withoutPrefix;
-}
-
 /**
- * Check if a tool name is an MCP tool (starts with mcp_ prefix).
+ * Check if a tool name is an MCP tool.
+ * Uses the `mcp_` prefix AND confirms it's not a native tool.
  */
+const NATIVE_TOOL_NAMES = new Set([
+  'search_web', 'scrape_page', 'send_report', 'query_database',
+  'draft_content', 'get_weather_forecast', 'search_memory', 'save_memory',
+  'validate_memory', 'search_tasks', 'search_conversations', 'save_leads',
+  'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job',
+  'delegate_task', 'delegate_task_and_wait', 'request_approval',
+  'analyze_inventory', 'call_api', 'request_integration', 'browse_web',
+  'manage_automation', 'run_code', 'update_instructions', 'send_email',
+  'make_call', 'post_social', 'generate_media', 'generate_video',
+  'generate_long_video',
+]);
+
 export function isMcpTool(toolName: string): boolean {
-  return toolName.startsWith(MCP_TOOL_PREFIX);
+  return toolName.startsWith(MCP_TOOL_PREFIX) && !NATIVE_TOOL_NAMES.has(toolName);
 }

@@ -596,26 +596,41 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   const nativeTools = getToolsForAgent(enabledTools);
 
   // ── Discover MCP tools (dynamic tools from external servers) ──
+  type SerializedMcpMapping = { originalToolName: string; server: { id: string; name: string; transport: string; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] } };
   const mcpResult = await context.run('discover-mcp', async () => {
     try {
       const { tools: mcpTools, serverMap } = await discoverMcpTools(toolCtx.businessId);
-      // serverMap is a Map — serialize for Upstash step storage
-      const serializedMap: Record<string, { name: string; url: string; api_key?: string; headers?: Record<string, string> }> = {};
-      for (const [key, val] of serverMap.entries()) {
-        serializedMap[key] = { name: val.name, url: val.url, api_key: val.api_key, headers: val.headers };
-      }
+      // serverMap is a Map — serialize for Upstash step storage (Maps aren't JSON-safe)
+      const serializedMap: Record<string, SerializedMcpMapping> = {};
+      serverMap.forEach((mapping, key) => {
+        serializedMap[key] = {
+          originalToolName: mapping.originalToolName,
+          server: {
+            id: mapping.server.id,
+            name: mapping.server.name,
+            transport: mapping.server.transport,
+            url: mapping.server.url,
+            api_key: mapping.server.api_key,
+            headers: mapping.server.headers,
+            tool_filter: mapping.server.tool_filter,
+          },
+        };
+      });
       return { mcpTools, serializedMap };
     } catch (err) {
       console.warn(`[agent:${taskId}] MCP discovery failed (non-fatal):`, err);
-      return { mcpTools: [] as McpToolSchema[], serializedMap: {} as Record<string, { name: string; url: string; api_key?: string; headers?: Record<string, string> }> };
+      return { mcpTools: [] as McpToolSchema[], serializedMap: {} as Record<string, SerializedMcpMapping> };
     }
   });
 
   const agentTools = [...nativeTools, ...mcpResult.mcpTools];
-  // Rebuild serverMap from serialized data
-  const mcpServerMap = new Map<string, { name: string; transport: 'http' | 'sse'; url: string; api_key?: string; headers?: Record<string, string>; id: string; tool_filter?: string[] }>();
+  // Rebuild serverMap from serialized data (restore Map<string, McpToolMapping>)
+  const mcpServerMap = new Map<string, { server: { id: string; name: string; transport: 'http' | 'sse'; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] }; originalToolName: string }>();
   for (const [key, val] of Object.entries(mcpResult.serializedMap)) {
-    mcpServerMap.set(key, { ...val, id: key, transport: 'http' as const });
+    mcpServerMap.set(key, {
+      originalToolName: val.originalToolName,
+      server: { ...val.server, transport: val.server.transport as 'http' | 'sse' },
+    });
   }
 
   if (mcpResult.mcpTools.length > 0) {
@@ -678,9 +693,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       warningMessage = `⚠️ You've made ${currentResearchSteps} research calls. Consider wrapping up and calling send_report unless you are missing critical data.`;
     }
 
-    // ── Memory nudge: prompt agent to persist learnings at step 5 ──
+    // ── Memory nudge: prompt agent to persist learnings at step 5 boundaries ──
     let memoryNudge = '';
-    if (stepsUsed === 5) {
+    if (stepsUsed >= 5 && stepsUsed % 5 === 0) {
       memoryNudge = '🧠 MEMORY CHECK: You\'ve completed 5 steps. Pause and reflect — have you discovered any important facts, contacts, prices, patterns, or preferences worth saving? If so, call save_memory now before continuing. This ensures you don\'t lose valuable learnings if the task ends unexpectedly.';
     }
 
@@ -881,7 +896,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         try {
           let result: string;
           if (isMcpTool(tc.function.name)) {
-            result = await executeMcpTool(tc.function.name, toolArgs, mcpServerMap as any);
+            result = await executeMcpTool(tc.function.name, toolArgs, mcpServerMap);
           } else {
             result = await executeTool(tc.function.name, toolArgs, toolCtx, timeout);
           }
@@ -1151,7 +1166,10 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
               max_tokens: 500,
             });
             const reflectionText = reflection.choices[0]?.message?.content?.trim() || '[]';
-            const memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
+            let memories: Array<{ content?: string; category?: string; importance?: number }> = [];
+            try {
+              memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
+            } catch { /* LLM returned non-JSON — skip reflection */ }
             if (Array.isArray(memories) && memories.length > 0) {
               for (const mem of memories.slice(0, 3)) {
                 if (mem.content && mem.content.length > 10) {

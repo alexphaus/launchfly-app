@@ -623,13 +623,14 @@ export async function executeAgentTask(taskId: string): Promise<{
     const nativeTools = getToolsForAgent(row.enabled_tools);
 
     // ── Discover MCP tools (dynamic tools from external servers) ──
-    let mcpServerMap = new Map<string, any>();
-    let agentTools = nativeTools;
+    type McpToolMapping = { server: { id: string; name: string; transport: 'http' | 'sse'; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] }; originalToolName: string };
+    let mcpServerMap = new Map<string, McpToolMapping>();
+    let agentTools: typeof nativeTools = nativeTools;
     try {
       const { tools: mcpTools, serverMap } = await discoverMcpTools(row.business_id);
       if (mcpTools.length > 0) {
-        agentTools = [...nativeTools, ...mcpTools];
-        mcpServerMap = serverMap;
+        agentTools = [...nativeTools, ...mcpTools as typeof nativeTools];
+        mcpServerMap = serverMap as Map<string, McpToolMapping>;
         console.log(`[agent:${taskId}] Loaded ${mcpTools.length} MCP tools from external servers`);
       }
     } catch (mcpErr) {
@@ -704,9 +705,9 @@ export async function executeAgentTask(taskId: string): Promise<{
         warningMessage = `⚠️ You've made ${currentResearchSteps} research calls. Consider wrapping up and calling send_report unless you are missing critical data.`;
       }
 
-      // ── Memory nudge: prompt agent to persist learnings at step 5 ──
+      // ── Memory nudge: prompt agent to persist learnings at step 5 boundaries ──
       let memoryNudge = '';
-      if (stepsUsed === 5) {
+      if (stepsUsed >= 5 && stepsUsed % 5 === 0) {
         memoryNudge = '🧠 MEMORY CHECK: You\'ve completed 5 steps. Pause and reflect — have you discovered any important facts, contacts, prices, patterns, or preferences worth saving? If so, call save_memory now before continuing. This ensures you don\'t lose valuable learnings if the task ends unexpectedly.';
       }
 
@@ -1165,7 +1166,10 @@ export async function executeAgentTask(taskId: string): Promise<{
               max_tokens: 500,
             });
             const reflectionText = reflection.choices[0]?.message?.content?.trim() || '[]';
-            const memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
+            let memories: Array<{ content?: string; category?: string; importance?: number }> = [];
+            try {
+              memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
+            } catch { /* LLM returned non-JSON — skip reflection */ }
             if (Array.isArray(memories) && memories.length > 0) {
               for (const mem of memories.slice(0, 3)) {
                 if (mem.content && mem.content.length > 10) {

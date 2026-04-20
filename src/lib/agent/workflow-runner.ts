@@ -564,8 +564,11 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   let { toolCtx, messages, stepsUsed, toolLog, recalledSkillIds } = initResult;
   const { enabledTools, goal, parentTaskId } = initResult;
 
-  // Get provider config for context.call() — API key is read from env vars via getProviderApiKey()
-  const providerConfig = await context.run('resolve-provider', async () => {
+  // ─── Step: Setup — Resolve provider + discover MCP tools in ONE step ───
+  // Merging these avoids extra Upstash Workflow HTTP round-trips (each context.run() = ~3-5s overhead)
+  type SerializedMcpMapping = { originalToolName: string; server: { id: string; name: string; transport: string; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] } };
+  const setupResult = await context.run('setup', async () => {
+    // Resolve provider config
     const provider = await getAgentProvider();
     const providerName = process.env.AGENT_PROVIDER || 'deepseek';
     let baseURL: string;
@@ -585,23 +588,20 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         model = 'deepseek-chat';
     }
 
-    return {
+    const providerConfig = {
       baseURL,
       model,
       contextWindow: provider.contextWindow,
       compressThreshold: Math.min(Math.floor(provider.contextWindow * 0.5), CONTEXT_COMPRESS_THRESHOLD),
     };
-  });
 
-  const nativeTools = getToolsForAgent(enabledTools);
-
-  // ── Discover MCP tools (dynamic tools from external servers) ──
-  type SerializedMcpMapping = { originalToolName: string; server: { id: string; name: string; transport: string; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] } };
-  const mcpResult = await context.run('discover-mcp', async () => {
+    // Discover MCP tools
+    let mcpTools: McpToolSchema[] = [];
+    let serializedMap: Record<string, SerializedMcpMapping> = {};
     try {
-      const { tools: mcpTools, serverMap } = await discoverMcpTools(toolCtx.businessId);
+      const { tools, serverMap } = await discoverMcpTools(toolCtx.businessId);
+      mcpTools = tools;
       // serverMap is a Map — serialize for Upstash step storage (Maps aren't JSON-safe)
-      const serializedMap: Record<string, SerializedMcpMapping> = {};
       serverMap.forEach((mapping, key) => {
         serializedMap[key] = {
           originalToolName: mapping.originalToolName,
@@ -616,25 +616,28 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           },
         };
       });
-      return { mcpTools, serializedMap };
     } catch (err) {
       console.warn(`[agent:${taskId}] MCP discovery failed (non-fatal):`, err);
-      return { mcpTools: [] as McpToolSchema[], serializedMap: {} as Record<string, SerializedMcpMapping> };
     }
+
+    return { providerConfig, mcpTools, serializedMap };
   });
 
-  const agentTools = [...nativeTools, ...mcpResult.mcpTools];
+  const { providerConfig } = setupResult;
+  const nativeTools = getToolsForAgent(enabledTools);
+  const agentTools = [...nativeTools, ...setupResult.mcpTools];
+
   // Rebuild serverMap from serialized data (restore Map<string, McpToolMapping>)
   const mcpServerMap = new Map<string, { server: { id: string; name: string; transport: 'http' | 'sse'; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] }; originalToolName: string }>();
-  for (const [key, val] of Object.entries(mcpResult.serializedMap)) {
+  for (const [key, val] of Object.entries(setupResult.serializedMap)) {
     mcpServerMap.set(key, {
       originalToolName: val.originalToolName,
       server: { ...val.server, transport: val.server.transport as 'http' | 'sse' },
     });
   }
 
-  if (mcpResult.mcpTools.length > 0) {
-    console.log(`[agent:${taskId}] Loaded ${mcpResult.mcpTools.length} MCP tools from external servers`);
+  if (setupResult.mcpTools.length > 0) {
+    console.log(`[agent:${taskId}] Loaded ${setupResult.mcpTools.length} MCP tools from external servers`);
   }
 
   const executedToolCalls = new Set<string>();
@@ -652,31 +655,50 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   while (stepsUsed < MAX_TOTAL_STEPS) {
     loopIteration++;
 
-    // ── Cancellation check: abort if task was killed externally ──
-    const taskAlive = await context.run(`alive-${loopIteration}`, async () => {
-      const { data } = await supabase
-        .from('agent_tasks')
-        .select('status')
-        .eq('id', taskId)
-        .single();
-      return data?.status === 'running';
-    });
-    if (!taskAlive) {
-      console.log(`[agent:${taskId}] Task no longer running — aborting workflow`);
-      return; // Workflow exits cleanly; Upstash marks it as complete
+    // ── Cancellation check + mid-task steering: pick up new owner messages ──
+    // Skip on first iteration — we just set status to 'running' in the init step
+    if (loopIteration > 1) {
+      const aliveResult = await context.run(`alive-${loopIteration}`, async () => {
+        const { data } = await supabase
+          .from('agent_tasks')
+          .select('status, messages')
+          .eq('id', taskId)
+          .single();
+        return {
+          alive: data?.status === 'running',
+          dbMessages: (data?.messages || []) as AgentMessage[],
+        };
+      });
+      if (!aliveResult.alive) {
+        console.log(`[agent:${taskId}] Task no longer running — aborting workflow`);
+        return; // Workflow exits cleanly; Upstash marks it as complete
+      }
+
+      // Check if owner appended corrections while we were working
+      if (aliveResult.dbMessages.length > messages.length) {
+        const injected = aliveResult.dbMessages.slice(messages.length);
+        const corrections = injected.filter(m => m.role === 'user');
+        if (corrections.length > 0) {
+          messages.push(...corrections);
+          console.log(`[agent:${taskId}] Injected ${corrections.length} mid-task owner correction(s)`);
+        }
+      }
     }
 
     // ── Context compression step ──
-    messages = await context.run(`compress-${loopIteration}`, async () => {
-      return compressContext({
-        messages,
-        apiKey: getProviderApiKey(),
-        baseURL: providerConfig.baseURL,
-        model: providerConfig.model,
-        taskId,
-        threshold: providerConfig.compressThreshold,
+    // Skip on first iteration — messages are fresh, nothing to compress
+    if (loopIteration > 1) {
+      messages = await context.run(`compress-${loopIteration}`, async () => {
+        return compressContext({
+          messages,
+          apiKey: getProviderApiKey(),
+          baseURL: providerConfig.baseURL,
+          model: providerConfig.model,
+          taskId,
+          threshold: providerConfig.compressThreshold,
+        });
       });
-    });
+    }
 
     // ── Build budget/research warnings ──
     const currentResearchSteps = toolLog.filter(t =>

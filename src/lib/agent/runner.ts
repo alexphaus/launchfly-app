@@ -689,6 +689,30 @@ export async function executeAgentTask(taskId: string): Promise<{
         break;
       }
 
+      // ── Mid-task steering: pick up owner corrections appended to the task ──
+      if (stepsThisInvocation > 0) {
+        try {
+          const { data: taskCheck } = await supabase
+            .from('agent_tasks')
+            .select('status, messages')
+            .eq('id', taskId)
+            .single();
+          if (taskCheck?.status !== 'running') {
+            console.log(`[agent:${taskId}] Task no longer running (${taskCheck?.status}), aborting`);
+            break;
+          }
+          const dbMessages = (taskCheck?.messages || []) as AgentMessage[];
+          if (dbMessages.length > messages.length) {
+            const injected = dbMessages.slice(messages.length);
+            const corrections = injected.filter(m => m.role === 'user');
+            if (corrections.length > 0) {
+              messages.push(...corrections);
+              console.log(`[agent:${taskId}] Injected ${corrections.length} mid-task owner correction(s)`);
+            }
+          }
+        } catch { /* non-critical — continue with existing messages */ }
+      }
+
       // ── Context compression — prevent blowing the context window ──
       messages = await compressContextIfNeeded(messages, client, taskId, agentModel, compressThreshold);
 

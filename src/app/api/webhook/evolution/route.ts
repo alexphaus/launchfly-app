@@ -594,8 +594,29 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (recentTask) {
-        console.log(`   ⏳ Dedup: skipping dispatch — task ${recentTask.id} already ${recentTask.status} (created ${recentTask.created_at})`);
-        return NextResponse.json({ ok: true, skipped: true, reason: 'dedup_recent_task', existingTaskId: recentTask.id });
+        // ── Mid-task steering: append the owner's correction/clarification to the running task ──
+        // Instead of dropping the message, inject it so the agent picks it up on next loop iteration.
+        console.log(`   🔄 Steering: appending owner message to running task ${recentTask.id}`);
+        try {
+          const { data: taskRow } = await supabase
+            .from('agent_tasks')
+            .select('messages')
+            .eq('id', recentTask.id)
+            .single();
+
+          const msgs = Array.isArray(taskRow?.messages) ? taskRow.messages : [];
+          msgs.push({
+            role: 'user',
+            content: `[OWNER CORRECTION — sent while you were working]: ${messageText}`,
+          });
+
+          await supabase.from('agent_tasks')
+            .update({ messages: msgs, updated_at: new Date().toISOString() })
+            .eq('id', recentTask.id);
+        } catch (steerErr) {
+          console.error(`   ⚠️ Failed to steer task ${recentTask.id}:`, steerErr);
+        }
+        return NextResponse.json({ ok: true, steered: true, reason: 'mid_task_correction', existingTaskId: recentTask.id });
       }
 
       const dispatched = await dispatchAgentViaQStash({

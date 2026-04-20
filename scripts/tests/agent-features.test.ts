@@ -344,9 +344,9 @@ async function testMcpIntegrationWorkflowRunner() {
   assert(src.includes('isMcpTool'), 'Imports isMcpTool');
 
   // Discovery
-  assert(src.includes("context.run('discover-mcp'"), 'MCP discovery in Upstash workflow step');
+  assert(src.includes("context.run('setup'"), 'MCP discovery in Upstash workflow setup step');
   assert(src.includes('discoverMcpTools(toolCtx.businessId)'), 'Passes businessId to discovery');
-  assert(src.includes('...nativeTools, ...mcpResult.mcpTools'), 'Merges MCP tools with native tools');
+  assert(src.includes('...nativeTools, ...setupResult.mcpTools') || src.includes('...setupResult.mcpTools'), 'Merges MCP tools with native tools');
 
   // Serialization for Upstash
   assert(src.includes('originalToolName: mapping.originalToolName'), 'Serializes originalToolName');

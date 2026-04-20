@@ -733,6 +733,206 @@ async function testToolTimeoutOverrides() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SECURITY TESTS — Post-adversarial-review
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function testPythonInjectionPrevention() {
+  console.log('\n🧪 Security: Python code injection prevention via base64 encoding');
+
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools-extended.ts'),
+    'utf-8',
+  );
+
+  // No triple-quoted string interpolation of user input should remain
+  // All user strings should go through base64 encoding
+  const tripleQuoteInterpolations = src.match(/'''(\$\{[^}]+\})'''/g) || [];
+  // Filter out any that are NOT user-controlled (e.g. constants)
+  const dangerousInterpolations = tripleQuoteInterpolations.filter(m =>
+    m.includes('url') || m.includes('content') || m.includes('title') || m.includes('data')
+  );
+
+  assert(
+    dangerousInterpolations.length === 0,
+    `No triple-quoted Python string interpolation of user input (found ${dangerousInterpolations.length}: ${dangerousInterpolations.join(', ')})`,
+  );
+
+  // Verify base64 encoding is used for user strings
+  assert(
+    src.includes("Buffer.from(url).toString('base64')") || src.includes("Buffer.from(file.url).toString('base64')"),
+    'URL base64 encoding present for process_document',
+  );
+  assert(
+    src.includes("const titleB64 = Buffer.from(title).toString('base64')"),
+    'Title base64 encoding present for generate_document',
+  );
+  assert(
+    src.includes("const contentB64 = Buffer.from(content).toString('base64')"),
+    'Content base64 encoding present for generate_document',
+  );
+}
+
+async function testSsrfProtection() {
+  console.log('\n🧪 Security: SSRF protection in all URL-fetching tools');
+
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools-extended.ts'),
+    'utf-8',
+  );
+
+  // checkSsrf helper must exist
+  assert(src.includes('function checkSsrf(url: string)'), 'checkSsrf helper exists');
+  assert(src.includes('169\\.254\\.'), 'checkSsrf blocks AWS metadata IP range');
+  assert(src.includes('localhost'), 'checkSsrf blocks localhost');
+  assert(src.includes('.local'), 'checkSsrf blocks .local domains');
+
+  // process_document must call checkSsrf
+  const processDocSection = src.substring(
+    src.indexOf('executeProcessDocument'),
+    src.indexOf('executeProcessDocument') + 2000,
+  );
+  assert(processDocSection.includes('checkSsrf'), 'process_document calls checkSsrf');
+
+  // knowledge_base add must call checkSsrf
+  const kbSection = src.substring(
+    src.indexOf("case 'add':"),
+    src.indexOf("case 'add':") + 2000,
+  );
+  assert(kbSection.includes('checkSsrf'), 'knowledge_base add calls checkSsrf');
+}
+
+async function testTenantIsolation() {
+  console.log('\n🧪 Security: Tenant isolation in manage_project updates');
+
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools-extended.ts'),
+    'utf-8',
+  );
+
+  // All .update() calls in manage_project must include business_id filter
+  const manageProjectSection = src.substring(
+    src.indexOf('executeManageProject'),
+    src.lastIndexOf("Unknown action: ${action}. Use: create_project"),
+  );
+
+  // Count update operations and ensure they all have business_id
+  const updateCalls = manageProjectSection.match(/\.update\([^)]+\)\.eq\([^)]+\)/g) || [];
+  for (const call of updateCalls) {
+    // Each update chain should eventually have business_id (we check the surrounding context)
+    // This is a structural check — the actual assertion is that no update lacks business_id
+  }
+
+  // Specific check: no .update().eq('id', ...) without .eq('business_id', ...)
+  const unsafeUpdates = manageProjectSection.match(/\.update\([^)]+\)\.eq\('id'[^.]*$/gm) || [];
+  assert(
+    unsafeUpdates.length === 0,
+    `No update calls without business_id filter (found ${unsafeUpdates.length})`,
+  );
+
+  // Positive check: business_id appears after every update().eq('id')
+  const allUpdateChains = manageProjectSection.match(/\.update\([^)]+\)\.eq\('id'[^;]*/g) || [];
+  for (const chain of allUpdateChains) {
+    assert(
+      chain.includes("'business_id'") || chain.includes('business_id'),
+      `Update chain includes business_id: ${chain.substring(0, 80)}...`,
+    );
+  }
+}
+
+async function testPaymentAmountCap() {
+  console.log('\n🧪 Security: Payment amount cap enforced');
+
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools-extended.ts'),
+    'utf-8',
+  );
+
+  assert(src.includes('PAYMENT_MAX_AMOUNT'), 'PAYMENT_MAX_AMOUNT constant exists');
+  assert(src.includes('amount > PAYMENT_MAX_AMOUNT'), 'Amount cap check in payment handler');
+
+  // Stripe error sanitization
+  assert(src.includes('safeStripeError'), 'safeStripeError helper used');
+  assert(src.includes('[REDACTED]'), 'Stripe key redaction pattern present');
+}
+
+async function testEmbeddingDedup() {
+  console.log('\n🧪 Architecture: getEmbedding is single-source (no duplication)');
+
+  const toolsSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools.ts'),
+    'utf-8',
+  );
+  const extSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools-extended.ts'),
+    'utf-8',
+  );
+
+  // tools.ts should export getEmbedding
+  assert(
+    toolsSrc.includes('export async function getEmbedding'),
+    'tools.ts exports getEmbedding',
+  );
+
+  // tools-extended.ts should import it, NOT define its own
+  assert(
+    extSrc.includes("import { getEmbedding } from './tools'"),
+    'tools-extended.ts imports getEmbedding from tools.ts',
+  );
+
+  // tools-extended.ts should NOT have its own getEmbedding definition
+  const extGetEmbeddingDefs = (extSrc.match(/async function getEmbedding/g) || []).length;
+  assert(
+    extGetEmbeddingDefs === 0,
+    `tools-extended.ts has no local getEmbedding definition (found ${extGetEmbeddingDefs})`,
+  );
+}
+
+async function testChunkCountCap() {
+  console.log('\n🧪 Cost control: Knowledge base chunk count is capped');
+
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools-extended.ts'),
+    'utf-8',
+  );
+
+  assert(
+    src.includes('.slice(0, 200)'),
+    'Chunks array is capped at 200',
+  );
+  assert(
+    src.includes('MAX_CONTENT_LENGTH'),
+    'Content length is capped before chunking',
+  );
+}
+
+async function testAggregateNoStackOverflow() {
+  console.log('\n🧪 Bug fix: computeAgg uses reduce instead of spread for MIN/MAX');
+
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools.ts'),
+    'utf-8',
+  );
+
+  // Should NOT use Math.min(...values) or Math.max(...values) in computeAgg
+  const computeAggSection = src.substring(
+    src.indexOf('const computeAgg'),
+    src.indexOf('const computeAgg') + 500,
+  );
+  assert(
+    !computeAggSection.includes('Math.min(...'),
+    'computeAgg does NOT use Math.min(...values) spread',
+  );
+  assert(
+    !computeAggSection.includes('Math.max(...'),
+    'computeAgg does NOT use Math.max(...values) spread',
+  );
+  assert(
+    computeAggSection.includes('.reduce('),
+    'computeAgg uses reduce for MIN/MAX',
+  );
+}
+
 async function main() {
   console.log('═══════════════════════════════════════════════════');
   console.log('  Agent Features Test Suite (5 new features)');
@@ -783,6 +983,15 @@ async function main() {
   await testKnowledgeBaseChunking();
   await testContradictionDetection();
   await testToolTimeoutOverrides();
+
+  // 10. Security (post-adversarial-review)
+  await testPythonInjectionPrevention();
+  await testSsrfProtection();
+  await testTenantIsolation();
+  await testPaymentAmountCap();
+  await testEmbeddingDedup();
+  await testChunkCountCap();
+  await testAggregateNoStackOverflow();
 
   // DB-dependent tests
   if (!unitOnly) {

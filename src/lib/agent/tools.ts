@@ -1853,8 +1853,8 @@ async function executeQueryDatabase(
         switch (fn) {
           case 'SUM': return values.reduce((a, b) => a + b, 0);
           case 'AVG': return values.reduce((a, b) => a + b, 0) / values.length;
-          case 'MIN': return Math.min(...values);
-          case 'MAX': return Math.max(...values);
+          case 'MIN': return values.reduce((a, b) => a < b ? a : b, Infinity);
+          case 'MAX': return values.reduce((a, b) => a > b ? a : b, -Infinity);
           case 'COUNT': return values.length;
           default: return 0;
         }
@@ -2821,7 +2821,7 @@ async function executeSearchConversations(
 // FEATURE: Semantic Memory (pgvector)
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function getEmbedding(text: string): Promise<number[]> {
+export async function getEmbedding(text: string): Promise<number[]> {
   const OpenAI = (await import('openai')).default;
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const res = await client.embeddings.create({

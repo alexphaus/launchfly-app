@@ -11,12 +11,66 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { ToolContext } from './tools';
+import { getEmbedding } from './tools';
 
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!,
   );
+}
+
+/**
+ * Sanitize a string for safe interpolation into Python triple-quoted strings.
+ * Escapes backslashes first, then all quote characters, so `'''` in input
+ * cannot break out of `'''...'''` delimiters.
+ */
+function safePythonString(s: string): string {
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"""/g, '\\"\\"\\"')
+    .replace(/'''/g, "\\'\\'\\'");
+}
+
+/**
+ * Block SSRF: returns an error string if the URL points to private/internal addresses.
+ * Returns null if the URL is safe.
+ */
+function checkSsrf(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'Error: Only http/https URLs allowed.';
+    }
+    const hostname = parsed.hostname;
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname.endsWith('.local') ||
+      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(hostname)
+    ) {
+      return 'Error: Private/internal URLs not allowed.';
+    }
+    return null;
+  } catch {
+    return 'Error: Invalid URL format.';
+  }
+}
+
+const PAYMENT_MAX_AMOUNT = 50_000; // $50,000 hard cap per single payment/invoice
+
+/** Safely extract Stripe error message without leaking API keys or sensitive data */
+function safeStripeError(responseText: string): string {
+  try {
+    const parsed = JSON.parse(responseText) as { error?: { message?: string; type?: string } };
+    if (parsed.error?.message) return parsed.error.message.substring(0, 200);
+  } catch { /* not JSON, use fallback */ }
+  // Strip anything that looks like a key (sk_live_..., sk_test_..., rk_live_...)
+  return responseText
+    .replace(/(?:sk|rk|pk)_(live|test)_[A-Za-z0-9]+/g, '[REDACTED]')
+    .substring(0, 200);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -81,11 +135,13 @@ export async function executeExecutePython(
         for (const file of files.slice(0, 10)) {
           const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 100);
           try {
-            // Download URL content and write to sandbox
+            // Download URL content and write to sandbox — use base64-encoded URL to prevent injection
+            const urlB64 = Buffer.from(file.url).toString('base64');
             const downloadCode = `
-import urllib.request
-urllib.request.urlretrieve('${file.url.replace(/'/g, '')}', '/home/user/${safeName}')
-print(f"Downloaded {safeName}")
+import urllib.request, base64
+_url = base64.b64decode('${urlB64}').decode('utf-8')
+urllib.request.urlretrieve(_url, '/home/user/${safeName}')
+print(f"Downloaded ${safeName}")
 `;
             await sandbox.runCode(downloadCode, { timeoutMs: 30_000 });
           } catch {
@@ -191,15 +247,9 @@ export async function executeProcessDocument(
 ): Promise<string> {
   if (!url?.trim()) return 'Error: url is required.';
 
-  // Validate URL
-  try {
-    const parsed = new URL(url);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return 'Error: Only http/https URLs allowed.';
-    }
-  } catch {
-    return 'Error: Invalid URL format.';
-  }
+  // Validate URL + block SSRF
+  const ssrfErr = checkSsrf(url);
+  if (ssrfErr) return ssrfErr;
 
   const apiKey = process.env.E2B_API_KEY;
   if (!apiKey) return 'Error: E2B_API_KEY is required for document processing.';
@@ -215,17 +265,19 @@ export async function executeProcessDocument(
   else if (urlLower.includes('.txt') || urlLower.includes('.md')) fileType = 'text';
 
   // Build extraction code based on file type
-  const extractInstruction = extract ? `\n\n# After extraction, filter for: ${extract}` : '';
   const outputFormat = format === 'json' ? 'json' : format === 'markdown' ? 'markdown' : 'text';
 
+  // Use base64-encoded URL to prevent Python code injection
+  const urlB64 = Buffer.from(url).toString('base64');
   const code = `
 import urllib.request
+import base64
 import os
 import json
 
-# Download the file
-url = '''${url.replace(/'/g, "\\'")}'''
-filename = '/tmp/document' + os.path.splitext(url.split('?')[0])[-1] or '.bin'
+# Download the file — URL is base64-encoded to prevent injection
+url = base64.b64decode('${urlB64}').decode('utf-8')
+filename = '/tmp/document' + (os.path.splitext(url.split('?')[0])[-1] or '.bin')
 urllib.request.urlretrieve(url, filename)
 file_size = os.path.getsize(filename)
 if file_size > 50_000_000:
@@ -386,16 +438,6 @@ const KB_CHUNK_SIZE = 1500;  // chars per chunk
 const KB_CHUNK_OVERLAP = 200; // overlap between chunks
 const KB_MAX_RESULTS = 8;
 
-async function getEmbedding(text: string): Promise<number[]> {
-  const OpenAI = (await import('openai')).default;
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const res = await client.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text.substring(0, 8000),
-  });
-  return res.data[0].embedding;
-}
-
 function chunkText(text: string, chunkSize = KB_CHUNK_SIZE, overlap = KB_CHUNK_OVERLAP): string[] {
   const chunks: string[] = [];
   let start = 0;
@@ -467,6 +509,10 @@ export async function executeKnowledgeBase(
 
       // If URL provided, fetch document content
       if (url && !content) {
+        // SSRF check
+        const ssrfErr = checkSsrf(url);
+        if (ssrfErr) return ssrfErr;
+
         // Use process_document for supported formats
         const urlLower = url.toLowerCase();
         if (/\.(pdf|xlsx?|csv|docx?|pptx?|txt|md)/.test(urlLower)) {
@@ -486,9 +532,15 @@ export async function executeKnowledgeBase(
 
       if (!content || content.length < 50) return 'Error: document content is too short (minimum 50 characters).';
 
+      // Cap content to prevent runaway embedding costs (max ~200 chunks ≈ $0.04)
+      const MAX_CONTENT_LENGTH = 200 * KB_CHUNK_SIZE; // ~260K chars
+      if (content.length > MAX_CONTENT_LENGTH) {
+        content = content.substring(0, MAX_CONTENT_LENGTH);
+      }
+
       try {
         const docId = crypto.randomUUID();
-        const chunks = chunkText(content);
+        const chunks = chunkText(content).slice(0, 200); // Hard cap: 200 chunks
 
         // Generate embeddings for all chunks
         const rows = [];
@@ -783,6 +835,7 @@ export async function executeProcessPayment(
         const description = (args.description as string || 'Payment').substring(0, 200);
 
         if (!amount || amount <= 0) return 'Error: amount is required and must be positive.';
+        if (amount > PAYMENT_MAX_AMOUNT) return `Error: amount exceeds maximum of ${PAYMENT_MAX_AMOUNT}. Contact support for larger payments.`;
 
         // Create a price first, then a payment link
         const priceRes = await fetch('https://api.stripe.com/v1/prices', {
@@ -793,7 +846,7 @@ export async function executeProcessPayment(
             'product_data[name]': description,
           }),
         });
-        if (!priceRes.ok) return `Stripe error creating price: ${(await priceRes.text()).substring(0, 300)}`;
+        if (!priceRes.ok) return `Stripe error creating price: ${safeStripeError(await priceRes.text())}`;
         const price = await priceRes.json() as { id: string };
 
         const linkRes = await fetch('https://api.stripe.com/v1/payment_links', {
@@ -803,7 +856,7 @@ export async function executeProcessPayment(
             'line_items[0][quantity]': '1',
           }),
         });
-        if (!linkRes.ok) return `Stripe error creating payment link: ${(await linkRes.text()).substring(0, 300)}`;
+        if (!linkRes.ok) return `Stripe error creating payment link: ${safeStripeError(await linkRes.text())}`;
         const link = await linkRes.json() as { id: string; url: string };
 
         return `✅ Payment link created\nAmount: ${currency.toUpperCase()} ${amount.toFixed(2)}\nDescription: ${description}\nLink: ${link.url}\nLink ID: ${link.id}`;
@@ -818,9 +871,11 @@ export async function executeProcessPayment(
 
         if (!customerEmail) return 'Error: customer_email is required.';
         if (!amount || amount <= 0) return 'Error: amount is required and must be positive.';
+        if (amount > PAYMENT_MAX_AMOUNT) return `Error: amount exceeds maximum of ${PAYMENT_MAX_AMOUNT}. Contact support for larger invoices.`;
 
         // Find or create customer
         const custSearchRes = await fetch(`https://api.stripe.com/v1/customers?email=${encodeURIComponent(customerEmail)}&limit=1`, { headers });
+        if (!custSearchRes.ok) return 'Stripe error searching for customer.';
         const custData = await custSearchRes.json() as { data: Array<{ id: string }> };
         let customerId: string;
 
@@ -831,6 +886,7 @@ export async function executeProcessPayment(
             method: 'POST', headers,
             body: encode({ email: customerEmail }),
           });
+          if (!createRes.ok) return 'Stripe error creating customer.';
           const newCust = await createRes.json() as { id: string };
           customerId = newCust.id;
         }
@@ -852,7 +908,7 @@ export async function executeProcessPayment(
           method: 'POST', headers,
           body: encode(invoiceParams),
         });
-        if (!invRes.ok) return `Stripe error creating invoice: ${(await invRes.text()).substring(0, 300)}`;
+        if (!invRes.ok) return `Stripe error creating invoice: ${safeStripeError(await invRes.text())}`;
         const invoice = await invRes.json() as { id: string };
 
         // Add line item
@@ -883,7 +939,7 @@ export async function executeProcessPayment(
 
       case 'check_balance': {
         const res = await fetch('https://api.stripe.com/v1/balance', { headers });
-        if (!res.ok) return `Stripe error: ${(await res.text()).substring(0, 300)}`;
+        if (!res.ok) return `Stripe error: ${safeStripeError(await res.text())}`;
         const balance = await res.json() as { available: Array<{ amount: number; currency: string }>; pending: Array<{ amount: number; currency: string }> };
 
         const available = balance.available.map(b => `${b.currency.toUpperCase()} ${(b.amount / 100).toFixed(2)}`).join(', ');
@@ -895,7 +951,7 @@ export async function executeProcessPayment(
       case 'list_recent_payments': {
         const limit = Math.min((args.limit as number) || 10, 50);
         const res = await fetch(`https://api.stripe.com/v1/payment_intents?limit=${limit}`, { headers });
-        if (!res.ok) return `Stripe error: ${(await res.text()).substring(0, 300)}`;
+        if (!res.ok) return `Stripe error: ${safeStripeError(await res.text())}`;
         const data = await res.json() as { data: Array<Record<string, unknown>> };
 
         if (!data.data?.length) return 'No recent payments found.';
@@ -942,6 +998,11 @@ export async function executeGenerateDocument(
 
   if (!content && !data) return 'Error: content or data is required.';
 
+  // Encode user strings as base64 to prevent Python code injection
+  const titleB64 = Buffer.from(title).toString('base64');
+  const contentB64 = Buffer.from(content).toString('base64');
+  const dataB64 = data ? Buffer.from(JSON.stringify(data)).toString('base64') : '';
+
   // Build Python code to generate the document
   let code = '';
 
@@ -952,19 +1013,21 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-import json
+import json, base64
 
 doc = SimpleDocTemplate('/tmp/output.pdf', pagesize=A4, topMargin=0.75*inch, bottomMargin=0.75*inch)
 styles = getSampleStyleSheet()
 title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontSize=18, spaceAfter=20)
 body_style = ParagraphStyle('CustomBody', parent=styles['Normal'], fontSize=11, leading=14, spaceAfter=8)
 
+_title = base64.b64decode('${titleB64}').decode('utf-8')
+_content = base64.b64decode('${contentB64}').decode('utf-8')
+
 elements = []
-elements.append(Paragraph('''${title.replace(/'/g, "\\'")}''', title_style))
+elements.append(Paragraph(_title, title_style))
 elements.append(Spacer(1, 12))
 
-content = '''${content.replace(/'/g, "\\'").replace(/\n/g, '\\n')}'''
-for para in content.split('\\n'):
+for para in _content.split('\\n'):
     para = para.strip()
     if not para:
         elements.append(Spacer(1, 6))
@@ -979,7 +1042,7 @@ for para in content.split('\\n'):
 
 ${data ? `
 # Add data table if provided
-table_data = json.loads('''${JSON.stringify(data).replace(/'/g, "\\'")}''')
+table_data = json.loads(base64.b64decode('${dataB64}').decode('utf-8'))
 if isinstance(table_data, dict) and 'rows' in table_data:
     headers = table_data.get('headers', list(table_data['rows'][0].keys()) if table_data['rows'] else [])
     rows = [[str(row.get(h, '')) for h in headers] for row in table_data['rows']]
@@ -1002,11 +1065,11 @@ print("PDF generated successfully")
     code = `
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-import json
+import json, base64
 
 wb = openpyxl.Workbook()
 ws = wb.active
-ws.title = '''${title.replace(/'/g, "\\'").substring(0, 31)}'''
+ws.title = base64.b64decode('${titleB64}').decode('utf-8')[:31]
 
 # Header style
 header_font = Font(bold=True, color='FFFFFF', size=11)
@@ -1017,7 +1080,7 @@ thin_border = Border(
 )
 
 ${data ? `
-data = json.loads('''${JSON.stringify(data).replace(/'/g, "\\'")}''')
+data = json.loads(base64.b64decode('${dataB64}').decode('utf-8'))
 if isinstance(data, dict) and 'rows' in data:
     headers = data.get('headers', list(data['rows'][0].keys()) if data['rows'] else [])
     for col_idx, header in enumerate(headers, 1):
@@ -1035,8 +1098,8 @@ if isinstance(data, dict) and 'rows' in data:
         max_length = max(len(str(cell.value or '')) for cell in col)
         ws.column_dimensions[col[0].column_letter].width = min(max_length + 4, 50)
 ` : `
-content = '''${content.replace(/'/g, "\\'").replace(/\n/g, '\\n')}'''
-for i, line in enumerate(content.split('\\n'), 1):
+_content = base64.b64decode('${contentB64}').decode('utf-8')
+for i, line in enumerate(_content.split('\\n'), 1):
     ws.cell(row=i, column=1, value=line)
 `}
 
@@ -1048,13 +1111,14 @@ print("Excel generated successfully")
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
+import base64
 
 prs = Presentation()
 prs.slide_width = Inches(13.33)
 prs.slide_height = Inches(7.5)
 
-content = '''${content.replace(/'/g, "\\'").replace(/\n/g, '\\n')}'''
-slides_text = content.split('---')
+_content = base64.b64decode('${contentB64}').decode('utf-8')
+slides_text = _content.split('---')
 
 for i, slide_text in enumerate(slides_text):
     slide_text = slide_text.strip()
@@ -1471,7 +1535,7 @@ export async function executeManageProject(
       if (project) {
         const meta = (project.metadata || {}) as Record<string, unknown>;
         meta.subtask_count = ((meta.subtask_count as number) || 0) + 1;
-        await supabase.from('jobs').update({ metadata: meta }).eq('id', projectId);
+        await supabase.from('jobs').update({ metadata: meta }).eq('id', projectId).eq('business_id', toolCtx.businessId);
       }
 
       return `✅ Task added: "${title}" (${priority} priority)\nTask ID: ${data.id}\nProject: ${projectId}`;
@@ -1520,7 +1584,7 @@ export async function executeManageProject(
         if (parent) {
           const parentMeta = (parent.metadata || {}) as Record<string, unknown>;
           parentMeta.completed_count = ((parentMeta.completed_count as number) || 0) + 1;
-          await supabase.from('jobs').update({ metadata: parentMeta }).eq('id', meta.parent_project_id as string);
+          await supabase.from('jobs').update({ metadata: parentMeta }).eq('id', meta.parent_project_id as string).eq('business_id', toolCtx.businessId);
         }
       }
 

@@ -23,6 +23,7 @@ import { getToolsForAgent, executeTool, type ToolContext } from './tools';
 import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
 import { getAgentProvider } from './provider';
 import { sendWhatsAppWithCreds, type EvolutionCredentials } from '@/lib/evolution';
+import { discoverMcpTools, executeMcpTool, isMcpTool, type McpToolSchema } from './mcp';
 
 // ─── Launchfly CEO instance credentials (for tool updates & reports) ─────
 function getLaunchflyCreds(): EvolutionCredentials | null {
@@ -77,6 +78,7 @@ const PARALLEL_SAFE_TOOLS = new Set([
   'search_web', 'scrape_page', 'search_memory', 'search_tasks',
   'query_database', 'get_weather_forecast', 'search_google_maps',
   'save_memory', 'save_leads', 'draft_content', 'validate_memory',
+  'search_conversations',
 ]);
 
 const SKILL_AUTO_CREATE_MIN_TOOLS = 3;
@@ -591,7 +593,35 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     };
   });
 
-  const agentTools = getToolsForAgent(enabledTools);
+  const nativeTools = getToolsForAgent(enabledTools);
+
+  // ── Discover MCP tools (dynamic tools from external servers) ──
+  const mcpResult = await context.run('discover-mcp', async () => {
+    try {
+      const { tools: mcpTools, serverMap } = await discoverMcpTools(toolCtx.businessId);
+      // serverMap is a Map — serialize for Upstash step storage
+      const serializedMap: Record<string, { name: string; url: string; api_key?: string; headers?: Record<string, string> }> = {};
+      for (const [key, val] of serverMap.entries()) {
+        serializedMap[key] = { name: val.name, url: val.url, api_key: val.api_key, headers: val.headers };
+      }
+      return { mcpTools, serializedMap };
+    } catch (err) {
+      console.warn(`[agent:${taskId}] MCP discovery failed (non-fatal):`, err);
+      return { mcpTools: [] as McpToolSchema[], serializedMap: {} as Record<string, { name: string; url: string; api_key?: string; headers?: Record<string, string> }> };
+    }
+  });
+
+  const agentTools = [...nativeTools, ...mcpResult.mcpTools];
+  // Rebuild serverMap from serialized data
+  const mcpServerMap = new Map<string, { name: string; transport: 'http' | 'sse'; url: string; api_key?: string; headers?: Record<string, string>; id: string; tool_filter?: string[] }>();
+  for (const [key, val] of Object.entries(mcpResult.serializedMap)) {
+    mcpServerMap.set(key, { ...val, id: key, transport: 'http' as const });
+  }
+
+  if (mcpResult.mcpTools.length > 0) {
+    console.log(`[agent:${taskId}] Loaded ${mcpResult.mcpTools.length} MCP tools from external servers`);
+  }
+
   const executedToolCalls = new Set<string>();
 
   // Seed dedup tracker from existing tool_log
@@ -648,8 +678,15 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       warningMessage = `⚠️ You've made ${currentResearchSteps} research calls. Consider wrapping up and calling send_report unless you are missing critical data.`;
     }
 
-    const llmMessages = warningMessage
-      ? [...messages, { role: 'system' as const, content: warningMessage }]
+    // ── Memory nudge: prompt agent to persist learnings at step 5 ──
+    let memoryNudge = '';
+    if (stepsUsed === 5) {
+      memoryNudge = '🧠 MEMORY CHECK: You\'ve completed 5 steps. Pause and reflect — have you discovered any important facts, contacts, prices, patterns, or preferences worth saving? If so, call save_memory now before continuing. This ensures you don\'t lose valuable learnings if the task ends unexpectedly.';
+    }
+
+    const systemNudges = [warningMessage, memoryNudge].filter(Boolean);
+    const llmMessages = systemNudges.length > 0
+      ? [...messages, ...systemNudges.map(n => ({ role: 'system' as const, content: n }))]
       : messages;
 
     // ── LLM call via context.call() — offloaded to Upstash, no Vercel timeout ──
@@ -839,10 +876,15 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         // Send live status via WhatsApp (fire-and-forget)
         sendToolStatus(toolCtx, tc.function.name, toolArgs);
 
-        // Execute tool
+        // Execute tool (route MCP tools through MCP adapter)
         const timeout = TOOL_TIMEOUT_OVERRIDES[tc.function.name] || TOOL_TIMEOUT_MS;
         try {
-          const result = await executeTool(tc.function.name, toolArgs, toolCtx, timeout);
+          let result: string;
+          if (isMcpTool(tc.function.name)) {
+            result = await executeMcpTool(tc.function.name, toolArgs, mcpServerMap as any);
+          } else {
+            result = await executeTool(tc.function.name, toolArgs, toolCtx, timeout);
+          }
           return { id: tc.id, name: tc.function.name, args: toolArgs, result };
         } catch (err) {
           return { id: tc.id, name: tc.function.name, args: toolArgs, result: `Tool error: ${err instanceof Error ? err.message : String(err)}` };
@@ -1088,8 +1130,45 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
       // ── Auto-create skill (separate step to not block completion) ──
       await context.run('auto-skill', async () => {
-        await autoCreateSkill(supabase, taskId, goal, toolCtx.businessId, toolLog, providerConfig);
+        await autoCreateSkill(supabase, taskId, goal, toolCtx.businessId, toolLog, providerConfig, recalledSkillIds);
       });
+
+      // ── Memory reflection at task completion ──
+      if (toolLog.length >= 3 && !goal.startsWith('[DELEGATED TASK]')) {
+        await context.run('memory-reflection', async () => {
+          try {
+            const toolSummary = toolLog.slice(-10).map(t =>
+              `${t.tool}(${JSON.stringify(t.args).substring(0, 80)}) → ${safeSlice(t.result, 100)}`
+            ).join('\n');
+            const OpenAI = (await import('openai')).default;
+            const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: providerConfig.baseURL });
+            const reflection = await client.chat.completions.create({
+              model: providerConfig.model,
+              messages: [
+                { role: 'system', content: 'You are reviewing a completed agent task. Extract 1-3 key learnings worth remembering for future tasks. Focus on: new contacts/prices discovered, what worked vs failed, owner preferences revealed, patterns spotted. Return JSON array: [{"content":"...","category":"supplier|decision|pattern|preference|market_insight|tool_recipe|general","importance":0.5}]. Return [] if nothing worth saving.' },
+                { role: 'user', content: `Goal: ${goal}\n\nTool log:\n${toolSummary}\n\nFinal result: ${safeSlice(finalResult, 500)}` },
+              ],
+              max_tokens: 500,
+            });
+            const reflectionText = reflection.choices[0]?.message?.content?.trim() || '[]';
+            const memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
+            if (Array.isArray(memories) && memories.length > 0) {
+              for (const mem of memories.slice(0, 3)) {
+                if (mem.content && mem.content.length > 10) {
+                  await executeTool('save_memory', {
+                    content: mem.content,
+                    category: mem.category || 'general',
+                    importance: mem.importance || 0.5,
+                  }, toolCtx);
+                }
+              }
+              console.log(`[agent:${taskId}] Memory reflection saved ${memories.length} learnings`);
+            }
+          } catch (err) {
+            console.warn(`[agent:${taskId}] Memory reflection failed (non-fatal):`, err);
+          }
+        });
+      }
 
       // ── Update skill effectiveness ──
       if (recalledSkillIds.length > 0) {
@@ -1255,6 +1334,7 @@ async function autoCreateSkill(
   businessId: string,
   toolLog: ToolLogEntry[],
   providerConfig: { baseURL: string; model: string },
+  recalledSkillIds: string[] = [],
 ): Promise<void> {
   try {
     if (goal.startsWith('[DELEGATED TASK]')) return;
@@ -1280,7 +1360,6 @@ async function autoCreateSkill(
       match_count: 1,
       min_similarity: 0.55,
     });
-    if (existing?.length) return;
 
     const toolSequence = toolLog.map((t, i) =>
       `${i + 1}. ${t.tool}(${JSON.stringify(t.args).substring(0, 120)}) → ${safeSlice(t.result, 100)}`
@@ -1288,6 +1367,44 @@ async function autoCreateSkill(
 
     const OpenAI = (await import('openai')).default;
     const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: providerConfig.baseURL });
+
+    // ── Skill rewrite: if a recalled skill exists, evolve it instead of creating new ──
+    if (existing?.length) {
+      const existingSkill = existing[0] as { id: string; content: string; similarity: number };
+      const isRecalled = recalledSkillIds.includes(existingSkill.id);
+
+      if (isRecalled && existingSkill.content) {
+        // The agent used this skill — rewrite it with improvements from this execution
+        const rewriteCompletion = await client.chat.completions.create({
+          model: providerConfig.model,
+          messages: [
+            { role: 'system', content: 'You are improving an existing SKILL document based on a new execution. Compare the original skill with what actually happened. Update the STEPS, TIPS, and TRIGGER if the new execution reveals better approaches, new pitfalls, or refined parameters. Keep the same format:\n\nSKILL: [name]\nTRIGGER: [when to use]\nSTEPS:\n1. [tool] — [what and why]\nTIPS: [improved tips]\n\nPreserve wisdom from the original. Add new learnings. Output ONLY the updated skill.' },
+            { role: 'user', content: `ORIGINAL SKILL:\n${existingSkill.content}\n\nNEW EXECUTION:\nGoal: ${goal}\nTool sequence:\n${toolSequence}` },
+          ],
+          max_tokens: 600,
+        });
+
+        const rewrittenContent = rewriteCompletion.choices[0]?.message?.content?.trim();
+        if (rewrittenContent && rewrittenContent.length > 30) {
+          const newEmbedding = await embedClient.embeddings.create({
+            model: 'text-embedding-3-small',
+            input: rewrittenContent.substring(0, 8000),
+          });
+
+          await supabase.from('ai_memories').update({
+            content: rewrittenContent,
+            embedding: newEmbedding.data[0]?.embedding || null,
+            updated_at: new Date().toISOString(),
+            metadata: { source: 'auto_skill_rewrite', task_id: taskId, tools_used: Array.from(uniqueTools), rewrite_count: ((existingSkill as any).metadata?.rewrite_count || 0) + 1 },
+          }).eq('id', existingSkill.id);
+
+          console.log(`[agent:${taskId}] Rewrote existing skill ${existingSkill.id} with improved steps`);
+        }
+      }
+      // If not recalled, skip (don't create duplicate)
+      return;
+    }
+
     const skillCompletion = await client.chat.completions.create({
       model: providerConfig.model,
       messages: [
@@ -1396,6 +1513,22 @@ ${customRulesBlock}
 6. Save valuable leads with save_leads — don't just list them in text.
 7. Use request_approval BEFORE costly or irreversible actions (orders, campaigns, outreach to new contacts).
 8. Deliver final results via send_report, or write the full report in your last message.
+
+## STRUCTURED REASONING (use before EVERY action)
+Before calling any tool, think through your plan in a <scratch_pad> block:
+
+<scratch_pad>
+Goal: [restate what you need to accomplish in this step]
+Plan: [list the tool calls you intend to make and why]
+Observation: [after tools return — summarize the key data points]
+Reflection: [did this advance the goal? are there errors? what's the next step?]
+</scratch_pad>
+
+Rules for scratch_pad:
+- ALWAYS use it before multi-tool sequences (3+ tools)
+- Use it to catch yourself before making redundant calls
+- After receiving tool results, reflect on whether you have enough data to proceed
+- If reflection reveals a dead end, pivot strategy instead of repeating
 
 ## PROPORTIONALITY
 - Match your response to the request. Simple greetings ("Hello", "Hi") get a brief friendly reply — do NOT launch campaigns, create automations, or do deep analysis unless asked.

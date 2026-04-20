@@ -26,6 +26,7 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'validate_memory', 'search_tasks',
+  'search_conversations',
 ]);
 const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video', 'generate_long_video']);
 
@@ -458,6 +459,22 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
   {
     type: 'function' as const,
     function: {
+      name: 'search_conversations',
+      description: 'Search across ALL past conversations (owner messages + your replies) using full-text search. Use when the owner asks "what did we discuss about X?", "when did I mention Y?", or you need to recall something said in a previous conversation days/weeks ago. More powerful than search_tasks — searches actual message content, not just task goals.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search keywords or phrase (e.g. "marble supplier price", "booking system")' },
+          days: { type: 'number', description: 'How many days back to search (default: 90, max: 365)' },
+          limit: { type: 'number', description: 'Max results to return (default: 15, max: 30)' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'call_api',
       description: 'Call any external REST API using credentials stored in the business integrations vault. Use this to interact with third-party services (video generators, design tools, analytics platforms, etc.) that the owner has connected. Always search_memory for "tool_recipe" first to check if you already know how to call a specific API. For POST/PUT/DELETE requests that cost money, use request_approval first.',
       parameters: {
@@ -823,6 +840,9 @@ export async function executeTool(
 
     case 'search_tasks':
       return executeSearchTasks(args.query as string, toolCtx.businessId, (args.days as number) || 30);
+
+    case 'search_conversations':
+      return executeSearchConversations(args.query as string, toolCtx.businessId, (args.days as number) || 90, (args.limit as number) || 15);
 
     case 'save_memory':
       return executeSaveMemory(args.content as string, args.category as string, toolCtx, (args.importance as number) || 0.5);
@@ -2338,6 +2358,90 @@ async function executeSearchTasks(
     }).join('\n\n');
   } catch (err) {
     return `Task search failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE: Cross-Session Conversation Search (FTS)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function executeSearchConversations(
+  query: string,
+  businessId: string,
+  days: number = 90,
+  limit: number = 15,
+): Promise<string> {
+  try {
+    const supabase = getSupabase();
+    const safeDays = Math.min(Math.max(1, days), 365);
+    const safeLimit = Math.min(Math.max(1, limit), 30);
+
+    if (!query || query.trim().length < 2) return 'Error: query too short.';
+
+    // Try FTS first (PostgreSQL websearch_to_tsquery)
+    let results: Array<{ id: string; phone: string; role: string; content: string; created_at: string; rank?: number }> = [];
+
+    try {
+      const { data, error } = await supabase.rpc('search_conversations', {
+        search_query: query.trim(),
+        match_business_id: businessId,
+        match_phone: null,
+        max_results: safeLimit,
+        days_back: safeDays,
+      });
+      if (!error && data?.length) {
+        results = data;
+      }
+    } catch {
+      // RPC not deployed — fall back to ILIKE
+    }
+
+    // Fallback: ILIKE search if FTS returned nothing
+    if (results.length === 0) {
+      try {
+        const { data, error } = await supabase.rpc('search_conversations_like', {
+          search_query: query.trim().substring(0, 100),
+          match_business_id: businessId,
+          match_phone: null,
+          max_results: safeLimit,
+          days_back: safeDays,
+        });
+        if (!error && data?.length) {
+          results = data;
+        }
+      } catch {
+        // RPC not deployed — raw query fallback
+        const since = new Date(Date.now() - safeDays * 86400000).toISOString();
+        const keywords = query.split(/\s+/).filter(w => w.length > 2).slice(0, 4);
+        if (keywords.length === 0) return 'Error: no meaningful search terms.';
+
+        const orFilter = keywords.map(k => `content.ilike.%${k.replace(/[%_'"\\]/g, ' ')}%`).join(',');
+        const { data, error } = await supabase
+          .from('chat_history')
+          .select('id, phone, role, content, created_at')
+          .eq('business_id', businessId)
+          .gte('created_at', since)
+          .or(orFilter)
+          .order('created_at', { ascending: false })
+          .limit(safeLimit);
+
+        if (error) return `Search failed: ${error.message}`;
+        if (data?.length) results = data;
+      }
+    }
+
+    if (results.length === 0) return `No matching conversations found in the last ${safeDays} days.`;
+
+    // Group by date for readability
+    return results.map((m, i) => {
+      const d = new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const speaker = m.role === 'user' ? 'OWNER' : 'AI';
+      const content = (m.content || '').substring(0, 300);
+      const rankStr = m.rank ? ` (relevance: ${(m.rank as number).toFixed(2)})` : '';
+      return `${i + 1}. [${d}] ${speaker}${rankStr}:\n   ${content}`;
+    }).join('\n\n');
+  } catch (err) {
+    return `Conversation search failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 

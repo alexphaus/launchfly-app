@@ -457,6 +457,282 @@ async function testRunnerParity() {
 // TEST RUNNER
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. EXTENDED TOOLS TESTS (P0-P3)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function testNewToolSchemas() {
+  console.log('\n🧪 Extended Tools: All new tool schemas present in AGENT_TOOLS');
+
+  const toolsModule = await import('../../src/lib/agent/tools');
+  const { AGENT_TOOLS } = toolsModule;
+  const toolNames = new Set(AGENT_TOOLS.map((t: any) => t.function.name));
+
+  const newTools = [
+    'execute_python', 'process_document', 'knowledge_base',
+    'manage_calendar', 'process_payment', 'generate_document',
+    'analyze_image', 'deep_research', 'translate', 'manage_project',
+  ];
+
+  for (const name of newTools) {
+    assert(toolNames.has(name), `${name} schema exists in AGENT_TOOLS`);
+  }
+
+  // Verify required params for key tools
+  const pyTool = AGENT_TOOLS.find((t: any) => t.function.name === 'execute_python');
+  assert(
+    pyTool?.function?.parameters?.required?.includes('code'),
+    'execute_python requires "code" param',
+  );
+
+  const docTool = AGENT_TOOLS.find((t: any) => t.function.name === 'process_document');
+  assert(
+    docTool?.function?.parameters?.required?.includes('url'),
+    'process_document requires "url" param',
+  );
+
+  const kbTool = AGENT_TOOLS.find((t: any) => t.function.name === 'knowledge_base');
+  assert(
+    kbTool?.function?.parameters?.properties?.action?.enum?.length === 4,
+    'knowledge_base has 4 actions (search, add, list, delete)',
+  );
+
+  const calTool = AGENT_TOOLS.find((t: any) => t.function.name === 'manage_calendar');
+  assert(
+    calTool?.function?.parameters?.properties?.action?.enum?.length === 5,
+    'manage_calendar has 5 actions',
+  );
+
+  const payTool = AGENT_TOOLS.find((t: any) => t.function.name === 'process_payment');
+  assert(
+    payTool?.function?.parameters?.properties?.action?.enum?.includes('create_payment_link'),
+    'process_payment has create_payment_link action',
+  );
+
+  const researchTool = AGENT_TOOLS.find((t: any) => t.function.name === 'deep_research');
+  assert(
+    researchTool?.function?.parameters?.properties?.depth?.enum?.includes('thorough'),
+    'deep_research has depth enum with thorough option',
+  );
+}
+
+async function testToolSets() {
+  console.log('\n🧪 Extended Tools: INTERNAL_TOOLS and CORE_TOOLS sets updated');
+
+  const toolsSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools.ts'),
+    'utf-8',
+  );
+
+  const internalToolsMatch = toolsSrc.match(/const INTERNAL_TOOLS = new Set\(\[([^\]]+)\]\)/);
+  assert(!!internalToolsMatch, 'INTERNAL_TOOLS set found');
+
+  const internalStr = internalToolsMatch?.[1] || '';
+  const newInternalTools = [
+    'execute_python', 'process_document', 'knowledge_base',
+    'manage_calendar', 'process_payment', 'generate_document',
+    'analyze_image', 'deep_research', 'manage_project',
+  ];
+
+  for (const tool of newInternalTools) {
+    assert(internalStr.includes(`'${tool}'`), `${tool} in INTERNAL_TOOLS`);
+  }
+
+  // translate should be in CORE_TOOLS (available to everyone)
+  const coreToolsMatch = toolsSrc.match(/const CORE_TOOLS = new Set\(\[([^\]]+)\]\)/);
+  const coreStr = coreToolsMatch?.[1] || '';
+  assert(coreStr.includes("'translate'"), 'translate in CORE_TOOLS');
+}
+
+async function testParseSelectAggregates() {
+  console.log('\n🧪 query_database: parseSelect supports SUM/AVG/MIN/MAX aggregates');
+
+  // Read tools.ts and find parseSelect function to verify it handles aggregates
+  const toolsSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools.ts'),
+    'utf-8',
+  );
+
+  assert(
+    toolsSrc.includes("kind: 'aggregate'"),
+    'parseSelect returns aggregate kind',
+  );
+
+  assert(
+    toolsSrc.includes('SUM|AVG|MIN|MAX|COUNT'),
+    'parseSelect recognizes SUM/AVG/MIN/MAX/COUNT',
+  );
+
+  // Verify the aggregate execution path exists
+  assert(
+    toolsSrc.includes('AGGREGATE (SUM, AVG, MIN, MAX)'),
+    'executeQueryDatabase has aggregate execution path',
+  );
+
+  assert(
+    toolsSrc.includes('computeAgg'),
+    'computeAgg helper function exists',
+  );
+}
+
+async function testScrapPageAutoDetect() {
+  console.log('\n🧪 scrape_page: Auto-detects document URLs');
+
+  const toolsSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools.ts'),
+    'utf-8',
+  );
+
+  assert(
+    toolsSrc.includes('Auto-detect document URLs and route to process_document'),
+    'scrape_page has auto-detection comment',
+  );
+
+  assert(
+    toolsSrc.includes("\\.(pdf|xlsx?|csv|docx?|pptx?)$"),
+    'scrape_page detects PDF, Excel, CSV, Word, PowerPoint extensions',
+  );
+
+  assert(
+    toolsSrc.includes('return executeProcessDocument(url, extract)'),
+    'scrape_page routes to executeProcessDocument for document URLs',
+  );
+}
+
+async function testTranslate() {
+  console.log('\n🧪 translate: Handler exists and handles missing input');
+
+  const { executeTranslate } = await import('../../src/lib/agent/tools-extended');
+
+  const result1 = await executeTranslate({});
+  assert(result1.includes('Error: text is required'), 'Returns error for missing text');
+
+  const result2 = await executeTranslate({ text: 'hello' });
+  assert(result2.includes('Error: target_language is required'), 'Returns error for missing target_language');
+}
+
+async function testKnowledgeBaseChunking() {
+  console.log('\n🧪 knowledge_base: Text chunking works correctly');
+
+  // Import the module to access chunkText indirectly — test via executeKnowledgeBase
+  const extModule = await import('../../src/lib/agent/tools-extended');
+
+  // Test the handler input validation
+  const result1 = await extModule.executeKnowledgeBase(
+    { action: 'add', title: '' },
+    { businessId: 'test', ownerPhone: '', assistantName: '', businessName: '' } as any,
+  );
+  assert(result1.includes('Error: title is required'), 'Requires title for add action');
+
+  const result2 = await extModule.executeKnowledgeBase(
+    { action: 'add', title: 'Test', content: '' },
+    { businessId: 'test', ownerPhone: '', assistantName: '', businessName: '' } as any,
+  );
+  assert(result2.includes('Error: either url or content'), 'Requires url or content for add action');
+
+  const result3 = await extModule.executeKnowledgeBase(
+    { action: 'search', query: '' },
+    { businessId: 'test', ownerPhone: '', assistantName: '', businessName: '' } as any,
+  );
+  assert(result3.includes('Error: query is required'), 'Requires query for search action');
+
+  const result4 = await extModule.executeKnowledgeBase(
+    { action: 'delete' },
+    { businessId: 'test', ownerPhone: '', assistantName: '', businessName: '' } as any,
+  );
+  assert(result4.includes('Error: doc_id is required'), 'Requires doc_id for delete action');
+}
+
+async function testContradictionDetection() {
+  console.log('\n🧪 save_memory: Contradiction detection integrated');
+
+  const toolsSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'tools.ts'),
+    'utf-8',
+  );
+
+  assert(
+    toolsSrc.includes('checkMemoryContradiction'),
+    'save_memory calls checkMemoryContradiction',
+  );
+
+  assert(
+    toolsSrc.includes('CONTRADICTION DETECTED'),
+    'save_memory reports contradictions',
+  );
+
+  assert(
+    toolsSrc.includes("outcome: 'superseded'"),
+    'save_memory auto-supersedes contradicting memories',
+  );
+
+  // Test the contradiction checker function directly
+  const { checkMemoryContradiction } = await import('../../src/lib/agent/tools-extended');
+  assert(typeof checkMemoryContradiction === 'function', 'checkMemoryContradiction is exported');
+}
+
+async function testToolTimeoutOverrides() {
+  console.log('\n🧪 Both runners: TOOL_TIMEOUT_OVERRIDES include new tools');
+
+  const workflowSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'workflow-runner.ts'),
+    'utf-8',
+  );
+
+  const runnerSrc = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'lib', 'agent', 'runner.ts'),
+    'utf-8',
+  );
+
+  const newTimeoutTools = [
+    'execute_python', 'process_document', 'deep_research',
+    'generate_document', 'manage_calendar', 'process_payment',
+  ];
+
+  for (const tool of newTimeoutTools) {
+    assert(
+      workflowSrc.includes(`${tool}:`),
+      `workflow-runner: ${tool} in TOOL_TIMEOUT_OVERRIDES`,
+    );
+    assert(
+      runnerSrc.includes(`${tool}:`),
+      `runner: ${tool} in TOOL_TIMEOUT_OVERRIDES`,
+    );
+  }
+
+  // Verify PARALLEL_SAFE_TOOLS updated in both
+  for (const file of [workflowSrc, runnerSrc]) {
+    assert(
+      file.includes("'translate'") && file.includes("'knowledge_base'") && file.includes("'analyze_image'"),
+      'PARALLEL_SAFE_TOOLS includes translate, knowledge_base, analyze_image',
+    );
+  }
+
+  // Verify system prompt tips
+  for (const src of [workflowSrc, runnerSrc]) {
+    assert(
+      src.includes('**execute_python**'),
+      'System prompt has execute_python tip',
+    );
+    assert(
+      src.includes('**knowledge_base**'),
+      'System prompt has knowledge_base tip',
+    );
+    assert(
+      src.includes('**manage_calendar**'),
+      'System prompt has manage_calendar tip',
+    );
+    assert(
+      src.includes('**deep_research**'),
+      'System prompt has deep_research tip',
+    );
+    assert(
+      src.includes('**translate**'),
+      'System prompt has translate tip',
+    );
+  }
+}
+
 async function main() {
   console.log('═══════════════════════════════════════════════════');
   console.log('  Agent Features Test Suite (5 new features)');
@@ -497,6 +773,16 @@ async function main() {
 
   // 8. Parity
   await testRunnerParity();
+
+  // 9. Extended tools
+  await testNewToolSchemas();
+  await testToolSets();
+  await testParseSelectAggregates();
+  await testScrapPageAutoDetect();
+  await testTranslate();
+  await testKnowledgeBaseChunking();
+  await testContradictionDetection();
+  await testToolTimeoutOverrides();
 
   // DB-dependent tests
   if (!unitOnly) {

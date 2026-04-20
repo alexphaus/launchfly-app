@@ -63,6 +63,12 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   send_voice_note: 30_000,    // TTS generation + upload + send
   generate_video: 55_000,      // Vast.ai boot + generate (capped by Vercel 60s — prefer workflow-runner)
   generate_long_video: 55_000, // Multi-scene (capped by Vercel 60s — prefer workflow-runner)
+  execute_python: 55_000,      // E2B sandbox (capped by Vercel — prefer workflow-runner for long tasks)
+  process_document: 55_000,    // Document download + parse (capped by Vercel)
+  deep_research: 55_000,       // Multi-step search (capped by Vercel)
+  generate_document: 55_000,   // Doc gen (capped by Vercel)
+  manage_calendar: 15_000,     // Google Calendar API
+  process_payment: 15_000,     // Stripe API
 };
 const LLM_TIMEOUT_MS = 48_000;        // Max time for a single LLM call (48s — give DeepSeek maximum possible runway)
 const LLM_MAX_RETRIES = 1;            // Single retry for transient DeepSeek errors (was 2 — too slow)
@@ -79,7 +85,7 @@ const PARALLEL_SAFE_TOOLS = new Set([
   'search_web', 'scrape_page', 'search_memory', 'search_tasks',
   'query_database', 'get_weather_forecast', 'search_google_maps',
   'save_memory', 'save_leads', 'draft_content', 'validate_memory',
-  'search_conversations',
+  'search_conversations', 'translate', 'knowledge_base', 'analyze_image',
 ]);
 
 // ─── Skill Auto-Creation ─────────────────────────────────────────────────
@@ -1879,11 +1885,23 @@ Rules for scratch_pad:
 - **manage_automation**: Default to \`agent_task\` action type (spawns full agent with all tools). Only use \`notify_owner\` for static hardcoded text with no AI logic.
   Config by type: agent_task={agentGoal, agentRole?} | notify_owner={message} | send_whatsapp={message} | delay={hours} | ai_response=(no config) | search_leads={searchQuery, searchLocation, maxResults, dailyCap}
 - **run_code**: Sandboxed JS — no network/filesystem. Fetch data with other tools first, then pass as literals.
+- **execute_python**: Full cloud Python sandbox (E2B) — has network, pip, filesystem. Use for data analysis, chart generation, web scraping, file processing, complex calculations. Install any package with packages param. Use print() for output. Charts auto-upload.
+- **process_document**: Extracts text/tables from PDF, Excel, CSV, Word, PPTX files. Give it a URL. Use extract param to filter for specific info.
+- **knowledge_base**: Persistent searchable document library. Add SOPs, manuals, price lists. Search with natural language.
 - **browse_web**: Real cloud browser for clicking, typing, forms. Use search_web/scrape_page for simple reads (cheaper).
+- **manage_calendar**: Google Calendar integration — list events, check availability, create/update/delete events. Requires google_calendar integration.
+- **process_payment**: Stripe integration — create payment links, send invoices, check balance. Requires stripe integration. Use request_approval before sending invoices.
+- **generate_document**: Create PDFs (reports, invoices, proposals), Excel spreadsheets, PowerPoint presentations. Use # headings, - bullets, --- slide breaks.
+- **analyze_image**: GPT-4o vision — read text from photos, analyze receipts, screenshots, product photos, handwriting. Use extract_schema for structured extraction.
+- **deep_research**: Multi-source research engine. Decomposes questions, runs parallel searches, synthesizes report with citations. Use for market analysis, competitor research.
+- **translate**: Translate text between any languages. Uses DeepL (high quality) or AI fallback. Good for multilingual customer support.
+- **manage_project**: Lightweight project tracking with subtasks, priorities, assignees, deadlines. Projects group related tasks.
+- **query_database**: Supports SUM/AVG/MIN/MAX aggregations. Use select: "status, COUNT(*) as count" for grouping, or "SUM(amount) as total" for totals.
 - **call_api / request_integration**: Check search_memory for "tool_recipe" first. Save recipes after success. Request ONE integration at a time. NEVER request integrations on your own initiative — only when the owner asks.
 - **request_integration (webhook mode)**: When the owner says "set up a webhook for X" or "I connected X, wake up when it fires", use request_integration with webhook=true and webhook_instructions describing what to do when events arrive. This generates a URL the owner pastes into the external service settings.
 - **send_email / make_call**: For cold outreach, use request_approval first.
 - **update_instructions**: Save permanent behavioral rules, not one-time facts (use save_memory for those).
+- **save_memory**: Auto-detects contradictions — if a new memory contradicts an existing one, the old one is auto-superseded.
 
 ## CRITICAL THINKING & STRATEGY
 - Act as a proactive, high-leverage business partner. Don't just execute blindly—suggest optimizations, identify bottlenecks, and flag risks.

@@ -9,6 +9,19 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { syncBusinessCrons } from '@/lib/automations/cron';
+import {
+  executeExecutePython,
+  executeProcessDocument,
+  executeKnowledgeBase,
+  executeManageCalendar,
+  executeProcessPayment,
+  executeGenerateDocument,
+  executeAnalyzeImage,
+  executeDeepResearch,
+  executeTranslate,
+  executeManageProject,
+  checkMemoryContradiction,
+} from './tools-extended';
 
 function getSupabase() {
   return createClient(
@@ -26,9 +39,9 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'draft_content', 'get_weather_forecast',
   'search_memory', 'save_memory', 'validate_memory', 'search_tasks',
-  'search_conversations',
+  'search_conversations', 'translate',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video', 'generate_long_video']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video', 'generate_long_video', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'deep_research', 'manage_project']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -743,6 +756,201 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
       },
     },
   },
+  // ── P0: Execute Python (E2B cloud sandbox) ────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'execute_python',
+      description: 'Execute Python code in a full cloud sandbox with network access, 200+ packages (pandas, matplotlib, requests, PIL, BeautifulSoup, openpyxl, pdfplumber, etc.), and file I/O. Use this for data analysis, chart generation, web scraping, API calls, file processing, complex calculations, or anything the other tools cannot handle. The sandbox has pip — install any package you need. Use print() for output. Generated charts/images are auto-uploaded and returned as URLs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'Python code to execute. Use print() for output. Has full stdlib + network + filesystem.' },
+          packages: { type: 'array', items: { type: 'string' }, description: 'Optional pip packages to install before execution (e.g. ["pandas", "matplotlib", "beautifulsoup4"]).' },
+          timeout_ms: { type: 'number', description: 'Max execution time in ms (default 30000, max 300000). Increase for long-running tasks.' },
+          files: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, url: { type: 'string' } }, required: ['name', 'url'] }, description: 'Files to download into the sandbox before execution. Each has name (filename) and url (HTTPS URL).' },
+        },
+        required: ['code'],
+      },
+    },
+  },
+  // ── P1: Process Document (PDF/Excel/CSV/Word/PowerPoint) ──────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'process_document',
+      description: 'Extract text, tables, and data from documents: PDF, Excel (.xlsx), CSV, Word (.docx), PowerPoint (.pptx), or plain text. Provide a URL to the document. Optionally specify what to extract for targeted results. Use for invoices, contracts, reports, spreadsheets, catalogs, and any structured document.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'HTTPS URL to the document file.' },
+          extract: { type: 'string', description: 'Optional: what specific information to extract (e.g. "all invoice line items with amounts", "contact emails and phone numbers").' },
+          format: { type: 'string', enum: ['text', 'json', 'markdown'], description: 'Output format (default: text).' },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  // ── P1: Knowledge Base (RAG over business documents) ──────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'knowledge_base',
+      description: 'Manage the business knowledge base — a persistent, searchable library of documents (SOPs, manuals, price lists, contracts, handbooks). Documents are chunked and embedded for semantic search. Use action="search" to find info, "add" to add documents (from URL or direct content), "list" to see all docs, "delete" to remove.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['search', 'add', 'list', 'delete'], description: 'Operation to perform.' },
+          query: { type: 'string', description: 'Search query (for action=search). Natural language question.' },
+          url: { type: 'string', description: 'URL of document to add (for action=add). Supports PDF, Excel, Word, web pages.' },
+          title: { type: 'string', description: 'Document title (required for action=add).' },
+          content: { type: 'string', description: 'Direct text content to add (alternative to url, for action=add).' },
+          doc_id: { type: 'string', description: 'Document ID (for action=delete). Use action=list to find IDs.' },
+          limit: { type: 'number', description: 'Max results for search (default 5, max 8).' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  // ── P2: Manage Calendar (Google Calendar) ─────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'manage_calendar',
+      description: 'Manage Google Calendar: list events, check availability, create/update/delete events, send invites. Requires a google_calendar integration to be configured via request_integration.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['list', 'check_availability', 'create', 'update', 'delete'], description: 'Operation to perform.' },
+          start: { type: 'string', description: 'Start datetime (ISO 8601). For list/check_availability: start of range. For create: event start.' },
+          end: { type: 'string', description: 'End datetime (ISO 8601). For list/check_availability: end of range. For create: event end.' },
+          summary: { type: 'string', description: 'Event title (for create/update).' },
+          description: { type: 'string', description: 'Event description (for create/update).' },
+          location: { type: 'string', description: 'Event location (for create/update).' },
+          attendees: { type: 'array', items: { type: 'string' }, description: 'Email addresses of attendees (for create).' },
+          event_id: { type: 'string', description: 'Event ID (for update/delete).' },
+          calendar_id: { type: 'string', description: 'Calendar ID (default: primary).' },
+          limit: { type: 'number', description: 'Max events to return (default 10, max 50).' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  // ── P2: Process Payment (Stripe) ──────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'process_payment',
+      description: 'Create payment links, send invoices, check Stripe balance, and list recent payments. Requires a stripe integration. IMPORTANT: For creating invoices to real customers, use request_approval first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['create_payment_link', 'create_invoice', 'check_balance', 'list_recent_payments'], description: 'Operation to perform.' },
+          amount: { type: 'number', description: 'Payment amount in base currency units (e.g. 25.99). Required for create_payment_link and create_invoice.' },
+          currency: { type: 'string', description: 'Currency code (default: usd). E.g. usd, eur, gbp, myr, php.' },
+          description: { type: 'string', description: 'Payment/invoice description.' },
+          customer_email: { type: 'string', description: 'Customer email (required for create_invoice).' },
+          due_date: { type: 'string', description: 'Invoice due date (ISO 8601). Default: 7 days from now.' },
+          limit: { type: 'number', description: 'Max results for list_recent_payments (default 10).' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  // ── P2: Generate Document (PDF/Excel/Slides) ─────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'generate_document',
+      description: 'Generate professional documents: PDFs (proposals, invoices, reports), Excel spreadsheets (data exports, financial models), or PowerPoint presentations. Provide the content as text (use # for headings, - for bullets, --- for slide breaks in PPTX). For tables/data, provide a data object with headers and rows.',
+      parameters: {
+        type: 'object',
+        properties: {
+          doc_type: { type: 'string', enum: ['pdf', 'excel', 'xlsx', 'pptx', 'slides'], description: 'Document type to generate.' },
+          title: { type: 'string', description: 'Document title.' },
+          content: { type: 'string', description: 'Document content as text. For PDF: use # and ## for headings, - for bullets. For PPTX: use --- to separate slides. For Excel: one row per line, pipe-separated.' },
+          data: { type: 'object', description: 'Structured data for tables. Format: { "headers": ["Col1", "Col2"], "rows": [{"Col1": "val1", "Col2": "val2"}] }' },
+        },
+        required: ['doc_type', 'title'],
+      },
+    },
+  },
+  // ── P2: Analyze Image (general-purpose vision) ────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'analyze_image',
+      description: 'Analyze any image using GPT-4o vision. Read text from photos, extract data from receipts/business cards, analyze screenshots, describe product photos, verify deliveries, read handwritten notes, or answer any visual question. For inventory comparison, use analyze_inventory instead.',
+      parameters: {
+        type: 'object',
+        properties: {
+          image_url: { type: 'string', description: 'HTTPS URL of the image to analyze.' },
+          question: { type: 'string', description: 'What to analyze or extract from the image (default: describe everything visible).' },
+          extract_schema: { type: 'object', description: 'Optional JSON schema for structured extraction. Keys are field names, values are descriptions.' },
+        },
+        required: ['image_url'],
+      },
+    },
+  },
+  // ── P2: Deep Research (multi-step research chain) ─────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'deep_research',
+      description: 'Conduct comprehensive multi-source research on a complex question. Decomposes the question into sub-queries, runs parallel searches, cross-references sources, and synthesizes a research report with citations. Use for market analysis, competitor deep-dives, regulatory research, due diligence, or any question requiring multiple sources.',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'The research question or topic to investigate.' },
+          depth: { type: 'string', enum: ['quick', 'standard', 'thorough'], description: 'Research depth: quick (2 queries), standard (4 queries), thorough (6 queries). Default: standard.' },
+          max_sources: { type: 'number', description: 'Maximum number of sources to analyze (default 8, max 15).' },
+        },
+        required: ['question'],
+      },
+    },
+  },
+  // ── P3: Translate ─────────────────────────────────────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'translate',
+      description: 'Translate text between languages. Uses DeepL (if configured) for high-quality translation, with AI fallback. Supports all major languages.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Text to translate.' },
+          target_language: { type: 'string', description: 'Target language code: EN, ES, FR, DE, IT, PT, NL, PL, RU, ZH, JA, KO, AR, HI, TH, VI, MS, ID, TL, etc.' },
+          source_language: { type: 'string', description: 'Source language code (optional — auto-detected if omitted).' },
+        },
+        required: ['text', 'target_language'],
+      },
+    },
+  },
+  // ── P3: Manage Project (lightweight project tracking) ─────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'manage_project',
+      description: 'Manage projects with subtasks, priorities, assignees, deadlines, and progress tracking. Projects group related tasks into a structured hierarchy. Uses the jobs table with metadata for project/subtask relationships.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['create_project', 'add_task', 'update_task', 'list'], description: 'Operation to perform.' },
+          name: { type: 'string', description: 'Project or task name (for create_project, add_task).' },
+          title: { type: 'string', description: 'Task title (for add_task).' },
+          description: { type: 'string', description: 'Project or task description.' },
+          project_id: { type: 'string', description: 'Parent project ID (for add_task, list project tasks).' },
+          task_id: { type: 'string', description: 'Task ID (for update_task).' },
+          status: { type: 'string', enum: ['draft', 'ready', 'blocked', 'completed'], description: 'Task status (for update_task).' },
+          assignee: { type: 'string', description: 'Person assigned to the task.' },
+          priority: { type: 'string', enum: ['low', 'medium', 'high', 'critical'], description: 'Task priority (default: medium).' },
+          deadline: { type: 'string', description: 'Due date (ISO 8601 or YYYY-MM-DD).' },
+          depends_on: { type: 'array', items: { type: 'string' }, description: 'Task IDs this task depends on.' },
+        },
+        required: ['action'],
+      },
+    },
+  },
   ];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
@@ -886,6 +1094,45 @@ export async function executeTool(
     case 'generate_long_video':
       return executeGenerateLongVideo(args as Record<string, unknown>, toolCtx);
 
+    case 'execute_python':
+      return executeExecutePython(
+        args.code as string,
+        args.packages as string[] | undefined,
+        args.timeout_ms as number | undefined,
+        args.files as Array<{ name: string; url: string }> | undefined,
+      );
+
+    case 'process_document':
+      return executeProcessDocument(
+        args.url as string,
+        args.extract as string | undefined,
+        args.format as string | undefined,
+      );
+
+    case 'knowledge_base':
+      return executeKnowledgeBase(args as Record<string, unknown>, toolCtx);
+
+    case 'manage_calendar':
+      return executeManageCalendar(args as Record<string, unknown>, toolCtx);
+
+    case 'process_payment':
+      return executeProcessPayment(args as Record<string, unknown>, toolCtx);
+
+    case 'generate_document':
+      return executeGenerateDocument(args as Record<string, unknown>, toolCtx);
+
+    case 'analyze_image':
+      return executeAnalyzeImage(args as Record<string, unknown>, toolCtx);
+
+    case 'deep_research':
+      return executeDeepResearch(args as Record<string, unknown>, toolCtx);
+
+    case 'translate':
+      return executeTranslate(args as Record<string, unknown>);
+
+    case 'manage_project':
+      return executeManageProject(args as Record<string, unknown>, toolCtx);
+
     default:
       return `Unknown tool: ${name}`;
   }
@@ -1008,6 +1255,12 @@ async function executeScrapePage(url: string, extract?: string): Promise<string>
     }
   } catch {
     return 'Error: Invalid URL format';
+  }
+
+  // Auto-detect document URLs and route to process_document
+  const urlLower = url.toLowerCase().split('?')[0];
+  if (/\.(pdf|xlsx?|csv|docx?|pptx?)$/.test(urlLower)) {
+    return executeProcessDocument(url, extract);
   }
 
   // Try Exa /contents first (livecrawl, better quality), fall back to Jina
@@ -1330,6 +1583,7 @@ type ParsedSelect =
   | { kind: 'columns'; columns: string }
   | { kind: 'count'; alias: string }
   | { kind: 'groupCount'; column: string; alias: string }
+  | { kind: 'aggregate'; aggs: Array<{ fn: string; col: string; alias: string }>; groupBy?: string }
   | { kind: 'invalid'; reason: string };
 
 // Only allow simple column names plus a small set of safe aggregate shapes.
@@ -1363,9 +1617,41 @@ function parseSelect(select: string): ParsedSelect {
     return { kind: 'columns', columns: cols.join(',') };
   }
 
+  // Parse aggregate expressions: SUM(col) as alias, AVG(col) as alias, etc.
+  // Optionally preceded by a GROUP BY column
+  const SAFE_AGG_FN = /^(SUM|AVG|MIN|MAX|COUNT)$/i;
+  const aggParts = normalized.split(',').map(p => p.trim());
+  const aggs: Array<{ fn: string; col: string; alias: string }> = [];
+  let groupBy: string | undefined;
+
+  for (const part of aggParts) {
+    // Match: FN(column) as alias  or  FN(column)
+    const aggMatch = part.match(/^(\w+)\(([a-zA-Z_][a-zA-Z0-9_]*|\*)\)\s*(?:as\s+([a-zA-Z_][a-zA-Z0-9_]*))?$/i);
+    if (aggMatch && SAFE_AGG_FN.test(aggMatch[1])) {
+      aggs.push({
+        fn: aggMatch[1].toUpperCase(),
+        col: aggMatch[2],
+        alias: aggMatch[3] || `${aggMatch[1].toLowerCase()}_${aggMatch[2]}`,
+      });
+      continue;
+    }
+    // Plain column name (for GROUP BY)
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part)) {
+      if (!groupBy) {
+        groupBy = part;
+        continue;
+      }
+    }
+    // If we already have some aggs, ignore unrecognized parts rather than failing
+  }
+
+  if (aggs.length > 0) {
+    return { kind: 'aggregate', aggs, groupBy };
+  }
+
   return {
     kind: 'invalid',
-    reason: 'Unsupported select expression. Use plain column names, COUNT(*) as alias, or column, COUNT(*) as alias.',
+    reason: 'Unsupported select expression. Use plain column names, COUNT(*) as alias, SUM(col) as alias, AVG(col) as alias, MIN(col) as alias, MAX(col) as alias, or column, COUNT(*) as alias.',
   };
 }
 
@@ -1526,6 +1812,92 @@ async function executeQueryDatabase(
         ? '\nWarning: grouped counts truncated after scanning 5000 matching rows.'
         : '';
       return `${rows.length} grouped row(s):\n${JSON.stringify(outputRows, null, 2).substring(0, 6000)}${warning}`;
+    }
+
+    // ─── AGGREGATE (SUM, AVG, MIN, MAX) ───
+    if (parsedSelect.kind === 'aggregate') {
+      const columnsNeeded = new Set<string>();
+      for (const agg of parsedSelect.aggs) {
+        if (agg.col !== '*') columnsNeeded.add(agg.col);
+      }
+      if (parsedSelect.groupBy) columnsNeeded.add(parsedSelect.groupBy);
+
+      const selectCols = columnsNeeded.size > 0 ? [...columnsNeeded].join(',') : '*';
+      const pageSize = 1000;
+      let allRows: Array<Record<string, unknown>> = [];
+      let from = 0;
+      let truncated = false;
+
+      while (true) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let pageQuery: any = supabase
+          .from(table)
+          .select(selectCols)
+          .eq('business_id', businessId);
+        if (filters) pageQuery = applyFilters(pageQuery, filters);
+
+        const { data: batch, error } = await pageQuery.range(from, from + pageSize - 1);
+        if (error) return `Aggregate query error: ${error.message}`;
+        if (!batch?.length) break;
+
+        allRows = allRows.concat(batch as Array<Record<string, unknown>>);
+        if (batch.length < pageSize) break;
+        from += pageSize;
+        if (from >= 10000) { truncated = true; break; }
+      }
+
+      if (!allRows.length) return `No results in ${table} matching those filters.`;
+
+      const computeAgg = (values: number[], fn: string): number => {
+        if (values.length === 0) return 0;
+        switch (fn) {
+          case 'SUM': return values.reduce((a, b) => a + b, 0);
+          case 'AVG': return values.reduce((a, b) => a + b, 0) / values.length;
+          case 'MIN': return Math.min(...values);
+          case 'MAX': return Math.max(...values);
+          case 'COUNT': return values.length;
+          default: return 0;
+        }
+      };
+
+      if (parsedSelect.groupBy) {
+        const groups = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of allRows) {
+          const key = row[parsedSelect.groupBy] === null ? '__null__' : String(row[parsedSelect.groupBy]);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(row);
+        }
+
+        const results = [...groups.entries()].map(([key, groupRows]) => {
+          const result: Record<string, unknown> = { [parsedSelect.groupBy!]: key === '__null__' ? null : key };
+          for (const agg of parsedSelect.aggs) {
+            const values = groupRows
+              .map(r => Number(r[agg.col]))
+              .filter(v => !isNaN(v));
+            result[agg.alias] = Math.round(computeAgg(values, agg.fn) * 100) / 100;
+          }
+          return result;
+        }).sort((a, b) => {
+          // Sort by first agg descending
+          const firstAlias = parsedSelect.aggs[0]?.alias;
+          return firstAlias ? (Number(b[firstAlias]) || 0) - (Number(a[firstAlias]) || 0) : 0;
+        });
+
+        const outputRows = results.slice(0, Math.min(limit, 100));
+        const warning = truncated ? '\nWarning: aggregation truncated after scanning 10000 rows.' : '';
+        return `${results.length} grouped result(s) from ${allRows.length} rows:\n${JSON.stringify(outputRows, null, 2).substring(0, 6000)}${warning}`;
+      } else {
+        // Global aggregation (no group by)
+        const result: Record<string, unknown> = { total_rows: allRows.length };
+        for (const agg of parsedSelect.aggs) {
+          const values = agg.col === '*'
+            ? allRows.map((_, i) => i + 1) // COUNT(*)
+            : allRows.map(r => Number(r[agg.col])).filter(v => !isNaN(v));
+          result[agg.alias] = Math.round(computeAgg(values, agg.fn) * 100) / 100;
+        }
+        const warning = truncated ? ' (truncated after 10000 rows)' : '';
+        return `Aggregate result${warning}:\n${JSON.stringify(result, null, 2)}`;
+      }
     }
 
     // Parse order_by: prefix '-' means ascending (oldest first), default descending
@@ -2551,6 +2923,28 @@ async function executeSaveMemory(
     const embedding = await getEmbedding(content);
     const clampedImportance = Math.max(0, Math.min(1, importance));
 
+    // ── Contradiction detection ──
+    let contradictionNote = '';
+    try {
+      const check = await checkMemoryContradiction(content, toolCtx.businessId);
+      if (check.contradicts && check.existingMemory && check.existingId) {
+        // Auto-supersede the old memory
+        await supabase
+          .from('ai_memories')
+          .update({
+            archived: true,
+            outcome: 'superseded',
+            outcome_reason: `Superseded by newer memory: "${content.substring(0, 100)}"`,
+          })
+          .eq('id', check.existingId)
+          .eq('business_id', toolCtx.businessId);
+
+        contradictionNote = `\n⚠️ CONTRADICTION DETECTED: Existing memory "${check.existingMemory.substring(0, 80)}..." was auto-superseded. If this was wrong, use validate_memory to restore it.`;
+      }
+    } catch {
+      // Non-fatal — don't block save
+    }
+
     const { error } = await supabase.from('ai_memories').insert({
       business_id: toolCtx.businessId,
       content,
@@ -2574,7 +2968,7 @@ async function executeSaveMemory(
       }
     }
 
-    return `Memory saved: [${category}] "${content.substring(0, 80)}..." (importance: ${importance})`;
+    return `Memory saved: [${category}] "${content.substring(0, 80)}..." (importance: ${importance})${contradictionNote}`;
   } catch (err) {
     return `Failed: ${err instanceof Error ? err.message : String(err)}`;
   }

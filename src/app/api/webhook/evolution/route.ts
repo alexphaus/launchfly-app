@@ -253,10 +253,6 @@ export async function POST(request: NextRequest) {
       '';
 
     // Handle documents and images without text
-    // Note: media download deferred until businessId is resolved (needed for storage path)
-    let pendingSupplierDoc: { fileName: string; mimetype: string } | null = null;
-    let pendingSupplierImg: { mimetype: string } | null = null;
-
     if (!messageText) {
       const docMsg = data.message?.documentMessage || data.message?.documentWithCaptionMessage?.message?.documentMessage;
       const imgMsg = data.message?.imageMessage || data.message?.imageWithCaptionMessage?.message?.imageMessage;
@@ -266,43 +262,86 @@ export async function POST(request: NextRequest) {
         const mimetype = docMsg.mimetype;
         
         let extractedText: string | null = null;
+        let docUrl: string | null = null;
 
-        // Try inline text extraction for PDFs (doesn't need businessId)
-        if (mimetype === 'application/pdf') {
-          console.log(`   📄 PDF detected from ${remoteJid}, extracting text...`);
-          try {
-            const instCreds = await resolveInstanceCreds(instanceName);
-            if (instCreds) {
-              const { extractTextFromDocument } = await import('@/lib/extract-document');
-              const text = await extractTextFromDocument({
+        try {
+          const instCreds = await resolveInstanceCreds(instanceName);
+          if (instCreds) {
+            // Try inline text extraction for PDFs
+            if (mimetype === 'application/pdf') {
+              console.log(`   📄 PDF detected from ${remoteJid}, extracting text...`);
+              try {
+                const { extractTextFromDocument } = await import('@/lib/extract-document');
+                const text = await extractTextFromDocument({
+                  baseUrl: instCreds.baseUrl,
+                  apiKey: instCreds.apiKey,
+                  instanceName: instCreds.instanceName,
+                  message: data.message,
+                  messageKey: data.key,
+                  mimetype,
+                  fileName,
+                });
+                if (text && text.trim().length > 0) {
+                  extractedText = text;
+                  console.log(`   📝 Extracted ${text.length} chars from PDF: "${text.substring(0, 100).replace(/\n/g, ' ')}..."`);
+                }
+              } catch (err) {
+                console.warn('   ⚠️ PDF extraction failed:', err);
+              }
+            }
+
+            // If text extraction failed/skipped, download and store for agent access
+            if (!extractedText) {
+              const { downloadAndStoreMedia } = await import('@/lib/vision-inventory');
+              docUrl = await downloadAndStoreMedia({
                 baseUrl: instCreds.baseUrl,
                 apiKey: instCreds.apiKey,
                 instanceName: instCreds.instanceName,
                 message: data.message,
                 messageKey: data.key,
-                mimetype,
                 fileName,
+                mimetype,
               });
-              if (text && text.trim().length > 0) {
-                extractedText = text;
-                console.log(`   📝 Extracted ${text.length} chars from PDF: "${text.substring(0, 100).replace(/\n/g, ' ')}..."`);
-              }
+              if (docUrl) console.log(`   📎 Document stored: ${docUrl}`);
             }
-          } catch (err) {
-            console.warn('   ⚠️ PDF extraction failed:', err);
           }
+        } catch (err) {
+          console.warn('   ⚠️ Document processing failed:', err);
         }
 
         if (extractedText) {
-          messageText = `[Supplier sent a PDF document: ${fileName}]\n\n--- PDF CONTENTS ---\n${extractedText}\n--- END PDF CONTENTS ---`;
+          messageText = `[Document received: ${fileName}]\n\n--- DOCUMENT CONTENTS ---\n${extractedText}\n--- END DOCUMENT CONTENTS ---`;
+        } else if (docUrl) {
+          messageText = `[Document received: ${fileName}]\n[DOCUMENT URL: ${docUrl}]\nUse process_document tool to extract and read the contents of this file.`;
         } else {
-          // Mark for deferred download — will store to Supabase after businessId is resolved
-          pendingSupplierDoc = { fileName, mimetype };
-          messageText = `[Supplier sent a document: ${fileName}]`;
+          messageText = `[Document received: ${fileName} - could not be downloaded]`;
         }
       } else if (imgMsg) {
-        pendingSupplierImg = { mimetype: imgMsg.mimetype };
-        messageText = `[Supplier sent an image]`;
+        // Download and store image for agent access
+        let imgUrl: string | null = null;
+        try {
+          const instCreds = await resolveInstanceCreds(instanceName);
+          if (instCreds) {
+            const { downloadAndStoreMedia } = await import('@/lib/vision-inventory');
+            imgUrl = await downloadAndStoreMedia({
+              baseUrl: instCreds.baseUrl,
+              apiKey: instCreds.apiKey,
+              instanceName: instCreds.instanceName,
+              message: data.message,
+              messageKey: data.key,
+              mimetype: imgMsg.mimetype,
+            });
+            if (imgUrl) console.log(`   📸 Image stored: ${imgUrl}`);
+          }
+        } catch (err) {
+          console.warn('   ⚠️ Image download failed:', err);
+        }
+
+        if (imgUrl) {
+          messageText = `[Image received]\n[ATTACHED IMAGE: ${imgUrl}]`;
+        } else {
+          messageText = `[Image received - could not be downloaded]`;
+        }
       }
     }
 
@@ -681,60 +720,6 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`   🏢 Business: ${businessId}`);
-
-    // ─── Deferred supplier media download (now that businessId is resolved) ──
-    if (pendingSupplierDoc) {
-      try {
-        const instCreds = await resolveInstanceCreds(instanceName);
-        if (instCreds) {
-          const { downloadAndStoreMedia } = await import('@/lib/vision-inventory');
-          const supplierDocUrl = await downloadAndStoreMedia({
-            baseUrl: instCreds.baseUrl,
-            apiKey: instCreds.apiKey,
-            instanceName: instCreds.instanceName,
-            message: data.message,
-            messageKey: data.key,
-            businessId,
-            fileName: pendingSupplierDoc.fileName,
-            mimetype: pendingSupplierDoc.mimetype,
-          });
-          if (supplierDocUrl) {
-            console.log(`   📎 Supplier doc stored: ${supplierDocUrl}`);
-            messageText = `[Supplier sent a document: ${pendingSupplierDoc.fileName}]\n[DOCUMENT URL: ${supplierDocUrl}]\nUse process_document tool to extract and read the contents of this file.`;
-          } else {
-            messageText = `[Supplier sent a document: ${pendingSupplierDoc.fileName} - The file could not be downloaded. Ask the owner to review it manually.]`;
-          }
-        }
-      } catch (err) {
-        console.warn('   ⚠️ Supplier doc download failed:', err);
-      }
-    }
-
-    if (pendingSupplierImg) {
-      try {
-        const instCreds = await resolveInstanceCreds(instanceName);
-        if (instCreds) {
-          const { downloadAndStoreMedia } = await import('@/lib/vision-inventory');
-          const supplierImgUrl = await downloadAndStoreMedia({
-            baseUrl: instCreds.baseUrl,
-            apiKey: instCreds.apiKey,
-            instanceName: instCreds.instanceName,
-            message: data.message,
-            messageKey: data.key,
-            businessId,
-            mimetype: pendingSupplierImg.mimetype,
-          });
-          if (supplierImgUrl) {
-            console.log(`   📸 Supplier image stored: ${supplierImgUrl}`);
-            messageText = `[Supplier sent an image]\n[ATTACHED IMAGE: ${supplierImgUrl}]\nUse analyze_image tool to describe what the supplier sent.`;
-          } else {
-            messageText = `[Supplier sent an image - The image could not be downloaded. Ask the owner to review it manually.]`;
-          }
-        }
-      } catch (err) {
-        console.warn('   ⚠️ Supplier image download failed:', err);
-      }
-    }
 
     // ─── Ensure customer record exists (upsert on business_id+phone) ──
     const phoneWithPlus = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;

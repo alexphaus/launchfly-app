@@ -99,13 +99,14 @@ interface DownloadMediaInput {
   instanceName: string;
   message: Record<string, unknown>;
   messageKey: Record<string, unknown>;
-  businessId: string;
+  businessId?: string;
   fileName?: string;
   mimetype?: string;
 }
 
 /**
  * Download any media (document, image, etc.) from Evolution and upload to Supabase Storage.
+ * Uses 'business-files' bucket which accepts all file types (unlike inventory-images which is image-only).
  * Returns the public URL of the uploaded file.
  */
 export async function downloadAndStoreMedia(input: DownloadMediaInput): Promise<string | null> {
@@ -134,18 +135,23 @@ export async function downloadAndStoreMedia(input: DownloadMediaInput): Promise<
 
     // 2. Upload to Supabase Storage
     const supabase = getSupabase();
-    const bucket = 'inventory-images';
+    // Use 'business-files' bucket — accepts all file types (PDFs, docs, images, etc.)
+    // The 'inventory-images' bucket only allows image/* mime types
+    const bucket = 'business-files';
 
-    // Determine file extension and content type
-    const ext = fileName?.split('.').pop()?.toLowerCase() || (mimetype === 'application/pdf' ? 'pdf' : 'bin');
+    // Determine content type
     const contentType = mimetype || 'application/octet-stream';
 
-    // Ensure bucket exists (idempotent)
-    await supabase.storage.createBucket(bucket, { public: true });
+    // Ensure bucket exists (idempotent — no-op if already created)
+    await supabase.storage.createBucket(bucket, {
+      public: true,
+      fileSizeLimit: 50 * 1024 * 1024, // 50MB
+    });
 
     const buffer = Buffer.from(base64Data, 'base64');
     const safeName = (fileName || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `${businessId}/${Date.now()}-${safeName}`;
+    const prefix = businessId || 'incoming';
+    const storagePath = `${prefix}/${Date.now()}-${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from(bucket)

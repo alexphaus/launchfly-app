@@ -216,7 +216,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
             type: 'object',
             description: 'For insert: the row to insert (column: value pairs). For update: the columns to change (column: newValue). Not used for select/delete.',
           },
-          limit: { type: 'number', description: 'Max rows to return for select (default 25, max 100). For update/delete: max rows (default 1, max 50). The response always includes total_matching so you know if more rows exist beyond the limit.' },
+          limit: { type: 'number', description: 'Max rows to return for select (default 25, max 100). The response always includes total_matching so you know if more rows exist beyond the limit. Limit is ignored for update/delete.' },
           offset: { type: 'number', description: 'Skip this many rows before returning results (for pagination). Use with limit to page through large result sets.' },
           order_by: { type: 'string', description: 'Column to sort by (default: created_at). Prefix with - for ascending, e.g. "-created_at" = oldest first. Default is newest first (descending).' },
           select: { type: 'string', description: 'Columns to select (comma-separated, default *). Also supports COUNT(*) as alias for totals and column, COUNT(*) as alias for grouped counts.' },
@@ -1944,8 +1944,7 @@ async function executeQueryDatabase(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query: any = supabase.from(table).update(safeData).eq('business_id', businessId);
     query = applyFilters(query, filters);
-    const maxRows = Math.min(limit || 1, 50);
-    const { data: updated, error } = await query.limit(maxRows).select();
+    const { data: updated, error } = await query.select();
     if (error) return `Update error: ${error.message}`;
     if (!updated?.length) return `No rows matched the filters — nothing updated.`;
     return `Updated ${updated.length} row(s):\n${JSON.stringify(updated, null, 2).substring(0, 3000)}`;
@@ -1957,8 +1956,7 @@ async function executeQueryDatabase(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query: any = supabase.from(table).delete().eq('business_id', businessId);
     query = applyFilters(query, filters);
-    const maxRows = Math.min(limit || 1, 50);
-    const { data: deleted, error } = await query.limit(maxRows).select();
+    const { data: deleted, error } = await query.select();
     if (error) return `Delete error: ${error.message}`;
     if (!deleted?.length) return `No rows matched the filters — nothing deleted.`;
     return `Deleted ${deleted.length} row(s).`;

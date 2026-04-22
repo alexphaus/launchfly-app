@@ -728,7 +728,22 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       memoryNudge = '🧠 MEMORY CHECK: You\'ve completed 5 steps. Pause and reflect — have you discovered any important facts, contacts, prices, patterns, or preferences worth saving? If so, call save_memory now before continuing. This ensures you don\'t lose valuable learnings if the task ends unexpectedly.';
     }
 
-    const systemNudges = [warningMessage, memoryNudge].filter(Boolean);
+    // ── Self-Reflection Critic Nudge ──
+    let criticNudge = '';
+    const COMPLEX_TOOLS = new Set(['execute_python', 'browse_web', 'scrape_page', 'call_api', 'query_database']);
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant' && msg.tool_calls) {
+        const hasComplex = msg.tool_calls.some((tc: any) => tc.type === 'function' && COMPLEX_TOOLS.has(tc.function.name));
+        if (hasComplex) {
+          criticNudge = '🧠 CRITIC NODE: Review the output of your recent tool calls. Did they succeed and return the exact data you needed? If they failed or returned unexpected results, DO NOT blindly repeat the exact same tool call. Formulate a new hypothesis and try a different approach. If code failed, read the error and fix it.';
+        }
+        break;
+      }
+      if (msg.role === 'user') break;
+    }
+
+    const systemNudges = [warningMessage, memoryNudge, criticNudge].filter(Boolean);
     const llmMessages = systemNudges.length > 0
       ? [...messages, ...systemNudges.map(n => ({ role: 'system' as const, content: n }))]
       : messages;

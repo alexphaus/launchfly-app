@@ -85,6 +85,7 @@ const PARALLEL_SAFE_TOOLS = new Set([
   'query_database', 'get_weather_forecast', 'search_google_maps',
   'save_memory', 'save_leads', 'draft_content', 'validate_memory',
   'search_conversations', 'translate', 'knowledge_base', 'analyze_image',
+  'process_document'
 ]);
 
 const SKILL_AUTO_CREATE_MIN_TOOLS = 3;
@@ -308,9 +309,40 @@ export async function buildInitialMessages(
           .limit(10)
           .then(r => r.data || [])
       : Promise.resolve([]),
+    (async () => {
+      const goalText = (row.goal || '').trim();
+      if (goalText.length <= 2) return { skills: null, autoMemories: null };
+      try {
+        const OpenAIEmbed = (await import('openai')).default;
+        const embedClient = new OpenAIEmbed({ apiKey: process.env.OPENAI_API_KEY! });
+        const embRes = await embedClient.embeddings.create({
+          model: 'text-embedding-3-small',
+          input: goalText.substring(0, 8000),
+        });
+        const goalEmbedding = embRes.data[0]?.embedding;
+        if (!goalEmbedding) return { skills: null, autoMemories: null };
+        
+        const [skillsRes, memRes] = await Promise.all([
+          supabase.rpc('search_skills', {
+            query_embedding: goalEmbedding, match_business_id: row.business_id, match_count: 2, min_similarity: 0.3,
+          }),
+          supabase.rpc('search_memories', {
+            query_embedding: goalEmbedding, match_business_id: row.business_id, match_category: null, match_count: 5,
+          })
+        ]);
+        
+        return { 
+          skills: !skillsRes.error ? skillsRes.data : null, 
+          autoMemories: !memRes.error ? memRes.data : null 
+        };
+      } catch (e) {
+        console.warn(`[agent:${row.id}] Embedding auto-recall failed (non-fatal):`, e);
+        return { skills: null, autoMemories: null };
+      }
+    })()
   ] as const;
 
-  const [conversationHistory, recentTasks, activeJobs] = await Promise.all(contextPromises);
+  const [conversationHistory, recentTasks, activeJobs, vectorData] = await Promise.all(contextPromises);
 
   let memoryContext = '';
   let recalledSkillIds: string[] = [];
@@ -341,67 +373,33 @@ export async function buildInitialMessages(
     }
   }
 
-  // ── Skills auto-recall ──
-  try {
-    const goalText = (row.goal || '').trim();
-    if (goalText.length > 2) {
-      const OpenAIEmbed = (await import('openai')).default;
-      const embedClient = new OpenAIEmbed({ apiKey: process.env.OPENAI_API_KEY! });
-      const embRes = await embedClient.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: goalText.substring(0, 8000),
-      });
-      const goalEmbedding = embRes.data[0]?.embedding;
+  // ── Skills & Memories auto-recall ──
+  const { skills, autoMemories } = vectorData || {};
+  
+  if (skills && skills.length > 0) {
+    recalledSkillIds = skills.map((s: any) => s.id);
+    toolLog.push({ tool: '__recalled_skills__', args: { ids: recalledSkillIds } as Record<string, unknown>, result: 'ok', timestamp: new Date().toISOString() });
+    memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
+    for (const s of skills) {
+      memoryContext += `${((s as any).content || '').substring(0, 600)}\n---\n`;
+    }
+  }
 
-      if (goalEmbedding) {
-        const { data: skills, error: rpcErr } = await supabase.rpc('search_skills', {
-          query_embedding: goalEmbedding,
-          match_business_id: row.business_id,
-          match_count: 2,
-          min_similarity: 0.3,
-        });
-
-        if (!rpcErr && skills?.length) {
-          recalledSkillIds = skills.map((s: any) => s.id);
-          toolLog.push({ tool: '__recalled_skills__', args: { ids: recalledSkillIds } as Record<string, unknown>, result: 'ok', timestamp: new Date().toISOString() });
-          memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
-          for (const s of skills) {
-            memoryContext += `${((s as any).content || '').substring(0, 600)}\n---\n`;
-          }
-        }
-
-        // ── Auto-inject relevant memories ──
-        try {
-          const { data: autoMemories, error: memErr } = await supabase.rpc('search_memories', {
-            query_embedding: goalEmbedding,
-            match_business_id: row.business_id,
-            match_category: null,
-            match_count: 5,
-          });
-
-          if (!memErr && autoMemories?.length) {
-            const relevant = autoMemories.filter((m: any) => (m.similarity || 0) > 0.25);
-            if (relevant.length > 0) {
-              memoryContext += '\n\n## AUTO-RECALLED MEMORIES (relevant to this goal — no need to search_memory for these)\n';
-              for (const m of relevant) {
-                const cat = (m as any).category || 'general';
-                const imp = (m as any).importance_score || 0.5;
-                const sim = ((m as any).similarity || 0).toFixed(2);
-                memoryContext += `- [${cat}] (importance: ${imp}, relevance: ${sim}) ${((m as any).content || '').substring(0, 400)}\n`;
-              }
-              const recalledIds = relevant.map((m: any) => m.id).filter(Boolean);
-              if (recalledIds.length > 0) {
-                try { await supabase.rpc('touch_recalled_memories', { memory_ids: recalledIds }); } catch { /* non-fatal */ }
-              }
-            }
-          }
-        } catch (memAutoErr) {
-          console.warn(`[agent:${row.id}] Auto-recall memories failed (non-fatal):`, memAutoErr);
-        }
+  if (autoMemories && autoMemories.length > 0) {
+    const relevant = autoMemories.filter((m: any) => (m.similarity || 0) > 0.25);
+    if (relevant.length > 0) {
+      memoryContext += '\n\n## AUTO-RECALLED MEMORIES (relevant to this goal — no need to search_memory for these)\n';
+      for (const m of relevant) {
+        const cat = (m as any).category || 'general';
+        const imp = (m as any).importance_score || 0.5;
+        const sim = ((m as any).similarity || 0).toFixed(2);
+        memoryContext += `- [${cat}] (importance: ${imp}, relevance: ${sim}) ${((m as any).content || '').substring(0, 400)}\n`;
+      }
+      const recalledIds = relevant.map((m: any) => m.id).filter(Boolean);
+      if (recalledIds.length > 0) {
+        supabase.rpc('touch_recalled_memories', { memory_ids: recalledIds }).catch(() => {});
       }
     }
-  } catch (e) {
-    console.warn(`[agent:${row.id}] Skills recall failed (non-fatal):`, e);
   }
 
   // ── Playbooks ──
@@ -658,49 +656,56 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   while (stepsUsed < MAX_TOTAL_STEPS) {
     loopIteration++;
 
-    // ── Cancellation check + mid-task steering: pick up new owner messages ──
+    // ── Pre-flight check: alive + context compression ──
     // Skip on first iteration — we just set status to 'running' in the init step
     if (loopIteration > 1) {
-      const aliveResult = await context.run(`alive-${loopIteration}`, async () => {
+      const tokenEstimate = estimateTokens(messages);
+      const needsCompression = tokenEstimate >= providerConfig.compressThreshold;
+
+      const preFlightResult = await context.run(`pre-flight-${loopIteration}`, async () => {
         const { data } = await supabase
           .from('agent_tasks')
           .select('status, messages')
           .eq('id', taskId)
           .single();
-        return {
-          alive: data?.status === 'running',
-          dbMessages: (data?.messages || []) as AgentMessage[],
-        };
+        const alive = data?.status === 'running';
+        const dbMessages = (data?.messages || []) as AgentMessage[];
+
+        let compressedMessages = messages;
+        if (alive && needsCompression) {
+          let compressModel = providerConfig.model;
+          if (providerConfig.name === 'openai') compressModel = 'gpt-4o-mini';
+          else if (providerConfig.name === 'openrouter') compressModel = 'openai/gpt-4o-mini';
+
+          compressedMessages = await compressContext({
+            messages,
+            apiKey: getProviderApiKey(),
+            baseURL: providerConfig.baseURL,
+            model: compressModel,
+            taskId,
+            threshold: providerConfig.compressThreshold,
+          });
+        }
+
+        return { alive, dbMessages, compressedMessages };
       });
-      if (!aliveResult.alive) {
+
+      if (!preFlightResult.alive) {
         console.log(`[agent:${taskId}] Task no longer running — aborting workflow`);
         return; // Workflow exits cleanly; Upstash marks it as complete
       }
 
+      messages = preFlightResult.compressedMessages;
+
       // Check if owner appended corrections while we were working
-      if (aliveResult.dbMessages.length > messages.length) {
-        const injected = aliveResult.dbMessages.slice(messages.length);
+      if (preFlightResult.dbMessages.length > messages.length) {
+        const injected = preFlightResult.dbMessages.slice(messages.length);
         const corrections = injected.filter(m => m.role === 'user');
         if (corrections.length > 0) {
           messages.push(...corrections);
           console.log(`[agent:${taskId}] Injected ${corrections.length} mid-task owner correction(s)`);
         }
       }
-    }
-
-    // ── Context compression step ──
-    // Skip on first iteration — messages are fresh, nothing to compress
-    if (loopIteration > 1) {
-      messages = await context.run(`compress-${loopIteration}`, async () => {
-        return compressContext({
-          messages,
-          apiKey: getProviderApiKey(),
-          baseURL: providerConfig.baseURL,
-          model: providerConfig.model,
-          taskId,
-          threshold: providerConfig.compressThreshold,
-        });
-      });
     }
 
     // ── Build budget/research warnings ──
@@ -881,7 +886,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         const IDEMPOTENT_TOOLS = new Set([
           'search_web', 'scrape_page', 'search_memory', 'search_tasks',
           'query_database', 'get_weather_forecast', 'search_google_maps',
-          'call_api', 'run_code',
+          'call_api', 'run_code', 'process_document', 'search_leads'
         ]);
 
         // Research hard cap enforcement

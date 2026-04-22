@@ -145,22 +145,8 @@ function safeSlice(str: string, maxLen: number): string {
 
 function sanitizeString(str: string | null | undefined): string {
   if (!str) return str ?? '';
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      const next = str.charCodeAt(i + 1);
-      if (next >= 0xDC00 && next <= 0xDFFF) {
-        result += str[i] + str[i + 1];
-        i++;
-      }
-    } else if (code >= 0xDC00 && code <= 0xDFFF) {
-      // skip orphaned low surrogate
-    } else {
-      result += str[i];
-    }
-  }
-  return result;
+  // Remove unpaired surrogates using regex instead of manual loops
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|([^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '$1');
 }
 
 function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
@@ -170,17 +156,28 @@ function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
   }));
 }
 
+import { get_encoding } from 'tiktoken';
+
 function estimateTokens(msgs: AgentMessage[]): number {
-  let chars = 0;
+  let text = '';
   for (const m of msgs) {
-    if (m.content) chars += m.content.length;
+    if (m.content) text += m.content;
     if (m.tool_calls) {
       for (const tc of m.tool_calls) {
-        chars += tc.function.name.length + tc.function.arguments.length;
+        text += tc.function.name + tc.function.arguments;
       }
     }
   }
-  return Math.ceil(chars / CHARS_PER_TOKEN);
+  
+  try {
+    const enc = get_encoding('cl100k_base');
+    const tokens = enc.encode(text);
+    enc.free();
+    return tokens.length;
+  } catch (err) {
+    console.warn('Token estimation failed with tiktoken, falling back to heuristic', err);
+    return Math.ceil(text.length / CHARS_PER_TOKEN);
+  }
 }
 
 // ─── Context Compression ─────────────────────────────────────────────────
@@ -842,25 +839,15 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
       // Parse all args
       const parsedArgs = new Map<string, Record<string, unknown>>();
+      const parseErrors = new Map<string, boolean>();
+      
       for (const tc of fnCalls) {
         let toolArgs: Record<string, unknown>;
         try {
           toolArgs = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>;
         } catch {
           toolArgs = {};
-        }
-
-        // Payload auto-swap for send_report
-        if (tc.function.name === 'send_report' && typeof toolArgs.message === 'string' && assistantMessage.content) {
-          const firstLine = toolArgs.message.split('\n')[0].trim();
-          const isSummary = /^(here|the|a|\*)?( )?(summary|overview|report|this)/i.test(firstLine) ||
-                            /^i('ve| have) (successfully |already )?(sent|delivered|compiled|generated|completed)/i.test(firstLine) ||
-                            /^(perfect|great)!/i.test(firstLine);
-          const contentIsLonger = assistantMessage.content.length > toolArgs.message.length;
-          if ((isSummary || toolArgs.message.length < 150) && contentIsLonger) {
-            console.log(`[agent:${taskId}] Intercepted summary report call, swapping payload with assistant text message`);
-            toolArgs.message = assistantMessage.content.trim();
-          }
+          parseErrors.set(tc.id, true);
         }
 
         parsedArgs.set(tc.id, toolArgs);
@@ -880,6 +867,16 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       // Helper: execute one tool
       const runToolInStep = async (tc: FnToolCall, stepSuffix: string): Promise<{ id: string; name: string; args: Record<string, unknown>; result: string }> => {
         const toolArgs = parsedArgs.get(tc.id)!;
+        
+        if (parseErrors.has(tc.id)) {
+          return {
+            id: tc.id,
+            name: tc.function.name,
+            args: toolArgs,
+            result: `[Tool Error] Invalid JSON arguments provided. Please fix your formatting and try again.`,
+          };
+        }
+
         const RESEARCH_TOOLS = new Set(['search_web', 'scrape_page', 'search_google_maps']);
         const IDEMPOTENT_TOOLS = new Set([
           'search_web', 'scrape_page', 'search_memory', 'search_tasks',
@@ -1051,8 +1048,16 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
           // Save state with pause status
           await context.run(`save-pause-${loopIteration}`, async () => {
+            const { data: latest } = await supabase.from('agent_tasks').select('messages').eq('id', taskId).single();
+            let finalMessages = messages;
+            if (latest && Array.isArray(latest.messages)) {
+              const latestMsgs = latest.messages as AgentMessage[];
+              const prevLength = messages.length - (1 + fnCalls.length); // approx length before this step
+              const injected = latestMsgs.slice(prevLength).filter(m => m.role === 'user' && !messages.some(existing => existing.content === m.content));
+              if (injected.length > 0) finalMessages = [...messages, ...injected];
+            }
             await supabase.from('agent_tasks').update({
-              status: pauseType, messages, steps_used: stepsUsed, tool_log: toolLog,
+              status: pauseType, messages: finalMessages, steps_used: stepsUsed, tool_log: toolLog,
               updated_at: new Date().toISOString(),
             }).eq('id', taskId);
           });
@@ -1111,8 +1116,16 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
       // ── Save progress after all tools ──
       await context.run(`save-${loopIteration}`, async () => {
+        const { data: latest } = await supabase.from('agent_tasks').select('messages').eq('id', taskId).single();
+        let finalMessages = messages;
+        if (latest && Array.isArray(latest.messages)) {
+          const latestMsgs = latest.messages as AgentMessage[];
+          const prevLength = messages.length - (1 + sequentialCalls.length + parallelCalls.length); // approx length before tools
+          const injected = latestMsgs.slice(Math.max(0, prevLength)).filter(m => m.role === 'user' && !messages.some(existing => existing.content === m.content));
+          if (injected.length > 0) finalMessages = [...messages, ...injected];
+        }
         await supabase.from('agent_tasks').update({
-          messages, steps_used: stepsUsed, tool_log: toolLog,
+          messages: finalMessages, steps_used: stepsUsed, tool_log: toolLog,
           updated_at: new Date().toISOString(),
         }).eq('id', taskId);
       });
@@ -1151,8 +1164,16 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           }
         }
 
+        const { data: latest } = await supabase.from('agent_tasks').select('messages').eq('id', taskId).single();
+        let finalMessages = messages;
+        if (latest && Array.isArray(latest.messages)) {
+          const latestMsgs = latest.messages as AgentMessage[];
+          const injected = latestMsgs.filter(m => m.role === 'user' && !messages.some(existing => existing.content === m.content));
+          if (injected.length > 0) finalMessages = [...messages, ...injected];
+        }
+
         await supabase.from('agent_tasks').update({
-          status: 'completed', result: finalResult, messages, steps_used: stepsUsed, tool_log: toolLog,
+          status: 'completed', result: finalResult, messages: finalMessages, steps_used: stepsUsed, tool_log: toolLog,
           updated_at: new Date().toISOString(),
         }).eq('id', taskId);
 
@@ -1162,7 +1183,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           try {
             await saveMessage(ownerPhoneNorm, 'user', safeSlice(goal, 2000), toolCtx.businessId);
             await saveMessage(ownerPhoneNorm, 'assistant', safeSlice(finalResult, 2000), toolCtx.businessId);
-          } catch { /* non-critical */ }
+          } catch (err) {
+            console.error(`[agent:${taskId}] Failed to save conversation history:`, err);
+          }
         }
 
         // Resume parent if sub-task
@@ -1197,7 +1220,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
             let memories: Array<{ content?: string; category?: string; importance?: number }> = [];
             try {
               memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
-            } catch { /* LLM returned non-JSON — skip reflection */ }
+            } catch (err) {
+              console.error(`[agent:${taskId}] LLM returned non-JSON for memory reflection:`, reflectionText);
+            }
             if (Array.isArray(memories) && memories.length > 0) {
               for (const mem of memories.slice(0, 3)) {
                 if (mem.content && mem.content.length > 10) {
@@ -1558,7 +1583,7 @@ ${customRulesBlock}
 5. If a tool fails, try an alternative approach instead of repeating.
 6. Save valuable leads with save_leads — don't just list them in text.
 7. Use request_approval BEFORE costly or irreversible actions (orders, campaigns, outreach to new contacts).
-8. Deliver final results via send_report, or write the full report in your last message.
+8. Deliver final results via send_report. ALWAYS place the FULL content of your report in the "message" parameter of the send_report tool, not in your regular text response.
 
 ## STRUCTURED REASONING (use before EVERY action)
 Before calling any tool, think through your plan in a <scratch_pad> block:

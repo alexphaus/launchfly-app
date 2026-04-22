@@ -56,11 +56,9 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   send_voice_note: 60_000,
   // Video tools are offloaded via context.call() to /api/agent/video-generate,
   // so these timeouts only apply if somehow run via context.run() fallback
-  generate_video: 55_000,
-  generate_long_video: 55_000,
+  generate_media: 55_000,
   execute_python: 330_000,     // E2B sandbox up to 5min
   process_document: 150_000,   // Document download + parse
-  deep_research: 120_000,      // Multi-step search + synthesis
   generate_document: 120_000,  // Sandbox-based doc generation
   manage_calendar: 15_000,     // Google Calendar API
   process_payment: 15_000,     // Stripe API
@@ -81,10 +79,10 @@ function getProviderApiKey(): string {
 }
 
 const PARALLEL_SAFE_TOOLS = new Set([
-  'search_web', 'scrape_page', 'search_memory', 'search_tasks',
-  'query_database', 'get_weather_forecast', 'search_google_maps',
-  'save_memory', 'save_leads', 'draft_content', 'validate_memory',
-  'search_conversations', 'translate', 'knowledge_base', 'analyze_image',
+  'search_web', 'scrape_page', 'search_memory',
+  'query_database', 'search_google_maps',
+  'save_memory', 'save_leads', 'validate_memory',
+  'translate', 'knowledge_base', 'analyze_image',
   'process_document'
 ]);
 
@@ -885,9 +883,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
         const RESEARCH_TOOLS = new Set(['search_web', 'scrape_page', 'search_google_maps']);
         const IDEMPOTENT_TOOLS = new Set([
-          'search_web', 'scrape_page', 'search_memory', 'search_tasks',
-          'query_database', 'get_weather_forecast', 'search_google_maps',
-          'call_api', 'run_code', 'process_document', 'search_leads'
+          'search_web', 'scrape_page', 'search_memory',
+          'query_database', 'search_google_maps',
+          'call_api', 'process_document', 'search_leads'
         ]);
 
         // Research hard cap enforcement
@@ -961,7 +959,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       }
 
       // Video tools that must be offloaded via context.call() to avoid 800s timeout
-      const VIDEO_TOOLS = new Set(['generate_video', 'generate_long_video']);
+      const VIDEO_TOOLS = new Set(['generate_media']);
 
       // ── Execute sequential tools ──
       let paused = false;
@@ -1327,10 +1325,8 @@ function sendToolStatus(toolCtx: ToolContext, toolName: string, toolArgs: Record
     request_integration: '🔌', browse_web: '🌐', scrape_page: '🕷️',
     search_web: '🔍', search_google_maps: '🗺️', save_leads: '📥',
     search_memory: '🧠', save_memory: '💾', delegate_task: '🔀',
-    delegate_task_and_wait: '⏳', query_database: '🗄️', call_api: '⚡',
-    draft_content: '📝', manage_job: '📋', analyze_inventory: '📦',
-    request_approval: '👍', get_weather_forecast: '⛅', search_tasks: '🔍',
-    manage_automation: '🤖', run_code: '💻', update_instructions: '🧠',
+    query_database: '🗄️', call_api: '⚡', manage_job: '📋', analyze_inventory: '📦',
+    request_approval: '👍', manage_automation: '🤖', update_instructions: '🧠',
     send_email: '📧', make_call: '📞',
   };
   const icon = iconMap[toolName] || '⚙️';
@@ -1344,15 +1340,7 @@ function sendToolStatus(toolCtx: ToolContext, toolName: string, toolArgs: Record
     case 'query_database': hint = `${(a.action as string || 'SELECT')} ${(a.table as string || '')}`; break;
     case 'search_memory': hint = `"${(a.query as string || '').substring(0, 60)}"`; break;
     case 'save_memory': hint = `[${a.category || '?'}] "${(a.content as string || '').substring(0, 50)}"`; break;
-    case 'draft_content': hint = `${a.type || 'content'}: ${(a.topic as string || '').substring(0, 50)}`; break;
-    case 'delegate_task':
-    case 'delegate_task_and_wait': hint = `→ ${(a.goal as string || '').substring(0, 50)}`; break;
-    case 'run_code': {
-      const lines = (a.code as string || '').split('\n').filter(l => l.trim());
-      const commentLine = lines.find(l => /^\s*\/\//.test(l));
-      hint = (commentLine || lines[0] || '').replace(/^\s*\/\/\s*/, '').substring(0, 60);
-      break;
-    }
+    case 'delegate_task': hint = `→ ${(a.goal as string || '').substring(0, 50)}`; break;
     default: hint = JSON.stringify(a).substring(0, 60);
   }
 
@@ -1636,12 +1624,12 @@ Rules for scratch_pad:
 ## DELEGATION
 - To see what specialized agents exist, query the \`assistants\` table.
 - If the owner asks you to use a specific agent, or the task clearly matches one, delegate to it.
-- delegate_task = fire-and-forget. delegate_task_and_wait = you need the result to continue.
+- delegate_task = delegate to another agent. Use wait_for_completion=true if you need the result to continue.
 
 ## KEY TOOL TIPS
 - **manage_automation**: Default to \`agent_task\` action type (spawns full agent with all tools). Only use \`notify_owner\` for static hardcoded text with no AI logic.
   Config by type: agent_task={agentGoal, agentRole?} | notify_owner={message} | send_whatsapp={message} | delay={hours} | ai_response=(no config) | search_leads={searchQuery, searchLocation, maxResults, dailyCap}
-- **run_code**: Sandboxed JS — no network/filesystem. Fetch data with other tools first, then pass as literals.
+
 - **execute_python**: Full cloud Python sandbox (E2B) — has network, pip, filesystem. Use for data analysis, chart generation, web scraping, file processing, complex calculations. Install any package with packages param. Use print() for output. Charts auto-upload.
 - **process_document**: Extracts text/tables from PDF, Excel, CSV, Word, PPTX files. Give it a URL. Use extract param to filter for specific info. ALWAYS try this when a supplier sends a document — you CAN read PDFs.
 - **knowledge_base**: Persistent searchable document library. Add SOPs, manuals, price lists. Search with natural language.

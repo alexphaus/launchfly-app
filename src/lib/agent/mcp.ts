@@ -356,14 +356,12 @@ export async function executeMcpTool(
  */
 const NATIVE_TOOL_NAMES = new Set([
   'search_web', 'scrape_page', 'send_report', 'query_database',
-  'draft_content', 'get_weather_forecast', 'search_memory', 'save_memory',
-  'validate_memory', 'search_tasks', 'search_conversations', 'save_leads',
+  'search_memory', 'save_memory', 'validate_memory', 'save_leads',
   'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job',
-  'delegate_task', 'delegate_task_and_wait', 'request_approval',
+  'delegate_task', 'request_approval',
   'analyze_inventory', 'call_api', 'request_integration', 'browse_web',
-  'manage_automation', 'run_code', 'update_instructions', 'send_email',
-  'make_call', 'post_social', 'generate_media', 'generate_video',
-  'generate_long_video',
+  'manage_automation', 'update_instructions', 'send_email',
+  'make_call', 'post_social', 'generate_media',
 ]);
 
 export function isMcpTool(toolName: string): boolean {

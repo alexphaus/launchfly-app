@@ -37,11 +37,9 @@ function getSupabase() {
 
 const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
-  'query_database', 'draft_content', 'get_weather_forecast',
-  'search_memory', 'save_memory', 'validate_memory', 'search_tasks',
-  'search_conversations', 'translate',
+  'query_database', 'search_memory', 'save_memory', 'validate_memory', 'translate',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'delegate_task_and_wait', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'run_code', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'generate_video', 'generate_long_video', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'deep_research', 'manage_project']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'manage_project']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -228,43 +226,6 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
   {
     type: 'function' as const,
     function: {
-      name: 'draft_content',
-      description: 'Use AI to draft high-quality content: social media posts, email campaigns, video scripts, ad copy, blog articles. Pulls business context (services, pricing, location) automatically. For ads and social posts, request multiple variations to A/B test.',
-      parameters: {
-        type: 'object',
-        properties: {
-          type: {
-            type: 'string',
-            enum: ['social_post', 'email', 'video_script', 'ad_copy', 'blog', 'sms', 'whatsapp_template', 'google_ad', 'caption'],
-            description: 'Type of content to generate',
-          },
-          topic: { type: 'string', description: 'Topic, angle, or specific instructions for the content. Be detailed — include the offer, pain point, or hook.' },
-          platform: { type: 'string', description: 'Target platform (instagram, facebook, tiktok, linkedin, youtube, google, twitter/x, email). Affects format, length, hashtags, and tone.' },
-          tone: { type: 'string', description: 'Desired tone/voice: casual, professional, funny, urgent, educational, inspirational, bold. Default: confident and helpful.' },
-          audience: { type: 'string', description: 'Target audience (e.g. "homeowners in Sydney", "property managers", "small business owners"). Helps tailor the message.' },
-          variations: { type: 'number', description: 'Number of content variations to generate (default 1, max 5). Use 2-3 for A/B testing ads and social posts.' },
-        },
-        required: ['type', 'topic'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'get_weather_forecast',
-      description: 'Get the 14-day weather forecast for a specific city or location (returns dates, emojis, and min/max temperatures). Use this to add weather context to local events.',
-      parameters: {
-        type: 'object',
-        properties: {
-          location: { type: 'string', description: 'City name (e.g. "Madrid", "Los Alcázares")' },
-        },
-        required: ['location'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
       name: 'send_whatsapp',
       description: 'Send a WhatsApp message to any phone number (supplier, employee, partner). Use this to contact suppliers with quote requests, send job updates to technicians, etc.',
       parameters: {
@@ -306,6 +267,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
         properties: {
           assistantConfigName: { type: 'string', description: 'The exact name of the assistant config in the database (e.g. "Purchasing OS", "Marketing OS")' },
           instruction: { type: 'string', description: 'A detailed prompt describing what the sub-agent needs to accomplish.' },
+          wait_for_completion: { type: 'boolean', description: 'If true, your task will PAUSE until the sub-agent finishes and returns its result to you. If false, it delegates in the background.' },
         },
         required: ['assistantConfigName', 'instruction'],
       },
@@ -367,21 +329,6 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
       },
     },
   // ── Await-able Delegation ──────────────────────────────────────────
-  {
-    type: 'function' as const,
-    function: {
-      name: 'delegate_task_and_wait',
-      description: 'DANGER: Delegate a task to another AI assistant AND pause until it completes. Similar to delegate_task, only use if you intrinsically lack the required tools. Any formatting guidelines in your initial prompt WILL NOT transfer to the sub-agent.',
-      parameters: {
-        type: 'object',
-        properties: {
-          assistantConfigName: { type: 'string', description: 'The exact assistant name (e.g. "Purchasing OS", "Marketing OS")' },
-          instruction: { type: 'string', description: 'Detailed prompt for the sub-agent' },
-        },
-        required: ['assistantConfigName', 'instruction'],
-      },
-    },
-  },
   // ── Approval Gate ──────────────────────────────────────────────────
   {
     type: 'function' as const,
@@ -407,12 +354,13 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'search_memory',
-      description: 'Search the AI memory for past learnings, decisions, patterns, and supplier info relevant to a query. Uses semantic (meaning-based) search. Use this before making decisions to check if you already know something useful.',
+      description: 'Search the AI memory for past learnings, decisions, completed tasks, or past conversations relevant to a query. Uses semantic (meaning-based) search. Use this before making decisions to check if you already know something useful.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Natural language query (e.g. "best silver supplier", "owner prefers organic materials")' },
-          category: { type: 'string', description: 'Optional category filter: supplier, decision, pattern, preference, market_insight' },
+          query: { type: 'string', description: 'Natural language query (e.g. "best silver supplier", "what did we discuss about X", "marble task")' },
+          entity_type: { type: 'string', enum: ['memories', 'tasks', 'conversations'], description: 'What to search: memories (facts/patterns), tasks (past agent work), conversations (raw user chat history). Default: memories.' },
+          category: { type: 'string', description: 'Optional category filter for memories: supplier, decision, pattern, preference, market_insight' },
           limit: { type: 'number', description: 'Max results (default 5)' },
         },
         required: ['query'],
@@ -453,38 +401,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     },
   },
   // ── Task History Search (search_tasks) ─────────────────────────────
-  {
-    type: 'function' as const,
-    function: {
-      name: 'search_tasks',
-      description: 'Search past completed agent tasks by keyword. Use when the owner asks about previous work, old suppliers, past reports, historical decisions, or anything you did before. Returns matching tasks with their goals and results.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search keywords (e.g. "marble supplier", "weekly report", "inventory check")' },
-          days: { type: 'number', description: 'How many days back to search (default: 30, max: 365)' },
-        },
-        required: ['query'],
-      },
-    },
-  },
   // ── Dynamic API Calling ────────────────────────────────────────────
-  {
-    type: 'function' as const,
-    function: {
-      name: 'search_conversations',
-      description: 'Search across ALL past conversations (owner messages + your replies) using full-text search. Use when the owner asks "what did we discuss about X?", "when did I mention Y?", or you need to recall something said in a previous conversation days/weeks ago. More powerful than search_tasks — searches actual message content, not just task goals.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search keywords or phrase (e.g. "marble supplier price", "booking system")' },
-          days: { type: 'number', description: 'How many days back to search (default: 90, max: 365)' },
-          limit: { type: 'number', description: 'Max results to return (default: 15, max: 30)' },
-        },
-        required: ['query'],
-      },
-    },
-  },
   {
     type: 'function' as const,
     function: {
@@ -541,21 +458,6 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
           max_steps: { type: 'number', description: 'Maximum number of actions the browser agent can take (default: 20, max: 50). Increase for complex multi-page flows.' },
         },
         required: ['task'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'run_code',
-      description: 'Execute JavaScript/Node.js code in a sandboxed environment. Use for data analysis, calculations, transformations, string processing, generating reports from raw data, testing API responses, or any computation the AI cannot do reliably in its head. The code runs in an isolated VM with no filesystem or network access. Use console.log() to produce output. The last expression value is also captured.',
-      parameters: {
-        type: 'object',
-        properties: {
-          code: { type: 'string', description: 'JavaScript code to execute. Use console.log() for output. Has access to JSON, Math, Date, Array, Object, Map, Set, RegExp, parseInt, parseFloat, encodeURIComponent, decodeURIComponent, Buffer, and TextEncoder/TextDecoder.' },
-          timeout_ms: { type: 'number', description: 'Max execution time in milliseconds (default: 5000, max: 10000)' },
-        },
-        required: ['code'],
       },
     },
   },
@@ -690,72 +592,24 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'generate_media',
-      description: 'Generate images, videos, or audio using AI via Runware.ai. Images use Wan2.7 (excellent text rendering, $0.03/image). Videos use PixVerse V6 (cinematic, native audio, 1080p, ~$0.22/5s). Supports 200+ models. Returns public URLs valid for 7 days. Use for social media visuals, ad creatives, thumbnails, promotional videos, voice-overs. Requires RUNWARE_API_KEY env var.',
+      description: 'Generate images, short videos, or long videos using AI. Images use Wan2.7 via Runware.ai ($0.03/image). Videos use Vast.ai + ComfyUI + LTX Video (requires VASTAI_API_KEY). Returns public URLs valid for 7 days. Use for social media visuals, ad creatives, thumbnails, promotional videos.',
       parameters: {
         type: 'object',
         properties: {
-          media_type: { type: 'string', enum: ['image', 'video', 'audio'], description: 'Type of media to generate.' },
-          prompt: { type: 'string', description: 'Detailed description of what to generate. Be specific — include style, composition, colors, mood. For audio: describe the genre/mood.' },
-          negative_prompt: { type: 'string', description: 'What to avoid in the output (e.g. "blurry, low quality, text, watermark"). Images only.' },
-          model: { type: 'string', description: 'Specific model AIR ID. Leave empty for defaults: "alibaba:wan@2.7-image" (images, great text), "pixverse:1@8" (video, PixVerse V6). Other options: "runware:100@1" (FLUX Schnell, fast/cheap images), "alibaba:wan@2.7" (Wan2.7 video).' },
-          width: { type: 'number', description: 'Image/video width in px. Default 1024. Common: 1024x1024 (square), 1024x576 (landscape 16:9), 576x1024 (portrait 9:16 for stories/reels).' },
-          height: { type: 'number', description: 'Image/video height in px. Default 1024.' },
-          num_results: { type: 'number', description: 'Number of variations to generate (1-4). Default 1.' },
-          seed_image: { type: 'string', description: 'URL of a reference image for img-to-img or video-from-image generation.' },
-          strength: { type: 'number', description: 'How much the seed_image influences output (0.0-1.0). Higher = more influence. Default 0.7. Only for img-to-img.' },
-          duration: { type: 'number', description: 'Duration in seconds for video or audio generation.' },
+          media_type: { type: 'string', enum: ['image', 'short_video', 'long_video'], description: 'Type of media to generate. short_video is up to 20s. long_video stitches multiple scenes up to 60s.' },
+          prompt: { type: 'string', description: 'Detailed description of what to generate. Be specific — include style, composition, colors, mood. For long videos, describe the overall storyboard.' },
+          negative_prompt: { type: 'string', description: 'What to avoid in the output (e.g. "blurry, low quality, text, watermark").' },
+          model: { type: 'string', description: 'Specific model for images. Default: "alibaba:wan@2.7-image". Ignore for videos.' },
+          width: { type: 'number', description: 'Image/video width in px. Default 1024 for images, 768 for videos. Use 1024x576 or 544x960.' },
+          height: { type: 'number', description: 'Image/video height in px. Default 1024 for images, 512 for videos.' },
+          num_results: { type: 'number', description: 'Number of variations to generate (1-4). Default 1. Images only.' },
+          duration: { type: 'number', description: 'Duration in seconds for video. For short_video: max 20s. For long_video: max 60s.' },
         },
         required: ['media_type', 'prompt'],
       },
     },
   },
   // ── Generate Video Budget (Vast.ai + ComfyUI + LTX) ───────────────────
-  {
-    type: 'function' as const,
-    function: {
-      name: 'generate_video',
-      description: 'Generate a video with audio using LTX Video 2.3 (22B distilled) on a GPU via Vast.ai + ComfyUI. Costs ~$0.01/video. 8 denoising steps. Native audio generation (speech, music, ambient). Supports 9:16 portrait. Uses a persistent instance (start→generate→stop). Has 1-3 min cold start if stopped. Requires VASTAI_API_KEY and VAST_INSTANCE_ID env vars + 32GB+ VRAM GPU.',
-      parameters: {
-        type: 'object',
-        properties: {
-          prompt: { type: 'string', description: 'Detailed description of the video scene AND audio. Include subject, action, camera movement, lighting, style, and sound/music description.' },
-          negative_prompt: { type: 'string', description: 'What to avoid (e.g. "blurry, distorted faces, low quality, cartoon").' },
-          duration: { type: 'number', description: 'Video duration in seconds (2-20). Default 5. LTX 2.3 supports up to 20s natively.' },
-          width: { type: 'number', description: 'Video width. Default 768. Use 768x512 (landscape) or 544x960 (portrait 9:16).' },
-          height: { type: 'number', description: 'Video height. Default 512.' },
-        },
-        required: ['prompt'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'generate_long_video',
-      description: 'Generate a long-form video (up to 60s) by composing multiple scenes into one stitched video. Each scene is generated as a 5-20s clip using LTX Video 2.3, then all clips are concatenated with ffmpeg into a single MP4. Perfect for YouTube shorts, promo videos, and social content. Costs ~$0.04-0.20 depending on total duration. Has 1-3 min cold start if GPU is stopped.',
-      parameters: {
-        type: 'object',
-        properties: {
-          scenes: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                prompt: { type: 'string', description: 'Detailed description of this scene including visuals, camera movement, lighting, and audio/sound.' },
-                duration: { type: 'number', description: 'Scene duration in seconds (5-20). Default 15.' },
-              },
-              required: ['prompt'],
-            },
-            description: 'Array of scene descriptions (2-6 scenes). Each becomes one video clip, then all clips are stitched into one video.',
-          },
-          negative_prompt: { type: 'string', description: 'What to avoid across all scenes (e.g. "blurry, distorted, low quality").' },
-          width: { type: 'number', description: 'Video width for all scenes. Default 768.' },
-          height: { type: 'number', description: 'Video height for all scenes. Default 512.' },
-        },
-        required: ['scenes'],
-      },
-    },
-  },
   // ── P0: Execute Python (E2B cloud sandbox) ────────────────────────────
   {
     type: 'function' as const,
@@ -893,22 +747,6 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     },
   },
   // ── P2: Deep Research (multi-step research chain) ─────────────────────
-  {
-    type: 'function' as const,
-    function: {
-      name: 'deep_research',
-      description: 'Conduct comprehensive multi-source research on a complex question. Decomposes the question into sub-queries, runs parallel searches, cross-references sources, and synthesizes a research report with citations. Use for market analysis, competitor deep-dives, regulatory research, due diligence, or any question requiring multiple sources.',
-      parameters: {
-        type: 'object',
-        properties: {
-          question: { type: 'string', description: 'The research question or topic to investigate.' },
-          depth: { type: 'string', enum: ['quick', 'standard', 'thorough'], description: 'Research depth: quick (2 queries), standard (4 queries), thorough (6 queries). Default: standard.' },
-          max_sources: { type: 'number', description: 'Maximum number of sources to analyze (default 8, max 15).' },
-        },
-        required: ['question'],
-      },
-    },
-  },
   // ── P3: Translate ─────────────────────────────────────────────────────
   {
     type: 'function' as const,
@@ -1016,11 +854,7 @@ export async function executeTool(
         (args.order_by as string) || 'created_at',
       );
 
-    case 'draft_content':
-      return executeDraftContent(args as Record<string, unknown>, toolCtx);
 
-    case 'get_weather_forecast':
-      return executeGetWeatherForecast(args.location as string);
 
     case 'send_whatsapp':
       return executeSendWhatsApp(args.phone as string, args.message as string, toolCtx, args.imageUrl as string | undefined, args.delay_minutes as number | undefined);
@@ -1029,7 +863,7 @@ export async function executeTool(
       return executeSendVoiceNote(args.phone as string, args.text as string, toolCtx);
 
     case 'delegate_task':
-      return executeDelegateTask(args.assistantConfigName as string, args.instruction as string, toolCtx);
+      return executeDelegateTask(args.assistantConfigName as string, args.instruction as string, args.wait_for_completion as boolean | undefined, toolCtx);
 
     case 'manage_job':
       return executeManageJob(args as Record<string, unknown>, toolCtx.businessId);
@@ -1037,20 +871,11 @@ export async function executeTool(
     case 'analyze_inventory':
       return executeAnalyzeInventory(args as Record<string, unknown>, toolCtx);
 
-    case 'delegate_task_and_wait':
-      return executeDelegateTaskAndWait(args.assistantConfigName as string, args.instruction as string, toolCtx);
-
     case 'request_approval':
       return executeRequestApproval(args.question as string, args.options as string[] | undefined, toolCtx);
 
     case 'search_memory':
-      return executeSearchMemory(args.query as string, toolCtx.businessId, args.category as string | undefined, (args.limit as number) || 5);
-
-    case 'search_tasks':
-      return executeSearchTasks(args.query as string, toolCtx.businessId, (args.days as number) || 30);
-
-    case 'search_conversations':
-      return executeSearchConversations(args.query as string, toolCtx.businessId, (args.days as number) || 90, (args.limit as number) || 15);
+      return executeSearchMemory(args.query as string, toolCtx.businessId, args.category as string | undefined, (args.limit as number) || 5, args.entity_type as 'memories' | 'tasks' | 'conversations' | undefined);
 
     case 'save_memory':
       return executeSaveMemory(args.content as string, args.category as string, toolCtx, (args.importance as number) || 0.5);
@@ -1070,9 +895,6 @@ export async function executeTool(
     case 'manage_automation':
       return executeManageAutomation(args as Record<string, unknown>, toolCtx.businessId);
 
-    case 'run_code':
-      return executeRunCode(args.code as string, (args.timeout_ms as number) || 5000);
-
     case 'update_instructions':
       return executeUpdateInstructions(args.rule as string, toolCtx.businessId, toolCtx.assistantName, args.replace_rule_index as number | undefined);
 
@@ -1087,12 +909,6 @@ export async function executeTool(
 
     case 'generate_media':
       return executeGenerateMedia(args as Record<string, unknown>, toolCtx);
-
-    case 'generate_video':
-      return executeGenerateVideo(args as Record<string, unknown>, toolCtx);
-
-    case 'generate_long_video':
-      return executeGenerateLongVideo(args as Record<string, unknown>, toolCtx);
 
     case 'execute_python':
       return executeExecutePython(
@@ -1965,129 +1781,7 @@ async function executeQueryDatabase(
   return `Unknown action "${effectiveAction}". Use: select, update, insert, delete.`;
 }
 
-// ─── draft_content ───────────────────────────────────────────────────────
 
-async function executeDraftContent(
-  args: Record<string, unknown>,
-  toolCtx: ToolContext,
-): Promise<string> {
-  const type = (args.type as string) || 'social_post';
-  const topic = (args.topic as string) || '';
-  const platform = args.platform as string | undefined;
-  const tone = (args.tone as string) || 'confident and helpful';
-  const audience = args.audience as string | undefined;
-  const variations = Math.min(Math.max((args.variations as number) || 1, 1), 5);
-
-  if (!topic) return 'Error: "topic" is required.';
-
-  // Pull business context for richer content
-  let bizContext = '';
-  try {
-    const supabase = getSupabase();
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('name, business_data')
-      .eq('id', toolCtx.businessId)
-      .single();
-    if (biz?.business_data) {
-      const bd = biz.business_data as Record<string, unknown>;
-      const parts: string[] = [];
-      if (bd.industry || bd.category) parts.push(`Industry: ${bd.industry || bd.category}`);
-      if (bd.services) parts.push(`Services: ${bd.services}`);
-      if (bd.city || bd.location) parts.push(`Location: ${bd.city || bd.location}`);
-      if (bd.usp || bd.unique_selling_point) parts.push(`USP: ${bd.usp || bd.unique_selling_point}`);
-      if (parts.length > 0) bizContext = `\nBusiness details: ${parts.join('. ')}.`;
-    }
-  } catch { /* non-fatal */ }
-
-  const platformGuides: Record<string, string> = {
-    instagram: 'Instagram: visual-first, use line breaks for readability, 3-5 relevant hashtags at the end, max ~2200 chars but keep punchy (under 300 ideal). Use emojis strategically.',
-    facebook: 'Facebook: conversational, storytelling works well, 1-3 hashtags max, can be longer (300-600 chars). Ask a question to drive comments.',
-    tiktok: 'TikTok: ultra-casual, trend-aware, hook in first 2 seconds, use popular sounds/formats references, keep caption short (150 chars).',
-    linkedin: 'LinkedIn: professional but personable, use line breaks and white space, start with a bold hook, 1300-1700 chars ideal, 3-5 hashtags.',
-    youtube: 'YouTube: optimize title (60 chars), description (first 2 lines are key), include timestamps and CTAs, keywords naturally placed.',
-    google: 'Google Ads: strict limits — headline max 30 chars (up to 15 headlines), description max 90 chars (up to 4). Focus on keywords, benefits, and clear CTA.',
-    'twitter/x': 'Twitter/X: max 280 chars, be punchy and opinionated, 1-2 hashtags, threads for longer content.',
-    email: 'Email: compelling subject line (under 50 chars), preview text matters, clear single CTA, mobile-friendly short paragraphs.',
-  };
-  const platformGuide = platform ? (platformGuides[platform.toLowerCase()] || `Target platform: ${platform}. Optimize format, length, and style accordingly.`) : '';
-
-  try {
-    const { generateText } = await import('ai');
-    const { deepseek, MINI_MODEL } = await import('@/lib/ai-provider');
-
-    const systemPrompt = `You are a world-class content creator and performance marketer for ${toolCtx.businessName || 'a service business'}.${bizContext}
-
-CREATE: ${type} content.
-${platformGuide}
-Tone: ${tone}.
-${audience ? `Target audience: ${audience}.` : ''}
-${variations > 1 ? `Generate ${variations} distinct variations. Label them VARIATION 1, VARIATION 2, etc. Each should have a different hook/angle but same core message.` : ''}
-
-Rules:
-- Lead with a hook that stops the scroll (pain point, bold claim, or question).
-- Focus on benefits and outcomes, not features.
-- Include a clear CTA.
-- For social posts: include relevant hashtags.
-- For ads: keep copy tight, benefit-driven, urgency where appropriate.
-- Keep it authentic and human — never corporate or generic.
-- Match the tone of a confident expert who genuinely wants to help.`;
-
-    const result = await generateText({
-      model: deepseek(MINI_MODEL),
-      system: systemPrompt,
-      messages: [{ role: 'user', content: `Create ${type} about: ${topic}` }],
-    });
-
-    return result.text;
-  } catch (err) {
-    return `Failed to draft content: ${err instanceof Error ? err.message : String(err)}`;
-  }
-}
-
-// ─── get_weather_forecast ────────────────────────────────────────────────
-
-function getWeatherEmoji(code: number): string {
-  if (code === 0) return '☀️';
-  if (code === 1 || code === 2) return '⛅';
-  if (code === 3) return '☁️';
-  if (code >= 45 && code <= 48) return '🌫️';
-  if (code >= 51 && code <= 67) return '🌧️';
-  if (code >= 71 && code <= 77) return '❄️';
-  if (code >= 80 && code <= 82) return '🌦️';
-  if (code >= 85 && code <= 86) return '🌨️';
-  if (code >= 95 && code <= 99) return '⛈️';
-  return '🌤️';
-}
-
-async function executeGetWeatherForecast(location: string): Promise<string> {
-  try {
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
-    const geoData = await geoRes.json();
-    if (!geoData.results?.[0]) return `Could not find map coordinates for ${location}`;
-
-    const loc = geoData.results[0];
-    const lat = loc.latitude;
-    const lon = loc.longitude;
-
-    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=14`);
-    const wData = await wRes.json();
-    if (!wData.daily) return `No weather data available for ${location}`;
-
-    const times = wData.daily.time; // array of "YYYY-MM-DD"
-    const codes = wData.daily.weather_code;
-    const max = wData.daily.temperature_2m_max;
-    const min = wData.daily.temperature_2m_min;
-
-    let forecast = `14-day Weather for ${loc.name} (${loc.admin1 || loc.country}):\n`;
-    for(let i = 0; i < times.length; i++){
-       forecast += `${times[i]}: ${getWeatherEmoji(codes[i])} ${Math.round(max[i])}°C / ${Math.round(min[i])}°C\n`;
-    }
-    return forecast;
-  } catch (err) {
-    return `Failed to fetch weather: ${err instanceof Error ? err.message : String(err)}`;
-  }
-}
 
 // ─── send_whatsapp (message any phone via business instance) ─────────────
 
@@ -2376,8 +2070,12 @@ async function executeManageJob(
 async function executeDelegateTask(
   assistantConfigName: string,
   instruction: string,
+  waitForCompletion: boolean | undefined,
   toolCtx: ToolContext,
 ): Promise<string> {
+  if (waitForCompletion && !toolCtx.taskId) {
+    return 'Failed: No task ID available (cannot pause without task context).';
+  }
   try {
     const supabase = getSupabase();
     const { data: assistant } = await supabase
@@ -2545,82 +2243,7 @@ async function executeAnalyzeInventory(
 // FEATURE: Await-able Delegation
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Delegate a task to a sub-agent and PAUSE until it completes.
- * Returns a special __PAUSE__ signal that the runner interprets
- * to save state and stop looping.
- */
-async function executeDelegateTaskAndWait(
-  assistantConfigName: string,
-  instruction: string,
-  toolCtx: ToolContext,
-): Promise<string> {
-  if (!toolCtx.taskId) return 'Failed: No task ID available (cannot pause without task context).';
 
-  try {
-    const supabase = getSupabase();
-    const { data: assistant } = await supabase
-      .from('assistants')
-      .select('system_prompt, tools_enabled')
-      .eq('business_id', toolCtx.businessId)
-      .eq('name', assistantConfigName)
-      .limit(1)
-      .maybeSingle();
-
-    if (!assistant) {
-      return `Failed: Could not find assistant "${assistantConfigName}".`;
-    }
-
-    const qstashToken = process.env.QSTASH_TOKEN;
-    if (!qstashToken) return 'Failed: QSTASH_TOKEN missing.';
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.launchfly.ai';
-    const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
-    const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
-
-    const rawTools = assistant.tools_enabled;
-    const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
-
-    // Create sub-task row in DB FIRST (so runner can find it)
-    const subTaskId = crypto.randomUUID();
-    const { error: insertErr } = await supabase.from('agent_tasks').insert({
-      id: subTaskId,
-      business_id: toolCtx.businessId,
-      status: 'pending',
-      goal: `[DELEGATED TASK] ${instruction}`,
-      role: assistant.system_prompt,
-      messages: [],
-      steps_used: 0,
-      tool_log: [],
-      owner_phone: toolCtx.ownerPhone || null,
-      enabled_tools: enabledTools,
-      parent_task_id: toolCtx.taskId,
-    });
-
-    if (insertErr) return `Failed to create sub-task: ${insertErr.message}`;
-
-    // Dispatch sub-agent via QStash (only sends taskId — row already exists)
-    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${qstashToken}`,
-        'Content-Type': 'application/json',
-        'Upstash-Retries': '1',
-        'Upstash-Delay': '1s',
-      },
-      body: JSON.stringify({
-        taskId: subTaskId,
-      }),
-    });
-
-    if (!res.ok) return `Failed: QStash returned ${res.status}`;
-
-    // Return pause signal — runner will stop looping and set status
-    return `__PAUSE__:waiting_subtask:${subTaskId}:Delegated to ${assistantConfigName}. Task will resume when sub-agent completes.`;
-  } catch (err) {
-    return `Failed to delegate: ${err instanceof Error ? err.message : String(err)}`;
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FEATURE: Approval Gates
@@ -2834,7 +2457,15 @@ async function executeSearchMemory(
   businessId: string,
   category?: string,
   limit: number = 5,
+  entityType?: 'memories' | 'tasks' | 'conversations',
 ): Promise<string> {
+  if (entityType === 'tasks') {
+    return executeSearchTasks(query, businessId, 30);
+  }
+  if (entityType === 'conversations') {
+    return executeSearchConversations(query, businessId, 90, limit);
+  }
+
   try {
     const supabase = getSupabase();
     const embedding = await getEmbedding(query);
@@ -4081,10 +3712,17 @@ async function executeGenerateMedia(
   args: Record<string, unknown>,
   _toolCtx: ToolContext,
 ): Promise<string> {
+  const mediaType = (args.media_type as string || 'image').toLowerCase();
+  
+  if (mediaType === 'short_video' || mediaType === 'video') {
+    return executeGenerateVideo(args, _toolCtx);
+  }
+  if (mediaType === 'long_video') {
+    return executeGenerateLongVideo(args, _toolCtx);
+  }
+
   const apiKey = process.env.RUNWARE_API_KEY;
   if (!apiKey) return 'Error: RUNWARE_API_KEY environment variable is not set. Add it to your .env file — get one free at https://my.runware.ai/';
-
-  const mediaType = (args.media_type as string || 'image').toLowerCase();
   const prompt = (args.prompt as string || '').trim();
   const negativePrompt = args.negative_prompt as string | undefined;
   const model = args.model as string | undefined;

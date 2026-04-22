@@ -973,21 +973,21 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         }
       }
 
-      // Video tools that must be offloaded via context.call() to avoid 800s timeout
-      const VIDEO_TOOLS = new Set(['generate_media']);
-
       // ── Execute sequential tools ──
       let paused = false;
       for (let i = 0; i < sequentialCalls.length; i++) {
         const tc = sequentialCalls[i];
+        const toolArgs = parsedArgs.get(tc.id)!;
 
         let result: { id: string; name: string; args: Record<string, unknown>; result: string };
 
-        if (VIDEO_TOOLS.has(tc.function.name)) {
+        const isPhasedVideo = tc.function.name === 'generate_media' && 
+          ['short_video', 'long_video', 'video'].includes(String(toolArgs.media_type || '').toLowerCase());
+
+        if (isPhasedVideo) {
           // ── Offload video tools via phased context.call() loop ──
           // Each call handles one phase (boot → scene × N → finalize).
           // State is passed between calls — each fits within Vercel's 800s maxDuration.
-          const toolArgs = parsedArgs.get(tc.id)!;
           const callKey = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
           if (executedToolCalls.has(callKey)) {
             result = { id: tc.id, name: tc.function.name, args: toolArgs, result: `Duplicate call blocked — you already called ${tc.function.name} with these exact arguments.` };
@@ -1037,6 +1037,19 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
             }
 
             if (!videoResult) videoResult = 'Video generation failed: exceeded maximum phases (20).';
+
+            // ── FALLBACK TO RUNWARE IF VAST.AI FAILS ──
+            if (videoResult.toLowerCase().includes('fail') || videoResult.toLowerCase().includes('error')) {
+              console.log(`[agent:${taskId}] Vast.ai failed (${videoResult}). Falling back to Runware...`);
+              try {
+                const fallbackRes = await context.run(`video-fallback-${loopIteration}-${i}`, async () => {
+                  return await runToolInStep(tc, `fallback-seq${i}`);
+                });
+                videoResult = fallbackRes.result;
+              } catch (err) {
+                videoResult += `\nFallback to Runware also failed: ${err instanceof Error ? err.message : String(err)}`;
+              }
+            }
 
             result = { id: tc.id, name: tc.function.name, args: toolArgs, result: videoResult };
           }

@@ -944,31 +944,19 @@ export async function executeAgentTask(taskId: string): Promise<{
                   : `${act.toUpperCase()} ${tbl}${filterDesc}`;
                 break;
               }
-              case :      hint = `"${(a.query as string || '').substring(0, 60)}"`; break;
               case 'search_memory':     hint = `"${(a.query as string || '').substring(0, 60)}"${a.category ? ` [${a.category}]` : ''}`; break;
               case 'save_memory':       hint = `[${a.category || '?'}] "${(a.content as string || '').substring(0, 50)}"`; break;
-              case :     hint = `${a.type || 'content'}${a.platform ? ` for ${a.platform}` : ''}: ${(a.topic as string || '').substring(0, 50)}`; break;
               case 'manage_job':        hint = `${a.action || ''}${a.title ? ` "${(a.title as string).substring(0, 40)}"` : ''}${a.status ? ` → ${a.status}` : ''}`; break;
               case 'manage_automation': hint = `${a.action || 'list'}${a.name ? ` "${(a.name as string).substring(0, 40)}"` : ''}${a.trigger ? ` (${a.trigger})` : ''}`; break;
               case 'call_api':          hint = `${(a.method as string || 'GET')} ${a.service_name || ''}${a.path as string || ''}`; break;
               case 'delegate_task':
-              case : hint = `→ ${(a.assistantConfigName as string || 'agent')}: ${(a.goal as string || '').substring(0, 50)}`; break;
               case 'browse_web':        hint = (a.task as string || a.url as string || '').substring(0, 60); break;
-              case : {
-                const code = (a.code as string || '');
-                // Extract the first comment or meaningful line as purpose
-                const lines = code.split('\n').filter(l => l.trim());
-                const commentLine = lines.find(l => /^\s*\/\//.test(l));
-                hint = (commentLine || lines[0] || '').replace(/^\s*\/\/\s*/, '').substring(0, 60);
-                break;
-              }
               case 'request_integration': hint = `requesting "${a.display_name || a.service_name || '?'}" integration`; break;
               case 'analyze_inventory': hint = (a.action as string || ''); break;
               case 'update_instructions': hint = `"${(a.rule as string || '').substring(0, 60)}"`; break;
               case 'send_email':        hint = `→ ${(a.to as string || '').substring(0, 30)}${a.subject ? `: ${(a.subject as string).substring(0, 40)}` : ''}`; break;
               case 'make_call':         hint = `→ ${(a.phone as string || '')}${a.purpose ? ` (${(a.purpose as string).substring(0, 30)})` : ''}`; break;
               case 'request_approval':  hint = `"${(a.question as string || '').substring(0, 60)}"`; break;
-              case : hint = (a.location as string || ''); break;
               case 'send_whatsapp':     hint = `→ ${(a.phone as string || '').substring(0, 15)}`; break;
               case 'send_voice_note':   hint = `→ ${(a.phone as string || '').substring(0, 15)}`; break;
               case 'post_social':       hint = `${(a.platform as string || 'social')}: ${(a.content as string || '').substring(0, 40)}`; break;

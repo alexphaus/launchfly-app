@@ -651,6 +651,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
   // ─── Main Agent Loop ───
   let loopIteration = 0;
+  let baselineDbLength = messages.length;
 
   while (stepsUsed < MAX_TOTAL_STEPS) {
     loopIteration++;
@@ -697,13 +698,14 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       messages = preFlightResult.compressedMessages;
 
       // Check if owner appended corrections while we were working
-      if (preFlightResult.dbMessages.length > messages.length) {
-        const injected = preFlightResult.dbMessages.slice(messages.length);
+      if (preFlightResult.dbMessages.length > baselineDbLength) {
+        const injected = preFlightResult.dbMessages.slice(baselineDbLength);
         const corrections = injected.filter(m => m.role === 'user');
         if (corrections.length > 0) {
           messages.push(...corrections);
           console.log(`[agent:${taskId}] Injected ${corrections.length} mid-task owner correction(s)`);
         }
+        baselineDbLength = preFlightResult.dbMessages.length;
       }
     }
 
@@ -1051,20 +1053,23 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           }
 
           // Save state with pause status
-          await context.run(`save-pause-${loopIteration}`, async () => {
+          messages = await context.run(`save-pause-${loopIteration}`, async () => {
             const { data: latest } = await supabase.from('agent_tasks').select('messages').eq('id', taskId).single();
             let finalMessages = messages;
             if (latest && Array.isArray(latest.messages)) {
               const latestMsgs = latest.messages as AgentMessage[];
-              const prevLength = messages.length - (1 + fnCalls.length); // approx length before this step
-              const injected = latestMsgs.slice(prevLength).filter(m => m.role === 'user' && !messages.some(existing => existing.content === m.content));
-              if (injected.length > 0) finalMessages = [...messages, ...injected];
+              if (latestMsgs.length > baselineDbLength) {
+                const injected = latestMsgs.slice(baselineDbLength).filter(m => m.role === 'user');
+                if (injected.length > 0) finalMessages = [...messages, ...injected];
+              }
             }
             await supabase.from('agent_tasks').update({
               status: pauseType, messages: finalMessages, steps_used: stepsUsed, tool_log: toolLog,
               updated_at: new Date().toISOString(),
             }).eq('id', taskId);
+            return finalMessages;
           });
+          baselineDbLength = messages.length;
 
           if (pauseType === 'waiting_approval') {
             // Wait for approval event (up to 7 days)
@@ -1101,6 +1106,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
                 updated_at: new Date().toISOString(),
               }).eq('id', taskId);
             });
+            baselineDbLength = messages.length;
 
             paused = false; // Continue the main loop
             break; // Break out of sequential tool loop
@@ -1119,20 +1125,23 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       }
 
       // ── Save progress after all tools ──
-      await context.run(`save-${loopIteration}`, async () => {
+      messages = await context.run(`save-${loopIteration}`, async () => {
         const { data: latest } = await supabase.from('agent_tasks').select('messages').eq('id', taskId).single();
         let finalMessages = messages;
         if (latest && Array.isArray(latest.messages)) {
           const latestMsgs = latest.messages as AgentMessage[];
-          const prevLength = messages.length - (1 + sequentialCalls.length + parallelCalls.length); // approx length before tools
-          const injected = latestMsgs.slice(Math.max(0, prevLength)).filter(m => m.role === 'user' && !messages.some(existing => existing.content === m.content));
-          if (injected.length > 0) finalMessages = [...messages, ...injected];
+          if (latestMsgs.length > baselineDbLength) {
+            const injected = latestMsgs.slice(baselineDbLength).filter(m => m.role === 'user');
+            if (injected.length > 0) finalMessages = [...messages, ...injected];
+          }
         }
         await supabase.from('agent_tasks').update({
           messages: finalMessages, steps_used: stepsUsed, tool_log: toolLog,
           updated_at: new Date().toISOString(),
         }).eq('id', taskId);
+        return finalMessages;
       });
+      baselineDbLength = messages.length;
 
     } else {
       // ── No tool calls — task complete ──

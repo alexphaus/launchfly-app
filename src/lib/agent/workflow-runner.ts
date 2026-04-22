@@ -397,7 +397,7 @@ export async function buildInitialMessages(
       }
       const recalledIds = relevant.map((m: any) => m.id).filter(Boolean);
       if (recalledIds.length > 0) {
-        supabase.rpc('touch_recalled_memories', { memory_ids: recalledIds }).catch(() => {});
+        try { await supabase.rpc('touch_recalled_memories', { memory_ids: recalledIds }); } catch { /* non-fatal */ }
       }
     }
   }
@@ -590,6 +590,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     }
 
     const providerConfig = {
+      name: providerName,
       baseURL,
       model,
       contextWindow: provider.contextWindow,

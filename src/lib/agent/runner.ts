@@ -82,10 +82,9 @@ const CHARS_PER_TOKEN = 3.5;               // Rough estimate for English/mixed c
 // ─── Parallel Tool Execution ─────────────────────────────────────────────
 // Read-only tools that can safely run in parallel (no side effects)
 const PARALLEL_SAFE_TOOLS = new Set([
-  'search_web', 'scrape_page', 'search_memory', 'search_tasks',
-  'query_database', 'get_weather_forecast', 'search_google_maps',
-  'save_memory', 'save_leads', 'draft_content', 'validate_memory',
-  'search_conversations', 'translate', 'knowledge_base', 'analyze_image',
+  'search_web', 'scrape_page', 'search_memory', 'query_database', 'search_google_maps',
+  'save_memory', 'save_leads', 'validate_memory',
+  'translate', 'knowledge_base', 'analyze_image',
 ]);
 
 // ─── Skill Auto-Creation ─────────────────────────────────────────────────
@@ -905,17 +904,12 @@ export async function executeAgentTask(taskId: string): Promise<{
               search_memory: '🧠',
               save_memory: '💾',
               delegate_task: '🔀',
-              delegate_task_and_wait: '⏳',
               query_database: '🗄️',
               call_api: '⚡',
-              draft_content: '📝',
               manage_job: '📋',
               analyze_inventory: '📦',
               request_approval: '👍',
-              get_weather_forecast: '⛅',
-              search_tasks: '🔍',
               manage_automation: '🤖',
-              run_code: '💻',
               update_instructions: '🧠',
               send_email: '📧',
               make_call: '📞'
@@ -950,17 +944,17 @@ export async function executeAgentTask(taskId: string): Promise<{
                   : `${act.toUpperCase()} ${tbl}${filterDesc}`;
                 break;
               }
-              case 'search_tasks':      hint = `"${(a.query as string || '').substring(0, 60)}"`; break;
+              case :      hint = `"${(a.query as string || '').substring(0, 60)}"`; break;
               case 'search_memory':     hint = `"${(a.query as string || '').substring(0, 60)}"${a.category ? ` [${a.category}]` : ''}`; break;
               case 'save_memory':       hint = `[${a.category || '?'}] "${(a.content as string || '').substring(0, 50)}"`; break;
-              case 'draft_content':     hint = `${a.type || 'content'}${a.platform ? ` for ${a.platform}` : ''}: ${(a.topic as string || '').substring(0, 50)}`; break;
+              case :     hint = `${a.type || 'content'}${a.platform ? ` for ${a.platform}` : ''}: ${(a.topic as string || '').substring(0, 50)}`; break;
               case 'manage_job':        hint = `${a.action || ''}${a.title ? ` "${(a.title as string).substring(0, 40)}"` : ''}${a.status ? ` → ${a.status}` : ''}`; break;
               case 'manage_automation': hint = `${a.action || 'list'}${a.name ? ` "${(a.name as string).substring(0, 40)}"` : ''}${a.trigger ? ` (${a.trigger})` : ''}`; break;
               case 'call_api':          hint = `${(a.method as string || 'GET')} ${a.service_name || ''}${a.path as string || ''}`; break;
               case 'delegate_task':
-              case 'delegate_task_and_wait': hint = `→ ${(a.assistantConfigName as string || 'agent')}: ${(a.goal as string || '').substring(0, 50)}`; break;
+              case : hint = `→ ${(a.assistantConfigName as string || 'agent')}: ${(a.goal as string || '').substring(0, 50)}`; break;
               case 'browse_web':        hint = (a.task as string || a.url as string || '').substring(0, 60); break;
-              case 'run_code': {
+              case : {
                 const code = (a.code as string || '');
                 // Extract the first comment or meaningful line as purpose
                 const lines = code.split('\n').filter(l => l.trim());
@@ -974,7 +968,7 @@ export async function executeAgentTask(taskId: string): Promise<{
               case 'send_email':        hint = `→ ${(a.to as string || '').substring(0, 30)}${a.subject ? `: ${(a.subject as string).substring(0, 40)}` : ''}`; break;
               case 'make_call':         hint = `→ ${(a.phone as string || '')}${a.purpose ? ` (${(a.purpose as string).substring(0, 30)})` : ''}`; break;
               case 'request_approval':  hint = `"${(a.question as string || '').substring(0, 60)}"`; break;
-              case 'get_weather_forecast': hint = (a.location as string || ''); break;
+              case : hint = (a.location as string || ''); break;
               case 'send_whatsapp':     hint = `→ ${(a.phone as string || '').substring(0, 15)}`; break;
               case 'send_voice_note':   hint = `→ ${(a.phone as string || '').substring(0, 15)}`; break;
               case 'post_social':       hint = `${(a.platform as string || 'social')}: ${(a.content as string || '').substring(0, 40)}`; break;
@@ -1001,10 +995,8 @@ export async function executeAgentTask(taskId: string): Promise<{
           // ── Duplicate tool call detection ──
           // Side-effect tools (send_whatsapp, send_report, etc.) are allowed to repeat
           const IDEMPOTENT_TOOLS = new Set([
-            'search_web', 'scrape_page', 'search_memory', 'search_tasks',
-            'query_database', 'get_weather_forecast', 'search_google_maps',
-            'call_api', 'run_code',
-          ]);
+            'search_web', 'scrape_page', 'search_memory', 'query_database', 'search_google_maps',
+            'call_api', ]);
           const callKey = `${tc.function.name}:${JSON.stringify(toolArgs)}`;
           if (IDEMPOTENT_TOOLS.has(tc.function.name) && executedToolCalls.has(callKey)) {
             console.log(`[agent:${taskId}] Blocked duplicate tool call: ${tc.function.name}`);
@@ -1879,12 +1871,11 @@ Rules for scratch_pad:
 ## DELEGATION
 - To see what specialized agents exist, query the \`assistants\` table.
 - If the owner asks you to use a specific agent, or the task clearly matches one, delegate to it.
-- delegate_task = fire-and-forget. delegate_task_and_wait = you need the result to continue.
+- delegate_task = delegate to another agent. Use wait_for_completion=true if you need the result to continue.
 
 ## KEY TOOL TIPS
 - **manage_automation**: Default to \`agent_task\` action type (spawns full agent with all tools). Only use \`notify_owner\` for static hardcoded text with no AI logic.
   Config by type: agent_task={agentGoal, agentRole?} | notify_owner={message} | send_whatsapp={message} | delay={hours} | ai_response=(no config) | search_leads={searchQuery, searchLocation, maxResults, dailyCap}
-- **run_code**: Sandboxed JS — no network/filesystem. Fetch data with other tools first, then pass as literals.
 - **execute_python**: Full cloud Python sandbox (E2B) — has network, pip, filesystem. Use for data analysis, chart generation, web scraping, file processing, complex calculations. Install any package with packages param. Use print() for output. Charts auto-upload.
 - **process_document**: Extracts text/tables from PDF, Excel, CSV, Word, PPTX files. Give it a URL. Use extract param to filter for specific info. ALWAYS try this when a supplier sends a document — you CAN read PDFs.
 - **knowledge_base**: Persistent searchable document library. Add SOPs, manuals, price lists. Search with natural language.

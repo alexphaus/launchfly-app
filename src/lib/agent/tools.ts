@@ -490,7 +490,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
           },
           actions: {
             type: 'array',
-            description: 'Sequential actions to run when triggered. DEFAULT: use `agent_task` with a descriptive agentGoal for anything involving AI, research, dynamic content, lead gen, reports, or follow-ups — the spawned agent has ALL tools available (search_web, run_code, send_whatsapp, search_google_maps, etc.) and is strictly more powerful than any fixed action type. Only use `notify_owner` (static hardcoded text) or `send_whatsapp` (static template) when there is truly nothing dynamic. `delay` pauses the chain. `ai_response` auto-replies to inbound messages.',
+            description: 'Sequential actions to run when triggered. DEFAULT: use `agent_task` with a descriptive agentGoal for anything involving AI, research, dynamic content, lead gen, reports, or follow-ups — the spawned agent has ALL tools available (search_web, send_whatsapp, search_google_maps, etc.) and is strictly more powerful than any fixed action type. Only use `notify_owner` (static hardcoded text) or `send_whatsapp` (static template) when there is truly nothing dynamic. `delay` pauses the chain. `ai_response` auto-replies to inbound messages.',
             items: {
               type: 'object',
               properties: {
@@ -4207,89 +4207,6 @@ async function executeGenerateLongVideo(
   }
 }
 
-// ─── run_code (Sandboxed JS execution via Node VM) ──────────────────────
-
-const RUN_CODE_MAX_TIMEOUT = 10_000; // 10s hard cap
-const RUN_CODE_MAX_OUTPUT = 8_000;   // 8KB max output
-
-async function executeRunCode(code: string, timeoutMs: number): Promise<string> {
-  const vm = await import('node:vm');
-
-  const effectiveTimeout = Math.min(Math.max(timeoutMs, 500), RUN_CODE_MAX_TIMEOUT);
-
-  // Capture console.log output
-  const logs: string[] = [];
-  const mockConsole = {
-    log: (...args: unknown[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
-    warn: (...args: unknown[]) => logs.push('[warn] ' + args.map(a => String(a)).join(' ')),
-    error: (...args: unknown[]) => logs.push('[error] ' + args.map(a => String(a)).join(' ')),
-    info: (...args: unknown[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
-  };
-
-  // Allowlisted globals — safe, no I/O
-  const sandbox = {
-    console: mockConsole,
-    JSON,
-    Math,
-    Date,
-    Array,
-    Object,
-    Map,
-    Set,
-    RegExp,
-    String,
-    Number,
-    Boolean,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    encodeURIComponent,
-    decodeURIComponent,
-    encodeURI,
-    decodeURI,
-    Buffer,
-    TextEncoder,
-    TextDecoder,
-    atob: globalThis.atob,
-    btoa: globalThis.btoa,
-    // Intentionally excluded: fetch, require, import, process, fs, child_process, etc.
-  };
-
-  const context = vm.createContext(sandbox, {
-    name: 'agent-sandbox',
-    codeGeneration: { strings: false, wasm: false },
-  });
-
-  try {
-    const script = new vm.Script(code, { filename: 'agent-code.js' });
-    const result = script.runInContext(context, { timeout: effectiveTimeout });
-
-    const parts: string[] = [];
-    if (logs.length > 0) {
-      parts.push('=== Console Output ===');
-      parts.push(logs.join('\n'));
-    }
-    if (result !== undefined) {
-      parts.push('=== Return Value ===');
-      parts.push(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result));
-    }
-
-    if (parts.length === 0) return '(No output produced. Use console.log() to print results.)';
-
-    const output = parts.join('\n');
-    if (output.length > RUN_CODE_MAX_OUTPUT) {
-      return output.substring(0, RUN_CODE_MAX_OUTPUT) + `\n... (truncated, ${output.length} chars total)`;
-    }
-    return output;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('Script execution timed out')) {
-      return `Code execution timed out after ${effectiveTimeout}ms. Simplify the code or increase timeout_ms (max ${RUN_CODE_MAX_TIMEOUT}ms).`;
-    }
-    return `Code execution error: ${msg}`;
-  }
-}
 
 // ─── browse_web (Browserbase + Stagehand — real browser automation) ──────
 

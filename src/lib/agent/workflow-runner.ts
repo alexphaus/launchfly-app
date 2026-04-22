@@ -157,7 +157,7 @@ function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
   }));
 }
 
-import { get_encoding } from 'tiktoken';
+import { getEncoding } from 'js-tiktoken';
 
 function estimateTokens(msgs: AgentMessage[]): number {
   let text = '';
@@ -171,12 +171,10 @@ function estimateTokens(msgs: AgentMessage[]): number {
   }
   
   try {
-    const enc = get_encoding('cl100k_base');
-    const tokens = enc.encode(text);
-    enc.free();
-    return tokens.length;
+    const enc = getEncoding('cl100k_base');
+    return enc.encode(text).length;
   } catch (err) {
-    console.warn('Token estimation failed with tiktoken, falling back to heuristic', err);
+    console.warn('Token estimation failed with js-tiktoken, falling back to heuristic', err);
     return Math.ceil(text.length / CHARS_PER_TOKEN);
   }
 }

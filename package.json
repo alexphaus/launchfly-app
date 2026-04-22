@@ -37,6 +37,7 @@
     "dotenv": "^17.2.3",
     "fb": "^2.0.0",
     "inngest": "^3.40.1",
+    "js-tiktoken": "^1.0.21",
     "linkedin-api-client": "^0.3.0",
     "lucide-react": "^0.525.0",
     "nanoid": "^5.1.5",
@@ -53,7 +54,6 @@
     "sharp": "^0.34.5",
     "snoowrap": "^1.23.0",
     "stripe": "^18.4.0",
-    "tiktoken": "^1.0.22",
     "twilio": "^5.7.3",
     "twitter-api-v2": "^1.17.2"
   },

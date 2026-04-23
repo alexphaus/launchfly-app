@@ -1007,9 +1007,9 @@ export async function executeGenerateDocument(
       await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
 
       const mimeTypes: Record<string, string> = {
-        html: 'text/html; charset=utf-8',
-        csv: 'text/csv; charset=utf-8',
-        txt: 'text/plain; charset=utf-8',
+        html: 'text/html',
+        csv: 'text/csv',
+        txt: 'text/plain',
         json: 'application/json',
         py: 'text/x-python',
         js: 'application/javascript',
@@ -1018,7 +1018,7 @@ export async function executeGenerateDocument(
       const filename = `${toolCtx.businessId}/doc-${Date.now()}.${docType}`;
       const { error: uploadError } = await supabase.storage
         .from('generated-media')
-        .upload(filename, buffer, { contentType: mimeTypes[docType] || 'text/plain; charset=utf-8' });
+        .upload(filename, buffer, { contentType: mimeTypes[docType] || 'text/plain' });
 
       if (uploadError) return `File generated but upload failed: ${uploadError.message}`;
 

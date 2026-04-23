@@ -8,11 +8,14 @@
 // Configured via AGENT_PROVIDER env var or per-business settings
 
 import type OpenAIType from 'openai';
+import { createClient } from '@supabase/supabase-js';
 
 export interface AgentProvider {
   client: InstanceType<typeof OpenAIType>;
   model: string;
   contextWindow: number;  // tokens
+  providerName: string;
+  baseURL: string;
 }
 
 interface ProviderConfig {
@@ -73,19 +76,35 @@ const PROVIDER_CONFIGS: Record<string, () => ProviderConfig | null> = {
 
 /**
  * Resolve the LLM provider for agent tasks.
- * Priority: AGENT_PROVIDER env var → DeepSeek (default)
+ * Priority: DB Configuration -> AGENT_PROVIDER env var → DeepSeek (default)
  */
-export async function getAgentProvider(timeoutMs = 20_000): Promise<AgentProvider> {
+export async function getAgentProvider(businessId?: string | null, timeoutMs = 20_000): Promise<AgentProvider> {
   const OpenAI = (await import('openai')).default;
 
-  const providerName = (process.env.AGENT_PROVIDER || 'deepseek').toLowerCase();
+  let dbProviderName: string | null = null;
+  let dbModel: string | null = null;
+
+  if (businessId && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    try {
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+      const { data } = await supabase.from('businesses').select('ai_provider, ai_model').eq('id', businessId).single();
+      if (data) {
+        if (data.ai_provider) dbProviderName = data.ai_provider;
+        if (data.ai_model) dbModel = data.ai_model;
+      }
+    } catch (err) {
+      console.error('[agent:provider] Error fetching DB config:', err);
+    }
+  }
+
+  const providerName = (dbProviderName || process.env.AGENT_PROVIDER || 'deepseek').toLowerCase();
   const configFn = PROVIDER_CONFIGS[providerName];
 
   if (!configFn) {
     console.warn(`[agent:provider] Unknown provider "${providerName}", falling back to DeepSeek`);
     const fallback = PROVIDER_CONFIGS.deepseek();
     if (!fallback) throw new Error(`[agent:provider] No API key configured for DeepSeek (fallback). Set DEEPSEEK_API_KEY.`);
-    return createProvider(OpenAI, fallback, timeoutMs);
+    return { ...createProvider(OpenAI, fallback, timeoutMs), providerName: 'deepseek', baseURL: fallback.baseURL };
   }
 
   const config = configFn();
@@ -93,18 +112,23 @@ export async function getAgentProvider(timeoutMs = 20_000): Promise<AgentProvide
     console.warn(`[agent:provider] ${providerName} API key not configured, falling back to DeepSeek`);
     const fallback = PROVIDER_CONFIGS.deepseek();
     if (!fallback) throw new Error(`[agent:provider] No API key configured for ${providerName} or DeepSeek (fallback). Set DEEPSEEK_API_KEY.`);
-    return createProvider(OpenAI, fallback, timeoutMs);
+    return { ...createProvider(OpenAI, fallback, timeoutMs), providerName: 'deepseek', baseURL: fallback.baseURL };
+  }
+
+  // Override model if specified in DB
+  if (dbModel && providerName === (dbProviderName || process.env.AGENT_PROVIDER || 'deepseek').toLowerCase()) {
+    config.model = dbModel;
   }
 
   console.log(`[agent:provider] Using ${providerName} (${config.model}, ${config.contextWindow / 1000}K context)`);
-  return createProvider(OpenAI, config, timeoutMs);
+  return { ...createProvider(OpenAI, config, timeoutMs), providerName, baseURL: config.baseURL };
 }
 
 function createProvider(
   OpenAI: typeof OpenAIType,
   config: ProviderConfig,
   timeoutMs: number,
-): AgentProvider {
+) {
   return {
     client: new OpenAI({
       apiKey: config.apiKey,

@@ -566,29 +566,12 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   type SerializedMcpMapping = { originalToolName: string; server: { id: string; name: string; transport: string; url: string; api_key?: string; headers?: Record<string, string>; tool_filter?: string[] } };
   const setupResult = await context.run('setup', async () => {
     // Resolve provider config
-    const provider = await getAgentProvider();
-    const providerName = process.env.AGENT_PROVIDER || 'deepseek';
-    let baseURL: string;
-    let model: string;
-
-    switch (providerName) {
-      case 'openai':
-        baseURL = 'https://api.openai.com/v1';
-        model = process.env.AGENT_OPENAI_MODEL || 'gpt-4o';
-        break;
-      case 'openrouter':
-        baseURL = 'https://openrouter.ai/api/v1';
-        model = process.env.AGENT_OPENROUTER_MODEL || 'deepseek/deepseek-chat';
-        break;
-      default: // deepseek
-        baseURL = 'https://api.deepseek.com';
-        model = 'deepseek-chat';
-    }
+    const provider = await getAgentProvider(toolCtx.businessId);
 
     const providerConfig = {
-      name: providerName,
-      baseURL,
-      model,
+      name: provider.providerName,
+      baseURL: provider.baseURL,
+      model: provider.model,
       contextWindow: provider.contextWindow,
       compressThreshold: Math.min(Math.floor(provider.contextWindow * 0.5), CONTEXT_COMPRESS_THRESHOLD),
     };
@@ -1246,9 +1229,10 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
               `${t.tool}(${JSON.stringify(t.args).substring(0, 80)}) → ${safeSlice(t.result, 100)}`
             ).join('\n');
             const OpenAI = (await import('openai')).default;
-            const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: providerConfig.baseURL });
+            const fallbackProvider = await getAgentProvider(toolCtx.businessId);
+            const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: fallbackProvider.baseURL });
             const reflection = await client.chat.completions.create({
-              model: providerConfig.model,
+              model: fallbackProvider.model,
               messages: [
                 { role: 'system', content: 'You are reviewing a completed agent task. Extract 1-3 key learnings worth remembering for future tasks. Focus on: new contacts/prices discovered, what worked vs failed, owner preferences revealed, patterns spotted. Return JSON array: [{"content":"...","category":"supplier|decision|pattern|preference|market_insight|tool_recipe|general","importance":0.5}]. Return [] if nothing worth saving.' },
                 { role: 'user', content: `Goal: ${goal}\n\nTool log:\n${toolSummary}\n\nFinal result: ${safeSlice(finalResult, 500)}` },

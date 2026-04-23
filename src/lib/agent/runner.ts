@@ -623,7 +623,7 @@ export async function executeAgentTask(taskId: string): Promise<{
   // ── Agent Loop ──
   const startTime = Date.now();
   try {
-    const provider = await getAgentProvider(LLM_TIMEOUT_MS);
+    const provider = await getAgentProvider(null, LLM_TIMEOUT_MS);
     const client = provider.client;
     const agentModel = provider.model;
     // Dynamic compression threshold: cap at CONTEXT_COMPRESS_THRESHOLD for fast response times
@@ -1246,7 +1246,7 @@ export async function executeAgentTask(taskId: string): Promise<{
     // Hard cap — force send_report with collected data
     console.log(`[agent:${taskId}] MAX_TOTAL_STEPS reached (${stepsUsed}), forcing send_report`);
     try {
-      const forceProvider = await getAgentProvider(LLM_TIMEOUT_MS);
+      const forceProvider = await getAgentProvider(null, LLM_TIMEOUT_MS);
       const agentTools = getToolsForAgent(row.enabled_tools);
       const forceCompletion = await forceProvider.client.chat.completions.create({
         model: forceProvider.model,

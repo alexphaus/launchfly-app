@@ -995,6 +995,7 @@ export async function executeGenerateDocument(
   const title = (args.title as string || 'Document').substring(0, 200);
   const content = (args.content as string || '').trim();
   const data = args.data as Record<string, unknown> | undefined;
+  const requestedFilename = (args.filename as string)?.trim();
 
   if (!content && !data) return 'Error: content or data is required.';
 
@@ -1015,10 +1016,14 @@ export async function executeGenerateDocument(
         js: 'application/javascript',
       };
 
-      const filename = `${toolCtx.businessId}/doc-${Date.now()}.${docType}`;
+      const fileBaseName = requestedFilename || `doc-${Date.now()}.${docType}`;
+      const filename = `${toolCtx.businessId}/${fileBaseName}`;
       const { error: uploadError } = await supabase.storage
         .from('generated-media')
-        .upload(filename, buffer, { contentType: mimeTypes[docType] || 'text/plain' });
+        .upload(filename, buffer, { 
+          contentType: mimeTypes[docType] || 'text/plain',
+          upsert: true 
+        });
 
       if (uploadError) return `File generated but upload failed: ${uploadError.message}`;
 
@@ -1241,10 +1246,14 @@ print("Presentation generated successfully")
         pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       };
 
-      const filename = `${toolCtx.businessId}/doc-${Date.now()}.${ext}`;
+      const fileBaseName = requestedFilename || `doc-${Date.now()}.${ext}`;
+      const filename = `${toolCtx.businessId}/${fileBaseName}`;
       const { error: uploadError } = await supabase.storage
         .from('generated-media')
-        .upload(filename, buffer, { contentType: mimeTypes[ext] || 'application/octet-stream' });
+        .upload(filename, buffer, { 
+          contentType: mimeTypes[ext] || 'application/octet-stream',
+          upsert: true
+        });
 
       if (uploadError) return `File generated but upload failed: ${uploadError.message}`;
 

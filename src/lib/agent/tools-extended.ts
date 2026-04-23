@@ -998,6 +998,37 @@ export async function executeGenerateDocument(
 
   if (!content && !data) return 'Error: content or data is required.';
 
+  // ── FAST PATH: Raw Text Files (No Sandbox Required) ──
+  const RAW_FORMATS = ['html', 'csv', 'txt', 'json', 'py', 'js'];
+  if (RAW_FORMATS.includes(docType)) {
+    try {
+      const buffer = Buffer.from(content, 'utf-8');
+      const supabase = getSupabase();
+      await supabase.storage.createBucket('generated-media', { public: true }).catch(() => {});
+
+      const mimeTypes: Record<string, string> = {
+        html: 'text/html; charset=utf-8',
+        csv: 'text/csv; charset=utf-8',
+        txt: 'text/plain; charset=utf-8',
+        json: 'application/json',
+        py: 'text/x-python',
+        js: 'application/javascript',
+      };
+
+      const filename = `${toolCtx.businessId}/doc-${Date.now()}.${docType}`;
+      const { error: uploadError } = await supabase.storage
+        .from('generated-media')
+        .upload(filename, buffer, { contentType: mimeTypes[docType] || 'text/plain; charset=utf-8' });
+
+      if (uploadError) return `File generated but upload failed: ${uploadError.message}`;
+
+      const { data: urlData } = supabase.storage.from('generated-media').getPublicUrl(filename);
+      return `✅ ${docType.toUpperCase()} file generated: "${title}"\nURL: ${urlData.publicUrl}\nSize: ${(buffer.length / 1024).toFixed(1)} KB`;
+    } catch (err) {
+      return `Raw file generation failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
   // Encode user strings as base64 to prevent Python code injection
   const titleB64 = Buffer.from(title).toString('base64');
   const contentB64 = Buffer.from(content).toString('base64');

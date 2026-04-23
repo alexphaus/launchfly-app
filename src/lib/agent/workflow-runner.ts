@@ -64,7 +64,8 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   process_payment: 15_000,     // Stripe API
 };
 
-const CONTEXT_COMPRESS_THRESHOLD = 20_000;
+const CONTEXT_COMPRESS_DEFAULT = 20_000;
+const CONTEXT_COMPRESS_MAX = 100_000;
 const CONTEXT_COMPRESS_KEEP_TAIL = 4;
 const CHARS_PER_TOKEN = 3.5;
 
@@ -193,7 +194,7 @@ interface CompressContextParams {
  * params so the caller can use context.call() or direct fetch.
  */
 export async function compressContext(params: CompressContextParams): Promise<AgentMessage[]> {
-  const { messages, apiKey, baseURL, model, taskId, threshold = CONTEXT_COMPRESS_THRESHOLD } = params;
+  const { messages, apiKey, baseURL, model, taskId, threshold = CONTEXT_COMPRESS_DEFAULT } = params;
   const tokenEstimate = estimateTokens(messages);
   if (tokenEstimate < threshold || messages.length <= CONTEXT_COMPRESS_KEEP_TAIL + 2) {
     return messages;
@@ -573,7 +574,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       baseURL: provider.baseURL,
       model: provider.model,
       contextWindow: provider.contextWindow,
-      compressThreshold: Math.min(Math.floor(provider.contextWindow * 0.5), CONTEXT_COMPRESS_THRESHOLD),
+      compressThreshold: Math.max(15_000, Math.min(Math.floor(provider.contextWindow * 0.3), CONTEXT_COMPRESS_MAX)),
     };
 
     // Discover MCP tools

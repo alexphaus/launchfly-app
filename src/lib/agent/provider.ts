@@ -65,11 +65,25 @@ const PROVIDER_CONFIGS: Record<string, () => ProviderConfig | null> = {
   openrouter: () => {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) return null;
+    const model = process.env.AGENT_OPENROUTER_MODEL || 'deepseek/deepseek-chat';
+    
+    // Dynamic context window detection for popular OpenRouter models
+    let contextWindow = 64_000;
+    const lowerModel = model.toLowerCase();
+    
+    if (lowerModel.includes('mimo')) contextWindow = 262_144;
+    else if (lowerModel.includes('gemini-2.0')) contextWindow = 1_048_576;
+    else if (lowerModel.includes('gemini-1.5')) contextWindow = 1_048_576;
+    else if (lowerModel.includes('claude-3')) contextWindow = 200_000;
+    else if (lowerModel.includes('llama-3.1')) contextWindow = 128_000;
+    else if (lowerModel.includes('gpt-4o')) contextWindow = 128_000;
+    else if (lowerModel.includes('o1-')) contextWindow = 128_000;
+
     return {
       apiKey,
       baseURL: 'https://openrouter.ai/api/v1',
-      model: process.env.AGENT_OPENROUTER_MODEL || 'deepseek/deepseek-chat',
-      contextWindow: 64_000,
+      model,
+      contextWindow,
     };
   },
 };

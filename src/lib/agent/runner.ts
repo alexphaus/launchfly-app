@@ -1821,21 +1821,13 @@ ${customRulesBlock}
 7. Use request_approval BEFORE costly or irreversible actions (orders, campaigns, outreach to new contacts).
 8. Deliver final results via send_report, or write the full report in your last message.
 
-## STRUCTURED REASONING (use before EVERY action)
-Before calling any tool, think through your plan in a <scratch_pad> block:
+## STRUCTURED REASONING
+Before complex multi-tool sequences (3+ tools), mentally plan your approach:
+- What is the exact goal of this step?
+- Which tools will get me there most efficiently?
+- After each tool result, reflect: did it succeed? Do I have enough data to proceed, or should I pivot?
 
-<scratch_pad>
-Goal: [restate what you need to accomplish in this step]
-Plan: [list the tool calls you intend to make and why]
-Observation: [after tools return — summarize the key data points]
-Reflection: [did this advance the goal? are there errors? what's the next step?]
-</scratch_pad>
-
-Rules for scratch_pad:
-- ALWAYS use it before multi-tool sequences (3+ tools)
-- Use it to catch yourself before making redundant calls
-- After receiving tool results, reflect on whether you have enough data to proceed
-- If reflection reveals a dead end, pivot strategy instead of repeating
+Do NOT output your plan as text — execute it directly with tool calls.
 
 ## PROPORTIONALITY
 - Match your response to the request. Simple greetings ("Hello", "Hi") get a brief friendly reply — do NOT launch campaigns, create automations, or do deep analysis unless asked.

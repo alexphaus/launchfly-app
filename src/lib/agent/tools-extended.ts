@@ -1036,9 +1036,22 @@ export async function executeGenerateDocument(
 
   // Build Python code to generate the document
   let code = '';
+  let isHtmlPdf = false;
 
   if (docType === 'pdf') {
-    code = `
+    isHtmlPdf = content.toLowerCase().includes('<html') || content.toLowerCase().includes('<!doctype html');
+    
+    if (isHtmlPdf) {
+      code = `
+import weasyprint
+import base64
+
+_content = base64.b64decode('${contentB64}').decode('utf-8')
+weasyprint.HTML(string=_content).write_pdf('/tmp/output.pdf')
+print("PDF generated successfully using WeasyPrint")
+`;
+    } else {
+      code = `
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -1092,6 +1105,7 @@ if isinstance(table_data, dict) and 'rows' in table_data:
 doc.build(elements)
 print("PDF generated successfully")
 `;
+    }
   } else if (docType === 'excel' || docType === 'xlsx') {
     code = `
 import openpyxl
@@ -1189,7 +1203,7 @@ print("Presentation generated successfully")
     try {
       // Install packages
       const packages = docType === 'pdf'
-        ? 'reportlab'
+        ? (isHtmlPdf ? 'weasyprint' : 'reportlab')
         : docType === 'excel' || docType === 'xlsx'
           ? 'openpyxl'
           : 'python-pptx';

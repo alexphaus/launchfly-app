@@ -716,13 +716,13 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'generate_document',
-      description: 'Generate professional documents (PDFs, Excel, PPTX) or raw files (HTML, CSV, scripts). Provide the content as text. For PDFs: use # for headings. For raw files (html, csv, py, js, txt): simply provide the exact raw code/text in the `content` field and it will be uploaded instantly.',
+      description: 'Generate professional documents (PDFs, Excel, PPTX) or raw files (HTML, CSV, scripts). Provide the content as text. For stunning PDFs: provide the EXACT full HTML/CSS code (including Tailwind or inline styles) in the `content` field. The system will flawlessly convert your web design into a PDF. For raw files (html, csv, py, js, txt): simply provide the exact raw code/text.',
       parameters: {
         type: 'object',
         properties: {
           doc_type: { type: 'string', enum: ['pdf', 'excel', 'xlsx', 'pptx', 'slides', 'html', 'csv', 'txt', 'json', 'js', 'py'], description: 'Document type to generate.' },
           title: { type: 'string', description: 'Document title.' },
-          content: { type: 'string', description: 'Document content as text. For PDF: use # and ## for headings. For raw files (html/csv/js/etc): provide the exact raw code.' },
+          content: { type: 'string', description: 'Document content as text. For PDF: supply full HTML/CSS to build a beautiful document. For raw files (html/csv/js/etc): provide the exact raw code.' },
           data: { type: 'object', description: 'Structured data for tables. Format: { "headers": ["Col1", "Col2"], "rows": [{"Col1": "val1", "Col2": "val2"}] }' },
         },
         required: ['doc_type', 'title', 'content'],

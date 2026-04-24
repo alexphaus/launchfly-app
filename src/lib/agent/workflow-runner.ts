@@ -376,7 +376,7 @@ export async function buildInitialMessages(
   if (skills && skills.length > 0) {
     recalledSkillIds = skills.map((s: any) => s.id);
     toolLog.push({ tool: '__recalled_skills__', args: { ids: recalledSkillIds } as Record<string, unknown>, result: 'ok', timestamp: new Date().toISOString() });
-    memoryContext += '\n\n## RELEVANT SKILLS (proven workflows — follow these steps if applicable)\n';
+    memoryContext += '\n\n## YOUR PROVEN PLAYBOOK (follow these steps — they worked before)\n';
     for (const s of skills) {
       memoryContext += `${((s as any).content || '').substring(0, 600)}\n---\n`;
     }
@@ -385,7 +385,7 @@ export async function buildInitialMessages(
   if (autoMemories && autoMemories.length > 0) {
     const relevant = autoMemories.filter((m: any) => (m.similarity || 0) > 0.25);
     if (relevant.length > 0) {
-      memoryContext += '\n\n## AUTO-RECALLED MEMORIES (relevant to this goal — no need to search_memory for these)\n';
+      memoryContext += '\n\n## IMPORTANT CONTEXT FROM PAST EXPERIENCE (use this — don\'t start from scratch)\n';
       for (const m of relevant) {
         const cat = (m as any).category || 'general';
         const imp = (m as any).importance_score || 0.5;
@@ -1443,7 +1443,7 @@ async function autoCreateSkill(
       query_embedding: goalEmbedding,
       match_business_id: businessId,
       match_count: 1,
-      min_similarity: 0.55,
+      min_similarity: 0.40,
     });
 
     const toolSequence = toolLog.map((t, i) =>
@@ -1458,7 +1458,7 @@ async function autoCreateSkill(
       const existingSkill = existing[0] as { id: string; content: string; similarity: number };
       const isRecalled = recalledSkillIds.includes(existingSkill.id);
 
-      if (isRecalled && existingSkill.content) {
+      if (existingSkill.content) {
         // The agent used this skill — rewrite it with improvements from this execution
         const rewriteCompletion = await client.chat.completions.create({
           model: providerConfig.model,

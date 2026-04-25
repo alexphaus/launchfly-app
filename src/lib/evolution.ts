@@ -83,11 +83,6 @@ async function evoFetch(
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    console.error(`[Evolution] HTTP ${res.status} from ${path} (instance: ${creds.instanceName}): ${errText.substring(0, 300)}`);
-    return { error: errText || res.statusText, message: `HTTP ${res.status}: ${res.statusText}`, status: res.status };
-  }
   return res.json();
 }
 

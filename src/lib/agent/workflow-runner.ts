@@ -69,9 +69,9 @@ const CONTEXT_COMPRESS_MAX = 100_000;
 const CONTEXT_COMPRESS_KEEP_TAIL = 4;
 const CHARS_PER_TOKEN = 3.5;
 
-/** Read provider API key from env. Safe outside context.run() — env vars are constant per deployment. */
-function getProviderApiKey(): string {
-  const p = process.env.AGENT_PROVIDER || 'deepseek';
+/** Read provider API key from env. Accepts optional resolved provider name (from DB) to override env var. */
+function getProviderApiKey(resolvedProvider?: string): string {
+  const p = resolvedProvider || process.env.AGENT_PROVIDER || 'deepseek';
   switch (p) {
     case 'openai': return process.env.OPENAI_API_KEY!;
     case 'openrouter': return process.env.OPENROUTER_API_KEY!;
@@ -661,7 +661,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
           compressedMessages = await compressContext({
             messages,
-            apiKey: getProviderApiKey(),
+            apiKey: getProviderApiKey(providerConfig.name),
             baseURL: providerConfig.baseURL,
             model: compressModel,
             taskId,
@@ -749,7 +749,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       url: `${providerConfig.baseURL}/chat/completions`,
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${getProviderApiKey()}`,
+        'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -771,7 +771,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
           url: `${providerConfig.baseURL}/chat/completions`,
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${getProviderApiKey()}`,
+            'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1231,7 +1231,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
             ).join('\n');
             const OpenAI = (await import('openai')).default;
             const fallbackProvider = await getAgentProvider(toolCtx.businessId);
-            const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: fallbackProvider.baseURL });
+            const client = new OpenAI({ apiKey: getProviderApiKey(providerConfig.name), baseURL: fallbackProvider.baseURL });
             const reflection = await client.chat.completions.create({
               model: fallbackProvider.model,
               messages: [
@@ -1285,7 +1285,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       const forceResult = await fetch(`${providerConfig.baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${getProviderApiKey()}`,
+          'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1418,7 +1418,7 @@ async function autoCreateSkill(
   goal: string,
   businessId: string,
   toolLog: ToolLogEntry[],
-  providerConfig: { baseURL: string; model: string },
+  providerConfig: { name: string; baseURL: string; model: string },
   recalledSkillIds: string[] = [],
 ): Promise<void> {
   try {
@@ -1451,7 +1451,7 @@ async function autoCreateSkill(
     ).join('\n');
 
     const OpenAI = (await import('openai')).default;
-    const client = new OpenAI({ apiKey: getProviderApiKey(), baseURL: providerConfig.baseURL });
+    const client = new OpenAI({ apiKey: getProviderApiKey(providerConfig.name), baseURL: providerConfig.baseURL });
 
     // ── Skill rewrite: if a recalled skill exists, evolve it instead of creating new ──
     if (existing?.length) {

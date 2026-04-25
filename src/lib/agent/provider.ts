@@ -25,71 +25,65 @@ interface ProviderConfig {
   contextWindow: number;
 }
 
-/**
- * Detect context window for a given model name.
- */
-function getContextWindowForModel(model: string): number {
-  const lower = model.toLowerCase();
-  
-  if (lower.includes('mimo')) return 262_144;
-  if (lower.includes('gemini-2.0')) return 1_048_576;
-  if (lower.includes('gemini-1.5')) return 1_048_576;
-  if (lower.includes('claude-3')) return 200_000;
-  if (lower.includes('llama-3.1')) return 128_000;
-  if (lower.includes('deepseek-v4')) return 128_000; // Future-proofing
-  if (lower.includes('deepseek-v3')) return 64_000;
-  if (lower.includes('deepseek-chat')) return 64_000;
-  if (lower.includes('gpt-4o')) return 128_000;
-  if (lower.includes('o1-')) return 128_000;
-  
-  return 64_000; // Safe default
-}
-
-const PROVIDER_CONFIGS: Record<string, (modelOverride?: string) => ProviderConfig | null> = {
-  deepseek: (modelOverride) => {
+const PROVIDER_CONFIGS: Record<string, () => ProviderConfig | null> = {
+  deepseek: () => {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) return null;
-    const model = modelOverride || 'deepseek-chat';
     return {
       apiKey,
       baseURL: 'https://api.deepseek.com',
-      model,
-      contextWindow: getContextWindowForModel(model),
+      model: 'deepseek-chat',
+      contextWindow: 64_000,
     };
   },
-  openai: (modelOverride) => {
+  openai: () => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return null;
-    const model = modelOverride || process.env.AGENT_OPENAI_MODEL || 'gpt-4o';
     return {
       apiKey,
       baseURL: 'https://api.openai.com/v1',
-      model,
-      contextWindow: getContextWindowForModel(model),
+      model: process.env.AGENT_OPENAI_MODEL || 'gpt-4o',
+      contextWindow: 128_000,
     };
   },
-  anthropic: (modelOverride) => {
+  anthropic: () => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return null;
+    // Requires an OpenAI-compatible proxy (e.g. LiteLLM). Native Anthropic API is NOT compatible.
     const baseURL = process.env.ANTHROPIC_BASE_URL;
-    if (!baseURL) return null;
-    const model = modelOverride || process.env.AGENT_ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+    if (!baseURL) {
+      console.warn('[agent:provider] ANTHROPIC_BASE_URL not set — Anthropic requires an OpenAI-compatible proxy (e.g. LiteLLM)');
+      return null;
+    }
     return {
       apiKey,
       baseURL,
-      model,
-      contextWindow: getContextWindowForModel(model),
+      model: process.env.AGENT_ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+      contextWindow: 200_000,
     };
   },
-  openrouter: (modelOverride) => {
+  openrouter: () => {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) return null;
-    const model = modelOverride || process.env.AGENT_OPENROUTER_MODEL || 'deepseek/deepseek-chat';
+    const model = process.env.AGENT_OPENROUTER_MODEL || 'deepseek/deepseek-chat';
+    
+    // Dynamic context window detection for popular OpenRouter models
+    let contextWindow = 64_000;
+    const lowerModel = model.toLowerCase();
+    
+    if (lowerModel.includes('mimo')) contextWindow = 262_144;
+    else if (lowerModel.includes('gemini-2.0')) contextWindow = 1_048_576;
+    else if (lowerModel.includes('gemini-1.5')) contextWindow = 1_048_576;
+    else if (lowerModel.includes('claude-3')) contextWindow = 200_000;
+    else if (lowerModel.includes('llama-3.1')) contextWindow = 128_000;
+    else if (lowerModel.includes('gpt-4o')) contextWindow = 128_000;
+    else if (lowerModel.includes('o1-')) contextWindow = 128_000;
+
     return {
       apiKey,
       baseURL: 'https://openrouter.ai/api/v1',
       model,
-      contextWindow: getContextWindowForModel(model),
+      contextWindow,
     };
   },
 };
@@ -109,55 +103,52 @@ export async function getAgentProvider(businessId?: string | null, timeoutMs = 2
       const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
       const { data } = await supabase.from('businesses').select('ai_provider, ai_model').eq('id', businessId).single();
       if (data) {
-        dbProviderName = data.ai_provider;
-        dbModel = data.ai_model;
+        if (data.ai_provider) dbProviderName = data.ai_provider;
+        if (data.ai_model) dbModel = data.ai_model;
       }
     } catch (err) {
       console.error('[agent:provider] Error fetching DB config:', err);
     }
   }
 
-  // ── Smart Resolution ──
-  // If model contains a slash, it's almost certainly OpenRouter
-  let providerName = (dbProviderName || process.env.AGENT_PROVIDER || 'deepseek').toLowerCase();
-  let modelName = dbModel || (providerName === 'openrouter' ? process.env.AGENT_OPENROUTER_MODEL : undefined);
+  const providerName = (dbProviderName || process.env.AGENT_PROVIDER || 'deepseek').toLowerCase();
+  const configFn = PROVIDER_CONFIGS[providerName];
 
-  if (modelName?.includes('/') && providerName !== 'openrouter') {
-    console.log(`[agent:provider] Auto-switching to openrouter for model path: ${modelName}`);
-    providerName = 'openrouter';
-  }
-
-  let configFn = PROVIDER_CONFIGS[providerName];
   if (!configFn) {
     console.warn(`[agent:provider] Unknown provider "${providerName}", falling back to DeepSeek`);
-    providerName = 'deepseek';
-    configFn = PROVIDER_CONFIGS.deepseek;
+    const fallback = PROVIDER_CONFIGS.deepseek();
+    if (!fallback) throw new Error(`[agent:provider] No API key configured for DeepSeek (fallback). Set DEEPSEEK_API_KEY.`);
+    return { ...createProvider(OpenAI, fallback, timeoutMs), providerName: 'deepseek', baseURL: fallback.baseURL };
   }
 
-  let config = configFn(modelName);
-  if (!config && providerName !== 'deepseek') {
-    console.warn(`[agent:provider] ${providerName} API key not configured, falling back to DeepSeek`);
-    providerName = 'deepseek';
-    config = PROVIDER_CONFIGS.deepseek(modelName?.includes('/') ? 'deepseek-chat' : modelName);
-  }
-
+  const config = configFn();
   if (!config) {
-    throw new Error(`[agent:provider] No API key configured for ${providerName} or DeepSeek. Check environment variables.`);
+    console.warn(`[agent:provider] ${providerName} API key not configured, falling back to DeepSeek`);
+    const fallback = PROVIDER_CONFIGS.deepseek();
+    if (!fallback) throw new Error(`[agent:provider] No API key configured for ${providerName} or DeepSeek (fallback). Set DEEPSEEK_API_KEY.`);
+    return { ...createProvider(OpenAI, fallback, timeoutMs), providerName: 'deepseek', baseURL: fallback.baseURL };
   }
 
-  console.log(`[agent:provider] Resolved: ${providerName} (${config.model}, ${config.contextWindow / 1024}K context)`);
-  
-  return {
-    client: new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseURL,
-      timeout: timeoutMs,
-    }),
-    model: config.model,
-    contextWindow: config.contextWindow,
-    providerName,
-    baseURL: config.baseURL,
-  };
+  // Override model if specified in DB
+  if (dbModel && providerName === (dbProviderName || process.env.AGENT_PROVIDER || 'deepseek').toLowerCase()) {
+    config.model = dbModel;
+  }
+
+  // Dynamic context window detection (runs AFTER DB model override, so it uses the actual model)
+  if (providerName === 'openrouter') {
+    const lowerModel = config.model.toLowerCase();
+    if (lowerModel.includes('mimo')) config.contextWindow = 262_144;
+    else if (lowerModel.includes('gemini-2.0')) config.contextWindow = 1_048_576;
+    else if (lowerModel.includes('gemini-1.5')) config.contextWindow = 1_048_576;
+    else if (lowerModel.includes('claude-3')) config.contextWindow = 200_000;
+    else if (lowerModel.includes('llama-3.1')) config.contextWindow = 128_000;
+    else if (lowerModel.includes('gpt-4o')) config.contextWindow = 128_000;
+    else if (lowerModel.includes('o1-')) config.contextWindow = 128_000;
+    else if (lowerModel.includes('deepseek')) config.contextWindow = 64_000;
+  }
+
+  console.log(`[agent:provider] Using ${providerName} (${config.model}, ${config.contextWindow / 1000}K context)`);
+  return { ...createProvider(OpenAI, config, timeoutMs), providerName, baseURL: config.baseURL };
 }
 
 function createProvider(

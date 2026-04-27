@@ -587,19 +587,19 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
       },
     },
   },
-  // ── Generate Media (Runware.ai — images, video, audio) ────────────────
+  // ── Generate Media (OpenRouter images, Vast.ai video) ─────────────────
   {
     type: 'function' as const,
     function: {
       name: 'generate_media',
-      description: 'Generate images, short videos, or long videos using AI. Images use Wan2.7 via Runware.ai ($0.03/image). Videos use Vast.ai + ComfyUI + LTX Video (requires VASTAI_API_KEY). Returns public URLs valid for 7 days. Use for social media visuals, ad creatives, thumbnails, promotional videos.',
+      description: 'Generate images, short videos, or long videos using AI. Images use FLUX.2 Max via OpenRouter ($0.07/image). Videos use Vast.ai + ComfyUI + LTX Video (requires VASTAI_API_KEY). Returns public URLs. Use for social media visuals, ad creatives, thumbnails, promotional videos.',
       parameters: {
         type: 'object',
         properties: {
           media_type: { type: 'string', enum: ['image', 'short_video', 'long_video'], description: 'Type of media to generate. short_video is up to 20s. long_video stitches multiple scenes up to 60s.' },
           prompt: { type: 'string', description: 'Detailed description of what to generate. Be specific — include style, composition, colors, mood. For long videos, describe the overall storyboard.' },
           negative_prompt: { type: 'string', description: 'What to avoid in the output (e.g. "blurry, low quality, text, watermark").' },
-          model: { type: 'string', description: 'Specific model for images. Default: "alibaba:wan@2.7-image". Ignore for videos.' },
+          model: { type: 'string', description: 'Override the image model. Default: FLUX.2 Max. For OpenRouter models use full ID e.g. "black-forest-labs/flux.2-pro".' },
           width: { type: 'number', description: 'Image/video width in px. Default 1024 for images, 768 for videos. Use 1024x576 or 544x960.' },
           height: { type: 'number', description: 'Image/video height in px. Default 1024 for images, 512 for videos.' },
           num_results: { type: 'number', description: 'Number of variations to generate (1-4). Default 1. Images only.' },
@@ -3704,9 +3704,152 @@ async function executePostSocial(
   }
 }
 
-// ─── generate_media (Runware.ai — images, video, audio) ─────────────────
+// ─── generate_media (provider-agnostic images, Vast.ai video) ───────────
+//
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  IMAGE PROVIDER CONFIG — change model/provider here            ║
+// ╠══════════════════════════════════════════════════════════════════╣
+// ║  provider: 'openrouter' | 'runware'                            ║
+// ║  model:    OpenRouter model ID or Runware model ID             ║
+// ║  pricing:  Flux 2 Max ≈ $0.07/megapixel                        ║
+// ║            Flux 2 Pro ≈ $0.05/megapixel                        ║
+// ║            Runware Wan2.7 ≈ $0.03/image                        ║
+// ╚══════════════════════════════════════════════════════════════════╝
+const IMAGE_PROVIDER_CONFIG = {
+  provider: (process.env.IMAGE_GEN_PROVIDER || 'openrouter') as 'openrouter' | 'runware',
+  // OpenRouter image models (change model here to swap):
+  //   'black-forest-labs/flux.2-max'   — best quality, $0.07/MP
+  //   'black-forest-labs/flux.2-pro'   — great quality, $0.05/MP
+  //   'black-forest-labs/flux.2-flex'  — budget, ~$0.02/MP
+  openrouterModel: process.env.IMAGE_GEN_MODEL || 'black-forest-labs/flux.2-max',
+  // Runware fallback model (if provider='runware'):
+  runwareModel: 'alibaba:wan@2.7-image',
+};
+
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  VIDEO PROVIDER CONFIG — change model/provider here            ║
+// ╠══════════════════════════════════════════════════════════════════╣
+// ║  Currently uses Vast.ai + ComfyUI (see executeGenerateVideo)   ║
+// ║  Future: swap to OpenRouter video models when available        ║
+// ╚══════════════════════════════════════════════════════════════════╝
+// (video config is handled in executeGenerateVideo / executeGenerateLongVideo below)
 
 const RUNWARE_TIMEOUT_MS = 120_000; // 2 min for video/audio
+
+/**
+ * Generate an image via OpenRouter's chat/completions endpoint.
+ * Returns a public Supabase Storage URL.
+ */
+async function generateImageViaOpenRouter(
+  prompt: string,
+  model: string,
+  width: number,
+  height: number,
+  numResults: number,
+): Promise<string> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return 'Error: OPENROUTER_API_KEY is not set. Required for image generation.';
+
+  const urls: string[] = [];
+
+  for (let i = 0; i < numResults; i++) {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        modalities: ['image'],
+        // Pass size hints if supported
+        ...(width && height ? { image: { width, height } } : {}),
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '(empty)');
+      return `Image generation failed (HTTP ${res.status}): ${errText.substring(0, 300)}`;
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const choices = data.choices as Array<{ message: { content?: string; images?: Array<{ image_url: { url: string } }> } }> | undefined;
+    const message = choices?.[0]?.message;
+
+    if (!message) return 'Image generation returned no response. Try a different prompt.';
+
+    // OpenRouter returns images in message.images[] as base64 data URLs
+    if (message.images?.length) {
+      for (const img of message.images) {
+        const dataUrl = img.image_url?.url;
+        if (dataUrl) {
+          // Upload base64 to Supabase Storage for a permanent public URL
+          const publicUrl = await uploadBase64ToStorage(dataUrl, 'generated');
+          urls.push(publicUrl);
+        }
+      }
+    } else if (message.content) {
+      // Some models return base64 inline in content
+      const b64Match = message.content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/);
+      if (b64Match) {
+        const publicUrl = await uploadBase64ToStorage(b64Match[0], 'generated');
+        urls.push(publicUrl);
+      } else {
+        // Content might be a direct URL
+        const urlMatch = message.content.match(/https?:\/\/\S+\.(png|jpg|jpeg|webp|gif)/i);
+        if (urlMatch) urls.push(urlMatch[0]);
+        else return `Image model returned text instead of image: "${message.content.substring(0, 200)}"`;
+      }
+    }
+  }
+
+  if (!urls.length) return 'No images were generated. Try a different prompt.';
+
+  const urlList = urls.map((u, i) => `${i + 1}. ${u}`).join('\n');
+  return `✅ Generated ${urls.length} image(s) (model: ${model})\n\n${urlList}`;
+}
+
+/**
+ * Upload a base64 data URL to Supabase Storage, return public URL.
+ */
+async function uploadBase64ToStorage(dataUrl: string, prefix: string): Promise<string> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    // If no storage configured, return the data URL directly
+    return dataUrl;
+  }
+
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Parse data URL: data:image/png;base64,AAAA...
+  const match = dataUrl.match(/^data:image\/([a-z+]+);base64,(.+)$/i);
+  if (!match) return dataUrl; // Not a valid data URL, return as-is
+
+  const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+  const base64Data = match[2];
+  const buffer = Buffer.from(base64Data, 'base64');
+  const fileName = `${prefix}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from('business-files')
+    .upload(fileName, buffer, {
+      contentType: `image/${match[1]}`,
+      upsert: false,
+    });
+
+  if (error) {
+    console.error('[generate_media] Storage upload error:', error);
+    return dataUrl; // Fallback to inline data URL
+  }
+
+  const { data: urlData } = supabase.storage.from('business-files').getPublicUrl(fileName);
+  return urlData.publicUrl;
+}
 
 async function executeGenerateMedia(
   args: Record<string, unknown>,
@@ -3721,19 +3864,29 @@ async function executeGenerateMedia(
     return executeGenerateLongVideo(args, _toolCtx);
   }
 
-  const apiKey = process.env.RUNWARE_API_KEY;
-  if (!apiKey) return 'Error: RUNWARE_API_KEY environment variable is not set. Add it to your .env file — get one free at https://my.runware.ai/';
   const prompt = (args.prompt as string || '').trim();
-  const negativePrompt = args.negative_prompt as string | undefined;
+  if (!prompt) return 'Error: prompt is required.';
+
   const model = args.model as string | undefined;
   const width = (args.width as number) || 1024;
   const height = (args.height as number) || 1024;
   const numResults = Math.min(Math.max((args.num_results as number) || 1, 1), 4);
+
+  const provider = IMAGE_PROVIDER_CONFIG.provider;
+
+  // ── OpenRouter image generation (default) ──
+  if (provider === 'openrouter') {
+    const imageModel = model || IMAGE_PROVIDER_CONFIG.openrouterModel;
+    return generateImageViaOpenRouter(prompt, imageModel, width, height, numResults);
+  }
+
+  // ── Runware fallback ──
+  const apiKey = process.env.RUNWARE_API_KEY;
+  if (!apiKey) return 'Error: RUNWARE_API_KEY environment variable is not set. Add it to your .env file — get one free at https://my.runware.ai/';
+
+  const negativePrompt = args.negative_prompt as string | undefined;
   const seedImage = args.seed_image as string | undefined;
   const strength = args.strength as number | undefined;
-  const duration = args.duration as number | undefined;
-
-  if (!prompt) return 'Error: prompt is required.';
 
   const { Runware } = await import('@runware/sdk-js');
   const runware = new Runware({ apiKey, timeoutDuration: RUNWARE_TIMEOUT_MS });
@@ -3743,7 +3896,7 @@ async function executeGenerateMedia(
     if (mediaType === 'image') {
       const params: Record<string, unknown> = {
         positivePrompt: prompt,
-        model: model || 'alibaba:wan@2.7-image', // Wan2.7 Image — multilingual text rendering, high quality
+        model: model || IMAGE_PROVIDER_CONFIG.runwareModel,
         width,
         height,
         numberResults: numResults,
@@ -3764,51 +3917,8 @@ async function executeGenerateMedia(
       const urls = images.map((img, i) => `${i + 1}. ${img.imageURL}`).join('\n');
       return `✅ Generated ${images.length} image(s) (cost: $${totalCost.toFixed(4)})\n\n${urls}`;
 
-    } else if (mediaType === 'video') {
-      // Runware video inference via raw task API (SDK videoInference)
-      const params: Record<string, unknown> = {
-        positivePrompt: prompt,
-        model: model || 'pixverse:1@8', // PixVerse V6 — multi-shot, native audio, 1080p, text rendering
-        width: width || 768,
-        height: height || 512,
-        includeCost: true,
-        outputType: 'URL' as const,
-      };
-      if (seedImage) {
-        params.inputs = { image: seedImage };
-      }
-      if (duration) params.duration = duration;
-
-      // Use videoInference if available, else fall back to generic call
-      const videos = await (runware as unknown as Record<string, CallableFunction>).videoInference(params);
-      const videoArr = Array.isArray(videos) ? videos : [videos];
-      if (!videoArr.length) return 'No video was generated. Try a different prompt or model.';
-
-      const totalCost = videoArr.reduce((sum: number, v: Record<string, unknown>) => sum + ((v.cost as number) || 0), 0);
-      const urls = videoArr.map((v: Record<string, unknown>, i: number) => `${i + 1}. ${v.videoURL || v.imageURL || 'no URL'}`).join('\n');
-      return `✅ Generated video (cost: $${totalCost.toFixed(4)})\n\n${urls}`;
-
-    } else if (mediaType === 'audio') {
-      const params: Record<string, unknown> = {
-        positivePrompt: prompt,
-        model: model || 'elevenlabs:1@1',
-        outputType: 'URL' as const,
-        outputFormat: 'MP3' as const,
-        includeCost: true,
-        numberResults: 1,
-      };
-      if (duration) params.duration = duration;
-
-      const audio = await (runware as unknown as Record<string, CallableFunction>).audioInference(params);
-      const audioArr = Array.isArray(audio) ? audio : [audio];
-      if (!audioArr.length) return 'No audio was generated. Try a different prompt or model.';
-
-      const totalCost = audioArr.reduce((sum: number, a: Record<string, unknown>) => sum + ((a.cost as number) || 0), 0);
-      const urls = audioArr.map((a: Record<string, unknown>, i: number) => `${i + 1}. ${a.audioURL || 'no URL'}`).join('\n');
-      return `✅ Generated audio (cost: $${totalCost.toFixed(4)})\n\n${urls}`;
-
     } else {
-      return `Error: unsupported media_type "${mediaType}". Use "image", "video", or "audio".`;
+      return `Error: unsupported media_type "${mediaType}". Use "image", "short_video", or "long_video".`;
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : (typeof err === 'object' ? JSON.stringify(err) : String(err));

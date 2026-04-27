@@ -1248,9 +1248,14 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
             }
           }
           try {
-            await executeTool('send_report', { message: safeSlice(reportContent || finalResult, 3500) }, toolCtx);
+            const sendResult = await executeTool('send_report', { message: safeSlice(reportContent || finalResult, 3500) }, toolCtx);
+            if (sendResult.includes('Failed') || sendResult.includes('Cannot')) {
+              console.error(`[agent:${taskId}] Auto send_report FAILED: ${sendResult}`);
+            } else {
+              console.log(`[agent:${taskId}] Auto send_report delivered to ${toolCtx.ownerPhone}`);
+            }
           } catch (e) {
-            console.warn(`[agent:${taskId}] Auto send_report failed:`, e);
+            console.error(`[agent:${taskId}] Auto send_report threw:`, e);
           }
         }
 

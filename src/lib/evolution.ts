@@ -82,7 +82,17 @@ async function evoFetch(
       apikey: creds.apiKey,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
   });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '(empty)');
+    throw new Error(`Evolution API ${res.status}: ${text.substring(0, 200)}`);
+  }
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('json')) {
+    const text = await res.text().catch(() => '(empty)');
+    throw new Error(`Evolution API returned non-JSON (${contentType}): ${text.substring(0, 200)}`);
+  }
   return res.json();
 }
 

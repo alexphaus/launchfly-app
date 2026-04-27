@@ -548,12 +548,19 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     }
     if (!repName) repName = assistant?.name;
 
-    // Resolve owner phone
+    // Resolve owner phone — trust explicit owner_phone from webhook; only guess from DB if missing
     const botWhatsApp = (biz?.whatsapp_number || '').replace(/^\+/, '');
-    let resolvedOwnerPhone = row.owner_phone || biz?.whatsapp_notify_number || biz?.phone_number || undefined;
-    if (resolvedOwnerPhone && botWhatsApp && resolvedOwnerPhone.replace(/^\+/, '') === botWhatsApp) {
-      const altPhone = (biz?.phone_number || '').replace(/^\+/, '');
-      resolvedOwnerPhone = (altPhone && altPhone !== botWhatsApp) ? biz!.phone_number! : undefined;
+    let resolvedOwnerPhone: string | undefined;
+    if (row.owner_phone) {
+      // Explicitly set by webhook — the sender's real phone. Trust it.
+      resolvedOwnerPhone = row.owner_phone;
+    } else {
+      // Guess from DB fields, but avoid sending to the bot's own number
+      resolvedOwnerPhone = biz?.whatsapp_notify_number || biz?.phone_number || undefined;
+      if (resolvedOwnerPhone && botWhatsApp && resolvedOwnerPhone.replace(/^\+/, '') === botWhatsApp) {
+        const altPhone = (biz?.phone_number || '').replace(/^\+/, '');
+        resolvedOwnerPhone = (altPhone && altPhone !== botWhatsApp) ? biz!.phone_number! : undefined;
+      }
     }
 
     const toolCtx: ToolContext = {

@@ -3627,7 +3627,7 @@ async function executePostSocial(
   const unmatched: string[] = [];
 
   for (const platform of normalized) {
-    const match = integrations.find(i => i.providerIdentifier === platform);
+    const match = integrations.find(i => (i.providerIdentifier || (i as any).identifier) === platform);
     if (!match) { unmatched.push(platform); continue; }
 
     const settings: Record<string, unknown> = { __type: platform };
@@ -3666,7 +3666,7 @@ async function executePostSocial(
   }
 
   if (!posts.length) {
-    return `No connected channels found for: ${normalized.join(', ')}. Connected channels: ${integrations.map(i => `${i.providerIdentifier} (${i.name || i.id})`).join(', ') || 'none'}. Ask the owner to connect these platforms in Postiz settings.`;
+    return `No connected channels found for: ${normalized.join(', ')}. Connected channels: ${integrations.map(i => `${i.providerIdentifier || (i as any).identifier} (${i.name || i.id})`).join(', ') || 'none'}. Ask the owner to connect these platforms in Postiz settings.`;
   }
 
   // Create the post

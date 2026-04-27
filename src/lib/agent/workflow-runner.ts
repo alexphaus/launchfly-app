@@ -156,6 +156,52 @@ function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
   }));
 }
 
+/**
+ * Parse XML-style tool calls from model content (MiMo, Qwen format).
+ * Converts: <tool_call>\n<function=NAME>\n<parameter=KEY>VALUE</parameter>\n</function>\n</tool_call>
+ * Into: [{ id, type: 'function', function: { name, arguments } }]
+ */
+function parseXmlToolCalls(content: string): ToolCall[] {
+  const toolCalls: ToolCall[] = [];
+  const toolCallRegex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = toolCallRegex.exec(content)) !== null) {
+    const block = match[1];
+    // Extract function name: <function=NAME> or <function=NAME>
+    const fnMatch = block.match(/<function=([^>]+)>/);
+    if (!fnMatch) continue;
+    const fnName = fnMatch[1].trim();
+
+    // Extract parameters: <parameter=KEY>VALUE</parameter>
+    const params: Record<string, unknown> = {};
+    const paramRegex = /<parameter=([^>]+)>([\s\S]*?)<\/parameter>/g;
+    let paramMatch: RegExpExecArray | null;
+    while ((paramMatch = paramRegex.exec(block)) !== null) {
+      const key = paramMatch[1].trim();
+      let value: unknown = paramMatch[2];
+      // Try to parse as JSON (numbers, booleans, arrays, objects)
+      try {
+        value = JSON.parse(value as string);
+      } catch {
+        // Keep as string
+      }
+      params[key] = value;
+    }
+
+    toolCalls.push({
+      id: `xmltc_${Date.now()}_${toolCalls.length}`,
+      type: 'function',
+      function: {
+        name: fnName,
+        arguments: JSON.stringify(params),
+      },
+    });
+  }
+
+  return toolCalls;
+}
+
 import { getEncoding } from 'js-tiktoken';
 
 function estimateTokens(msgs: AgentMessage[]): number {
@@ -823,6 +869,20 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     }
 
     // ── Tool calls ──
+    // Some models (MiMo, Qwen) emit tool calls as XML text in content instead of structured tool_calls.
+    // Detect and convert: <tool_call>\n<function=NAME>\n<parameter=KEY>VALUE</parameter>\n</function>\n</tool_call>
+    if ((!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) && assistantMessage.content) {
+      const xmlToolCalls = parseXmlToolCalls(assistantMessage.content);
+      if (xmlToolCalls.length > 0) {
+        assistantMessage.tool_calls = xmlToolCalls;
+        // Strip the XML from content so it doesn't pollute the conversation
+        assistantMessage.content = assistantMessage.content
+          .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+          .trim() || null;
+        console.log(`[agent:${taskId}] Parsed ${xmlToolCalls.length} XML tool call(s) from model content`);
+      }
+    }
+
     const rawToolCalls = assistantMessage.tool_calls?.filter(
       (tc: { type: string }) => tc.type === 'function'
     ) || [];

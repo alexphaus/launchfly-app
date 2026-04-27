@@ -243,6 +243,42 @@ interface ToolLogEntry {
   timestamp: string;
 }
 
+/**
+ * Parse XML-style tool calls from model content (MiMo, Qwen format).
+ * Converts: <tool_call>\n<function=NAME>\n<parameter=KEY>VALUE</parameter>\n</function>\n</tool_call>
+ * Into: [{ id, type: 'function', function: { name, arguments } }]
+ */
+function parseXmlToolCalls(content: string): ToolCall[] {
+  const toolCalls: ToolCall[] = [];
+  const toolCallRegex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = toolCallRegex.exec(content)) !== null) {
+    const block = match[1];
+    const fnMatch = block.match(/<function=([^>]+)>/);
+    if (!fnMatch) continue;
+    const fnName = fnMatch[1].trim();
+
+    const params: Record<string, unknown> = {};
+    const paramRegex = /<parameter=([^>]+)>([\s\S]*?)<\/parameter>/g;
+    let paramMatch: RegExpExecArray | null;
+    while ((paramMatch = paramRegex.exec(block)) !== null) {
+      const key = paramMatch[1].trim();
+      let value: unknown = paramMatch[2];
+      try { value = JSON.parse(value as string); } catch { /* keep as string */ }
+      params[key] = value;
+    }
+
+    toolCalls.push({
+      id: `xmltc_${Date.now()}_${toolCalls.length}`,
+      type: 'function',
+      function: { name: fnName, arguments: JSON.stringify(params) },
+    });
+  }
+
+  return toolCalls;
+}
+
 interface TaskRow {
   id: string;
   business_id: string;
@@ -834,6 +870,18 @@ export async function executeAgentTask(taskId: string): Promise<{
       const assistantMessage = completion.choices[0].message;
 
       // ── Tool calls ──
+      // Some models (MiMo, Qwen) emit tool calls as XML text in content instead of structured tool_calls.
+      if ((!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) && assistantMessage.content) {
+        const xmlToolCalls = parseXmlToolCalls(assistantMessage.content);
+        if (xmlToolCalls.length > 0) {
+          (assistantMessage as unknown as Record<string, unknown>).tool_calls = xmlToolCalls;
+          assistantMessage.content = assistantMessage.content
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+            .trim() || null;
+          console.log(`[agent:${taskId}] Parsed ${xmlToolCalls.length} XML tool call(s) from model content`);
+        }
+      }
+
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
         type FnToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
         const fnCalls: FnToolCall[] = assistantMessage.tool_calls.filter(

@@ -24,6 +24,7 @@ import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/histo
 import { getAgentProvider } from './provider';
 import { sendWhatsAppWithCreds, type EvolutionCredentials } from '@/lib/evolution';
 import { discoverMcpTools, executeMcpTool, isMcpTool, type McpToolSchema } from './mcp';
+import { consolidateMemoryGraph } from './memory-consolidator';
 
 // ─── Launchfly CEO instance credentials (for tool updates & reports) ─────
 function getLaunchflyCreds(): EvolutionCredentials | null {
@@ -365,18 +366,30 @@ export async function buildInitialMessages(
         const goalEmbedding = embRes.data[0]?.embedding;
         if (!goalEmbedding) return { skills: null, autoMemories: null };
         
-        const [skillsRes, memRes] = await Promise.all([
+        const [skillsRes, memRes, graphNodesRes] = await Promise.all([
           supabase.rpc('search_skills', {
             query_embedding: goalEmbedding, match_business_id: row.business_id, match_count: 2, min_similarity: 0.3,
           }),
           supabase.rpc('search_memories', {
             query_embedding: goalEmbedding, match_business_id: row.business_id, match_category: null, match_count: 5,
+          }),
+          supabase.rpc('search_graph_nodes', {
+            query_embedding: goalEmbedding, match_business_id: row.business_id, match_count: 5, min_similarity: 0.3,
           })
         ]);
+
+        let graphEdges = null;
+        if (!graphNodesRes.error && graphNodesRes.data && graphNodesRes.data.length > 0) {
+           const nodeIds = graphNodesRes.data.map((n: any) => n.id);
+           const edgesRes = await supabase.rpc('get_subgraph', { node_ids: nodeIds, match_business_id: row.business_id });
+           if (!edgesRes.error) graphEdges = edgesRes.data;
+        }
         
         return { 
           skills: !skillsRes.error ? skillsRes.data : null, 
-          autoMemories: !memRes.error ? memRes.data : null 
+          autoMemories: !memRes.error ? memRes.data : null,
+          graphNodes: !graphNodesRes.error ? graphNodesRes.data : null,
+          graphEdges: graphEdges
         };
       } catch (e) {
         console.warn(`[agent:${row.id}] Embedding auto-recall failed (non-fatal):`, e);
@@ -417,7 +430,7 @@ export async function buildInitialMessages(
   }
 
   // ── Skills & Memories auto-recall ──
-  const { skills, autoMemories } = vectorData || {};
+  const { skills, autoMemories, graphNodes, graphEdges } = vectorData || {};
   
   if (skills && skills.length > 0) {
     recalledSkillIds = skills.map((s: any) => s.id);
@@ -441,6 +454,22 @@ export async function buildInitialMessages(
       const recalledIds = relevant.map((m: any) => m.id).filter(Boolean);
       if (recalledIds.length > 0) {
         try { await supabase.rpc('touch_recalled_memories', { memory_ids: recalledIds }); } catch { /* non-fatal */ }
+      }
+    }
+  }
+
+  if (graphNodes && graphNodes.length > 0) {
+    memoryContext += '\n\n## KNOWLEDGE GRAPH CONTEXT (Related Entities & Relationships)\n';
+    const edges = graphEdges || [];
+    if (edges.length > 0) {
+      for (const e of edges) {
+        memoryContext += `- (${e.source_label}: ${e.source_name}) -[${e.relation}]-> (${e.target_label}: ${e.target_name})\n`;
+      }
+    }
+    // Also include isolated nodes properties that might not have edges
+    for (const n of graphNodes) {
+      if (n.properties && Object.keys(n.properties).length > 0) {
+         memoryContext += `- Entity: ${n.label} (${n.name}) - Properties: ${JSON.stringify(n.properties)}\n`;
       }
     }
   }
@@ -1298,41 +1327,9 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       if (toolLog.length >= 3 && !goal.startsWith('[DELEGATED TASK]')) {
         await context.run('memory-reflection', async () => {
           try {
-            const toolSummary = toolLog.slice(-10).map(t =>
-              `${t.tool}(${JSON.stringify(t.args).substring(0, 80)}) → ${safeSlice(t.result, 100)}`
-            ).join('\n');
-            const OpenAI = (await import('openai')).default;
-            const fallbackProvider = await getAgentProvider(toolCtx.businessId);
-            const client = new OpenAI({ apiKey: getProviderApiKey(providerConfig.name), baseURL: fallbackProvider.baseURL });
-            const reflection = await client.chat.completions.create({
-              model: fallbackProvider.model,
-              messages: [
-                { role: 'system', content: 'You are reviewing a completed agent task. Extract 1-3 key learnings worth remembering for future tasks. Focus on: new contacts/prices discovered, what worked vs failed, owner preferences revealed, patterns spotted. Return JSON array: [{"content":"...","category":"supplier|decision|pattern|preference|market_insight|tool_recipe|general","importance":0.5}]. Return [] if nothing worth saving.' },
-                { role: 'user', content: `Goal: ${goal}\n\nTool log:\n${toolSummary}\n\nFinal result: ${safeSlice(finalResult, 500)}` },
-              ],
-              max_tokens: 500,
-            });
-            const reflectionText = reflection.choices[0]?.message?.content?.trim() || '[]';
-            let memories: Array<{ content?: string; category?: string; importance?: number }> = [];
-            try {
-              memories = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
-            } catch (err) {
-              console.error(`[agent:${taskId}] LLM returned non-JSON for memory reflection:`, reflectionText);
-            }
-            if (Array.isArray(memories) && memories.length > 0) {
-              for (const mem of memories.slice(0, 3)) {
-                if (mem.content && mem.content.length > 10) {
-                  await executeTool('save_memory', {
-                    content: mem.content,
-                    category: mem.category || 'general',
-                    importance: mem.importance || 0.5,
-                  }, toolCtx);
-                }
-              }
-              console.log(`[agent:${taskId}] Memory reflection saved ${memories.length} learnings`);
-            }
+            await consolidateMemoryGraph(goal, toolLog, finalResult, toolCtx.businessId, providerConfig, getProviderApiKey(providerConfig.name));
           } catch (err) {
-            console.warn(`[agent:${taskId}] Memory reflection failed (non-fatal):`, err);
+            console.warn(`[agent:${taskId}] Memory reflection graph extraction failed (non-fatal):`, err);
           }
         });
       }

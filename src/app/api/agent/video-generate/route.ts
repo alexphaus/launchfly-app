@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { vastBoot, vastGenerateClip, vastFinalizeVideo, vastStop, type ToolContext } from '@/lib/agent/tools';
 
-export const maxDuration = 800;
+export const maxDuration = 300; // Vercel hobby plan max
 
 /** State passed between phases via the workflow runner loop */
 interface VideoState {

@@ -39,7 +39,7 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'search_memory', 'save_memory', 'validate_memory', 'translate',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'request_approval', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'manage_project']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'check_subtask_status', 'request_approval', 'wait_for_user_input', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'manage_project']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -261,15 +261,29 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'delegate_task',
-      description: 'DANGER: Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). ONLY use this if you ABSOLUTELY CANNOT do the task yourself (i.e., you lack the required tools). If you use this, the sub-agent will LOSE your custom report formatting rules. Therefore, DO NOT delegate if your main goal involves a specific output format.',
+      description: 'Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). The sub-agent runs in the background. You will receive a job_id which you can use with check_subtask_status to poll for the result. DO NOT use this if your main goal involves a specific output format that the sub-agent does not know about.',
       parameters: {
         type: 'object',
         properties: {
           assistantConfigName: { type: 'string', description: 'The exact name of the assistant config in the database (e.g. "Purchasing OS", "Marketing OS")' },
           instruction: { type: 'string', description: 'A detailed prompt describing what the sub-agent needs to accomplish.' },
-          wait_for_completion: { type: 'boolean', description: 'If true, your task will PAUSE until the sub-agent finishes and returns its result to you. If false, it delegates in the background.' },
+          async_mode: { type: 'boolean', description: 'Set to true. The sub-agent will run in the background and you will receive a job_id.' },
         },
         required: ['assistantConfigName', 'instruction'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'check_subtask_status',
+      description: 'Check the status and result of a delegated sub-task using its job_id.',
+      parameters: {
+        type: 'object',
+        properties: {
+          job_id: { type: 'string', description: 'The job_id returned by delegate_task.' },
+        },
+        required: ['job_id'],
       },
     },
   },
@@ -334,7 +348,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'request_approval',
-      description: 'Ask the business owner for approval before proceeding with a significant action (e.g. placing an order, sending a campaign, spending money). Sends a WhatsApp message and PAUSES your task until the owner replies. Your task will resume automatically with their response.',
+      description: 'Ask the business owner for approval before proceeding with a significant action (e.g. placing an order, sending a campaign, spending money). Sends a WhatsApp message. This is NON-BLOCKING — you can continue executing other parallel steps in your DAG while waiting for the owner to reply. If you have absolutely nothing else to do, you may output an empty response to yield execution.',
       parameters: {
         type: 'object',
         properties: {
@@ -346,6 +360,20 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
           },
         },
         required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'wait_for_user_input',
+      description: 'PAUSES your execution until the user provides input. Only use this when you have ABSOLUTELY exhausted all other parallel steps in your Plan DAG and cannot proceed without a human response.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Why you are pausing (e.g. "Waiting for approval on XYZ").' },
+        },
+        required: ['reason'],
       },
     },
   },
@@ -863,7 +891,10 @@ export async function executeTool(
       return executeSendVoiceNote(args.phone as string, args.text as string, toolCtx);
 
     case 'delegate_task':
-      return executeDelegateTask(args.assistantConfigName as string, args.instruction as string, args.wait_for_completion as boolean | undefined, toolCtx);
+      return executeDelegateTask(args.assistantConfigName as string, args.instruction as string, args.async_mode as boolean | undefined, toolCtx);
+
+    case 'check_subtask_status':
+      return executeCheckSubtaskStatus(args.job_id as string, toolCtx);
 
     case 'manage_job':
       return executeManageJob(args as Record<string, unknown>, toolCtx.businessId);
@@ -873,6 +904,9 @@ export async function executeTool(
 
     case 'request_approval':
       return executeRequestApproval(args.question as string, args.options as string[] | undefined, toolCtx);
+
+    case 'wait_for_user_input':
+      return `__PAUSE__:waiting_approval::${args.reason}`;
 
     case 'search_memory':
       return executeSearchMemory(args.query as string, toolCtx.businessId, args.category as string | undefined, (args.limit as number) || 5, args.entity_type as 'memories' | 'tasks' | 'conversations' | undefined);
@@ -2070,12 +2104,9 @@ async function executeManageJob(
 async function executeDelegateTask(
   assistantConfigName: string,
   instruction: string,
-  waitForCompletion: boolean | undefined,
+  asyncMode: boolean | undefined,
   toolCtx: ToolContext,
 ): Promise<string> {
-  if (waitForCompletion && !toolCtx.taskId) {
-    return 'Failed: No task ID available (cannot pause without task context).';
-  }
   try {
     const supabase = getSupabase();
     const { data: assistant } = await supabase
@@ -2133,9 +2164,35 @@ async function executeDelegateTask(
       return `Failed: QStash returned ${res.status}`;
     }
 
-    return `Successfully dispatched task to ${assistantConfigName} (task ID: ${subTaskId}). The agent will work in the background.`;
+    return `Successfully dispatched task to ${assistantConfigName} (job_id: ${subTaskId}). The agent will work in the background. Use check_subtask_status with this job_id to check if it is done.`;
   } catch (err) {
     return `Failed to delegate: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function executeCheckSubtaskStatus(jobId: string, toolCtx: ToolContext): Promise<string> {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('agent_tasks')
+      .select('status, result, updated_at')
+      .eq('id', jobId)
+      .eq('business_id', toolCtx.businessId)
+      .single();
+
+    if (error || !data) {
+      return `Failed to find job_id: ${jobId}. It may be invalid or you lack permissions.`;
+    }
+
+    if (data.status === 'completed') {
+      return `STATUS: COMPLETED\nRESULT:\n${data.result}`;
+    } else if (data.status === 'failed') {
+      return `STATUS: FAILED\nERROR:\n${data.result}`;
+    } else {
+      return `STATUS: ${data.status.toUpperCase()}\nThe task is still running. Try checking again later.`;
+    }
+  } catch (err) {
+    return `Failed to check status: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -2294,13 +2351,11 @@ async function executeRequestApproval(
       await provider.sendWhatsApp(toolCtx.ownerPhone, approvalMsg, toolCtx.businessId);
     }
 
-    // Mark task as waiting
-    await supabase.from('agent_tasks').update({
-      status: 'waiting_approval',
-      updated_at: new Date().toISOString(),
-    }).eq('id', toolCtx.taskId);
+    // We no longer mark the task as waiting_approval here.
+    // The task remains 'running' so it can process other DAG steps.
+    // If it needs to pause later, it will call wait_for_user_input.
 
-    return `__PAUSE__:waiting_approval:${approval.id}:Approval request sent to owner. Task will resume when they reply.`;
+    return `Approval request sent to owner via WhatsApp (Approval ID: ${approval.id}). You may continue executing other parallel steps in your plan. If you have nothing else to do, you MUST call wait_for_user_input to yield.`;
   } catch (err) {
     return `Failed: ${err instanceof Error ? err.message : String(err)}`;
   }

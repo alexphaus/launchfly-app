@@ -19,6 +19,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { type WorkflowContext } from '@upstash/workflow';
+import * as crypto from 'crypto';
 import { getToolsForAgent, executeTool, type ToolContext } from './tools';
 import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
 import { getAgentProvider } from './provider';
@@ -126,6 +127,7 @@ interface TaskRow {
   owner_phone: string | null;
   enabled_tools: string[] | null;
   parent_task_id: string | null;
+  plan_dag: Record<string, unknown> | null;
   updated_at?: string | null;
 }
 
@@ -155,6 +157,14 @@ function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
     ...m,
     content: typeof m.content === 'string' ? sanitizeString(m.content) : m.content,
   }));
+}
+
+function computeStateHash(messages: AgentMessage[], tools: any[]): string {
+  const payload = JSON.stringify({
+    messages: messages.map(m => ({ role: m.role, content: m.content, tool_calls: m.tool_calls })),
+    tools: tools.map(t => t.function.name)
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
 }
 
 /**
@@ -633,6 +643,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       enabledTools: row.enabled_tools,
       goal: row.goal,
       parentTaskId: row.parent_task_id,
+      planDag: row.plan_dag,
     };
   });
 
@@ -643,6 +654,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
   let { toolCtx, messages, stepsUsed, toolLog, recalledSkillIds } = initResult;
   const { enabledTools, goal, parentTaskId } = initResult;
+  let planDag = initResult.planDag;
 
   // ─── Step: Setup — Resolve provider + discover MCP tools in ONE step ───
   // Merging these avoids extra Upstash Workflow HTTP round-trips (each context.run() = ~3-5s overhead)
@@ -719,6 +731,40 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
   while (stepsUsed < MAX_TOTAL_STEPS) {
     loopIteration++;
+
+    // ── DAG Planning Step (Phase 2) ──
+    if (loopIteration === 1 && !planDag && providerConfig.name !== 'mock') {
+      const planResult = await context.call<any>(`plan-dag-gen`, {
+        url: `${providerConfig.baseURL}/chat/completions`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: providerConfig.model,
+          messages: [
+            { role: 'system', content: `You are an expert planner. Analyze the user's goal: "${goal}". Break it down into a Directed Acyclic Graph (DAG) of logical steps. Output valid JSON only, using this schema: { "steps": [{ "id": "step_1", "description": "...", "depends_on": [] }] }. Do not include markdown blocks.` },
+          ],
+        }),
+        timeout: '2m',
+      });
+      
+      if (planResult.status >= 200 && planResult.status < 300) {
+        try {
+          const content = planResult.body?.choices?.[0]?.message?.content || '{}';
+          const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+          planDag = JSON.parse(cleanContent);
+          
+          await context.run('save-plan-dag', async () => {
+             await supabase.from('agent_tasks').update({ plan_dag: planDag }).eq('id', taskId);
+          });
+          console.log(`[agent:${taskId}] Generated Plan DAG with ${(planDag as any)?.steps?.length || 0} steps.`);
+        } catch (e) {
+          console.error(`[agent:${taskId}] Failed to parse Plan DAG:`, e);
+        }
+      }
+    }
 
     // ── Pre-flight check: alive + context compression ──
     // Skip on first iteration — we just set status to 'running' in the init step
@@ -809,7 +855,12 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       if (msg.role === 'user') break;
     }
 
-    const systemNudges = [warningMessage, memoryNudge, criticNudge].filter(Boolean);
+    let planNudge = '';
+    if (planDag && (planDag as any).steps) {
+      planNudge = `🗺️ PLAN-AND-SOLVE: Your current execution plan DAG is: ${JSON.stringify(planDag)}. Review your progress against these steps. Identify the next uncompleted step whose dependencies are met, and focus on executing it. Do not execute steps out of order.`;
+    }
+
+    const systemNudges = [planNudge, warningMessage, memoryNudge, criticNudge].filter(Boolean);
     const llmMessages = systemNudges.length > 0
       ? [...messages, ...systemNudges.map(n => ({ role: 'system' as const, content: n }))]
       : messages;
@@ -827,21 +878,42 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         };
       }>;
     };
-    let llmResult = await context.call<LlmResponseBody>(`llm-${loopIteration}`, {
-      url: `${providerConfig.baseURL}/chat/completions`,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: providerConfig.model,
-        messages: sanitizeMessages(llmMessages),
-        tools: agentTools,
-        tool_choice: 'auto',
-      }),
-      timeout: '2m',
+
+    const stateHash = computeStateHash(llmMessages, agentTools);
+
+    // ── Semantic Cache Check ──
+    const cacheResult = await context.run(`cache-check-${loopIteration}`, async () => {
+      const { data } = await supabase
+        .from('ai_llm_cache')
+        .select('llm_response')
+        .eq('business_id', toolCtx.businessId)
+        .eq('state_hash', stateHash)
+        .maybeSingle();
+      return data ? (data.llm_response as LlmResponseBody) : null;
     });
+
+    let llmResult: { status: number; body: LlmResponseBody };
+
+    if (cacheResult) {
+      console.log(`[agent:${taskId}] CACHE HIT! Skipping LLM call.`);
+      llmResult = { status: 200, body: cacheResult };
+    } else {
+      llmResult = await context.call<LlmResponseBody>(`llm-${loopIteration}`, {
+        url: `${providerConfig.baseURL}/chat/completions`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: providerConfig.model,
+          messages: sanitizeMessages(llmMessages),
+          tools: agentTools,
+          tool_choice: 'auto',
+        }),
+        timeout: '2m',
+      });
+    }
 
     if (llmResult.status < 200 || llmResult.status >= 300) {
       console.error(`[agent:${taskId}] LLM returned ${llmResult.status}:`, JSON.stringify(llmResult.body).substring(0, 500));
@@ -889,6 +961,19 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
         });
         return;
       }
+    }
+
+    // ── Cache Save (Initial Call) ──
+    if (!cacheResult && llmResult.status >= 200 && llmResult.status < 300 && llmResult.body?.choices?.length > 0) {
+      await context.run(`cache-save-${loopIteration}`, async () => {
+        try {
+           await supabase.from('ai_llm_cache').insert({
+             business_id: toolCtx.businessId,
+             state_hash: stateHash,
+             llm_response: llmResult.body as any
+           });
+        } catch (e) { /* ignore constraint errors */ }
+      });
     }
 
     const assistantMessage = llmResult.body.choices?.[0]?.message;
@@ -1252,6 +1337,63 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
     } else {
       // ── No tool calls — task complete ──
       const finalResult = assistantMessage.content || 'Task completed (no output).';
+
+      // ── Phase 4: LLM-as-a-Judge Evaluation ──
+      const MAX_EVAL_RETRIES = 2;
+      let evalRetryCount = 0;
+      if (providerConfig.name !== 'mock') {
+        // Count how many times the evaluator has already rejected in this task
+        evalRetryCount = messages.filter(m => m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('CRITIC EVALUATION FAILED')).length;
+        
+        if (evalRetryCount < MAX_EVAL_RETRIES) {
+          const evalResult = await context.call<any>(`evaluate-task-${loopIteration}`, {
+            url: `${providerConfig.baseURL}/chat/completions`,
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: providerConfig.name === 'openai' ? 'gpt-4o-mini' : (providerConfig.name === 'openrouter' ? 'openai/gpt-4o-mini' : providerConfig.model),
+              messages: [
+                { role: 'system', content: 'You are an objective QA evaluator. Review the agent\'s final output against the original goal. Score the output from 1 to 10. If the score is less than 8, explain exactly why it failed. Output JSON: { "score": 8, "reasoning": "..." }' },
+                { role: 'user', content: `GOAL: ${goal}\n\nFINAL OUTPUT:\n${finalResult}` }
+              ]
+            }),
+            timeout: '1m'
+          });
+
+          if (evalResult.status >= 200 && evalResult.status < 300) {
+            try {
+              const content = evalResult.body?.choices?.[0]?.message?.content || '{}';
+              const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+              const evaluation = JSON.parse(cleanContent);
+              
+              if (evaluation.score < 8) {
+                console.log(`[agent:${taskId}] Evaluator rejected completion (Score ${evaluation.score}, attempt ${evalRetryCount + 1}/${MAX_EVAL_RETRIES}): ${evaluation.reasoning}`);
+                messages.push({ role: 'assistant', content: finalResult });
+                messages.push({ role: 'user', content: `CRITIC EVALUATION FAILED (Score ${evaluation.score}/10): ${evaluation.reasoning}\n\nPlease correct these issues and try completing the task again.` });
+                stepsUsed++; // Count eval rejection as a step to prevent runaway loops
+                
+                await context.run(`save-eval-fail-${loopIteration}`, async () => {
+                  await supabase.from('agent_tasks').update({
+                    messages, steps_used: stepsUsed, tool_log: toolLog,
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', taskId);
+                });
+                
+                continue; // Re-enter the loop!
+              } else {
+                console.log(`[agent:${taskId}] Evaluator approved completion (Score ${evaluation.score}).`);
+              }
+            } catch (e) {
+              console.error(`[agent:${taskId}] Evaluator parsing failed, proceeding anyway:`, e);
+            }
+          }
+        } else {
+          console.log(`[agent:${taskId}] Max eval retries (${MAX_EVAL_RETRIES}) reached, accepting result as-is.`);
+        }
+      }
 
       // Push final assistant message into conversation history
       messages.push({ role: 'assistant', content: finalResult });

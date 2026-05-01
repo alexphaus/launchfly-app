@@ -19,7 +19,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { type WorkflowContext } from '@upstash/workflow';
-import * as crypto from 'crypto';
+
 import { getToolsForAgent, executeTool, type ToolContext } from './tools';
 import { getConversationHistory, saveMessage } from '@/lib/ai-receptionist/history';
 import { getAgentProvider } from './provider';
@@ -159,13 +159,7 @@ function sanitizeMessages(msgs: AgentMessage[]): AgentMessage[] {
   }));
 }
 
-function computeStateHash(messages: AgentMessage[], tools: any[]): string {
-  const payload = JSON.stringify({
-    messages: messages.map(m => ({ role: m.role, content: m.content, tool_calls: m.tool_calls })),
-    tools: tools.map(t => t.function.name)
-  });
-  return crypto.createHash('sha256').update(payload).digest('hex');
-}
+
 
 /**
  * Parse XML-style tool calls from model content (MiMo, Qwen format).
@@ -643,7 +637,6 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       enabledTools: row.enabled_tools,
       goal: row.goal,
       parentTaskId: row.parent_task_id,
-      planDag: row.plan_dag,
     };
   });
 
@@ -654,7 +647,6 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
 
   let { toolCtx, messages, stepsUsed, toolLog, recalledSkillIds } = initResult;
   const { enabledTools, goal, parentTaskId } = initResult;
-  let planDag = initResult.planDag;
 
   // ─── Step: Setup — Resolve provider + discover MCP tools in ONE step ───
   // Merging these avoids extra Upstash Workflow HTTP round-trips (each context.run() = ~3-5s overhead)
@@ -732,39 +724,6 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
   while (stepsUsed < MAX_TOTAL_STEPS) {
     loopIteration++;
 
-    // ── DAG Planning Step (Phase 2) ──
-    if (loopIteration === 1 && !planDag && providerConfig.name !== 'mock') {
-      const planResult = await context.call<any>(`plan-dag-gen`, {
-        url: `${providerConfig.baseURL}/chat/completions`,
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: providerConfig.model,
-          messages: [
-            { role: 'system', content: `You are an expert planner. Analyze the user's goal: "${goal}". Break it down into a Directed Acyclic Graph (DAG) of logical steps. Output valid JSON only, using this schema: { "steps": [{ "id": "step_1", "description": "...", "depends_on": [] }] }. Do not include markdown blocks.` },
-          ],
-        }),
-        timeout: '2m',
-      });
-      
-      if (planResult.status >= 200 && planResult.status < 300) {
-        try {
-          const content = planResult.body?.choices?.[0]?.message?.content || '{}';
-          const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-          planDag = JSON.parse(cleanContent);
-          
-          await context.run('save-plan-dag', async () => {
-             await supabase.from('agent_tasks').update({ plan_dag: planDag }).eq('id', taskId);
-          });
-          console.log(`[agent:${taskId}] Generated Plan DAG with ${(planDag as any)?.steps?.length || 0} steps.`);
-        } catch (e) {
-          console.error(`[agent:${taskId}] Failed to parse Plan DAG:`, e);
-        }
-      }
-    }
 
     // ── Pre-flight check: alive + context compression ──
     // Skip on first iteration — we just set status to 'running' in the init step
@@ -855,12 +814,7 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       if (msg.role === 'user') break;
     }
 
-    let planNudge = '';
-    if (planDag && (planDag as any).steps) {
-      planNudge = `🗺️ PLAN-AND-SOLVE: Your current execution plan DAG is: ${JSON.stringify(planDag)}. Review your progress against these steps. Identify the next uncompleted step whose dependencies are met, and focus on executing it. Do not execute steps out of order.`;
-    }
-
-    const systemNudges = [planNudge, warningMessage, memoryNudge, criticNudge].filter(Boolean);
+    const systemNudges = [warningMessage, memoryNudge, criticNudge].filter(Boolean);
     const llmMessages = systemNudges.length > 0
       ? [...messages, ...systemNudges.map(n => ({ role: 'system' as const, content: n }))]
       : messages;
@@ -879,41 +833,23 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       }>;
     };
 
-    const stateHash = computeStateHash(llmMessages, agentTools);
-
-    // ── Semantic Cache Check ──
-    const cacheResult = await context.run(`cache-check-${loopIteration}`, async () => {
-      const { data } = await supabase
-        .from('ai_llm_cache')
-        .select('llm_response')
-        .eq('business_id', toolCtx.businessId)
-        .eq('state_hash', stateHash)
-        .maybeSingle();
-      return data ? (data.llm_response as LlmResponseBody) : null;
-    });
-
     let llmResult: { status: number; body: LlmResponseBody };
 
-    if (cacheResult) {
-      console.log(`[agent:${taskId}] CACHE HIT! Skipping LLM call.`);
-      llmResult = { status: 200, body: cacheResult };
-    } else {
-      llmResult = await context.call<LlmResponseBody>(`llm-${loopIteration}`, {
-        url: `${providerConfig.baseURL}/chat/completions`,
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: providerConfig.model,
-          messages: sanitizeMessages(llmMessages),
-          tools: agentTools,
-          tool_choice: 'auto',
-        }),
-        timeout: '2m',
-      });
-    }
+    llmResult = await context.call<LlmResponseBody>(`llm-${loopIteration}`, {
+      url: `${providerConfig.baseURL}/chat/completions`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getProviderApiKey(providerConfig.name)}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: providerConfig.model,
+        messages: sanitizeMessages(llmMessages),
+        tools: agentTools,
+        tool_choice: 'auto',
+      }),
+      timeout: '2m',
+    });
 
     if (llmResult.status < 200 || llmResult.status >= 300) {
       console.error(`[agent:${taskId}] LLM returned ${llmResult.status}:`, JSON.stringify(llmResult.body).substring(0, 500));
@@ -963,18 +899,6 @@ export async function runAgentWorkflow(context: WorkflowContext<WorkflowPayload>
       }
     }
 
-    // ── Cache Save (Initial Call) ──
-    if (!cacheResult && llmResult.status >= 200 && llmResult.status < 300 && llmResult.body?.choices?.length > 0) {
-      await context.run(`cache-save-${loopIteration}`, async () => {
-        try {
-           await supabase.from('ai_llm_cache').insert({
-             business_id: toolCtx.businessId,
-             state_hash: stateHash,
-             llm_response: llmResult.body as any
-           });
-        } catch (e) { /* ignore constraint errors */ }
-      });
-    }
 
     const assistantMessage = llmResult.body.choices?.[0]?.message;
     if (!assistantMessage) {

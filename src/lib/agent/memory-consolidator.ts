@@ -16,13 +16,24 @@ export interface GraphEdge {
   properties: Record<string, any>;
 }
 
+export interface FlatMemory {
+  content: string;
+  category: string;
+  importance: number;
+}
+
 export interface ExtractedGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  flat_memories: FlatMemory[]; // Always extracted as backward-compatible fallback
 }
 
 /**
- * Asynchronously extracts entities and relationships from a completed task and upserts them into the Knowledge Graph.
+ * Asynchronously extracts entities and relationships from a completed task.
+ * 
+ * DUAL-WRITE STRATEGY:
+ * 1. Always saves flat ai_memories (backward compatible, works without graph migration)
+ * 2. Attempts to save graph nodes/edges (fails silently if tables don't exist)
  */
 export async function consolidateMemoryGraph(
   goal: string,
@@ -45,7 +56,7 @@ export async function consolidateMemoryGraph(
     const OpenAI = (await import('openai')).default;
     const client = new OpenAI({ apiKey, baseURL: providerConfig.baseURL });
     
-    // We prompt the LLM to extract a JSON graph representation
+    // Prompt extracts BOTH flat memories AND graph entities in one LLM call
     const reflection = await client.chat.completions.create({
       model: providerConfig.model,
       messages: [
@@ -53,14 +64,16 @@ export async function consolidateMemoryGraph(
           role: 'system', 
           content: `You are an expert Knowledge Graph builder reviewing a completed agent task.
 Extract important entities (nodes) and their relationships (edges).
+Also extract 1-3 key flat learnings worth remembering.
 Focus on: new contacts, suppliers, prices, owner preferences, and workflows.
 
 Return a strictly valid JSON object matching this schema:
 {
+  "flat_memories": [{"content": "Human-readable learning", "category": "supplier|decision|pattern|preference|market_insight|tool_recipe|general", "importance": 0.5}],
   "nodes": [{"label": "Supplier|Preference|Concept|Person", "name": "Exact Name", "properties": {"key": "value"}}],
   "edges": [{"source_name": "Name1", "source_label": "Label1", "target_name": "Name2", "target_label": "Label2", "relation": "UPPERCASE_RELATION", "properties": {}}]
 }
-Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.` 
+Return {"flat_memories": [], "nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.` 
         },
         { 
           role: 'user', 
@@ -68,11 +81,11 @@ Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.`
         },
       ],
       max_tokens: 1000,
-      response_format: { type: 'json_object' }, // If supported, otherwise standard prompt
+      response_format: { type: 'json_object' },
     });
 
-    const reflectionText = reflection.choices[0]?.message?.content?.trim() || '{"nodes":[],"edges":[]}';
-    let graph: ExtractedGraph = { nodes: [], edges: [] };
+    const reflectionText = reflection.choices[0]?.message?.content?.trim() || '{"flat_memories":[],"nodes":[],"edges":[]}';
+    let graph: ExtractedGraph = { nodes: [], edges: [], flat_memories: [] };
     
     try {
       graph = JSON.parse(reflectionText.replace(/^```json?\n?|\n?```$/g, ''));
@@ -81,15 +94,43 @@ Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.`
       return;
     }
 
+    // ── LAYER 1: Always save flat memories (backward compatible) ──
+    if (graph.flat_memories && graph.flat_memories.length > 0) {
+      const embedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+      
+      for (const mem of graph.flat_memories.slice(0, 3)) {
+        if (!mem.content || mem.content.length < 10) continue;
+        try {
+          const embRes = await embedClient.embeddings.create({
+            model: 'text-embedding-3-small',
+            input: mem.content.substring(0, 8000),
+          });
+          const embedding = embRes.data[0]?.embedding;
+
+          await supabase.from('ai_memories').insert({
+            business_id: businessId,
+            content: mem.content,
+            category: mem.category || 'general',
+            importance_score: mem.importance || 0.5,
+            embedding: embedding || null,
+            metadata: { source: 'auto_reflection' },
+          });
+        } catch (memErr) {
+          console.warn(`[memory-consolidator] Flat memory save failed:`, memErr);
+        }
+      }
+      console.log(`[memory-consolidator] Saved ${Math.min(graph.flat_memories.length, 3)} flat memories.`);
+    }
+
+    // ── LAYER 2: Attempt graph upserts (fails gracefully if tables missing) ──
     if (!graph.nodes || graph.nodes.length === 0) {
-      console.log(`[memory-consolidator] No new nodes extracted for task.`);
+      console.log(`[memory-consolidator] No graph nodes extracted.`);
       return;
     }
 
     console.log(`[memory-consolidator] Extracted ${graph.nodes.length} nodes and ${graph.edges?.length || 0} edges.`);
 
-    // Generate embeddings for nodes in parallel
-    const embedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }); // Assuming OpenAI for embeddings
+    const embedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
     
     await Promise.all(graph.nodes.map(async (node) => {
       try {
@@ -100,8 +141,7 @@ Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.`
         });
         const embedding = embRes.data[0]?.embedding;
 
-        // Upsert node
-        const { data: nodeIdData, error: nodeErr } = await supabase.rpc('upsert_ai_node', {
+        const { error: nodeErr } = await supabase.rpc('upsert_ai_node', {
           p_business_id: businessId,
           p_label: node.label,
           p_name: node.name,
@@ -110,6 +150,11 @@ Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.`
         });
 
         if (nodeErr) {
+          // Graph tables may not exist — this is expected pre-migration
+          if (nodeErr.message?.includes('does not exist') || nodeErr.code === '42883') {
+            console.warn(`[memory-consolidator] Graph tables not deployed. Flat memories saved successfully.`);
+            return; // Stop attempting graph ops
+          }
           console.error(`[memory-consolidator] Error upserting node ${node.name}:`, nodeErr);
         }
       } catch (embErr) {
@@ -117,11 +162,10 @@ Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.`
       }
     }));
 
-    // Now upsert edges
+    // Upsert edges
     if (graph.edges && graph.edges.length > 0) {
       for (const edge of graph.edges) {
         try {
-          // Resolve source and target IDs
           const { data: sourceData } = await supabase.from('ai_nodes').select('id').eq('business_id', businessId).eq('label', edge.source_label).eq('name', edge.source_name).single();
           const { data: targetData } = await supabase.from('ai_nodes').select('id').eq('business_id', businessId).eq('label', edge.target_label).eq('name', edge.target_name).single();
           
@@ -137,7 +181,9 @@ Return {"nodes": [], "edges": []} if nothing is worth saving. Output ONLY JSON.`
              console.warn(`[memory-consolidator] Edge resolution failed for ${edge.source_name} -> ${edge.target_name}. Missing node in DB.`);
           }
         } catch (edgeErr) {
-           console.error(`[memory-consolidator] Error upserting edge:`, edgeErr);
+          // Silently handle if ai_nodes table doesn't exist
+          if (String(edgeErr).includes('does not exist')) return;
+          console.error(`[memory-consolidator] Error upserting edge:`, edgeErr);
         }
       }
     }

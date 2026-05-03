@@ -1,440 +1,287 @@
-'use client';
+// src/app/(marketing)/page.tsx
+// Launchfly Agency Sales Page - High-converting landing page
 
-import { useEffect, useState, useCallback } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { trackCTAClick } from '../lib/onboarding-analytics';
+import React from 'react';
+import {
+    MessageCircle,
+    PhoneMissed,
+    MessageSquareOff,
+    Smartphone,
+    Check,
+    ShieldCheck
+} from 'lucide-react';
 
-export default function HomePage() {
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [headerScrolled, setHeaderScrolled] = useState(false);
-  const [liveUsers, setLiveUsers] = useState(73);
+export const metadata = {
+    title: 'Launchfly - The WhatsApp Booking Machine',
+    description: 'Stop missing calls. Start booking jobs. The WhatsApp Receptionist for busy Aircon & Service Pros.',
+};
 
-  // Generate session ID
-  const [sessionId] = useState(() => 
-    `session_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`
-  );
+export default function LaunchflyAgencyPage() {
+    return (
+        <div className="min-h-screen bg-white text-slate-900 font-sans antialiased selection:bg-blue-100">
 
-  // Navigation functions
-  const handleGetStarted = async (plan = 'growth', location = 'unknown') => {
-    trackCTAClick('get_started', location, undefined, plan);
-    
-    if ((location === 'pricing' || location === 'final_cta') && plan !== 'free') {
-      try {
-        const response = await fetch('/api/stripe/create-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            plan,
-            returnUrl: window.location.href
-          })
-        });
-        
-        if (response.ok) {
-          const { url } = await response.json();
-          window.location.href = url;
-          return;
-        }
-      } catch (error) {
-        console.error('Checkout error:', error);
-      }
-    }
-    
-    router.push(`/templates`); // Direct to templates/wizard
-  };
-
-  useEffect(() => {
-    setIsLoading(false);
-    document.body.classList.add('loaded');
-    
-    let scrollTimer: NodeJS.Timeout;
-    const handleScroll = () => {
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        setHeaderScrolled(window.scrollY > 10);
-      }, 10);
-    };
-
-    // Dynamic counters
-    const usersInterval = setInterval(() => {
-      const change = Math.floor(Math.random() * 5) - 2;
-      setLiveUsers(prev => Math.max(60, Math.min(120, prev + change)));
-    }, 8000);
-
-    window.addEventListener('scroll', handleScroll);
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      clearInterval(usersInterval);
-    };
-  }, []);
-
-  const toggleMobileMenu = useCallback(() => {
-    setMobileMenuOpen(prev => {
-      const newState = !prev;
-      document.body.style.overflow = newState ? 'hidden' : '';
-      return newState;
-    });
-  }, []);
-
-  if (isLoading) return null;
-  
-  return (
-    <div className="launchfly-homepage-v2">
-      {/* Header */}
-      <header id="header" className={headerScrolled ? 'scrolled' : ''}>
-        <nav className="container">
-          <div className="logo">
-            <span className="logo-icon">🚀</span>
-            <span>Launchfly</span>
-          </div>
-          <div className="nav-links">
-            <a href="#how-it-works">How It Works</a>
-            <a href="#features">Features</a>
-            <a href="#pricing">Pricing</a>
-          </div>
-          <button 
-            className="nav-cta" 
-            onClick={() => handleGetStarted('free', 'header_nav')}
-          >
-            <span className="pulse-dot"></span>
-            Build My Funnel Free
-          </button>
-          <button 
-            className={`mobile-menu-toggle ${mobileMenuOpen ? 'active' : ''}`} 
-            onClick={toggleMobileMenu}
-          >
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
-        </nav>
-      </header>
-
-      <main>
-        {/* Hero Section - Local Service Focused */}
-        <section className="hero-v2">
-          <div className="container">
-            {/* Trust Badge */}
-            <div className="hero-badge">
-              <span className="badge-pulse"></span>
-              <span className="badge-icon">🔧</span>
-              <span><strong>New:</strong> Lead Generation for Local Businesses</span>
-            </div>
-            
-            {/* Main Headline */}
-            <h1 className="hero-title">
-              <span className="title-main">The "Done-For-You" Lead System</span><br />
-              <span className="title-highlight">That Fills Your Calendar</span><br />
-              <span className="title-sub">Automated Quote Funnels for Local Businesses</span>
-            </h1>
-            
-            {/* Subheadline - The Promise */}
-            <p className="hero-subtitle">
-              Most websites are just digital business cards. We build you a <strong>complete lead generation machine</strong>: The Guide, The Landing Page, and The Email Follow-up. Ready in 60 seconds.
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="cta-group">
-              <button 
-                className="primary-cta"
-                onClick={() => handleGetStarted('free', 'hero')}
-              >
-                <span>Generate My Funnel Now</span>
-                <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
-                </svg>
-              </button>
-              <p className="cta-subtext">No credit card required • Free to generate</p>
-            </div>
-
-            {/* Stats Bar */}
-            <div className="hero-stats">
-              <div className="stat-item">
-                <div className="stat-icon">📋</div>
-                <strong>Checklist/Guide</strong>
-                <span>Written & Designed</span>
-              </div>
-              <div className="stat-item">
-                <div className="stat-icon">💻</div>
-                <strong>Landing Page</strong>
-                <span>High-Converting</span>
-              </div>
-              <div className="stat-item">
-                <div className="stat-icon">📧</div>
-                <strong>Email Sequence</strong>
-                <span>5-Day Nurture</span>
-              </div>
-              <div className="stat-item">
-                <div className="stat-icon">⚡</div>
-                <strong>Instant</strong>
-                <span>Ready in 30s</span>
-              </div>
-            </div>
-
-            {/* Social Proof */}
-            <div className="trust-indicators">
-              <div className="avatar-stack">
-                <Image src="https://i.pravatar.cc/40?img=12" alt="User" width={40} height={40} unoptimized />
-                <Image src="https://i.pravatar.cc/40?img=25" alt="User" width={40} height={40} unoptimized />
-                <Image src="https://i.pravatar.cc/40?img=33" alt="User" width={40} height={40} unoptimized />
-                <Image src="https://i.pravatar.cc/40?img=42" alt="User" width={40} height={40} unoptimized />
-                <div className="more-users">+{liveUsers - 4}</div>
-              </div>
-              <div className="trust-text">
-                <span className="live-indicator"></span>
-                <span><strong>{liveUsers}</strong> local businesses building funnels right now</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* The Problem We Solve */}
-        <section className="problem-section">
-          <div className="container">
-            <div className="problem-grid">
-              <div className="problem-card">
-                <span className="problem-icon">📉</span>
-                <h3>Most Websites Fail</h3>
-                <p>They look nice, but they don't ask for the sale. 96% of visitors leave without contacting you because they aren't ready to book <em>right now</em>.</p>
-              </div>
-              <div className="solution-card">
-                <span className="solution-icon">📈</span>
-                <h3>Funnels Print Money</h3>
-                <p>We give visitors a reason to share their info (a free guide or quote). Then we automatically follow up until they book. It's like having a 24/7 sales rep.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* What You Get */}
-        <section className="differentiator-section" id="features">
-          <div className="container">
-            <div className="section-header">
-              <div className="section-label">What You Get</div>
-              <h2>A Complete Lead Generation System</h2>
-              <p>We don't just give you a tool. We give you the finished assets.</p>
-            </div>
-
-            <div className="fulfillment-comparison">
-              <div className="comparison-card new">
-                <h3>1. The Lead Magnet (Asset)</h3>
-                <p>A professional Checklist, Price Guide, or Coupon tailored to your business. Real value that makes homeowners want to give you their info.</p>
-                <ul>
-                  <li>✅ Custom written for your niche</li>
-                  <li>✅ Professional layout & design</li>
-                  <li>✅ High perceived value</li>
-                </ul>
-              </div>
-
-              <div className="comparison-card new">
-                <h3>2. The Landing Page</h3>
-                <p>A clean, distraction-free page designed to do one thing: convert visitors into leads and phone calls.</p>
-                <ul>
-                  <li>✅ Mobile responsive</li>
-                  <li>✅ Copywriting that converts</li>
-                  <li>✅ Click-to-Call ready</li>
-                </ul>
-              </div>
-
-              <div className="comparison-card new">
-                <h3>3. The Email Sequence</h3>
-                <p>A 5-day automated email series that delivers the asset, builds trust, and gets them to book an appointment.</p>
-                <ul>
-                  <li>✅ Day 1: Delivery & Welcome</li>
-                  <li>✅ Day 2-4: Value & Trust Building</li>
-                  <li>✅ Day 5: The "Book Now" Pitch</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* How It Works */}
-        <section className="how-section" id="how-it-works">
-          <div className="container">
-            <div className="section-header">
-              <div className="section-label">Simple Process</div>
-              <h2>From Idea to Leads in 3 Steps</h2>
-            </div>
-
-            <div className="steps-grid">
-              <div className="step-card">
-                <div className="step-number">1</div>
-                <div className="step-icon">🎯</div>
-                <h3>Enter Your Business</h3>
-                <p>Tell us what you do and where you are. Example: "I'm a roofer in Dallas looking for storm damage repairs."</p>
-              </div>
-
-              <div className="step-card">
-                <div className="step-number">2</div>
-                <div className="step-icon">🤖</div>
-                <h3>AI Generates Everything</h3>
-                <p>Our engine writes your guide, builds your page, and drafts your emails. It takes about 30 seconds.</p>
-              </div>
-
-              <div className="step-card">
-                <div className="step-number">3</div>
-                <div className="step-icon">🚀</div>
-                <h3>Launch & Collect Leads</h3>
-                <p>Get your link, share it on Facebook or your truck wrap, and watch the leads roll in. We handle the delivery.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing */}
-        <section className="pricing-section" id="pricing">
-          <div className="container">
-            <div className="section-header">
-              <div className="section-label">🚀 SEA Launch Special</div>
-              <h2>Launch Your Lead System</h2>
-              <p style={{ fontSize: '1.1rem', color: '#10b981', fontWeight: '600', marginTop: '0.5rem' }}>
-                Keep 100% of Your Profits — No Monthly Fees, No Revenue Share
-              </p>
-            </div>
-
-            <div className="pricing-grid">
-              {/* Tier 1: The Foot in the Door - $97 */}
-              <div className="pricing-card popular">
-                <div className="popular-badge">🔥 POPULAR</div>
-                <div className="plan-name">The "Neighborhood Authority" System</div>
-                <div className="plan-price">
-                  <span className="price-amount">$97</span>
-                  <span className="price-period" style={{ fontSize: '1rem', color: '#6b7280', fontWeight: 'normal' }}>one-time</span>
+            {/* 1. NAVBAR */}
+            <nav className="fixed w-full bg-white/90 backdrop-blur-sm z-50 border-b border-slate-100">
+                <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">L</div>
+                        <span className="font-bold text-xl tracking-tight">Launchfly</span>
+                    </div>
+                    <a
+                        href="https://wa.me/13203627874"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2 shadow-sm hover:shadow-md"
+                    >
+                        <MessageCircle className="w-4 h-4" />
+                        Talk to Sales
+                    </a>
                 </div>
-                <div className="plan-tagline">Everything you need to capture leads</div>
-                
-                <ul className="plan-features">
-                  <li>✓ <strong>Custom "City-Specific" PDF Guide</strong></li>
-                  <li>✓ <strong>High-Converting Landing Page</strong></li>
-                  <li>✓ <strong>5-Day Automated Email Sequence</strong></li>
-                  <li>✓ <strong>Lead Command Center Dashboard</strong></li>
-                  <li>✓ <strong>Unlimited Leads</strong></li>
-                  <li style={{ color: '#10b981', fontWeight: '600' }}>✓ No Monthly Fees</li>
-                  <li style={{ color: '#10b981', fontWeight: '600' }}>✓ You Keep 100% Profit</li>
-                </ul>
+            </nav>
 
-                <button className="plan-cta primary" onClick={() => handleGetStarted('pro', 'pricing')}>
-                  Get My System — $97
-                </button>
-                <p style={{ fontSize: '0.85rem', color: '#10b981', marginTop: '0.75rem', textAlign: 'center', fontWeight: '600' }}>
-                  🛡️ First 10 Leads in 30 Days or Full Refund
-                </p>
-              </div>
+            {/* 2. HERO SECTION */}
+            <header
+                className="pt-32 pb-20 px-6"
+                style={{
+                    backgroundImage: 'radial-gradient(#3b82f6 1px, transparent 1px)',
+                    backgroundSize: '24px 24px'
+                }}
+            >
+                <div className="max-w-4xl mx-auto text-center">
+                    {/* Scarcity Badge */}
+                    <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 px-4 py-2 rounded-full mb-8 shadow-sm">
+                        <span className="relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                        </span>
+                        <span className="text-sm font-semibold text-blue-700">Accepting 3 New Clients for Jan 2026</span>
+                    </div>
 
-              {/* Tier 2: The Goal - $297 + $29/mo */}
-              <div className="pricing-card">
-                <div className="plan-name">Done-For-You Growth</div>
-                <div className="plan-price">
-                  <span className="price-amount">$297</span>
-                  <span className="price-period" style={{ fontSize: '1rem', color: '#6b7280', fontWeight: 'normal' }}>setup + $29/mo</span>
+                    <h1 className="text-5xl md:text-7xl font-black text-slate-900 mb-6 leading-tight tracking-tight">
+                        Stop Missing Calls.<br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Start Booking Jobs.</span>
+                    </h1>
+
+                    <p className="text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+                        The &quot;WhatsApp Receptionist&quot; for busy Aircon &amp; Service Pros.
+                        It quotes prices, replies to leads, and books appointments while you&apos;re on a ladder.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <a href="#demo" className="w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-all shadow-lg shadow-blue-900/10 hover:shadow-xl hover:-translate-y-1">
+                            See The Demo
+                        </a>
+                        <a href="#pricing" className="w-full sm:w-auto px-8 py-4 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-bold text-lg hover:border-slate-300 hover:bg-slate-50 transition-all">
+                            View Pricing
+                        </a>
+                    </div>
+
+                    <p className="mt-6 text-sm text-slate-400 font-medium">Trusted by 50+ Pros in Metro Manila</p>
                 </div>
-                <div className="plan-tagline">We manage the tech, you close the deals</div>
-                
-                <ul className="plan-features">
-                  <li>✓ <strong>Everything in the $97 Plan</strong></li>
-                  <li>✓ <strong>Google Business Profile Optimization</strong></li>
-                  <li>✓ <strong>Instant SMS Lead Alerts</strong> (Speed-to-Lead)</li>
-                  <li>✓ <strong>Premium Hosting & Domain Connection</strong></li>
-                  <li>✓ <strong>Monthly Content Updates</strong></li>
-                  <li style={{ color: '#f59e0b', fontWeight: '600' }}>⭐ We Handle Everything</li>
-                </ul>
+            </header>
 
-                <button className="plan-cta secondary" onClick={() => handleGetStarted('vip', 'pricing')} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: 'white', borderColor: 'transparent' }}>
-                  Apply for Growth Plan
-                </button>
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  Limited spots available per week.
-                </p>
-              </div>
+            {/* 3. THE PAIN POINT (Agitation) */}
+            <section className="py-20 bg-slate-50 border-y border-slate-200">
+                <div className="max-w-5xl mx-auto px-6">
+                    <div className="grid md:grid-cols-2 gap-12 items-center">
+                        <div>
+                            <h2 className="text-3xl font-bold mb-6 text-slate-900">You are losing money every time you climb a ladder.</h2>
+                            <div className="space-y-6">
+                                <div className="flex gap-4 group">
+                                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center shrink-0 group-hover:bg-red-200 transition-colors">
+                                        <PhoneMissed className="w-6 h-6 text-red-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-lg text-slate-900">The &quot;Missed Call&quot; Problem</h3>
+                                        <p className="text-slate-600 mt-1">Phone rings while you&apos;re driving or fixing an AC. You don&apos;t answer. Customer calls the next guy.</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-4 group">
+                                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center shrink-0 group-hover:bg-red-200 transition-colors">
+                                        <MessageSquareOff className="w-6 h-6 text-red-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-lg text-slate-900">The &quot;Hm Po?&quot; Nightmare</h3>
+                                        <p className="text-slate-600 mt-1">You spend hours texting &quot;How much?&quot; to people who never reply. It&apos;s a waste of time.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-              {/* Tier 3: Agency License - $997/year */}
-              <div className="pricing-card">
-                <div className="plan-name">Agency License</div>
-                <div className="plan-price">
-                  <span className="price-amount">$997</span>
-                  <span className="price-period" style={{ fontSize: '1rem', color: '#6b7280', fontWeight: 'normal' }}>/year</span>
+                        {/* The "Old Way" Card */}
+                        <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 md:rotate-2 hover:rotate-0 transition-all duration-500 ease-out">
+                            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+                                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <span className="text-xs text-slate-400 font-mono ml-auto">Old Way.exe</span>
+                            </div>
+                            <div className="space-y-3 font-mono text-sm">
+                                <div className="bg-slate-50 p-3 rounded-lg text-slate-500 flex items-center gap-2">
+                                    <PhoneMissed className="w-4 h-4" /> Missed Call (0917-XXX-XXXX)
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-lg text-slate-500 flex items-center gap-2">
+                                    <PhoneMissed className="w-4 h-4" /> Missed Call (0998-XXX-XXXX)
+                                </div>
+                                <div className="bg-red-50 p-3 rounded-lg text-red-600 font-bold border border-red-100 flex items-center gap-2">
+                                    ⚠️ ₱5,000 Potential Revenue LOST.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div className="plan-tagline">Your "Business in a Box" Opportunity</div>
-                
-                <ul className="plan-features">
-                  <li>✓ <strong>10 Client Licenses</strong> (Sell for $300+ each)</li>
-                  <li>✓ <strong>White-Label Removal</strong> (Your Brand, Not Ours)</li>
-                  <li>✓ <strong>Complete Sales Kit</strong> (Scripts & Contracts)</li>
-                  <li>✓ <strong>Priority Agency Support</strong></li>
-                  <li>✓ <strong>You Keep 100% Profit</strong></li>
-                  <li style={{ color: '#7c3aed', fontWeight: '600' }}>⭐ Digital Arbitrage Model</li>
-                </ul>
+            </section>
 
-                <button className="plan-cta secondary" onClick={() => handleGetStarted('agency', 'pricing')} style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)', color: 'white', borderColor: 'transparent' }}>
-                  Start Your Agency
-                </button>
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.75rem', textAlign: 'center' }}>
-                  Limited to 3 partners per city.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+            {/* 4. THE SOLUTION (Interactive Demo) */}
+            <section id="demo" className="py-24 bg-white">
+                <div className="max-w-4xl mx-auto px-6 text-center">
+                    <span className="text-blue-600 font-bold tracking-wider uppercase text-sm">The New Way</span>
+                    <h2 className="text-4xl font-bold mt-2 mb-12 text-slate-900">Try the &quot;Instant Quote&quot; Engine</h2>
 
-        {/* Final CTA */}
-        <section className="final-cta-section">
-          <div className="container">
-            <div className="final-cta-content">
-              <h2>Ready to Get More Leads?</h2>
-              <p>One-time payment. No monthly fees. No revenue share. You keep 100%.</p>
-              
-              <button className="primary-cta large" onClick={() => handleGetStarted('pro', 'final_cta')}>
-                <span>Get My Lead System — $97</span>
-                <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd"/>
-                </svg>
-              </button>
-              <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', marginTop: '1rem' }}>
-                Or try the free preview first →
-              </p>
-            </div>
-          </div>
-        </section>
-      </main>
+                    <div className="relative group cursor-pointer">
+                        {/* Glow Effect */}
+                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl blur opacity-25 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
 
-      {/* Footer */}
-      <footer>
-        <div className="container">
-          <div className="footer-main">
-            <div className="footer-brand">
-              <div className="logo">
-                <span className="logo-icon">🚀</span>
-                <span>Launchfly</span>
-              </div>
-              <p>The AI Lead Magnet Generator for Local Businesses.</p>
-            </div>
-            
-            <div className="footer-links">
-              <div className="footer-column">
-                <h4>Product</h4>
-                <a href="#how-it-works">How It Works</a>
-                <a href="#features">Features</a>
-                <a href="#pricing">Pricing</a>
-              </div>
-              
-              <div className="footer-column">
-                <h4>Legal</h4>
-                <a href="#">Privacy Policy</a>
-                <a href="#">Terms of Service</a>
-              </div>
-            </div>
-          </div>
-          
-          <div className="footer-bottom">
-            <p>&copy; 2025 Launchfly AI. All rights reserved.</p>
-          </div>
+                        <div className="relative bg-white border border-slate-200 rounded-2xl p-8 shadow-2xl text-left">
+                            <div className="grid md:grid-cols-2 gap-8 items-center">
+                                <div>
+                                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                                        <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm">1</span>
+                                        Customer Clicks a Link
+                                    </h3>
+                                    <p className="text-slate-600 mb-6 pl-10 border-l-2 border-slate-100">Instead of calling, they tap your &quot;Instant Quote&quot; link. They select &quot;Cleaning&quot; and &quot;2 Units&quot;.</p>
+
+                                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                                        <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm">2</span>
+                                        They Get a Price Instantly
+                                    </h3>
+                                    <p className="text-slate-600 mb-6 pl-10 border-l-2 border-slate-100">Our system calculates the price (e.g., ₱2,400) and shows it immediately. No waiting.</p>
+
+                                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                                        <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm">3</span>
+                                        You Get the Job
+                                    </h3>
+                                    <p className="text-slate-600 pl-10 border-l-2 border-slate-100">The lead is sent directly to your WhatsApp. &quot;New Job: Cleaning, 2 Units, Makati.&quot;</p>
+                                </div>
+
+                                {/* Phone Mockup with Live Demo */}
+                                <a
+                                    href="/q/525b6e62-efb4-4c85-aee0-da47eedbdcc4"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block bg-slate-900 rounded-[2.5rem] p-3 shadow-2xl border-4 border-slate-800 transform group-hover:scale-[1.02] transition-transform duration-300"
+                                >
+                                    <div className="bg-gradient-to-b from-blue-50 to-white rounded-[2rem] overflow-hidden h-[500px] w-full relative flex flex-col items-center justify-center p-6">
+                                        {/* Simulated Quote UI */}
+                                        <div className="w-full max-w-[200px] space-y-4 text-center">
+                                            <div className="bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-bold">
+                                                🔧 Aircon Cleaning
+                                            </div>
+                                            <div className="bg-white border-2 border-slate-200 rounded-xl p-4 shadow-sm">
+                                                <p className="text-xs text-slate-500 mb-1">Estimated Price</p>
+                                                <p className="text-2xl font-black text-slate-900">₱1,200 - ₱1,500</p>
+                                            </div>
+                                            <div className="bg-green-500 text-white py-3 px-6 rounded-xl font-bold text-sm shadow-lg animate-pulse">
+                                                📱 Get Quote via WhatsApp
+                                            </div>
+                                        </div>
+                                        <p className="absolute bottom-4 text-xs text-slate-400 font-medium">Tap to try the live demo →</p>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* 5. THE OFFER STACK (Pricing) */}
+            <section id="pricing" className="py-24 bg-slate-900 text-white">
+                <div className="max-w-3xl mx-auto px-6 text-center">
+                    <h2 className="text-4xl font-bold mb-4">
+                        ₱15,000 Value. <span className="text-green-400">₱5,000 Price.</span>
+                    </h2>
+                    <p className="text-slate-400 mb-12 text-lg">I&apos;m building my portfolio. I want you as a Case Study. That&apos;s why the price is this low.</p>
+
+                    <div className="bg-slate-800 rounded-3xl p-8 border border-slate-700 shadow-2xl relative overflow-hidden max-w-lg mx-auto transform hover:scale-[1.01] transition-transform duration-300">
+                        <div className="absolute top-0 right-0 bg-green-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-xl">ONE-TIME PAYMENT</div>
+
+                        <div className="space-y-6 text-left mb-8 mt-4">
+                            <div className="flex gap-4 items-start">
+                                <div className="bg-green-500/20 p-2 rounded-lg text-green-400 shrink-0">
+                                    <Check className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-lg">Instant Quote Engine</h4>
+                                    <p className="text-slate-400 text-sm mt-1">Replaces your &quot;Contact Us&quot; page. Customers price themselves.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="bg-green-500/20 p-2 rounded-lg text-green-400 shrink-0">
+                                    <Check className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-lg">24/7 WhatsApp Auto-Reply</h4>
+                                    <p className="text-slate-400 text-sm mt-1">Replies instantly while you work. Never miss a lead again.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="bg-green-500/20 p-2 rounded-lg text-green-400 shrink-0">
+                                    <Check className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-lg">Van QR Magnet Design</h4>
+                                    <p className="text-slate-400 text-sm mt-1">Turns your work truck into a 24/7 lead capture machine.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-700 pt-8">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="text-slate-400 font-medium">Setup Fee</span>
+                                <span className="text-4xl font-bold tracking-tight">₱5,000</span>
+                            </div>
+                            <a
+                                href="https://wa.me/13203627874?text=Hi%20Launchfly,%20I%20want%20to%20activate%20the%205k%20promo."
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block w-full py-4 bg-green-500 hover:bg-green-400 text-slate-900 font-black text-xl rounded-xl transition-all shadow-lg hover:shadow-green-500/20 text-center"
+                            >
+                                Activate System Now
+                            </a>
+                            <p className="mt-4 text-xs text-slate-500 flex justify-center items-center gap-2">
+                                <ShieldCheck className="w-4 h-4" /> 30-Day Money Back Guarantee. If you don&apos;t like it, I refund you.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* 6. FAQ (Trust) */}
+            <section className="py-20 bg-slate-50 border-t border-slate-200">
+                <div className="max-w-2xl mx-auto px-6">
+                    <h2 className="text-2xl font-bold mb-8 text-center text-slate-900">Frequently Asked Questions</h2>
+
+                    <div className="space-y-4">
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                            <h3 className="font-bold mb-2 text-slate-900">Do I need a computer?</h3>
+                            <p className="text-slate-600 text-sm leading-relaxed">No. Everything runs on your phone. You get leads on WhatsApp.</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                            <h3 className="font-bold mb-2 text-slate-900">Are there monthly fees?</h3>
+                            <p className="text-slate-600 text-sm leading-relaxed">This ₱5,000 package is a one-time setup fee. You own the system.</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                            <h3 className="font-bold mb-2 text-slate-900">Can you change the prices?</h3>
+                            <p className="text-slate-600 text-sm leading-relaxed">Yes. If your cleaning price goes up, just text me and I update the calculator in 2 minutes.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* FOOTER */}
+            <footer className="py-8 bg-white border-t border-slate-100 text-center text-sm text-slate-400">
+                &copy; 2026 Launchfly Services. Metro Manila, Philippines.
+            </footer>
         </div>
-      </footer>
-    </div>
-  );
+    );
 }
-

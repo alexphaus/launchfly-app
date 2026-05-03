@@ -44,15 +44,6 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Rewrite root to serve index.html from public folder
-  async rewrites() {
-    return [
-      {
-        source: '/',
-        destination: '/index.html',
-      },
-    ];
-  },
   
   // Headers for better caching and performance
   async headers() {

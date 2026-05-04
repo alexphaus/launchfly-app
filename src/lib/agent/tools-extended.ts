@@ -1712,6 +1712,143 @@ export async function executeManageProject(
 // P1: Memory Contradiction Detection (enhancement to save_memory)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// P3: manage_ecommerce — Shopify API integration
+// ═══════════════════════════════════════════════════════════════════════════
+export async function executeManageEcommerce(
+  args: Record<string, unknown>,
+  toolCtx: ToolContext,
+): Promise<string> {
+  const action = (args.action as string || 'list_products').toLowerCase();
+  const supabase = getSupabase();
+
+  // Look up Shopify integration
+  const { data: integration } = await supabase
+    .from('business_integrations')
+    .select('api_key_encrypted, base_url, status')
+    .eq('business_id', toolCtx.businessId)
+    .eq('service_name', 'shopify')
+    .maybeSingle();
+
+  if (!integration || integration.status !== 'active') {
+    return 'Shopify is not connected. Use request_integration with service_name="shopify" to set it up. (Requires Shop URL as base_url and Admin API Access Token).';
+  }
+
+  const accessToken = integration.api_key_encrypted;
+  // Ensure base_url has no trailing slash and includes /admin/api/2024-01
+  let shopBase = integration.base_url || '';
+  if (!shopBase.includes('/admin/api')) {
+    shopBase = `${shopBase.replace(/\/+$/, '')}/admin/api/2024-01`;
+  }
+  
+  if (!accessToken) return 'Shopify API key/token is missing.';
+
+  const headers = {
+    'X-Shopify-Access-Token': accessToken,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    switch (action) {
+      case 'create_product': {
+        const title = args.title as string;
+        if (!title) return 'Error: title is required.';
+
+        const productPayload: any = {
+          product: {
+            title,
+            body_html: args.body_html || '',
+            vendor: args.vendor || 'AI Store',
+            product_type: args.product_type || '',
+            status: 'draft', // Create as draft by default
+            variants: [
+              {
+                price: args.price || '0.00',
+                compare_at_price: args.compare_at_price || null,
+              }
+            ]
+          }
+        };
+
+        if (args.image_url) {
+          productPayload.product.images = [{ src: args.image_url }];
+        }
+
+        const res = await fetch(`${shopBase}/products.json`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(productPayload)
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          return `Failed to create product on Shopify: ${err.substring(0, 300)}`;
+        }
+
+        const data = await res.json() as any;
+        const productId = data.product?.id;
+        const variantId = data.product?.variants?.[0]?.id;
+        const invItemId = data.product?.variants?.[0]?.inventory_item_id;
+
+        return `✅ Product created on Shopify: "${title}"\nProduct ID: ${productId}\nVariant ID: ${variantId}\nInventory Item ID: ${invItemId}\nStatus: draft (Push to active via Shopify Admin when ready)`;
+      }
+
+      case 'update_inventory': {
+        const inventory_item_id = args.inventory_item_id as string;
+        const location_id = args.location_id as string;
+        const qty = args.inventory_quantity as number;
+
+        if (!inventory_item_id || !location_id || qty === undefined) {
+          return 'Error: inventory_item_id, location_id, and inventory_quantity are required.';
+        }
+
+        const invPayload = {
+          location_id: parseInt(location_id),
+          inventory_item_id: parseInt(inventory_item_id),
+          available: qty
+        };
+
+        const res = await fetch(`${shopBase}/inventory_levels/set.json`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(invPayload)
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          return `Failed to update inventory: ${err.substring(0, 300)}`;
+        }
+
+        return `✅ Inventory updated successfully for item ${inventory_item_id} at location ${location_id} to ${qty}.`;
+      }
+
+      case 'list_products': {
+        const limit = Math.min((args.limit as number) || 10, 50);
+        const res = await fetch(`${shopBase}/products.json?limit=${limit}`, { headers });
+        
+        if (!res.ok) {
+          const err = await res.text();
+          return `Failed to fetch products: ${err.substring(0, 300)}`;
+        }
+
+        const data = await res.json() as any;
+        const products = data.products || [];
+
+        if (products.length === 0) return 'No products found on Shopify.';
+
+        return `Shopify Products (${products.length}):\n` + products.map((p: any) => 
+          `- ID: ${p.id} | Title: ${p.title} | Price: $${p.variants?.[0]?.price || '0.00'} | Status: ${p.status}`
+        ).join('\n');
+      }
+
+      default:
+        return `Unknown action: ${action}. Use: create_product, update_inventory, list_products.`;
+    }
+  } catch (err) {
+    return `Shopify operation failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 export async function checkMemoryContradiction(
   content: string,
   businessId: string,

@@ -20,6 +20,7 @@ import {
   executeDeepResearch,
   executeTranslate,
   executeManageProject,
+  executeManageEcommerce,
   checkMemoryContradiction,
 } from './tools-extended';
 
@@ -39,7 +40,7 @@ const CORE_TOOLS = new Set([
   'search_web', 'scrape_page', 'send_report',
   'query_database', 'search_memory', 'save_memory', 'validate_memory', 'translate',
 ]);
-const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'check_subtask_status', 'request_approval', 'wait_for_user_input', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'manage_project']);
+const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsapp', 'send_voice_note', 'manage_job', 'delegate_task', 'check_subtask_status', 'request_approval', 'wait_for_user_input', 'analyze_inventory', 'call_api', 'request_integration', 'browse_web', 'manage_automation', 'update_instructions', 'send_email', 'make_call', 'post_social', 'generate_media', 'execute_python', 'process_document', 'knowledge_base', 'manage_calendar', 'process_payment', 'generate_document', 'analyze_image', 'manage_project', 'manage_ecommerce']);
 
 /**
  * Return the tool schemas to pass to the model.
@@ -817,7 +818,33 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
       },
     },
   },
-  ];
+  // ── P3: Manage E-Commerce (Shopify API integration) ─────────────────────
+  {
+    type: 'function' as const,
+    function: {
+      name: 'manage_ecommerce',
+      description: 'Manage e-commerce storefronts like Shopify. Create products, update inventory, and list products. Requires a "shopify" integration to be configured via request_integration.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['create_product', 'update_inventory', 'list_products'], description: 'Operation to perform.' },
+          title: { type: 'string', description: 'Product title (required for create_product).' },
+          body_html: { type: 'string', description: 'Product description in HTML format (required for create_product).' },
+          vendor: { type: 'string', description: 'Product vendor/brand.' },
+          product_type: { type: 'string', description: 'Product category/type.' },
+          price: { type: 'string', description: 'Price as a string (e.g., "24.99").' },
+          compare_at_price: { type: 'string', description: 'Compare-at price for discounts (e.g., "34.99").' },
+          image_url: { type: 'string', description: 'URL of the product image to attach.' },
+          inventory_quantity: { type: 'number', description: 'Initial inventory count or stock level to update.' },
+          inventory_item_id: { type: 'string', description: 'Shopify Inventory Item ID (required for update_inventory).' },
+          location_id: { type: 'string', description: 'Shopify Location ID (required for update_inventory).' },
+          limit: { type: 'number', description: 'Max products to list (default 10).' },
+        },
+        required: ['action'],
+      },
+    },
+  },
+];
 
 // ─── Tool Execution Handlers ─────────────────────────────────────────────
 

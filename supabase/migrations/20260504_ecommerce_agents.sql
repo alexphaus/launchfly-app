@@ -1,6 +1,17 @@
 -- Migration: Provision E-Commerce Agents (Business-in-a-Box)
 -- Description: Adds a stored procedure to instantiate the 4 core e-commerce agents for any business.
 
+-- First, ensure assistants table has a unique constraint on (business_id, name)
+-- so that we can use ON CONFLICT (business_id, name) DO NOTHING.
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_assistants_business_name'
+    ) THEN
+        ALTER TABLE assistants ADD CONSTRAINT uq_assistants_business_name UNIQUE (business_id, name);
+    END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION provision_ecommerce_agents(target_business_id UUID)
 RETURNS void
 LANGUAGE plpgsql

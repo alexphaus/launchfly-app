@@ -2152,7 +2152,7 @@ async function executeDelegateTask(
     if (!qstashToken) return 'Failed: QSTASH_TOKEN missing, cannot dispatch sub-agent.';
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.launchfly.ai';
-    const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
+    const targetUrl = `${appUrl.replace(/\/$/, '')}/api/agent/workflow-run`;
     const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
 
     const rawTools = assistant.tools_enabled;
@@ -2176,19 +2176,32 @@ async function executeDelegateTask(
 
     if (insertErr) return `Failed to create sub-task: ${insertErr.message}`;
 
-    const res = await fetch(`${qstashBase}/v2/publish/${targetUrl}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${qstashToken}`,
-        'Content-Type': 'application/json',
-        'Upstash-Retries': '1',
-        'Upstash-Delay': '1s',
-      },
-      body: JSON.stringify({ taskId: subTaskId }),
-    });
-
-    if (!res.ok) {
-      return `Failed: QStash returned ${res.status}`;
+    // Use Upstash Workflow SDK to trigger the durable workflow endpoint.
+    // Raw QStash publishes lack the Workflow SDK auth headers that serve() requires,
+    // so we MUST use client.trigger() instead.
+    try {
+      const { Client } = await import('@upstash/workflow');
+      const client = new Client({ token: qstashToken });
+      await client.trigger({
+        url: targetUrl,
+        body: { taskId: subTaskId },
+        retries: 2,
+      });
+    } catch (triggerErr) {
+      // Fallback: try raw QStash publish to /api/agent/run (legacy endpoint)
+      console.warn(`[delegate] Workflow trigger failed, falling back to legacy:`, triggerErr);
+      const legacyUrl = `${appUrl.replace(/\/$/, '')}/api/agent/run`;
+      const res = await fetch(`${qstashBase}/v2/publish/${legacyUrl}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${qstashToken}`,
+          'Content-Type': 'application/json',
+          'Upstash-Retries': '1',
+          'Upstash-Delay': '1s',
+        },
+        body: JSON.stringify({ taskId: subTaskId }),
+      });
+      if (!res.ok) return `Failed: QStash returned ${res.status}`;
     }
 
     return `Successfully dispatched task to ${assistantConfigName} (job_id: ${subTaskId}). The agent will work in the background. Use check_subtask_status with this job_id to check if it is done.`;

@@ -405,7 +405,7 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
         type: 'object',
         properties: {
           content: { type: 'string', description: 'The insight or fact to remember (be specific and concise)' },
-          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'tool_recipe', 'skill', 'general'], description: 'Memory category. Use "skill" to save proven multi-step workflows. Use "tool_recipe" to save working API call patterns.' },
+          category: { type: 'string', enum: ['supplier', 'decision', 'pattern', 'preference', 'market_insight', 'tool_recipe', 'skill', 'general', 'directive'], description: 'Memory category. Use "skill" to save proven multi-step workflows. Use "tool_recipe" to save working API call patterns. Use "directive" for business-wide announcements that ALL agents must follow (e.g., price changes, policy updates).' },
           importance: { type: 'number', description: 'Importance score 0.0-1.0 (default 0.5). Use 0.8+ for critical business decisions.' },
         },
         required: ['content', 'category'],
@@ -3393,6 +3393,20 @@ async function executeUpdateInstructions(
     .eq('id', assistant.id);
 
   if (saveErr) return `Failed to save rule: ${saveErr.message}`;
+
+  // Broadcast the rule as a directive so ALL agents in this business pick it up
+  try {
+    const embedding = await getEmbedding(cleaned);
+    await supabase.from('ai_memories').insert({
+      business_id: businessId,
+      content: `[RULE UPDATE by ${assistantName || 'agent'}] ${cleaned}`,
+      category: 'directive',
+      importance_score: 0.9,
+      embedding,
+      metadata: { source: 'update_instructions', agent: assistantName || 'unknown' },
+    });
+  } catch { /* non-fatal — rule was still saved to the assistant */ }
+
   return `✅ Learned: "${cleaned}"\n(${rules.length}/${MAX_CUSTOM_RULES} rules. Owner can review/edit in Assistant settings → Custom Rules.)`;
 }
 

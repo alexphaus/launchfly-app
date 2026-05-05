@@ -419,8 +419,8 @@ export async function buildInitialMessages(
     for (const t of recentTasks) {
       const ago = Math.round((Date.now() - new Date(t.updated_at).getTime()) / 3600000);
       const goalStr = (t.goal as string) || '';
-      if (goalStr.startsWith('[DELEGATED TASK]')) continue;
-      memoryContext += `- [${ago}h ago] ${safeSlice(goalStr, 200)} → ${safeSlice((t.result as string) || '', 600)}\n`;
+      const prefix = goalStr.startsWith('[DELEGATED TASK]') ? '🤖 ' : '';
+      memoryContext += `- ${prefix}[${ago}h ago] ${safeSlice(goalStr, 200)} → ${safeSlice((t.result as string) || '', 600)}\n`;
     }
   }
 
@@ -503,6 +503,28 @@ export async function buildInitialMessages(
     }
   } catch (e) {
     console.warn(`[agent:${row.id}] Business DNA recall failed (non-fatal):`, e);
+  }
+
+  // ── Business Directives (shared announcements ALL agents MUST see) ──
+  try {
+    const { data: directives } = await supabase
+      .from('ai_memories')
+      .select('content, importance_score, updated_at')
+      .eq('business_id', row.business_id)
+      .eq('category', 'directive')
+      .eq('archived', false)
+      .order('updated_at', { ascending: false })
+      .limit(10);
+
+    if (directives?.length) {
+      memoryContext += '\n\n## 📢 ACTIVE BUSINESS DIRECTIVES (MANDATORY — follow these)\n';
+      for (const d of directives) {
+        const age = Math.round((Date.now() - new Date(d.updated_at).getTime()) / 3600000);
+        memoryContext += `- [${age}h ago] ${(d.content || '').substring(0, 500)}\n`;
+      }
+    }
+  } catch (e) {
+    console.warn(`[agent:${row.id}] Directives recall failed (non-fatal):`, e);
   }
 
   const messages: AgentMessage[] = [

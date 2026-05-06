@@ -1,713 +1,349 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import {
-    LayoutDashboard,
-    Users,
-    Calendar,
-    Settings,
-    Bot,
-    Search,
-    MessageSquare,
-    TrendingUp,
-    Zap,
-    Clock,
-    ChevronRight,
-    Play,
-    Edit3,
-    Activity,
-    DollarSign,
-    Target,
-    ShieldCheck,
-    Cpu,
-    Terminal,
-    Eye,
-    Globe,
-    ExternalLink
+import React, { useState } from 'react';
+import { 
+  Bot, TrendingUp, Users, Activity, 
+  ChevronRight, Zap, Settings, Command,
+  MessageSquare, Clock, ArrowUpRight,
+  Workflow, Database, PhoneCall, Shield
 } from 'lucide-react';
 
-/**
- * ModernCommandCenter Component
- * A high-end, brutalist-inspired dashboard for Launchfly autonomous agents.
- */
 export default function ModernCommandCenter({ business, initialLeads = [], initialBookings = [], initialStats = {} }) {
-    const [leads, setLeads] = useState(initialLeads);
-    const [bookings, setBookings] = useState(initialBookings);
-    const [stats, setStats] = useState({
-        activeQuotes: initialStats.activeQuotes || 0,
-        pipeline: initialStats.pipeline || 0,
-        booked: initialStats.booked || 0,
-    });
-    const [activeTab, setActiveTab] = useState('overview');
-    const [assistants, setAssistants] = useState([]);
-    const [agentLogs, setAgentLogs] = useState([]);
-    const [loadingAssistants, setLoadingAssistants] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
 
-    const supabase = createClientComponentClient();
-    const businessData = business?.business_data || {};
-    const businessName = businessData.businessName || business?.name || 'Your Business';
-    const currency = businessData.currency || '₱';
+  const businessName = business?.business_data?.businessName || business?.name || 'Launchfly Business';
+  const currency = business?.business_data?.currency || '$';
 
-    // Fetch Agents (Assistants)
-    useEffect(() => {
-        const fetchAssistants = async () => {
-            setLoadingAssistants(true);
-            const { data, error } = await supabase
-                .from('assistants')
-                .select('*')
-                .eq('business_id', business.id)
-                .eq('active', true);
-            
-            if (data) setAssistants(data);
-            setLoadingAssistants(false);
-        };
-        fetchAssistants();
-    }, [business.id]);
+  return (
+    <div className="min-h-screen bg-[#0a0a08] text-[#f5f4ef] font-sans selection:bg-[#f97316]/30">
+      {/* Noise Texture Overlay */}
+      <div 
+        className="fixed inset-0 opacity-[0.04] pointer-events-none z-0 mix-blend-overlay" 
+        style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\'/%3E%3C/svg%3E")' }}
+      ></div>
 
-    // Fetch Latest Agent Logs (Tasks)
-    useEffect(() => {
-        const fetchLogs = async () => {
-            const { data } = await supabase
-                .from('agent_tasks')
-                .select('id, goal, status, created_at, steps_used, tool_log')
-                .eq('business_id', business.id)
-                .order('created_at', { ascending: false })
-                .limit(10);
-            
-            if (data) setAgentLogs(data);
-        };
-        fetchLogs();
+      {/* Diagonal Accent Stripe (Hero feel) */}
+      <div className="fixed top-[-10%] right-[-5%] w-[55%] h-[120%] pointer-events-none z-0 opacity-40 transform -skew-x-[8deg]" style={{ background: 'linear-gradient(135deg, transparent 40%, rgba(249,115,22,0.06) 100%)', borderLeft: '1px solid rgba(249,115,22,0.12)' }}></div>
 
-        // Subscribe to logs
-        const taskChannel = supabase
-            .channel('agent-activity')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'agent_tasks', filter: `business_id=eq.${business.id}` },
-                (payload) => {
-                    if (payload.eventType === 'INSERT') {
-                        setAgentLogs(prev => [payload.new, ...prev].slice(0, 10));
-                    } else if (payload.eventType === 'UPDATE') {
-                        setAgentLogs(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new } : t));
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => supabase.removeChannel(taskChannel);
-    }, [business.id]);
-
-    // Helper: Map assistant type to icon
-    const getAgentIcon = (name) => {
-        const lower = name.toLowerCase();
-        if (lower.includes('research')) return <Search className="w-5 h-5" />;
-        if (lower.includes('marketer') || lower.includes('blast')) return <TrendingUp className="w-5 h-5" />;
-        if (lower.includes('reception') || lower.includes('chat')) return <MessageSquare className="w-5 h-5" />;
-        if (lower.includes('operator') || lower.includes('manager')) return <Zap className="w-5 h-5" />;
-        return <Bot className="w-5 h-5" />;
-    };
-
-    // Helper: Format Time
-    const timeAgo = (date) => {
-        const diff = new Date() - new Date(date);
-        const mins = Math.floor(diff / 60000);
-        if (mins < 1) return 'Just now';
-        if (mins < 60) return `${mins}m ago`;
-        const hours = Math.floor(mins / 60);
-        if (hours < 24) return `${hours}h ago`;
-        return `${Math.floor(hours / 24)}d ago`;
-    };
-
-    return (
-        <div className="modern-dashboard">
-            {/* ---- CSS STYLES ---- */}
-            <style jsx global>{`
-                :root {
-                    --black: #0a0a08;
-                    --off-black: #111110;
-                    --card: #161614;
-                    --border: #2a2a26;
-                    --orange: #f97316;
-                    --orange-hot: #fb923c;
-                    --white: #f5f4ef;
-                    --muted: #7a7a70;
-                    --green: #22c55e;
-                }
-
-                .modern-dashboard {
-                    background: var(--black);
-                    color: var(--white);
-                    font-family: 'DM Sans', sans-serif;
-                    min-height: 100vh;
-                    display: flex;
-                    position: relative;
-                }
-
-                /* Noise texture */
-                .modern-dashboard::before {
-                    content: '';
-                    position: fixed;
-                    inset: 0;
-                    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-                    pointer-events: none;
-                    z-index: 0;
-                    opacity: 0.5;
-                }
-
-                /* SIDEBAR */
-                .sidebar {
-                    width: 260px;
-                    background: var(--off-black);
-                    border-right: 1px solid var(--border);
-                    display: flex;
-                    flex-direction: column;
-                    z-index: 10;
-                    position: sticky;
-                    top: 0;
-                    height: 100vh;
-                }
-
-                .sidebar-logo {
-                    padding: 2rem;
-                    font-family: 'Bebas Neue', sans-serif;
-                    font-size: 1.8rem;
-                    color: var(--orange);
-                    letter-spacing: 0.05em;
-                }
-
-                .nav-group {
-                    padding: 1rem;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                }
-
-                .nav-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.8rem;
-                    padding: 0.8rem 1rem;
-                    color: var(--muted);
-                    text-decoration: none;
-                    font-size: 0.9rem;
-                    font-weight: 500;
-                    border-radius: 4px;
-                    transition: all 0.2s;
-                    cursor: pointer;
-                }
-
-                .nav-item:hover, .nav-item.active {
-                    background: var(--card);
-                    color: var(--white);
-                }
-
-                .nav-item.active {
-                    color: var(--orange);
-                }
-
-                /* MAIN CONTENT */
-                .main-content {
-                    flex: 1;
-                    padding: 2.5rem;
-                    position: relative;
-                    z-index: 1;
-                    max-width: 1400px;
-                    margin: 0 auto;
-                }
-
-                /* HEADER */
-                .dashboard-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-end;
-                    margin-bottom: 3rem;
-                }
-
-                .welcome-text h1 {
-                    font-family: 'Bebas Neue', sans-serif;
-                    font-size: 3rem;
-                    letter-spacing: 0.02em;
-                    line-height: 1;
-                }
-
-                .welcome-text p {
-                    color: var(--muted);
-                    font-size: 0.95rem;
-                    margin-top: 0.5rem;
-                }
-
-                .header-actions {
-                    display: flex;
-                    gap: 1rem;
-                }
-
-                /* STATS GRID */
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(4, 1fr);
-                    gap: 1px;
-                    background: var(--border);
-                    border: 1px solid var(--border);
-                    margin-bottom: 3rem;
-                }
-
-                .stat-card {
-                    background: var(--card);
-                    padding: 1.5rem 2rem;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                }
-
-                .stat-label {
-                    font-family: 'DM Mono', monospace;
-                    font-size: 0.7rem;
-                    color: var(--muted);
-                    text-transform: uppercase;
-                    letter-spacing: 0.1em;
-                }
-
-                .stat-value {
-                    font-family: 'Bebas Neue', sans-serif;
-                    font-size: 2.2rem;
-                    color: var(--white);
-                }
-
-                .stat-trend {
-                    font-size: 0.75rem;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.3rem;
-                }
-
-                /* AGENT SWARM */
-                .section-title {
-                    font-family: 'Bebas Neue', sans-serif;
-                    font-size: 1.8rem;
-                    margin-bottom: 1.5rem;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.8rem;
-                }
-
-                .agent-swarm {
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 1.5rem;
-                    margin-bottom: 3rem;
-                }
-
-                .agent-card {
-                    background: var(--card);
-                    border: 1px solid var(--border);
-                    padding: 1.8rem;
-                    position: relative;
-                    overflow: hidden;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-
-                .agent-card:hover {
-                    transform: translateY(-4px);
-                    border-color: var(--orange);
-                    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
-                }
-
-                .agent-card::after {
-                    content: 'NEURAL_LINK_ACTIVE';
-                    position: absolute;
-                    top: 1rem;
-                    right: -2rem;
-                    font-family: 'DM Mono', monospace;
-                    font-size: 0.5rem;
-                    color: var(--orange);
-                    opacity: 0;
-                    transform: rotate(45deg);
-                    transition: opacity 0.3s;
-                }
-
-                .agent-card:hover::after {
-                    opacity: 0.4;
-                }
-
-                .agent-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 1.2rem;
-                }
-
-                .agent-identity {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.8rem;
-                }
-
-                .agent-icon {
-                    width: 44px;
-                    height: 44px;
-                    background: rgba(249,115,22,0.05);
-                    border: 1px solid rgba(249,115,22,0.1);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: var(--orange);
-                    transition: all 0.3s;
-                }
-
-                .agent-card:hover .agent-icon {
-                    background: var(--orange);
-                    color: var(--black);
-                    border-color: var(--orange);
-                }
-
-                .agent-name {
-                    font-family: 'Bebas Neue', sans-serif;
-                    font-size: 1.6rem;
-                    letter-spacing: 0.04em;
-                }
-
-                .agent-status-dot {
-                    width: 10px;
-                    height: 10px;
-                    border-radius: 50%;
-                    background: var(--green);
-                    box-shadow: 0 0 12px var(--green);
-                    animation: pulse-green 2s infinite;
-                }
-
-                @keyframes pulse-green {
-                    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-                    70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-                    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-                }
-
-                .agent-mission {
-                    font-size: 0.9rem;
-                    color: var(--muted);
-                    line-height: 1.6;
-                    margin-bottom: 1.8rem;
-                    height: 3rem;
-                    overflow: hidden;
-                    display: -webkit-box;
-                    -webkit-line-clamp: 2;
-                    -webkit-box-orient: vertical;
-                }
-
-                /* LOG TERMINAL */
-                .operation-terminal {
-                    background: var(--off-black);
-                    border: 1px solid var(--border);
-                    font-family: 'DM Mono', monospace;
-                    font-size: 0.85rem;
-                    display: flex;
-                    flex-direction: column;
-                    height: 400px;
-                    position: relative;
-                    overflow: hidden;
-                }
-
-                .operation-terminal::before {
-                    content: " ";
-                    position: absolute;
-                    top: 0; left: 0; bottom: 0; right: 0;
-                    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-                    z-index: 2;
-                    background-size: 100% 2px, 3px 100%;
-                    pointer-events: none;
-                }
-
-                .operation-terminal::after {
-                    content: " ";
-                    position: absolute;
-                    top: 0; left: 0; bottom: 0; right: 0;
-                    background: rgba(18, 16, 16, 0.1);
-                    opacity: 0;
-                    z-index: 2;
-                    pointer-events: none;
-                    animation: flicker 0.15s infinite;
-                }
-
-                @keyframes flicker {
-                    0% { opacity: 0.27861; }
-                    5% { opacity: 0.34769; }
-                    10% { opacity: 0.23604; }
-                    /* ... abbreviated ... */
-                    100% { opacity: 0.27861; }
-                }
-
-                .scanline {
-                    width: 100%;
-                    height: 100px;
-                    z-index: 3;
-                    background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(249, 115, 22, 0.1) 50%, rgba(0, 0, 0, 0) 100%);
-                    opacity: 0.1;
-                    position: absolute;
-                    bottom: 100%;
-                    animation: scanline 6s linear infinite;
-                }
-
-                @keyframes scanline {
-                    0% { bottom: 100%; }
-                    80% { bottom: 100%; }
-                    100% { bottom: -100px; }
-                }
-
-                .terminal-header {
-                    background: var(--card);
-                    padding: 0.6rem 1rem;
-                    border-bottom: 1px solid var(--border);
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-
-                .terminal-title {
-                    font-size: 0.7rem;
-                    color: var(--muted);
-                    display: flex;
-                    align-items: center;
-                    gap: 0.6rem;
-                    text-transform: uppercase;
-                }
-
-                .terminal-body {
-                    padding: 1rem;
-                    flex: 1;
-                    overflow-y: auto;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.8rem;
-                }
-
-                .log-entry {
-                    display: flex;
-                    gap: 1rem;
-                    line-height: 1.5;
-                }
-
-                .log-time {
-                    color: var(--muted);
-                    flex-shrink: 0;
-                    font-size: 0.75rem;
-                }
-
-                .log-content {
-                    color: #c5c4bb;
-                }
-
-                .log-tag {
-                    color: var(--orange);
-                    font-weight: 700;
-                    margin-right: 0.5rem;
-                }
-
-                .log-status {
-                    display: inline-block;
-                    padding: 0 0.4rem;
-                    font-size: 0.65rem;
-                    border-radius: 2px;
-                    margin-left: 0.5rem;
-                }
-
-                .status-running { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
-                .status-completed { background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.2); }
-
-                @media (max-width: 1024px) {
-                    .sidebar { display: none; }
-                    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-                    .agent-swarm { grid-template-columns: 1fr; }
-                }
-            `}</style>
-
-            {/* ---- SIDEBAR ---- */}
-            <aside className="sidebar">
-                <div className="sidebar-logo">LAUNCHFLY</div>
-                
-                <nav className="nav-group">
-                    <div className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
-                        <LayoutDashboard className="w-5 h-5" />
-                        Overview
-                    </div>
-                    <div className={`nav-item ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => setActiveTab('agents')}>
-                        <Cpu className="w-5 h-5" />
-                        Agent Swarm
-                    </div>
-                    <div className={`nav-item ${activeTab === 'operations' ? 'active' : ''}`} onClick={() => setActiveTab('operations')}>
-                        <Activity className="w-5 h-5" />
-                        Operations
-                    </div>
-                    <div className={`nav-item ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => setActiveTab('customers')}>
-                        <Users className="w-5 h-5" />
-                        Customers
-                    </div>
-                    <div className={`nav-item ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>
-                        <Calendar className="w-5 h-5" />
-                        Schedule
-                    </div>
-                </nav>
-
-                <div className="mt-auto nav-group border-t border-border">
-                    <div className="nav-item">
-                        <Settings className="w-5 h-5" />
-                        Settings
-                    </div>
-                </div>
-            </aside>
-
-            {/* ---- MAIN CONTENT ---- */}
-            <main className="main-content">
-                {/* HEADER */}
-                <header className="dashboard-header">
-                    <div className="welcome-text">
-                        <h1>COMMAND CENTER</h1>
-                        <p>Autonomous Swarm Operating System for {businessName}</p>
-                    </div>
-                    <div className="header-actions">
-                        <button className="btn-brutalist btn-brutalist-orange px-6" onClick={() => window.location.href = `/command/${business.id}/settings`}>
-                            <Zap className="w-4 h-4 fill-current" />
-                            Global Launch
-                        </button>
-                    </div>
-                </header>
-
-                {/* STATS OVERVIEW */}
-                <div className="stats-grid">
-                    <div className="stat-card">
-                        <span className="stat-label">Total Revenue</span>
-                        <div className="stat-value">{currency}{(stats.pipeline * 0.85).toLocaleString()}</div>
-                        <div className="stat-trend text-green-500">
-                            <TrendingUp className="w-3 h-3" />
-                            +12.5% this month
-                        </div>
-                    </div>
-                    <div className="stat-card">
-                        <span className="stat-label">Leads In Pipe</span>
-                        <div className="stat-value">{leads.length}</div>
-                        <div className="stat-trend text-orange-500">
-                            <Activity className="w-3 h-3" />
-                            {stats.activeQuotes} active quotes
-                        </div>
-                    </div>
-                    <div className="stat-card">
-                        <span className="stat-label">Job Completion</span>
-                        <div className="stat-value">94.2%</div>
-                        <div className="stat-trend text-blue-500">
-                            <ShieldCheck className="w-3 h-3" />
-                            Industry leading
-                        </div>
-                    </div>
-                    <div className="stat-card">
-                        <span className="stat-label">Agent Efficiency</span>
-                        <div className="stat-value">2.4m</div>
-                        <div className="stat-trend text-muted">
-                            <Zap className="w-3 h-3" />
-                            Avg Response Time
-                        </div>
-                    </div>
-                </div>
-
-                {/* AGENT SWARM */}
-                <h2 className="section-title">
-                    <Bot className="w-6 h-6 text-orange" />
-                    Autonomous Agent Swarm
-                </h2>
-                <div className="agent-swarm">
-                    {loadingAssistants ? (
-                        <div className="col-span-2 py-12 text-center text-muted border border-border bg-card">
-                            Initialising Neural Swarm...
-                        </div>
-                    ) : (
-                        assistants.map((agent) => (
-                            <div key={agent.id} className="agent-card">
-                                <div className="agent-header">
-                                    <div className="agent-identity">
-                                        <div className="agent-icon">
-                                            {getAgentIcon(agent.name)}
-                                        </div>
-                                        <div className="agent-name">{agent.name}</div>
-                                    </div>
-                                    <div className="agent-status-dot"></div>
-                                </div>
-                                <p className="agent-mission">
-                                    {agent.goal || 'Waiting for mission parameters...'}
-                                </p>
-                                <div className="agent-stats">
-                                    <div className="agent-stat">
-                                        <span className="agent-stat-label">Tasks</span>
-                                        <span className="agent-stat-value">128</span>
-                                    </div>
-                                    <div className="agent-stat">
-                                        <span className="agent-stat-label">Success Rate</span>
-                                        <span className="agent-stat-value">98%</span>
-                                    </div>
-                                    <div className="agent-stat">
-                                        <span className="agent-stat-label">Last Activity</span>
-                                        <span className="agent-stat-value">{timeAgo(agent.updated_at)}</span>
-                                    </div>
-                                </div>
-                                <div className="agent-actions">
-                                    <button className="btn-brutalist btn-brutalist-orange" onClick={() => window.location.href = `/command/${business.id}/prompts?id=${agent.id}`}>
-                                        <Edit3 className="w-4 h-4" />
-                                        Prompt
-                                    </button>
-                                    <button className="btn-brutalist" onClick={() => window.location.href = `/command/${business.id}/automations?id=${agent.id}`}>
-                                        <Zap className="w-4 h-4" />
-                                        Automations
-                                    </button>
-                                    <button className="btn-brutalist">
-                                        <Activity className="w-4 h-4" />
-                                        Logs
-                                    </button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-
-                {/* OPERATION TERMINAL */}
-                <h2 className="section-title">
-                    <Terminal className="w-6 h-6 text-orange" />
-                    Global Operation Logs
-                </h2>
-                <div className="operation-terminal">
-                    <div className="scanline"></div>
-                    <div className="terminal-header">
-                        <div className="terminal-title">
-                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                            Live Neural Feed
-                        </div>
-                        <div className="text-[0.65rem] text-muted font-mono">
-                            UPSTASH_WORKFLOW_REPLAY_ACTIVE
-                        </div>
-                    </div>
-                    <div className="terminal-body">
-                        {agentLogs.length === 0 ? (
-                            <div className="text-muted italic opacity-50">Awaiting agent activity...</div>
-                        ) : (
-                            agentLogs.map((log) => (
-                                <div key={log.id} className="log-entry">
-                                    <span className="log-time">[{new Date(log.created_at).toLocaleTimeString()}]</span>
-                                    <div className="log-content">
-                                        <span className="log-tag">TASK_ID:{log.id.substring(0, 8)}</span>
-                                        Agent received mission: "{log.goal}"
-                                        <span className={`log-status status-${log.status}`}>
-                                            {log.status.toUpperCase()}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                        <div className="log-entry">
-                            <span className="log-time">[{new Date().toLocaleTimeString()}]</span>
-                            <div className="log-content">
-                                <span className="log-tag">SYSTEM</span>
-                                Dashboard ready. Monitoring neural swarm...
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 border-b border-[#2a2a26] bg-[#0a0a08]/80 backdrop-blur-md px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-[#f97316] text-[#0a0a08] flex items-center justify-center font-bold" style={{ clipPath: 'polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%)' }}>
+            <Command size={18} />
+          </div>
+          <span className="font-bold tracking-widest text-[#f97316] uppercase text-lg" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.08em' }}>
+            {businessName}
+          </span>
         </div>
-    );
+        
+        <div className="flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-6 text-sm font-mono text-[#7a7a70] uppercase tracking-wider">
+            <button onClick={() => setActiveTab('overview')} className={`hover:text-[#f5f4ef] transition-colors ${activeTab === 'overview' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>Overview</button>
+            <button onClick={() => setActiveTab('agents')} className={`hover:text-[#f5f4ef] transition-colors flex items-center gap-2 ${activeTab === 'agents' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#f97316]"></span>
+              </span>
+              Swarm Agents
+            </button>
+            <button onClick={() => setActiveTab('customers')} className={`hover:text-[#f5f4ef] transition-colors ${activeTab === 'customers' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>Customers</button>
+          </div>
+          
+          <button className="bg-[#161614] border border-[#2a2a26] hover:border-[#f97316] text-[#f5f4ef] px-4 py-2 text-sm uppercase tracking-wider font-mono transition-colors flex items-center gap-2">
+            <Settings size={16} />
+            <span className="hidden sm:inline">Settings</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="relative z-10 p-6 md:p-10 max-w-[1400px] mx-auto space-y-10">
+        
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#2a2a26] pb-8">
+          <div>
+            <div className="inline-flex items-center gap-2 font-mono text-xs tracking-[0.18em] text-[#f97316] uppercase mb-4 px-3 py-1 border border-[#f97316]/30 bg-[#f97316]/10">
+              <span className="w-1.5 h-1.5 bg-[#f97316] rounded-full animate-pulse"></span>
+              Command Center Active
+            </div>
+            <h1 className="text-4xl md:text-6xl font-bold uppercase" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.02em', lineHeight: '0.95' }}>
+              System <span className="text-[#f97316]">Overview</span>
+            </h1>
+            <p className="mt-4 text-[#a8a89e] max-w-xl leading-relaxed">
+              Monitor your autonomous agents, track revenue generation, and manage active customer conversations across the platform.
+            </p>
+          </div>
+          
+          <div className="flex gap-4">
+            <button className="bg-[#f97316] hover:bg-[#fb923c] text-[#0a0a08] font-bold py-3 px-6 text-sm tracking-wide uppercase transition-all transform hover:-translate-y-0.5 flex items-center gap-2" style={{ clipPath: 'polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)' }}>
+              <Zap size={18} />
+              Deploy Agent
+            </button>
+          </div>
+        </header>
+
+        {/* Top Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-1 bg-[#2a2a26] border border-[#2a2a26]">
+          {/* Stat Box 1 */}
+          <div className="bg-[#111110] p-6 relative group overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="flex justify-between items-start mb-4">
+              <span className="font-mono text-[0.68rem] tracking-[0.22em] text-[#7a7a70] uppercase">Pipeline Value</span>
+              <TrendingUp size={20} className="text-[#22c55e]" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-[#f97316] font-mono">{currency}</span>
+              <span className="text-5xl font-bold" style={{ fontFamily: '"Bebas Neue", sans-serif' }}>{(initialStats.pipeline || 12450).toLocaleString()}</span>
+            </div>
+            <div className="mt-4 inline-block bg-[#22c55e]/10 border border-[#22c55e]/20 text-[#22c55e] font-mono text-[0.65rem] tracking-widest px-2 py-1 uppercase">
+              +14% this week
+            </div>
+          </div>
+
+          {/* Stat Box 2 */}
+          <div className="bg-[#111110] p-6 relative group overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-[#3b82f6] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="flex justify-between items-start mb-4">
+              <span className="font-mono text-[0.68rem] tracking-[0.22em] text-[#7a7a70] uppercase">Active Agents</span>
+              <Workflow size={20} className="text-[#3b82f6]" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-bold" style={{ fontFamily: '"Bebas Neue", sans-serif' }}>4</span>
+              <span className="text-[#7a7a70] text-sm font-mono">/ 5 limits</span>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#f97316] animate-pulse" style={{ animationDelay: '0.6s' }}></div>
+            </div>
+          </div>
+
+          {/* Stat Box 3 */}
+          <div className="bg-[#111110] p-6 relative group overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-[#a855f7] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="flex justify-between items-start mb-4">
+              <span className="font-mono text-[0.68rem] tracking-[0.22em] text-[#7a7a70] uppercase">Active Leads</span>
+              <Users size={20} className="text-[#a855f7]" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-bold" style={{ fontFamily: '"Bebas Neue", sans-serif' }}>{initialStats.activeQuotes || 24}</span>
+            </div>
+            <div className="mt-4 flex items-center gap-2 text-sm text-[#a8a89e]">
+              <Clock size={14} />
+              <span>Avg response: 1.2s</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Dashboard Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Left Column: Autonomous Agents */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="flex justify-between items-center border-b border-[#2a2a26] pb-3">
+              <h2 className="text-2xl font-bold uppercase" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.04em' }}>
+                Swarm Operations
+              </h2>
+              <button className="text-xs font-mono text-[#f97316] hover:text-[#fb923c] uppercase tracking-widest flex items-center gap-1">
+                View All Logs <ArrowUpRight size={14} />
+              </button>
+            </div>
+
+            {/* Agent Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1 bg-[#2a2a26] border border-[#2a2a26]">
+              {/* Agent 1 */}
+              <div className="bg-[#161614] p-5 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3">
+                  <span className="flex h-3 w-3 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#22c55e]"></span>
+                  </span>
+                </div>
+                <div className="w-12 h-12 bg-[#22c55e]/10 border border-[#22c55e]/30 flex items-center justify-center mb-4 text-[#22c55e]">
+                  <Bot size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-[#f5f4ef] uppercase" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.04em' }}>Receptionist Alpha</h3>
+                <p className="text-[#7a7a70] text-sm mt-1 h-10 line-clamp-2">Handling inbound WhatsApp queries and scheduling appointments.</p>
+                
+                <div className="mt-6 pt-4 border-t border-[#2a2a26]">
+                  <div className="flex justify-between text-xs font-mono text-[#7a7a70] uppercase tracking-wider mb-2">
+                    <span>Task: Booking Lead</span>
+                    <span className="text-[#f5f4ef]">Running</span>
+                  </div>
+                  <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
+                    <div className="bg-[#22c55e] h-full" style={{ width: '75%' }}></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Agent 2 */}
+              <div className="bg-[#161614] p-5 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3">
+                  <span className="flex h-3 w-3 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#f97316]"></span>
+                  </span>
+                </div>
+                <div className="w-12 h-12 bg-[#f97316]/10 border border-[#f97316]/30 flex items-center justify-center mb-4 text-[#f97316]">
+                  <Database size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-[#f5f4ef] uppercase" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.04em' }}>Memory Consolidator</h3>
+                <p className="text-[#7a7a70] text-sm mt-1 h-10 line-clamp-2">Running background extraction to Knowledge Graph.</p>
+                
+                <div className="mt-6 pt-4 border-t border-[#2a2a26]">
+                  <div className="flex justify-between text-xs font-mono text-[#7a7a70] uppercase tracking-wider mb-2">
+                    <span>Task: Pruning Vector DB</span>
+                    <span className="text-[#f97316]">Processing</span>
+                  </div>
+                  <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
+                    <div className="bg-[#f97316] h-full animate-pulse" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Agent 3 */}
+              <div className="bg-[#161614] p-5 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3">
+                  <span className="flex h-3 w-3 relative">
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#a855f7]"></span>
+                  </span>
+                </div>
+                <div className="w-12 h-12 bg-[#a855f7]/10 border border-[#a855f7]/30 flex items-center justify-center mb-4 text-[#a855f7]">
+                  <Shield size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-[#f5f4ef] uppercase" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.04em' }}>CEO Overseer</h3>
+                <p className="text-[#7a7a70] text-sm mt-1 h-10 line-clamp-2">Evaluating sub-agent performance and managing approvals.</p>
+                
+                <div className="mt-6 pt-4 border-t border-[#2a2a26]">
+                  <div className="flex justify-between text-xs font-mono text-[#7a7a70] uppercase tracking-wider mb-2">
+                    <span>Task: Waiting for Approval</span>
+                    <span className="text-[#a855f7]">Paused</span>
+                  </div>
+                  <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden flex">
+                    <div className="bg-[#a855f7] h-full w-1/3"></div>
+                    <div className="bg-[#a855f7]/30 h-full w-2/3 border-l border-[#0a0a08]"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Add Agent CTA */}
+              <button className="bg-[#111110] hover:bg-[#161614] border-2 border-dashed border-[#2a2a26] hover:border-[#f97316] p-5 flex flex-col items-center justify-center gap-3 transition-colors group min-h-[220px]">
+                <div className="w-12 h-12 rounded-full border border-[#2a2a26] group-hover:border-[#f97316] flex items-center justify-center text-[#7a7a70] group-hover:text-[#f97316] transition-colors">
+                  <Zap size={20} />
+                </div>
+                <span className="font-mono text-sm tracking-wider uppercase text-[#7a7a70] group-hover:text-[#f97316] transition-colors">Deploy New Agent</span>
+              </button>
+            </div>
+            
+            {/* Recent Activity Log */}
+            <div className="mt-8">
+               <h3 className="font-mono text-[0.68rem] tracking-[0.22em] text-[#7a7a70] uppercase mb-4">System Event Log</h3>
+               <div className="bg-[#111110] border border-[#2a2a26] p-4 font-mono text-xs space-y-3">
+                  <div className="flex gap-4 items-start">
+                    <span className="text-[#a8a89e]">10:42:05</span>
+                    <span className="text-[#3b82f6]">[CEO]</span>
+                    <span className="text-[#f5f4ef]">Delegated task <span className="text-[#f97316]">"Follow up with Sarah"</span> to Receptionist Alpha.</span>
+                  </div>
+                  <div className="flex gap-4 items-start">
+                    <span className="text-[#a8a89e]">10:45:12</span>
+                    <span className="text-[#22c55e]">[Alpha]</span>
+                    <span className="text-[#f5f4ef]">Generated Plan DAG (3 steps). Executing node: check_availability.</span>
+                  </div>
+                  <div className="flex gap-4 items-start">
+                    <span className="text-[#a8a89e]">10:46:30</span>
+                    <span className="text-[#f97316]">[Memory]</span>
+                    <span className="text-[#f5f4ef]">Archived 4 stale vectors. Consolidated 2 entity relationships.</span>
+                  </div>
+                  <div className="flex gap-4 items-start">
+                    <span className="text-[#a8a89e]">10:48:01</span>
+                    <span className="text-[#a855f7]">[Evaluator]</span>
+                    <span className="text-[#f5f4ef]">Critic check passed (9/10). Task completed successfully.</span>
+                  </div>
+               </div>
+            </div>
+          </div>
+
+          {/* Right Column: Customers & Actions */}
+          <div className="space-y-6">
+            <div className="flex justify-between items-center border-b border-[#2a2a26] pb-3">
+              <h2 className="text-2xl font-bold uppercase" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.04em' }}>
+                Live Customers
+              </h2>
+            </div>
+
+            <div className="bg-[#111110] border border-[#2a2a26] divide-y divide-[#2a2a26]">
+              {initialLeads.length > 0 ? (
+                initialLeads.slice(0, 5).map((lead, i) => (
+                  <div key={i} className="p-4 hover:bg-[#161614] transition-colors cursor-pointer group">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-bold text-[#f5f4ef]">{lead.name || 'Unknown Lead'}</h4>
+                      <span className="text-[0.65rem] font-mono px-2 py-0.5 bg-[#f97316]/10 text-[#f97316] border border-[#f97316]/20 uppercase">
+                        {lead.status || 'New'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-[#7a7a70] line-clamp-1 mb-3">{lead.notes || 'No details provided.'}</p>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-[#a8a89e] flex items-center gap-1"><Clock size={12}/> Just now</span>
+                      <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-mono tracking-wider flex items-center gap-1">
+                        View <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <>
+                  <div className="p-4 hover:bg-[#161614] transition-colors cursor-pointer group">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-bold text-[#f5f4ef]">Michael Scott</h4>
+                      <span className="text-[0.65rem] font-mono px-2 py-0.5 bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/20 uppercase">
+                        Booked
+                      </span>
+                    </div>
+                    <p className="text-sm text-[#7a7a70] line-clamp-1 mb-3">Needs a full AC cleaning unit 3.</p>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-[#a8a89e] flex items-center gap-1"><Clock size={12}/> 5m ago</span>
+                      <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-mono tracking-wider flex items-center gap-1">
+                        View <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4 hover:bg-[#161614] transition-colors cursor-pointer group">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-bold text-[#f5f4ef]">Pam Beesly</h4>
+                      <span className="text-[0.65rem] font-mono px-2 py-0.5 bg-[#f97316]/10 text-[#f97316] border border-[#f97316]/20 uppercase">
+                        Quoted
+                      </span>
+                    </div>
+                    <p className="text-sm text-[#7a7a70] line-clamp-1 mb-3">Checking pricing for leak repair.</p>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-[#a8a89e] flex items-center gap-1"><Clock size={12}/> 1h ago</span>
+                      <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-mono tracking-wider flex items-center gap-1">
+                        View <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button className="w-full py-3 border border-[#2a2a26] text-sm font-mono text-[#7a7a70] hover:text-[#f5f4ef] hover:border-[#f5f4ef] transition-colors uppercase tracking-widest">
+              View All Customers
+            </button>
+            
+            {/* Quick Actions */}
+            <div className="mt-8 p-6 bg-[#f97316] text-[#0a0a08] relative overflow-hidden" style={{ clipPath: 'polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%)' }}>
+               <div className="absolute top-0 right-0 w-32 h-32 bg-[#fb923c] rounded-full blur-3xl opacity-50 -mr-10 -mt-10 pointer-events-none"></div>
+               <h3 className="font-bold text-xl uppercase mb-2" style={{ fontFamily: '"Bebas Neue", sans-serif', letterSpacing: '0.04em' }}>Need Human Help?</h3>
+               <p className="text-sm opacity-90 mb-4 font-medium">The AI is currently waiting for your approval on a quote sent to Dwight Schrute.</p>
+               <button className="bg-[#0a0a08] text-[#f5f4ef] px-4 py-2 text-sm font-bold uppercase tracking-wider w-full flex justify-center items-center gap-2 hover:bg-[#111110] transition-colors">
+                 <Shield size={16} /> Review Approval
+               </button>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  );
 }

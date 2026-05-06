@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Bot, TrendingUp, Users, Activity, 
   ChevronRight, Zap, Settings, Command,
@@ -10,9 +10,78 @@ import {
 
 export default function ModernCommandCenter({ business, initialLeads = [], initialBookings = [], initialStats = {} }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const businessName = business?.business_data?.businessName || business?.name || 'Launchfly Business';
   const currency = business?.business_data?.currency || '$';
+
+  // ──── FETCH REAL DATA FROM API ────
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const businessId = business?.id;
+        if (!businessId) {
+          setError('No business ID provided');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(`/api/dashboard/stats?businessId=${businessId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch dashboard data: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setDashboardData(data);
+        setError(null);
+      } catch (err) {
+        console.error('Dashboard data fetch error:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [business?.id]);
+
+  // ──── HELPER: Format relative time ────
+  const formatRelativeTime = (timestamp) => {
+    if (!timestamp) return 'Just now';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (seconds < 60) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // ──── HELPER: Format time for logs ────
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '00:00:00';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { hour12: false });
+  };
+
+  // ──── FALLBACK DATA (if API fails) ────
+  const stats = dashboardData?.stats || {
+    pipeline: initialStats.pipeline || 12450,
+    activeAgents: initialStats.activeAgents || 4,
+    activeQuotes: initialStats.activeQuotes || 24,
+  };
+
+  const agents = dashboardData?.agents || [];
+  const activityLog = dashboardData?.activityLog || [];
+  const leads = dashboardData?.leads || initialLeads;
 
   return (
     <>
@@ -117,7 +186,7 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
 
           {/* Top Stats Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-[1.5px] bg-[#2a2a26] border-[1.5px] border-[#2a2a26]">
-            {/* Stat Box 1 */}
+            {/* Stat Box 1: Pipeline Value */}
             <div className="bg-[#161614] p-[2rem] hover-border-orange group">
               <div className="flex justify-between items-start mb-[0.3rem]">
                 <span className="font-dm-mono text-[0.78rem] tracking-[0.1em] text-[#7a7a70] uppercase">Pipeline Value</span>
@@ -125,30 +194,36 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
                 <span className="text-[1.3rem] font-bold text-[#f97316] font-dm-mono">{currency}</span>
-                <span className="text-[2.8rem] text-[#f97316] font-bebas leading-[1] tracking-[0.03em]">{(initialStats.pipeline || 12450).toLocaleString()}</span>
+                <span className="text-[2.8rem] text-[#f97316] font-bebas leading-[1] tracking-[0.03em]">
+                  {loading ? '...' : (stats.pipeline || 0).toLocaleString()}
+                </span>
               </div>
             </div>
 
-            {/* Stat Box 2 */}
+            {/* Stat Box 2: Active Agents */}
             <div className="bg-[#161614] p-[2rem] hover-border-orange group">
               <div className="flex justify-between items-start mb-[0.3rem]">
                 <span className="font-dm-mono text-[0.78rem] tracking-[0.1em] text-[#7a7a70] uppercase">Active Agents</span>
                 <Workflow size={18} className="text-[#3b82f6]" />
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">4</span>
-                <span className="text-[#7a7a70] text-[0.85rem] font-dm-mono">/ 5 limits</span>
+                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">
+                  {loading ? '...' : stats.activeAgents || 0}
+                </span>
+                <span className="text-[#7a7a70] text-[0.85rem] font-dm-mono">/ {stats.totalAgents || 5} limit</span>
               </div>
             </div>
 
-            {/* Stat Box 3 */}
+            {/* Stat Box 3: Active Leads */}
             <div className="bg-[#161614] p-[2rem] hover-border-orange group">
               <div className="flex justify-between items-start mb-[0.3rem]">
                 <span className="font-dm-mono text-[0.78rem] tracking-[0.1em] text-[#7a7a70] uppercase">Active Leads</span>
                 <Users size={18} className="text-[#a855f7]" />
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{initialStats.activeQuotes || 24}</span>
+                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">
+                  {loading ? '...' : stats.activeLeads || 0}
+                </span>
               </div>
             </div>
           </div>
@@ -172,81 +247,109 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
 
               {/* Agent Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-[1.5px] bg-[#2a2a26] border-[1.5px] border-[#2a2a26]">
-                {/* Agent 1 */}
-                <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                  <div className="absolute top-0 right-0 p-4">
-                    <span className="flex h-3 w-3 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#22c55e]"></span>
-                    </span>
+                {/* Real Agent Cards from Database */}
+                {!loading && agents.length > 0 ? (
+                  agents.map((agent, idx) => {
+                    const statusColors = {
+                      'running': { bg: '#22c55e', text: '#22c55e' },
+                      'completed': { bg: '#3b82f6', text: '#3b82f6' },
+                      'pending': { bg: '#f97316', text: '#f97316' },
+                      'paused': { bg: '#a855f7', text: '#a855f7' },
+                      'failed': { bg: '#ef4444', text: '#ef4444' },
+                      'idle': { bg: '#6b7280', text: '#6b7280' },
+                    };
+                    const colors = statusColors[agent.status] || statusColors['idle'];
+                    
+                    return (
+                      <div key={agent.id} className="bg-[#161614] p-[2rem] hover-border-orange relative">
+                        <div className="absolute top-0 right-0 p-4">
+                          <span className="flex h-3 w-3 relative">
+                            {agent.status === 'running' && (
+                              <>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: colors.bg }}></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3" style={{ background: colors.bg }}></span>
+                              </>
+                            )}
+                            {agent.status !== 'running' && (
+                              <span className="relative inline-flex rounded-full h-3 w-3" style={{ background: colors.bg }}></span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-[2rem] mb-[1rem]" style={{ color: colors.text }}>
+                          <Bot size={32} />
+                        </div>
+                        <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">{agent.name}</h3>
+                        <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">{agent.taskGoal}</p>
+                        
+                        <div className="mt-4 pt-4 border-t border-[#2a2a26]">
+                          <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
+                            <span className="text-[#7a7a70]">Task: {agent.status}</span>
+                            <span style={{ color: colors.text }}>{agent.status.toUpperCase()}</span>
+                          </div>
+                          <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
+                            <div style={{ background: colors.bg, width: `${Math.min(agent.stepsUsed || 0, 100)}%` }} className="h-full" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : loading ? (
+                  <div className="col-span-2 bg-[#161614] p-[2rem] text-center text-[#7a7a70]">
+                    Loading agents...
                   </div>
-                  <div className="text-[2rem] mb-[1rem] text-[#22c55e]">
-                    <Bot size={32} />
-                  </div>
-                  <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">Receptionist Alpha</h3>
-                  <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Handling inbound WhatsApp queries and scheduling appointments.</p>
-                  
-                  <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                    <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
-                      <span className="text-[#7a7a70]">Task: Booking Lead</span>
-                      <span className="text-[#f5f4ef]">Running</span>
+                ) : (
+                  <>
+                    {/* Fallback: Mock agents if no real data */}
+                    <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
+                      <div className="absolute top-0 right-0 p-4">
+                        <span className="flex h-3 w-3 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-[#22c55e]"></span>
+                        </span>
+                      </div>
+                      <div className="text-[2rem] mb-[1rem] text-[#22c55e]">
+                        <Bot size={32} />
+                      </div>
+                      <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">Receptionist Alpha</h3>
+                      <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Handling inbound WhatsApp queries and scheduling appointments.</p>
+                      
+                      <div className="mt-4 pt-4 border-t border-[#2a2a26]">
+                        <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
+                          <span className="text-[#7a7a70]">Task: Booking Lead</span>
+                          <span className="text-[#f5f4ef]">Running</span>
+                        </div>
+                        <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
+                          <div className="bg-[#22c55e] h-full" style={{ width: '75%' }}></div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                      <div className="bg-[#22c55e] h-full" style={{ width: '75%' }}></div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Agent 2 */}
-                <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                  <div className="absolute top-0 right-0 p-4">
-                    <span className="flex h-3 w-3 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#f97316]"></span>
-                    </span>
-                  </div>
-                  <div className="text-[2rem] mb-[1rem] text-[#f97316]">
-                    <Database size={32} />
-                  </div>
-                  <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">Memory Consolidator</h3>
-                  <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Running background extraction to Knowledge Graph.</p>
-                  
-                  <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                    <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
-                      <span className="text-[#7a7a70]">Task: Pruning Vector DB</span>
-                      <span className="text-[#f97316]">Processing</span>
+                    <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
+                      <div className="absolute top-0 right-0 p-4">
+                        <span className="flex h-3 w-3 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-[#f97316]"></span>
+                        </span>
+                      </div>
+                      <div className="text-[2rem] mb-[1rem] text-[#f97316]">
+                        <Database size={32} />
+                      </div>
+                      <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">Memory Consolidator</h3>
+                      <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Running background extraction to Knowledge Graph.</p>
+                      
+                      <div className="mt-4 pt-4 border-t border-[#2a2a26]">
+                        <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
+                          <span className="text-[#7a7a70]">Task: Pruning Vector DB</span>
+                          <span className="text-[#f97316]">Processing</span>
+                        </div>
+                        <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
+                          <div className="bg-[#f97316] h-full animate-pulse" style={{ width: '100%' }}></div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                      <div className="bg-[#f97316] h-full animate-pulse" style={{ width: '100%' }}></div>
-                    </div>
-                  </div>
-                </div>
+                  </>
+                )}
                 
-                {/* Agent 3 */}
-                <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                  <div className="absolute top-0 right-0 p-4">
-                    <span className="flex h-3 w-3 relative">
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#a855f7]"></span>
-                    </span>
-                  </div>
-                  <div className="text-[2rem] mb-[1rem] text-[#a855f7]">
-                    <Shield size={32} />
-                  </div>
-                  <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">CEO Overseer</h3>
-                  <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Evaluating sub-agent performance and managing approvals.</p>
-                  
-                  <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                    <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
-                      <span className="text-[#7a7a70]">Task: Waiting for Approval</span>
-                      <span className="text-[#a855f7]">Paused</span>
-                    </div>
-                    <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden flex">
-                      <div className="bg-[#a855f7] h-full w-1/3"></div>
-                      <div className="bg-[#a855f7]/30 h-full w-2/3 border-l border-[#0a0a08]"></div>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Add Agent CTA */}
                 <button className="bg-[#111110] hover:bg-[#161614] p-[2rem] flex flex-col items-center justify-center gap-4 transition-colors group min-h-[240px] cursor-pointer">
                   <div className="text-[2rem] text-[#7a7a70] group-hover:text-[#f97316] transition-colors">
@@ -260,26 +363,50 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
               <div className="mt-[3.5rem] relative">
                  <div className="font-dm-mono text-[0.68rem] tracking-[0.22em] text-[#f97316] uppercase mb-[0.8rem]">System Log</div>
                  <div className="bg-[#111110] border-[1px] border-[#2a2a26] p-[2rem] font-dm-mono text-[0.85rem] space-y-4">
-                    <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
-                      <span className="text-[#7a7a70] shrink-0">10:42:05</span>
-                      <span className="text-[#3b82f6] shrink-0">[CEO]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Delegated task <span className="text-[#f97316]">"Follow up with Sarah"</span> to Receptionist Alpha.</span>
-                    </div>
-                    <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
-                      <span className="text-[#7a7a70] shrink-0">10:45:12</span>
-                      <span className="text-[#22c55e] shrink-0">[Alpha]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Generated Plan DAG (3 steps). Executing node: check_availability.</span>
-                    </div>
-                    <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
-                      <span className="text-[#7a7a70] shrink-0">10:46:30</span>
-                      <span className="text-[#f97316] shrink-0">[Memory]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Archived 4 stale vectors. Consolidated 2 entity relationships.</span>
-                    </div>
-                    <div className="flex gap-4 items-start">
-                      <span className="text-[#7a7a70] shrink-0">10:48:01</span>
-                      <span className="text-[#a855f7] shrink-0">[Evaluator]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Critic check passed (9/10). Task completed successfully.</span>
-                    </div>
+                    {!loading && activityLog.length > 0 ? (
+                      activityLog.map((activity, idx) => {
+                        const typeColors = {
+                          'running': '#3b82f6',
+                          'completed': '#22c55e',
+                          'pending': '#f97316',
+                          'failed': '#ef4444',
+                          'paused': '#a855f7',
+                        };
+                        const color = typeColors[activity.type] || '#7a7a70';
+                        return (
+                          <div key={idx} className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
+                            <span className="text-[#7a7a70] shrink-0">{formatTime(activity.timestamp)}</span>
+                            <span style={{ color }} className="shrink-0">[{activity.type.toUpperCase()}]</span>
+                            <span className="text-[#c5c4bb] leading-[1.5]">
+                              {activity.message?.slice(0, 100) || 'Task executed'}
+                            </span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
+                          <span className="text-[#7a7a70] shrink-0">10:42:05</span>
+                          <span className="text-[#3b82f6] shrink-0">[CEO]</span>
+                          <span className="text-[#c5c4bb] leading-[1.5]">Delegated task <span className="text-[#f97316]">"Follow up with Sarah"</span> to Receptionist Alpha.</span>
+                        </div>
+                        <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
+                          <span className="text-[#7a7a70] shrink-0">10:45:12</span>
+                          <span className="text-[#22c55e] shrink-0">[Alpha]</span>
+                          <span className="text-[#c5c4bb] leading-[1.5]">Generated Plan DAG (3 steps). Executing node: check_availability.</span>
+                        </div>
+                        <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
+                          <span className="text-[#7a7a70] shrink-0">10:46:30</span>
+                          <span className="text-[#f97316] shrink-0">[Memory]</span>
+                          <span className="text-[#c5c4bb] leading-[1.5]">Archived 4 stale vectors. Consolidated 2 entity relationships.</span>
+                        </div>
+                        <div className="flex gap-4 items-start">
+                          <span className="text-[#7a7a70] shrink-0">10:48:01</span>
+                          <span className="text-[#a855f7] shrink-0">[Evaluator]</span>
+                          <span className="text-[#c5c4bb] leading-[1.5]">Critic check passed (9/10). Task completed successfully.</span>
+                        </div>
+                      </>
+                    )}
                  </div>
               </div>
             </div>
@@ -293,24 +420,33 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
               </div>
 
               <div className="border-[1.5px] border-[#2a2a26] bg-[#2a2a26] gap-[1.5px] flex flex-col">
-                {initialLeads.length > 0 ? (
-                  initialLeads.slice(0, 5).map((lead, i) => (
+                {!loading && leads.length > 0 ? (
+                  leads.slice(0, 5).map((lead, i) => (
                     <div key={i} className="bg-[#161614] p-5 hover-border-orange cursor-pointer group">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-bebas text-[1.2rem] text-[#f5f4ef] tracking-[0.04em]">{lead.name || 'Unknown Lead'}</h4>
-                        <span className="inline-block bg-[rgba(249,115,22,0.1)] border border-[rgba(249,115,22,0.25)] text-[#f97316] font-dm-mono text-[0.65rem] tracking-[0.12em] px-[0.6rem] py-[0.2rem] uppercase">
+                        <span className={`inline-block border font-dm-mono text-[0.65rem] tracking-[0.12em] px-[0.6rem] py-[0.2rem] uppercase`}
+                          style={{
+                            background: lead.status === 'converted' ? 'rgba(34,197,94,0.1)' : lead.status === 'qualified' ? 'rgba(59,130,246,0.1)' : 'rgba(249,115,22,0.1)',
+                            borderColor: lead.status === 'converted' ? 'rgba(34,197,94,0.25)' : lead.status === 'qualified' ? 'rgba(59,130,246,0.25)' : 'rgba(249,115,22,0.25)',
+                            color: lead.status === 'converted' ? '#22c55e' : lead.status === 'qualified' ? '#3b82f6' : '#f97316',
+                          }}>
                           {lead.status || 'New'}
                         </span>
                       </div>
-                      <p className="text-[0.92rem] text-[#7a7a70] line-clamp-1 mb-3">{lead.notes || 'No details provided.'}</p>
+                      <p className="text-[0.92rem] text-[#7a7a70] line-clamp-1 mb-3">{lead.notes || `${lead.phone || lead.email || 'No contact'}`}</p>
                       <div className="flex justify-between items-center">
-                        <span className="text-[#7a7a70] text-[0.8rem] flex items-center gap-1"><Clock size={12}/> Just now</span>
+                        <span className="text-[#7a7a70] text-[0.8rem] flex items-center gap-1"><Clock size={12}/> {formatRelativeTime(lead.createdAt)}</span>
                         <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-dm-mono text-[0.8rem] tracking-wider flex items-center gap-1">
                           View <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
                   ))
+                ) : loading ? (
+                  <div className="bg-[#161614] p-5 text-center text-[#7a7a70]">
+                    Loading leads...
+                  </div>
                 ) : (
                   <>
                     <div className="bg-[#161614] p-5 hover-border-orange cursor-pointer group">
@@ -358,9 +494,13 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
                  <div className="absolute top-0 right-0 w-[55%] h-[120%] bg-[linear-gradient(135deg,transparent_40%,rgba(249,115,22,0.12)_100%)] border-l border-[rgba(249,115,22,0.2)] transform -skew-x-[8deg] pointer-events-none"></div>
                  <div className="p-8 relative z-10">
                    <h3 className="font-bebas text-[1.5rem] tracking-[0.04em] mb-2 text-[#f5f4ef]">Need Human Help?</h3>
-                   <p className="text-[#c5c4bb] text-[0.92rem] leading-[1.65] mb-6 max-w-[200px]">The AI is currently waiting for your approval on a quote sent to Dwight Schrute.</p>
+                   <p className="text-[#c5c4bb] text-[0.92rem] leading-[1.65] mb-6 max-w-[200px]">
+                     {stats.activeAgentTasks > 0 
+                       ? `${stats.activeAgentTasks} task(s) running. Your AI is working autonomously.`
+                       : 'No pending approvals. Your AI is operating smoothly.'}
+                   </p>
                    <button className="btn-primary w-full justify-center">
-                     <Shield size={16} /> Review Approval
+                     <Shield size={16} /> {stats.activeAgentTasks > 0 ? 'View Active Tasks' : 'View Dashboard'}
                    </button>
                  </div>
               </div>

@@ -1,15 +1,15 @@
 // src/app/command/[businessId]/page.js
-// Mobile-first Command Center Dashboard
+// Modern Command Center — Swarm Operating System
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import CommandCenter from '@/components/CommandCenter';
+import ModernCommandCenter from '@/components/ModernCommandCenter';
 
 export async function generateMetadata({ params }) {
     const { businessId } = await params;
 
     let meta = {
         title: 'Command Center',
-        description: 'Manage your leads and jobs',
+        description: 'Manage your autonomous swarm',
     };
 
     try {
@@ -104,17 +104,17 @@ export default async function CommandCenterPage({ params }) {
 
     if (!business) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
-                    <h1 className="text-2xl font-bold text-gray-800 mb-4">🔍 Business Not Found</h1>
-                    <p className="text-gray-600">This command center doesn&apos;t exist or you don&apos;t have access.</p>
+            <div className="min-h-screen flex items-center justify-center bg-black">
+                <div className="bg-[#161614] p-8 border border-[#2a2a26] text-center max-w-md">
+                    <h1 className="text-2xl font-bold text-white mb-4">🔍 Business Not Found</h1>
+                    <p className="text-[#7a7a70]">This command center doesn&apos;t exist or you don&apos;t have access.</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <CommandCenter
+        <ModernCommandCenter
             business={business}
             initialLeads={leads}
             initialBookings={bookings}

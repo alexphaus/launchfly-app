@@ -125,7 +125,7 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
                 <span className="text-[1.3rem] font-bold text-[#f97316] font-dm-mono">{currency}</span>
-                <span className="text-[2.8rem] text-[#f97316] font-bebas leading-[1] tracking-[0.03em]">{(initialStats.pipeline || 12450).toLocaleString()}</span>
+                <span className="text-[2.8rem] text-[#f97316] font-bebas leading-[1] tracking-[0.03em]">{(initialStats.pipeline || 0).toLocaleString()}</span>
               </div>
             </div>
 
@@ -136,7 +136,7 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
                 <Workflow size={18} className="text-[#3b82f6]" />
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">4</span>
+                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">0</span>
                 <span className="text-[#7a7a70] text-[0.85rem] font-dm-mono">/ 5 limits</span>
               </div>
             </div>
@@ -148,7 +148,7 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
                 <Users size={18} className="text-[#a855f7]" />
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{initialStats.activeQuotes || 24}</span>
+                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{initialStats.activeQuotes || 0}</span>
               </div>
             </div>
           </div>
@@ -171,115 +171,22 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
               </div>
 
               {/* Agent Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-[1.5px] bg-[#2a2a26] border-[1.5px] border-[#2a2a26]">
-                {/* Agent 1 */}
-                <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                  <div className="absolute top-0 right-0 p-4">
-                    <span className="flex h-3 w-3 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22c55e] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#22c55e]"></span>
-                    </span>
-                  </div>
-                  <div className="text-[2rem] mb-[1rem] text-[#22c55e]">
-                    <Bot size={32} />
-                  </div>
-                  <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">Receptionist Alpha</h3>
-                  <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Handling inbound WhatsApp queries and scheduling appointments.</p>
-                  
-                  <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                    <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
-                      <span className="text-[#7a7a70]">Task: Booking Lead</span>
-                      <span className="text-[#f5f4ef]">Running</span>
-                    </div>
-                    <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                      <div className="bg-[#22c55e] h-full" style={{ width: '75%' }}></div>
-                    </div>
-                  </div>
+              <div className="bg-[#111110] border-[1px] border-[#2a2a26] p-[3rem] flex flex-col items-center justify-center text-center">
+                <div className="text-[2rem] text-[#2a2a26] mb-4">
+                  <Workflow size={48} />
                 </div>
-
-                {/* Agent 2 */}
-                <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                  <div className="absolute top-0 right-0 p-4">
-                    <span className="flex h-3 w-3 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#f97316]"></span>
-                    </span>
-                  </div>
-                  <div className="text-[2rem] mb-[1rem] text-[#f97316]">
-                    <Database size={32} />
-                  </div>
-                  <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">Memory Consolidator</h3>
-                  <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Running background extraction to Knowledge Graph.</p>
-                  
-                  <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                    <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
-                      <span className="text-[#7a7a70]">Task: Pruning Vector DB</span>
-                      <span className="text-[#f97316]">Processing</span>
-                    </div>
-                    <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                      <div className="bg-[#f97316] h-full animate-pulse" style={{ width: '100%' }}></div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Agent 3 */}
-                <div className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                  <div className="absolute top-0 right-0 p-4">
-                    <span className="flex h-3 w-3 relative">
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#a855f7]"></span>
-                    </span>
-                  </div>
-                  <div className="text-[2rem] mb-[1rem] text-[#a855f7]">
-                    <Shield size={32} />
-                  </div>
-                  <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">CEO Overseer</h3>
-                  <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">Evaluating sub-agent performance and managing approvals.</p>
-                  
-                  <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                    <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2">
-                      <span className="text-[#7a7a70]">Task: Waiting for Approval</span>
-                      <span className="text-[#a855f7]">Paused</span>
-                    </div>
-                    <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden flex">
-                      <div className="bg-[#a855f7] h-full w-1/3"></div>
-                      <div className="bg-[#a855f7]/30 h-full w-2/3 border-l border-[#0a0a08]"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Add Agent CTA */}
-                <button className="bg-[#111110] hover:bg-[#161614] p-[2rem] flex flex-col items-center justify-center gap-4 transition-colors group min-h-[240px] cursor-pointer">
-                  <div className="text-[2rem] text-[#7a7a70] group-hover:text-[#f97316] transition-colors">
-                    <Zap size={32} />
-                  </div>
-                  <span className="font-dm-mono text-[0.8rem] tracking-[0.1em] uppercase text-[#7a7a70] group-hover:text-[#f5f4ef] transition-colors border-b border-[#2a2a26] group-hover:border-[#f97316] pb-1">Deploy New Agent</span>
+                <h3 className="font-bebas text-[1.5rem] tracking-[0.04em] text-[#7a7a70] mb-2">No Active Agents</h3>
+                <p className="text-[#a8a89e] text-[0.9rem] max-w-[300px] mb-6">Deploy a new autonomous agent to handle your workflows.</p>
+                <button className="bg-[#111110] border border-[#2a2a26] hover:border-[#f97316] text-[#7a7a70] hover:text-[#f97316] px-[2rem] py-[0.8rem] transition-colors flex items-center gap-2 font-dm-mono text-[0.8rem] tracking-[0.1em] uppercase">
+                  <Zap size={16} /> Deploy Agent
                 </button>
               </div>
               
               {/* Recent Activity Log */}
               <div className="mt-[3.5rem] relative">
                  <div className="font-dm-mono text-[0.68rem] tracking-[0.22em] text-[#f97316] uppercase mb-[0.8rem]">System Log</div>
-                 <div className="bg-[#111110] border-[1px] border-[#2a2a26] p-[2rem] font-dm-mono text-[0.85rem] space-y-4">
-                    <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
-                      <span className="text-[#7a7a70] shrink-0">10:42:05</span>
-                      <span className="text-[#3b82f6] shrink-0">[CEO]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Delegated task <span className="text-[#f97316]">"Follow up with Sarah"</span> to Receptionist Alpha.</span>
-                    </div>
-                    <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
-                      <span className="text-[#7a7a70] shrink-0">10:45:12</span>
-                      <span className="text-[#22c55e] shrink-0">[Alpha]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Generated Plan DAG (3 steps). Executing node: check_availability.</span>
-                    </div>
-                    <div className="flex gap-4 items-start pb-4 border-b border-[#2a2a26]">
-                      <span className="text-[#7a7a70] shrink-0">10:46:30</span>
-                      <span className="text-[#f97316] shrink-0">[Memory]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Archived 4 stale vectors. Consolidated 2 entity relationships.</span>
-                    </div>
-                    <div className="flex gap-4 items-start">
-                      <span className="text-[#7a7a70] shrink-0">10:48:01</span>
-                      <span className="text-[#a855f7] shrink-0">[Evaluator]</span>
-                      <span className="text-[#c5c4bb] leading-[1.5]">Critic check passed (9/10). Task completed successfully.</span>
-                    </div>
+                 <div className="bg-[#111110] border-[1px] border-[#2a2a26] p-[3rem] font-dm-mono text-[0.85rem] text-center text-[#7a7a70]">
+                    No recent activity. Logs will appear here when agents are running.
                  </div>
               </div>
             </div>
@@ -312,38 +219,9 @@ export default function ModernCommandCenter({ business, initialLeads = [], initi
                     </div>
                   ))
                 ) : (
-                  <>
-                    <div className="bg-[#161614] p-5 hover-border-orange cursor-pointer group">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-bebas text-[1.2rem] text-[#f5f4ef] tracking-[0.04em]">Michael Scott</h4>
-                        <span className="inline-block bg-[rgba(34,197,94,0.1)] border border-[rgba(34,197,94,0.25)] text-[#22c55e] font-dm-mono text-[0.65rem] tracking-[0.12em] px-[0.6rem] py-[0.2rem] uppercase">
-                          Booked
-                        </span>
-                      </div>
-                      <p className="text-[0.92rem] text-[#7a7a70] line-clamp-1 mb-3">Needs a full AC cleaning unit 3.</p>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[#7a7a70] text-[0.8rem] flex items-center gap-1"><Clock size={12}/> 5m ago</span>
-                        <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-dm-mono text-[0.8rem] tracking-wider flex items-center gap-1">
-                          View <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="bg-[#161614] p-5 hover-border-orange cursor-pointer group">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-bebas text-[1.2rem] text-[#f5f4ef] tracking-[0.04em]">Pam Beesly</h4>
-                        <span className="inline-block bg-[rgba(249,115,22,0.1)] border border-[rgba(249,115,22,0.25)] text-[#f97316] font-dm-mono text-[0.65rem] tracking-[0.12em] px-[0.6rem] py-[0.2rem] uppercase">
-                          Quoted
-                        </span>
-                      </div>
-                      <p className="text-[0.92rem] text-[#7a7a70] line-clamp-1 mb-3">Checking pricing for leak repair.</p>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[#7a7a70] text-[0.8rem] flex items-center gap-1"><Clock size={12}/> 1h ago</span>
-                        <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-dm-mono text-[0.8rem] tracking-wider flex items-center gap-1">
-                          View <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </>
+                  <div className="p-8 text-center text-[#7a7a70] font-dm-mono text-[0.85rem] uppercase tracking-wider">
+                    No active customers yet.
+                  </div>
                 )}
               </div>
 

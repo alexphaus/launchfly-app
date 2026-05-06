@@ -39,10 +39,24 @@ CREATE TABLE public.ad_campaigns (
   CONSTRAINT ad_campaigns_pkey PRIMARY KEY (id),
   CONSTRAINT ad_campaigns_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.agent_pending_approvals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  business_id uuid NOT NULL,
+  question text NOT NULL,
+  options ARRAY,
+  response text,
+  responded_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '24:00:00'::interval),
+  CONSTRAINT agent_pending_approvals_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_pending_approvals_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.agent_tasks(id),
+  CONSTRAINT agent_pending_approvals_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.agent_tasks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid NOT NULL,
-  status text NOT NULL DEFAULT 'running'::text CHECK (status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text, 'paused'::text])),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text, 'paused'::text, 'waiting_approval'::text, 'waiting_subtask'::text])),
   goal text NOT NULL,
   role text,
   steps_used integer NOT NULL DEFAULT 0,
@@ -50,8 +64,32 @@ CREATE TABLE public.agent_tasks (
   result text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  parent_task_id uuid,
+  messages jsonb,
+  owner_phone text,
+  enabled_tools jsonb,
+  plan_dag jsonb,
   CONSTRAINT agent_tasks_pkey PRIMARY KEY (id),
-  CONSTRAINT agent_tasks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+  CONSTRAINT agent_tasks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT agent_tasks_parent_task_id_fkey FOREIGN KEY (parent_task_id) REFERENCES public.agent_tasks(id)
+);
+CREATE TABLE public.agent_workflows (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  cron_expression text NOT NULL,
+  assistant_name text NOT NULL DEFAULT 'Chief of Staff'::text,
+  goal_template text NOT NULL,
+  enabled_tools ARRAY DEFAULT '{}'::text[],
+  timezone text NOT NULL DEFAULT 'Europe/Madrid'::text,
+  active boolean NOT NULL DEFAULT true,
+  last_run_at timestamp with time zone,
+  next_run_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT agent_workflows_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_workflows_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.ai_activities (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -112,6 +150,19 @@ CREATE TABLE public.ai_conversations (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT ai_conversations_pkey PRIMARY KEY (id),
   CONSTRAINT ai_conversations_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.ai_edges (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  source_id uuid,
+  target_id uuid,
+  relation character varying NOT NULL,
+  properties jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ai_edges_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_edges_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
+  CONSTRAINT ai_edges_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.ai_nodes(id),
+  CONSTRAINT ai_edges_target_id_fkey FOREIGN KEY (target_id) REFERENCES public.ai_nodes(id)
 );
 CREATE TABLE public.ai_event_counters (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -181,6 +232,15 @@ CREATE TABLE public.ai_learning_patterns (
   CONSTRAINT ai_learning_patterns_pkey PRIMARY KEY (id),
   CONSTRAINT ai_learning_patterns_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.ai_llm_cache (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  state_hash character varying NOT NULL,
+  llm_response jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ai_llm_cache_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_llm_cache_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.ai_memories (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -194,6 +254,12 @@ CREATE TABLE public.ai_memories (
   archived boolean DEFAULT false,
   memory_timestamp timestamp with time zone DEFAULT now(),
   created_at timestamp with time zone DEFAULT now(),
+  use_count integer DEFAULT 0,
+  last_recalled_at timestamp with time zone,
+  recall_count integer NOT NULL DEFAULT 0,
+  outcome text,
+  validated_at timestamp with time zone,
+  updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT ai_memories_pkey PRIMARY KEY (id),
   CONSTRAINT ai_memories_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
@@ -206,6 +272,18 @@ CREATE TABLE public.ai_memories_simple (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT ai_memories_simple_pkey PRIMARY KEY (id),
   CONSTRAINT ai_memories_simple_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.ai_nodes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid,
+  label character varying NOT NULL,
+  name character varying NOT NULL,
+  properties jsonb DEFAULT '{}'::jsonb,
+  embedding USER-DEFINED,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ai_nodes_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_nodes_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.ai_playbooks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -280,6 +358,24 @@ CREATE TABLE public.bookings (
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id),
   CONSTRAINT bookings_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+);
+CREATE TABLE public.business_integrations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  business_id uuid NOT NULL,
+  service_name text NOT NULL,
+  description text,
+  base_url text NOT NULL,
+  api_key_encrypted text,
+  auth_type text DEFAULT 'bearer'::text,
+  auth_header text DEFAULT 'Authorization'::text,
+  status text DEFAULT 'active'::text,
+  config jsonb DEFAULT '{}'::jsonb,
+  requested_by text DEFAULT 'owner'::text,
+  request_context text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT business_integrations_pkey PRIMARY KEY (id),
+  CONSTRAINT business_integrations_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.business_metrics (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -430,6 +526,10 @@ CREATE TABLE public.businesses (
   whatsapp_template_feedback text,
   prospecting_config jsonb,
   outreach_paused boolean DEFAULT false,
+  automation_rules jsonb DEFAULT '[]'::jsonb,
+  active boolean DEFAULT false,
+  ai_provider text,
+  ai_model text,
   CONSTRAINT businesses_pkey PRIMARY KEY (id),
   CONSTRAINT businesses_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT businesses_guarantee_id_fkey FOREIGN KEY (guarantee_id) REFERENCES public.revenue_guarantees(id),
@@ -489,6 +589,7 @@ CREATE TABLE public.chat_history (
   content text NOT NULL,
   tool_calls jsonb,
   created_at timestamp with time zone DEFAULT now(),
+  fts tsvector DEFAULT to_tsvector('english'::regconfig, COALESCE(content, ''::text)),
   CONSTRAINT chat_history_pkey PRIMARY KEY (id),
   CONSTRAINT chat_history_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
@@ -770,6 +871,17 @@ CREATE TABLE public.fulfillments (
   CONSTRAINT fulfillments_pkey PRIMARY KEY (id),
   CONSTRAINT fulfillments_sale_id_fkey FOREIGN KEY (sale_id) REFERENCES public.sales(id)
 );
+CREATE TABLE public.golden_state_images (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  image_url text NOT NULL,
+  label text,
+  category text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT golden_state_images_pkey PRIMARY KEY (id),
+  CONSTRAINT golden_state_images_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.growth_experiments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -876,6 +988,35 @@ CREATE TABLE public.inngest_jobs (
   CONSTRAINT inngest_jobs_pkey PRIMARY KEY (id),
   CONSTRAINT inngest_jobs_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
+CREATE TABLE public.jobs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  business_id uuid NOT NULL,
+  title text,
+  status text DEFAULT 'draft'::text,
+  description text,
+  materials_needed jsonb DEFAULT '[]'::jsonb,
+  quotes_received jsonb DEFAULT '[]'::jsonb,
+  blockers jsonb DEFAULT '[]'::jsonb,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT jobs_pkey PRIMARY KEY (id),
+  CONSTRAINT jobs_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.knowledge_base_chunks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  document_id uuid NOT NULL,
+  document_title text NOT NULL,
+  chunk_index integer NOT NULL DEFAULT 0,
+  chunk_text text NOT NULL,
+  embedding USER-DEFINED,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT knowledge_base_chunks_pkey PRIMARY KEY (id),
+  CONSTRAINT knowledge_base_chunks_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
 CREATE TABLE public.landing_pages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   business_id uuid,
@@ -887,6 +1028,26 @@ CREATE TABLE public.landing_pages (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT landing_pages_pkey PRIMARY KEY (id),
   CONSTRAINT landing_pages_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.leads (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  name text NOT NULL DEFAULT 'Unknown'::text,
+  phone text,
+  email text,
+  website text,
+  address text,
+  category text,
+  notes text,
+  source text DEFAULT 'agent'::text,
+  status text DEFAULT 'new'::text CHECK (status = ANY (ARRAY['new'::text, 'contacted'::text, 'qualified'::text, 'converted'::text, 'lost'::text, 'archived'::text])),
+  rating numeric,
+  reviews_count integer,
+  google_maps_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT leads_pkey PRIMARY KEY (id),
+  CONSTRAINT leads_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.marketing_campaigns (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -914,6 +1075,23 @@ CREATE TABLE public.marketplace_listings (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT marketplace_listings_pkey PRIMARY KEY (id),
   CONSTRAINT marketplace_listings_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.mcp_servers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  business_id uuid NOT NULL,
+  name text NOT NULL,
+  transport text NOT NULL DEFAULT 'http'::text,
+  url text NOT NULL,
+  api_key text,
+  headers jsonb DEFAULT '{}'::jsonb,
+  enabled boolean NOT NULL DEFAULT true,
+  tool_filter ARRAY,
+  cached_tools jsonb,
+  cached_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT mcp_servers_pkey PRIMARY KEY (id),
+  CONSTRAINT mcp_servers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.onboarding_analytics (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1523,6 +1701,19 @@ CREATE TABLE public.success_patterns (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT success_patterns_pkey PRIMARY KEY (id),
   CONSTRAINT success_patterns_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
+);
+CREATE TABLE public.suppliers (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  business_id uuid NOT NULL,
+  name text NOT NULL,
+  whatsapp_number text,
+  email text,
+  category text,
+  notes text,
+  avg_response_hours numeric,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT suppliers_pkey PRIMARY KEY (id),
+  CONSTRAINT suppliers_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.businesses(id)
 );
 CREATE TABLE public.suppression_list (
   email text NOT NULL,

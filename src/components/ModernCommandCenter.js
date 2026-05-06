@@ -181,19 +181,19 @@ export default function ModernCommandCenter({
         </nav>
 
         {/* Main Content */}
-        <main className="relative z-10 px-8 py-6 md:py-8 max-w-[1100px] mx-auto space-y-8">
+        <main className="relative z-10 px-6 md:px-14 lg:px-16 py-5 md:py-7 max-w-[1280px] mx-auto space-y-7">
           
           {/* Header Section */}
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#2a2a26] pb-5">
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5 border-b border-[#2a2a26] pb-4">
             <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-2 font-dm-mono text-[0.62rem] tracking-[0.16em] text-[#f97316] uppercase mb-2.5 px-2.5 py-1 border border-[#f97316]/30 bg-[#f97316]/10">
+              <div className="inline-flex items-center gap-2 font-dm-mono text-[0.62rem] tracking-[0.16em] text-[#f97316] uppercase mb-2 px-2.5 py-1 border border-[#f97316]/30 bg-[#f97316]/10">
                 <span className="w-[5px] h-[5px] bg-[#f97316] rounded-full animate-pulse shrink-0"></span>
                 Command Center Active
               </div>
-              <h1 className="text-[clamp(2.25rem,6vw,3.75rem)] font-bebas uppercase leading-[0.92] tracking-[0.02em] text-[#f5f4ef]">
+              <h1 className="text-[clamp(2.45rem,5.2vw,4.15rem)] font-bebas uppercase leading-[0.9] tracking-[0.02em] text-[#f5f4ef] md:whitespace-nowrap">
                 System <span className="text-[#f97316]">Overview</span>
               </h1>
-              <p className="mt-2.5 text-[#a8a79d] max-w-[520px] text-[0.95rem] md:text-[1rem] leading-snug font-light">
+              <p className="mt-2 text-[#a8a79d] max-w-[650px] text-[0.95rem] md:text-[1rem] leading-snug font-light">
                 Monitor your autonomous agents, track revenue generation, and manage active customer conversations across the platform.
               </p>
             </div>

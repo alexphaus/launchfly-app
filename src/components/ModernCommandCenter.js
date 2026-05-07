@@ -429,6 +429,7 @@ export default function ModernCommandCenter({
                     const Icon = getIcon(agent.iconKey);
                     const accent = agent.accentColor || '#22c55e';
                     const statusColor = agent.statusColor || accent;
+                    const isActive = agent.hasActiveTask;
                     return (
                       <div key={agent.id} className="bg-[#161614] p-[2rem] hover-border-orange relative">
                         <div className="absolute top-0 right-0 p-4">
@@ -439,7 +440,7 @@ export default function ModernCommandCenter({
                             <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: statusColor }}></span>
                           </span>
                         </div>
-                        <div className="text-[2rem] mb-[1rem]" style={{ color: accent }}>
+                        <div className="text-[2rem] mb-[1rem] transition-colors duration-500" style={{ color: isActive ? accent : '#40403a' }}>
                           <Icon size={32} />
                         </div>
                         <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">{agent.name}</h3>
@@ -464,7 +465,7 @@ export default function ModernCommandCenter({
                             </div>
                           ) : (
                             <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                              <div className="h-full" style={{ backgroundColor: accent, opacity: 0.25, width: '100%' }}></div>
+                              <div className="h-full transition-all duration-700" style={{ backgroundColor: isActive ? accent : '#2a2a26', opacity: isActive ? 0.25 : 0.5, width: '100%' }}></div>
                             </div>
                           )}
                         </div>

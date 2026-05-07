@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
   Bot, TrendingUp, Users,
   ChevronRight, Zap, Settings,
@@ -88,11 +89,23 @@ export default function ModernCommandCenter({
   initialLeads = [],
   initialBookings = [],
   initialStats = {},
-  agents = [],
-  activities = [],
-  pendingApproval = null,
+  agents: initialAgents = [],
+  activities: initialActivities = [],
+  pendingApproval: initialPendingApproval = null,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [leads, setLeads] = useState(initialLeads);
+  const [agents, setAgents] = useState(initialAgents);
+  const [activities, setActivities] = useState(initialActivities);
+  const [pendingApproval, setPendingApproval] = useState(initialPendingApproval);
+  const [stats, setStats] = useState({
+    activeQuotes: initialStats.activeQuotes || 0,
+    pipeline: initialStats.pipeline || 0,
+    booked: initialStats.booked || 0,
+    agentLimit: initialStats.agentLimit || 5,
+  });
+
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
     if (business?.id) {
@@ -100,12 +113,141 @@ export default function ModernCommandCenter({
     }
   }, [business?.id]);
 
+  // ── Real-time Subscriptions ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!business?.id) return;
+
+    // 1. Subscribe to customers (Leads)
+    const customersChannel = supabase
+      .channel(`command-leads-${business.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customers', filter: `business_id=eq.${business.id}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setLeads(prev => [payload.new, ...prev].slice(0, 20));
+            setStats(prev => ({ ...prev, activeQuotes: prev.activeQuotes + 1 }));
+          } else if (payload.eventType === 'UPDATE') {
+            setLeads(prev => prev.map(l => l.id === payload.new.id ? payload.new : l));
+          } else if (payload.eventType === 'DELETE') {
+            setLeads(prev => prev.filter(l => l.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Subscribe to agent_tasks (Agent Updates)
+    const tasksChannel = supabase
+      .channel(`command-tasks-${business.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'agent_tasks', filter: `business_id=eq.${business.id}` },
+        (payload) => {
+          const task = payload.new;
+          if (!task) return;
+
+          // Extract agent name from role to match with our local agents state
+          const role = task.role || '';
+          const dashIdx = role.search(/\s[—–-]\s/);
+          let taskAgentName = null;
+          if (dashIdx > 0 && dashIdx < 60) taskAgentName = role.substring(0, dashIdx).trim();
+          else {
+            const m = role.match(/You are (?:the |an? )?(?:AI )?([^.\n]+?)(?:\s+for\s|\s+working\s|\.|\n)/i);
+            if (m) taskAgentName = m[1].trim().substring(0, 40);
+          }
+
+          if (taskAgentName) {
+            setAgents(prev => prev.map(agent => {
+              if (agent.name && agent.name.toLowerCase() === taskAgentName.toLowerCase()) {
+                // Update this agent with task info
+                const ACTIVE_STATUSES = new Set(['running', 'pending', 'paused', 'waiting_approval', 'waiting_subtask']);
+                const isActive = ACTIVE_STATUSES.has(task.status);
+                
+                // Mirror statusToUi from page.js
+                let ui = { label: 'Idle', color: '#7a7a70', mode: 'idle', pulse: false };
+                if (task.status === 'running') ui = { label: 'Running', color: '#22c55e', mode: 'progress', pulse: true };
+                else if (task.status === 'pending') ui = { label: 'Queued', color: '#f97316', mode: 'progress', pulse: false };
+                else if (task.status === 'waiting_approval') ui = { label: 'Awaiting Approval', color: '#a855f7', mode: 'segmented', pulse: true };
+                else if (task.status === 'waiting_subtask') ui = { label: 'Waiting on Sub-Agent', color: '#a855f7', mode: 'progress', pulse: true };
+                else if (task.status === 'paused') ui = { label: 'Paused', color: '#a855f7', mode: 'segmented', pulse: false };
+                else if (task.status === 'completed') ui = { label: 'Completed', color: '#9ca3af', mode: 'idle', pulse: false };
+                else if (task.status === 'failed') ui = { label: 'Failed', color: '#ef4444', mode: 'idle', pulse: false };
+
+                const progress = isActive
+                  ? Math.min(100, Math.round(((task.steps_used || 0) / 80) * 100) || (task.status === 'pending' ? 5 : 25))
+                  : 0;
+
+                return {
+                  ...agent,
+                  status: task.status,
+                  statusLabel: ui.label,
+                  statusColor: ui.color,
+                  statusMode: ui.mode,
+                  pulse: ui.pulse,
+                  progress,
+                  taskTitle: task.goal ? task.goal.replace(/^\[DELEGATED TASK\]\s*/i, '').substring(0, 60) : agent.taskTitle,
+                  hasActiveTask: isActive,
+                };
+              }
+              return agent;
+            }));
+          }
+
+          // Also update activity log if there's a tool call
+          if (task.tool_log && Array.isArray(task.tool_log) && task.tool_log.length > 0) {
+            const lastTool = task.tool_log[task.tool_log.length - 1];
+            if (lastTool && lastTool.tool && !lastTool.tool.startsWith('__')) {
+              const newActivity = {
+                id: `log-${task.id}-${Date.now()}`,
+                tag: taskAgentName ? taskAgentName.substring(0, 14) : 'Agent',
+                color: '#3b82f6',
+                text: `Used ${lastTool.tool}`, // Simplified for now
+                created_at: new Date().toISOString(),
+              };
+              setActivities(prev => [newActivity, ...prev].slice(0, 8));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // 3. Subscribe to agent_pending_approvals
+    const approvalsChannel = supabase
+      .channel(`command-approvals-${business.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'agent_pending_approvals', filter: `business_id=eq.${business.id}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            if (!payload.new.response) {
+              setPendingApproval({
+                id: payload.new.id,
+                taskId: payload.new.task_id,
+                question: payload.new.question,
+                count: 1, // simplified
+                createdAt: payload.new.created_at,
+              });
+            } else {
+              setPendingApproval(null);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(customersChannel);
+      supabase.removeChannel(tasksChannel);
+      supabase.removeChannel(approvalsChannel);
+    };
+  }, [business?.id]);
+
   const businessName = business?.business_data?.businessName || business?.name || 'Launchfly Business';
   const currency = business?.business_data?.currency || '$';
 
-  const activeAgents = agents.filter((a) => a.hasActiveTask).length;
+  const activeAgentsCount = agents.filter((a) => a.hasActiveTask).length;
   const totalAgents = agents.length;
-  const agentLimit = initialStats.agentLimit || Math.max(totalAgents, 1);
+  const agentLimit = stats.agentLimit;
 
   return (
     <>
@@ -173,7 +315,7 @@ export default function ModernCommandCenter({
               <button onClick={() => setActiveTab('overview')} className={`hover:text-[#f5f4ef] transition-colors ${activeTab === 'overview' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>Overview</button>
               <button onClick={() => setActiveTab('agents')} className={`hover:text-[#f5f4ef] transition-colors flex items-center gap-2 ${activeTab === 'agents' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>
                 <span className="relative flex h-2 w-2">
-                  {activeAgents > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>}
+                  {activeAgentsCount > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>}
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#f97316]"></span>
                 </span>
                 Swarm Agents

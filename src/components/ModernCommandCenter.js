@@ -335,27 +335,23 @@ export default function ModernCommandCenter({
         </nav>
 
         {/* Main Content */}
-        <main className="relative z-10 px-8 py-6 md:py-8 max-w-[1100px] mx-auto space-y-8">
+        <main className="relative z-10 px-8 py-6 md:py-8 max-w-[1200px] mx-auto space-y-6">
           
           {/* Header Section */}
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#2a2a26] pb-5">
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-2 font-dm-mono text-[0.62rem] tracking-[0.16em] text-[#f97316] uppercase mb-2.5 px-2.5 py-1 border border-[#f97316]/30 bg-[#f97316]/10">
+              <div className="inline-flex items-center gap-2 font-dm-mono text-[0.62rem] tracking-[0.16em] text-[#f97316] uppercase mb-2 px-2.5 py-1 border border-[#f97316]/30 bg-[#f97316]/10">
                 <span className="w-[5px] h-[5px] bg-[#f97316] rounded-full animate-pulse shrink-0"></span>
-                Command Center Active
+                Swarm Active
               </div>
-              <h1 className="text-[clamp(2.25rem,6vw,3.75rem)] font-bebas uppercase leading-[0.92] tracking-[0.02em] text-[#f5f4ef]">
-                System <span className="text-[#f97316]">Overview</span>
+              <h1 className="text-[2.8rem] font-bebas uppercase leading-[0.92] tracking-[0.02em] text-[#f5f4ef]">
+                Command <span className="text-[#f97316]">Center</span>
               </h1>
-              <p className="mt-2.5 text-[#a8a79d] max-w-[520px] text-[0.95rem] md:text-[1rem] leading-snug font-light">
-                Monitor your autonomous agents, track revenue generation, and manage active customer conversations across the platform.
-              </p>
             </div>
             
             <div className="flex gap-3 shrink-0 w-full md:w-auto md:justify-end">
               <button type="button" className="btn-primary btn-primary-compact w-full md:w-auto justify-center">
-                <Zap size={16} />
-                Deploy Agent
+                <Zap size={16} /> Deploy
               </button>
             </div>
           </header>
@@ -363,221 +359,154 @@ export default function ModernCommandCenter({
           {/* Top Stats Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-[1.5px] bg-[#2a2a26] border-[1.5px] border-[#2a2a26]">
             {/* Stat Box 1 */}
-            <div className="bg-[#161614] p-[2rem] hover-border-orange group">
-              <div className="flex justify-between items-start mb-[0.3rem]">
-                <span className="font-dm-mono text-[0.78rem] tracking-[0.1em] text-[#7a7a70] uppercase">Pipeline Value</span>
-                <TrendingUp size={18} className="text-[#f97316]" />
+            <div className="bg-[#161614] p-[1.2rem] hover-border-orange group">
+              <div className="flex justify-between items-start mb-[0.1rem]">
+                <span className="font-dm-mono text-[0.7rem] tracking-[0.1em] text-[#7a7a70] uppercase">Revenue Pipeline</span>
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[1.3rem] font-bold text-[#f97316] font-dm-mono">{currency}</span>
-                <span className="text-[2.8rem] text-[#f97316] font-bebas leading-[1] tracking-[0.03em]">{(initialStats.pipeline || 0).toLocaleString()}</span>
+                <span className="text-[1.1rem] font-bold text-[#f97316] font-dm-mono">{currency}</span>
+                <span className="text-[2.2rem] text-[#f97316] font-bebas leading-[1] tracking-[0.03em]">{stats.pipeline.toLocaleString()}</span>
               </div>
             </div>
 
             {/* Stat Box 2 */}
-            <div className="bg-[#161614] p-[2rem] hover-border-orange group">
-              <div className="flex justify-between items-start mb-[0.3rem]">
-                <span className="font-dm-mono text-[0.78rem] tracking-[0.1em] text-[#7a7a70] uppercase">Active Agents</span>
-                <Workflow size={18} className="text-[#3b82f6]" />
+            <div className="bg-[#161614] p-[1.2rem] hover-border-orange group">
+              <div className="flex justify-between items-start mb-[0.1rem]">
+                <span className="font-dm-mono text-[0.7rem] tracking-[0.1em] text-[#7a7a70] uppercase">Swarm Health</span>
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{totalAgents}</span>
-                <span className="text-[#7a7a70] text-[0.85rem] font-dm-mono">/ {agentLimit} limits</span>
+                <span className="text-[2.2rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{activeAgentsCount}</span>
+                <span className="text-[#7a7a70] text-[0.8rem] font-dm-mono uppercase">Working</span>
               </div>
             </div>
 
             {/* Stat Box 3 */}
-            <div className="bg-[#161614] p-[2rem] hover-border-orange group">
-              <div className="flex justify-between items-start mb-[0.3rem]">
-                <span className="font-dm-mono text-[0.78rem] tracking-[0.1em] text-[#7a7a70] uppercase">Active Leads</span>
-                <Users size={18} className="text-[#a855f7]" />
+            <div className="bg-[#161614] p-[1.2rem] hover-border-orange group">
+              <div className="flex justify-between items-start mb-[0.1rem]">
+                <span className="font-dm-mono text-[0.7rem] tracking-[0.1em] text-[#7a7a70] uppercase">Active Leads</span>
               </div>
               <div className="flex items-baseline gap-[0.3rem]">
-                <span className="text-[2.8rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{initialStats.activeQuotes || 0}</span>
+                <span className="text-[2.2rem] text-[#f5f4ef] font-bebas leading-[1] tracking-[0.03em]">{stats.activeQuotes}</span>
               </div>
             </div>
           </div>
 
-          {/* Dashboard Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-10">
-            
-            {/* Left Column: Autonomous Agents */}
-            <div className="space-y-8">
-              <div className="flex justify-between items-end border-b border-[#2a2a26] pb-3">
-                <div>
-                  <div className="font-dm-mono text-[0.68rem] tracking-[0.22em] text-[#f97316] uppercase mb-[0.8rem]">Autonomous</div>
-                  <h2 className="text-[clamp(2.4rem,5vw,3.2rem)] font-bebas leading-[1] tracking-[0.02em] m-0">
-                    Swarm Operations
-                  </h2>
-                </div>
-                <button className="btn-ghost mb-2">
-                  View All Logs <ArrowUpRight size={14} />
-                </button>
-              </div>
-
-              {/* Agent Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-[1.5px] bg-[#2a2a26] border-[1.5px] border-[#2a2a26]">
-                {agents.length === 0 ? (
-                  <div className="bg-[#161614] p-[2rem] md:col-span-2 flex flex-col items-center justify-center gap-4 min-h-[240px]">
-                    <Bot size={32} className="text-[#7a7a70]" />
-                    <p className="text-[#7a7a70] font-dm-mono text-[0.85rem] tracking-[0.1em] uppercase text-center">
-                      No active assistants yet.<br />Deploy your first AI agent to begin.
-                    </p>
+          {/* Agent Swarm Section */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-[1.5px] bg-[#2a2a26] border-[1.5px] border-[#2a2a26]">
+            {agents.map((agent) => {
+              const Icon = getIcon(agent.iconKey);
+              const accent = agent.accentColor || '#22c55e';
+              const statusColor = agent.statusColor || accent;
+              const isActive = agent.hasActiveTask;
+              return (
+                <div key={agent.id} className="bg-[#161614] p-[1.5rem] relative group hover:bg-[#1c1c1a] transition-colors">
+                  <div className="absolute top-0 right-0 p-3">
+                    <span className="flex h-2 w-2 relative">
+                      {agent.pulse && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: statusColor }}></span>
+                      )}
+                      <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: statusColor }}></span>
+                    </span>
                   </div>
-                ) : (
-                  agents.map((agent) => {
-                    const Icon = getIcon(agent.iconKey);
-                    const accent = agent.accentColor || '#22c55e';
-                    const statusColor = agent.statusColor || accent;
-                    const isActive = agent.hasActiveTask;
-                    return (
-                      <div key={agent.id} className="bg-[#161614] p-[2rem] hover-border-orange relative">
-                        <div className="absolute top-0 right-0 p-4">
-                          <span className="flex h-3 w-3 relative">
-                            {agent.pulse && (
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: statusColor }}></span>
-                            )}
-                            <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: statusColor }}></span>
-                          </span>
-                        </div>
-                        <div className="text-[2rem] mb-[1rem] transition-colors duration-500" style={{ color: isActive ? accent : '#40403a' }}>
-                          <Icon size={32} />
-                        </div>
-                        <h3 className="text-[1.4rem] font-bebas tracking-[0.04em] mb-[0.6rem] text-[#f5f4ef]">{agent.name}</h3>
-                        <p className="text-[0.9rem] text-[#7a7a70] leading-[1.65] h-12 line-clamp-2">{agent.description}</p>
+                  <div className="text-[1.8rem] mb-[0.8rem] transition-colors duration-500" style={{ color: isActive ? accent : '#40403a' }}>
+                    <Icon size={24} />
+                  </div>
+                  <h3 className="text-[1.1rem] font-bebas tracking-[0.04em] mb-[0.2rem] text-[#f5f4ef] uppercase">{agent.name}</h3>
+                  <div className="flex justify-between font-dm-mono text-[0.6rem] tracking-[0.12em] uppercase mb-2.5">
+                    <span style={{ color: statusColor }} className="shrink-0">{agent.statusLabel}</span>
+                  </div>
 
-                        <div className="mt-4 pt-4 border-t border-[#2a2a26]">
-                          <div className="flex justify-between font-dm-mono text-[0.65rem] tracking-[0.12em] uppercase mb-2 gap-2">
-                            <span className="text-[#7a7a70] line-clamp-1 flex-1">Task: {agent.taskTitle}</span>
-                            <span style={{ color: statusColor }} className="shrink-0">{agent.statusLabel}</span>
-                          </div>
-                          {agent.statusMode === 'segmented' ? (
-                            <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden flex">
-                              <div className="h-full w-1/3" style={{ backgroundColor: statusColor }}></div>
-                              <div className="h-full w-2/3 border-l border-[#0a0a08]" style={{ backgroundColor: statusColor, opacity: 0.3 }}></div>
-                            </div>
-                          ) : agent.statusMode === 'progress' ? (
-                            <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                              <div
-                                className={agent.status === 'pending' ? 'h-full animate-pulse' : 'h-full transition-all'}
-                                style={{ backgroundColor: statusColor, width: `${Math.max(agent.progress, 5)}%` }}
-                              ></div>
-                            </div>
-                          ) : (
-                            <div className="w-full bg-[#0a0a08] h-1.5 overflow-hidden">
-                              <div className="h-full transition-all duration-700" style={{ backgroundColor: isActive ? accent : '#2a2a26', opacity: isActive ? 0.25 : 0.5, width: '100%' }}></div>
-                            </div>
-                          )}
-                        </div>
+                  <div className="mt-auto">
+                    {agent.statusMode === 'segmented' ? (
+                      <div className="w-full bg-[#0a0a08] h-1 overflow-hidden flex">
+                        <div className="h-full w-1/3" style={{ backgroundColor: statusColor }}></div>
+                        <div className="h-full w-2/3 border-l border-[#0a0a08]" style={{ backgroundColor: statusColor, opacity: 0.3 }}></div>
                       </div>
-                    );
-                  })
-                )}
-
-                {/* Add Agent CTA */}
-                <button className="bg-[#111110] hover:bg-[#161614] p-[2rem] flex flex-col items-center justify-center gap-4 transition-colors group min-h-[240px] cursor-pointer">
-                  <div className="text-[2rem] text-[#7a7a70] group-hover:text-[#f97316] transition-colors">
-                    <Zap size={32} />
-                  </div>
-                  <span className="font-dm-mono text-[0.8rem] tracking-[0.1em] uppercase text-[#7a7a70] group-hover:text-[#f5f4ef] transition-colors border-b border-[#2a2a26] group-hover:border-[#f97316] pb-1">Deploy New Agent</span>
-                </button>
-              </div>
-              
-              {/* Recent Activity Log */}
-              <div className="mt-[3.5rem] relative">
-                 <div className="font-dm-mono text-[0.68rem] tracking-[0.22em] text-[#f97316] uppercase mb-[0.8rem]">System Log</div>
-                 <div className="bg-[#111110] border-[1px] border-[#2a2a26] p-[2rem] font-dm-mono text-[0.85rem] space-y-4">
-                    {activities.length === 0 ? (
-                      <div className="text-[#7a7a70] text-center py-4">
-                        No agent activity yet. Once your assistants run, you&apos;ll see their tool calls and outcomes here in real-time.
+                    ) : agent.statusMode === 'progress' ? (
+                      <div className="w-full bg-[#0a0a08] h-1 overflow-hidden">
+                        <div
+                          className={agent.status === 'pending' ? 'h-full animate-pulse' : 'h-full transition-all'}
+                          style={{ backgroundColor: statusColor, width: `${Math.max(agent.progress, 5)}%` }}
+                        ></div>
                       </div>
                     ) : (
-                      activities.map((entry, idx) => (
-                        <div
-                          key={entry.id}
-                          className={`flex gap-4 items-start ${idx < activities.length - 1 ? 'pb-4 border-b border-[#2a2a26]' : ''}`}
-                        >
-                          <span className="text-[#7a7a70] shrink-0">{formatLogTime(entry.created_at)}</span>
-                          <span className="shrink-0" style={{ color: entry.color }}>[{entry.tag}]</span>
-                          <span className="text-[#c5c4bb] leading-[1.5] line-clamp-2">{entry.text}</span>
-                        </div>
-                      ))
-                    )}
-                 </div>
-              </div>
-            </div>
-
-            {/* Right Column: Customers & Actions */}
-            <div className="space-y-8">
-              <div className="flex justify-between items-end border-b border-[#2a2a26] pb-3">
-                <h2 className="text-[clamp(2rem,4vw,2.4rem)] font-bebas leading-[1] tracking-[0.02em] m-0">
-                  Live Action
-                </h2>
-              </div>
-
-              <div className="border-[1.5px] border-[#2a2a26] bg-[#2a2a26] gap-[1.5px] flex flex-col">
-                {initialLeads.length > 0 ? (
-                  initialLeads.slice(0, 5).map((lead) => {
-                    const badge = getStatusBadge(lead.status);
-                    return (
-                      <div key={lead.id} className="bg-[#161614] p-5 hover-border-orange cursor-pointer group">
-                        <div className="flex justify-between items-start mb-2 gap-3">
-                          <h4 className="font-bebas text-[1.2rem] text-[#f5f4ef] tracking-[0.04em] line-clamp-1">
-                            {getCustomerName(lead)}
-                          </h4>
-                          <span
-                            className="inline-block font-dm-mono text-[0.65rem] tracking-[0.12em] px-[0.6rem] py-[0.2rem] uppercase shrink-0 border"
-                            style={{ backgroundColor: badge.bg, borderColor: badge.border, color: badge.text }}
-                          >
-                            {badge.label}
-                          </span>
-                        </div>
-                        <p className="text-[0.92rem] text-[#7a7a70] line-clamp-1 mb-3">{getCustomerSummary(lead)}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[#7a7a70] text-[0.8rem] flex items-center gap-1">
-                            <Clock size={12}/> {formatTimeAgo(lead.updated_at || lead.created_at)}
-                          </span>
-                          <button className="text-[#f97316] opacity-0 group-hover:opacity-100 transition-opacity uppercase font-dm-mono text-[0.8rem] tracking-wider flex items-center gap-1">
-                            View <ChevronRight size={14} />
-                          </button>
-                        </div>
+                      <div className="w-full bg-[#0a0a08] h-1 overflow-hidden">
+                        <div className="h-full transition-all duration-700" style={{ backgroundColor: isActive ? accent : '#2a2a26', opacity: isActive ? 0.25 : 0.5, width: '100%' }}></div>
                       </div>
-                    );
-                  })
-                ) : (
-                  <div className="bg-[#161614] p-6 text-center">
-                    <p className="text-[#7a7a70] font-dm-mono text-[0.8rem] tracking-[0.1em] uppercase">
-                      No live leads yet. New conversations and bookings will appear here.
-                    </p>
+                    )}
+                    <div className="mt-2 text-[#7a7a70] font-dm-mono text-[0.55rem] tracking-[0.05em] uppercase truncate">
+                      {agent.taskTitle}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              );
+            })}
+          </div>
 
-              <div className="text-center">
-                <button className="btn-ghost">
-                  View All Customers
-                </button>
-              </div>
-              
-              {/* Quick Actions (Need Human Help) — only when there's a real pending approval */}
+          {/* Activity & Leads Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+            <div className="space-y-6">
+              {/* Quick Actions (Need Human Help) */}
               {pendingApproval && (
-                <div className="mt-8 bg-[#111110] border-t border-[#2a2a26] border-b border-[#2a2a26] relative overflow-hidden">
+                <div className="bg-[#111110] border border-[#f97316]/50 relative overflow-hidden">
                    <div className="absolute top-0 right-0 w-[55%] h-[120%] bg-[linear-gradient(135deg,transparent_40%,rgba(249,115,22,0.12)_100%)] border-l border-[rgba(249,115,22,0.2)] transform -skew-x-[8deg] pointer-events-none"></div>
-                   <div className="p-8 relative z-10">
-                     <h3 className="font-bebas text-[1.5rem] tracking-[0.04em] mb-2 text-[#f5f4ef]">Need Human Help?</h3>
-                     <p className="text-[#c5c4bb] text-[0.92rem] leading-[1.65] mb-6">
-                       {pendingApproval.count > 1
-                         ? `${pendingApproval.count} agents are waiting for your approval. `
-                         : 'Your AI is waiting for your approval before continuing. '}
-                       <span className="text-[#f5f4ef] line-clamp-2 block mt-2">&quot;{pendingApproval.question}&quot;</span>
+                   <div className="p-6 relative z-10">
+                     <h3 className="font-bebas text-[1.4rem] tracking-[0.04em] mb-1 text-[#f5f4ef]">Human Intervention Required</h3>
+                     <p className="text-[#c5c4bb] text-[0.85rem] leading-relaxed mb-4">
+                       {pendingApproval.question}
                      </p>
-                     <button className="btn-primary w-full justify-center">
-                       <Shield size={16} /> Review Approval
+                     <button className="btn-primary btn-primary-compact">
+                       <Shield size={14} /> Review & Approve
                      </button>
                    </div>
                 </div>
               )}
+
+              {/* System Log */}
+              <div className="space-y-4">
+                <div className="font-dm-mono text-[0.62rem] tracking-[0.22em] text-[#f97316] uppercase">Real-Time Intelligence</div>
+                <div className="bg-[#111110] border border-[#2a2a26] p-6 font-dm-mono text-[0.8rem] space-y-3 min-h-[400px]">
+                {activities.length === 0 ? (
+                  <div className="text-[#7a7a70] text-center py-10 italic">Waiting for swarm activity...</div>
+                ) : (
+                  activities.map((entry, idx) => (
+                    <div key={entry.id} className={`flex gap-4 items-start ${idx < activities.length - 1 ? 'pb-3 border-b border-[#2a2a26]/50' : ''}`}>
+                      <span className="text-[#4b4b44] shrink-0">{formatLogTime(entry.created_at)}</span>
+                      <span className="shrink-0 font-bold" style={{ color: entry.color }}>{entry.tag}</span>
+                      <span className="text-[#a8a79d] leading-relaxed">{entry.text}</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
+
+            {/* Recent Leads Sidebar */}
+            <div className="space-y-4">
+              <div className="font-dm-mono text-[0.62rem] tracking-[0.22em] text-[#f97316] uppercase">Inbound Pipeline</div>
+              <div className="bg-[#111110] border border-[#2a2a26] divide-y divide-[#2a2a26]">
+                {leads.length === 0 ? (
+                  <div className="p-10 text-center text-[#7a7a70] text-[0.85rem]">No active leads.</div>
+                ) : (
+                  leads.slice(0, 8).map((lead) => {
+                    const badge = getStatusBadge(lead.status);
+                    return (
+                      <div key={lead.id} className="p-4 hover:bg-[#161614] transition-colors cursor-pointer group">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-[#f5f4ef] font-bebas text-[1.1rem] tracking-wide group-hover:text-[#f97316] transition-colors">
+                            {getCustomerName(lead)}
+                          </span>
+                          <span className="text-[0.6rem] font-dm-mono uppercase px-1.5 py-0.5 rounded" style={{ backgroundColor: badge.bg, color: badge.text, border: `1px solid ${badge.border}` }}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <div className="text-[0.75rem] text-[#7a7a70] truncate">{getCustomerSummary(lead)}</div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
 
           </div>
         </main>

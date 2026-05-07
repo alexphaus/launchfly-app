@@ -5,7 +5,7 @@ import {
   Bot, TrendingUp, Users,
   ChevronRight, Zap, Settings,
   Clock, ArrowUpRight,
-  Workflow, Database, PhoneCall, Shield,
+  Workflow, Database, PhoneCall, Shield, MessageSquare
 } from 'lucide-react';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ const ICON_MAP = {
   trending: TrendingUp,
   users: Users,
   zap: Zap,
+  message: MessageSquare,
 };
 
 function getIcon(key) {

@@ -97,7 +97,10 @@ function deriveAgentVisuals(asst) {
     if (/voice|call|caller|phone|retell/.test(lowerName)) {
         return { iconKey: 'phone', accentColor: '#38bdf8' };
     }
-    if (/reception|support|operator|customer/.test(lowerName) || /customer|satisfaction|support/.test(lowerGoal)) {
+    if (/reception/.test(lowerName)) {
+        return { iconKey: 'message', accentColor: '#fbbf24' };
+    }
+    if (/support|operator|customer/.test(lowerName) || /customer|satisfaction|support/.test(lowerGoal)) {
         return { iconKey: 'users', accentColor: '#14b8a6' };
     }
     if (/market|growth|sales|outreach/.test(lowerName) || /close_sale|drive_growth|drive_traffic|cold_outreach/.test(lowerGoal)) {

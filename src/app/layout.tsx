@@ -34,7 +34,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false, // App-like feel, prevents zooming
-  themeColor: '#2563eb',
+  themeColor: '#f97316',
 };
 
 export default function RootLayout({

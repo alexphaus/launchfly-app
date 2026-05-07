@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bot, TrendingUp, Users,
   ChevronRight, Zap, Settings,
@@ -92,6 +92,12 @@ export default function ModernCommandCenter({
   pendingApproval = null,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
+
+  useEffect(() => {
+    if (business?.id) {
+      localStorage.setItem('lastBusinessId', business.id);
+    }
+  }, [business?.id]);
 
   const businessName = business?.business_data?.businessName || business?.name || 'Launchfly Business';
   const currency = business?.business_data?.currency || '$';

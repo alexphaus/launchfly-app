@@ -103,6 +103,8 @@ export default function ModernCommandCenter({
   return (
     <>
       <style dangerouslySetInnerHTML={{__html: `
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap');
+        
         .font-bebas { font-family: 'Bebas Neue', sans-serif; }
         .font-dm-mono { font-family: 'DM Mono', monospace; }
         .font-dm-sans { font-family: 'DM Sans', sans-serif; }

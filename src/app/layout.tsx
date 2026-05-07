@@ -18,10 +18,10 @@ export const metadata: Metadata = {
   },
   description: "The WhatsApp OS for Service Professionals. Manage leads, bookings, and payments.",
   icons: {
-    icon: "/icon-512.png",
-    apple: "/icon-512.png",
+    icon: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>",
+    apple: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>",
   },
-  manifest: '/manifest.json',
+  manifest: '/manifest.json', // Next.js generates this from manifest.ts
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -33,8 +33,8 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false,
-  themeColor: '#0a0a08', // Match the dashboard background
+  userScalable: false, // App-like feel, prevents zooming
+  themeColor: '#2563eb',
 };
 
 export default function RootLayout({
@@ -44,11 +44,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet" />
-      </head>
       <body className={inter.className}>
         {children}
         <Script

@@ -50,6 +50,19 @@ export default function RootLayout({
           src="https://tally.so/widgets/embed.js"
           strategy="lazyOnload"
         />
+        <Script id="register-sw" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                  console.log('SW registered');
+                }, function(err) {
+                  console.log('SW failed: ', err);
+                });
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );

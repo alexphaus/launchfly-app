@@ -2,23 +2,25 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'Launchfly Command Center',
+        name: 'Launchfly Swarm',
         short_name: 'Launchfly',
-        description: 'The WhatsApp OS for Service Professionals',
-        start_url: '/dashboard',
+        description: 'Autonomous Agent Orchestrator',
+        start_url: '/command',
         display: 'standalone',
-        background_color: '#ffffff',
-        theme_color: '#2563eb',
+        background_color: '#0a0a08',
+        theme_color: '#f97316',
         icons: [
             {
                 src: '/icon-192.png',
                 sizes: '192x192',
                 type: 'image/png',
+                purpose: 'any maskable'
             },
             {
                 src: '/icon-512.png',
                 sizes: '512x512',
                 type: 'image/png',
+                purpose: 'any maskable'
             },
         ],
     };

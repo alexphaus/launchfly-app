@@ -310,22 +310,14 @@ export default function ModernCommandCenter({
         {/* Nav */}
         <nav className="sticky top-0 z-50 border-b border-[#2a2a26] bg-[#0a0a08]/88 backdrop-blur-[12px] px-8 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <span className="font-bebas tracking-[0.08em] text-[#f97316] text-[1.6rem]">
-              {businessName}
+            <span className="font-bebas tracking-[0.08em] text-[#f97316] text-[1.6rem] flex items-center">
+              LAUNCH<span className="text-[#f5f4ef]">FLY</span>
             </span>
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="hidden md:flex items-center gap-6 text-[0.85rem] font-dm-mono text-[#7a7a70] uppercase tracking-wider">
-              <button onClick={() => setActiveTab('overview')} className={`hover:text-[#f5f4ef] transition-colors ${activeTab === 'overview' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>Overview</button>
-              <button onClick={() => setActiveTab('agents')} className={`hover:text-[#f5f4ef] transition-colors flex items-center gap-2 ${activeTab === 'agents' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>
-                <span className="relative flex h-2 w-2">
-                  {activeAgentsCount > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f97316] opacity-75"></span>}
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#f97316]"></span>
-                </span>
-                Swarm Agents
-              </button>
-              <button onClick={() => setActiveTab('customers')} className={`hover:text-[#f5f4ef] transition-colors ${activeTab === 'customers' ? 'text-[#f5f4ef] border-b border-[#f97316] pb-1' : ''}`}>Customers</button>
+            <div className="hidden md:flex items-center gap-6 text-[0.85rem] font-dm-mono text-[#7a7a70] uppercase tracking-widest opacity-60">
+              Swarm Command v2.4
             </div>
             
             <button className="bg-[#f97316] text-[#0a0a08] font-bold text-[0.85rem] px-[1.4rem] py-[0.6rem] tracking-[0.04em] uppercase transition-colors hover:bg-[#fb923c]" style={{ clipPath: 'polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%)' }}>

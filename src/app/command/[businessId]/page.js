@@ -57,9 +57,15 @@ function extractAgentNameFromRole(role) {
     if (!role) return null;
     const dashIdx = role.search(/\s[—–-]\s/);
     if (dashIdx > 0 && dashIdx < 60) return role.substring(0, dashIdx).trim();
+    // Match "You are the [Name]" or "You are [Name]"
     const m = role.match(/You are (?:the |an? )?(?:AI )?([^.\n]+?)(?:\s+for\s|\s+working\s|\.|\n)/i);
     if (m) return m[1].trim().substring(0, 40);
     return role.substring(0, 30).trim();
+}
+
+function normalizeName(name) {
+    if (!name) return '';
+    return name.toLowerCase().replace(/^(the|a|an)\s+/i, '').trim();
 }
 
 const GOAL_DESCRIPTIONS = {
@@ -301,16 +307,17 @@ export default async function CommandCenterPage({ params }) {
             const description = deriveDescription(asst);
 
             const matched = tasks.filter((t) => {
-                const taskName = extractAgentNameFromRole(t.role);
-                if (taskName && asst.name && taskName.toLowerCase() === asst.name.toLowerCase()) return true;
+                const taskAgentName = extractAgentNameFromRole(t.role);
+                if (taskAgentName && asst.name && normalizeName(taskAgentName) === normalizeName(asst.name)) return true;
                 // Tasks without an explicit role default to the active assistant of the business
+                // BUT only if they are the most recent task for the business (to avoid matching old tasks)
                 if (!t.role) return true;
                 return false;
             });
 
-            const currentTask = matched.find((t) => ACTIVE_TASK_STATUSES.has(t.status)) || null;
-            const lastTask = matched.find((t) => !ACTIVE_TASK_STATUSES.has(t.status)) || null;
-            const taskForUi = currentTask || lastTask;
+            // Pick the absolute most recent task for this agent
+            const taskForUi = matched[0] || null;
+            const currentTask = (taskForUi && ACTIVE_TASK_STATUSES.has(taskForUi.status)) ? taskForUi : null;
 
             const ui = statusToUi(taskForUi?.status);
             const stepsUsed = currentTask?.steps_used || 0;

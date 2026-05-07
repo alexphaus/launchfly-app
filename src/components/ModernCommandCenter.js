@@ -47,6 +47,11 @@ function formatLogTime(dateStr) {
   return d.toLocaleTimeString('en-GB', { hour12: false });
 }
 
+function normalizeName(name) {
+  if (!name) return '';
+  return name.toLowerCase().replace(/^(the|a|an)\s+/i, '').trim();
+}
+
 const STATUS_BADGE = {
   // Customer / lead pipeline statuses → badge tint
   lead: { label: 'New Lead', bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.25)', text: '#f97316' },
@@ -158,7 +163,7 @@ export default function ModernCommandCenter({
 
           if (taskAgentName) {
             setAgents(prev => prev.map(agent => {
-              if (agent.name && agent.name.toLowerCase() === taskAgentName.toLowerCase()) {
+              if (agent.name && normalizeName(agent.name) === normalizeName(taskAgentName)) {
                 // Update this agent with task info
                 const ACTIVE_STATUSES = new Set(['running', 'pending', 'paused', 'waiting_approval', 'waiting_subtask']);
                 const isActive = ACTIVE_STATUSES.has(task.status);

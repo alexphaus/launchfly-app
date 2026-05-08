@@ -429,18 +429,18 @@ export async function executeAgentTask(taskId: string): Promise<{
   let repName: string | undefined;
   if (row.role) {
     // Extract a short display name from the role string.
-    // Patterns: "You are the AI Chief of Staff" → "Chief of Staff"
-    //           "Trend Scout — Weekly..." → "Trend Scout"
-    const dashIdx = row.role.search(/\s[—–-]\s/);
+    // Strip "You are" prefix first: "You are The Researcher — ..." → "The Researcher"
+    const cleanedRole = row.role.replace(/^You are\s+/i, '');
+    const dashIdx = cleanedRole.search(/\s[—–-]\s/);
     if (dashIdx > 0 && dashIdx < 60) {
-      repName = row.role.substring(0, dashIdx).trim();
+      repName = cleanedRole.substring(0, dashIdx).trim();
     } else {
-      // Try to extract role title from "You are the [ROLE] for ..."
-      const roleMatch = row.role.match(/You are (?:the |an? )?(?:AI )?(.+?)(?:\s+for\s|\s+working\s|\.\s|\n)/i);
+      // Try to extract role title from "[Name] for ..." or "[Name]. ..."
+      const roleMatch = cleanedRole.match(/^(?:the |an? )?(?:AI )?(.+?)(?:\s+for\s|\s+working\s|\.\s|\n)/i);
       if (roleMatch) {
         repName = roleMatch[1].trim().substring(0, 40);
       } else {
-        repName = row.role.substring(0, 30).trim();
+        repName = cleanedRole.substring(0, 30).trim();
       }
     }
   }

@@ -45,7 +45,7 @@ export async function generateMetadata({ params }) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-const MAX_AGENT_STEPS = 80; // mirrors workflow-runner's MAX_TOTAL_STEPS
+const MAX_AGENT_STEPS = 10_000; // mirrors workflow-runner's MAX_TOTAL_STEPS
 
 const ACTIVE_TASK_STATUSES = new Set([
     'running', 'pending', 'paused', 'waiting_approval', 'waiting_subtask',
@@ -55,12 +55,14 @@ const PLAN_AGENT_LIMIT = { starter: 1, pro: 3, scale: 10 };
 
 function extractAgentNameFromRole(role) {
     if (!role) return null;
-    const dashIdx = role.search(/\s[—–-]\s/);
-    if (dashIdx > 0 && dashIdx < 60) return role.substring(0, dashIdx).trim();
-    // Match "You are the [Name]" or "You are [Name]"
-    const m = role.match(/You are (?:the |an? )?(?:AI )?([^.\n]+?)(?:\s+for\s|\s+working\s|\.|\n)/i);
+    // Strip common preamble: "You are The Researcher — ..."
+    let cleaned = role.replace(/^You are\s+/i, '');
+    const dashIdx = cleaned.search(/\s[—–-]\s/);
+    if (dashIdx > 0 && dashIdx < 60) return cleaned.substring(0, dashIdx).trim();
+    // Match "[Name] for this business" or "[Name]. ..."
+    const m = cleaned.match(/^(?:the |an? )?(?:AI )?([^.\n]+?)(?:\s+for\s|\s+working\s|\.|\n)/i);
     if (m) return m[1].trim().substring(0, 40);
-    return role.substring(0, 30).trim();
+    return cleaned.substring(0, 30).trim();
 }
 
 function normalizeName(name) {

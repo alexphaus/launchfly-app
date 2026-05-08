@@ -153,11 +153,13 @@ export default function ModernCommandCenter({
 
           // Extract agent name from role to match with our local agents state
           const role = task.role || '';
-          const dashIdx = role.search(/\s[—–-]\s/);
+          // Strip "You are" prefix before matching dash pattern
+          const cleanedRole = role.replace(/^You are\s+/i, '');
+          const dashIdx = cleanedRole.search(/\s[—–-]\s/);
           let taskAgentName = null;
-          if (dashIdx > 0 && dashIdx < 60) taskAgentName = role.substring(0, dashIdx).trim();
+          if (dashIdx > 0 && dashIdx < 60) taskAgentName = cleanedRole.substring(0, dashIdx).trim();
           else {
-            const m = role.match(/You are (?:the |an? )?(?:AI )?([^.\n]+?)(?:\s+for\s|\s+working\s|\.|\n)/i);
+            const m = cleanedRole.match(/^(?:the |an? )?(?:AI )?([^.\n]+?)(?:\s+for\s|\s+working\s|\.|\n)/i);
             if (m) taskAgentName = m[1].trim().substring(0, 40);
           }
 
@@ -179,7 +181,7 @@ export default function ModernCommandCenter({
                 else if (task.status === 'failed') ui = { label: 'Failed', color: '#ef4444', mode: 'idle', pulse: false };
 
                 const progress = isActive
-                  ? Math.min(100, Math.round(((task.steps_used || 0) / 80) * 100) || (task.status === 'pending' ? 5 : 25))
+                  ? Math.min(100, Math.round(((task.steps_used || 0) / 10_000) * 100) || (task.status === 'pending' ? 5 : 25))
                   : 0;
 
                 return {

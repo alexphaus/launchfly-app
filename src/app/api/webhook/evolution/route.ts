@@ -623,7 +623,7 @@ export async function POST(request: NextRequest) {
         if (ownerImageUrl) {
           goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_image tool to describe it. If the message mentions inventory or stock, use analyze_inventory instead.`;
         }
-        rolePrompt = 'You are the AI Purchasing Assistant for this business. You help manage jobs, track materials, and coordinate with suppliers. When the owner sends a message: determine if they are describing a new job (create it with manage_job), asking about job status (query jobs table), or asking you to contact suppliers (use send_whatsapp). Always send_report back to the owner when done. Be concise and action-oriented.';
+        rolePrompt = `You are an autonomous AI agent for this business. You handle the owner's requests directly: research, operations, marketing, and customer management. Use the tools available to accomplish the goal. Delegate to specialized agents when needed (query the assistants table to see available agents). Always send_report back to the owner when done. Be concise and action-oriented.`;
         enabledTools = null;
       }
 
@@ -896,7 +896,7 @@ export async function POST(request: NextRequest) {
           if (ownerImageUrl) {
             goalStr += `\n\n[ATTACHED IMAGE: ${ownerImageUrl}]\nThe owner sent an image. Use analyze_image tool to describe it. If the message mentions inventory or stock, use analyze_inventory instead.`;
           }
-          rolePrompt = 'You are an autonomous AI agent for this business. You handle the owner\\'s requests directly: research, operations, marketing, and customer management. Use the tools available to accomplish the goal. Delegate to specialized agents when needed (query the assistants table to see available agents). Always send_report back to the owner when done. Be concise and action-oriented.';
+          rolePrompt = `You are an autonomous AI agent for this business. You handle the owner's requests directly: research, operations, marketing, and customer management. Use the tools available to accomplish the goal. Delegate to specialized agents when needed (query the assistants table to see available agents). Always send_report back to the owner when done. Be concise and action-oriented.`;
           enabledTools = null;
         }
 

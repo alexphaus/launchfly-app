@@ -282,7 +282,7 @@ export async function handleAIResponse(input: AIBrainInput): Promise<AIBrainResu
       .select('system_prompt, knowledge_base, tools_enabled, custom_rules, tone, goal')
       .eq('business_id', businessId)
       .eq('active', true)
-      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+      .not('name', 'in', '("The Researcher","The Operator","The Marketer")')
       .limit(1)
       .maybeSingle(),
   ]);
@@ -504,7 +504,7 @@ export async function handleAIFollowup(input: AIFollowupInput): Promise<AIFollow
       .select('system_prompt, knowledge_base, tools_enabled, custom_rules, tone, goal')
       .eq('business_id', businessId)
       .eq('active', true)
-      .not('name', 'in', '("Purchasing OS","Chief of Staff","Marketing OS","Content & Growth OS")')
+      .not('name', 'in', '("The Researcher","The Operator","The Marketer")')
       .limit(1)
       .maybeSingle(),
   ]);

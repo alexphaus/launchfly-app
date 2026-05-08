@@ -262,11 +262,11 @@ Do NOT guess columns. If unsure, select * with limit 1 first.`,
     type: 'function' as const,
     function: {
       name: 'delegate_task',
-      description: 'Delegate a specific task to another AI assistant (e.g. Marketing OS, Purchasing OS). The sub-agent runs in the background. You will receive a job_id which you can use with check_subtask_status to poll for the result. DO NOT use this if your main goal involves a specific output format that the sub-agent does not know about.',
+      description: 'Delegate a specific task to another AI assistant (e.g. The Researcher, The Operator, The Marketer, The Receptionist). The sub-agent runs in the background. You will receive a job_id which you can use with check_subtask_status to poll for the result. DO NOT use this if your main goal involves a specific output format that the sub-agent does not know about.',
       parameters: {
         type: 'object',
         properties: {
-          assistantConfigName: { type: 'string', description: 'The exact name of the assistant config in the database (e.g. "Purchasing OS", "Marketing OS")' },
+          assistantConfigName: { type: 'string', description: 'The exact name of the assistant config in the database (e.g. "The Researcher", "The Operator", "The Marketer", "The Receptionist")' },
           instruction: { type: 'string', description: 'A detailed prompt describing what the sub-agent needs to accomplish.' },
           async_mode: { type: 'boolean', description: 'Set to true. The sub-agent will run in the background and you will receive a job_id.' },
         },
@@ -2145,7 +2145,7 @@ async function executeDelegateTask(
       .maybeSingle();
 
     if (!assistant) {
-      return `Failed: Could not find an assistant named "${assistantConfigName}". Available ones typically are "Purchasing OS", "Marketing OS", etc.`;
+      return `Failed: Could not find an assistant named "${assistantConfigName}". Available ones are typically "The Researcher", "The Operator", "The Marketer", "The Receptionist". Query the assistants table to see all available agents.`;
     }
 
     const qstashToken = process.env.QSTASH_TOKEN;

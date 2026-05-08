@@ -45,10 +45,10 @@ function getSupabase() {
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
-const MAX_TOTAL_STEPS = 80;
-const BUDGET_WARNING_STEPS = 5;
-const RESEARCH_SOFT_CAP = 8;
-const RESEARCH_HARD_CAP = 14;
+const MAX_TOTAL_STEPS = 10_000;       // Effectively unlimited — agents run until done
+const BUDGET_WARNING_STEPS = 50;
+const RESEARCH_SOFT_CAP = 50;
+const RESEARCH_HARD_CAP = 100;
 const TOOL_RESULT_MAX = 6000;
 const TOOL_TIMEOUT_MS = 25_000; // More generous — no wall-clock pressure
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {

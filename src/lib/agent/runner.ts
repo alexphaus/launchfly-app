@@ -46,13 +46,13 @@ function getSupabase() {
 // ─── Constants ───────────────────────────────────────────────────────────
 
 const MAX_STEPS_PER_INVOCATION = 12;  // 12 steps — reduces continuation gaps (biggest perf win)
-const MAX_TOTAL_STEPS = 80;           // Hard cap across all continuations
+const MAX_TOTAL_STEPS = 10_000;       // Effectively unlimited — agents run until done (safety: owner can send 'stop' via WhatsApp)
 const AGENT_MODEL = 'deepseek-chat';
 const WALL_CLOCK_LIMIT_MS = 290_000;  // 290s (Vercel Pro w/ Fluid Compute default is 300s, 10s buffer)
 const STALE_TASK_MINUTES = 2;         // Auto-resume tasks stuck longer than this (Vercel max=60s, so 2min is generous)
-const BUDGET_WARNING_STEPS = 5;       // Warn agent to wrap up when this many steps remain globally
-const RESEARCH_SOFT_CAP = 8;          // After this many search/scrape steps, nudge to wrap up
-const RESEARCH_HARD_CAP = 14;         // After this many, forcefully demand send_report
+const BUDGET_WARNING_STEPS = 50;      // Warn agent to wrap up when this many steps remain globally
+const RESEARCH_SOFT_CAP = 50;         // After this many search/scrape steps, nudge to wrap up
+const RESEARCH_HARD_CAP = 100;        // After this many, forcefully demand send_report
 const TOOL_RESULT_MAX = 6000;         // Max chars per tool result stored in messages
 const TOOL_TIMEOUT_MS = 12_000;       // Max time for a single tool execution (12s — fail fast)
 // Some tools legitimately need more time (e.g. Apify actor runs, browser automation)

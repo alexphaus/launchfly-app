@@ -233,6 +233,17 @@ export async function POST(request: Request) {
             return Response.json({ error: bizErr.message }, { status: 500 });
         }
 
+        // Auto-provision AI agents for the new business
+        const { error: provisionErr } = await supabase.rpc('provision_business_os_agents', {
+            target_business_id: business.id,
+        });
+        if (provisionErr) {
+            console.warn(`⚠️ Agent provisioning failed for ${business.id}:`, provisionErr.message);
+            // Non-fatal — business still works, agents can be provisioned later
+        } else {
+            console.log(`🤖 Provisioned agents for ${business.id}`);
+        }
+
         const previewUrl = `https://${subdomain}.launchfly.ai/quote`;
         const duration = Date.now() - startTime;
 

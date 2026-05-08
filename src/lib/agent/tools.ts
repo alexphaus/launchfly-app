@@ -3323,22 +3323,28 @@ async function executeUpdateInstructions(
   if (cleaned.length < 5) return 'Rule too short. Provide a clear, specific instruction (at least 5 characters).';
   if (cleaned.length > 300) return 'Rule too long. Keep it under 300 characters — be concise.';
 
-  // Try to find the specific assistant that is running (by name), else fall back to any active one
+  // Try to find the specific assistant that is running (by name).
+  // When running as a delegated sub-agent, the assistant may have active=false
+  // (only The Receptionist is permanently active). So when we know the name,
+  // query by name WITHOUT filtering on active — the agent IS running, it's
+  // just not the "default inbound" assistant.
+  // Fall back to any active assistant only when assistantName is unknown.
   let query = supabase
     .from('assistants')
     .select('id, custom_rules')
-    .eq('business_id', businessId)
-    .eq('active', true);
+    .eq('business_id', businessId);
 
   if (assistantName) {
     query = query.eq('name', assistantName);
+  } else {
+    query = query.eq('active', true);
   }
 
   const { data: assistant, error: fetchErr } = await query
     .limit(1)
     .maybeSingle();
 
-  if (fetchErr || !assistant) return `Failed to find active assistant: ${fetchErr?.message || 'none found'}`;
+  if (fetchErr || !assistant) return `Failed to find assistant${assistantName ? ` "${assistantName}"` : ''}: ${fetchErr?.message || 'none found'}`;
 
   const rules: string[] = (assistant.custom_rules as string[]) || [];
 

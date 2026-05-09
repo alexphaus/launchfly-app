@@ -48,7 +48,7 @@ const INTERNAL_TOOLS = new Set(['save_leads', 'search_google_maps', 'send_whatsa
  * - If enabledTools is undefined/null, ALL tools are included (backwards compat for Launchfly).
  */
 export function getToolsForAgent(enabledTools?: string[] | null) {
-  if (!enabledTools) return AGENT_TOOLS; // legacy: all tools
+  if (!enabledTools || enabledTools.length === 0) return AGENT_TOOLS; // null or empty = all tools
   const extras = new Set(enabledTools);
   return AGENT_TOOLS.filter(t => {
     const name = t.function.name;
@@ -2156,7 +2156,7 @@ async function executeDelegateTask(
     const qstashBase = process.env.QSTASH_URL || 'https://qstash.upstash.io';
 
     const rawTools = assistant.tools_enabled;
-    const enabledTools = Array.isArray(rawTools) ? rawTools.map(String) : [];
+    const enabledTools = (Array.isArray(rawTools) && rawTools.length > 0) ? rawTools.map(String) : null;
 
     // Create sub-task row in DB so fire-and-forget tasks are still tracked
     const subTaskId = crypto.randomUUID();

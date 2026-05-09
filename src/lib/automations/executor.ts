@@ -1580,8 +1580,8 @@ CUSTOMER NAME: ${customerName}
       let goal = (cfg.agentGoal as string) ? fillVars(cfg.agentGoal as string, ctx) : '';
       const role = (cfg.agentRole as string) || undefined;
       const enabledTools: string[] | null = cfg.agentTools === '*' ? null
-        : Array.isArray(cfg.agentTools) ? (cfg.agentTools as string[])
-        : [];
+        : Array.isArray(cfg.agentTools) && (cfg.agentTools as string[]).length > 0 ? (cfg.agentTools as string[])
+        : null;  // Default = all tools (null = universal access)
 
       if (!goal) return { ok: false, detail: 'No agent goal specified' };
 

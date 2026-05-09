@@ -324,7 +324,7 @@ export async function createAgentTask(params: {
     tool_log: [],
     result: null,
     owner_phone: params.ownerPhone || null,
-    enabled_tools: params.enabledTools || null,
+    enabled_tools: (params.enabledTools && params.enabledTools.length > 0) ? params.enabledTools : null,
     parent_task_id: params.parentTaskId || null,
   });
 

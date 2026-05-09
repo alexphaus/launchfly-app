@@ -47,6 +47,42 @@ function formatLogTime(dateStr) {
   return d.toLocaleTimeString('en-GB', { hour12: false });
 }
 
+// Humanize tool calls for the activity log (mirrors page.js)
+function humanizeTool(toolName, args) {
+  const name = toolName || 'tool';
+  const a = args || {};
+  switch (name) {
+    case 'search_web': return `Searched web for "${(a.query || '').toString().substring(0, 60)}"`;
+    case 'scrape_page': return `Scraped ${(a.url || '').toString().replace(/^https?:\/\//, '').substring(0, 60)}`;
+    case 'search_google_maps': return `Searched Google Maps for "${(a.query || '').toString().substring(0, 50)}"`;
+    case 'save_leads': return `Saved leads to pipeline${a.leads ? ` (${Array.isArray(a.leads) ? a.leads.length : 1})` : ''}`;
+    case 'save_memory': return `Saved memory: ${(a.content || '').toString().substring(0, 60)}`;
+    case 'search_memory': return `Recalled memories: "${(a.query || '').toString().substring(0, 60)}"`;
+    case 'send_whatsapp': return `Sent WhatsApp message`;
+    case 'send_email': return `Sent email${a.subject ? `: ${a.subject}` : ''}`;
+    case 'send_report': return `Delivered report to owner`;
+    case 'make_call': return `Initiated call to lead`;
+    case 'manage_calendar': return `Updated calendar`;
+    case 'process_payment': return `Processed payment`;
+    case 'request_approval': return `Requested approval from owner`;
+    case 'delegate_task': return `Delegated to sub-agent: ${(a.goal || a.instruction || '').toString().substring(0, 50)}`;
+    case 'query_database': return `Queried database (${a.table || 'records'})`;
+    case 'execute_python': return `Ran Python analysis`;
+    case 'browse_web': return `Browsed web`;
+    case 'analyze_image': return `Analyzed image`;
+    case 'process_document': return `Processed document`;
+    case 'generate_media': return `Generated ${a.media_type || 'image'}`;
+    case 'post_social': return `Posted to ${a.platform || 'social media'}`;
+    case 'generate_document': return `Generated ${a.format || 'document'}`;
+    case 'deep_research': return `Deep research: ${(a.question || '').toString().substring(0, 50)}`;
+    case 'translate': return `Translated text`;
+    case 'manage_job': return `Updated job tracking`;
+    case 'manage_project': return `Updated project`;
+    case 'update_instructions': return `Updated agent rules`;
+    default: return `Used ${name}`;
+  }
+}
+
 function normalizeName(name) {
   if (!name) return '';
   return name.toLowerCase().replace(/^(the|a|an)\s+/i, '').trim();
@@ -180,8 +216,10 @@ export default function ModernCommandCenter({
                 else if (task.status === 'completed') ui = { label: 'Completed', color: '#9ca3af', mode: 'idle', pulse: false };
                 else if (task.status === 'failed') ui = { label: 'Failed', color: '#ef4444', mode: 'idle', pulse: false };
 
+                // Log-scaled progress: looks meaningful even with 10k max steps
+                // step 1 → ~5%, step 10 → ~25%, step 50 → ~42%, step 200 → ~58%, step 1000 → ~75%
                 const progress = isActive
-                  ? Math.min(100, Math.round(((task.steps_used || 0) / 10_000) * 100) || (task.status === 'pending' ? 5 : 25))
+                  ? Math.min(100, Math.max(5, Math.round(Math.log10(Math.max(task.steps_used || 1, 1)) / Math.log10(10000) * 100)))
                   : 0;
 
                 return {
@@ -202,16 +240,22 @@ export default function ModernCommandCenter({
 
           // Also update activity log if there's a tool call
           if (task.tool_log && Array.isArray(task.tool_log) && task.tool_log.length > 0) {
-            const lastTool = task.tool_log[task.tool_log.length - 1];
-            if (lastTool && lastTool.tool && !lastTool.tool.startsWith('__')) {
-              const newActivity = {
-                id: `log-${task.id}-${Date.now()}`,
+            // Deduplicate: track last-seen tool_log length per task
+            const lastSeenKey = `__lastToolLogLen_${task.id}`;
+            const prevLen = parseInt(sessionStorage.getItem(lastSeenKey) || '0', 10);
+            const newEntries = task.tool_log.slice(prevLen);
+            sessionStorage.setItem(lastSeenKey, String(task.tool_log.length));
+
+            const validEntries = newEntries.filter(tl => tl?.tool && !tl.tool.startsWith('__'));
+            if (validEntries.length > 0) {
+              const newActivities = validEntries.map((tl, i) => ({
+                id: `log-${task.id}-${Date.now()}-${i}`,
                 tag: taskAgentName ? taskAgentName.substring(0, 14) : 'Agent',
                 color: '#3b82f6',
-                text: `Used ${lastTool.tool}`, // Simplified for now
-                created_at: new Date().toISOString(),
-              };
-              setActivities(prev => [newActivity, ...prev].slice(0, 8));
+                text: humanizeTool(tl.tool, tl.args),
+                created_at: tl.timestamp || new Date().toISOString(),
+              }));
+              setActivities(prev => [...newActivities.reverse(), ...prev].slice(0, 8));
             }
           }
         }

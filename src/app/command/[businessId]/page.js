@@ -324,7 +324,7 @@ export default async function CommandCenterPage({ params }) {
             const ui = statusToUi(taskForUi?.status);
             const stepsUsed = currentTask?.steps_used || 0;
             const progress = currentTask
-                ? Math.min(100, Math.round((stepsUsed / MAX_AGENT_STEPS) * 100) || (currentTask.status === 'pending' ? 5 : 25))
+                ? Math.min(100, Math.max(5, Math.round(Math.log10(Math.max(stepsUsed, 1)) / Math.log10(MAX_AGENT_STEPS) * 100)))
                 : 0;
 
             return {

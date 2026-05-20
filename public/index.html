@@ -84,6 +84,12 @@
 
   .nav-cta:hover { background: var(--orange-hot); }
 
+  @keyframes btnPulse {
+    0% { box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
+    70% { box-shadow: 0 0 0 12px rgba(249,115,22,0); }
+    100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
+  }
+
   /* ---- HERO ---- */
   .hero {
     min-height: 100vh;
@@ -195,6 +201,7 @@
     transition: all 0.2s;
     position: relative;
     overflow: hidden;
+    animation: btnPulse 2s infinite;
   }
 
   .btn-primary::after {
@@ -222,6 +229,67 @@
   }
 
   .btn-ghost:hover { color: var(--white); border-color: var(--white); }
+
+  /* Hero Social Proof */
+  .hero-social-proof {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    margin-top: 1.8rem;
+  }
+
+  .avatars {
+    display: flex;
+    align-items: center;
+  }
+
+  .avatars img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--black);
+    margin-left: -12px;
+    object-fit: cover;
+  }
+
+  .avatars img:first-child { margin-left: 0; }
+
+  .avatar-more {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--black);
+    background: var(--off-black);
+    color: var(--orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-left: -12px;
+    z-index: 1;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .proof-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .proof-text .stars {
+    color: var(--yellow);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    margin-bottom: 0.2rem;
+  }
+
+  .proof-text div:last-child {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+  }
 
   .hero-stats {
     display: flex;
@@ -623,6 +691,23 @@
 
   .price-cta-solid:hover { background: var(--orange-hot); }
 
+  .pricing-trust {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--white);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .pricing-trust span:nth-child(even) {
+    color: var(--border);
+  }
+  .pricing-trust span { display: flex; align-items: center; gap: 0.4rem; }
+
   /* ---- GUARANTEE ---- */
   .guarantee-section {
     border-top: 1px solid var(--border);
@@ -930,6 +1015,8 @@
   .hero-inner > *:nth-child(3) { animation-delay: 0.34s; }
   .hero-inner > *:nth-child(4) { animation-delay: 0.46s; }
   .hero-inner > *:nth-child(5) { animation-delay: 0.58s; }
+  .hero-inner > *:nth-child(6) { animation-delay: 0.7s; }
+  .hero-inner > *:nth-child(7) { animation-delay: 0.82s; }
 
   /* ---- HERO 2-COL ---- */
   .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; max-width: 1200px; }
@@ -953,6 +1040,21 @@
   .wa-anim-3 { animation-delay: 2.8s; }
   .wa-anim-4 { animation-delay: 4s; }
   @keyframes waMsgIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  .wa-status-text::after {
+    content: 'online';
+    animation: typingStatus 5s forwards;
+  }
+  @keyframes typingStatus {
+    0% { content: 'online'; color: #8696a0; }
+    15% { content: 'typing...'; color: var(--green); }
+    30% { content: 'online'; color: #8696a0; }
+    35% { content: 'typing...'; color: var(--green); }
+    56% { content: 'online'; color: #8696a0; }
+    60% { content: 'typing...'; color: var(--green); }
+    80% { content: 'online'; color: #8696a0; }
+    100% { content: 'online'; color: #8696a0; }
+  }
 
   /* ---- TRUST BAR ---- */
   .trust-bar { border-bottom: 1px solid var(--border); padding: 1.5rem 2rem; background: var(--off-black); position: relative; z-index: 1; }
@@ -1031,7 +1133,7 @@
 
 <nav>
   <a class="nav-logo" href="#">Launch<span style="color:var(--white)">fly</span></a>
-  <a class="nav-cta" href="#pricing">Book a Demo →</a>
+  <a class="nav-cta" href="#contact">Get Free Audit →</a>
 </nav>
 
 <!-- ===== HERO ===== -->
@@ -1046,8 +1148,21 @@
         all on WhatsApp. While you're on the tools, the AI is on the phones.
       </p>
       <div class="hero-ctas">
-        <a href="#pricing" class="btn-primary">See Pricing & Plans ↓</a>
+        <a href="#contact" class="btn-primary">Get Free Audit →</a>
         <a href="#how" class="btn-ghost">How it works →</a>
+      </div>
+      <div class="hero-social-proof">
+        <div class="avatars">
+          <img src="https://i.pravatar.cc/100?img=11" alt="Contractor">
+          <img src="https://i.pravatar.cc/100?img=12" alt="Contractor">
+          <img src="https://i.pravatar.cc/100?img=33" alt="Contractor">
+          <img src="https://i.pravatar.cc/100?img=68" alt="Contractor">
+          <div class="avatar-more">50+</div>
+        </div>
+        <div class="proof-text">
+          <div class="stars">★★★★★</div>
+          <div>Trusted by 50+ Contractors</div>
+        </div>
       </div>
       <div class="urgency">Only onboarding 10 contractors this month</div>
       <div class="hero-stats">
@@ -1071,7 +1186,7 @@
         <div class="wa-avatar">🤖</div>
         <div>
           <div class="wa-name">Launchfly AI</div>
-          <div class="wa-status">online</div>
+          <div class="wa-status wa-status-text"></div>
         </div>
       </div>
       <div class="wa-chat">
@@ -1375,7 +1490,14 @@
         </div>
 
       </div>
-      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;">All prices in AUD. Setup fee due on signing. Monthly billed on 1st of each month.</p>
+      <div class="pricing-trust">
+        <span>🔒 No Lock-in Contracts</span>
+        <span>•</span>
+        <span>🤝 60-Day ROI Guarantee</span>
+        <span>•</span>
+        <span>⚡ Cancel Anytime</span>
+      </div>
+      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;">All prices in AUD. Setup fee due on signing. Monthly billed on 1st of each month.</p>
     </div>
 
     <!-- SEA -->
@@ -1428,7 +1550,12 @@
         </div>
 
       </div>
-      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;">Prices in USD. Local currency invoicing available for MY (RM) and PH (PHP).</p>
+      <div class="pricing-trust">
+        <span>🔒 No Lock-in Contracts</span>
+        <span>•</span>
+        <span>⚡ Cancel Anytime</span>
+      </div>
+      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;">Prices in USD. Local currency invoicing available for MY (RM) and PH (PHP).</p>
     </div>
 
   </div>

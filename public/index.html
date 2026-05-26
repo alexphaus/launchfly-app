@@ -1404,19 +1404,12 @@
 <section class="pricing-section" id="pricing">
   <div class="container">
     <div class="section-label">Transparent Pricing</div>
-    <h2>Pick Your Market.<br>Pick Your Plan.</h2>
+    <h2>Plans Built For<br>Scale.</h2>
     <p class="section-intro">
       Simple, predictable pricing. No hidden fees, just scalable growth for your business.
     </p>
 
-    <div class="market-tabs">
-      <button class="tab-btn active" onclick="switchTab('au', this)">🇦🇺 Australia</button>
-      <button class="tab-btn" onclick="switchTab('sea', this)">🇲🇾 Malaysia · 🇵🇭 Philippines</button>
-    </div>
-
-    <!-- AUSTRALIA -->
-    <div id="tab-au" class="tab-panel active">
-      <div class="pricing-grid">
+    <div class="pricing-grid">
 
         <!-- Tier 1 -->
         <div class="price-card">
@@ -1497,66 +1490,7 @@
         <span>•</span>
         <span>⚡ Cancel Anytime</span>
       </div>
-      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;">All prices in AUD. Setup fee due on signing. Monthly billed on 1st of each month.</p>
-    </div>
-
-    <!-- SEA -->
-    <div id="tab-sea" class="tab-panel">
-      <div class="pricing-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
-
-        <!-- Performance -->
-        <div class="price-card featured" style="outline-color: #3b82f6;">
-          <div class="price-header" style="padding-top:1.2rem;">
-            <div class="tier-label" style="color:#60a5fa;">Performance Partner</div>
-            <div class="price-name">Pay For Results</div>
-            <div class="setup-fee" style="color:#60a5fa;">$199 one-time activation</div>
-            <div class="price-main">
-              <span class="price-currency" style="color:#3b82f6;">$</span>
-              <span class="price-amount">49</span>
-              <span class="price-period">/mo base</span>
-            </div>
-            <div class="price-usage" style="color:#60a5fa;border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.08);">+ 3–5% of closed job value (or flat $3–$5/job)</div>
-          </div>
-          <div class="price-divider"></div>
-          <ul class="price-features">
-            <li>WhatsApp automation fully operational</li>
-            <li>Supplier quote sourcing & follow-up</li>
-            <li>Purchase order generation</li>
-            <li>Pay only when AI closes or processes jobs</li>
-            <li>Scales automatically as you grow</li>
-            <li>Zero risk — performance-tied revenue share</li>
-          </ul>
-          <a href="#contact" class="price-cta" style="background:#3b82f6;color:white;display:block;text-align:center;padding:0.85rem;font-weight:700;font-size:0.88rem;letter-spacing:0.06em;text-decoration:none;text-transform:uppercase;clip-path:polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);">Get Started via WhatsApp →</a>
-        </div>
-
-        <div class="price-card" style="background:var(--off-black);">
-          <div style="padding:1rem 0;">
-            <div class="section-label">Why this model?</div>
-            <p style="color:var(--muted);font-size:0.9rem;line-height:1.75;margin-top:0.5rem;">
-              We know that fixed monthly costs are a hard sell when your cash flow depends on bookings. 
-              So we aligned our incentives with yours: <strong style="color:var(--white);">we only make money when you make money.</strong>
-            </p>
-            <br>
-            <p style="color:var(--muted);font-size:0.9rem;line-height:1.75;">
-              The $49/month covers your WhatsApp API line, server costs, and AI inference. The performance 
-              fee kicks in only on closed or processed jobs — you approve what counts.
-            </p>
-            <br>
-            <div style="border-top:1px solid var(--border);padding-top:1.2rem;margin-top:0.5rem;">
-              <div class="stat-num" style="font-size:2rem;">$0</div>
-              <div class="stat-label">Cost if the AI doesn't perform</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-      <div class="pricing-trust">
-        <span>🔒 No Lock-in Contracts</span>
-        <span>•</span>
-        <span>⚡ Cancel Anytime</span>
-      </div>
-      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;">Prices in USD. Local currency invoicing available for MY (RM) and PH (PHP).</p>
-    </div>
+      <p style="margin-top:1rem;font-size:0.78rem;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;">All prices in USD. Setup fee due on signing. Monthly billed on 1st of each month.</p>
 
   </div>
 </section>
@@ -1660,13 +1594,7 @@
 </div>
 
 <script>
-  // Tab switching
-  function switchTab(market, btn) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + market).classList.add('active');
-  }
+
 
   // FAQ accordion
   function toggleFaq(el) {

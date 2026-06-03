@@ -92,7 +92,7 @@
 
   /* ---- HERO ---- */
   .hero {
-    min-height: 100vh;
+    min-height: 85vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -153,11 +153,11 @@
 
   h1 {
     font-family: 'Outfit', sans-serif;
-    font-size: clamp(3.5rem, 9vw, 8rem);
+    font-size: clamp(3rem, 7vw, 6.5rem);
     line-height: 0.95;
     letter-spacing: 0.02em;
     color: var(--white);
-    margin-bottom: 1.8rem;
+    margin-bottom: 1.5rem;
   }
 
   h1 span {
@@ -166,11 +166,11 @@
   }
 
   .hero-sub {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     color: #c5c4bb;
-    max-width: 580px;
-    margin-bottom: 2.5rem;
-    line-height: 1.7;
+    max-width: 540px;
+    margin-bottom: 2rem;
+    line-height: 1.6;
     font-weight: 300;
   }
 
@@ -1019,10 +1019,11 @@
   .hero-inner > *:nth-child(7) { animation-delay: 0.82s; }
 
   /* ---- HERO 2-COL ---- */
-  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; max-width: 1200px; }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 4rem; align-items: center; max-width: 1200px; margin: 0 auto; }
 
   /* ---- WHATSAPP MOCKUP ---- */
-  .wa-mockup { background: #0b141a; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,0.5); max-width: 360px; margin-left: auto; position: relative; z-index: 1; }
+  .wa-mockup { background: #0b141a; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,0.5); max-width: 400px; margin: 0 auto; position: relative; z-index: 1; width: 100%; border: 1px solid var(--border); transform: rotate(2deg) translateY(-10px); transition: transform 0.3s ease; }
+  .wa-mockup:hover { transform: rotate(0deg) translateY(0); }
   .wa-header { background: #1f2c34; padding: 0.8rem 1rem; display: flex; align-items: center; gap: 0.7rem; }
   .wa-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--orange); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
   .wa-name { color: #e9edef; font-size: 0.9rem; font-weight: 500; }
@@ -1165,20 +1166,6 @@
         </div>
       </div>
       <div class="urgency">Only onboarding 10 contractors this month</div>
-      <div class="hero-stats">
-        <div class="stat-block">
-          <div class="stat-num">3.2×</div>
-          <div class="stat-label">Avg. quote turnaround</div>
-        </div>
-        <div class="stat-block">
-          <div class="stat-num">60 Days</div>
-          <div class="stat-label">ROI guarantee</div>
-        </div>
-        <div class="stat-block">
-          <div class="stat-num">AU · MY · PH</div>
-          <div class="stat-label">Markets served</div>
-        </div>
-      </div>
     </div>
     <!-- WhatsApp Mockup -->
     <div class="wa-mockup">
@@ -1207,6 +1194,24 @@
           <div class="wa-time wa-time-out">9:06 AM</div>
         </div>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== HERO STATS ===== -->
+<section class="trust-bar" style="border-top: 1px solid var(--border); padding-top: 2rem; padding-bottom: 2rem;">
+  <div class="hero-stats" style="margin-top: 0; padding-top: 0; border-top: none; justify-content: center; gap: 5rem; flex-wrap: wrap;">
+    <div class="stat-block" style="text-align: center;">
+      <div class="stat-num">3.2×</div>
+      <div class="stat-label">Avg. quote turnaround</div>
+    </div>
+    <div class="stat-block" style="text-align: center;">
+      <div class="stat-num">60 Days</div>
+      <div class="stat-label">ROI guarantee</div>
+    </div>
+    <div class="stat-block" style="text-align: center;">
+      <div class="stat-num">AU · MY · PH</div>
+      <div class="stat-label">Markets served</div>
     </div>
   </div>
 </section>
@@ -1414,11 +1419,11 @@
         <!-- Tier 1 -->
         <div class="price-card">
           <div class="tier-label">Tier 01 / Starter</div>
-          <div class="price-name">Core Engine</div>
-          <div class="setup-fee">$1,500 one-time setup <span style="color:var(--green); opacity: 0.8;">(Waived with 3mo commit)</span></div>
+          <div class="price-name">The Solo</div>
+          <div class="setup-fee">$1,500 one-time setup</div>
           <div class="price-main">
             <span class="price-currency">$</span>
-            <span class="price-amount">497</span>
+            <span class="price-amount">500</span>
             <span class="price-period">/mo</span>
           </div>
           <div class="price-usage">Perfect for solo operators.</div>
@@ -1437,18 +1442,18 @@
         <div class="price-card featured">
           <div class="price-header">
             <div class="tier-label">Tier 02 / Growth</div>
-            <div class="price-name">Professional</div>
-            <div class="setup-fee">$3,000 one-time setup <span style="color:var(--green); opacity: 0.8;">(Waived with 3mo commit)</span></div>
+            <div class="price-name">The Workshop</div>
+            <div class="setup-fee">$5,000 one-time setup</div>
             <div class="price-main">
               <span class="price-currency">$</span>
-              <span class="price-amount">997</span>
+              <span class="price-amount">1,500</span>
               <span class="price-period">/mo</span>
             </div>
             <div class="price-usage">Most popular for growing teams.</div>
           </div>
           <div class="price-divider"></div>
           <ul class="price-features">
-            <li>Everything in Tier 01</li>
+            <li>Everything in The Solo</li>
             <li>We build your full supplier database</li>
             <li>Custom WhatsApp number integration</li>
             <li>AI trained on your job types & margins</li>
@@ -1462,17 +1467,17 @@
         <!-- Tier 3 -->
         <div class="price-card">
           <div class="tier-label">Tier 03 / Scale</div>
-          <div class="price-name">Enterprise</div>
-          <div class="setup-fee">$7,500 one-time setup <span style="color:var(--green); opacity: 0.8;">(Waived with 3mo commit)</span></div>
+          <div class="price-name">The Fleet</div>
+          <div class="setup-fee">$10,000 one-time setup</div>
           <div class="price-main">
             <span class="price-currency">$</span>
-            <span class="price-amount">2,500</span>
+            <span class="price-amount">3,500</span>
             <span class="price-period">/mo</span>
           </div>
           <div class="price-usage">Custom solutions for large fleets.</div>
           <div class="price-divider"></div>
           <ul class="price-features">
-            <li>Everything in The Workflow</li>
+            <li>Everything in The Workshop</li>
             <li>Multi-location / multi-team setup</li>
             <li>Custom AI persona for your brand</li>
             <li>Dedicated account manager</li>

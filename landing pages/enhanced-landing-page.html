@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Launch an AI-powered business in 30 minutes. Your first $1,000 is guaranteed, or we pay you. AI builds your site, finds customers, and runs your marketing.">
+    <title>Launchfly - AI-Powered Business | $1,000 Guaranteed</title>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+    
+    <link rel="preload" href="enhanced-styles.css" as="style">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" as="style">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Enhanced CSS combining best of both */
+        :root {
+            --primary: #007BFF;
+            --primary-dark: #0056b3;
+            --primary-light: #E6F2FF;
+            --secondary-cta: #00B8D9;
+            --secondary-cta-dark: #00A3BF;
+            --accent: #FF6B6B;
+            --success: #28a745;
+            --text-dark: #1A2B48;
+            --text-gray: #5A6982;
+            --text-light: #F9FAFB;
+            --bg-light: #F9FAFB;
+            --bg-dark: #1A2B48;
+            --white: #ffffff;
+            --border-light: #E4E7EB;
+            --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--secondary-cta) 100%);
+            --gradient-hero: linear-gradient(135deg, var(--primary-light) 0%, var(--bg-light) 50%, var(--white) 100%);
+            --shadow-sm: 0 1px 2px 0 rgba(26, 43, 72, 0.05);
+            --shadow-md: 0 4px 8px -2px rgba(26, 43, 72, 0.1), 0 2px 4px -2px rgba(26, 43, 72, 0.06);
+            --shadow-lg: 0 12px 20px -4px rgba(26, 43, 72, 0.1), 0 4px 6px -4px rgba(26, 43, 72, 0.05);
+            --shadow-xl: 0 24px 32px -8px rgba(26, 43, 72, 0.12), 0 10px 12px -6px rgba(26, 43, 72, 0.08);
+            --transition-base: 200ms ease;
+            --transition-slow: 300ms ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 80px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: var(--white);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+
+        body.menu-open {
+            overflow: hidden;
+        }
+
+        main {
+            padding-top: 80px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        section {
+            padding: 88px 0;
+        }
+
+        /* Enhanced Header */
+        #header {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            transition: all var(--transition-slow);
+            border-bottom: 1px solid transparent;
+        }
+
+        #header.scrolled {
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: var(--shadow-md);
+            border-bottom-color: var(--border-light);
+        }
+
+        #header nav.container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 80px;
+        }
+
+        .logo {
+            font-size: 26px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-dark);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 36px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-gray);
+            font-weight: 600;
+            font-size: 16px;
+            transition: color var(--transition-base);
+            position: relative;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: width var(--transition-base);
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .nav-cta {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all var(--transition-base);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .mobile-menu-toggle {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            z-index: 1002;
+        }
+
+        .mobile-menu-toggle span {
+            display: block;
+            width: 24px;
+            height: 3px;
+            background: var(--text-dark);
+            margin: 5px 0;
+            transition: all var(--transition-base);
+            border-radius: 2px;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(1) {
+            transform: translateY(8px) rotate(45deg);
+        }
+
+        .mobile-menu-toggle.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-menu-toggle.active span:nth-child(3) {
+            transform: translateY(-8px) rotate(-45deg);
+        }
+
+        /* Enhanced Mobile Navigation */
+        .mobile-nav-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: var(--white);
+            z-index: 1001;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-slow);
+        }
+
+        .mobile-nav-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .mobile-nav-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 24px;
+        }
+
+        .mobile-nav-link {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-decoration: none;
+            transition: color var(--transition-base);
+        }
+
+        .mobile-nav-link:hover {
+            color: var(--primary);
+        }
+
+        .mobile-nav-cta {
+            background: var(--gradient-primary);
+            color: var(--white);
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+
+        /* Enhanced Hero Section */
+        .hero {
+            position: relative;
+            background: var(--white);
+            padding: 120px 0 80px;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .hero-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--gradient-hero);
+            opacity: 0.5;
+            z-index: -1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
+            transition: transform var(--transition-base);
+        }
+
+        .hero-badge.pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
+            }
+            50% {
+                box-shadow: 0 4px 20px rgba(255, 107, 107, 0.5);
+                transform: scale(1.05);
+            }
+            100% {
+                box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
+            }
+        }
+
+        h1 {
+            font-size: 64px;
+            margin-bottom: 24px;
+            font-weight: 900;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            color: var(--text-dark);
+        }
+
+        .gradient-text {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 20px;
+            margin-bottom: 40px;
+            color: var(--text-gray);
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+
+        .primary-cta {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 18px 36px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            transition: all var(--transition-base);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 5px 20px rgba(0, 123, 255, 0.25);
+            border: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .primary-cta:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 123, 255, 0.35);
+        }
+
+        .primary-cta.pulse-shadow::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: inherit;
+            transform: translate(-50%, -50%) scale(0);
+            animation: ripple 2s infinite;
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(4);
+                opacity: 0;
+            }
+        }
+
+        .cta-subtext {
+            font-size: 14px;
+            color: var(--text-gray);
+            opacity: 0.8;
+        }
+
+        .hero-pillars {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            flex-wrap: wrap;
+            opacity: 0.9;
+        }
+
+        .pillar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-gray);
+        }
+
+        /* Enhanced Trust Bar */
+        .trust-bar {
+            background: var(--bg-light);
+            padding: 24px 0;
+            border-top: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .trust-bar-content {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .trust-item {
+            color: var(--text-gray);
+            font-weight: 500;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .trust-item strong {
+            color: var(--text-dark);
+            font-weight: 700;
+        }
+
+        .live-indicator {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+            }
+        }
+
+        /* Section Headers */
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .section-header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .section-label {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-gray);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* How It Works */
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 32px;
+        }
+
+        .step-card {
+            text-align: center;
+            padding: 32px;
+            border-radius: 16px;
+            background: var(--white);
+            transition: all var(--transition-base);
+            border: 1px solid var(--border-light);
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease, box-shadow var(--transition-base);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--gradient-primary);
+            opacity: 0;
+            transition: opacity var(--transition-base);
+            z-index: -1;
+        }
+
+        .step-card:hover::before {
+            opacity: 0.05;
+        }
+
+        .step-card:nth-child(2) { transition-delay: 0.1s; }
+        .step-card:nth-child(3) { transition-delay: 0.2s; }
+        .step-card:nth-child(4) { transition-delay: 0.3s; }
+
+        .step-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .step-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-light);
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-primary);
+            color: white;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 auto 24px;
+            box-shadow: 0 4px 14px rgba(0, 123, 255, 0.3);
+        }
+
+        .step-card h3 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+            font-weight: 700;
+        }
+
+        .step-card p {
+            color: var(--text-gray);
+            font-size: 16px;
+        }
+
+        /* Enhanced Success Story Section */
+        .video-testimonial {
+            background: var(--bg-dark);
+            color: var(--white);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-testimonial::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 123, 255, 0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .video-testimonial .section-title { color: var(--white); }
+        .video-testimonial .section-subtitle { color: var(--text-light); opacity: 0.8; }
+
+        .video-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            box-shadow: var(--shadow-xl);
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .video-container.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .video-placeholder {
+            width: 100%;
+            display: block;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+        }
+
+        .play-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 88px;
+            height: 88px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-base);
+        }
+
+        .play-button svg {
+            width: 44px;
+            height: 44px;
+            color: var(--white);
+            transform: translateX(4px);
+        }
+
+        .video-container:hover .play-button {
+            transform: translate(-50%, -50%) scale(1.1);
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .video-caption {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--text-light);
+            opacity: 0.8;
+            font-style: italic;
+        }
+
+        /* Enhanced Comparison Section */
+        .comparison {
+            background: var(--bg-light);
+        }
+
+        .comparison-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .comparison-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 40px;
+            position: relative;
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-base);
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .comparison-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .comparison-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .old-way {
+            border: 2px solid var(--border-light);
+        }
+
+        .launchfly-way {
+            border: 2px solid var(--primary);
+            background: linear-gradient(to bottom, var(--primary-light), var(--white));
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .card-icon {
+            font-size: 32px;
+        }
+
+        .card-header h3 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 16px;
+            color: var(--text-gray);
+        }
+
+        .x-mark {
+            color: #ef4444;
+            font-weight: 700;
+            flex-shrink: 0;
+            font-size: 18px;
+        }
+
+        .check-mark {
+            color: var(--success);
+            font-weight: 700;
+            flex-shrink: 0;
+            font-size: 18px;
+        }
+
+        .best-choice-badge {
+            position: absolute;
+            top: -15px;
+            right: 20px;
+            background: var(--primary);
+            color: var(--white);
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Pricing */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.1fr;
+            gap: 32px;
+            align-items: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .pricing-card {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease, box-shadow var(--transition-base);
+        }
+
+        .pricing-card:nth-child(2) { transition-delay: 0.1s; }
+
+        .pricing-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .pricing-card.featured {
+            border-color: var(--primary);
+            transform: scale(1.05);
+            box-shadow: var(--shadow-xl);
+            position: relative;
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .pricing-card.featured:hover {
+            transform: translateY(-5px) scale(1.05);
+        }
+
+        .featured-badge {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .pricing-card h3 {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-dark);
+        }
+
+        .plan-description {
+            color: var(--text-gray);
+            margin-bottom: 24px;
+            font-size: 16px;
+            flex-grow: 1;
+            max-height: 50px;
+        }
+
+        .price-tag {
+            font-size: 56px;
+            font-weight: 900;
+            color: var(--text-dark);
+            margin: 16px 0 8px;
+        }
+
+        .price-period {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-gray);
+        }
+
+        .revenue-share {
+            font-size: 14px;
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 32px;
+            background: var(--primary-light);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin-bottom: 40px;
+            text-align: left;
+            flex-grow: 1;
+        }
+
+        .plan-features li {
+            padding: 10px 0;
+            color: var(--text-gray);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 16px;
+        }
+
+        .check-icon {
+            color: var(--success);
+            flex-shrink: 0;
+            margin-top: 4px;
+            font-weight: bold;
+        }
+
+        .plan-cta {
+            padding: 16px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            display: block;
+            width: 100%;
+            transition: all var(--transition-base);
+            font-size: 16px;
+            margin-top: auto;
+        }
+
+        .plan-cta.primary {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .plan-cta.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .plan-cta.secondary {
+            background: var(--white);
+            color: var(--primary);
+            border: 2px solid var(--primary-light);
+        }
+
+        .plan-cta.secondary:hover {
+            background: var(--primary-light);
+        }
+
+        /* Guarantee */
+        .guarantee-section {
+            background: var(--bg-light);
+        }
+
+        .guarantee-content {
+            background: var(--primary-light);
+            border-radius: 24px;
+            padding: 56px;
+            display: flex;
+            gap: 48px;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .guarantee-content.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .guarantee-seal svg {
+            width: 110px;
+            height: 110px;
+            color: var(--primary);
+        }
+
+        .guarantee-text h3 {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+        }
+
+        .guarantee-text p {
+            color: var(--text-gray);
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+
+        .guarantee-text p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* FAQ */
+        .faq-grid {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            background: var(--white);
+            margin-bottom: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+            overflow: hidden;
+            transition: all var(--transition-base);
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .faq-item:nth-child(2) { transition-delay: 0.1s; }
+        .faq-item:nth-child(3) { transition-delay: 0.2s; }
+        .faq-item:nth-child(4) { transition-delay: 0.3s; }
+
+        .faq-item.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .faq-item.active {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        .faq-question {
+            padding: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-dark);
+            width: 100%;
+            background: none;
+            border: none;
+            text-align: left;
+            transition: color var(--transition-base);
+        }
+
+        .faq-question:hover {
+            color: var(--primary);
+        }
+
+        .faq-item.active .faq-question {
+            color: var(--primary);
+        }
+
+        .faq-icon {
+            font-size: 24px;
+            transition: transform var(--transition-base);
+            color: var(--primary);
+            font-weight: 400;
+        }
+
+        .faq-item.active .faq-icon {
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out, padding 0.4s ease-out;
+        }
+
+        .faq-answer p {
+            padding: 0 24px 0px;
+            color: var(--text-gray);
+            line-height: 1.7;
+            font-size: 16px;
+        }
+
+        .faq-item.active .faq-answer {
+            max-height: 300px;
+            padding-bottom: 24px;
+        }
+
+        /* Enhanced Final CTA */
+        .final-cta {
+            background: var(--bg-dark);
+            color: var(--white);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .final-cta::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 184, 217, 0.1) 0%, transparent 70%);
+            animation: rotate 35s linear infinite reverse;
+        }
+
+        .final-cta-content {
+            padding: 80px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .final-cta h2 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
+        }
+
+        .final-cta p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            opacity: 0.8;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .countdown-timer {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .timer-item {
+            text-align: center;
+        }
+
+        .timer-number {
+            display: block;
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--white);
+        }
+
+        .timer-label {
+            display: block;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .timer-divider {
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.3);
+            padding-top: 8px;
+        }
+
+        .primary-cta.large {
+            padding: 20px 40px;
+            font-size: 20px;
+        }
+
+        /* Footer */
+        footer {
+            background: #12213A;
+            color: var(--text-light);
+            padding: 80px 0 40px;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        footer .logo {
+            color: var(--text-light);
+        }
+
+        .footer-brand p {
+            margin-top: 16px;
+            color: #9CA3AF;
+            max-width: 250px;
+        }
+
+        .footer-links-container {
+            display: flex;
+            gap: 72px;
+        }
+
+        .footer-column h4 {
+            font-size: 16px;
+            margin-bottom: 24px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .footer-column a {
+            display: block;
+            color: #9CA3AF;
+            text-decoration: none;
+            margin-bottom: 16px;
+            transition: color var(--transition-base);
+        }
+
+        .footer-column a:hover {
+            color: var(--white);
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 40px;
+            border-top: 1px solid #334155;
+            color: #9CA3AF;
+            font-size: 14px;
+        }
+
+        /* Visibility animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            h1 { font-size: 56px; }
+            .section-title { font-size: 40px; }
+            .pricing-grid {
+                grid-template-columns: 1fr;
+                max-width: 550px;
+            }
+            .pricing-card.featured {
+                transform: scale(1);
+            }
+            .pricing-card:hover, .pricing-card.featured:hover {
+                transform: translateY(-5px);
+            }
+            .comparison-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 40px; }
+            .section-title { font-size: 34px; }
+            .subtitle, .section-subtitle { font-size: 18px; }
+            section { padding: 64px 0; }
+            main { padding-top: 80px; }
+
+            .nav-links, .nav-cta-container { display: none; }
+            .mobile-menu-toggle { display: flex; }
+
+            .trust-bar-content {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                text-align: center;
+            }
+
+            .steps-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .guarantee-content {
+                flex-direction: column;
+                text-align: center;
+                padding: 40px 24px;
+            }
+
+            .guarantee-seal svg {
+                width: 80px;
+                height: 80px;
+            }
+
+            .final-cta h2 { font-size: 36px; }
+
+            .countdown-timer {
+                gap: 16px;
+                padding: 16px;
+            }
+
+            .timer-number {
+                font-size: 28px;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+                align-items: center;
+            }
+
+            .footer-links-container {
+                flex-direction: column;
+                gap: 30px;
+                width: 100%;
+            }
+        }
+    </style>
+
+    <script src="https://tally.so/widgets/embed.js" defer></script>
+</head>
+<body>
+    <header id="header">
+        <nav class="container">
+            <div class="logo">
+                <span class="logo-icon">🚀</span>
+                Launchfly
+            </div>
+            <div class="nav-links">
+                <a href="#how-it-works">How It Works</a>
+                <a href="#comparison">Why We're Better</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+            </div>
+            <div class="nav-cta-container">
+                <a href="#" class="nav-cta" onclick="openTallyPopup(event)">Join This Week's Cohort →</a>
+            </div>
+            <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Enhanced Mobile Navigation -->
+    <div class="mobile-nav-overlay" id="mobileNavOverlay">
+        <div class="mobile-nav-content">
+            <a href="#how-it-works" class="mobile-nav-link">How It Works</a>
+            <a href="#comparison" class="mobile-nav-link">Why We're Better</a>
+            <a href="#pricing" class="mobile-nav-link">Pricing</a>
+            <a href="#faq" class="mobile-nav-link">FAQ</a>
+            <a href="#" class="mobile-nav-cta" onclick="openTallyPopup(event)">Join Cohort</a>
+        </div>
+    </div>
+
+    <main>
+        <section class="hero">
+            <div class="hero-background"></div>
+            <div class="container hero-content">
+                <div class="hero-badge pulse" id="heroBadge">⚡️ This Week's Cohort: 12 Spots Left</div>
+                <h1>Launch an AI-Powered Business in 30 Minutes.<br><span class="gradient-text">Your First $1,000 is Guaranteed.</span></h1>
+                <p class="subtitle">AI builds your site, finds your customers, and runs your marketing. If you don't profit, we pay you. No skills needed.</p>
+                
+                <div class="cta-group">
+                    <a href="#" class="primary-cta pulse-shadow" onclick="openTallyPopup(event)">
+                        <span>Activate My Guaranteed Income</span>
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                    </a>
+                    <p class="cta-subtext">✓ No credit card required ✓ Start earning in 48 hours</p>
+                </div>
+
+                <div class="hero-pillars">
+                    <div class="pillar">🚀<span>Live in 30 Mins</span></div>
+                    <div class="pillar">💸<span>First Sale in 48h</span></div>
+                    <div class="pillar">📈<span>$1k Guaranteed</span></div>
+                    <div class="pillar">🛡️<span>$0 Until You Profit</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="trust-bar">
+            <div class="container trust-bar-content">
+                <div class="trust-item"><strong>4.9/5</strong> from 847+ reviews</div>
+                <div class="trust-item"><strong>$1.2M+</strong> Generated for Users</div>
+                <div class="trust-item"><strong>3,847+</strong> Active Businesses</div>
+                <div class="trust-item">
+                    <span class="live-indicator"></span>
+                    <span id="liveUsers"><strong>127</strong> Viewing Now</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="how-it-works" id="how-it-works">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">Your Path to Profit</div>
+                    <h2 class="section-title">Zero to Income in 4 Simple Steps</h2>
+                    <p class="section-subtitle">No tech skills. No audience. No experience needed.</p>
+                </div>
+                
+                <div class="steps-grid">
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h3>Pick Your Path</h3>
+                        <p>Choose from proven business models or let our AI analyze your skills to find your perfect, high-demand niche. Takes 2 minutes.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h3>Launch Instantly</h3>
+                        <p>AI creates everything: products, pricing, a stunning website, and marketing copy. You're live and ready to sell in 30 minutes.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h3>Get Customers</h3>
+                        <p>AI finds your ideal buyers, runs targeted ads, and sends emails. Most users see their first paying customer within 48 hours.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">4</div>
+                        <h3>Scale on Autopilot</h3>
+                        <p>AI continuously improves your business: testing prices, launching new campaigns, and finding more customers. You just collect the profits.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="video-testimonial">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">"I made $1,450 my first month... it's surreal."</h2>
+                </div>
+                <div class="video-container">
+                    <img src="https://placehold.co/1000x563/1A2B48/FFFFFF?text=Video+Testimonial" alt="Video testimonial from a happy customer" class="video-placeholder">
+                    <div class="play-button">
+                        <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
+                    </div>
+                </div>
+                <p class="video-caption">Hear from Jake M., a former skeptic who now runs a thriving fitness coaching business on autopilot.</p>
+            </div>
+        </section>
+        
+        <section class="comparison" id="comparison">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">The Smart Choice</div>
+                    <h2 class="section-title">Launchfly vs. The DIY Method</h2>
+                    <p class="section-subtitle">They give you empty tools. We give you a profitable business.</p>
+                </div>
+                
+                <div class="comparison-cards">
+                    <div class="comparison-card old-way">
+                        <div class="card-header">
+                            <span class="card-icon">❌</span>
+                            <h3>The Old Way</h3>
+                        </div>
+                        <ul class="comparison-list">
+                            <li><span class="x-mark">✗</span> 30-50+ hours to launch</li>
+                            <li><span class="x-mark">✗</span> Need technical skills</li>
+                            <li><span class="x-mark">✗</span> Figure out products yourself</li>
+                            <li><span class="x-mark">✗</span> Learn marketing from scratch</li>
+                            <li><span class="x-mark">✗</span> Find customers manually</li>
+                            <li><span class="x-mark">✗</span> 90% fail in first year</li>
+                            <li><span class="x-mark">✗</span> No guarantees</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="comparison-card launchfly-way">
+                        <div class="card-header">
+                            <span class="card-icon">🚀</span>
+                            <h3>The Launchfly Way</h3>
+                        </div>
+                        <ul class="comparison-list">
+                            <li><span class="check-mark">✓</span> Live in 30 minutes</li>
+                            <li><span class="check-mark">✓</span> Zero skills needed</li>
+                            <li><span class="check-mark">✓</span> AI creates everything</li>
+                            <li><span class="check-mark">✓</span> Marketing runs itself</li>
+                            <li><span class="check-mark">✓</span> Customers come to you</li>
+                            <li><span class="check-mark">✓</span> 73% success rate</li>
+                            <li><span class="check-mark">✓</span> $1,000 guaranteed</li>
+                        </ul>
+                        <div class="best-choice-badge">Best Choice</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="pricing" id="pricing">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">Success-Based Pricing</div>
+                    <h2 class="section-title">We Only Make Money When You Do</h2>
+                    <p class="section-subtitle">This is a partnership. Your success is our business model.</p>
+                </div>
+                
+                <div class="pricing-grid">
+                    <div class="pricing-card">
+                        <h3>Launch</h3>
+                        <p class="plan-description">For starting your side income risk-free.</p>
+                        <div class="price-tag">$0<span class="price-period">/ to start</span></div>
+                        <div class="revenue-share">Then 15% of revenue</div>
+                        <ul class="plan-features">
+                            <li><span class="check-icon">✓</span>Complete business setup</li>
+                            <li><span class="check-icon">✓</span>AI finds your first customers</li>
+                            <li><span class="check-icon">✓</span>Basic marketing campaigns</li>
+                            <li><span class="check-icon">✓</span>Community support</li>
+                        </ul>
+                        <a href="#" class="plan-cta secondary" onclick="openTallyPopup(event, 'Launch')">Start Earning Now</a>
+                    </div>
+                    
+                    <div class="pricing-card featured">
+                        <div class="featured-badge">MOST POPULAR</div>
+                        <h3>Growth</h3>
+                        <p class="plan-description">For serious entrepreneurs ready to scale.</p>
+                        <div class="price-tag">$97<span class="price-period">/ month</span></div>
+                        <div class="revenue-share">Plus only 10% of revenue</div>
+                        <ul class="plan-features">
+                            <li><span class="check-icon">✓</span><strong>Everything in Launch, plus:</strong></li>
+                            <li><span class="check-icon">✓</span>Advanced AI optimization</li>
+                            <li><span class="check-icon">✓</span>Unlimited products & campaigns</li>
+                            <li><span class="check-icon">✓</span>Priority support & coaching</li>
+                            <li><span class="check-icon">✓</span>Weekly strategy calls</li>
+                        </ul>
+                        <a href="#" class="plan-cta primary" onclick="openTallyPopup(event, 'Growth')">Claim My Spot</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="guarantee-section">
+            <div class="container">
+                <div class="guarantee-content">
+                    <div class="guarantee-seal">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10.95,16.69L7.4,13.14L8.8,11.73L10.95,13.88L15.16,9.66L16.57,11.07L10.95,16.69Z" /></svg>
+                    </div>
+                    <div class="guarantee-text">
+                        <h3>The Launchfly Double Guarantee</h3>
+                        <p><strong>1. The Profit Guarantee:</strong> If your AI-powered business doesn't generate at least $1,000 in revenue within your first 60 days, we will send you $100 cash for your time. No questions asked.</p>
+                        <p><strong>2. The Success Partnership:</strong> We operate on a success-based model. We only get paid when you get paid. This ensures our goals are perfectly aligned with yours from day one.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="faq" id="faq">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">Common Questions</div>
+                    <h2 class="section-title">Your Questions, Answered</h2>
+                </div>
+                <div class="faq-grid">
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>How is this different from ChatGPT or other AI tools?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>ChatGPT can write copy. We deliver customers. Our AI doesn't just build a business—it runs it for you. It actively finds buyers, launches campaigns, and optimizes for profit 24/7. It's the difference between being handed a toolbox and being handed a profitable, running business.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>What exactly happens after I sign up?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>1) You answer 5 quick questions (2 minutes). 2) AI analyzes your answers and creates your business—products, pricing, website, everything (20-30 minutes). 3) You review and launch with one click. 4) AI immediately starts finding customers. Most users see their first visitor within hours and first sale within 48 hours.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>How much time do I really need to invest?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>Week 1: About 2-3 hours total for setup and learning. After that: 30 minutes per week to check results and approve AI suggestions. The whole point is that AI runs everything. Many users check in just once a week. This is designed to be a true side income, not another job.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>Is the $1,000 guarantee real? What's the catch?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>It's 100% real, and there is no catch. If you follow the AI's recommendations and don't make at least $1,000 in 60 days, we send you $100. We can offer this because our system works—73% of our users hit the $1k mark in their first month. Our success is literally tied to yours.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="final-cta">
+            <div class="container final-cta-content">
+                <h2>Your Side Income is Waiting.</h2>
+                <p>Join this week's cohort and start earning within 48 hours. What will you do with an extra $1,000+ per month?</p>
+                
+                <div class="countdown-timer">
+                    <div class="timer-item">
+                        <span class="timer-number" id="spots">12</span>
+                        <span class="timer-label">Spots Left</span>
+                    </div>
+                    <div class="timer-divider">:</div>
+                    <div class="timer-item">
+                        <span class="timer-number" id="hours">23</span>
+                        <span class="timer-label">Hours</span>
+                    </div>
+                    <div class="timer-divider">:</div>
+                    <div class="timer-item">
+                        <span class="timer-number" id="minutes">47</span>
+                        <span class="timer-label">Minutes</span>
+                    </div>
+                </div>
+                
+                <a href="#" class="primary-cta large" onclick="openTallyPopup(event)">
+                    <span>Claim My Spot & Start for $0</span>
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container footer-content">
+            <div class="footer-brand">
+                <div class="logo">
+                    <span class="logo-icon">🚀</span>
+                    Launchfly
+                </div>
+                <p>The AI-powered business launchpad.</p>
+            </div>
+            <div class="footer-links-container">
+                <div class="footer-column">
+                    <h4>Product</h4>
+                    <a href="#how-it-works">How it Works</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#comparison">Compare Us</a>
+                </div>
+                <div class="footer-column">
+                    <h4>Company</h4>
+                    <a href="#">About Us</a>
+                    <a href="#">Success Stories</a>
+                    <a href="#">Careers</a>
+                </div>
+                <div class="footer-column">
+                    <h4>Legal</h4>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                    <a href="#">Guarantee Terms</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 Launchfly AI. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Debounce utility
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Tally Popup
+        const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        function openTallyPopup(event, plan = 'Default') {
+            if (event) event.preventDefault();
+            
+            if (typeof Tally !== 'undefined') {
+                Tally.openPopup('mOqz1Y', {
+                    layout: 'modal',
+                    width: 700,
+                    hideTitle: true,
+                    hiddenFields: {
+                        sessionID: sessionId,
+                        selectedPlan: plan,
+                        referrer: document.referrer,
+                        landingPage: window.location.pathname
+                    }
+                });
+            }
+        }
+
+        // Enhanced Mobile Menu
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const mobileNavOverlay = document.getElementById('mobileNavOverlay');
+        const mobileNavLinks = document.querySelectorAll('.mobile-nav-link, .mobile-nav-cta');
+        const body = document.body;
+
+        function toggleMobileMenu() {
+            const isActive = mobileNavOverlay.classList.contains('active');
+            if (isActive) {
+                closeMobileMenu();
+            } else {
+                openMobileMenu();
+            }
+        }
+
+        function openMobileMenu() {
+            mobileNavOverlay.classList.add('active');
+            mobileMenuToggle.classList.add('active');
+            body.classList.add('menu-open');
+            setTimeout(() => {
+                mobileNavLinks[0]?.focus();
+            }, 300);
+        }
+
+        function closeMobileMenu() {
+            mobileNavOverlay.classList.remove('active');
+            mobileMenuToggle.classList.remove('active');
+            body.classList.remove('menu-open');
+            mobileMenuToggle.focus();
+        }
+
+        mobileMenuToggle.addEventListener('click', toggleMobileMenu);
+
+        mobileNavLinks.forEach(link => {
+            link.addEventListener('click', closeMobileMenu);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && mobileNavOverlay.classList.contains('active')) {
+                closeMobileMenu();
+            }
+        });
+
+        // Header Scroll Effect
+        const header = document.getElementById('header');
+        const handleScroll = debounce(() => {
+            if (window.scrollY > 10) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        }, 10);
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+
+        // FAQ Toggle
+        const faqItems = document.querySelectorAll('.faq-item');
+        faqItems.forEach(item => {
+            const question = item.querySelector('.faq-question');
+            const answer = item.querySelector('.faq-answer');
+            
+            question.addEventListener('click', () => {
+                const wasActive = item.classList.contains('active');
+                faqItems.forEach(i => i.classList.remove('active'));
+                if (!wasActive) {
+                    item.classList.add('active');
+                    answer.setAttribute('aria-expanded', 'true');
+                } else {
+                    answer.setAttribute('aria-expanded', 'false');
+                }
+            });
+            
+            answer.setAttribute('aria-expanded', 'false');
+        });
+
+        // Animate value changes
+        function animateValue(element, start, end, duration) {
+            const range = end - start;
+            const increment = range / (duration / 16);
+            let current = start;
+            
+            const timer = setInterval(() => {
+                current += increment;
+                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                    element.textContent = end;
+                    clearInterval(timer);
+                } else {
+                    element.textContent = Math.round(current);
+                }
+            }, 16);
+        }
+
+        // Dynamic Live Users Counter
+        const liveUsersEl = document.getElementById('liveUsers');
+        let currentUsers = 127;
+
+        function updateLiveUsers() {
+            const change = Math.floor(Math.random() * 11) - 5;
+            currentUsers = Math.max(85, Math.min(180, currentUsers + change));
+            
+            if (liveUsersEl) {
+                const strongEl = liveUsersEl.querySelector('strong');
+                if (strongEl) {
+                    animateValue(strongEl, parseInt(strongEl.textContent), currentUsers, 1000);
+                }
+            }
+        }
+
+        setInterval(updateLiveUsers, 3000 + Math.random() * 4000);
+
+        // Dynamic Spots Counter
+        let spotsLeft = 12;
+        const heroBadgeEl = document.getElementById('heroBadge');
+        const spotsEl = document.getElementById('spots');
+
+        function updateSpots() {
+            if (spotsLeft > 3 && Math.random() > 0.7) {
+                spotsLeft--;
+                
+                if (spotsEl) {
+                    animateValue(spotsEl, parseInt(spotsEl.textContent), spotsLeft, 500);
+                }
+                
+                if (heroBadgeEl) {
+                    heroBadgeEl.textContent = `⚡️ This Week's Cohort: ${spotsLeft} Spots Left`;
+                    heroBadgeEl.classList.add('pulse');
+                    setTimeout(() => heroBadgeEl.classList.remove('pulse'), 1000);
+                }
+            }
+        }
+
+        setInterval(updateSpots, 25000 + Math.random() * 10000);
+
+        // Countdown Timer
+        function updateCountdown() {
+            const hoursEl = document.getElementById('hours');
+            const minutesEl = document.getElementById('minutes');
+            
+            if (hoursEl && minutesEl) {
+                let hours = parseInt(hoursEl.textContent);
+                let minutes = parseInt(minutesEl.textContent);
+                
+                minutes--;
+                if (minutes < 0) {
+                    minutes = 59;
+                    hours--;
+                    if (hours < 0) hours = 23;
+                }
+                
+                hoursEl.textContent = hours.toString().padStart(2, '0');
+                minutesEl.textContent = minutes.toString().padStart(2, '0');
+            }
+        }
+
+        setInterval(updateCountdown, 60000);
+
+        // Intersection Observer for Animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -100px 0px' });
+
+        document.querySelectorAll('.section-header, .step-card, .video-container, .comparison-card, .pricing-card, .guarantee-content, .faq-item').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href === '#') return;
+                
+                e.preventDefault();
+                const target = document.querySelector(href);
+                
+                if (target) {
+                    const headerHeight = 80;
+                    const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - headerHeight;
+                    
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

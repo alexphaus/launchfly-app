@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Launch your profitable online business in 60 minutes with AI. From zero to your first paying customer. AI builds everything: website, products, marketing, and payment systems.">
+    <title>Launchly AI - Launch Your Online Business in 60 Minutes</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #f59e0b;
+            --text-dark: #111827;
+            --text-gray: #6b7280;
+            --bg-light: #f9fafb;
+            --white: #ffffff;
+            --success: #10b981;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        header.scrolled {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+        
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-gray);
+            font-weight: 500;
+            font-size: 15px;
+            transition: color 0.2s;
+            position: relative;
+        }
+        
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+        
+        .nav-cta {
+            background: var(--primary);
+            color: white;
+            padding: 10px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+        }
+        
+        .nav-cta:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        
+        /* Mobile Menu */
+        .mobile-menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+        }
+        
+        .mobile-menu-toggle span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: var(--text-dark);
+            margin: 5px 0;
+            transition: all 0.3s;
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: var(--gradient);
+            padding: 140px 0 100px;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: moveGrid 20s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes moveGrid {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .trust-badges {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+        
+        .trust-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 16px;
+            border-radius: 100px;
+            backdrop-filter: blur(10px);
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .icon-star {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+        
+        .icon-chart {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+        
+        .icon-users {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+        
+        h1 {
+            font-size: 56px;
+            margin-bottom: 24px;
+            font-weight: 900;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(to right, #fbbf24, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 22px;
+            margin-bottom: 48px;
+            opacity: 0.95;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+        }
+        
+        .cta-group {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+        
+        .primary-cta {
+            background: white;
+            color: var(--primary);
+            padding: 16px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 17px;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .primary-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        .secondary-cta {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 17px;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .secondary-cta:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: white;
+            transform: translateY(-2px);
+        }
+        
+        .countdown {
+            background: rgba(255,255,255,0.1);
+            padding: 12px 24px;
+            border-radius: 100px;
+            backdrop-filter: blur(10px);
+            display: inline-block;
+            margin-bottom: 40px;
+            font-size: 15px;
+            font-weight: 500;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .countdown strong {
+            color: #fbbf24;
+            font-weight: 700;
+        }
+        
+        .launch-counter {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 16px;
+        }
+        
+        .launch-counter strong {
+            color: #fbbf24;
+            font-weight: 700;
+        }
+        
+        /* Arrow Icon */
+        .arrow-right {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+        
+        .play-icon {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+        
+        /* Live Stats */
+        .live-stats {
+            background: var(--bg-light);
+            padding: 48px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            color: var(--text-gray);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        /* How It Works */
+        .how-it-works {
+            padding: 100px 0;
+            background: white;
+        }
+        
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+        
+        .section-title {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+        
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-gray);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+            margin-bottom: 64px;
+        }
+        
+        .step {
+            text-align: center;
+            padding: 32px;
+            border-radius: 16px;
+            background: var(--bg-light);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .step::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+        
+        .step:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .step:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+        }
+        
+        .step-number {
+            width: 56px;
+            height: 56px;
+            background: var(--gradient);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 auto 20px;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+        }
+        
+        .step h3 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+            font-weight: 700;
+        }
+        
+        .step p {
+            color: var(--text-gray);
+            line-height: 1.6;
+            font-size: 15px;
+        }
+        
+        .demo-video {
+            background: var(--gradient);
+            border-radius: 20px;
+            padding: 48px;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.3);
+        }
+        
+        .demo-video::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 30px 30px;
+            animation: moveGrid 15s linear infinite reverse;
+            pointer-events: none;
+        }
+        
+        .demo-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .demo-video h3 {
+            font-size: 32px;
+            margin-bottom: 16px;
+            font-weight: 800;
+        }
+        
+        .demo-video p {
+            margin-bottom: 32px;
+            opacity: 0.95;
+            font-size: 18px;
+        }
+        
+        .watch-demo-btn {
+            background: white;
+            color: var(--primary);
+            padding: 14px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            font-size: 16px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+        }
+        
+        .watch-demo-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        
+        /* Results Gallery */
+        .results {
+            padding: 100px 0;
+            background: var(--bg-light);
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 32px;
+            margin-top: 64px;
+        }
+        
+        .result-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .result-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-color: var(--primary-light);
+        }
+        
+        .result-image {
+            height: 200px;
+            background: var(--gradient);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .result-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255,255,255,0.9);
+            color: var(--primary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .result-content {
+            padding: 28px;
+        }
+        
+        .result-business {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+        }
+        
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .result-stat {
+            text-align: center;
+        }
+        
+        .result-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            display: block;
+        }
+        
+        .result-stat-label {
+            font-size: 12px;
+            color: var(--text-gray);
+            margin-top: 4px;
+        }
+        
+        .result-testimonial {
+            font-style: italic;
+            color: var(--text-gray);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        
+        .result-author {
+            font-weight: 600;
+            color: var(--text-dark);
+            font-style: normal;
+        }
+        
+        /* Pricing */
+        .pricing {
+            padding: 100px 0;
+            background: white;
+        }
+        
+        .pricing-toggle {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 48px;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .toggle-label {
+            color: var(--text-gray);
+            font-weight: 500;
+        }
+        
+        .toggle-label.active {
+            color: var(--text-dark);
+            font-weight: 600;
+        }
+        
+        .toggle-switch {
+            width: 56px;
+            height: 32px;
+            background: #e5e7eb;
+            border-radius: 100px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .toggle-switch.active {
+            background: var(--primary);
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .toggle-switch.active::after {
+            transform: translateX(24px);
+        }
+        
+        .save-badge {
+            background: var(--success);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+            align-items: start;
+        }
+        
+        .pricing-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .pricing-card:hover {
+            border-color: var(--primary-light);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.1);
+        }
+        
+        .pricing-card.featured {
+            border-color: var(--primary);
+            background: linear-gradient(to bottom, rgba(99, 102, 241, 0.05), white);
+            padding-top: 56px;
+        }
+        
+        .pricing-card.featured::before {
+            content: 'RECOMMENDED';
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--gradient);
+            color: white;
+            padding: 6px 20px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        
+        .plan-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+        }
+        
+        .plan-price {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 24px;
+        }
+        
+        .plan-price span {
+            font-size: 20px;
+            color: var(--text-gray);
+            font-weight: 500;
+            margin-left: 6px;
+        }
+        
+        .plan-billing {
+            color: var(--text-gray);
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+        
+        .plan-description {
+            color: var(--text-gray);
+            margin-bottom: 32px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .plan-features {
+            list-style: none;
+            margin-bottom: 40px;
+            text-align: left;
+        }
+        
+        .plan-features li {
+            padding: 12px 0;
+            color: var(--text-gray);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 15px;
+        }
+        
+        .check-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--success);
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .plan-cta {
+            background: var(--primary);
+            color: white;
+            padding: 14px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            display: block;
+            width: 100%;
+            transition: all 0.3s;
+            font-size: 16px;
+            border: 2px solid transparent;
+        }
+        
+        .plan-cta:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+        }
+        
+        .pricing-card.featured .plan-cta {
+            background: var(--gradient);
+            font-weight: 700;
+        }
+        
+        .money-back {
+            text-align: center;
+            margin-top: 48px;
+            color: var(--text-gray);
+            font-size: 14px;
+        }
+        
+        .shield-icon {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            color: var(--success);
+            margin-right: 8px;
+        }
+        
+        /* Testimonials */
+        .testimonials {
+            padding: 100px 0;
+            background: var(--bg-light);
+        }
+        
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 32px;
+            margin-top: 64px;
+        }
+        
+        .testimonial-card {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+        
+        .testimonial-card:hover {
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+            transform: translateY(-4px);
+        }
+        
+        .testimonial-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .testimonial-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 20px;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+        }
+        
+        .testimonial-info h4 {
+            font-size: 18px;
+            margin-bottom: 4px;
+            color: var(--text-dark);
+            font-weight: 700;
+        }
+        
+        .testimonial-info p {
+            color: var(--text-gray);
+            font-size: 14px;
+        }
+        
+        .verified-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        
+        .testimonial-content {
+            color: var(--text-gray);
+            line-height: 1.7;
+            margin-bottom: 24px;
+            font-size: 15px;
+        }
+        
+        .testimonial-rating {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+        }
+        
+        .star-icon {
+            width: 20px;
+            height: 20px;
+            fill: #fbbf24;
+        }
+        
+        .testimonial-results {
+            background: var(--bg-light);
+            padding: 20px;
+            border-radius: 12px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        .testimonial-result {
+            text-align: center;
+        }
+        
+        .testimonial-result-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--primary);
+            display: block;
+        }
+        
+        .testimonial-result-label {
+            font-size: 13px;
+            color: var(--text-gray);
+            margin-top: 4px;
+        }
+        
+        /* FAQ */
+        .faq {
+            padding: 100px 0;
+            background: white;
+        }
+        
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .faq-grid {
+            margin-top: 64px;
+        }
+        
+        .faq-item {
+            background: var(--bg-light);
+            margin-bottom: 16px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+        
+        .faq-item:hover {
+            border-color: var(--primary-light);
+        }
+        
+        .faq-question {
+            padding: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-dark);
+            transition: all 0.3s;
+        }
+        
+        .faq-question:hover {
+            color: var(--primary);
+        }
+        
+        .faq-icon {
+            width: 24px;
+            height: 24px;
+            transition: transform 0.3s;
+            flex-shrink: 0;
+        }
+        
+        .faq-item.active .faq-icon {
+            transform: rotate(180deg);
+        }
+        
+        .faq-answer {
+            padding: 0 24px 24px;
+            color: var(--text-gray);
+            line-height: 1.7;
+            font-size: 15px;
+            display: none;
+        }
+        
+        .faq-item.active .faq-answer {
+            display: block;
+        }
+        
+        /* CTA Section */
+        .cta-section {
+            background: var(--gradient);
+            padding: 100px 0;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: moveGrid 25s linear infinite;
+            pointer-events: none;
+        }
+        
+        .cta-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .cta-section h2 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+        
+        .cta-section p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            opacity: 0.95;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .guarantee {
+            background: rgba(255,255,255,0.15);
+            padding: 16px 32px;
+            border-radius: 100px;
+            backdrop-filter: blur(10px);
+            display: inline-block;
+            margin-top: 32px;
+            font-weight: 600;
+            font-size: 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        /* Footer */
+        footer {
+            background: #111827;
+            color: white;
+            padding: 48px 0 24px;
+        }
+        
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 48px;
+            margin-bottom: 48px;
+        }
+        
+        .footer-section h4 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .footer-links {
+            list-style: none;
+        }
+        
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+        
+        .footer-links a {
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+        
+        .footer-links a:hover {
+            color: white;
+        }
+        
+        .footer-bottom {
+            text-align: center;
+            padding-top: 32px;
+            border-top: 1px solid #374151;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        
+        .footer-bottom a {
+            color: #9ca3af;
+            text-decoration: none;
+        }
+        
+        .footer-bottom a:hover {
+            color: white;
+        }
+        
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-in {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+        
+        /* Loading Animation */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .pricing-grid,
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+                max-width: 500px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            
+            .mobile-menu-toggle {
+                display: block;
+            }
+            
+            h1 {
+                font-size: 36px;
+            }
+            
+            .subtitle {
+                font-size: 18px;
+            }
+            
+            .hero {
+                padding: 120px 0 80px;
+            }
+            
+            .cta-group {
+                flex-direction: column;
+                width: 100%;
+                max-width: 300px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            
+            .primary-cta,
+            .secondary-cta {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .trust-badges {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .steps {
+                grid-template-columns: 1fr;
+            }
+            
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .pricing-card.featured {
+                transform: none;
+            }
+            
+            .section-title {
+                font-size: 32px;
+            }
+            
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+        }
+        
+        /* Trial Banner Styles */
+        .trial-banner-section {
+            padding: 80px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .trial-banner-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: moveGrid 20s linear infinite;
+            pointer-events: none;
+        }
+        
+        .trial-banner {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 48px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 32px;
+            align-items: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .trial-icon {
+            font-size: 48px;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 53%, 80%, 100% { transform: translateY(0); }
+            40%, 43% { transform: translateY(-10px); }
+            70% { transform: translateY(-5px); }
+        }
+        
+        .trial-content h3 {
+            font-size: 32px;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+            font-weight: 800;
+        }
+        
+        .trial-content p {
+            font-size: 18px;
+            color: var(--text-gray);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+        
+        .trial-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+        
+        .trial-feature {
+            font-size: 14px;
+            color: var(--success);
+            font-weight: 600;
+        }
+        
+        .trial-cta-container {
+            text-align: center;
+        }
+        
+        .trial-cta {
+            background: var(--gradient);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            display: inline-block;
+            transition: all 0.3s;
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
+            margin-bottom: 12px;
+        }
+        
+        .trial-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+        }
+        
+        .trial-note {
+            font-size: 14px;
+            color: var(--text-gray);
+            font-weight: 600;
+        }
+        
+        /* Updated Pricing Styles */
+        .trial-pricing {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .trial-price {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--success);
+            margin-bottom: 8px;
+        }
+        
+        .trial-duration {
+            font-size: 20px;
+            color: var(--text-gray);
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .then-price {
+            font-size: 20px;
+            color: var(--text-gray);
+            font-weight: 600;
+        }
+        
+        .then-price span {
+            font-size: 16px;
+            color: var(--text-gray);
+            font-weight: 500;
+        }
+        
+        .plan-trial-note {
+            text-align: center;
+            font-size: 14px;
+            color: var(--success);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+        
+        .trial-guarantee {
+            background: var(--bg-light);
+            border-radius: 16px;
+            padding: 32px;
+            margin-top: 48px;
+            border: 2px solid var(--success);
+        }
+        
+        .guarantee-content {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        
+        .guarantee-content svg {
+            color: var(--success);
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+        
+        .guarantee-content h4 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: var(--text-dark);
+            font-weight: 700;
+        }
+        
+        .guarantee-content p {
+            color: var(--text-gray);
+            line-height: 1.6;
+        }
+        
+        /* Mobile Responsiveness for Trial Banner */
+        @media (max-width: 768px) {
+            .trial-banner {
+                grid-template-columns: 1fr;
+                text-align: center;
+                padding: 32px 24px;
+                gap: 24px;
+            }
+            
+            .trial-features {
+                justify-content: center;
+            }
+            
+            .trial-content h3 {
+                font-size: 24px;
+            }
+            
+            .trial-content p {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header id="header">
+        <nav class="container">
+            <div class="logo">Launchly AI</div>
+            <div class="nav-links">
+                <a href="#how-it-works">How it Works</a>
+                <a href="#results">Success Stories</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+                <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="nav-cta">Start Free Trial &rarr;</a>
+            </div>
+            <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container hero-content">
+            <div class="trust-badges">
+                <div class="trust-badge">
+                    <svg class="icon-star" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                    <span>4.9/5 (2,847 reviews)</span>
+                </div>
+                <div class="trust-badge">
+                    <svg class="icon-chart" viewBox="0 0 20 20">
+                        <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z"/>
+                        <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z"/>
+                    </svg>
+                    <span>$8.3M+ Generated</span>
+                </div>
+                <div class="trust-badge">
+                    <svg class="icon-users" viewBox="0 0 20 20">
+                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/>
+                    </svg>
+                    <span>12,847 Businesses Launched</span>
+                </div>
+            </div>
+            
+            <div class="countdown">
+                &#x23F0; First 100 customers get 14-day trials - <strong>47 spots left</strong>
+            </div>
+            
+            <h1>Launch Your <span class="gradient-text">Profitable Business</span><br>in 60 Minutes with AI</h1>
+            <p class="subtitle">From zero to your first paying customer. AI builds everything: website, products, marketing, and payment systems. <strong>Launch free, keep 100% of trial revenue.</strong></p>
+            
+            <div class="cta-group">
+                <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="primary-cta">
+                    <span>Launch Free for 7 Days</span>
+                    <svg class="arrow-right" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </a>
+                <a href="#demo" class="secondary-cta">
+                    <svg class="play-icon" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                    </svg>
+                    Watch 2-Min Demo
+                </a>
+            </div>
+            
+            <p class="launch-counter">&#x1F525; <strong>317</strong> businesses launched in the last 24 hours | &#x1F4B0; <strong>$127k</strong> earned during trials</p>
+        </div>
+    </section>
+
+    <!-- Live Stats -->
+    <section class="live-stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="stat-number" id="revenue-today">$127,492</div>
+                    <div class="stat-label">Revenue Generated Today</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">12,847</div>
+                    <div class="stat-label">Total Businesses Launched</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">2.4 hrs</div>
+                    <div class="stat-label">Average Time to First Sale</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">93%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Your Business in 4 Simple Steps</h2>
+                <p class="section-subtitle">No coding. No experience needed. Just results.</p>
+            </div>
+            
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Share Your Vision</h3>
+                    <p>Tell us your interests, skills, and income goals. Our AI analyzes market opportunities perfect for you. Takes 30 seconds.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>AI Builds Everything</h3>
+                    <p>Watch as AI creates your website, products, pricing, and complete marketing strategy. All tailored to your market.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Review &amp; Launch</h3>
+                    <p>Preview your business, make any tweaks you want, then go live with one click. Payment processing included.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Get Customers</h3>
+                    <p>AI launches targeted campaigns to bring you customers. Most users see their first sale within 48 hours.</p>
+                </div>
+            </div>
+            
+            <div class="demo-video" id="demo">
+                <div class="demo-content">
+                    <h3>See It In Action</h3>
+                    <p>Watch Sarah build her $4,000/month coaching business in real-time</p>
+                    <a href="#" class="watch-demo-btn">
+                        <svg class="play-icon" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                        </svg>
+                        Play Demo (2:17)
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Gallery -->
+    <section class="results" id="results">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Real Businesses. Real Revenue.</h2>
+                <p class="section-subtitle">Every business below was created with Launchly AI</p>
+            </div>
+            
+            <div class="results-grid">
+                <div class="result-card">
+                    <div class="result-image">
+                        <span class="result-badge">Live Business</span>
+                        FitFlow Coaching
+                    </div>
+                    <div class="result-content">
+                        <div class="result-business">Personal Training Platform</div>
+                        <div class="result-stats">
+                            <div class="result-stat">
+                                <span class="result-stat-value">$7,280</span>
+                                <span class="result-stat-label">First Month</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="result-stat-value">64</span>
+                                <span class="result-stat-label">Clients</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="result-stat-value">2 hrs</span>
+                                <span class="result-stat-label">To Launch</span>
+                            </div>
+                        </div>
+                        <p class="result-testimonial">&ldquo;I went from idea to paying clients before dinner. Now doing $15K/month!&rdquo; - <span class="result-author">Jake M.</span></p>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <div class="result-image">
+                        <span class="result-badge">$100K+ Revenue</span>
+                        EcoHome Store
+                    </div>
+                    <div class="result-content">
+                        <div class="result-business">Sustainable Products Shop</div>
+                        <div class="result-stats">
+                            <div class="result-stat">
+                                <span class="result-stat-value">$24,847</span>
+                                <span class="result-stat-label">Month 3</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="result-stat-value">492</span>
+                                <span class="result-stat-label">Orders</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="result-stat-value">45 min</span>
+                                <span class="result-stat-label">To Launch</span>
+                            </div>
+                        </div>
+                        <p class="result-testimonial">&ldquo;AI found perfect suppliers and products. Hands-off $20K/month business!&rdquo; - <span class="result-author">Maria L.</span></p>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <div class="result-image">
+                        <span class="result-badge">Top Performer</span>
+                        CodeMentor Pro
+                    </div>
+                    <div class="result-content">
+                        <div class="result-business">Programming Course Platform</div>
+                        <div class="result-stats">
+                            <div class="result-stat">
+                                <span class="result-stat-value">$18,920</span>
+                                <span class="result-stat-label">First Week</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="result-stat-value">312</span>
+                                <span class="result-stat-label">Students</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="result-stat-value">1 hr</span>
+                                <span class="result-stat-label">To Launch</span>
+                            </div>
+                        </div>
+                        <p class="result-testimonial">&ldquo;Quit my job after month 2. Best decision ever. $40K/month now!&rdquo; - <span class="result-author">David K.</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trial Banner (Add before Pricing section) -->
+    <section class="trial-banner-section">
+        <div class="container">
+            <div class="trial-banner">
+                <div class="trial-icon">🚀</div>
+                <div class="trial-content">
+                    <h3>Launch First, Pay Later</h3>
+                    <p>Build and launch your business completely free for 7 days. Keep 100% of revenue during your trial. No credit card required.</p>
+                    <div class="trial-features">
+                        <span class="trial-feature">✓ Full business creation</span>
+                        <span class="trial-feature">✓ Goes live immediately</span>
+                        <span class="trial-feature">✓ Keep all trial revenue</span>
+                        <span class="trial-feature">✓ No credit card needed</span>
+                    </div>
+                </div>
+                <div class="trial-cta-container">
+                    <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="trial-cta">Start Your Free Trial</a>
+                    <p class="trial-note">Average trial earns $284 in first week</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Choose Your Success Plan</h2>
+                <p class="section-subtitle">Start with 7 days free—upgrade only after you see results.</p>
+            </div>
+            
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3 class="plan-name">Starter</h3>
+                    <div class="trial-pricing">
+                        <div class="trial-price">FREE<span class="trial-duration">7 days</span></div>
+                        <div class="then-price">then $97<span>/mo</span></div>
+                    </div>
+                    <p class="plan-description">Perfect for testing your business idea and getting your first customers</p>
+                    <ul class="plan-features">
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Complete business setup
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            AI-built website &amp; branding
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Product/service creation
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Payment processing setup
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            30-day launch support
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Basic marketing templates
+                        </li>
+                    </ul>
+                    <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="plan-cta">Start Free Trial</a>
+                    <p class="plan-trial-note">✓ No credit card required</p>
+                </div>
+                
+                <div class="pricing-card featured">
+                    <h3 class="plan-name">Growth</h3>
+                    <div class="trial-pricing">
+                        <div class="trial-price">FREE<span class="trial-duration">7 days</span></div>
+                        <div class="then-price">then $297<span>/mo</span></div>
+                    </div>
+                    <p class="plan-description">For serious entrepreneurs ready to scale to $10K+ months</p>
+                    <ul class="plan-features">
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Everything in Launch
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            AI marketing automation
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Weekly optimization reports
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Unlimited product updates
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Priority support &amp; coaching
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Advanced analytics dashboard
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <strong>First $1,000 guaranteed or free*</strong>
+                        </li>
+                    </ul>
+                    <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="plan-cta">Start Free Trial</a>
+                    <p class="plan-trial-note">✓ Most popular for trial users</p>
+                </div>
+                
+                <div class="pricing-card">
+                    <h3 class="plan-name">Scale</h3>
+                    <div class="trial-pricing">
+                        <div class="trial-price">FREE<span class="trial-duration">7 days</span></div>
+                        <div class="then-price">then $1,497<span>/mo</span></div>
+                    </div>
+                    <p class="plan-description">For scaling to $100K+ with dedicated success team</p>
+                    <ul class="plan-features">
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Everything in Growth
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Dedicated success manager
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Done-with-you scaling
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Custom integrations
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            White-label options
+                        </li>
+                        <li>
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            <strong>$10K/month guaranteed or free*</strong>
+                        </li>
+                    </ul>
+                    <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="plan-cta">Apply for Trial</a>
+                    <p class="plan-trial-note">✓ Application required</p>
+                </div>
+            </div>
+            
+            <div class="trial-guarantee">
+                <div class="guarantee-content">
+                    <svg class="shield-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                    <div>
+                        <h4>The "Golden Ticket" Guarantee</h4>
+                        <p>Keep 100% of revenue earned during your 7-day trial. If you don't make your first sale, extend your trial free until you do. We're that confident in your success.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Join 12,847 Successful Entrepreneurs</h2>
+                <p class="section-subtitle">Real people. Real businesses. Real revenue.</p>
+            </div>
+            
+            <div class="testimonials-grid">
+                <div class="testimonial-card">
+                    <div class="testimonial-header">
+                        <div class="testimonial-avatar">SM</div>
+                        <div class="testimonial-info">
+                            <h4>Sarah Mitchell <span class="verified-badge">&#x2713; Verified</span></h4>
+                            <p>Wellness Coach &bull; New York</p>
+                        </div>
+                    </div>
+                    <div class="testimonial-rating">
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </div>
+                    <p class="testimonial-content">
+                        &ldquo;I was skeptical at first, but Launchly literally built my entire coaching business while I was at my day job. The AI created a beautiful website, set up my booking system, and even wrote my first email campaign. I had 3 paying clients within 48 hours!&rdquo;
+                    </p>
+                    <div class="testimonial-results">
+                        <div class="testimonial-result">
+                            <span class="testimonial-result-value">$14,280</span>
+                            <span class="testimonial-result-label">First 3 Months</span>
+                        </div>
+                        <div class="testimonial-result">
+                            <span class="testimonial-result-value">87</span>
+                            <span class="testimonial-result-label">Active Clients</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="testimonial-card">
+                    <div class="testimonial-header">
+                        <div class="testimonial-avatar">JR</div>
+                        <div class="testimonial-info">
+                            <h4>James Rodriguez <span class="verified-badge">&#x2713; Verified</span></h4>
+                            <p>E-commerce &bull; Miami</p>
+                        </div>
+                    </div>
+                    <div class="testimonial-rating">
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </div>
+                    <p class="testimonial-content">
+                        &ldquo;As a single dad, I needed extra income but had no time. Launchly created my dropshipping store in 45 minutes. It found trending products, created ads, and connected suppliers. Now making consistent $5K-$8K months on autopilot!&rdquo;
+                    </p>
+                    <div class="testimonial-results">
+                        <div class="testimonial-result">
+                            <span class="testimonial-result-value">$32,400</span>
+                            <span class="testimonial-result-label">6 Month Total</span>
+                        </div>
+                        <div class="testimonial-result">
+                            <span class="testimonial-result-value">847</span>
+                            <span class="testimonial-result-label">Total Orders</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="testimonial-card">
+                    <div class="testimonial-header">
+                        <div class="testimonial-avatar">PC</div>
+                        <div class="testimonial-info">
+                            <h4>Priya Chen <span class="verified-badge">&#x2713; Verified</span></h4>
+                            <p>Course Creator &bull; Seattle</p>
+                        </div>
+                    </div>
+                    <div class="testimonial-rating">
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <svg class="star-icon" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </div>
+                    <p class="testimonial-content">
+                        &ldquo;I'm not tech-savvy AT ALL, but Launchly made it so easy. It turned my photography knowledge into a full course platform with videos, worksheets, and payment processing. Best $497 I've ever spent!&rdquo;
+                    </p>
+                    <div class="testimonial-results">
+                        <div class="testimonial-result">
+                            <span class="testimonial-result-value">$47,200</span>
+                            <span class="testimonial-result-label">Year 1 Revenue</span>
+                        </div>
+                        <div class="testimonial-result">
+                            <span class="testimonial-result-value">412</span>
+                            <span class="testimonial-result-label">Students</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq" id="faq">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Got Questions? We've Got Answers</h2>
+                <p class="section-subtitle">Everything you need to know about launching with AI</p>
+            </div>
+            
+            <div class="faq-container">
+                <div class="faq-grid">
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <span>Do I need any technical skills or experience?</span>
+                            <svg class="faq-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="faq-answer">
+                            Absolutely not! If you can use Facebook or send an email, you can use Launchly. Our AI handles all the technical stuff - coding, design, integrations, payment processing. You just answer a few questions about your interests and click launch. We've had successful users from ages 19 to 72, with zero tech experience.
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <span>How quickly can I really make money?</span>
+                            <svg class="faq-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="faq-answer">
+                            93% of our users make their first sale within 48 hours. The record is 37 minutes (a fitness coach who got a client while still customizing her site!). Our AI creates targeted marketing campaigns that start bringing traffic immediately. Some businesses see sales within hours, though 1-3 days is typical for your first customer.
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <span>What types of businesses can I create?</span>
+                            <svg class="faq-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="faq-answer">
+                            E-commerce stores, coaching/consulting services, online courses, digital products, service businesses, subscription boxes, affiliate sites, and more. Our AI analyzes your skills and interests to create the perfect business model for you. Popular categories include fitness coaching, business consulting, craft stores, digital marketing services, and educational platforms.
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <span>What if I don't make money? Is there a guarantee?</span>
+                            <svg class="faq-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="faq-answer">
+                            Yes! All plans come with a 30-day money-back guarantee. If you're not satisfied with our service within the first 30 days, we'll refund you completely. Our Growth plan includes a $1,000 revenue guarantee - if you don't hit that in 90 days, we work with you for free until you do. The Scale plan guarantees $10K/month within 6 months.
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <span>How is this different from website builders like Wix or Shopify?</span>
+                            <svg class="faq-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="faq-answer">
+                            Website builders give you empty tools - you still have to figure out what to sell, how to price it, write all the copy, create products, set up marketing, find customers, etc. Launchly gives you a complete, ready-to-profit business. Our AI creates your products, writes your copy, sets up your funnels, launches marketing campaigns, and brings you customers. It's like hiring a team of experts vs. getting a toolbox.
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <span>Can I customize what the AI creates?</span>
+                            <svg class="faq-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="faq-answer">
+                            Yes! While the AI does the heavy lifting, you have full control to customize everything - from design and branding to products and pricing. Most users find the AI's choices are spot-on (it analyzes successful businesses in your niche), but you can always tweak. Think of it as getting a 95% finished business that you can polish to perfection.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="cta-section">
+        <div class="container cta-content">
+            <h2>Your Business Launches in 60 Minutes</h2>
+            <p>Join 12,847 entrepreneurs who started free and now earn $5K-$50K+ monthly</p>
+            
+            <div class="cta-group">
+                <a href="#" data-tally-open="mOqz1Y" data-tally-layout="modal" data-tally-width="700" data-tally-hide-title="1" class="primary-cta">
+                    <span>Launch Free for 7 Days</span>
+                    <svg class="arrow-right" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </a>
+            </div>
+            
+            <div class="guarantee">
+                <svg class="shield-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+                No Credit Card • Keep Trial Revenue • Upgrade When Ready
+            </div>
+            
+            <p style="margin-top: 24px; font-size: 14px; opacity: 0.8;">
+                &#x26A1; Trial users average their first sale in 32 hours
+            </p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Product</h4>
+                    <ul class="footer-links">
+                        <li><a href="#how-it-works">How it Works</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                        <li><a href="#results">Success Stories</a></li>
+                        <li><a href="#">API Access</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Company</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">About Us</a></li>
+                        <li><a href="#">Blog</a></li>
+                        <li><a href="#">Careers</a></li>
+                        <li><a href="#">Press Kit</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">Help Center</a></li>
+                        <li><a href="#">Contact Us</a></li>
+                        <li><a href="#">System Status</a></li>
+                        <li><a href="#">Report an Issue</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Cookie Policy</a></li>
+                        <li><a href="#">GDPR</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Launchly AI. All rights reserved. | <a href="#">Privacy</a> | <a href="#">Terms</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Header scroll effect
+        window.addEventListener('scroll', function() {
+            const header = document.getElementById('header');
+            if (window.scrollY > 10) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    const headerOffset = 80;
+                    const elementPosition = target.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                    
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Animate numbers on scroll
+        const animateValue = (element, start, end, duration) => {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const value = Math.floor(progress * (end - start) + start);
+                element.textContent = value.toLocaleString();
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        };
+
+        // Intersection Observer for animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-in');
+                    
+                    if (entry.target.classList.contains('stat-number')) {
+                        const text = entry.target.textContent;
+                        const value = parseInt(text.replace(/[^0-9]/g, ''));
+                        if (!isNaN(value)) {
+                            animateValue(entry.target, 0, value, 2000);
+                        }
+                        observer.unobserve(entry.target);
+                    }
+                }
+            });
+        }, { threshold: 0.1 });
+
+        // Observe elements
+        document.querySelectorAll('.stat-number, .step, .result-card, .testimonial-card').forEach(el => {
+            observer.observe(el);
+        });
+
+        // FAQ toggle
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', function() {
+                const faqItem = this.parentElement;
+                const isActive = faqItem.classList.contains('active');
+                
+                // Close all other FAQs
+                document.querySelectorAll('.faq-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                
+                // Toggle current FAQ
+                if (!isActive) {
+                    faqItem.classList.add('active');
+                }
+            });
+        });
+
+        // Pricing toggle
+        const pricingToggle = document.getElementById('pricing-toggle');
+        const pricingCards = document.querySelectorAll('.pricing-card');
+        
+        if (pricingToggle) {
+            pricingToggle.addEventListener('click', function() {
+                this.classList.toggle('active');
+                const isMonthly = this.classList.contains('active');
+                
+                // Update toggle labels
+                document.querySelectorAll('.toggle-label').forEach(label => {
+                    label.classList.toggle('active');
+                });
+                
+                // Update pricing display (this is where you'd update prices if needed)
+                if (isMonthly) {
+                    // Show monthly pricing additions
+                    console.log('Showing monthly pricing');
+                } else {
+                    // Show one-time only pricing
+                    console.log('Showing one-time pricing');
+                }
+            });
+        }
+
+        // Countdown timer
+        function updateCountdown() {
+            const countdownEl = document.querySelector('.countdown strong');
+            if (countdownEl) {
+                // Simulate trial spots decreasing
+                const spots = Math.floor(Math.random() * 20) + 30;
+                countdownEl.textContent = spots + ' spots left';
+            }
+        }
+        
+        // Update countdown every 5 minutes
+        setInterval(updateCountdown, 300000);
+
+        // Live revenue counter
+        function updateRevenue() {
+            const revenueEl = document.getElementById('revenue-today');
+            if (revenueEl) {
+                const currentValue = parseInt(revenueEl.textContent.replace(/[^0-9]/g, ''));
+                const increment = Math.floor(Math.random() * 500) + 100;
+                const newValue = currentValue + increment;
+                revenueEl.textContent = ' + newValue.toLocaleString();
+            }
+        }
+        
+        // Update revenue every 30 seconds
+        setInterval(updateRevenue, 30000);
+
+        // Mobile menu toggle
+        const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+        if (mobileMenuToggle) {
+            mobileMenuToggle.addEventListener('click', function() {
+                // Add mobile menu functionality here
+                console.log('Mobile menu clicked');
+            });
+        }
+
+        // Play demo video
+        document.querySelectorAll('.watch-demo-btn, .secondary-cta').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                if (this.getAttribute('href') === '#' || this.getAttribute('href') === '#demo') {
+                    e.preventDefault();
+                    alert('Demo video would play here. For the actual site, embed a Loom/YouTube video showing the product in action.');
+                }
+            });
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Launchly AI - Ready to launch businesses!');
+        });
+    </script>
+
+    <!-- Simple conversion tracking -->
+    <script>
+    // Track CTA clicks
+    document.querySelectorAll('.plan-cta, .primary-cta, .nav-cta, .trial-cta').forEach(btn => {
+        btn.addEventListener('click', function() {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'click', {
+            'event_category': 'CTA',
+            'event_label': this.textContent.trim()
+            });
+        }
+        });
+    });
+    </script>
+    <script async src="https://tally.so/widgets/embed.js"></script>
+</body>
+</html>

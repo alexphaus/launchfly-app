@@ -1,0 +1,1982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Launch an AI-powered business in 30 minutes. Your first $1,000 is guaranteed, or we pay you. AI builds your site, finds customers, and runs your marketing.">
+    <title>Launchfly - Launch Your AI Business in 30 Minutes | $1,000 Guaranteed</title>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+    
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" as="style">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Root Variables & Global Styles */
+        :root {
+            --primary: #007BFF;
+            --primary-dark: #0056b3;
+            --primary-light: #E6F2FF;
+            --secondary-cta: #00B8D9;
+            --secondary-cta-dark: #00A3BF;
+            --accent: #FF6B6B;
+            --success: #28a745;
+            --text-dark: #1A2B48;
+            --text-gray: #5A6982;
+            --text-light: #F9FAFB;
+            --bg-light: #F9FAFB;
+            --bg-dark: #1A2B48;
+            --white: #ffffff;
+            --border-light: #E4E7EB;
+            --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--secondary-cta) 100%);
+            --shadow-sm: 0 1px 2px 0 rgba(26, 43, 72, 0.05);
+            --shadow-md: 0 4px 8px -2px rgba(26, 43, 72, 0.1), 0 2px 4px -2px rgba(26, 43, 72, 0.06);
+            --shadow-lg: 0 12px 20px -4px rgba(26, 43, 72, 0.1), 0 4px 6px -4px rgba(26, 43, 72, 0.05);
+            --shadow-xl: 0 24px 32px -8px rgba(26, 43, 72, 0.12), 0 10px 12px -6px rgba(26, 43, 72, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 80px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: var(--white);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body.menu-open {
+            overflow: hidden;
+        }
+
+        main {
+            padding-top: 80px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        section {
+            padding: 88px 0;
+        }
+
+        /* Header & Navigation */
+        #header {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            border-bottom: 1px solid transparent;
+        }
+
+        #header.scrolled {
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: var(--shadow-md);
+            border-bottom-color: var(--border-light);
+        }
+
+        #header nav.container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 80px;
+        }
+
+        .logo {
+            font-size: 26px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-dark);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 36px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-gray);
+            font-weight: 600;
+            font-size: 16px;
+            transition: color 0.2s;
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-cta {
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            background: var(--primary-dark);
+            box-shadow: var(--shadow-md);
+        }
+
+        .mobile-menu-toggle { display: none; }
+        .mobile-nav-links { display: none; }
+
+        /* Hero Section */
+        .hero {
+            background: var(--white);
+            padding: 80px 0 60px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: var(--accent);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
+            transition: all 0.3s ease;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3); }
+            50% { box-shadow: 0 4px 20px rgba(255, 107, 107, 0.5); }
+            100% { box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3); }
+        }
+
+        .hero-badge.highlight {
+            transform: scale(1.1);
+        }
+
+        h1 {
+            font-size: 64px;
+            margin-bottom: 24px;
+            font-weight: 900;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            color: var(--text-dark);
+        }
+
+        .gradient-text {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 20px;
+            margin-bottom: 40px;
+            color: var(--text-gray);
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .primary-cta {
+            background: var(--secondary-cta);
+            color: white;
+            padding: 18px 36px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 5px 20px rgba(0, 184, 217, 0.25);
+            border: none;
+            cursor: pointer;
+        }
+
+        .primary-cta:hover {
+            transform: translateY(-3px);
+            background: var(--secondary-cta-dark);
+            box-shadow: 0 8px 25px rgba(0, 184, 217, 0.35);
+        }
+
+        .cta-subtext {
+            font-size: 14px;
+            color: var(--text-gray);
+            margin-bottom: 48px;
+        }
+
+        /* Hero Stats */
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 32px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--primary);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-gray);
+            margin-top: 8px;
+        }
+
+        /* Trust Bar */
+        .trust-bar {
+            background: var(--bg-dark);
+            padding: 24px 0;
+            color: var(--white);
+        }
+
+        .trust-bar-content {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .trust-item {
+            color: var(--text-light);
+            font-weight: 500;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .trust-item strong {
+            color: var(--white);
+            font-weight: 700;
+        }
+
+        .stars {
+            color: #FFD700;
+        }
+
+        .live-indicator {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            display: inline-block;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* How It Works - Timeline */
+        .how-it-works {
+            background: var(--bg-light);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .section-header.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .section-label {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-gray);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .steps-timeline {
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .timeline-line {
+            position: absolute;
+            left: 30px;
+            top: 30px;
+            bottom: 30px;
+            width: 2px;
+            background: linear-gradient(180deg, var(--primary), var(--secondary-cta));
+            opacity: 0.3;
+        }
+
+        .step-card {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 40px;
+            opacity: 0;
+            transform: translateX(-30px);
+            transition: all 0.6s ease;
+        }
+
+        .step-card.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .step-card:nth-child(2) { transition-delay: 0.1s; }
+        .step-card:nth-child(3) { transition-delay: 0.2s; }
+        .step-card:nth-child(4) { transition-delay: 0.3s; }
+
+        .step-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--white);
+            border: 3px solid var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .step-card:hover .step-icon {
+            background: var(--primary);
+            color: var(--white);
+            transform: scale(1.1);
+            box-shadow: 0 4px 14px rgba(0, 123, 255, 0.4);
+        }
+
+        .step-content {
+            flex: 1;
+            padding-top: 5px;
+        }
+
+        .step-content h3 {
+            font-size: 22px;
+            margin-bottom: 8px;
+            color: var(--text-dark);
+        }
+
+        .step-content p {
+            color: var(--text-gray);
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .step-time {
+            font-size: 14px;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* Video Testimonial */
+        .video-testimonial {
+            background: var(--white);
+            padding: 88px 0;
+        }
+
+        .story-card {
+            background: var(--bg-light);
+            border-radius: 20px;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            box-shadow: var(--shadow-xl);
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 0.6s ease;
+        }
+
+        .story-card.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .story-content {
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .quote-icon {
+            font-size: 48px;
+            color: var(--primary);
+            line-height: 1;
+            margin-bottom: 24px;
+        }
+
+        .story-quote {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        .story-author {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .author-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+        }
+
+        .author-name {
+            font-weight: 700;
+            color: var(--text-dark);
+            font-size: 18px;
+        }
+
+        .author-business {
+            font-size: 14px;
+            color: var(--text-gray);
+        }
+
+        .story-video {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .play-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 88px;
+            height: 88px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .play-button:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .play-button svg {
+            width: 32px;
+            height: 32px;
+            color: var(--primary);
+            transform: translateX(3px);
+        }
+
+        /* Why Launchfly Comparison */
+        .comparison {
+            background: var(--bg-light);
+        }
+
+        .comparison-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .comparison-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 48px;
+            position: relative;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .comparison-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .comparison-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .old-way {
+            border: 2px solid var(--border-light);
+        }
+
+        .launchfly-way {
+            border: 2px solid var(--primary);
+            background: linear-gradient(to bottom, var(--primary-light), var(--white));
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .card-icon {
+            font-size: 32px;
+        }
+
+        .card-header h3 {
+            font-size: 24px;
+            color: var(--text-dark);
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 16px;
+            color: var(--text-gray);
+        }
+
+        .x-mark {
+            color: #DC2626;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .check-mark {
+            color: var(--success);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .best-choice-badge {
+            position: absolute;
+            top: -15px;
+            right: 20px;
+            background: var(--primary);
+            color: var(--white);
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Testimonials Carousel */
+        .testimonials {
+            background: var(--white);
+            padding: 88px 0;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin-top: 48px;
+        }
+
+        .testimonial-card {
+            background: var(--bg-light);
+            padding: 32px;
+            border-radius: 16px;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .testimonial-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .testimonial-stars {
+            color: #FFD700;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+
+        .testimonial-text {
+            color: var(--text-gray);
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .testimonial-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .testimonial-author-info {
+            flex: 1;
+        }
+
+        .testimonial-name {
+            font-weight: 700;
+            color: var(--text-dark);
+            font-size: 16px;
+        }
+
+        .testimonial-role {
+            font-size: 14px;
+            color: var(--text-gray);
+        }
+
+        /* Pricing Section */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.1fr;
+            gap: 32px;
+            align-items: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .pricing-card {
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.3s ease;
+        }
+
+        .pricing-card:nth-child(2) { transition-delay: 0.1s; }
+
+        .pricing-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .pricing-card.featured {
+            border-color: var(--primary);
+            transform: scale(1.05);
+            box-shadow: var(--shadow-xl);
+            position: relative;
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .pricing-card.featured:hover {
+            transform: translateY(-5px) scale(1.05);
+        }
+
+        .featured-badge {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .pricing-card h3 {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-dark);
+        }
+
+        .plan-description {
+            color: var(--text-gray);
+            margin-bottom: 24px;
+            font-size: 16px;
+            flex-grow: 1;
+            max-height: 50px;
+        }
+
+        .price-tag {
+            font-size: 56px;
+            font-weight: 900;
+            color: var(--text-dark);
+            margin: 16px 0 8px;
+        }
+
+        .price-period {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-gray);
+        }
+
+        .revenue-share {
+            font-size: 14px;
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 32px;
+            background: var(--primary-light);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin-bottom: 40px;
+            text-align: left;
+            flex-grow: 1;
+        }
+
+        .plan-features li {
+            padding: 10px 0;
+            color: var(--text-gray);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 16px;
+        }
+
+        .check-icon {
+            color: var(--success);
+            flex-shrink: 0;
+            margin-top: 4px;
+            font-weight: bold;
+        }
+
+        .plan-cta {
+            padding: 16px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            display: block;
+            width: 100%;
+            transition: all 0.3s;
+            font-size: 16px;
+            margin-top: auto;
+        }
+
+        .plan-cta.primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .plan-cta.primary:hover {
+            transform: translateY(-2px);
+            background: var(--primary-dark);
+            box-shadow: var(--shadow-md);
+        }
+
+        .plan-cta.secondary {
+            background: var(--white);
+            color: var(--primary);
+            border: 2px solid var(--primary-light);
+        }
+
+        .plan-cta.secondary:hover {
+            background: var(--primary-light);
+        }
+
+        /* Guarantee Section */
+        .guarantee-section {
+            background: var(--bg-light);
+        }
+
+        .guarantee-card {
+            background: var(--white);
+            border-radius: 24px;
+            padding: 64px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+            max-width: 1000px;
+            margin: 0 auto;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease;
+        }
+
+        .guarantee-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .guarantee-icon {
+            margin-bottom: 32px;
+        }
+
+        .guarantee-icon svg {
+            width: 88px;
+            height: 88px;
+            color: var(--primary);
+        }
+
+        .guarantee-content h3 {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 48px;
+            color: var(--text-dark);
+        }
+
+        .guarantee-items {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            text-align: left;
+        }
+
+        .guarantee-item {
+            display: flex;
+            gap: 24px;
+        }
+
+        .guarantee-number {
+            width: 48px;
+            height: 48px;
+            background: var(--primary);
+            color: var(--white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .guarantee-item h4 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: var(--text-dark);
+        }
+
+        .guarantee-item p {
+            color: var(--text-gray);
+            font-size: 16px;
+        }
+
+        /* FAQ Section */
+        .faq-grid {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            background: var(--white);
+            margin-bottom: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .faq-item:nth-child(2) { transition-delay: 0.1s; }
+        .faq-item:nth-child(3) { transition-delay: 0.2s; }
+        .faq-item:nth-child(4) { transition-delay: 0.3s; }
+
+        .faq-item.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .faq-item.active {
+            border-color: var(--primary);
+        }
+
+        .faq-question {
+            padding: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-dark);
+            width: 100%;
+            background: none;
+            border: none;
+            text-align: left;
+        }
+
+        .faq-question:hover {
+            color: var(--primary);
+        }
+
+        .faq-item.active .faq-question {
+            color: var(--primary);
+        }
+
+        .faq-icon {
+            font-size: 24px;
+            transition: transform 0.3s;
+            color: var(--primary);
+            font-weight: 400;
+        }
+
+        .faq-item.active .faq-icon {
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out, padding 0.4s ease-out;
+        }
+
+        .faq-answer p {
+            padding: 0 24px 0px;
+            color: var(--text-gray);
+            line-height: 1.7;
+            font-size: 16px;
+        }
+
+        .faq-item.active .faq-answer {
+            max-height: 300px;
+            padding-bottom: 24px;
+        }
+
+        /* Final CTA */
+        .final-cta {
+            background: var(--bg-dark);
+            color: var(--white);
+            text-align: center;
+        }
+
+        .final-cta-content {
+            padding: 80px 0;
+        }
+
+        .final-cta h2 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
+        }
+
+        .final-cta p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            opacity: 0.8;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .primary-cta.large {
+            padding: 20px 40px;
+            font-size: 20px;
+        }
+
+        /* Footer */
+        footer {
+            background: #0F1824;
+            color: var(--text-light);
+            padding: 80px 0 40px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 64px;
+            margin-bottom: 60px;
+        }
+
+        .footer-brand p {
+            margin-top: 16px;
+            color: #94A3B8;
+            max-width: 250px;
+        }
+
+        footer .logo {
+            color: var(--text-light);
+        }
+
+        .footer-links-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+        }
+
+        .footer-column h4 {
+            font-size: 16px;
+            margin-bottom: 24px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .footer-column a {
+            display: block;
+            color: #94A3B8;
+            text-decoration: none;
+            margin-bottom: 16px;
+            transition: color 0.2s;
+        }
+
+        .footer-column a:hover {
+            color: var(--white);
+        }
+
+        .footer-social {
+            display: flex;
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .social-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-weight: 700;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .social-icon:hover {
+            background: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 40px;
+            border-top: 1px solid #1E293B;
+            color: #64748B;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-legal {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-legal a {
+            color: #64748B;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-legal a:hover {
+            color: var(--white);
+        }
+
+        /* Live Chat Widget */
+        .chat-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 999;
+        }
+
+        .chat-button {
+            width: 64px;
+            height: 64px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .chat-button:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .chat-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 20px;
+            height: 20px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            h1 { font-size: 56px; }
+            .section-title { font-size: 40px; }
+            
+            .hero-stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 24px;
+            }
+            
+            .story-card {
+                grid-template-columns: 1fr;
+            }
+            
+            .comparison-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .pricing-grid {
+                grid-template-columns: 1fr;
+                max-width: 550px;
+            }
+            
+            .pricing-card.featured {
+                transform: scale(1);
+            }
+            
+            .pricing-card:hover, .pricing-card.featured:hover {
+                transform: translateY(-5px);
+            }
+            
+            .guarantee-items {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 40px; }
+            .section-title { font-size: 34px; }
+            .subtitle, .section-subtitle { font-size: 18px; }
+            section { padding: 64px 0; }
+            main { padding-top: 80px; }
+
+            .nav-links, .nav-cta-container { display: none; }
+            
+            .mobile-menu-toggle {
+                display: block;
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 8px;
+                z-index: 1002;
+                position: relative;
+            }
+            
+            .mobile-menu-toggle span {
+                display: block;
+                width: 24px;
+                height: 3px;
+                background: var(--text-dark);
+                margin: 5px 0;
+                transition: all 0.3s;
+                border-radius: 2px;
+            }
+            
+            .mobile-menu-toggle.active span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+            .mobile-menu-toggle.active span:nth-child(2) { opacity: 0; }
+            .mobile-menu-toggle.active span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+            .mobile-nav-links {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 24px;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100vh;
+                background: var(--white);
+                padding-top: 120px;
+                transform: translateY(-100%);
+                transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+                z-index: 1001;
+            }
+            
+            .mobile-nav-links.active {
+                transform: translateY(0);
+            }
+            
+            .mobile-nav-link {
+                font-size: 28px;
+                font-weight: 700;
+                color: var(--text-dark);
+                text-decoration: none;
+            }
+            
+            .mobile-nav-cta {
+                background: var(--primary);
+                color: var(--white);
+                padding: 14px 28px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 600;
+                margin-top: 20px;
+            }
+
+            .trust-bar-content {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                text-align: center;
+            }
+
+            .timeline-line {
+                display: none;
+            }
+
+            .story-content {
+                padding: 40px;
+            }
+
+            .story-quote {
+                font-size: 22px;
+            }
+
+            .comparison-card {
+                padding: 32px;
+            }
+
+            .guarantee-card {
+                padding: 40px 24px;
+            }
+            
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+                gap: 48px;
+            }
+            
+            .footer-links-container {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+            
+            .footer-bottom {
+                flex-direction: column;
+                gap: 24px;
+            }
+        }
+    </style>
+
+    <script src="https://tally.so/widgets/embed.js" defer></script>
+</head>
+<body>
+    <header id="header">
+        <nav class="container">
+            <div class="logo">
+                <span class="logo-icon">🚀</span>
+                Launchfly
+            </div>
+            <div class="nav-links">
+                <a href="#how-it-works">How It Works</a>
+                <a href="#why-launchfly">Why Launchfly</a>
+                <a href="#testimonials">Success Stories</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+            </div>
+            <div class="nav-cta-container">
+                 <a href="#" class="nav-cta" onclick="openTallyPopup()">Start Today →</a>
+            </div>
+            <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+        <div class="mobile-nav-links" id="mobileNavLinks">
+            <a href="#how-it-works" class="mobile-nav-link">How It Works</a>
+            <a href="#why-launchfly" class="mobile-nav-link">Why Launchfly</a>
+            <a href="#testimonials" class="mobile-nav-link">Success Stories</a>
+            <a href="#pricing" class="mobile-nav-link">Pricing</a>
+            <a href="#faq" class="mobile-nav-link">FAQ</a>
+            <a href="#" class="mobile-nav-cta" onclick="openTallyPopup()">Start Today</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container hero-content">
+                <div class="hero-badge" id="heroBadge">
+                    <span class="badge-icon">🔥</span>
+                    <span>Limited Time: 12 Spots Left This Week</span>
+                </div>
+                
+                <h1>Launch Your AI-Powered Business in 30 Minutes<br><span class="gradient-text">Your First $1,000 is Guaranteed</span></h1>
+                <p class="subtitle">No coding. No audience. No experience needed. Our AI builds everything—your website, products, and marketing—then finds paying customers automatically.</p>
+                
+                <div class="cta-group">
+                    <a href="#" class="primary-cta" onclick="openTallyPopup()">
+                        <span>Start Making Money Today</span>
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                    </a>
+                </div>
+                <p class="cta-subtext">✓ No credit card required ✓ Start earning in 48 hours</p>
+
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-number">3,847+</div>
+                        <div class="stat-label">Active Businesses</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">$1.2M+</div>
+                        <div class="stat-label">Generated for Users</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">73%</div>
+                        <div class="stat-label">Success Rate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">48h</div>
+                        <div class="stat-label">To First Sale</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="trust-bar">
+            <div class="container trust-bar-content">
+                <div class="trust-item">
+                    <span class="stars">★★★★★</span>
+                    <span><strong>4.9/5</strong> from 847+ reviews</span>
+                </div>
+                <div class="trust-item">
+                    <span class="live-indicator"></span>
+                    <span id="liveUsers"><strong>127</strong> people building right now</span>
+                </div>
+                <div class="trust-item">
+                    <span>🎯</span>
+                    <span><strong>92%</strong> make first sale in 7 days</span>
+                </div>
+                <div class="trust-item">
+                    <span>💰</span>
+                    <span><strong>$2,847</strong> avg monthly revenue</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="how-it-works" id="how-it-works">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">HOW IT WORKS</div>
+                    <h2 class="section-title">From Zero to Profit in <span class="gradient-text">4 Simple Steps</span></h2>
+                    <p class="section-subtitle">Join thousands who've already launched successful businesses</p>
+                </div>
+                
+                <div class="steps-timeline">
+                    <div class="timeline-line"></div>
+                    <div class="step-card">
+                        <div class="step-icon">1</div>
+                        <div class="step-content">
+                            <h3>Choose Your Niche</h3>
+                            <p>Answer 5 quick questions. Our AI analyzes market demand and matches you with a profitable business model tailored to your interests.</p>
+                            <div class="step-time">⏱ 2 minutes</div>
+                        </div>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-icon">2</div>
+                        <div class="step-content">
+                            <h3>AI Builds Everything</h3>
+                            <p>Watch as AI creates your entire business: professional website, compelling offers, pricing strategy, and marketing materials.</p>
+                            <div class="step-time">⏱ 30 minutes</div>
+                        </div>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-icon">3</div>
+                        <div class="step-content">
+                            <h3>Customers Find You</h3>
+                            <p>AI launches targeted campaigns across multiple channels. Most users see their first paying customer within 48 hours.</p>
+                            <div class="step-time">⏱ 24-48 hours</div>
+                        </div>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-icon">4</div>
+                        <div class="step-content">
+                            <h3>Scale Automatically</h3>
+                            <p>AI continuously optimizes pricing, tests new offers, and expands your reach. Your business grows while you sleep.</p>
+                            <div class="step-time">⏱ Ongoing</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="video-testimonial">
+            <div class="container">
+                <div class="story-card">
+                    <div class="story-content">
+                        <div class="quote-icon">"</div>
+                        <h3 class="story-quote">I went from skeptic to believer in 48 hours. Made my first $1,450 in month one—completely hands-off.</h3>
+                        <div class="story-author">
+                            <img src="https://placehold.co/60x60/007BFF/ffffff?text=JM" alt="Jake M." class="author-avatar">
+                            <div class="author-info">
+                                <div class="author-name">Jake Martinez</div>
+                                <div class="author-business">Fitness Coaching Business</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="story-video">
+                        <img src="https://placehold.co/600x400/1A2B48/ffffff?text=Success+Story+Video" alt="Jake's success story" class="video-thumbnail">
+                        <button class="play-button" aria-label="Play video">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="comparison" id="why-launchfly">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">WHY LAUNCHFLY</div>
+                    <h2 class="section-title">Stop Struggling. <span class="gradient-text">Start Earning.</span></h2>
+                    <p class="section-subtitle">See why smart entrepreneurs choose Launchfly over the old way</p>
+                </div>
+                
+                <div class="comparison-cards">
+                    <div class="comparison-card old-way">
+                        <div class="card-header">
+                            <span class="card-icon">❌</span>
+                            <h3>The Old Way</h3>
+                        </div>
+                        <ul class="comparison-list">
+                            <li><span class="x-mark">✗</span> 50+ hours to launch</li>
+                            <li><span class="x-mark">✗</span> Need technical skills</li>
+                            <li><span class="x-mark">✗</span> Figure out products yourself</li>
+                            <li><span class="x-mark">✗</span> Learn marketing from scratch</li>
+                            <li><span class="x-mark">✗</span> Find customers manually</li>
+                            <li><span class="x-mark">✗</span> 90% fail in first year</li>
+                            <li><span class="x-mark">✗</span> No guarantees</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="comparison-card launchfly-way">
+                        <div class="card-header">
+                            <span class="card-icon">🚀</span>
+                            <h3>The Launchfly Way</h3>
+                        </div>
+                        <ul class="comparison-list">
+                            <li><span class="check-mark">✓</span> Live in 30 minutes</li>
+                            <li><span class="check-mark">✓</span> Zero skills needed</li>
+                            <li><span class="check-mark">✓</span> AI creates everything</li>
+                            <li><span class="check-mark">✓</span> Marketing runs itself</li>
+                            <li><span class="check-mark">✓</span> Customers come to you</li>
+                            <li><span class="check-mark">✓</span> 73% success rate</li>
+                            <li><span class="check-mark">✓</span> $1,000 guaranteed</li>
+                        </ul>
+                        <div class="best-choice-badge">Best Choice</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="testimonials" id="testimonials">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">SUCCESS STORIES</div>
+                    <h2 class="section-title">Real People. <span class="gradient-text">Real Results.</span></h2>
+                    <p class="section-subtitle">Join thousands earning with AI-powered businesses</p>
+                </div>
+                
+                <div class="testimonials-grid">
+                    <div class="testimonial-card">
+                        <div class="testimonial-stars">★★★★★</div>
+                        <p class="testimonial-text">"$3,200 in my second month. The AI literally does everything - I just check my bank account. This is the future of online business."</p>
+                        <div class="testimonial-author">
+                            <div class="testimonial-avatar">SM</div>
+                            <div class="testimonial-author-info">
+                                <div class="testimonial-name">Sarah Mitchell</div>
+                                <div class="testimonial-role">Digital Marketing Services</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="testimonial-card">
+                        <div class="testimonial-stars">★★★★★</div>
+                        <p class="testimonial-text">"As a single mom, I needed something that actually worked. First sale in 36 hours, now making $2,100/month consistently."</p>
+                        <div class="testimonial-author">
+                            <div class="testimonial-avatar">LT</div>
+                            <div class="testimonial-author-info">
+                                <div class="testimonial-name">Lisa Thompson</div>
+                                <div class="testimonial-role">Parenting Resources</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="testimonial-card">
+                        <div class="testimonial-stars">★★★★★</div>
+                        <p class="testimonial-text">"Skeptical at first, but the guarantee convinced me. Made $1,847 in month one. Now it's my main income source."</p>
+                        <div class="testimonial-author">
+                            <div class="testimonial-avatar">RP</div>
+                            <div class="testimonial-author-info">
+                                <div class="testimonial-name">Robert Park</div>
+                                <div class="testimonial-role">Business Consulting</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="pricing" id="pricing">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">Success-Based Pricing</div>
+                    <h2 class="section-title">We Only Make Money When You Do</h2>
+                    <p class="section-subtitle">This is a partnership. Your success is our business model.</p>
+                </div>
+                
+                <div class="pricing-grid">
+                    <div class="pricing-card">
+                        <h3>Launch</h3>
+                        <p class="plan-description">For starting your side income risk-free.</p>
+                        <div class="price-tag">$0<span class="price-period">/ to start</span></div>
+                        <div class="revenue-share">Then 15% of revenue</div>
+                        <ul class="plan-features">
+                            <li><span class="check-icon">✓</span>Complete business setup</li>
+                            <li><span class="check-icon">✓</span>AI finds your first customers</li>
+                            <li><span class="check-icon">✓</span>Basic marketing campaigns</li>
+                            <li><span class="check-icon">✓</span>Community support</li>
+                            <li><span class="check-icon">✓</span>$1,000 guarantee</li>
+                        </ul>
+                        <a href="#" class="plan-cta secondary" onclick="openTallyPopup('Launch')">Start Earning Now</a>
+                    </div>
+                    
+                    <div class="pricing-card featured">
+                        <div class="featured-badge">MOST POPULAR</div>
+                        <h3>Growth</h3>
+                        <p class="plan-description">For serious entrepreneurs ready to scale.</p>
+                        <div class="price-tag">$97<span class="price-period">/ month</span></div>
+                        <div class="revenue-share">Plus only 10% of revenue</div>
+                        <ul class="plan-features">
+                            <li><span class="check-icon">✓</span><strong>Everything in Launch, plus:</strong></li>
+                            <li><span class="check-icon">✓</span>Advanced AI optimization</li>
+                            <li><span class="check-icon">✓</span>Unlimited products & campaigns</li>
+                            <li><span class="check-icon">✓</span>Priority support & coaching</li>
+                            <li><span class="check-icon">✓</span>Weekly strategy calls</li>
+                            <li><span class="check-icon">✓</span>Custom integrations</li>
+                        </ul>
+                        <a href="#" class="plan-cta primary" onclick="openTallyPopup('Growth')">Claim My Spot</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="guarantee-section">
+            <div class="container">
+                <div class="guarantee-card">
+                    <div class="guarantee-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z"/>
+                        </svg>
+                    </div>
+                    <div class="guarantee-content">
+                        <h3>Our Ironclad Double Guarantee</h3>
+                        <div class="guarantee-items">
+                            <div class="guarantee-item">
+                                <div class="guarantee-number">1</div>
+                                <div>
+                                    <h4>Revenue Guarantee</h4>
+                                    <p>Make at least $1,000 in your first 60 days or we'll pay you $100 cash. No questions asked.</p>
+                                </div>
+                            </div>
+                            <div class="guarantee-item">
+                                <div class="guarantee-number">2</div>
+                                <div>
+                                    <h4>Success Partnership</h4>
+                                    <p>We only make money when you do. If you don't profit, neither do we. Your success is our business model.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="faq" id="faq">
+            <div class="container">
+                <div class="section-header">
+                    <div class="section-label">Common Questions</div>
+                    <h2 class="section-title">Your Questions, Answered</h2>
+                </div>
+                <div class="faq-grid">
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>How is this different from ChatGPT or other AI tools?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>ChatGPT can write copy. We deliver customers. Our AI doesn't just build a business—it runs it for you. It actively finds buyers, launches campaigns, and optimizes for profit 24/7. It's the difference between being handed a toolbox and being handed a profitable, running business.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>What exactly happens after I sign up?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>1) You answer 5 quick questions (2 minutes). 2) AI analyzes your answers and creates your business—products, pricing, website, everything (20-30 minutes). 3) You review and launch with one click. 4) AI immediately starts finding customers. Most users see their first visitor within hours and first sale within 48 hours.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>How much time do I really need to invest?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>Week 1: About 2-3 hours total for setup and learning. After that: 30 minutes per week to check results and approve AI suggestions. The whole point is that AI runs everything. Many users check in just once a week. This is designed to be a true side income, not another job.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            <span>Is the $1,000 guarantee real? What's the catch?</span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                        <p>It's 100% real, and there is no catch. If you follow the AI's recommendations and don't make at least $1,000 in 60 days, we send you $100. We can offer this because our system works—73% of our users hit the $1k mark in their first month. Our success is literally tied to yours.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="final-cta">
+            <div class="container final-cta-content">
+                <h2>Your AI-Powered Income is Waiting</h2>
+                <p>Join thousands who've already launched successful businesses. Your financial freedom is just 30 minutes away.</p>
+                <a href="#" class="primary-cta large" onclick="openTallyPopup()">
+                    <span>Claim Your Spot Now</span>
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <span class="logo-icon">🚀</span>
+                        Launchfly
+                    </div>
+                    <p>AI-powered business automation for everyone.</p>
+                    <div class="footer-social">
+                        <a href="#" class="social-icon" aria-label="Twitter">𝕏</a>
+                        <a href="#" class="social-icon" aria-label="LinkedIn">in</a>
+                        <a href="#" class="social-icon" aria-label="YouTube">▶</a>
+                        <a href="#" class="social-icon" aria-label="Instagram">📷</a>
+                    </div>
+                </div>
+                <div class="footer-links-container">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#how-it-works">How it Works</a>
+                        <a href="#pricing">Pricing</a>
+                        <a href="#testimonials">Success Stories</a>
+                        <a href="#">API Access</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Company</h4>
+                        <a href="#">About Us</a>
+                        <a href="#">Blog</a>
+                        <a href="#">Careers</a>
+                        <a href="#">Press Kit</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Support</h4>
+                        <a href="#">Help Center</a>
+                        <a href="#">Community</a>
+                        <a href="#">Contact Us</a>
+                        <a href="#">System Status</a>
+                    </div>
+                </div>
+                <div class="footer-trust">
+                    <h4>Trusted By</h4>
+                    <p>Over 3,847 entrepreneurs worldwide</p>
+                    <div style="margin-top: 16px;">
+                        <img src="https://placehold.co/200x50/F9FAFB/94A3B8?text=Payment+Secure" alt="Payment Security" style="opacity: 0.7;">
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Launchfly Inc. All rights reserved.</p>
+                <div class="footer-legal">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                    <a href="#">Cookie Policy</a>
+                    <a href="#">GDPR</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Live Chat Widget -->
+    <div class="chat-widget">
+        <div class="chat-button" onclick="openChat()">
+            💬
+            <div class="chat-badge">1</div>
+        </div>
+    </div>
+
+    <script>
+        // --- Tally Popup ---
+        const sessionId = `session_${new Date().getTime()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        function openTallyPopup(plan = 'Default') {
+            if (typeof Tally !== 'undefined') {
+                Tally.openPopup('mOqz1Y', {
+                    layout: 'modal',
+                    width: 700,
+                    hideTitle: true,
+                    hiddenFields: {
+                        sessionID: sessionId,
+                        selectedPlan: plan
+                    }
+                });
+            }
+        }
+
+        // --- Mobile Menu ---
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const mobileNavLinks = document.getElementById('mobileNavLinks');
+        const navLinks = document.querySelectorAll('.mobile-nav-link');
+
+        mobileMenuToggle.addEventListener('click', () => {
+            const isActive = mobileNavLinks.classList.toggle('active');
+            mobileMenuToggle.classList.toggle('active');
+            document.body.classList.toggle('menu-open', isActive);
+        });
+        
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileNavLinks.classList.remove('active');
+                mobileMenuToggle.classList.remove('active');
+                document.body.classList.remove('menu-open');
+            });
+        });
+
+        // --- Header Scroll Effect ---
+        window.addEventListener('scroll', () => {
+            const header = document.getElementById('header');
+            if (window.scrollY > 10) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+
+        // --- FAQ Toggle ---
+        const faqItems = document.querySelectorAll('.faq-item');
+        faqItems.forEach(item => {
+            const question = item.querySelector('.faq-question');
+            question.addEventListener('click', () => {
+                const wasActive = item.classList.contains('active');
+                faqItems.forEach(i => i.classList.remove('active'));
+                if (!wasActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // --- Dynamic Counters ---
+        function animateValue(element, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const current = Math.floor(progress * (end - start) + start);
+                element.textContent = current;
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // Live users counter
+        const liveUsersEl = document.getElementById('liveUsers');
+        let currentUsers = 127;
+        
+        if (liveUsersEl) {
+            setInterval(() => {
+                const change = Math.floor(Math.random() * 11) - 5;
+                currentUsers = Math.max(85, Math.min(180, currentUsers + change));
+                const strongEl = liveUsersEl.querySelector('strong');
+                if (strongEl) {
+                    animateValue(strongEl, parseInt(strongEl.textContent), currentUsers, 1000);
+                }
+            }, 3000 + Math.random() * 4000);
+        }
+        
+        // Spots countdown
+        let spotsLeft = 12;
+        const heroBadgeEl = document.getElementById('heroBadge');
+        if (heroBadgeEl) {
+            setInterval(() => {
+                if (spotsLeft > 3 && Math.random() > 0.7) {
+                    spotsLeft--;
+                    heroBadgeEl.innerHTML = `<span class="badge-icon">🔥</span><span>Limited Time: ${spotsLeft} Spots Left This Week</span>`;
+                    heroBadgeEl.classList.add('highlight');
+                    setTimeout(() => heroBadgeEl.classList.remove('highlight'), 500);
+                }
+            }, 25000 + Math.random() * 10000);
+        }
+
+        // --- Intersection Observer for Animations ---
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.section-header, .step-card, .story-card, .comparison-card, .testimonial-card, .pricing-card, .guarantee-card, .faq-item').forEach(el => {
+            observer.observe(el);
+        });
+
+        // --- Chat Widget ---
+        function openChat() {
+            // Simple chat implementation - in production, integrate with real chat service
+            alert('Chat feature coming soon! For now, email us at support@launchfly.ai');
+        }
+
+        // --- Smooth Scrolling ---
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href === '#') return;
+                
+                e.preventDefault();
+                const target = document.querySelector(href);
+                
+                if (target) {
+                    const headerHeight = 80;
+                    const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - headerHeight;
+                    
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

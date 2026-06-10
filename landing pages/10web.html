@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Describe your business idea. AI builds everything and brings you customers in 48 hours. Guaranteed $1,000 or we pay you.">
+    <title>Launchfly - AI Business Builder | From Idea to Revenue in 48 Hours</title>
+    
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles33.css">
+</head>
+<body>
+    <!-- Header -->
+    <header id="header">
+        <nav>
+            <div class="logo">
+                <span>🚀</span>
+                <span>Launchfly</span>
+            </div>
+            <div class="nav-links">
+                <a href="#how">How it Works</a>
+                <a href="#proof">Success Stories</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#guarantee">Guarantee</a>
+                <a href="#faq">FAQ</a>
+                <a href="#" class="nav-cta">Talk to Sales</a>
+            </div>
+            <button class="mobile-menu" id="mobileMenu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="badge">
+                <span class="badge-dot"></span>
+                AI Business Builder
+            </div>
+            
+            <h1>Describe your business idea:<br>AI launches it & brings customers.</h1>
+            
+            <p class="subtitle">
+                From idea to paying customers in 48 hours. Guaranteed $1,000 or we pay you.
+            </p>
+
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        class="business-input"
+                        placeholder="Tell us your business idea in a few words. What do you want to sell? Who are your customers? What problems will you solve?"
+                        maxlength="500"
+                        id="businessIdea"
+                    ></textarea>
+                    <div class="char-count">
+                        <span id="charCount">0</span>/500
+                    </div>
+                </div>
+                <button class="generate-btn" onclick="launchBusiness()">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+                    </svg>
+                    Generate Your Business
+                </button>
+            </div>
+
+            <div class="live-examples">
+                <p class="examples-label">Currently Building</p>
+                <div class="example-pills">
+                    <div class="example-pill live">
+                        <span class="pill-icon">👩‍💼</span>
+                        <span>Virtual assistant for busy moms</span>
+                        <span class="pill-status"></span>
+                    </div>
+                    <div class="example-pill">
+                        <span class="pill-icon">📱</span>
+                        <span>Social media templates</span>
+                        <span class="success-metric">↗ $847 today</span>
+                    </div>
+                    <div class="example-pill live">
+                        <span class="pill-icon">🎨</span>
+                        <span>Logo design service</span>
+                        <span class="pill-status"></span>
+                    </div>
+                    <div class="example-pill">
+                        <span class="pill-icon">📚</span>
+                        <span>Online tutoring</span>
+                        <span class="success-metric">↗ $1,290 today</span>
+                    </div>
+                    <div class="example-pill live">
+                        <span class="pill-icon">🏋️</span>
+                        <span>Fitness coaching</span>
+                        <span class="pill-status"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat">
+                    <span class="stat-number">4,127</span>
+                    <span class="stat-label">Active Businesses</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">48hrs</span>
+                    <span class="stat-label">To First Customer</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">$2.3M+</span>
+                    <span class="stat-label">Generated Revenue</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">$0</span>
+                    <span class="stat-label">To Start</span>
+                </div>
+            </div>
+
+            <div class="trust-badges">
+                <div class="trust-badge">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    No credit card required
+                </div>
+                <div class="trust-badge">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    100% automated
+                </div>
+                <div class="trust-badge">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    Money-back guarantee
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works" id="how">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">Simple Process</span>
+                <h2>From idea to income in 4 steps</h2>
+                <p class="section-subtitle">No skills needed. AI does everything.</p>
+            </div>
+
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">01</div>
+                    <div class="step-icon">💭</div>
+                    <h3>Share Your Idea</h3>
+                    <p>Just describe what you want to build in plain English. Our AI understands everything.</p>
+                    <span class="step-time">30 seconds</span>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">02</div>
+                    <div class="step-icon">🤖</div>
+                    <h3>AI Builds Everything</h3>
+                    <p>Watch AI create your website, products, pricing, and marketing in real-time.</p>
+                    <span class="step-time">47 seconds</span>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">03</div>
+                    <div class="step-icon">🎯</div>
+                    <h3>Customers Arrive</h3>
+                    <p>AI launches campaigns, sends outreach, and brings you paying customers automatically.</p>
+                    <span class="step-time">48 hours</span>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">04</div>
+                    <div class="step-icon">📈</div>
+                    <h3>Scale on Autopilot</h3>
+                    <p>AI optimizes everything 24/7. You just watch your revenue grow.</p>
+                    <span class="step-time">Forever</span>
+                </div>
+            </div>
+
+            <div class="features-showcase">
+                <h3>Your AI handles everything:</h3>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <span>🔍</span>
+                        <span>Finds customers</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>📧</span>
+                        <span>Sends outreach</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>💬</span>
+                        <span>Manages conversations</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>💳</span>
+                        <span>Processes payments</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>📊</span>
+                        <span>Optimizes pricing</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>🎯</span>
+                        <span>Runs ads</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>📈</span>
+                        <span>Scales revenue</span>
+                    </div>
+                    <div class="feature-item">
+                        <span>🔄</span>
+                        <span>A/B tests</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Social Proof Section -->
+    <section class="social-proof" id="proof">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">Success Stories</span>
+                <h2>Real people. Real revenue.</h2>
+                <p class="section-subtitle">They had no experience. Now they have profitable businesses.</p>
+            </div>
+
+            <div class="testimonials-grid">
+                <div class="testimonial-card featured">
+                    <div class="testimonial-header">
+                        <img src="https://i.pravatar.cc/60?img=7" alt="Sarah M.">
+                        <div>
+                            <h4>Sarah Mitchell</h4>
+                            <p>Former Teacher</p>
+                        </div>
+                    </div>
+                    <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
+                    <p class="testimonial-text">"I was skeptical, but 36 hours later I had my first $97 sale. Now I make $4,200/month and haven't touched anything in weeks."</p>
+                    <div class="testimonial-metrics">
+                        <div class="metric">
+                            <span class="metric-value">$4,200/mo</span>
+                            <span class="metric-label">Revenue</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-value">36 hours</span>
+                            <span class="metric-label">First Sale</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-value">0 hours</span>
+                            <span class="metric-label">Weekly Work</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="testimonial-card">
+                    <div class="testimonial-header">
+                        <img src="https://i.pravatar.cc/60?img=11" alt="David R.">
+                        <div>
+                            <h4>David Rodriguez</h4>
+                            <p>Marketing Manager</p>
+                        </div>
+                    </div>
+                    <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
+                    <p class="testimonial-text">"Other platforms gave me a website. Launchfly gave me customers. First sale in 24 hours."</p>
+                    <div class="testimonial-metrics">
+                        <div class="metric">
+                            <span class="metric-value">$2,800/mo</span>
+                            <span class="metric-label">Revenue</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-value">24 hours</span>
+                            <span class="metric-label">First Sale</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="testimonial-card">
+                    <div class="testimonial-header">
+                        <img src="https://i.pravatar.cc/60?img=9" alt="Emma K.">
+                        <div>
+                            <h4>Emma Kim</h4>
+                            <p>Stay-at-Home Mom</p>
+                        </div>
+                    </div>
+                    <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
+                    <p class="testimonial-text">"The AI found a niche I never thought of. True passive income!"</p>
+                    <div class="testimonial-metrics">
+                        <div class="metric">
+                            <span class="metric-value">$1,850/mo</span>
+                            <span class="metric-label">Revenue</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-value">30 min</span>
+                            <span class="metric-label">Setup Time</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="results-banner">
+                <div class="result-item">
+                    <span class="result-label">Average Revenue</span>
+                    <span class="result-value">$1,847</span>
+                    <span class="result-context">first 60 days</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Success Rate</span>
+                    <span class="result-value">73%</span>
+                    <span class="result-context">reach $1k month 1</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Time to Profit</span>
+                    <span class="result-value">48hrs</span>
+                    <span class="result-context">guaranteed</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">Simple Pricing</span>
+                <h2>Start free. Pay from profits.</h2>
+                <p class="section-subtitle">We only make money when you do.</p>
+            </div>
+
+            <div class="pricing-grid">
+                <div class="price-card">
+                    <div class="price-header">
+                        <h3>Starter</h3>
+                        <p>Perfect to test risk-free</p>
+                    </div>
+                    <div class="price-amount">
+                        <span class="currency">$</span>
+                        <span class="number">0</span>
+                        <span class="period">to start</span>
+                    </div>
+                    <div class="revenue-share">Then 20% of revenue</div>
+                    <ul class="price-features">
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Complete AI business setup
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            First customers guaranteed
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Basic automation
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            $1,000 guarantee
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Community support
+                        </li>
+                    </ul>
+                    <button class="price-cta secondary">Start Free</button>
+                </div>
+
+                <div class="price-card popular">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <div class="price-header">
+                        <h3>Professional</h3>
+                        <p>For serious income</p>
+                    </div>
+                    <div class="price-amount">
+                        <span class="currency">$</span>
+                        <span class="number">97</span>
+                        <span class="period">/month</span>
+                    </div>
+                    <div class="revenue-share">Plus only 10% of revenue</div>
+                    <ul class="price-features">
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Everything in Starter
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Advanced AI optimization
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Unlimited scaling
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Priority customers
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Weekly coaching
+                        </li>
+                    </ul>
+                    <button class="price-cta primary">Get Started</button>
+                </div>
+
+                <div class="price-card">
+                    <div class="price-header">
+                        <h3>Scale</h3>
+                        <p>Multiple businesses</p>
+                    </div>
+                    <div class="price-amount">
+                        <span class="currency">$</span>
+                        <span class="number">297</span>
+                        <span class="period">/month</span>
+                    </div>
+                    <div class="revenue-share">Plus only 5% of revenue</div>
+                    <ul class="price-features">
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Everything in Professional
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Launch 5 businesses
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            Custom AI training
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            White-label options
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            1-on-1 coaching
+                        </li>
+                    </ul>
+                    <button class="price-cta secondary">Contact Sales</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Guarantee Section -->
+    <section class="guarantee" id="guarantee">
+        <div class="container">
+            <div class="guarantee-box">
+                <div class="guarantee-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z"/>
+                    </svg>
+                </div>
+                <h2>Triple-Lock Guarantee</h2>
+                <p class="guarantee-subtitle">We're so confident, we guarantee your success three ways:</p>
+                
+                <div class="guarantee-grid">
+                    <div class="guarantee-item">
+                        <span class="guarantee-number">1</span>
+                        <h3>48-Hour Customer</h3>
+                        <p>Get your first paying customer within 48 hours or we pay you $100 cash.</p>
+                    </div>
+                    <div class="guarantee-item">
+                        <span class="guarantee-number">2</span>
+                        <h3>$1,000 Revenue</h3>
+                        <p>Make at least $1,000 in your first 60 days or we work free until you do.</p>
+                    </div>
+                    <div class="guarantee-item">
+                        <span class="guarantee-number">3</span>
+                        <h3>Zero Work</h3>
+                        <p>After setup, if you have to do any work, we refund everything.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq" id="faq">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">FAQ</span>
+                <h2>Common questions answered</h2>
+            </div>
+
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <button class="faq-question">
+                        Do I really not have to do any work?
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>After the initial setup (typing your idea), you literally do nothing. The AI finds customers, talks to them, sells to them, and handles everything. You just check your dashboard weekly to see your profits.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question">
+                        How can you guarantee customers in 48 hours?
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Our AI doesn't just build a website and hope. It actively hunts for customers using proven methods: targeted outreach, paid ads, content marketing, and more. It's running 24/7 across multiple channels.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question">
+                        What if I have no skills or experience?
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Perfect! 67% of our successful users had zero online business experience. The AI handles everything technical. If you can type your ideas in a box, you can have a profitable business.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question">
+                        Is the $1,000 guarantee real?
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>100% real, no catch. If you don't make $1,000 in 60 days, we keep working for free until you do. We can guarantee this because our system works—and we only make money when you do.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question">
+                        Can I really start for $0?
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>Yes! Our Starter plan is completely free to begin. We only take a small percentage of revenue you actually make. No upfront costs, no credit card required to start.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <button class="faq-question">
+                        How is this different from other AI tools?
+                        <span class="faq-icon">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>ChatGPT writes copy. We deliver customers. Our AI doesn't just create content—it runs your entire business: finding leads, nurturing them, closing sales, processing payments, optimizing prices, scaling campaigns.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA Section -->
+    <section class="final-cta">
+        <div class="container">
+            <h2>Your profitable business is one click away</h2>
+            <p>Join 4,127+ people already making passive income with AI</p>
+            <button class="cta-button" onclick="scrollToTop()">
+                Start Your Business Now
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+            <div class="cta-badges">
+                <span>✓ No credit card</span>
+                <span>✓ 48-hour guarantee</span>
+                <span>✓ Cancel anytime</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="footer-logo">
+                        <span>🚀</span>
+                        <span>Launchfly</span>
+                    </div>
+                    <p>AI-powered businesses that actually make money.</p>
+                </div>
+                
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#how">How It Works</a>
+                        <a href="#pricing">Pricing</a>
+                        <a href="#proof">Success Stories</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Support</h4>
+                        <a href="#">Help Center</a>
+                        <a href="#">Contact</a>
+                        <a href="#">Status</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <a href="#">Privacy</a>
+                        <a href="#">Terms</a>
+                        <a href="#">Refunds</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2025 Launchfly AI. All rights reserved.</p>
+                <p class="disclaimer">Results vary. Success depends on market conditions.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">AI is building your business...</p>
+            <p class="loading-subtext">Finding customers • Creating products • Setting up payments</p>
+        </div>
+    </div>
+
+    <script src="launchfly-js.js"></script>
+</body>
+</html>

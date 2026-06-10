@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Transform your expertise into automated revenue. We guarantee your first $1,000 or pay you $500. Join 3,847+ entrepreneurs building profitable AI businesses.">
+    <title>Launchfly - Professional AI Business Platform | Results Guaranteed</title>
+
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script src="https://tally.so/widgets/embed.js" defer></script>
+
+    <style>
+        :root {
+            --primary: #5046E5;
+            --primary-dark: #4338CA;
+            --primary-light: #EDE9FE;
+            --accent: #0EA5E9;
+            --accent-dark: #0284C7;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --text-dark: #0F172A;
+            --text-body: #475569;
+            --text-light: #64748B;
+            --bg-white: #FFFFFF;
+            --bg-light: #F8FAFC;
+            --bg-accent: #F0F9FF;
+            --border: #E2E8F0;
+            --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            --gradient-dark: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.06), 0 6px 10px rgba(0,0,0,0.04);
+            --shadow-xl: 0 20px 35px rgba(0,0,0,0.08), 0 10px 15px rgba(0,0,0,0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text-dark);
+            line-height: 1.6;
+            background: var(--bg-white);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        header.scrolled {
+            box-shadow: var(--shadow-md);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 72px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text-dark);
+        }
+
+        .nav-links {
+            display: none;
+            gap: 32px;
+            align-items: center;
+        }
+
+        @media (min-width: 768px) {
+            .nav-links {
+                display: flex;
+            }
+        }
+
+        .nav-links a {
+            color: var(--text-body);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-cta {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.3s;
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .nav-cta {
+                display: inline-block;
+            }
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 140px 0 80px;
+            background: linear-gradient(180deg, var(--bg-white) 0%, var(--bg-light) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, var(--primary-light) 0%, transparent 70%);
+            opacity: 0.3;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(10deg); }
+        }
+
+        .trust-badges {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .trust-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--text-body);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .trust-badge strong {
+            color: var(--text-dark);
+        }
+
+        h1 {
+            font-size: clamp(36px, 5vw, 56px);
+            line-height: 1.1;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
+        }
+
+        .gradient-text {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: clamp(18px, 2.5vw, 21px);
+            color: var(--text-body);
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 40px;
+            line-height: 1.6;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 48px;
+        }
+
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 17px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            box-shadow: var(--shadow-md);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--primary);
+            padding: 16px 32px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 17px;
+            border: 2px solid var(--border);
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        /* Proof Bar */
+        .proof-bar {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .proof-item {
+            text-align: center;
+        }
+
+        .proof-number {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            display: block;
+        }
+
+        .proof-label {
+            font-size: 14px;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Results Section */
+        .results-section {
+            padding: 80px 0;
+            background: var(--bg-white);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-label {
+            display: inline-block;
+            padding: 6px 16px;
+            background: var(--primary-light);
+            color: var(--primary);
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: clamp(32px, 4vw, 42px);
+            font-weight: 800;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+        }
+
+        .section-subtitle {
+            font-size: 18px;
+            color: var(--text-body);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+            margin-bottom: 48px;
+        }
+
+        .result-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .result-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-xl);
+            border-color: var(--primary);
+        }
+
+        .result-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--primary-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 28px;
+        }
+
+        .result-card h3 {
+            font-size: 24px;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+        }
+
+        .result-card p {
+            color: var(--text-body);
+            line-height: 1.6;
+        }
+
+        /* Process Section */
+        .process-section {
+            padding: 80px 0;
+            background: var(--bg-light);
+        }
+
+        .process-timeline {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .process-timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--border);
+            transform: translateX(-50%);
+        }
+
+        @media (max-width: 768px) {
+            .process-timeline::before {
+                left: 30px;
+            }
+        }
+
+        .process-step {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 48px;
+            position: relative;
+            align-items: center;
+        }
+
+        .process-step:nth-child(even) {
+            flex-direction: row-reverse;
+        }
+
+        @media (max-width: 768px) {
+            .process-step,
+            .process-step:nth-child(even) {
+                flex-direction: row;
+            }
+        }
+
+        .step-number {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 800;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .step-content {
+            flex: 1;
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .step-content h3 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: var(--text-dark);
+        }
+
+        .step-content p {
+            color: var(--text-body);
+            margin-bottom: 12px;
+        }
+
+        .step-time {
+            display: inline-block;
+            padding: 4px 12px;
+            background: var(--success);
+            color: white;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Comparison Section */
+        .comparison-section {
+            padding: 80px 0;
+            background: var(--bg-white);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .comparison-card {
+            padding: 40px;
+            border-radius: 20px;
+            position: relative;
+        }
+
+        .comparison-card.others {
+            background: var(--bg-light);
+            border: 2px solid var(--border);
+        }
+
+        .comparison-card.us {
+            background: var(--gradient-primary);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .comparison-card h3 {
+            font-size: 24px;
+            margin-bottom: 24px;
+        }
+
+        .comparison-card.us h3 {
+            color: white;
+        }
+
+        .comparison-list {
+            list-style: none;
+        }
+
+        .comparison-list li {
+            padding: 12px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 16px;
+        }
+
+        .comparison-card.others li {
+            color: var(--text-body);
+        }
+
+        .comparison-card.us li {
+            color: white;
+            font-weight: 500;
+        }
+
+        .comparison-icon {
+            flex-shrink: 0;
+            font-size: 20px;
+        }
+
+        /* Testimonials Section */
+        .testimonials-section {
+            padding: 80px 0;
+            background: var(--bg-light);
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 32px;
+        }
+
+        .testimonial-card {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            position: relative;
+        }
+
+        .testimonial-card::before {
+            content: '"';
+            position: absolute;
+            top: 20px;
+            left: 24px;
+            font-size: 60px;
+            color: var(--primary-light);
+            font-family: serif;
+            line-height: 1;
+        }
+
+        .testimonial-content {
+            position: relative;
+            z-index: 1;
+            margin-bottom: 24px;
+            padding-top: 20px;
+            color: var(--text-body);
+            line-height: 1.7;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .author-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .author-info h4 {
+            font-size: 16px;
+            margin-bottom: 4px;
+            color: var(--text-dark);
+        }
+
+        .author-info p {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+
+        .testimonial-metric {
+            display: inline-block;
+            padding: 4px 12px;
+            background: var(--success);
+            color: white;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        /* Pricing Section */
+        .pricing-section {
+            padding: 80px 0;
+            background: var(--bg-white);
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .pricing-card {
+            background: white;
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .pricing-card.featured {
+            border-color: var(--primary);
+            transform: scale(1.05);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .pricing-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--gradient-primary);
+            color: white;
+            padding: 4px 20px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .pricing-card h3 {
+            font-size: 24px;
+            margin-bottom: 12px;
+            color: var(--text-dark);
+        }
+
+        .pricing-price {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--primary);
+            margin: 20px 0;
+        }
+
+        .pricing-period {
+            font-size: 16px;
+            color: var(--text-light);
+            font-weight: 400;
+        }
+
+        .pricing-description {
+            color: var(--text-body);
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        .pricing-features {
+            list-style: none;
+            margin-bottom: 32px;
+        }
+
+        .pricing-features li {
+            padding: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-body);
+        }
+
+        .feature-icon {
+            color: var(--success);
+            font-size: 20px;
+        }
+
+        .pricing-cta {
+            display: block;
+            text-align: center;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .pricing-card .pricing-cta {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .pricing-card.featured .pricing-cta {
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+        }
+
+        .pricing-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Guarantee Section */
+        .guarantee-section {
+            padding: 80px 0;
+            background: var(--gradient-dark);
+            color: white;
+        }
+
+        .guarantee-box {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .guarantee-icon {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 32px;
+            font-size: 36px;
+        }
+
+        .guarantee-title {
+            font-size: clamp(32px, 4vw, 42px);
+            margin-bottom: 24px;
+        }
+
+        .guarantee-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+        }
+
+        .guarantee-item {
+            text-align: left;
+            padding: 24px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .guarantee-item h4 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            color: white;
+        }
+
+        .guarantee-item p {
+            color: rgba(255,255,255,0.8);
+            line-height: 1.6;
+        }
+
+        /* FAQ Section */
+        .faq-section {
+            padding: 80px 0;
+            background: var(--bg-light);
+        }
+
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            background: white;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .faq-question {
+            width: 100%;
+            text-align: left;
+            padding: 24px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-dark);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .faq-question:hover {
+            background: var(--bg-light);
+        }
+
+        .faq-icon {
+            transition: transform 0.3s;
+            font-size: 24px;
+            color: var(--primary);
+        }
+
+        .faq-item.active .faq-icon {
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .faq-item.active .faq-answer {
+            max-height: 500px;
+        }
+
+        .faq-answer p {
+            padding: 0 24px 24px;
+            color: var(--text-body);
+            line-height: 1.7;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 100px 0;
+            background: var(--gradient-primary);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -25%;
+            width: 150%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .cta-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-title {
+            font-size: clamp(36px, 5vw, 48px);
+            color: white;
+            margin-bottom: 16px;
+            font-weight: 800;
+        }
+
+        .cta-subtitle {
+            font-size: 20px;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 32px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-button {
+            background: white;
+            color: var(--primary);
+            padding: 18px 40px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s;
+            box-shadow: var(--shadow-xl);
+        }
+
+        .cta-button:hover {
+            transform: scale(1.05);
+        }
+
+        /* Footer */
+        footer {
+            padding: 60px 0 40px;
+            background: var(--text-dark);
+            color: white;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+        }
+
+        .footer-brand p {
+            color: rgba(255,255,255,0.7);
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+
+        .footer-column h4 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .footer-column a {
+            display: block;
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            padding: 6px 0;
+            transition: color 0.2s;
+        }
+
+        .footer-column a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            padding-top: 32px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+        }
+
+        /* Utility */
+        .arrow-icon {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header id="header">
+        <nav class="container">
+            <div class="logo">
+                <span>⚡</span>
+                Launchfly
+            </div>
+            <div class="nav-links">
+                <a href="#process">Process</a>
+                <a href="#results">Results</a>
+                <a href="#pricing">Investment</a>
+                <a href="#guarantee">Guarantee</a>
+            </div>
+            <a href="#" class="nav-cta" onclick="openTallyPopup()">Schedule Consultation</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="trust-badges">
+                    <div class="trust-badge">⭐ <strong>4.9/5</strong> from 847 reviews</div>
+                    <div class="trust-badge">🏆 <strong>Y Combinator</strong> Backed</div>
+                    <div class="trust-badge">💰 <strong>$12M+</strong> Generated</div>
+                </div>
+
+                <h1>Transform Your Expertise Into <br><span class="gradient-text">Automated Revenue Streams</span></h1>
+                
+                <p class="subtitle">We guarantee your first $1,000 in 60 days or pay you $500. Our AI platform builds, launches, and scales your business while you focus on what matters.</p>
+                
+                <div class="cta-group">
+                    <a href="#" class="btn-primary" onclick="openTallyPopup()">
+                        Start Building Your Business
+                        <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                        </svg>
+                    </a>
+                    <a href="#process" class="btn-secondary">
+                        See How It Works
+                        <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </a>
+                </div>
+
+                <div class="proof-bar">
+                    <div class="proof-item">
+                        <span class="proof-number">3,847</span>
+                        <span class="proof-label">Active Businesses</span>
+                    </div>
+                    <div class="proof-item">
+                        <span class="proof-number">48hrs</span>
+                        <span class="proof-label">To First Customer</span>
+                    </div>
+                    <div class="proof-item">
+                        <span class="proof-number">73%</span>
+                        <span class="proof-label">Hit $1k in Month 1</span>
+                    </div>
+                    <div class="proof-item">
+                        <span class="proof-number" id="liveCount">127</span>
+                        <span class="proof-label">Building Now</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="results-section" id="results">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">Proven Results</span>
+                    <h2 class="section-title">What Makes Launchfly Different</h2>
+                    <p class="section-subtitle">We don't just build businesses. We guarantee profitable outcomes.</p>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-icon">🎯</div>
+                        <h3>Outcome Focused</h3>
+                        <p>We guarantee customers, not just websites. Your first sale within 48 hours or we pay you.</p>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-icon">🤖</div>
+                        <h3>Fully Automated</h3>
+                        <p>AI handles everything: customer acquisition, marketing optimization, and revenue growth 24/7.</p>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-icon">📊</div>
+                        <h3>Data-Driven Success</h3>
+                        <p>Leveraging insights from 3,847+ businesses to optimize your path to profitability.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="process-section" id="process">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">The Process</span>
+                    <h2 class="section-title">From Zero to Revenue in 4 Steps</h2>
+                    <p class="section-subtitle">A proven system that turns ideas into income streams.</p>
+                </div>
+
+                <div class="process-timeline">
+                    <div class="process-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Strategic Discovery</h3>
+                            <p>Our AI analyzes your skills, experience, and market opportunities to identify your highest-profit potential.</p>
+                            <span class="step-time">5 minutes</span>
+                        </div>
+                    </div>
+
+                    <div class="process-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Intelligent Build</h3>
+                            <p>AI creates your complete business infrastructure: professional website, product suite, pricing strategy, and marketing systems.</p>
+                            <span class="step-time">30 minutes</span>
+                        </div>
+                    </div>
+
+                    <div class="process-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Customer Acquisition</h3>
+                            <p>Launch multi-channel campaigns that find and convert your ideal customers automatically.</p>
+                            <span class="step-time">48 hours to first sale</span>
+                        </div>
+                    </div>
+
+                    <div class="process-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Scale & Optimize</h3>
+                            <p>AI continuously improves conversion rates, pricing, and customer acquisition costs to maximize your profit margins.</p>
+                            <span class="step-time">Ongoing automation</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="comparison-section">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">The Difference</span>
+                    <h2 class="section-title">Traditional vs. Launchfly Approach</h2>
+                    <p class="section-subtitle">Why most online businesses fail, and how we ensure yours succeeds.</p>
+                </div>
+
+                <div class="comparison-grid">
+                    <div class="comparison-card others">
+                        <h3>Traditional Approach</h3>
+                        <ul class="comparison-list">
+                            <li>
+                                <span class="comparison-icon">❌</span>
+                                <span>Build it and hope they come</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">❌</span>
+                                <span>Months to first customer</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">❌</span>
+                                <span>Manual everything</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">❌</span>
+                                <span>Pay regardless of results</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">❌</span>
+                                <span>Figure it out yourself</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="comparison-card us">
+                        <h3>The Launchfly Way</h3>
+                        <ul class="comparison-list">
+                            <li>
+                                <span class="comparison-icon">✅</span>
+                                <span>Guaranteed customer delivery</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">✅</span>
+                                <span>48 hours to first sale</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">✅</span>
+                                <span>100% AI automated</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">✅</span>
+                                <span>Success-based pricing</span>
+                            </li>
+                            <li>
+                                <span class="comparison-icon">✅</span>
+                                <span>Done-for-you system</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="testimonials-section">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">Success Stories</span>
+                    <h2 class="section-title">Real Entrepreneurs. Real Results.</h2>
+                    <p class="section-subtitle">Join thousands who've transformed their expertise into income.</p>
+                </div>
+
+                <div class="testimonials-grid">
+                    <div class="testimonial-card">
+                        <div class="testimonial-content">
+                            "I was skeptical about the 48-hour promise, but my first customer came in 36 hours. Now I'm consistently making $8,500/month with literally 2 hours of work per week."
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">MK</div>
+                            <div class="author-info">
+                                <h4>Michael Kim</h4>
+                                <p>Business Consultant</p>
+                            </div>
+                        </div>
+                        <span class="testimonial-metric">$8,500/mo recurring</span>
+                    </div>
+
+                    <div class="testimonial-card">
+                        <div class="testimonial-content">
+                            "The AI identified a niche I never considered. Three months later, I'm at $15k/month and have hired my first employee. This platform changed my life."
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">SP</div>
+                            <div class="author-info">
+                                <h4>Sarah Peterson</h4>
+                                <p>Former Teacher</p>
+                            </div>
+                        </div>
+                        <span class="testimonial-metric">$180k annual run rate</span>
+                    </div>
+
+                    <div class="testimonial-card">
+                        <div class="testimonial-content">
+                            "Other platforms gave me tools. Launchfly gave me customers. The difference is everything. ROI positive in week one."
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">JL</div>
+                            <div class="author-info">
+                                <h4>James Liu</h4>
+                                <p>Marketing Professional</p>
+                            </div>
+                        </div>
+                        <span class="testimonial-metric">312% ROI in 60 days</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="pricing-section" id="pricing">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">Investment Options</span>
+                    <h2 class="section-title">Choose Your Growth Path</h2>
+                    <p class="section-subtitle">Transparent pricing aligned with your success.</p>
+                </div>
+
+                <div class="pricing-grid">
+                    <div class="pricing-card">
+                        <h3>Starter</h3>
+                        <div class="pricing-price">$0<span class="pricing-period">/month</span></div>
+                        <p class="pricing-description">Perfect for testing the waters with zero risk.</p>
+                        <ul class="pricing-features">
+                            <li><span class="feature-icon">✓</span> Complete business setup</li>
+                            <li><span class="feature-icon">✓</span> AI customer acquisition</li>
+                            <li><span class="feature-icon">✓</span> Basic automation</li>
+                            <li><span class="feature-icon">✓</span> 20% revenue share</li>
+                        </ul>
+                        <a href="#" class="pricing-cta" onclick="openTallyPopup('Starter')">Start Free</a>
+                    </div>
+
+                    <div class="pricing-card featured">
+                        <span class="pricing-badge">Most Popular</span>
+                        <h3>Professional</h3>
+                        <div class="pricing-price">$97<span class="pricing-period">/month</span></div>
+                        <p class="pricing-description">For serious entrepreneurs ready to scale.</p>
+                        <ul class="pricing-features">
+                            <li><span class="feature-icon">✓</span> Everything in Starter</li>
+                            <li><span class="feature-icon">✓</span> Advanced AI optimization</li>
+                            <li><span class="feature-icon">✓</span> Priority support</li>
+                            <li><span class="feature-icon">✓</span> Only 10% revenue share</li>
+                            <li><span class="feature-icon">✓</span> Weekly strategy calls</li>
+                        </ul>
+                        <a href="#" class="pricing-cta" onclick="openTallyPopup('Professional')">Get Started</a>
+                    </div>
+
+                    <div class="pricing-card">
+                        <h3>Enterprise</h3>
+                        <div class="pricing-price">Custom</div>
+                        <p class="pricing-description">For established businesses seeking explosive growth.</p>
+                        <ul class="pricing-features">
+                            <li><span class="feature-icon">✓</span> White-glove service</li>
+                            <li><span class="feature-icon">✓</span> Dedicated success team</li>
+                            <li><span class="feature-icon">✓</span> Custom integrations</li>
+                            <li><span class="feature-icon">✓</span> Negotiable terms</li>
+                        </ul>
+                        <a href="#" class="pricing-cta" onclick="openTallyPopup('Enterprise')">Contact Sales</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="guarantee-section" id="guarantee">
+            <div class="container">
+                <div class="guarantee-box">
+                    <div class="guarantee-icon">🛡️</div>
+                    <h2 class="guarantee-title">Our Performance Guarantee</h2>
+                    <p style="font-size: 20px; margin-bottom: 32px; opacity: 0.9;">We're so confident in our system, we guarantee your success.</p>
+                    
+                    <div class="guarantee-grid">
+                        <div class="guarantee-item">
+                            <h4>48-Hour Customer Promise</h4>
+                            <p>Get your first paying customer within 48 hours of launch or receive $250 cash.</p>
+                        </div>
+                        <div class="guarantee-item">
+                            <h4>60-Day Revenue Guarantee</h4>
+                            <p>Make at least $1,000 in your first 60 days or we pay you $500. No questions asked.</p>
+                        </div>
+                        <div class="guarantee-item">
+                            <h4>Success Partnership</h4>
+                            <p>We only succeed when you do. Our compensation is tied directly to your revenue.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="faq-section">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">Frequently Asked</span>
+                    <h2 class="section-title">Questions & Answers</h2>
+                </div>
+
+                <div class="faq-container">
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            How is this different from other AI business tools?
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>While others provide tools, we deliver customers. Our AI doesn't just build your business—it actively acquires customers, optimizes pricing, and scales revenue. We're the only platform that guarantees profitable outcomes, not just deliverables.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            How much time will I need to invest?
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>Initial setup takes about 30 minutes of your time. After that, expect to spend 1-2 hours per week reviewing performance and approving strategic decisions. The AI handles all daily operations, customer communication, and marketing execution.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            What if I don't have business experience?
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>Perfect. Our AI leverages data from thousands of successful businesses to make optimal decisions. Many of our most successful users started with zero business experience. The system is designed to work regardless of your background.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <button class="faq-question">
+                            Is the revenue guarantee really risk-free?
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer">
+                            <p>Absolutely. If you follow our system and don't make $1,000 within 60 days, we pay you $500. We've paid out on less than 3% of guarantees because our system works. Your success is literally our business model.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta-section">
+            <div class="container">
+                <div class="cta-content">
+                    <h2 class="cta-title">Ready to Build Your Automated Business?</h2>
+                    <p class="cta-subtitle">Join 3,847+ entrepreneurs who are already building profitable, automated businesses with Launchfly.</p>
+                    <a href="#" class="cta-button" onclick="openTallyPopup()">
+                        Claim Your Spot Today
+                        <svg class="arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo" style="color: white;">
+                        <span>⚡</span>
+                        Launchfly
+                    </div>
+                    <p>The intelligent platform for building automated businesses that generate real revenue.</p>
+                </div>
+                <div class="footer-column">
+                    <h4>Product</h4>
+                    <a href="#process">How It Works</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#results">Success Stories</a>
+                </div>
+                <div class="footer-column">
+                    <h4>Company</h4>
+                    <a href="#">About</a>
+                    <a href="#">Blog</a>
+                    <a href="#">Careers</a>
+                </div>
+                <div class="footer-column">
+                    <h4>Support</h4>
+                    <a href="#">Help Center</a>
+                    <a href="#">Contact</a>
+                    <a href="#">Status</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Launchfly Inc. All rights reserved. | Terms | Privacy | Guarantee</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Tally Integration
+        function openTallyPopup(plan = 'Default') {
+            if (typeof Tally !== 'undefined') {
+                Tally.openPopup('mOqz1Y', {
+                    layout: 'modal',
+                    width: 700,
+                    hideTitle: true,
+                    hiddenFields: {
+                        plan: plan,
+                        source: 'professional-variant'
+                    }
+                });
+            }
+        }
+
+        // Header scroll effect
+        window.addEventListener('scroll', () => {
+            const header = document.getElementById('header');
+            if (window.scrollY > 10) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+
+        // FAQ functionality
+        document.querySelectorAll('.faq-question').forEach(button => {
+            button.addEventListener('click', () => {
+                const item = button.parentElement;
+                const wasActive = item.classList.contains('active');
+                
+                document.querySelectorAll('.faq-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+                
+                if (!wasActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Live counter animation
+        const liveCount = document.getElementById('liveCount');
+        if (liveCount) {
+            setInterval(() => {
+                const current = parseInt(liveCount.textContent);
+                const change = Math.floor(Math.random() * 7) - 3;
+                const newCount = Math.max(100, Math.min(150, current + change));
+                liveCount.textContent = newCount;
+            }, 5000);
+        }
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href !== '#') {
+                    e.preventDefault();
+                    const target = document.querySelector(href);
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                }
+            });
+        });
+
+        // Add intersection observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe elements for animation
+        document.querySelectorAll('.result-card, .process-step, .testimonial-card, .pricing-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

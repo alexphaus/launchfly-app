@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Your money machine is ready. Launch your automated side income with AI. First $1,000 guaranteed or we pay you $100.">
+    <title>Launchfly - Your Money Machine Is Ready</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles-neon.css">
+
+    <script src="https://tally.so/widgets/embed.js"></script>
+    <script>
+        function generateSimilarId(size = 21) {
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+            let id = '';
+            for (let i = 0; i < size; i++) {
+                id += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            return id;
+        }
+        const sessionId = generateSimilarId();
+    </script>
+</head>
+<body>
+    <!-- Particle Field Background -->
+    <div class="particle-field" id="particleField"></div>
+
+    <!-- Floating Navigation -->
+    <nav class="nav-float" id="navbar">
+        <div class="nav-container">
+            <div class="logo-neon">
+                <div class="logo-icon">⚡</div>
+                <span>Launchfly</span>
+            </div>
+            
+            <div class="nav-links">
+                <a href="#how" class="nav-link">How it Works</a>
+                <a href="#proof" class="nav-link">Success Proof</a>
+                <a href="#pricing" class="nav-link">Pricing</a>
+                <button class="nav-cta-neon" onclick="openForm()">
+                    <span>Start Earning</span>
+                    <div class="button-glow"></div>
+                </button>
+            </div>
+            
+            <button class="mobile-menu" onclick="toggleMobileMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-neon">
+        <!-- Animated gradient mesh background -->
+        <div class="gradient-mesh-bg">
+            <div class="mesh-circle mesh-1"></div>
+            <div class="mesh-circle mesh-2"></div>
+            <div class="mesh-circle mesh-3"></div>
+        </div>
+        
+        <div class="hero-container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <div class="pulse-badge">
+                        <span class="live-dot"></span>
+                        <span>LIVE • 247 making money right now</span>
+                    </div>
+                    
+                    <h1 class="hero-title">
+                        <span class="glitch-text" data-text="Your Money">Your Money</span><br>
+                        <span class="gradient-text glitch-text" data-text="Machine">Machine</span><br>
+                        <span class="glitch-text" data-text="Is Ready">Is Ready</span>
+                    </h1>
+                    
+                    <p class="hero-subtitle">
+                        <span class="typewriter-text">$1,000 in 30 days or we pay you.</span>
+                        <span class="cursor">|</span>
+                    </p>
+                    
+                    <div class="hero-cta-group">
+                        <button class="cta-neon primary" onclick="openForm()">
+                            <span>Activate My Income</span>
+                            <div class="button-glow"></div>
+                            <div class="button-particles"></div>
+                        </button>
+                        
+                        <button class="cta-glass" onclick="scrollToSection('proof')">
+                            <span>See Proof</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="hero-stats">
+                        <div class="stat-pill">
+                            <span class="stat-icon">🚀</span>
+                            <span>Live in 30 min</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">💰</span>
+                            <span>First sale in 48h</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-icon">🛡️</span>
+                            <span>Zero risk</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="hero-visual">
+                    <!-- 3D Dashboard Preview -->
+                    <div class="dashboard-3d">
+                        <div class="screen-float">
+                            <div class="dashboard-header">
+                                <span class="status-live">● LIVE</span>
+                                <span>Your Business Dashboard</span>
+                            </div>
+                            <div class="revenue-display">
+                                <span class="revenue-label">Today's Revenue</span>
+                                <div class="revenue-counter">$<span id="revenueCount">1,247</span></div>
+                            </div>
+                            <div class="graph-container">
+                                <div class="graph-bar" style="height: 40%"></div>
+                                <div class="graph-bar" style="height: 60%"></div>
+                                <div class="graph-bar" style="height: 45%"></div>
+                                <div class="graph-bar" style="height: 80%"></div>
+                                <div class="graph-bar" style="height: 65%"></div>
+                                <div class="graph-bar active" style="height: 90%"></div>
+                            </div>
+                            <div class="dashboard-footer">
+                                <div class="metric">
+                                    <span class="metric-value">18</span>
+                                    <span class="metric-label">Customers</span>
+                                </div>
+                                <div class="metric">
+                                    <span class="metric-value">94%</span>
+                                    <span class="metric-label">Growth</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Success Stream -->
+        <div class="success-stream">
+            <div class="stream-container" id="successStream">
+                <div class="stream-item">
+                    <img src="https://i.pravatar.cc/40?img=1" class="avatar-glow" alt="Sarah" />
+                    <span class="stream-text">Sarah just hit <strong>$1,420</strong></span>
+                    <span class="stream-time">2 min ago</span>
+                </div>
+                <div class="stream-item">
+                    <img src="https://i.pravatar.cc/40?img=2" class="avatar-glow" alt="Mike" />
+                    <span class="stream-text">Mike's first sale: <strong>$197</strong></span>
+                    <span class="stream-time">5 min ago</span>
+                </div>
+                <div class="stream-item">
+                    <img src="https://i.pravatar.cc/40?img=3" class="avatar-glow" alt="Emma" />
+                    <span class="stream-text">Emma crossed <strong>$3,000</strong></span>
+                    <span class="stream-time">12 min ago</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-section" id="how">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">THE PROCESS</div>
+                <h2 class="section-title">
+                    <span class="gradient-text">Zero to Income</span><br>
+                    in 4 Simple Steps
+                </h2>
+            </div>
+            
+            <div class="steps-grid">
+                <div class="step-card" data-step="01">
+                    <div class="step-icon">
+                        <div class="icon-glow">🎯</div>
+                    </div>
+                    <h3>Pick Your Path</h3>
+                    <p>Choose from proven business models. Our AI knows what works.</p>
+                    <div class="step-metric">2 min</div>
+                </div>
+                
+                <div class="step-card" data-step="02">
+                    <div class="step-icon">
+                        <div class="icon-glow">🤖</div>
+                    </div>
+                    <h3>AI Builds Everything</h3>
+                    <p>Watch your business come to life. Products, pricing, marketing - all automated.</p>
+                    <div class="step-metric">30 min</div>
+                </div>
+                
+                <div class="step-card" data-step="03">
+                    <div class="step-icon">
+                        <div class="icon-glow">💸</div>
+                    </div>
+                    <h3>Get Your First Sale</h3>
+                    <p>AI finds customers and brings them to you. Most see sales within 48 hours.</p>
+                    <div class="step-metric">1-2 days</div>
+                </div>
+                
+                <div class="step-card" data-step="04">
+                    <div class="step-icon">
+                        <div class="icon-glow">📈</div>
+                    </div>
+                    <h3>Scale on Autopilot</h3>
+                    <p>AI optimizes everything 24/7. Your income grows while you sleep.</p>
+                    <div class="step-metric">∞</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Business Models -->
+    <section class="models-section">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">CHOOSE YOUR MONEY MACHINE</div>
+                <h2 class="section-title">
+                    Proven Business Models<br>
+                    <span class="gradient-text">That Actually Work</span>
+                </h2>
+            </div>
+            
+            <div class="models-carousel">
+                <div class="model-card active">
+                    <div class="model-header">
+                        <span class="model-icon">💪</span>
+                        <span class="model-badge">78% Success Rate</span>
+                    </div>
+                    <h3>Fitness Coaching</h3>
+                    <div class="model-stats">
+                        <div class="stat">
+                            <span class="stat-value">$2,340</span>
+                            <span class="stat-label">Avg Monthly</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">24h</span>
+                            <span class="stat-label">First Sale</span>
+                        </div>
+                    </div>
+                    <div class="model-visual">
+                        <div class="revenue-chart">
+                            <div class="chart-line"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="model-card">
+                    <div class="model-header">
+                        <span class="model-icon">🎯</span>
+                        <span class="model-badge">84% Success Rate</span>
+                    </div>
+                    <h3>Business Consulting</h3>
+                    <div class="model-stats">
+                        <div class="stat">
+                            <span class="stat-value">$3,890</span>
+                            <span class="stat-label">Avg Monthly</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">36h</span>
+                            <span class="stat-label">First Sale</span>
+                        </div>
+                    </div>
+                    <div class="model-visual">
+                        <div class="revenue-chart">
+                            <div class="chart-line"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="model-card">
+                    <div class="model-header">
+                        <span class="model-icon">📚</span>
+                        <span class="model-badge">71% Success Rate</span>
+                    </div>
+                    <h3>Online Courses</h3>
+                    <div class="model-stats">
+                        <div class="stat">
+                            <span class="stat-value">$1,920</span>
+                            <span class="stat-label">Avg Monthly</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">48h</span>
+                            <span class="stat-label">First Sale</span>
+                        </div>
+                    </div>
+                    <div class="model-visual">
+                        <div class="revenue-chart">
+                            <div class="chart-line"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="carousel-nav">
+                <button class="carousel-btn prev" onclick="changeModel(-1)">←</button>
+                <button class="carousel-btn next" onclick="changeModel(1)">→</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Income Calculator -->
+    <section class="calculator-section">
+        <div class="container">
+            <div class="calculator-3d">
+                <h3>Calculate Your Potential</h3>
+                <div class="slider-container">
+                    <label>Hours per week</label>
+                    <input type="range" class="neon-slider" id="hoursSlider" min="1" max="20" value="5" oninput="updateCalculator()">
+                    <span class="slider-value" id="hoursValue">5 hours</span>
+                </div>
+                
+                <div class="projection-display">
+                    <div class="projection-item">
+                        <span class="projection-label">Monthly Income</span>
+                        <span class="projection-value monthly" id="monthlyIncome">$1,850</span>
+                    </div>
+                    <div class="projection-item">
+                        <span class="projection-label">Yearly Income</span>
+                        <span class="projection-value yearly" id="yearlyIncome">$22,200</span>
+                    </div>
+                </div>
+                
+                <button class="cta-neon" onclick="openForm()">
+                    <span>Start Earning This</span>
+                    <div class="button-glow"></div>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Social Proof -->
+    <section class="proof-section" id="proof">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">REAL RESULTS</div>
+                <h2 class="section-title">
+                    They Were Skeptical Too<br>
+                    <span class="gradient-text">Now They're Banking</span>
+                </h2>
+            </div>
+            
+            <div class="testimonials-grid">
+                <div class="testimonial-holo">
+                    <div class="holo-card">
+                        <div class="testimonial-header">
+                            <img src="https://i.pravatar.cc/60?img=5" class="testimonial-avatar" alt="Jessica" />
+                            <div class="testimonial-info">
+                                <h4>Jessica Park</h4>
+                                <span class="testimonial-role">Fitness Coach</span>
+                            </div>
+                            <div class="testimonial-badge">Verified</div>
+                        </div>
+                        <p class="testimonial-text">
+                            "I was working 60-hour weeks barely getting by. Set this up during lunch break, got my first $197 client that night. Now making $3,200/month on the side. This is insane!"
+                        </p>
+                        <div class="testimonial-stats">
+                            <div class="t-stat">
+                                <span class="t-stat-value">$3,200</span>
+                                <span class="t-stat-label">Monthly</span>
+                            </div>
+                            <div class="t-stat">
+                                <span class="t-stat-value">14 hrs</span>
+                                <span class="t-stat-label">First Sale</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="testimonial-holo">
+                    <div class="holo-card">
+                        <div class="testimonial-header">
+                            <img src="https://i.pravatar.cc/60?img=8" class="testimonial-avatar" alt="Marcus" />
+                            <div class="testimonial-info">
+                                <h4>Marcus Chen</h4>
+                                <span class="testimonial-role">Course Creator</span>
+                            </div>
+                            <div class="testimonial-badge">Verified</div>
+                        </div>
+                        <p class="testimonial-text">
+                            "Zero tech skills, but I know Excel. AI turned that into a $1,900/mo business teaching data analysis. Everything runs itself. I just check my bank account."
+                        </p>
+                        <div class="testimonial-stats">
+                            <div class="t-stat">
+                                <span class="t-stat-value">$1,900</span>
+                                <span class="t-stat-label">Monthly</span>
+                            </div>
+                            <div class="t-stat">
+                                <span class="t-stat-value">3 days</span>
+                                <span class="t-stat-label">First Sale</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="testimonial-holo">
+                    <div class="holo-card featured">
+                        <div class="testimonial-header">
+                            <img src="https://i.pravatar.cc/60?img=20" class="testimonial-avatar" alt="Sarah" />
+                            <div class="testimonial-info">
+                                <h4>Sarah Mitchell</h4>
+                                <span class="testimonial-role">Business Consultant</span>
+                            </div>
+                            <div class="testimonial-badge">Top Earner</div>
+                        </div>
+                        <p class="testimonial-text">
+                            "Quit my job last month. This thing prints money. $5,400 last month consulting for startups. The AI handles everything - I just do the calls. Why doesn't everyone do this?"
+                        </p>
+                        <div class="testimonial-stats">
+                            <div class="t-stat">
+                                <span class="t-stat-value">$5,400</span>
+                                <span class="t-stat-label">Monthly</span>
+                            </div>
+                            <div class="t-stat">
+                                <span class="t-stat-value">2 days</span>
+                                <span class="t-stat-label">First Sale</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing-section" id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-tag">INVESTMENT</div>
+                <h2 class="section-title">
+                    Pay Nothing Until<br>
+                    <span class="gradient-text">You're Profitable</span>
+                </h2>
+            </div>
+            
+            <div class="pricing-grid">
+                <div class="price-card">
+                    <div class="price-header">
+                        <h3>Side Hustle</h3>
+                        <div class="price-tag">
+                            <span class="price-currency">$</span>
+                            <span class="price-amount">0</span>
+                            <span class="price-period">/mo to start</span>
+                        </div>
+                        <p class="price-subtitle">Perfect for testing the waters</p>
+                    </div>
+                    <div class="price-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>$1,000 guarantee or we pay you</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>Complete business setup</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>AI finds customers 24/7</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>15% revenue share after $1k</span>
+                        </div>
+                    </div>
+                    <button class="price-cta" onclick="openForm('side-hustle')">
+                        <span>Start Free</span>
+                    </button>
+                </div>
+                
+                <div class="price-card featured">
+                    <div class="price-badge">MOST POPULAR</div>
+                    <div class="price-header">
+                        <h3>Full Income</h3>
+                        <div class="price-tag">
+                            <span class="price-currency">$</span>
+                            <span class="price-amount">97</span>
+                            <span class="price-period">/mo</span>
+                        </div>
+                        <p class="price-subtitle">Scale to $5k+ monthly</p>
+                    </div>
+                    <div class="price-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>Everything in Side Hustle</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>Priority AI optimization</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>1-on-1 success coaching</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>10% revenue share only</span>
+                        </div>
+                    </div>
+                    <button class="price-cta primary" onclick="openForm('full-income')">
+                        <span>Get Started</span>
+                        <div class="button-glow"></div>
+                    </button>
+                </div>
+                
+                <div class="price-card">
+                    <div class="price-header">
+                        <h3>Empire</h3>
+                        <div class="price-tag">
+                            <span class="price-amount">Custom</span>
+                        </div>
+                        <p class="price-subtitle">Scale to $10k+ monthly</p>
+                    </div>
+                    <div class="price-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>White glove service</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>Dedicated success team</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>Custom AI development</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">✓</span>
+                            <span>Lowest revenue share</span>
+                        </div>
+                    </div>
+                    <button class="price-cta" onclick="openForm('empire')">
+                        <span>Apply</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="final-cta">
+        <div class="container">
+            <div class="cta-content">
+                <div class="urgency-ticker">
+                    <span class="ticker-icon">🔥</span>
+                    <span>Only accepting 50 new members this week</span>
+                </div>
+                
+                <h2 class="cta-title">
+                    Your Competition Started<br>
+                    <span class="gradient-text">5 Minutes Ago</span>
+                </h2>
+                
+                <p class="cta-subtitle">
+                    Every minute you wait, someone else claims your customers.<br>
+                    Start now or pay more later.
+                </p>
+                
+                <button class="cta-neon mega" onclick="openForm()">
+                    <span>Activate My Money Machine</span>
+                    <div class="button-glow"></div>
+                    <div class="button-particles"></div>
+                </button>
+                
+                <div class="guarantee-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                    <span>30-Day Money Back • $100 If You Don't Succeed • Cancel Anytime</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-dark">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="logo-neon">
+                        <div class="logo-icon">⚡</div>
+                        <span>Launchfly</span>
+                    </div>
+                    <p>Your money machine awaits.</p>
+                </div>
+                
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#how">How it Works</a>
+                        <a href="#proof">Success Stories</a>
+                        <a href="#pricing">Pricing</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Support</h4>
+                        <a href="#">Help Center</a>
+                        <a href="#">Contact</a>
+                        <a href="#">Status</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <a href="#">Privacy</a>
+                        <a href="#">Terms</a>
+                        <a href="#">Earnings Disclaimer</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2025 Launchfly. Results not typical. Your success depends on effort.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Chat Widget -->
+    <div class="chat-fab" onclick="toggleChat()">
+        <div class="chat-notification">1</div>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+    </div>
+    
+    <div class="chat-window" id="chatWindow">
+        <div class="chat-header">
+            <img src="https://i.pravatar.cc/40?img=12" alt="Alex" />
+            <div>
+                <h4>Chat with Alex</h4>
+                <span class="chat-status">Made $4,200 last month</span>
+            </div>
+            <button class="chat-close" onclick="toggleChat()">×</button>
+        </div>
+        <div class="chat-body">
+            <div class="chat-message agent">
+                <p>Hey! I made $4,200 last month with zero experience. What questions do you have?</p>
+            </div>
+        </div>
+        <div class="chat-input">
+            <input type="text" placeholder="Type your question..." id="chatInput" onkeypress="handleChatKeyPress(event)">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Particle Field
+        function createParticles() {
+            const field = document.getElementById('particleField');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (20 + Math.random() * 20) + 's';
+                field.appendChild(particle);
+            }
+        }
+
+        // Revenue Counter Animation
+        function animateRevenue() {
+            const counter = document.getElementById('revenueCount');
+            const target = 1247;
+            let current = 0;
+            const increment = target / 100;
+            const timer = setInterval(() => {
+                current += increment;
+                if (current >= target) {
+                    current = target;
+                    clearInterval(timer);
+                }
+                counter.textContent = Math.floor(current).toLocaleString();
+            }, 20);
+        }
+
+        // Calculator
+        function updateCalculator() {
+            const hours = document.getElementById('hoursSlider').value;
+            document.getElementById('hoursValue').textContent = hours + ' hours';
+            
+            const hourlyRate = 370; // Average hourly earning
+            const monthly = hours * hourlyRate;
+            const yearly = monthly * 12;
+            
+            document.getElementById('monthlyIncome').textContent = '$' + monthly.toLocaleString();
+            document.getElementById('yearlyIncome').textContent = '$' + yearly.toLocaleString();
+        }
+
+        // Success Stream Animation
+        function animateSuccessStream() {
+            const stream = document.getElementById('successStream');
+            setInterval(() => {
+                const firstItem = stream.firstElementChild;
+                stream.appendChild(firstItem.cloneNode(true));
+                stream.removeChild(firstItem);
+            }, 3000);
+        }
+
+        // Model Carousel
+        let currentModel = 0;
+        const models = document.querySelectorAll('.model-card');
+        
+        function changeModel(direction) {
+            models[currentModel].classList.remove('active');
+            currentModel = (currentModel + direction + models.length) % models.length;
+            models[currentModel].classList.add('active');
+        }
+
+        // Scroll Effects
+        window.addEventListener('scroll', () => {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 100) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Form Handler
+        function openForm(plan = 'side-hustle') {
+            Tally.openPopup('mOqz1Y', {
+                layout: 'modal',
+                width: 700,
+                hideTitle: true,
+                hiddenFields: { sessionID: sessionId, plan: plan }
+            });
+        }
+
+        // Chat Functions
+        function toggleChat() {
+            const chatWindow = document.getElementById('chatWindow');
+            chatWindow.classList.toggle('open');
+            document.querySelector('.chat-notification').style.display = 'none';
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (message) {
+                // Add user message
+                const chatBody = document.querySelector('.chat-body');
+                const userMsg = document.createElement('div');
+                userMsg.className = 'chat-message user';
+                userMsg.innerHTML = `<p>${message}</p>`;
+                chatBody.appendChild(userMsg);
+                
+                input.value = '';
+                
+                // Simulate response
+                setTimeout(() => {
+                    const agentMsg = document.createElement('div');
+                    agentMsg.className = 'chat-message agent';
+                    agentMsg.innerHTML = `<p>Great question! Most people see their first sale within 48 hours. The AI handles everything technical - you just collect the money. Want me to show you some real examples?</p>`;
+                    chatBody.appendChild(agentMsg);
+                    chatBody.scrollTop = chatBody.scrollHeight;
+                }, 1000);
+            }
+        }
+
+        function handleChatKeyPress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Scroll to section
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Mobile menu
+        function toggleMobileMenu() {
+            document.querySelector('.nav-links').classList.toggle('mobile-open');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            createParticles();
+            animateRevenue();
+            animateSuccessStream();
+            
+            // Intersection Observer for animations
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate-in');
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            document.querySelectorAll('.step-card, .model-card, .testimonial-holo, .price-card').forEach(el => {
+                observer.observe(el);
+            });
+        });
+    </script>
+</body>
+</html>

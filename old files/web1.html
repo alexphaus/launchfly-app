@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Launchfly — AI-powered quote-to-cash & procurement for HVAC, plumbing & electrical contractors in Australia, Philippines & Malaysia. Now with Physical AI / Embodied AI for drones, robots & smart equipment.">
+    <title>Launchfly — AI That Turns Job Requests Into Cash (and Robots Into Revenue)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&display=swap');
+        :root {
+            --primary: #00d4ff;
+        }
+        .tailwind-ready { font-family: 'Inter', system_ui, sans-serif; }
+        .heading-font { font-family: 'Space Grotesk', sans-serif; }
+        .hero-bg {
+            background: linear-gradient(90deg, #0a1729 0%, #001f2e 100%);
+        }
+        .card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 25px 50px -12px rgb(0 212 255 / 0.15);
+        }
+    </style>
+</head>
+<body class="tailwind-ready">
+    <!-- NAVBAR -->
+    <nav class="bg-white border-b sticky top-0 z-50">
+        <div class="max-w-screen-2xl mx-auto px-6 py-5 flex items-center justify-between">
+            <div class="flex items-center gap-x-3">
+                <div class="w-9 h-9 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl">🚀</div>
+                <h1 class="heading-font text-3xl tracking-tighter font-semibold text-gray-900">Launchfly</h1>
+            </div>
+            
+            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
+                <a href="#product" class="hover:text-cyan-500 transition-colors">Product</a>
+                <a href="#physical-ai" class="hover:text-cyan-500 transition-colors">Physical AI</a>
+                <a href="#how" class="hover:text-cyan-500 transition-colors">How it Works</a>
+                <a href="#pricing" class="hover:text-cyan-500 transition-colors">Pricing</a>
+                <a href="#markets" class="hover:text-cyan-500 transition-colors">Markets</a>
+            </div>
+
+            <div class="flex items-center gap-x-4">
+                <a href="#" class="text-sm font-medium text-gray-700 hover:text-gray-900 hidden sm:block">Log in</a>
+                <a href="#trial" 
+                   class="px-6 py-3 bg-black text-white rounded-2xl font-semibold text-sm hover:bg-gray-800 transition-colors flex items-center gap-x-2">
+                    Start 7-day free trial
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <header class="hero-bg text-white py-20">
+        <div class="max-w-screen-2xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+            <div class="space-y-8">
+                <div class="inline-flex items-center gap-x-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-3xl text-sm font-medium">
+                    <span class="relative flex h-3 w-3">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    Now with Physical AI + Robotics
+                </div>
+                
+                <h1 class="heading-font text-6xl md:text-7xl leading-none font-semibold tracking-tighter">
+                    AI that reads your job requests.<br>
+                    Sources suppliers.<br>
+                    Closes POs.<br>
+                    <span class="bg-gradient-to-r from-cyan-300 to-blue-300 bg-clip-text text-transparent">And flies robots &amp; drones.</span>
+                </h1>
+                
+                <p class="text-xl text-gray-300 max-w-lg">
+                    B2B SaaS for HVAC, plumbing &amp; electrical contractors in Australia, Philippines &amp; Malaysia. 
+                    WhatsApp-native quote-to-cash + embodied AI for real-world efficiency.
+                </p>
+
+                <div class="flex flex-wrap gap-4">
+                    <a href="#trial" 
+                       class="px-8 py-5 bg-white text-black rounded-3xl font-semibold text-lg hover:scale-105 transition-transform flex items-center gap-x-3">
+                        Start free trial — no card needed
+                        <i class="fa-solid fa-rocket"></i>
+                    </a>
+                    <a href="#" 
+                       onclick="document.getElementById('demo-video').scrollIntoView({ behavior: 'smooth' });"
+                       class="px-8 py-5 border border-white/40 hover:bg-white/10 rounded-3xl font-semibold text-lg flex items-center gap-x-3">
+                        <i class="fa-solid fa-play"></i>
+                        Watch 90-second demo
+                    </a>
+                </div>
+
+                <div class="flex items-center gap-x-8 text-sm">
+                    <div class="flex -space-x-4">
+                        <div class="w-8 h-8 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs border border-white/30">🇦🇺</div>
+                        <div class="w-8 h-8 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs border border-white/30">🇵🇭</div>
+                        <div class="w-8 h-8 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs border border-white/30">🇲🇾</div>
+                    </div>
+                    <p class="text-gray-400">Trusted by contractors in <span class="font-semibold text-white">3 countries</span></p>
+                    <div class="text-emerald-400 text-sm font-medium flex items-center gap-x-1">
+                        <i class="fa-solid fa-check-circle"></i>
+                        Cancel anytime • Pay-per-result available
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hero visual -->
+            <div class="relative">
+                <div class="bg-white/10 backdrop-blur-3xl border border-white/20 rounded-3xl p-2 shadow-2xl">
+                    <div class="bg-gray-900 rounded-3xl overflow-hidden aspect-video relative">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="text-center">
+                                <div class="mx-auto w-24 h-24 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-3xl flex items-center justify-center text-5xl mb-6 animate-bounce">📸</div>
+                                <p class="text-white text-xl font-medium">Incoming job photo → AI reads it → Supplier quotes sourced → PO sent → Drone dispatched</p>
+                                <div class="mt-8 flex justify-center gap-x-8 text-xs">
+                                    <div class="text-center">
+                                        <div class="font-mono text-cyan-400">+47%</div>
+                                        <div class="text-gray-400">Margin recovered</div>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="font-mono text-cyan-400">-82%</div>
+                                        <div class="text-gray-400">Quote chasing time</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Floating badges -->
+                        <div class="absolute top-8 left-8 bg-white text-black text-xs px-4 py-2 rounded-2xl shadow-xl flex items-center gap-x-2">
+                            <i class="fa-solid fa-whatsapp text-green-500"></i>
+                            WhatsApp job received
+                        </div>
+                        <div class="absolute bottom-8 right-8 bg-emerald-500 text-white text-xs px-4 py-2 rounded-2xl shadow-xl flex items-center gap-x-2">
+                            <i class="fa-solid fa-robot"></i>
+                            Drone dispatched
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- TRUST BAR -->
+    <div class="bg-white py-6 border-b">
+        <div class="max-w-screen-2xl mx-auto px-6 flex flex-wrap justify-center items-center gap-x-12 gap-y-6 text-gray-400 text-sm">
+            <div class="flex items-center gap-x-2"><i class="fa-solid fa-whatsapp text-2xl text-green-500"></i> <span class="font-semibold">Evolution API</span></div>
+            <div>Retell AI Voice Agents</div>
+            <div>DeepSeek LLM</div>
+            <div class="font-semibold text-gray-600">Next.js • Vercel</div>
+            <div class="text-emerald-600 font-medium">7-day free trial • Cancel anytime</div>
+        </div>
+    </div>
+
+    <!-- PRODUCT CORE -->
+    <section id="product" class="py-24 bg-white">
+        <div class="max-w-screen-2xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <span class="px-6 py-2 bg-cyan-100 text-cyan-700 rounded-3xl text-sm font-semibold">Core SaaS Product</span>
+                <h2 class="heading-font text-5xl font-semibold tracking-tighter mt-4">Quote-to-Cash in 4 clicks.<br>Zero manual chasing.</h2>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="card-hover bg-gray-50 border border-gray-100 rounded-3xl p-8">
+                    <div class="h-12 w-12 bg-cyan-100 text-cyan-600 rounded-2xl flex items-center justify-center text-3xl mb-6">📸</div>
+                    <h3 class="font-semibold text-2xl mb-3">1. Reads job requests &amp; photos</h3>
+                    <p class="text-gray-600">WhatsApp → AI instantly extracts scope, photos, urgency using Retell AI + DeepSeek.</p>
+                </div>
+                <div class="card-hover bg-gray-50 border border-gray-100 rounded-3xl p-8">
+                    <div class="h-12 w-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-3xl mb-6">🔍</div>
+                    <h3 class="font-semibold text-2xl mb-3">2. Auto-sources supplier quotes</h3>
+                    <p class="text-gray-600">Scans your approved suppliers across Australia, Philippines &amp; Malaysia and gets real-time pricing.</p>
+                </div>
+                <div class="card-hover bg-gray-50 border border-gray-100 rounded-3xl p-8">
+                    <div class="h-12 w-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-3xl mb-6">📦</div>
+                    <h3 class="font-semibold text-2xl mb-3">3. Generates POs + follows up</h3>
+                    <p class="text-gray-600">Creates purchase orders, chases outstanding quotes via WhatsApp/voice until closed. You get paid faster.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PHYSICAL AI BUNDLE -->
+    <section id="physical-ai" class="py-24 bg-gradient-to-br from-gray-900 to-black text-white">
+        <div class="max-w-screen-2xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row gap-16 items-center">
+                <div class="md:w-5/12">
+                    <span class="px-6 py-2 bg-cyan-400 text-black rounded-3xl text-sm font-semibold">NEW BUNDLE</span>
+                    <h2 class="heading-font text-5xl font-semibold tracking-tighter mt-4 leading-none">Physical AI / Embodied AI<br>for the real world</h2>
+                    <p class="text-xl text-gray-400 mt-6">
+                        Intelligence in robots, drones, humanoids &amp; smart equipment.<br>
+                        Sensing → Deciding → Acting.
+                    </p>
+                    <ul class="mt-10 space-y-6">
+                        <li class="flex gap-x-4"><i class="fa-solid fa-drone text-cyan-400 mt-1"></i> <div>Drones auto-inspect roofs, pipes, leaks and feed data straight into your quote-to-cash workflow</div></li>
+                        <li class="flex gap-x-4"><i class="fa-solid fa-robot text-cyan-400 mt-1"></i> <div>Robotic tools &amp; smart equipment in warehouses &amp; factories (Amazon-scale coordination, BMW-style lines)</div></li>
+                        <li class="flex gap-x-4"><i class="fa-solid fa-house text-cyan-400 mt-1"></i> <div>Future-ready for homes &amp; last-mile logistics</div></li>
+                    </ul>
+                    <p class="text-cyan-400 font-medium mt-8">Seamlessly bundled with your existing SaaS. Same flexible pricing.</p>
+                </div>
+                <div class="md:w-7/12 bg-white/10 border border-white/10 rounded-3xl p-8">
+                    <div class="grid grid-cols-2 gap-6">
+                        <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-6 text-center">
+                            <div class="text-7xl mb-4">🛰️</div>
+                            <h4 class="font-semibold">Drone → Job</h4>
+                            <p class="text-sm text-gray-400">Photo → AI quote → Parts ordered in &lt;60 seconds</p>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-6 text-center">
+                            <div class="text-7xl mb-4">🏭</div>
+                            <h4 class="font-semibold">Factory / Warehouse</h4>
+                            <p class="text-sm text-gray-400">Autonomous coordination &amp; procurement at scale</p>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-6 text-center">
+                            <div class="text-7xl mb-4">🤖</div>
+                            <h4 class="font-semibold">Humanoids &amp; AMRs</h4>
+                            <p class="text-sm text-gray-400">Real-time sensing and acting in the field</p>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-6 text-center">
+                            <div class="text-7xl mb-4">📈</div>
+                            <h4 class="font-semibold">Efficiency Gains</h4>
+                            <p class="text-sm text-emerald-400 font-medium">+ adaptability + safety</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="how" class="py-24 bg-white">
+        <div class="max-w-screen-2xl mx-auto px-6">
+            <h2 class="text-center heading-font text-5xl font-semibold tracking-tighter mb-16">From WhatsApp message → Cash in the bank. In minutes.</h2>
+            <div class="grid md:grid-cols-4 gap-8 max-w-5xl mx-auto">
+                <div class="text-center">
+                    <div class="mx-auto w-16 h-16 bg-cyan-100 rounded-3xl flex items-center justify-center text-4xl mb-6">1</div>
+                    <p class="font-semibold">Contractor sends job + photo via WhatsApp</p>
+                </div>
+                <div class="text-center">
+                    <div class="mx-auto w-16 h-16 bg-cyan-100 rounded-3xl flex items-center justify-center text-4xl mb-6">2</div>
+                    <p class="font-semibold">Launchfly AI reads everything</p>
+                </div>
+                <div class="text-center">
+                    <div class="mx-auto w-16 h-16 bg-cyan-100 rounded-3xl flex items-center justify-center text-4xl mb-6">3</div>
+                    <p class="font-semibold">Auto-sources quotes + creates PO</p>
+                </div>
+                <div class="text-center">
+                    <div class="mx-auto w-16 h-16 bg-cyan-100 rounded-3xl flex items-center justify-center text-4xl mb-6">4</div>
+                    <p class="font-semibold">Physical AI (drone/robot) executes &amp; closes the loop</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- MARKETS -->
+    <section id="markets" class="py-24 bg-gray-50">
+        <div class="max-w-screen-2xl mx-auto px-6">
+            <h2 class="text-center text-4xl font-semibold mb-4">Built for your markets</h2>
+            <div class="flex flex-wrap justify-center gap-12 mt-12">
+                <div class="text-center">
+                    <div class="text-8xl mb-4">🇦🇺</div>
+                    <p class="font-semibold text-xl">Australia</p>
+                    <p class="text-gray-500">High labor cost + complex supply chains</p>
+                </div>
+                <div class="text-center">
+                    <div class="text-8xl mb-4">🇵🇭</div>
+                    <p class="font-semibold text-xl">Philippines</p>
+                    <p class="text-gray-500">WhatsApp-first operations + rapid growth</p>
+                </div>
+                <div class="text-center">
+                    <div class="text-8xl mb-4">🇲🇾</div>
+                    <p class="font-semibold text-xl">Malaysia</p>
+                    <p class="text-gray-500">Manufacturing + logistics boom</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PRICING -->
+    <section id="pricing" class="py-24 bg-white">
+        <div class="max-w-screen-2xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="heading-font text-5xl font-semibold tracking-tighter">Flexible pricing that fits your business</h2>
+                <p class="text-xl text-gray-600 mt-3">Choose what works best. 7-day free trial on every plan.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- Tier 1 -->
+                <div class="border border-gray-200 rounded-3xl p-8 hover:border-cyan-300 transition-colors">
+                    <div class="font-medium text-cyan-600 mb-2">STARTER</div>
+                    <div class="text-6xl font-semibold tracking-tighter">$149<span class="text-base font-normal text-gray-500">/mo</span></div>
+                    <ul class="my-8 space-y-4 text-sm">
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Up to 50 jobs/mo</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> WhatsApp + AI procurement</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Basic Physical AI (drone integration)</li>
+                    </ul>
+                    <a href="#trial" class="block w-full text-center py-5 border rounded-3xl font-semibold">Start free trial</a>
+                </div>
+
+                <!-- Tier 2 -->
+                <div class="border-2 border-cyan-500 rounded-3xl p-8 relative">
+                    <div class="absolute -top-3 right-8 bg-cyan-500 text-white text-xs font-bold px-6 py-1 rounded-3xl">MOST POPULAR</div>
+                    <div class="font-medium text-cyan-600 mb-2">PRO</div>
+                    <div class="text-6xl font-semibold tracking-tighter">$299<span class="text-base font-normal text-gray-500">/mo</span></div>
+                    <ul class="my-8 space-y-4 text-sm">
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Unlimited jobs</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Full Retell AI voice follow-up</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Full Physical AI bundle (drones + robots)</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Supplier network expansion</li>
+                    </ul>
+                    <a href="#trial" class="block w-full text-center py-5 bg-cyan-500 text-white rounded-3xl font-semibold">Start free trial</a>
+                </div>
+
+                <!-- Enterprise / Pay-per-result -->
+                <div class="border border-gray-200 rounded-3xl p-8 hover:border-cyan-300 transition-colors">
+                    <div class="font-medium text-cyan-600 mb-2">ENTERPRISE / PAY-PER-RESULT</div>
+                    <div class="text-6xl font-semibold tracking-tighter">$1,500<span class="text-base font-normal text-gray-500">/mo</span></div>
+                    <p class="text-sm text-gray-500 mt-1">or rev-share / per successful recovery</p>
+                    <ul class="my-8 space-y-4 text-sm">
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Custom integrations</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> On-premise robotics deployment</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Dedicated account + training</li>
+                        <li class="flex items-center gap-x-2"><i class="fa-solid fa-check text-emerald-500"></i> Warehouse / factory scale</li>
+                    </ul>
+                    <a href="#" class="block w-full text-center py-5 border rounded-3xl font-semibold">Book a demo</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <div id="trial" class="bg-gradient-to-r from-cyan-500 to-blue-600 py-20 text-white">
+        <div class="max-w-screen-2xl mx-auto px-6 text-center">
+            <h2 class="heading-font text-5xl font-semibold tracking-tighter">Ready to launch your operations?</h2>
+            <p class="text-2xl mt-4 text-cyan-100">Join the waitlist of contractors already saving hours and recovering margins every week.</p>
+            <div class="mt-12 max-w-md mx-auto">
+                <input type="email" placeholder="your@email.com" 
+                       class="w-full px-8 py-6 rounded-3xl text-black placeholder:text-gray-400 text-lg focus:outline-none">
+                <button onclick="alert('🎉 Welcome to Launchfly! (Demo mode — in production this would create your account)')"
+                        class="mt-4 w-full py-6 bg-black text-white rounded-3xl font-semibold text-xl hover:bg-gray-800">
+                    Start your 7-day free trial now
+                </button>
+                <p class="text-xs text-cyan-200 mt-6">No credit card • Cancel anytime • Built on Next.js + Vercel</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-gray-900 text-gray-400 py-16">
+        <div class="max-w-screen-2xl mx-auto px-6 grid grid-cols-2 md:grid-cols-5 gap-8">
+            <div>
+                <div class="flex items-center gap-x-3 text-white mb-6">
+                    <div class="w-9 h-9 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-2xl flex items-center justify-center text-2xl">🚀</div>
+                    <h1 class="heading-font text-3xl">Launchfly</h1>
+                </div>
+                <p class="text-sm">AI Procurement + Physical Intelligence for service contractors.</p>
+            </div>
+            <div>
+                <div class="font-semibold text-white mb-4">Product</div>
+                <p class="text-sm leading-relaxed">Quote-to-Cash<br>Procurement AI<br>Physical AI Bundle</p>
+            </div>
+            <div>
+                <div class="font-semibold text-white mb-4">Company</div>
+                <p class="text-sm leading-relaxed">Australia • Philippines • Malaysia</p>
+            </div>
+            <div>
+                <div class="font-semibold text-white mb-4">Legal</div>
+                <p class="text-xs">© 2026 Launchfly Pty Ltd<br>All rights reserved.</p>
+            </div>
+            <div class="text-xs">
+                Made with ❤️ for contractors who hate chasing quotes.<br>
+                Stack: Next.js • Vercel • WhatsApp • Retell AI • DeepSeek
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Tailwind script already loaded
+        console.log('%c🚀 Launchfly website ready! Copy this file as index.html and deploy to Vercel.', 'color:#00d4ff; font-size:13px;');
+    </script>
+</body>
+</html>

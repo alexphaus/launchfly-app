@@ -1,0 +1,22 @@
+# Stagehand uses Browserbase cloud (env: BROWSERBASE), not local Chromium.
+# Nixpacks auto-installs chromium + GPU libs when it sees puppeteer/playwright
+# in the lockfile — that bloats builds and often causes exit 255 on a VPS.
+providers = ["node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "22"
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+PUPPETEER_SKIP_DOWNLOAD = "1"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "1"
+
+[phases.setup]
+aptPkgs = []
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm run start"

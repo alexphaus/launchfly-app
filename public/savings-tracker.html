@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30k Savings Tracker</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f4f3ef;
+    --bg-card: #f9f8f5;
+    --text-primary: #1a1a1a;
+    --text-secondary: #6b6b66;
+    --text-tertiary: #9a9a93;
+    --border: #e0ded7;
+    --green: #1d9e75;
+    --green-dark: #085041;
+    --green-light: #e1f5ee;
+    --amber: #ef9f27;
+    --amber-dark: #854f0b;
+    --amber-light: #faeeda;
+    --red: #e24b4a;
+    --red-dark: #791f1f;
+    --red-light: #fcebeb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 1.5rem;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 4px;
+  }
+  .stat-card .value {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .stat-card.warn .value { color: var(--amber-dark); }
+  .stat-card.danger .value { color: var(--red-dark); }
+  .stat-card.good .value { color: var(--green-dark); }
+
+  .progress-track {
+    height: 12px;
+    background: var(--bg-secondary);
+    border-radius: 7px;
+    overflow: hidden;
+    margin-bottom: 6px;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--green);
+    transition: width 0.2s ease;
+  }
+  .milestone-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding: 0 1px;
+  }
+  .milestone {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    position: relative;
+  }
+  .milestone.hit {
+    color: var(--green-dark);
+    font-weight: 600;
+  }
+
+  .banner {
+    display: none;
+    background: var(--green-light);
+    color: var(--green-dark);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+  }
+  .banner.show { display: block; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 4px;
+    margin-bottom: 0.5rem;
+  }
+  .row-marker {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-align: right;
+    margin-bottom: 1.5rem;
+  }
+  .square {
+    aspect-ratio: 1;
+    padding: 0;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    transition: background 0.1s ease, transform 0.08s ease;
+    position: relative;
+  }
+  .square:hover {
+    transform: scale(1.1);
+  }
+  .square.filled {
+    background: var(--green);
+    border-color: var(--green-dark);
+  }
+  .square.milestone-edge {
+    border-right: 2px solid var(--text-tertiary);
+  }
+  .square:disabled {
+    cursor: wait;
+    opacity: 0.7;
+  }
+
+  .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  button {
+    font-size: 13px;
+    font-family: inherit;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  button:hover {
+    background: var(--bg-secondary);
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  .sync-status {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin: 0 0 1rem;
+  }
+  .sync-status.syncing { color: var(--amber-dark); }
+  .sync-status.error { color: var(--red-dark); }
+  .sync-status.saved { color: var(--green-dark); }
+
+  @media (max-width: 480px) {
+    .grid { grid-template-columns: repeat(10, 1fr); }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<h1>Savings tracker &mdash; &euro;30,000 goal</h1>
+  <p class="subtitle" id="deadline-line">Deadline: 30 Dec 2026</p>
+  <p class="sync-status" id="sync-status">Loading...</p>
+
+  <div class="stat-grid" id="stat-grid">
+    <div class="stat-card">
+      <p class="label">Saved</p>
+      <p class="value" id="saved-amount">&euro;0</p>
+    </div>
+    <div class="stat-card">
+      <p class="label">Remaining</p>
+      <p class="value" id="remaining-amount">&euro;30,000</p>
+    </div>
+    <div class="stat-card" id="pace-card">
+      <p class="label">&euro;/day needed</p>
+      <p class="value" id="pace-amount">&euro;0</p>
+    </div>
+    <div class="stat-card" id="streak-card">
+      <p class="label">Streak</p>
+      <p class="value" id="streak-amount">0 days</p>
+    </div>
+  </div>
+
+  <div class="banner" id="milestone-banner"></div>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-bar"></div>
+  </div>
+  <div class="milestone-row">
+    <span class="milestone" id="m-0">0%</span>
+    <span class="milestone" id="m-25">25%</span>
+    <span class="milestone" id="m-50">50%</span>
+    <span class="milestone" id="m-75">75%</span>
+    <span class="milestone" id="m-100">100%</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <p class="row-marker" id="square-count">0 / 200 squares &middot; &euro;150 each</p>
+
+<div class="footer-row">
+  <p class="hint">Click a square each time you save &euro;150 &middot; syncs across your devices</p>
+  <button id="reset-btn">Reset</button>
+</div>
+
+<script>
+  var TOTAL = 200;
+  var UNIT = 150;
+  var GOAL = 30000;
+  var LEGACY_STORAGE_KEY = 'savings-tracker-30k-v2';
+  var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
+  var API_URL = '/api/personal/savings-tracker';
+  var DEADLINE = new Date('2026-12-30T00:00:00');
+  var POLL_MS = 30000;
+
+  var grid = document.getElementById('grid');
+  var savedAmountEl = document.getElementById('saved-amount');
+  var remainingAmountEl = document.getElementById('remaining-amount');
+  var paceAmountEl = document.getElementById('pace-amount');
+  var paceCard = document.getElementById('pace-card');
+  var streakAmountEl = document.getElementById('streak-amount');
+  var streakCard = document.getElementById('streak-card');
+  var squareCountEl = document.getElementById('square-count');
+  var progressBar = document.getElementById('progress-bar');
+  var resetBtn = document.getElementById('reset-btn');
+  var banner = document.getElementById('milestone-banner');
+  var syncStatusEl = document.getElementById('sync-status');
+
+  var data = emptyData();
+  var lastSyncedAt = null;
+  var isSaving = false;
+  var isReady = false;
+  var pollTimer = null;
+
+  function emptyData() {
+    return {
+      filled: new Array(TOTAL).fill(false),
+      fillDates: {},
+      milestonesShown: {},
+      lastSaveDate: null,
+      streak: 0
+    };
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function dateStrFromOffset(daysAgo) {
+    var d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function normalizeData(parsed) {
+    if (!parsed || !Array.isArray(parsed.filled) || parsed.filled.length !== TOTAL) {
+      return emptyData();
+    }
+    return {
+      filled: parsed.filled.map(Boolean),
+      fillDates: parsed.fillDates || {},
+      milestonesShown: parsed.milestonesShown || {},
+      lastSaveDate: parsed.lastSaveDate || null,
+      streak: parsed.streak || 0
+    };
+  }
+
+  function loadLegacyLocalData() {
+    try {
+      var raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) return normalizeData(JSON.parse(raw));
+    } catch (e) {}
+    return emptyData();
+  }
+
+  function loadLocalBackupData() {
+    try {
+      var raw = localStorage.getItem(LOCAL_BACKUP_KEY);
+      if (raw) return normalizeData(JSON.parse(raw));
+    } catch (e) {}
+    return emptyData();
+  }
+
+  function saveLocalBackup() {
+    try {
+      localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(data));
+    } catch (e) {}
+  }
+
+  function setSyncStatus(state, message) {
+    syncStatusEl.className = 'sync-status' + (state ? ' ' + state : '');
+    syncStatusEl.textContent = message;
+  }
+
+  function setInteractive(enabled) {
+    resetBtn.disabled = !enabled;
+    var squares = grid.querySelectorAll('.square');
+    for (var i = 0; i < squares.length; i++) {
+      squares[i].disabled = !enabled;
+    }
+  }
+
+  function apiFetch(method, body) {
+    var options = {
+      method: method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (body) options.body = JSON.stringify(body);
+    return fetch(API_URL, options);
+  }
+
+  async function readErrorMessage(res, fallback) {
+    try {
+      var payload = await res.json();
+      if (payload && payload.error) return payload.error;
+    } catch (e) {}
+    return fallback;
+  }
+
+  function countFilledIn(state) {
+    var c = 0;
+    for (var i = 0; i < state.filled.length; i++) if (state.filled[i]) c++;
+    return c;
+  }
+
+  function checkStreakStillAlive() {
+    if (data.streak > 0 && data.lastSaveDate) {
+      var today = todayStr();
+      var yesterday = dateStrFromOffset(1);
+      if (data.lastSaveDate !== today && data.lastSaveDate !== yesterday) {
+        data.streak = 0;
+      }
+    }
+  }
+
+  function applyRemotePayload(payload, fromPoll) {
+    if (!payload || !payload.data) return false;
+    if (fromPoll && isSaving) return false;
+    if (fromPoll && payload.updated_at === lastSyncedAt) return false;
+
+    data = normalizeData(payload.data);
+    lastSyncedAt = payload.updated_at || null;
+    saveLocalBackup();
+    checkStreakStillAlive();
+    buildGrid();
+    render();
+
+    if (fromPoll) {
+      setSyncStatus('saved', 'Updated from another device');
+    }
+    return true;
+  }
+
+  async function fetchRemote(fromPoll) {
+    try {
+      var res = await apiFetch('GET');
+      if (!res.ok) {
+        if (!fromPoll) {
+          var loadMessage = await readErrorMessage(res, 'Could not load saved progress');
+          setSyncStatus('error', loadMessage);
+        }
+        return false;
+      }
+
+      var payload = await res.json();
+      applyRemotePayload(payload, fromPoll);
+      return true;
+    } catch (e) {
+      if (!fromPoll) setSyncStatus('error', 'Could not connect to sync service');
+      return false;
+    }
+  }
+
+  async function saveData() {
+    isSaving = true;
+    setInteractive(false);
+    setSyncStatus('syncing', 'Saving...');
+
+    try {
+      var res = await apiFetch('PUT', { data: data });
+      if (!res.ok) {
+        var saveMessage = await readErrorMessage(res, 'Save failed - try again');
+        setSyncStatus('error', saveMessage);
+        saveLocalBackup();
+        return;
+      }
+
+      var payload = await res.json();
+      lastSyncedAt = payload.updated_at || null;
+      saveLocalBackup();
+      setSyncStatus('saved', 'Saved and synced');
+    } catch (e) {
+      saveLocalBackup();
+      setSyncStatus('error', 'Save failed - using local backup');
+    } finally {
+      isSaving = false;
+      setInteractive(true);
+    }
+  }
+
+  async function bootstrapFromCloud() {
+    setSyncStatus('', 'Loading...');
+    var loaded = await fetchRemote(false);
+    if (!loaded) {
+      var backup = loadLocalBackupData();
+      if (countFilledIn(backup) > 0) {
+        data = backup;
+        checkStreakStillAlive();
+        buildGrid();
+        render();
+        setSyncStatus('error', 'Cloud sync unavailable - loaded local backup');
+      }
+      return false;
+    }
+
+    if (countFilledIn(data) === 0) {
+      var legacy = loadLegacyLocalData();
+      if (countFilledIn(legacy) > 0) {
+        data = legacy;
+        checkStreakStillAlive();
+        buildGrid();
+        render();
+        await saveData();
+        setSyncStatus('saved', 'Imported browser progress and synced');
+      }
+
+      var backup = loadLocalBackupData();
+      if (countFilledIn(data) === 0 && countFilledIn(backup) > 0) {
+        data = backup;
+        checkStreakStillAlive();
+        buildGrid();
+        render();
+        await saveData();
+        setSyncStatus('saved', 'Imported local backup and synced');
+      }
+    }
+
+    setSyncStatus('saved', 'Synced');
+    return true;
+  }
+
+  function formatEuro(n) {
+    return '\u20AC' + Math.round(n).toLocaleString('en-IE');
+  }
+
+  function countFilled() {
+    return countFilledIn(data);
+  }
+
+  function daysRemaining() {
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    var diff = DEADLINE - now;
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
+
+  function updateStreak(isAdding) {
+    var today = todayStr();
+    if (isAdding) {
+      if (data.lastSaveDate !== today) {
+        var yesterday = dateStrFromOffset(1);
+        if (data.lastSaveDate === yesterday) {
+          data.streak += 1;
+        } else {
+          data.streak = 1;
+        }
+        data.lastSaveDate = today;
+      }
+    }
+  }
+
+  function showMilestoneBanner(text) {
+    banner.textContent = text;
+    banner.classList.add('show');
+    setTimeout(function() {
+      banner.classList.remove('show');
+    }, 4000);
+  }
+
+  function checkMilestones(count, total) {
+    var pct = (count / TOTAL) * 100;
+    var checks = [
+      { key: '25', threshold: 25, text: 'Quarter of the way there \u2014 ' + formatEuro(total) + ' saved' },
+      { key: '50', threshold: 50, text: 'Halfway to \u20ac30,000. Keep going.' },
+      { key: '75', threshold: 75, text: 'Three quarters done \u2014 ' + formatEuro(GOAL - total) + ' left' },
+      { key: '100', threshold: 100, text: 'Goal reached. \u20ac30,000 saved.' }
+    ];
+    checks.forEach(function(c) {
+      if (pct >= c.threshold && !data.milestonesShown[c.key]) {
+        data.milestonesShown[c.key] = true;
+        showMilestoneBanner(c.text);
+      }
+      if (pct < c.threshold && data.milestonesShown[c.key]) {
+        data.milestonesShown[c.key] = false;
+      }
+    });
+  }
+
+  function render() {
+    var count = countFilled();
+    var total = count * UNIT;
+    var remaining = Math.max(0, GOAL - total);
+    var days = daysRemaining();
+
+    savedAmountEl.textContent = formatEuro(total);
+    remainingAmountEl.textContent = formatEuro(remaining);
+    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares \u00b7 \u20ac150 each';
+
+    if (days > 0 && remaining > 0) {
+      var pace = remaining / days;
+      paceAmountEl.textContent = formatEuro(pace);
+      paceCard.className = 'stat-card' + (pace > UNIT * 1.3 ? ' danger' : (pace > UNIT ? ' warn' : ' good'));
+    } else if (remaining <= 0) {
+      paceAmountEl.textContent = 'Done';
+      paceCard.className = 'stat-card good';
+    } else {
+      paceAmountEl.textContent = 'Past due';
+      paceCard.className = 'stat-card danger';
+    }
+
+    streakAmountEl.textContent = data.streak + (data.streak === 1 ? ' day' : ' days');
+    streakCard.className = 'stat-card' + (data.streak >= 3 ? ' good' : '');
+
+    var pct = Math.min(100, (total / GOAL) * 100);
+    progressBar.style.width = pct.toFixed(1) + '%';
+
+    ['0', '25', '50', '75', '100'].forEach(function(m) {
+      var el = document.getElementById('m-' + m);
+      if (pct >= parseInt(m)) {
+        el.classList.add('hit');
+      } else {
+        el.classList.remove('hit');
+      }
+    });
+
+    checkMilestones(count, total);
+  }
+
+  function buildGrid() {
+    grid.innerHTML = '';
+    for (var i = 0; i < TOTAL; i++) {
+      (function(index) {
+        var sq = document.createElement('button');
+        sq.type = 'button';
+        sq.className = 'square' + (data.filled[index] ? ' filled' : '');
+        if ((index + 1) % 50 === 0 && index !== TOTAL - 1) {
+          sq.classList.add('milestone-edge');
+        }
+        sq.title = '\u20AC' + UNIT;
+        sq.addEventListener('click', function() {
+          if (!isReady || isSaving) return;
+          var wasFilled = data.filled[index];
+          data.filled[index] = !wasFilled;
+          sq.className = 'square' + (data.filled[index] ? ' filled' : '');
+          if ((index + 1) % 50 === 0 && index !== TOTAL - 1) {
+            sq.classList.add('milestone-edge');
+          }
+          if (data.filled[index]) {
+            data.fillDates[index] = todayStr();
+            updateStreak(true);
+          } else {
+            delete data.fillDates[index];
+          }
+          saveLocalBackup();
+          render();
+          saveData();
+        });
+        grid.appendChild(sq);
+      })(i);
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function() {
+      fetchRemote(true);
+    }, POLL_MS);
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        fetchRemote(true);
+      }
+    });
+  }
+
+  resetBtn.addEventListener('click', async function() {
+    if (!confirm('Reset all progress? This cannot be undone.')) return;
+    data = emptyData();
+    buildGrid();
+    render();
+    saveLocalBackup();
+    await saveData();
+  });
+
+  (async function init() {
+    buildGrid();
+    await bootstrapFromCloud();
+    isReady = true;
+    startPolling();
+  })();
+</script>
+
+</body>
+</html>

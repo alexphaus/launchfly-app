@@ -142,11 +142,9 @@
     background: var(--bg-secondary);
     transition: background 0.1s ease, transform 0.08s ease;
     position: relative;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
   }
-  @media (hover: hover) {
-    .square:hover { transform: scale(1.1); }
+  .square:hover {
+    transform: scale(1.1);
   }
   .square.filled {
     background: var(--green);
@@ -176,14 +174,11 @@
     font-size: 13px;
     font-family: inherit;
     padding: 8px 14px;
-    min-height: 44px;
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text-primary);
     cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
   }
   button:hover {
     background: var(--bg-secondary);
@@ -204,18 +199,8 @@
   .sync-status.saved { color: var(--green-dark); }
 
   @media (max-width: 480px) {
-    body { padding: 1.25rem 1rem 3rem; }
-    h1 { font-size: 17px; }
-    .grid {
-      grid-template-columns: repeat(10, 1fr);
-      gap: 3px;
-    }
+    .grid { grid-template-columns: repeat(10, 1fr); }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
-    .stat-card { padding: 10px 10px; }
-    .stat-card .label { font-size: 11px; }
-    .stat-card .value { font-size: 16px; }
-    .footer-row { flex-direction: column; align-items: flex-start; gap: 10px; }
-    #reset-btn { align-self: flex-end; }
   }
 </style>
 </head>

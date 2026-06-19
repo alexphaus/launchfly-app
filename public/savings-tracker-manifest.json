@@ -1,0 +1,17 @@
+{
+  "name": "30k Savings Tracker",
+  "short_name": "Savings",
+  "description": "Track your €30,000 savings goal",
+  "start_url": "/savings-tracker.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d9e75",
+  "icons": [
+    {
+      "src": "/savings-tracker-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

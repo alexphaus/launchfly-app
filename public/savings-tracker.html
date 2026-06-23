@@ -271,7 +271,7 @@
 <script>
   var TOTAL = 200;
   var UNIT = 150;
-  var MILESTONE_EMOJIS = { 49: '\u2708\uFE0F', 99: '\uD83D\uDE0A', 149: '\uD83D\uDE0E', 199: '\uD83C\uDFDD\uFE0F' };
+  var MILESTONE_EMOJIS = { 9: '\uD83D\uDEDF', 49: '\u2708\uFE0F', 99: '\uD83D\uDE0A', 149: '\uD83D\uDE0E', 199: '\u26F3\uFE0F' };
   var GOAL = 30000;
   var LEGACY_STORAGE_KEY = 'savings-tracker-30k-v2';
   var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
@@ -626,7 +626,7 @@
           emoji.textContent = MILESTONE_EMOJIS[index];
           sq.appendChild(emoji);
         }
-        sq.title = '\u20AC' + UNIT;
+        sq.title = formatEuro((index + 1) * UNIT);
         sq.addEventListener('click', function() {
           if (!isReady || isSaving) return;
           var wasFilled = data.filled[index];

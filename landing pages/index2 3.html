@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Launchfly — Own a Business That Runs Itself</title>
+<meta name="description" content="Launchfly's AI doesn't just build your business — it runs it. Product, brand, customers, and a 24/7 agent team that operates the whole thing while you sleep. Start free.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --ink-soft: #1c1c1e;
+    --muted: #9b9ba3;
+    --muted-2: #6e6e76;
+    --line: #ececef;
+    --surface: #f5f5f6;
+    --surface-2: #fafafa;
+    --white: #ffffff;
+    --accent: #0a0a0a;
+    --teal: #0f766e;
+    --radius: 22px;
+    --radius-sm: 14px;
+    --max: 1080px;
+  }
+
+  * , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+
+  body {
+    background: var(--white);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* soft corner washes like the reference */
+  body::before, body::after {
+    content: '';
+    position: fixed;
+    width: 380px; height: 380px;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.5;
+    z-index: 0;
+    pointer-events: none;
+  }
+  body::before { top: 30vh; left: -180px; background: radial-gradient(circle, #d7f0ec 0%, transparent 70%); }
+  body::after  { bottom: -120px; right: -160px; background: radial-gradient(circle, #e7e7f7 0%, transparent 70%); }
+
+  a { color: inherit; text-decoration: none; }
+
+  h1, h2, h3, .logo, .stat-num, .price-amount {
+    font-family: 'Sora', sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* ---------- NAV ---------- */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 2rem;
+    max-width: var(--max);
+    margin: 0 auto;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(14px);
+  }
+
+  .logo { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+  .logo .rocket { font-size: 1.1rem; }
+
+  .nav-links { display: flex; align-items: center; gap: 2rem; }
+  .nav-links a { font-size: 0.92rem; color: var(--muted-2); transition: color 0.18s; }
+  .nav-links a:hover { color: var(--ink); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.92rem;
+    border-radius: 999px;
+    padding: 0.7rem 1.4rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    white-space: nowrap;
+  }
+  .btn-dark { background: var(--ink); color: #fff; }
+  .btn-dark:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.18); }
+  .btn-light { background: var(--surface); color: var(--ink); border-color: var(--line); }
+  .btn-light:hover { background: #ededef; transform: translateY(-2px); }
+  .btn-lg { padding: 0.95rem 1.9rem; font-size: 1rem; }
+
+  .nav-links .btn { padding: 0.6rem 1.25rem; }
+
+  /* ---------- LAYOUT ---------- */
+  section { position: relative; z-index: 1; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 2rem; }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted-2);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); animation: blink 2s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .mark { display: inline-flex; gap: 0.45rem; align-items: center; justify-content: center; }
+  .mark span { width: 16px; height: 16px; background: var(--ink); display: inline-block; }
+  .mark .sq { border-radius: 3px; }
+  .mark .ci { border-radius: 50%; }
+  .mark .tr { width: 0; height: 0; background: none; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--ink); }
+
+  /* ---------- HERO ---------- */
+  .hero { text-align: center; padding: 4.5rem 0 1rem; }
+  .hero .mark { margin-bottom: 2rem; }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.4rem);
+    font-weight: 800;
+    line-height: 1.02;
+    margin: 0 auto 1.4rem;
+    max-width: 14ch;
+  }
+  .hero h1 .fade { color: var(--muted); }
+  .hero .sub {
+    font-size: 1.18rem;
+    color: var(--muted-2);
+    max-width: 540px;
+    margin: 0 auto 2.2rem;
+    line-height: 1.55;
+  }
+  .hero-ctas { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+  .hero-micro { margin-top: 1.4rem; font-size: 0.82rem; color: var(--muted); }
+  .hero-micro b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- CONSOLE MOCK ---------- */
+  .console-shell { max-width: 940px; margin: 4rem auto 0; padding: 0 1.5rem; }
+  .console {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 40px 80px -30px rgba(15,23,42,0.25);
+    overflow: hidden;
+  }
+  .console-bar {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.9rem 1.2rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .console-bar .dots { display: flex; gap: 0.4rem; }
+  .console-bar .dots i { width: 11px; height: 11px; border-radius: 50%; background: #dcdce0; display: block; }
+  .console-bar .title { font-size: 0.8rem; color: var(--muted-2); margin-left: 0.6rem; font-family: 'Sora', sans-serif; font-weight: 500; }
+  .console-bar .live { margin-left: auto; font-size: 0.72rem; color: var(--teal); font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
+  .console-bar .live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); animation: blink 1.4s infinite; }
+
+  .console-body { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 320px; }
+  .console-feed { padding: 1.5rem; border-right: 1px solid var(--line); }
+  .feed-prompt { font-size: 0.82rem; color: var(--muted-2); margin-bottom: 1.1rem; }
+  .feed-prompt b { color: var(--ink); font-weight: 600; }
+  .feed-line {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    font-size: 0.86rem; color: var(--ink-soft);
+    padding: 0.4rem 0;
+    opacity: 0;
+    transform: translateY(6px);
+    animation: feedIn 0.5s forwards;
+  }
+  .feed-line .tick { color: var(--teal); font-weight: 700; flex-shrink: 0; }
+  .feed-line:nth-child(2) { animation-delay: 0.4s; }
+  .feed-line:nth-child(3) { animation-delay: 1.1s; }
+  .feed-line:nth-child(4) { animation-delay: 1.8s; }
+  .feed-line:nth-child(5) { animation-delay: 2.5s; }
+  .feed-line:nth-child(6) { animation-delay: 3.2s; }
+  @keyframes feedIn { to { opacity: 1; transform: translateY(0); } }
+
+  .console-preview { padding: 1.5rem; background: var(--surface-2); display: flex; flex-direction: column; gap: 0.8rem; }
+  .pv-site { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1.1rem; opacity: 0; animation: feedIn 0.6s 2.9s forwards; }
+  .pv-logo { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.95rem; margin-bottom: 0.7rem; }
+  .pv-bar { height: 9px; border-radius: 5px; background: #ededf0; margin-bottom: 0.5rem; }
+  .pv-bar.s { width: 60%; }
+  .pv-bar.m { width: 85%; }
+  .pv-btn { margin-top: 0.8rem; display: inline-block; background: var(--ink); color: #fff; font-size: 0.7rem; padding: 0.4rem 0.9rem; border-radius: 999px; }
+  .pv-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; opacity: 0; animation: feedIn 0.6s 3.6s forwards; }
+  .pv-metric { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.7rem 0.9rem; }
+  .pv-metric .n { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.2rem; }
+  .pv-metric .l { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* ---------- LOGOS / TRUST STRIP ---------- */
+  .strip { padding: 3rem 0 1rem; text-align: center; }
+  .strip p { font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.2rem; }
+  .strip-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 2.2rem; align-items: center; }
+  .strip-row span { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 1.05rem; color: #c2c2c8; }
+
+  /* ---------- MANIFESTO ---------- */
+  .manifesto { text-align: center; padding: 6.5rem 0 4rem; }
+  .manifesto h2 {
+    font-size: clamp(1.9rem, 4.2vw, 3rem);
+    font-weight: 700;
+    line-height: 1.08;
+    max-width: 18ch;
+    margin: 0 auto 1.4rem;
+  }
+  .manifesto h2 .fade { color: var(--muted); }
+  .manifesto p { color: var(--muted-2); max-width: 540px; margin: 0 auto; font-size: 1.05rem; }
+
+  /* ---------- FEATURES ---------- */
+  .features { padding: 3rem 0; }
+  .feature-grid { display: flex; flex-direction: column; gap: 1.4rem; }
+  .feature {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 2.6rem;
+  }
+  .feature.flip .feature-visual { order: -1; }
+  .feature-tag { font-size: 0.78rem; font-weight: 600; color: var(--teal); letter-spacing: 0.04em; margin-bottom: 0.9rem; }
+  .feature h3 { font-size: 1.7rem; font-weight: 700; line-height: 1.12; margin-bottom: 0.8rem; }
+  .feature p { color: var(--muted-2); font-size: 1rem; }
+  .feature-visual {
+    aspect-ratio: 4 / 3;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* mini visuals */
+  .vz { width: 78%; }
+  .vz .row { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 0.5rem; background: #fff; font-size: 0.78rem; color: var(--ink-soft); }
+  .vz .row .pill { margin-left: auto; font-size: 0.62rem; background: #effaf7; color: var(--teal); padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+  .vz .row .ic { width: 22px; height: 22px; border-radius: 6px; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+
+  .brand-card { text-align: center; }
+  .brand-card .bmark { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 1.6rem; margin-bottom: 0.4rem; }
+  .brand-swatches { display: flex; gap: 0.4rem; justify-content: center; margin-top: 0.8rem; }
+  .brand-swatches i { width: 26px; height: 26px; border-radius: 8px; display: block; }
+
+  .agent-orbit { width: 70%; aspect-ratio: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+  .agent-core { width: 54px; height: 54px; border-radius: 50%; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; z-index: 2; }
+  .agent-ring { position: absolute; border: 1px dashed #d7d7dd; border-radius: 50%; animation: spin 14s linear infinite; }
+  .agent-ring.r1 { inset: 18%; } .agent-ring.r2 { inset: 0; animation-duration: 22s; animation-direction: reverse; }
+  .agent-node { position: absolute; width: 30px; height: 30px; border-radius: 50%; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- STATS ---------- */
+  .stats { padding: 5.5rem 0; text-align: center; }
+  .stats-head h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; }
+  .stats-head .fade { color: var(--muted); }
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; margin-top: 3rem; }
+  .stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2.2rem 1rem; }
+  .stat-num { font-size: 2.6rem; font-weight: 800; line-height: 1; }
+  .stat-label { color: var(--muted-2); font-size: 0.9rem; margin-top: 0.6rem; }
+
+  /* ---------- TESTIMONIALS ---------- */
+  .testi { padding: 2rem 0 5rem; }
+  .testi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 2.6rem; }
+  .testi-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1.4rem; display: flex; flex-direction: column; justify-content: space-between; min-height: 200px; }
+  .testi-card p { font-size: 0.92rem; color: var(--ink-soft); line-height: 1.5; }
+  .testi-who { margin-top: 1.2rem; }
+  .testi-who .nm { font-weight: 600; font-size: 0.85rem; }
+  .testi-who .rl { font-size: 0.78rem; color: var(--muted); }
+
+  /* ---------- PRICING ---------- */
+  .pricing { padding: 5rem 0; text-align: center; }
+  .pricing-head h2 { font-size: clamp(1.9rem, 4.2vw, 2.8rem); font-weight: 700; }
+  .pricing-head .fade { color: var(--muted); }
+  .pricing-head p { color: var(--muted-2); margin-top: 0.6rem; }
+  .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 3rem; text-align: left; }
+  .price-card {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 2rem 1.7rem;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .price-card.feat { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .price-card.feat .price-period, .price-card.feat .price-tier, .price-card.feat .price-features li { color: #c9c9cf; }
+  .price-card.feat .price-features li .ck { color: #fff; }
+  .price-badge { position: absolute; top: 1.4rem; right: 1.4rem; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; background: #fff; color: var(--ink); padding: 0.25rem 0.6rem; border-radius: 999px; }
+  .price-tier { font-size: 0.85rem; color: var(--muted-2); margin-bottom: 0.9rem; }
+  .price-amount { font-size: 2.7rem; font-weight: 800; line-height: 1; }
+  .price-period { font-size: 0.9rem; color: var(--muted-2); margin-bottom: 1.4rem; margin-top: 0.3rem; }
+  .price-features { list-style: none; display: flex; flex-direction: column; gap: 0.7rem; margin: 0.6rem 0 1.8rem; }
+  .price-features li { display: flex; gap: 0.55rem; font-size: 0.9rem; color: var(--muted-2); }
+  .price-features li .ck { color: var(--teal); font-weight: 700; }
+  .price-card .btn { width: 100%; justify-content: center; margin-top: auto; }
+  .price-card.feat .btn-light { background: #fff; color: var(--ink); border-color: #fff; }
+  .pricing-note { margin-top: 1.6rem; font-size: 0.82rem; color: var(--muted); }
+  .pricing-note b { color: var(--ink); }
+
+  /* ---------- FINAL CTA ---------- */
+  .final { padding: 6rem 0 5rem; text-align: center; }
+  .final h2 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.05; max-width: 16ch; margin: 0 auto 1rem; }
+  .final .rocket { font-size: 2.2rem; display: block; margin-bottom: 1rem; }
+  .final p { color: var(--muted-2); max-width: 420px; margin: 0 auto 2rem; }
+
+  /* ---------- FOOTER ---------- */
+  footer { border-top: 1px solid var(--line); padding: 3.5rem 0 3rem; }
+  .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.4fr; gap: 2rem; }
+  .footer-col h4 { font-family: 'Sora', sans-serif; font-size: 0.82rem; font-weight: 600; margin-bottom: 1rem; }
+  .footer-col a, .footer-col span { display: block; font-size: 0.86rem; color: var(--muted-2); margin-bottom: 0.55rem; }
+  .footer-col a:hover { color: var(--ink); }
+  .footer-bottom { max-width: var(--max); margin: 2.5rem auto 0; padding: 1.5rem 2rem 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-size: 0.8rem; color: var(--muted); }
+
+  /* ---------- REVEAL ---------- */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width: 880px) {
+    .console-body { grid-template-columns: 1fr; }
+    .console-feed { border-right: none; border-bottom: 1px solid var(--line); }
+    .feature { grid-template-columns: 1fr; gap: 1.6rem; padding: 2rem; }
+    .feature.flip .feature-visual { order: 0; }
+    .stats-row { grid-template-columns: 1fr; }
+    .testi-grid { grid-template-columns: 1fr 1fr; }
+    .price-grid { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+    .nav-links a:not(.btn) { display: none; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 16px; }
+    .testi-grid { grid-template-columns: 1fr; }
+    nav { padding: 1rem 1.2rem; }
+    .wrap { padding: 0 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav>
+  <a href="#" class="logo"><span class="rocket">🚀</span> Launchfly</a>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#start" class="btn btn-dark">Start Free</a>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span> Autonomous companies · run by AI agents</span>
+    <div class="mark" style="margin-top:1.6rem;"><span class="sq"></span><span class="ci"></span><span class="tr"></span></div>
+    <h1>Own a business that <span class="fade">runs itself.</span></h1>
+    <p class="sub">Launchfly's AI builds your product, brand, and customers — then operates the whole thing 24/7. You own the company. The agents do the work.</p>
+    <div class="hero-ctas">
+      <a href="#start" class="btn btn-dark btn-lg">Start Free →</a>
+      <a href="#how" class="btn btn-light btn-lg">See it run</a>
+    </div>
+    <p class="hero-micro">No code. No team. No payroll. <b>Just equity you own.</b></p>
+  </div>
+
+  <!-- live build console -->
+  <div class="console-shell" id="how">
+    <div class="console reveal">
+      <div class="console-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="title">launchfly · autopilot</span>
+        <span class="live">running</span>
+      </div>
+      <div class="console-body">
+        <div class="console-feed">
+          <p class="feed-prompt">You said: <b>“I'm good at fitness coaching, $0 budget.”</b></p>
+          <div class="feed-line"><span class="tick">✓</span> Found a winnable niche: <b>&nbsp;menopause strength coaching</b></div>
+          <div class="feed-line"><span class="tick">✓</span> Generated brand, site & checkout</div>
+          <div class="feed-line"><span class="tick">✓</span> Built a $39 program + email funnel</div>
+          <div class="feed-line"><span class="tick">✓</span> Launched content + outreach agents</div>
+          <div class="feed-line"><span class="tick">✓</span> First customer in 19 minutes</div>
+        </div>
+        <div class="console-preview">
+          <div class="pv-site">
+            <div class="pv-logo">StrongAfter ◆</div>
+            <div class="pv-bar m"></div>
+            <div class="pv-bar s"></div>
+            <span class="pv-btn">Join the program</span>
+          </div>
+          <div class="pv-metrics">
+            <div class="pv-metric"><div class="n">19m</div><div class="l">to first sale</div></div>
+            <div class="pv-metric"><div class="n">$0</div><div class="l">spent by you</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TRUST STRIP ===== -->
+<section class="strip">
+  <div class="wrap reveal">
+    <p>Agents that run on the tools your business actually needs</p>
+    <div class="strip-row">
+      <span>Stripe</span>
+      <span>Gmail</span>
+      <span>Meta</span>
+      <span>X</span>
+      <span>Shopify</span>
+      <span>Calendly</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MANIFESTO (0-to-1) ===== -->
+<section class="manifesto">
+  <div class="wrap reveal">
+    <h2>Everyone can build now. <span class="fade">Almost no one can run.</span></h2>
+    <p>The website was never the hard part. Getting customers, shipping every day, and showing up when you'd rather quit — that's what kills businesses. Launchfly automates the part that actually matters: the running.</p>
+  </div>
+</section>
+
+<!-- ===== FEATURES ===== -->
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="feature-grid">
+
+      <!-- 1 -->
+      <div class="feature reveal">
+        <div>
+          <div class="feature-tag">FIND THE WEDGE</div>
+          <h3>It finds your unfair advantage.</h3>
+          <p>Forget generic “business ideas.” Launchfly studies live demand and hands you a specific, winnable niche — the smallest market you can actually dominate first.</p>
+        </div>
+        <div class="feature-visual">
+          <div class="vz">
+            <div class="row"><span class="ic">🔎</span> Scanning 2,400 niches <span class="pill">live</span></div>
+            <div class="row"><span class="ic">📈</span> Demand up 6× YoY <span class="pill">hot</span></div>
+            <div class="row"><span class="ic">🎯</span> Low competition <span class="pill">win</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="feature flip reveal">
+        <div>
+          <div class="feature-tag">INSTANT IDENTITY</div>
+          <h3>Brand &amp; site, ready to take payments.</h3>
+          <p>Name, logo, voice, copy, and a live site — generated and deployed in minutes, with checkout wired up so you can earn from minute one.</p>
+        </div>
+        <div class="feature-visual">
+          <div class="brand-card">
+            <div class="bmark">StrongAfter ◆</div>
+            <div style="font-size:0.8rem;color:var(--muted);">Strength, built to last.</div>
+            <div class="brand-swatches">
+              <i style="background:#0f766e;"></i>
+              <i style="background:#0a0a0a;"></i>
+              <i style="background:#e8c4a0;"></i>
+              <i style="background:#f5f5f6;border:1px solid var(--line);"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="feature reveal">
+        <div>
+          <div class="feature-tag">DONE-FOR-YOU OFFER</div>
+          <h3>Product, funnel &amp; first sales.</h3>
+          <p>A real digital product, smart pricing, a checkout, and an email engine that turns visitors into revenue — not a folder of assets you still have to assemble.</p>
+        </div>
+        <div class="feature-visual">
+          <div class="vz">
+            <div class="row"><span class="ic">📦</span> 6-week program <span class="pill">$39</span></div>
+            <div class="row"><span class="ic">✉️</span> 7-email funnel <span class="pill">armed</span></div>
+            <div class="row"><span class="ic">💳</span> Checkout live <span class="pill">paid</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 — the differentiator -->
+      <div class="feature flip reveal">
+        <div>
+          <div class="feature-tag">THE 0→1 DIFFERENCE</div>
+          <h3>An AI team that never clocks out.</h3>
+          <p>This is the part nobody else does. Agents run your marketing, content, support, and follow-ups around the clock. You approve from your phone — they execute while you sleep.</p>
+        </div>
+        <div class="feature-visual">
+          <div class="agent-orbit">
+            <div class="agent-ring r1"></div>
+            <div class="agent-ring r2"></div>
+            <div class="agent-core">🤖</div>
+            <div class="agent-node" style="top:-4%;left:42%;">📣</div>
+            <div class="agent-node" style="top:42%;right:-4%;">✉️</div>
+            <div class="agent-node" style="bottom:-4%;left:42%;">💬</div>
+            <div class="agent-node" style="top:42%;left:-4%;">📊</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== STATS ===== -->
+<section class="stats">
+  <div class="wrap">
+    <div class="stats-head reveal">
+      <h2>Real founders. <span class="fade">Real revenue.</span></h2>
+    </div>
+    <div class="stats-row reveal">
+      <div class="stat"><div class="stat-num">$4.2M+</div><div class="stat-label">earned by Launchfly companies</div></div>
+      <div class="stat"><div class="stat-num">9,400+</div><div class="stat-label">businesses running on autopilot</div></div>
+      <div class="stat"><div class="stat-num">1 hr</div><div class="stat-label">to launch · 0 hrs to run</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TESTIMONIALS ===== -->
+<section class="testi">
+  <div class="wrap">
+    <div class="stats-head reveal" style="text-align:center;">
+      <h2>Owners, not operators.</h2>
+    </div>
+    <div class="testi-grid">
+      <div class="testi-card reveal">
+        <p>“I own a real business and I've never once opened a code editor. It just runs.”</p>
+        <div class="testi-who"><div class="nm">Maya</div><div class="rl">Wellness, NYC</div></div>
+      </div>
+      <div class="testi-card reveal">
+        <p>“The agents handle support and outreach overnight. I woke up to 4 sales.”</p>
+        <div class="testi-who"><div class="nm">James</div><div class="rl">Solo founder, SF</div></div>
+      </div>
+      <div class="testi-card reveal">
+        <p>“Picked my niche, built the offer, found my first 50 customers. Zero stress.”</p>
+        <div class="testi-who"><div class="nm">Priya</div><div class="rl">Designer, London</div></div>
+      </div>
+      <div class="testi-card reveal">
+        <p>“It's a co-founder, a marketer, and an ops team — for less than my coffee budget.”</p>
+        <div class="testi-who"><div class="nm">Omar</div><div class="rl">Freelancer, Berlin</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== PRICING ===== -->
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <div class="pricing-head reveal">
+      <h2>Pay for a company, <span class="fade">not software.</span></h2>
+      <p>Start free. Upgrade when the agents are making you money.</p>
+    </div>
+    <div class="price-grid">
+
+      <div class="price-card reveal">
+        <div class="price-tier">Starter</div>
+        <div class="price-amount">$0</div>
+        <div class="price-period">free forever</div>
+        <ul class="price-features">
+          <li><span class="ck">✓</span> 1 AI-built company</li>
+          <li><span class="ck">✓</span> Niche, brand &amp; live site</li>
+          <li><span class="ck">✓</span> Funnel preview</li>
+        </ul>
+        <a href="#start" class="btn btn-light">Start Free</a>
+      </div>
+
+      <div class="price-card feat reveal">
+        <span class="price-badge">MOST POPULAR</span>
+        <div class="price-tier">Pro · Autopilot</div>
+        <div class="price-amount">$49<span style="font-size:1.1rem;font-weight:600;">/mo</span></div>
+        <div class="price-period">the agents go to work</div>
+        <ul class="price-features">
+          <li><span class="ck">✓</span> Unlimited companies</li>
+          <li><span class="ck">✓</span> Live checkout &amp; payments</li>
+          <li><span class="ck">✓</span> 24/7 marketing, content &amp; support agents</li>
+          <li><span class="ck">✓</span> Approve-from-phone control</li>
+        </ul>
+        <a href="#start" class="btn btn-light">Start Autopilot</a>
+      </div>
+
+      <div class="price-card reveal">
+        <div class="price-tier">Scale</div>
+        <div class="price-amount">$199<span style="font-size:1.1rem;font-weight:600;">/mo</span></div>
+        <div class="price-period">for portfolios of brands</div>
+        <ul class="price-features">
+          <li><span class="ck">✓</span> Everything in Pro</li>
+          <li><span class="ck">✓</span> Dedicated agent fleet &amp; priority compute</li>
+          <li><span class="ck">✓</span> Multi-brand dashboard</li>
+          <li><span class="ck">✓</span> 1:1 launch strategist</li>
+        </ul>
+        <a href="#start" class="btn btn-light">Go Scale</a>
+      </div>
+
+    </div>
+    <p class="pricing-note"><b>You keep 100% of what you earn.</b> No revenue share, no lock-in, cancel anytime.</p>
+  </div>
+</section>
+
+<!-- ===== FINAL CTA ===== -->
+<section class="final" id="start">
+  <div class="wrap reveal">
+    <span class="rocket">🚀</span>
+    <h2>Stop building businesses. Start owning them.</h2>
+    <p>Spin up your first self-running company free — no code, no team, no payroll.</p>
+    <a href="#" class="btn btn-dark btn-lg">Get Started Free →</a>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <div class="mark" style="justify-content:flex-start;"><span class="sq"></span><span class="ci"></span><span class="tr"></span></div>
+        <p style="color:var(--muted);font-size:0.84rem;margin-top:1rem;max-width:24ch;">The autonomous company builder. You own it, the agents run it.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Platform</h4>
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <a href="#">Launch playbook</a>
+        <a href="#">Customer stories</a>
+        <a href="#">Support</a>
+      </div>
+      <div class="footer-col">
+        <h4>Trust</h4>
+        <span>Run by frontier AI agents</span>
+        <span>9,400+ companies running</span>
+        <span>Integrates Stripe, Gmail, Meta</span>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Launchfly · Own a business that runs itself</span>
+      <span>Privacy · Terms</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // scroll reveal
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

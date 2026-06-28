@@ -151,15 +151,8 @@
   .hero-micro { margin-top: 1.4rem; font-size: 0.82rem; color: var(--muted); }
   .hero-micro b { color: var(--ink); font-weight: 600; }
 
-  /* ---------- AUDIENCE TOGGLE ---------- */
-  .seg-wrap { text-align: center; margin: 3.4rem 0 1.4rem; }
-  .seg { display: inline-flex; gap: 0.3rem; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0.3rem; }
-  .seg-btn { border: none; background: transparent; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.85rem; color: var(--muted-2); padding: 0.55rem 1.15rem; border-radius: 999px; cursor: pointer; transition: all 0.18s ease; }
-  .seg-btn.active { background: #fff; color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
-
   /* ---------- CONSOLE MOCK ---------- */
-  .console-shell { max-width: 940px; margin: 0 auto; padding: 0 1.5rem; }
-  .console[hidden] { display: none; }
+  .console-shell { max-width: 940px; margin: 4rem auto 0; padding: 0 1.5rem; }
   .console {
     background: var(--white);
     border: 1px solid var(--line);
@@ -278,9 +271,9 @@
   .stats { padding: 5.5rem 0; text-align: center; }
   .stats-head h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; }
   .stats-head .fade { color: var(--muted); }
-  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 3rem; }
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; margin-top: 3rem; }
   .stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2.2rem 1rem; }
-  .stat-num { font-size: 2.4rem; font-weight: 800; line-height: 1; }
+  .stat-num { font-size: 2.6rem; font-weight: 800; line-height: 1; }
   .stat-label { color: var(--muted-2); font-size: 0.9rem; margin-top: 0.6rem; }
 
   /* ---------- TESTIMONIALS ---------- */
@@ -340,21 +333,76 @@
   .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
   .reveal.in { opacity: 1; transform: translateY(0); }
 
+  /* ---------- HERO ONBOARDING INPUT ---------- */
+  .hero-form { display: flex; gap: 0.6rem; max-width: 520px; margin: 0 auto; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 0.45rem 0.45rem 0.45rem 1.3rem; box-shadow: 0 18px 40px -24px rgba(15,23,42,0.4); transition: box-shadow 0.2s, border-color 0.2s; }
+  .hero-form:focus-within { border-color: #cdcdd4; box-shadow: 0 22px 48px -22px rgba(15,23,42,0.5); }
+  .hero-form input { flex: 1; border: none; outline: none; font-family: 'Inter', sans-serif; font-size: 1rem; color: var(--ink); background: transparent; min-width: 0; }
+  .hero-form input::placeholder { color: var(--muted); }
+  .hero-form .btn { flex-shrink: 0; }
+  .hero-form-hint { margin-top: 0.9rem; font-size: 0.82rem; color: var(--muted); }
+  .hero-form-hint b { color: var(--ink); font-weight: 600; }
+  .chip-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-top: 1.1rem; }
+  .chip { font-size: 0.8rem; color: var(--muted-2); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0.35rem 0.85rem; cursor: pointer; transition: all 0.16s; }
+  .chip:hover { color: var(--ink); border-color: #cdcdd4; background: #fff; }
+
+  /* ---------- OPS TICKER (tangible run) ---------- */
+  .ops-feed { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.9rem; }
+  .ops-feed .ops-head { font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.4rem; }
+  .ops-feed .ops-head::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); animation: blink 1.4s infinite; }
+  .ops-row { display: flex; align-items: center; gap: 0.55rem; font-size: 0.78rem; color: var(--ink-soft); padding: 0.3rem 0; }
+  .ops-row .ic { width: 22px; height: 22px; border-radius: 6px; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 0.78rem; flex-shrink: 0; }
+  .ops-row .amt { margin-left: auto; font-weight: 600; font-size: 0.72rem; color: var(--teal); }
+
+  /* ---------- MOAT / COMPOUNDS ---------- */
+  .moat { padding: 5.5rem 0; }
+  .moat-head { text-align: center; max-width: 620px; margin: 0 auto 3rem; }
+  .moat-head h2 { font-size: clamp(1.9rem, 4.2vw, 2.8rem); font-weight: 700; }
+  .moat-head .fade { color: var(--muted); }
+  .moat-head p { color: var(--muted-2); margin-top: 0.8rem; }
+  .moat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  .moat-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.9rem; }
+  .moat-card .mi { width: 42px; height: 42px; border-radius: 12px; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 1rem; }
+  .moat-card h3 { font-size: 1.18rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .moat-card p { font-size: 0.92rem; color: var(--muted-2); }
+
+  /* ---------- CONTROL / RISK REVERSAL BAND ---------- */
+  .control { padding: 1rem 0 4rem; }
+  .control-box { background: var(--ink); color: #fff; border-radius: var(--radius); padding: 3rem; display: grid; grid-template-columns: 1.1fr 1fr; gap: 2.5rem; align-items: center; }
+  .control-box h2 { font-size: clamp(1.6rem, 3.4vw, 2.2rem); font-weight: 700; line-height: 1.1; margin-bottom: 0.8rem; }
+  .control-box p { color: #c9c9cf; font-size: 0.98rem; }
+  .control-list { display: flex; flex-direction: column; gap: 0.9rem; }
+  .control-list .ctl { display: flex; gap: 0.7rem; align-items: flex-start; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); padding: 0.9rem 1.1rem; }
+  .control-list .ctl .ck { color: #fff; font-weight: 700; flex-shrink: 0; }
+  .control-list .ctl b { font-size: 0.92rem; }
+  .control-list .ctl span.sub { display: block; color: #b6b6bf; font-size: 0.8rem; margin-top: 0.15rem; }
+
+  /* ---------- CASE STUDY ---------- */
+  .case-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2rem; display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; align-items: center; margin-top: 1.6rem; text-align: left; }
+  .case-card .case-tag { font-size: 0.74rem; font-weight: 600; color: var(--teal); letter-spacing: 0.04em; margin-bottom: 0.7rem; }
+  .case-card .case-quote { font-size: 1.05rem; line-height: 1.5; font-weight: 500; }
+  .case-card .case-who { margin-top: 1rem; font-size: 0.85rem; color: var(--muted-2); }
+  .case-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+  .case-metric { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.9rem; }
+  .case-metric .n { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.4rem; }
+  .case-metric .l { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.2rem; }
+
   /* ---------- RESPONSIVE ---------- */
   @media (max-width: 880px) {
     .console-body { grid-template-columns: 1fr; }
     .console-feed { border-right: none; border-bottom: 1px solid var(--line); }
     .feature { grid-template-columns: 1fr; gap: 1.6rem; padding: 2rem; }
     .feature.flip .feature-visual { order: 0; }
-    .stats-row { grid-template-columns: 1fr 1fr; }
+    .stats-row { grid-template-columns: 1fr; }
     .testi-grid { grid-template-columns: 1fr 1fr; }
     .price-grid { grid-template-columns: 1fr; }
     .footer-grid { grid-template-columns: 1fr 1fr; }
     .nav-links a:not(.btn) { display: none; }
+    .moat-grid { grid-template-columns: 1fr; }
+    .control-box { grid-template-columns: 1fr; padding: 2rem; gap: 1.6rem; }
+    .case-card { grid-template-columns: 1fr; }
   }
   @media (max-width: 520px) {
     body { font-size: 16px; }
-    .stats-row { grid-template-columns: 1fr; }
     .testi-grid { grid-template-columns: 1fr; }
     nav { padding: 1rem 1.2rem; }
     .wrap { padding: 0 1.2rem; }
@@ -377,28 +425,26 @@
 <!-- ===== HERO ===== -->
 <section class="hero">
   <div class="wrap">
-    <span class="eyebrow"><span class="dot"></span> Build a new business — or automate the one you have</span>
+    <span class="eyebrow"><span class="dot"></span> The AI operator for experts, coaches &amp; creators</span>
     <div class="mark" style="margin-top:1.6rem;"><span class="sq"></span><span class="ci"></span><span class="tr"></span></div>
-    <h1>Own a business that <span class="fade">runs itself.</span></h1>
-    <p class="sub">Whether you're starting from scratch or already running one, Launchfly's AI builds, automates, and operates your business 24/7 — so you get your time back.</p>
-    <div class="hero-ctas">
-      <a href="#start" class="btn btn-dark btn-lg">Start Free →</a>
-      <a href="#how" class="btn btn-light btn-lg">See it run</a>
+    <h1>Turn what you know into a business that <span class="fade">runs itself.</span></h1>
+    <p class="sub">Tell Launchfly what you're great at. Its AI builds the offer, the brand, and the funnel — then runs marketing, follow-up, and support 24/7. You own it. The agents work it.</p>
+    <form class="hero-form" id="heroForm" onsubmit="return launchFromHero(event)">
+      <input type="text" id="heroSkill" placeholder="What are you great at? e.g. fitness coaching" aria-label="What are you great at?">
+      <button type="submit" class="btn btn-dark">Build my business free →</button>
+    </form>
+    <div class="chip-row" id="chipRow">
+      <span class="chip" data-skill="fitness coaching">🏋️ Fitness coaching</span>
+      <span class="chip" data-skill="selling digital art">🎨 Digital art</span>
+      <span class="chip" data-skill="a niche newsletter">📰 Newsletter</span>
+      <span class="chip" data-skill="local consulting">💼 Consulting</span>
     </div>
-    <p class="hero-micro">No code. No team. No payroll. <b>Just equity you own.</b></p>
+    <p class="hero-form-hint">No code. No team. No payroll. <b>See your business before you sign up.</b></p>
   </div>
 
-  <!-- live console -->
-  <div class="console-shell reveal" id="how">
-    <div class="seg-wrap">
-      <div class="seg" role="tablist">
-        <button class="seg-btn active" data-target="build" role="tab">Start a new business</button>
-        <button class="seg-btn" data-target="automate" role="tab">Automate the one I have</button>
-      </div>
-    </div>
-
-    <!-- PANEL: BUILD -->
-    <div class="console" data-panel="build">
+  <!-- live build console -->
+  <div class="console-shell" id="how">
+    <div class="console reveal">
       <div class="console-bar">
         <span class="dots"><i></i><i></i><i></i></span>
         <span class="title">launchfly · autopilot</span>
@@ -406,54 +452,19 @@
       </div>
       <div class="console-body">
         <div class="console-feed">
-          <p class="feed-prompt">You said: <b>“I'm good at fitness coaching, $0 budget.”</b></p>
-          <div class="feed-line"><span class="tick">✓</span> Found a winnable niche: <b>&nbsp;menopause strength coaching</b></div>
-          <div class="feed-line"><span class="tick">✓</span> Generated brand, site & checkout</div>
-          <div class="feed-line"><span class="tick">✓</span> Built a $39 program + email funnel</div>
-          <div class="feed-line"><span class="tick">✓</span> Launched content + outreach agents</div>
-          <div class="feed-line"><span class="tick">✓</span> First customer in 19 minutes</div>
+          <p class="feed-prompt" id="cPrompt"></p>
+          <div id="cFeed"></div>
         </div>
         <div class="console-preview">
-          <div class="pv-site">
-            <div class="pv-logo">StrongAfter ◆</div>
+          <div class="pv-site" id="cSite">
+            <div class="pv-logo" id="cLogo"></div>
             <div class="pv-bar m"></div>
             <div class="pv-bar s"></div>
-            <span class="pv-btn">Join the program</span>
+            <span class="pv-btn" id="cCta"></span>
           </div>
-          <div class="pv-metrics">
-            <div class="pv-metric"><div class="n">19m</div><div class="l">to first sale</div></div>
-            <div class="pv-metric"><div class="n">$0</div><div class="l">spent by you</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PANEL: AUTOMATE -->
-    <div class="console" data-panel="automate" hidden>
-      <div class="console-bar">
-        <span class="dots"><i></i><i></i><i></i></span>
-        <span class="title">launchfly · autopilot</span>
-        <span class="live">running</span>
-      </div>
-      <div class="console-body">
-        <div class="console-feed">
-          <p class="feed-prompt">You said: <b>“I run a plumbing business — drowning in admin.”</b></p>
-          <div class="feed-line"><span class="tick">✓</span> Connected your inbox, calendar & Stripe</div>
-          <div class="feed-line"><span class="tick">✓</span> Found <b>&nbsp;11 hrs/week</b>&nbsp;of repetitive work</div>
-          <div class="feed-line"><span class="tick">✓</span> Deployed booking, follow-up & invoicing agents</div>
-          <div class="feed-line"><span class="tick">✓</span> Spotted a missed upsell worth $4k/mo</div>
-          <div class="feed-line"><span class="tick">✓</span> Booked 3 jobs overnight — you approved in 2 taps</div>
-        </div>
-        <div class="console-preview">
-          <div class="pv-site">
-            <div class="pv-logo">This week, automated</div>
-            <div class="pv-bar m"></div>
-            <div class="pv-bar s"></div>
-            <span class="pv-btn">Running on autopilot</span>
-          </div>
-          <div class="pv-metrics">
-            <div class="pv-metric"><div class="n">11h</div><div class="l">time given back</div></div>
-            <div class="pv-metric"><div class="n">3</div><div class="l">jobs booked</div></div>
+          <div class="ops-feed">
+            <div class="ops-head">agents working — live</div>
+            <div id="cOps"></div>
           </div>
         </div>
       </div>
@@ -480,7 +491,7 @@
 <section class="manifesto">
   <div class="wrap reveal">
     <h2>Everyone can build now. <span class="fade">Almost no one can run.</span></h2>
-    <p>The website was never the hard part. Getting customers, shipping every day, and showing up when you'd rather quit — that's what kills businesses. Launchfly automates the part that actually matters: the running. <b style="color:var(--ink);font-weight:600;">Already have a business? Hand it the agents and take your time back.</b></p>
+    <p>The website was never the hard part. Getting customers, shipping every day, and showing up when you'd rather quit — that's what kills businesses. Launchfly automates the part that actually matters: the running.</p>
   </div>
 </section>
 
@@ -542,24 +553,8 @@
         </div>
       </div>
 
-      <!-- 4 — existing businesses -->
+      <!-- 4 — the differentiator -->
       <div class="feature flip reveal">
-        <div>
-          <div class="feature-tag">ALREADY HAVE A BUSINESS?</div>
-          <h3>It finds where you're leaking time.</h3>
-          <p>Connect your tools and Launchfly maps how your business actually runs, hands the repetitive time-sinks to agents, and surfaces your next growth lever — so it runs more without you.</p>
-        </div>
-        <div class="feature-visual">
-          <div class="vz">
-            <div class="row"><span class="ic">🔌</span> Connected your stack <span class="pill">synced</span></div>
-            <div class="row"><span class="ic">⏳</span> 11 hrs/week of busywork <span class="pill">found</span></div>
-            <div class="row"><span class="ic">⚙️</span> 3 workflows automated <span class="pill">live</span></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 5 — the differentiator -->
-      <div class="feature reveal">
         <div>
           <div class="feature-tag">THE 0→1 DIFFERENCE</div>
           <h3>An AI team that never clocks out.</h3>
@@ -582,17 +577,58 @@
   </div>
 </section>
 
+<!-- ===== MOAT / WHY IT COMPOUNDS ===== -->
+<section class="moat">
+  <div class="wrap">
+    <div class="moat-head reveal">
+      <h2>The longer it runs, <span class="fade">the harder it is to beat.</span></h2>
+      <p>Anyone can wrap an AI model. Launchfly gets better — and stickier — with every business it operates.</p>
+    </div>
+    <div class="moat-grid">
+      <div class="moat-card reveal">
+        <div class="mi">📈</div>
+        <h3>A private conversion engine</h3>
+        <p>Every launch feeds an anonymized network of what's actually selling right now — the niches, offers, and ad angles printing money. Your AI doesn't guess; it copies winners.</p>
+      </div>
+      <div class="moat-card reveal">
+        <div class="mi">🧩</div>
+        <h3>Proven launch recipes</h3>
+        <p>Start from real businesses that worked, not a blank prompt. A marketplace of revenue-ranked playbooks means you skip the part where most founders fail.</p>
+      </div>
+      <div class="moat-card reveal">
+        <div class="mi">🧠</div>
+        <h3>An agent that remembers</h3>
+        <p>Your AI holds every customer, conversation, and what converts them. Leaving doesn't cost you a website — it costs you your best salesperson. That's the moat.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ===== STATS ===== -->
 <section class="stats">
   <div class="wrap">
     <div class="stats-head reveal">
-      <h2>Real revenue. <span class="fade">Real free time.</span></h2>
+      <h2>Real founders. <span class="fade">Real revenue.</span></h2>
+      <p style="color:var(--muted-2);margin-top:0.6rem;">From the first 200 founders in our private beta.</p>
     </div>
     <div class="stats-row reveal">
-      <div class="stat"><div class="stat-num">$4.2M+</div><div class="stat-label">earned by Launchfly businesses</div></div>
-      <div class="stat"><div class="stat-num">9,400+</div><div class="stat-label">businesses running on autopilot</div></div>
-      <div class="stat"><div class="stat-num">11 hrs</div><div class="stat-label">avg. per week given back</div></div>
-      <div class="stat"><div class="stat-num">1 hr</div><div class="stat-label">to launch · 0 hrs to run</div></div>
+      <div class="stat"><div class="stat-num">200</div><div class="stat-label">founders in private beta</div></div>
+      <div class="stat"><div class="stat-num">$180k</div><div class="stat-label">earned in the first 90 days</div></div>
+      <div class="stat"><div class="stat-num">31 min</div><div class="stat-label">median time to first sale</div></div>
+    </div>
+
+    <div class="case-card reveal">
+      <div>
+        <div class="case-tag">CASE STUDY · MENOPAUSE STRENGTH COACHING</div>
+        <p class="case-quote">“I had 15 years of coaching knowledge and zero idea how to sell it online. Launchfly picked the niche, built ‘StrongAfter,’ and the agents booked my first 12 clients while I was still sleeping.”</p>
+        <div class="case-who">Maya R. · Coach, NYC · launched in 1 weekend</div>
+      </div>
+      <div class="case-metrics">
+        <div class="case-metric"><div class="n">19 min</div><div class="l">to first sale</div></div>
+        <div class="case-metric"><div class="n">$2,340</div><div class="l">first 30 days</div></div>
+        <div class="case-metric"><div class="n">12</div><div class="l">clients booked</div></div>
+        <div class="case-metric"><div class="n">0 hrs</div><div class="l">she spent on ops</div></div>
+      </div>
     </div>
   </div>
 </section>
@@ -617,8 +653,25 @@
         <div class="testi-who"><div class="nm">Priya</div><div class="rl">Designer, London</div></div>
       </div>
       <div class="testi-card reveal">
-        <p>“I already had a plumbing company. The agents took the admin off my plate — I got my evenings back.”</p>
-        <div class="testi-who"><div class="nm">Omar</div><div class="rl">Trades owner, Austin</div></div>
+        <p>“It's a co-founder, a marketer, and an ops team — for less than my coffee budget.”</p>
+        <div class="testi-who"><div class="nm">Omar</div><div class="rl">Freelancer, Berlin</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CONTROL / RISK REVERSAL ===== -->
+<section class="control">
+  <div class="wrap">
+    <div class="control-box reveal">
+      <div>
+        <h2>It's autopilot — but you're still the pilot.</h2>
+        <p>This isn't a black box that spams the internet in your name. The agents do the work and queue every meaningful decision for you. One tap to approve, from your phone.</p>
+      </div>
+      <div class="control-list">
+        <div class="ctl"><span class="ck">✓</span><div><b>Nothing ships without your say-so</b><span class="sub">Agents draft and queue; you approve sends, offers, and refunds.</span></div></div>
+        <div class="ctl"><span class="ck">✓</span><div><b>Guardrails you set</b><span class="sub">Price floors, brand voice, and no-go topics the AI can't cross.</span></div></div>
+        <div class="ctl"><span class="ck">✓</span><div><b>Launch guarantee</b><span class="sub">If you don't have a live, sellable business in 7 days, we refund you — and help by hand.</span></div></div>
       </div>
     </div>
   </div>
@@ -629,7 +682,7 @@
   <div class="wrap">
     <div class="pricing-head reveal">
       <h2>Pay for a company, <span class="fade">not software.</span></h2>
-      <p>Start free. Upgrade when the agents are making you money — or giving you your time back.</p>
+      <p>Start free. Upgrade when the agents are making you money.</p>
     </div>
     <div class="price-grid">
 
@@ -640,9 +693,9 @@
         <ul class="price-features">
           <li><span class="ck">✓</span> 1 AI-built company</li>
           <li><span class="ck">✓</span> Niche, brand &amp; live site</li>
-          <li><span class="ck">✓</span> Funnel preview</li>
+          <li><span class="ck">✓</span> <b style="color:var(--ink)">Process your first $100 in sales — free</b></li>
         </ul>
-        <a href="#start" class="btn btn-light">Start Free</a>
+        <a href="#start" class="btn btn-light">Build my business free</a>
       </div>
 
       <div class="price-card feat reveal">
@@ -651,8 +704,8 @@
         <div class="price-amount">$49<span style="font-size:1.1rem;font-weight:600;">/mo</span></div>
         <div class="price-period">the agents go to work</div>
         <ul class="price-features">
-          <li><span class="ck">✓</span> Unlimited new or existing businesses</li>
-          <li><span class="ck">✓</span> Connect your stack — audit &amp; automate</li>
+          <li><span class="ck">✓</span> Unlimited companies</li>
+          <li><span class="ck">✓</span> Live checkout &amp; payments</li>
           <li><span class="ck">✓</span> 24/7 marketing, content &amp; support agents</li>
           <li><span class="ck">✓</span> Approve-from-phone control</li>
         </ul>
@@ -662,18 +715,18 @@
       <div class="price-card reveal">
         <div class="price-tier">Scale</div>
         <div class="price-amount">$199<span style="font-size:1.1rem;font-weight:600;">/mo</span></div>
-        <div class="price-period">to scale a portfolio or a real business</div>
+        <div class="price-period">for portfolios of brands</div>
         <ul class="price-features">
           <li><span class="ck">✓</span> Everything in Pro</li>
           <li><span class="ck">✓</span> Dedicated agent fleet &amp; priority compute</li>
-          <li><span class="ck">✓</span> Deep automations for established businesses</li>
-          <li><span class="ck">✓</span> 1:1 launch &amp; automation strategist</li>
+          <li><span class="ck">✓</span> Multi-brand dashboard</li>
+          <li><span class="ck">✓</span> 1:1 launch strategist</li>
         </ul>
         <a href="#start" class="btn btn-light">Go Scale</a>
       </div>
 
     </div>
-    <p class="pricing-note"><b>You keep 100% of what you earn.</b> No revenue share, no lock-in, cancel anytime.</p>
+    <p class="pricing-note"><b>You keep 100% of what you earn.</b> No revenue share, no lock-in, cancel anytime.<br>Prefer skin in the game? Ask about <b>$19/mo + 3% of AI-made revenue</b> — we only win when you do.</p>
   </div>
 </section>
 
@@ -681,8 +734,8 @@
 <section class="final" id="start">
   <div class="wrap reveal">
     <span class="rocket">🚀</span>
-    <h2>Stop running your business. Start owning it.</h2>
-    <p>Build a new self-running company — or connect the one you have. Free to start, no code, no payroll.</p>
+    <h2>Stop building businesses. Start owning them.</h2>
+    <p>Spin up your first self-running company free — no code, no team, no payroll.</p>
     <a href="#" class="btn btn-dark btn-lg">Get Started Free →</a>
   </div>
 </section>
@@ -693,7 +746,7 @@
     <div class="footer-grid">
       <div class="footer-col">
         <div class="mark" style="justify-content:flex-start;"><span class="sq"></span><span class="ci"></span><span class="tr"></span></div>
-        <p style="color:var(--muted);font-size:0.84rem;margin-top:1rem;max-width:26ch;">Build a business — or automate the one you have. You own it, the agents run it.</p>
+        <p style="color:var(--muted);font-size:0.84rem;margin-top:1rem;max-width:24ch;">The autonomous company builder. You own it, the agents run it.</p>
       </div>
       <div class="footer-col">
         <h4>Platform</h4>
@@ -728,25 +781,135 @@
   }, { threshold: 0.12 });
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-  // audience toggle (build vs. automate)
-  const segButtons = document.querySelectorAll('.seg-btn');
-  const panels = document.querySelectorAll('.console[data-panel]');
-  function showPanel(name) {
-    panels.forEach(p => {
-      const on = p.dataset.panel === name;
-      p.hidden = !on;
-      if (on) {
-        // restart the streaming animations for the active panel
-        p.querySelectorAll('.feed-line, .pv-site, .pv-metrics').forEach(el => {
-          el.style.animation = 'none';
-          void el.offsetWidth;
-          el.style.animation = '';
-        });
-      }
+  // ---- Live build console: rotating examples + tangible ops ----
+  const examples = [
+    {
+      skill: 'fitness coaching', niche: 'menopause strength coaching',
+      brand: 'StrongAfter ◆', cta: 'Join the program', product: 'a $39 6-week program',
+      first: '19 minutes',
+      ops: [
+        { ic: '✉️', t: 'Drafted welcome email in Gmail', a: 'sent' },
+        { ic: '📣', t: 'Raised the winning Meta ad budget', a: '+12%' },
+        { ic: '💳', t: 'Stripe — payment received', a: '+$39' },
+        { ic: '💬', t: 'Replied to a prospect DM', a: '0m' },
+      ],
+    },
+    {
+      skill: 'selling digital art', niche: 'AI-assisted pet portraits',
+      brand: 'Petraits ❉', cta: 'Order a portrait', product: 'a $24 custom portrait',
+      first: '31 minutes',
+      ops: [
+        { ic: '🖼️', t: 'Posted 3 sample portraits to IG', a: 'live' },
+        { ic: '✉️', t: 'Sent abandoned-cart nudge', a: 'sent' },
+        { ic: '💳', t: 'Stripe — payment received', a: '+$24' },
+        { ic: '💬', t: 'Confirmed an order detail', a: '0m' },
+      ],
+    },
+    {
+      skill: 'a niche newsletter', niche: 'weekly micro-SaaS teardowns',
+      brand: 'TeardownHQ ✦', cta: 'Subscribe', product: 'an $8/mo paid newsletter',
+      first: '42 minutes',
+      ops: [
+        { ic: '📝', t: 'Drafted this week\u2019s issue', a: 'ready' },
+        { ic: '📣', t: 'Scheduled 5 promo posts on X', a: 'queued' },
+        { ic: '💳', t: 'Stripe — new subscriber', a: '+$8' },
+        { ic: '💬', t: 'Answered a reply in inbox', a: '0m' },
+      ],
+    },
+    {
+      skill: 'local consulting', niche: 'restaurant operations audits',
+      brand: 'Mise ▰', cta: 'Book an audit', product: 'a $499 audit package',
+      first: '2 hours',
+      ops: [
+        { ic: '📅', t: 'Booked a discovery call (Calendly)', a: 'set' },
+        { ic: '✉️', t: 'Sent the proposal follow-up', a: 'sent' },
+        { ic: '💳', t: 'Stripe — deposit received', a: '+$499' },
+        { ic: '💬', t: 'Answered a pricing question', a: '0m' },
+      ],
+    },
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  function titleize(s) { return s.replace(/^a |^an /, '').replace(/\b\w/g, (c) => c.toUpperCase()); }
+
+  function renderExample(ex) {
+    $('cPrompt').innerHTML = 'You said: <b>\u201cI\u2019m great at ' + ex.skill + '.\u201d</b>';
+
+    const lines = [
+      'Found a winnable niche: <b>&nbsp;' + ex.niche + '</b>',
+      'Generated brand, site &amp; checkout',
+      'Built ' + ex.product + ' + email funnel',
+      'Launched content + outreach agents',
+      'First customer in ' + ex.first,
+    ];
+    const feed = $('cFeed');
+    feed.innerHTML = '';
+    lines.forEach((l, i) => {
+      const d = document.createElement('div');
+      d.className = 'feed-line';
+      d.style.animationDelay = (0.15 + i * 0.55) + 's';
+      d.innerHTML = '<span class="tick">\u2713</span> ' + l;
+      feed.appendChild(d);
     });
-    segButtons.forEach(b => b.classList.toggle('active', b.dataset.target === name));
+
+    $('cLogo').textContent = ex.brand;
+    $('cCta').textContent = ex.cta;
+
+    const ops = $('cOps');
+    ops.innerHTML = '';
+    ex.ops.forEach((o, i) => {
+      const r = document.createElement('div');
+      r.className = 'feed-line ops-row';
+      r.style.animationDelay = (3.0 + i * 0.4) + 's';
+      r.innerHTML = '<span class="ic">' + o.ic + '</span> ' + o.t + '<span class="amt">' + o.a + '</span>';
+      ops.appendChild(r);
+    });
   }
-  segButtons.forEach(b => b.addEventListener('click', () => showPanel(b.dataset.target)));
+
+  let exIdx = 0;
+  let rotateTimer;
+  function rotate() { exIdx = (exIdx + 1) % examples.length; renderExample(examples[exIdx]); }
+  function startRotate() { clearInterval(rotateTimer); rotateTimer = setInterval(rotate, 5200); }
+
+  renderExample(examples[0]);
+  startRotate();
+
+  // ---- Hero progressive onboarding ----
+  function buildCustom(skill) {
+    const clean = skill.trim().toLowerCase();
+    return {
+      skill: clean,
+      niche: 'a focused, winnable angle in ' + clean,
+      brand: titleize(clean).split(' ').slice(0, 2).join('') + ' ◆',
+      cta: 'Get started',
+      product: 'your first paid offer',
+      first: 'minutes',
+      ops: [
+        { ic: '✉️', t: 'Drafted your welcome email', a: 'sent' },
+        { ic: '📣', t: 'Launched a first ad test', a: 'live' },
+        { ic: '💳', t: 'Wired up Stripe checkout', a: 'ready' },
+        { ic: '💬', t: 'Standing by for your first lead', a: '0m' },
+      ],
+    };
+  }
+
+  function launchFromHero(e) {
+    e.preventDefault();
+    const val = $('heroSkill').value.trim();
+    if (!val) { $('heroSkill').focus(); return false; }
+    clearInterval(rotateTimer);
+    renderExample(buildCustom(val));
+    document.querySelector('.console-shell').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(startRotate, 16000);
+    return false;
+  }
+
+  document.querySelectorAll('#chipRow .chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      $('heroSkill').value = chip.dataset.skill;
+      launchFromHero({ preventDefault() {} });
+    });
+  });
 </script>
 </body>
 </html>

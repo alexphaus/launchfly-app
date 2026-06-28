@@ -156,6 +156,7 @@
   .seg { display: inline-flex; gap: 0.3rem; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0.3rem; }
   .seg-btn { border: none; background: transparent; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.85rem; color: var(--muted-2); padding: 0.55rem 1.15rem; border-radius: 999px; cursor: pointer; transition: all 0.18s ease; }
   .seg-btn.active { background: #fff; color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+  .console-note { text-align: center; font-size: 0.74rem; color: var(--muted); margin-top: 0.9rem; }
 
   /* ---------- CONSOLE MOCK ---------- */
   .console-shell { max-width: 940px; margin: 0 auto; padding: 0 1.5rem; }
@@ -385,7 +386,7 @@
       <a href="#start" class="btn btn-dark btn-lg">Start Free →</a>
       <a href="#how" class="btn btn-light btn-lg">See it run</a>
     </div>
-    <p class="hero-micro">No code. No team. No payroll. <b>Just equity you own.</b></p>
+    <p class="hero-micro">No code. Set up in minutes. <b>Nothing happens without your approval.</b></p>
   </div>
 
   <!-- live console -->
@@ -411,7 +412,7 @@
           <div class="feed-line"><span class="tick">✓</span> Generated brand, site & checkout</div>
           <div class="feed-line"><span class="tick">✓</span> Built a $39 program + email funnel</div>
           <div class="feed-line"><span class="tick">✓</span> Launched content + outreach agents</div>
-          <div class="feed-line"><span class="tick">✓</span> First customer in 19 minutes</div>
+          <div class="feed-line"><span class="tick">✓</span> Live & taking payments in under an hour</div>
         </div>
         <div class="console-preview">
           <div class="pv-site">
@@ -421,8 +422,8 @@
             <span class="pv-btn">Join the program</span>
           </div>
           <div class="pv-metrics">
-            <div class="pv-metric"><div class="n">19m</div><div class="l">to first sale</div></div>
-            <div class="pv-metric"><div class="n">$0</div><div class="l">spent by you</div></div>
+            <div class="pv-metric"><div class="n">&lt;1 hr</div><div class="l">to go live</div></div>
+            <div class="pv-metric"><div class="n">$0</div><div class="l">to start</div></div>
           </div>
         </div>
       </div>
@@ -437,12 +438,12 @@
       </div>
       <div class="console-body">
         <div class="console-feed">
-          <p class="feed-prompt">You said: <b>“I run a plumbing business — drowning in admin.”</b></p>
-          <div class="feed-line"><span class="tick">✓</span> Connected your inbox, calendar & Stripe</div>
-          <div class="feed-line"><span class="tick">✓</span> Found <b>&nbsp;11 hrs/week</b>&nbsp;of repetitive work</div>
-          <div class="feed-line"><span class="tick">✓</span> Deployed booking, follow-up & invoicing agents</div>
-          <div class="feed-line"><span class="tick">✓</span> Spotted a missed upsell worth $4k/mo</div>
-          <div class="feed-line"><span class="tick">✓</span> Booked 3 jobs overnight — you approved in 2 taps</div>
+          <p class="feed-prompt">You said: <b>“I run a Shopify store — buried in support & admin.”</b></p>
+          <div class="feed-line"><span class="tick">✓</span> Connected your store, inbox & Stripe</div>
+          <div class="feed-line"><span class="tick">✓</span> Mapped the work that repeats every week</div>
+          <div class="feed-line"><span class="tick">✓</span> Set up support, follow-up & win-back agents</div>
+          <div class="feed-line"><span class="tick">✓</span> Drafted a win-back campaign for lapsed buyers</div>
+          <div class="feed-line"><span class="tick">✓</span> Nothing sends until you approve it</div>
         </div>
         <div class="console-preview">
           <div class="pv-site">
@@ -452,12 +453,13 @@
             <span class="pv-btn">Running on autopilot</span>
           </div>
           <div class="pv-metrics">
-            <div class="pv-metric"><div class="n">11h</div><div class="l">time given back</div></div>
-            <div class="pv-metric"><div class="n">3</div><div class="l">jobs booked</div></div>
+            <div class="pv-metric"><div class="n">3</div><div class="l">agents working</div></div>
+            <div class="pv-metric"><div class="n">100%</div><div class="l">approved by you</div></div>
           </div>
         </div>
       </div>
     </div>
+    <p class="console-note">Illustrative example of a Launchfly run.</p>
   </div>
 </section>
 
@@ -505,8 +507,24 @@
         </div>
       </div>
 
-      <!-- 2 -->
+      <!-- 2 — existing businesses -->
       <div class="feature flip reveal">
+        <div>
+          <div class="feature-tag">ALREADY HAVE A BUSINESS?</div>
+          <h3>It finds where you're leaking time.</h3>
+          <p>Connect your tools and Launchfly maps how your business actually runs, hands the repetitive time-sinks to agents, and surfaces your next growth lever — so it runs more without you. You approve before anything is sent, and your data stays yours.</p>
+        </div>
+        <div class="feature-visual">
+          <div class="vz">
+            <div class="row"><span class="ic">🔌</span> Connected your stack <span class="pill">synced</span></div>
+            <div class="row"><span class="ic">⏳</span> Repetitive work mapped <span class="pill">found</span></div>
+            <div class="row"><span class="ic">⚙️</span> Workflows automated <span class="pill">live</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="feature reveal">
         <div>
           <div class="feature-tag">INSTANT IDENTITY</div>
           <h3>Brand &amp; site, ready to take payments.</h3>
@@ -526,8 +544,8 @@
         </div>
       </div>
 
-      <!-- 3 -->
-      <div class="feature reveal">
+      <!-- 4 -->
+      <div class="feature flip reveal">
         <div>
           <div class="feature-tag">DONE-FOR-YOU OFFER</div>
           <h3>Product, funnel &amp; first sales.</h3>
@@ -537,23 +555,7 @@
           <div class="vz">
             <div class="row"><span class="ic">📦</span> 6-week program <span class="pill">$39</span></div>
             <div class="row"><span class="ic">✉️</span> 7-email funnel <span class="pill">armed</span></div>
-            <div class="row"><span class="ic">💳</span> Checkout live <span class="pill">paid</span></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4 — existing businesses -->
-      <div class="feature flip reveal">
-        <div>
-          <div class="feature-tag">ALREADY HAVE A BUSINESS?</div>
-          <h3>It finds where you're leaking time.</h3>
-          <p>Connect your tools and Launchfly maps how your business actually runs, hands the repetitive time-sinks to agents, and surfaces your next growth lever — so it runs more without you.</p>
-        </div>
-        <div class="feature-visual">
-          <div class="vz">
-            <div class="row"><span class="ic">🔌</span> Connected your stack <span class="pill">synced</span></div>
-            <div class="row"><span class="ic">⏳</span> 11 hrs/week of busywork <span class="pill">found</span></div>
-            <div class="row"><span class="ic">⚙️</span> 3 workflows automated <span class="pill">live</span></div>
+            <div class="row"><span class="ic">💳</span> Checkout live <span class="pill">ready</span></div>
           </div>
         </div>
       </div>
@@ -586,13 +588,13 @@
 <section class="stats">
   <div class="wrap">
     <div class="stats-head reveal">
-      <h2>Real revenue. <span class="fade">Real free time.</span></h2>
+      <h2>Less work in. <span class="fade">More business out.</span></h2>
     </div>
     <div class="stats-row reveal">
-      <div class="stat"><div class="stat-num">$4.2M+</div><div class="stat-label">earned by Launchfly businesses</div></div>
-      <div class="stat"><div class="stat-num">9,400+</div><div class="stat-label">businesses running on autopilot</div></div>
-      <div class="stat"><div class="stat-num">11 hrs</div><div class="stat-label">avg. per week given back</div></div>
-      <div class="stat"><div class="stat-num">1 hr</div><div class="stat-label">to launch · 0 hrs to run</div></div>
+      <div class="stat"><div class="stat-num">~1 hr</div><div class="stat-label">from idea to a live business</div></div>
+      <div class="stat"><div class="stat-num">24/7</div><div class="stat-label">agents working in the background</div></div>
+      <div class="stat"><div class="stat-num">Mins/day</div><div class="stat-label">to review &amp; approve</div></div>
+      <div class="stat"><div class="stat-num">100%</div><div class="stat-label">of revenue stays yours</div></div>
     </div>
   </div>
 </section>
@@ -601,24 +603,24 @@
 <section class="testi">
   <div class="wrap">
     <div class="stats-head reveal" style="text-align:center;">
-      <h2>Owners, not operators.</h2>
+      <h2>Built for owners, <span class="fade">not operators.</span></h2>
     </div>
     <div class="testi-grid">
       <div class="testi-card reveal">
-        <p>“I own a real business and I've never once opened a code editor. It just runs.”</p>
-        <div class="testi-who"><div class="nm">Maya</div><div class="rl">Wellness, NYC</div></div>
+        <p>Start a digital product from scratch and let the agents find your first customers — no code, no team.</p>
+        <div class="testi-who"><div class="nm">New founders</div><div class="rl">0 → 1</div></div>
       </div>
       <div class="testi-card reveal">
-        <p>“The agents handle support and outreach overnight. I woke up to 4 sales.”</p>
-        <div class="testi-who"><div class="nm">James</div><div class="rl">Solo founder, SF</div></div>
+        <p>Keep your day job. Agents handle support and outreach in the background while you build a side income.</p>
+        <div class="testi-who"><div class="nm">Side-hustlers</div><div class="rl">nights &amp; weekends</div></div>
       </div>
       <div class="testi-card reveal">
-        <p>“Picked my niche, built the offer, found my first 50 customers. Zero stress.”</p>
-        <div class="testi-who"><div class="nm">Priya</div><div class="rl">Designer, London</div></div>
+        <p>Turn an audience into an offer, funnel, and revenue — and skip the busywork that comes with it.</p>
+        <div class="testi-who"><div class="nm">Creators</div><div class="rl">audience → income</div></div>
       </div>
       <div class="testi-card reveal">
-        <p>“I already had a plumbing company. The agents took the admin off my plate — I got my evenings back.”</p>
-        <div class="testi-who"><div class="nm">Omar</div><div class="rl">Trades owner, Austin</div></div>
+        <p>Connect the store or service business you already run and hand the repetitive work to agents.</p>
+        <div class="testi-who"><div class="nm">Existing owners</div><div class="rl">more time back</div></div>
       </div>
     </div>
   </div>
@@ -628,7 +630,7 @@
 <section class="pricing" id="pricing">
   <div class="wrap">
     <div class="pricing-head reveal">
-      <h2>Pay for a company, <span class="fade">not software.</span></h2>
+      <h2>One subscription. <span class="fade">A whole team's work.</span></h2>
       <p>Start free. Upgrade when the agents are making you money — or giving you your time back.</p>
     </div>
     <div class="price-grid">
@@ -710,7 +712,7 @@
       <div class="footer-col">
         <h4>Trust</h4>
         <span>Run by frontier AI agents</span>
-        <span>9,400+ companies running</span>
+        <span>You approve every action</span>
         <span>Integrates Stripe, Gmail, Meta</span>
       </div>
     </div>

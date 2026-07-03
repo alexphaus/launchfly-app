@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { deepseek, CHAT_MODEL } from '@/lib/ai-provider';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const businessSchema = z.object({
   positioning: z.object({
@@ -111,35 +111,74 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false;
+      const send = (chunk: string) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(chunk));
+        } catch {
+          closed = true; // client disconnected
+        }
+      };
+
+      // First byte goes out immediately so browsers/proxies see a live stream
+      // (Safari kills fetches that receive no data for ~60s).
+      send(sse({ type: 'start' }));
+
+      // Heartbeat comments keep intermediaries from timing out idle connections.
+      const heartbeat = setInterval(() => send(': hb\n\n'), 10000);
+
+      let lastPartial: unknown = null;
       try {
         let lastSent = 0;
         for await (const partial of result.partialObjectStream) {
+          lastPartial = partial;
           // Throttle SSE frames to ~8/sec to keep payloads light
           const now = Date.now();
           if (now - lastSent < 120) continue;
           lastSent = now;
-          controller.enqueue(encoder.encode(sse({ type: 'partial', business: partial })));
+          send(sse({ type: 'partial', business: partial }));
         }
-        const business = await result.object;
-        controller.enqueue(encoder.encode(sse({ type: 'done', business })));
+        try {
+          const business = await result.object;
+          send(sse({ type: 'done', business }));
+        } catch (validationErr) {
+          // Model output didn't fully validate — salvage the last partial if
+          // the client can render it, rather than failing the whole run.
+          console.error('[prototype/generate] validation error:', validationErr);
+          if (lastPartial) {
+            send(sse({ type: 'done', business: lastPartial, partial: true }));
+          } else {
+            throw validationErr;
+          }
+        }
       } catch (err) {
         console.error('[prototype/generate] stream error:', err);
-        controller.enqueue(
-          encoder.encode(
-            sse({ type: 'error', message: 'The agents hit a snag. Please try again.' })
-          )
-        );
+        // If generation dropped mid-stream, ship what we have; the client
+        // only accepts it when every section is complete.
+        if (lastPartial) {
+          send(sse({ type: 'done', business: lastPartial, partial: true }));
+        } else {
+          send(sse({ type: 'error', message: 'The agents hit a snag. Please try again.' }));
+        }
       } finally {
-        controller.close();
+        clearInterval(heartbeat);
+        closed = true;
+        try {
+          controller.close();
+        } catch {}
       }
     },
   });
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
+      'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      // Critical behind nginx: disables proxy buffering so SSE frames are
+      // forwarded to the browser as they are produced.
+      'X-Accel-Buffering': 'no',
     },
   });
 }

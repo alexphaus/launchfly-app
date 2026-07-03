@@ -8,7 +8,10 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/api/') ||
     request.nextUrl.pathname.startsWith('/_next/') ||
     request.nextUrl.pathname.startsWith('/favicon.ico') ||
-    request.nextUrl.pathname.startsWith('/dashboard/')
+    request.nextUrl.pathname.startsWith('/dashboard/') ||
+    // Static assets in /public (e.g. index2.html, start.html, images) —
+    // serve them as-is even on *.vercel.app preview domains
+    /\.[a-zA-Z0-9]+$/.test(request.nextUrl.pathname)
   ) {
     return NextResponse.next();
   }

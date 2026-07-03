@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Start your business — Launchfly</title>
+<meta name="description" content="Tell the agents what you're good at. They'll draft your niche, brand, offer, landing copy and first-week launch plan — live, in about a minute.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --ink-soft: #1c1c1e;
+    --muted: #9b9ba3;
+    --muted-2: #6e6e76;
+    --line: #ececef;
+    --surface: #f5f5f6;
+    --surface-2: #fafafa;
+    --white: #ffffff;
+    --teal: #0f766e;
+    --teal-soft: #effaf7;
+    --red: #b91c1c;
+    --radius: 22px;
+    --radius-sm: 14px;
+    --max: 760px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+  body {
+    background: var(--white);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  body::before, body::after {
+    content: '';
+    position: fixed;
+    width: 380px; height: 380px;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.5;
+    z-index: 0;
+    pointer-events: none;
+  }
+  body::before { top: 30vh; left: -180px; background: radial-gradient(circle, #d7f0ec 0%, transparent 70%); }
+  body::after  { bottom: -120px; right: -160px; background: radial-gradient(circle, #e7e7f7 0%, transparent 70%); }
+
+  a { color: inherit; text-decoration: none; }
+  h1, h2, h3, .logo { font-family: 'Sora', sans-serif; letter-spacing: -0.02em; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.1rem 2rem;
+    max-width: var(--max); margin: 0 auto;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(14px);
+  }
+  .logo { font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+  .nav-note { font-size: 0.8rem; color: var(--muted-2); }
+
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 1.4rem 5rem; position: relative; z-index: 1; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.95rem;
+    border-radius: 999px; padding: 0.85rem 1.7rem;
+    cursor: pointer; border: 1px solid transparent;
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s;
+    white-space: nowrap;
+  }
+  .btn-dark { background: var(--ink); color: #fff; }
+  .btn-dark:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.18); }
+  .btn-dark:disabled { opacity: 0.45; cursor: default; }
+  .btn-light { background: var(--surface); color: var(--ink); border-color: var(--line); }
+  .btn-light:hover { background: #ededef; }
+  .btn-block { width: 100%; }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-size: 0.76rem; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--muted-2); background: var(--surface);
+    border: 1px solid var(--line); padding: 0.38rem 0.9rem; border-radius: 999px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); animation: blink 2s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .step { display: none; animation: fadeUp 0.45s ease; }
+  .step.on { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- STEP 1 : ASK ---------- */
+  .ask-head { text-align: center; padding: 3.2rem 0 2rem; }
+  .ask-head h1 { font-size: clamp(1.7rem, 5vw, 2.5rem); font-weight: 700; line-height: 1.15; margin-top: 1.1rem; }
+  .ask-head p { color: var(--muted-2); margin-top: 0.7rem; font-size: 0.98rem; max-width: 34rem; margin-left: auto; margin-right: auto; }
+
+  .seg { display: inline-flex; gap: 0.3rem; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0.3rem; margin-bottom: 1.4rem; }
+  .seg-btn { border: none; background: transparent; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.85rem; color: var(--muted-2); padding: 0.55rem 1.15rem; border-radius: 999px; cursor: pointer; transition: all 0.18s ease; }
+  .seg-btn.active { background: #fff; color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+
+  .ask-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 1.4rem; box-shadow: 0 18px 50px rgba(0,0,0,0.05); text-align: left; }
+  .ask-card textarea {
+    width: 100%; border: none; outline: none; resize: none;
+    font-family: 'Inter', sans-serif; font-size: 1.05rem; line-height: 1.55;
+    color: var(--ink); min-height: 96px; background: transparent;
+  }
+  .ask-card textarea::placeholder { color: var(--muted); }
+  .ask-foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.6rem; }
+  .char-hint { font-size: 0.74rem; color: var(--muted); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1.1rem; }
+  .chip {
+    font-size: 0.8rem; color: var(--muted-2); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 999px; padding: 0.42rem 0.95rem;
+    cursor: pointer; transition: all 0.15s ease; font-family: 'Inter', sans-serif;
+  }
+  .chip:hover { color: var(--ink); background: #ededef; }
+
+  .ask-micro { text-align: center; font-size: 0.78rem; color: var(--muted); margin-top: 1.2rem; }
+  .ask-micro b { color: var(--ink-soft); font-weight: 600; }
+
+  .plan-note {
+    display: none; margin: 0 auto 1.2rem; max-width: 30rem;
+    font-size: 0.82rem; color: var(--muted-2); background: var(--teal-soft);
+    border: 1px solid #d5efe8; border-radius: var(--radius-sm); padding: 0.7rem 1rem; text-align: center;
+  }
+  .plan-note.on { display: block; }
+
+  .err {
+    display: none; margin: 1rem auto 0; max-width: 30rem;
+    font-size: 0.84rem; color: var(--red); background: #fef2f2;
+    border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 0.7rem 1rem; text-align: center;
+  }
+  .err.on { display: block; }
+
+  /* ---------- STEP 2 : CONSOLE ---------- */
+  .console-head { text-align: center; padding: 2.6rem 0 1.6rem; }
+  .console-head h2 { font-size: clamp(1.4rem, 4vw, 1.9rem); font-weight: 700; }
+  .console-head p { color: var(--muted-2); font-size: 0.9rem; margin-top: 0.4rem; }
+
+  .console { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.05); }
+  .console-bar {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.85rem 1.2rem; border-bottom: 1px solid var(--line); background: var(--surface-2);
+  }
+  .console-bar .dots { display: flex; gap: 0.35rem; }
+  .console-bar .dots i { width: 11px; height: 11px; border-radius: 50%; background: #dcdce0; display: block; }
+  .console-bar .title { font-size: 0.8rem; color: var(--muted-2); font-weight: 500; }
+  .console-bar .live { margin-left: auto; display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; font-weight: 600; color: var(--teal); }
+  .console-bar .live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); animation: blink 1.4s infinite; }
+  .console-bar .live.done::before { animation: none; }
+
+  .console-body { padding: 1.3rem 1.2rem; }
+  .agent-row {
+    display: flex; align-items: flex-start; gap: 0.8rem;
+    padding: 0.75rem 0.4rem; border-bottom: 1px solid var(--surface);
+    opacity: 0.38; transition: opacity 0.3s ease;
+  }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-row.active, .agent-row.complete { opacity: 1; }
+  .agent-ic {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: var(--surface); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 0.95rem;
+  }
+  .agent-row.complete .agent-ic { background: var(--teal-soft); border-color: #d5efe8; }
+  .agent-info { min-width: 0; flex: 1; }
+  .agent-name { font-size: 0.86rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+  .agent-status { font-size: 0.76rem; color: var(--muted-2); }
+  .agent-out { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.35rem; background: var(--surface-2); border: 1px solid var(--surface); border-radius: 10px; padding: 0.45rem 0.7rem; display: none; word-break: break-word; }
+  .agent-out.on { display: block; animation: fadeUp 0.3s ease; }
+  .spinner {
+    width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid var(--line); border-top-color: var(--teal);
+    animation: spin 0.8s linear infinite; display: none;
+  }
+  .agent-row.active .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tick { color: var(--teal); font-weight: 700; font-size: 0.85rem; display: none; }
+  .agent-row.complete .tick { display: inline; }
+  .agent-row.complete .spinner { display: none; }
+
+  .console-foot { text-align: center; font-size: 0.76rem; color: var(--muted); padding: 0.9rem; border-top: 1px solid var(--surface); }
+
+  /* ---------- STEP 3 : RESULT ---------- */
+  .result-head { text-align: center; padding: 2.8rem 0 0.6rem; }
+  .result-head .eyebrow { margin-bottom: 1.1rem; }
+  .result-head h2 { font-size: clamp(1.9rem, 6vw, 2.8rem); font-weight: 800; line-height: 1.1; }
+  .result-head .tagline { color: var(--muted-2); font-size: 1.05rem; margin-top: 0.5rem; }
+  .result-head .angle { color: var(--ink-soft); font-size: 0.92rem; margin-top: 1rem; max-width: 34rem; margin-left: auto; margin-right: auto; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2.2rem; }
+  @media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 1.5rem; box-shadow: 0 14px 40px rgba(0,0,0,0.04); }
+  .card-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.9rem; }
+  .card h3 { font-size: 1.1rem; font-weight: 700; }
+  .offer-price { font-family: 'Sora', sans-serif; font-size: 1.9rem; font-weight: 800; margin: 0.4rem 0 0.8rem; }
+  .offer-format { font-size: 0.8rem; color: var(--muted-2); }
+  .card ul { list-style: none; margin-top: 0.7rem; }
+  .card ul li { font-size: 0.86rem; color: var(--ink-soft); padding: 0.32rem 0; display: flex; gap: 0.55rem; align-items: flex-start; }
+  .card ul li .ck { color: var(--teal); font-weight: 700; flex-shrink: 0; }
+
+  .mini-site { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1.4rem 1.2rem; text-align: center; margin-top: 0.4rem; }
+  .mini-site .ms-head { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.02rem; line-height: 1.3; }
+  .mini-site .ms-sub { font-size: 0.8rem; color: var(--muted-2); margin-top: 0.5rem; }
+  .mini-site .ms-cta { margin-top: 0.9rem; display: inline-block; background: var(--ink); color: #fff; font-size: 0.75rem; font-weight: 600; padding: 0.5rem 1.1rem; border-radius: 999px; }
+
+  .plan-card { margin-top: 1rem; }
+  .plan-row { display: flex; gap: 0.9rem; align-items: flex-start; padding: 0.65rem 0; border-bottom: 1px solid var(--surface); }
+  .plan-row:last-child { border-bottom: none; }
+  .plan-day { flex-shrink: 0; width: 52px; font-size: 0.72rem; font-weight: 700; color: var(--teal); background: var(--teal-soft); border-radius: 8px; text-align: center; padding: 0.3rem 0; margin-top: 0.1rem; }
+  .plan-act { font-size: 0.88rem; color: var(--ink-soft); }
+  .plan-ch { font-size: 0.74rem; color: var(--muted); }
+
+  .claim { background: var(--ink); color: #fff; border-radius: var(--radius); padding: 2rem 1.6rem; margin-top: 2.2rem; text-align: center; }
+  .claim h3 { font-size: 1.25rem; font-weight: 700; }
+  .claim p { font-size: 0.86rem; color: #c9c9cf; margin-top: 0.45rem; max-width: 28rem; margin-left: auto; margin-right: auto; }
+  .claim-form { display: flex; gap: 0.6rem; max-width: 26rem; margin: 1.3rem auto 0; }
+  .claim-form input {
+    flex: 1; min-width: 0; border: 1px solid #333; background: #161618; color: #fff;
+    font-family: 'Inter', sans-serif; font-size: 0.92rem;
+    border-radius: 999px; padding: 0.8rem 1.2rem; outline: none;
+  }
+  .claim-form input::placeholder { color: #7b7b83; }
+  .claim-form input:focus { border-color: #555; }
+  .claim .btn-claim { background: #fff; color: var(--ink); }
+  .claim-err { font-size: 0.78rem; color: #fca5a5; margin-top: 0.7rem; display: none; }
+  .claim-err.on { display: block; }
+  .claim-micro { font-size: 0.72rem; color: #7b7b83; margin-top: 0.9rem; }
+
+  .claimed { display: none; }
+  .claimed.on { display: block; animation: fadeUp 0.4s ease; }
+  .claimed .big-tick { width: 46px; height: 46px; border-radius: 50%; background: var(--teal-soft); color: var(--teal); font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
+
+  .result-foot { text-align: center; margin-top: 2rem; }
+  .result-foot a { font-size: 0.82rem; color: var(--muted-2); border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .result-foot a:hover { color: var(--ink); }
+
+  @media (max-width: 640px) {
+    nav { padding: 1rem 1.2rem; }
+    .claim-form { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index2.html" class="logo"><span>🚀</span> Launchfly</a>
+  <span class="nav-note" id="navNote">free · no card needed</span>
+</nav>
+
+<div class="wrap">
+
+  <!-- ============ STEP 1 : ASK ============ -->
+  <section class="step on" id="stepAsk">
+    <div class="ask-head">
+      <span class="eyebrow"><span class="dot"></span> Agents standing by</span>
+      <h1>What are you good at?</h1>
+      <p>One sentence is enough. The agents will draft your niche, brand, offer, landing copy and first-week launch plan — live.</p>
+    </div>
+
+    <div style="text-align:center;">
+      <div class="seg" role="tablist">
+        <button class="seg-btn active" data-mode="new" role="tab">Start a new business</button>
+        <button class="seg-btn" data-mode="existing" role="tab">Automate the one I have</button>
+      </div>
+    </div>
+
+    <div class="plan-note" id="planNote"></div>
+
+    <div class="ask-card">
+      <textarea id="idea" maxlength="300" placeholder="e.g. I'm good at fitness coaching and have $0 budget…" autofocus></textarea>
+      <div class="ask-foot">
+        <span class="char-hint" id="charHint">0 / 300</span>
+        <button class="btn btn-dark" id="goBtn" disabled>Put the agents to work →</button>
+      </div>
+    </div>
+
+    <div class="chips" id="chips">
+      <button class="chip">Fitness coaching, $0 budget</button>
+      <button class="chip">I bake sourdough people love</button>
+      <button class="chip">Freelance designer, feast or famine</button>
+      <button class="chip">I run a small cleaning service</button>
+    </div>
+
+    <div class="err" id="askErr"></div>
+
+    <p class="ask-micro">Takes about a minute. <b>Real agents, real output</b> — nothing is pre-written.</p>
+  </section>
+
+  <!-- ============ STEP 2 : CONSOLE ============ -->
+  <section class="step" id="stepBuild">
+    <div class="console-head">
+      <h2>The agents are on it.</h2>
+      <p id="buildIdea"></p>
+    </div>
+
+    <div class="console">
+      <div class="console-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span class="title">launchfly · agent console</span>
+        <span class="live" id="liveBadge">running</span>
+      </div>
+      <div class="console-body" id="agentList">
+        <div class="agent-row" data-agent="positioning">
+          <div class="agent-ic">🎯</div>
+          <div class="agent-info">
+            <div class="agent-name">Positioning agent <span class="spinner"></span><span class="tick">✓</span></div>
+            <div class="agent-status">finding your niche &amp; audience</div>
+            <div class="agent-out"></div>
+          </div>
+        </div>
+        <div class="agent-row" data-agent="brand">
+          <div class="agent-ic">✨</div>
+          <div class="agent-info">
+            <div class="agent-name">Brand agent <span class="spinner"></span><span class="tick">✓</span></div>
+            <div class="agent-status">naming your business</div>
+            <div class="agent-out"></div>
+          </div>
+        </div>
+        <div class="agent-row" data-agent="offer">
+          <div class="agent-ic">📦</div>
+          <div class="agent-info">
+            <div class="agent-name">Offer agent <span class="spinner"></span><span class="tick">✓</span></div>
+            <div class="agent-status">designing your first paid offer</div>
+            <div class="agent-out"></div>
+          </div>
+        </div>
+        <div class="agent-row" data-agent="landing">
+          <div class="agent-ic">🖥</div>
+          <div class="agent-info">
+            <div class="agent-name">Copy agent <span class="spinner"></span><span class="tick">✓</span></div>
+            <div class="agent-status">writing your landing page</div>
+            <div class="agent-out"></div>
+          </div>
+        </div>
+        <div class="agent-row" data-agent="launchPlan">
+          <div class="agent-ic">🗓</div>
+          <div class="agent-info">
+            <div class="agent-name">Launch planner <span class="spinner"></span><span class="tick">✓</span></div>
+            <div class="agent-status">mapping your first week</div>
+            <div class="agent-out"></div>
+          </div>
+        </div>
+      </div>
+      <div class="console-foot" id="consoleFoot">elapsed 0s</div>
+    </div>
+
+    <div class="err" id="buildErr"></div>
+    <div style="text-align:center; margin-top:1.2rem;">
+      <button class="btn btn-light" id="retryBtn" style="display:none;">Try again</button>
+    </div>
+  </section>
+
+  <!-- ============ STEP 3 : RESULT ============ -->
+  <section class="step" id="stepResult">
+    <div class="result-head">
+      <span class="eyebrow"><span class="dot"></span> <span id="draftMeta">Drafted by your agents</span></span>
+      <h2 id="rName"></h2>
+      <p class="tagline" id="rTagline"></p>
+      <p class="angle" id="rAngle"></p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Your first offer</div>
+        <h3 id="rProduct"></h3>
+        <div class="offer-price" id="rPrice"></div>
+        <div class="offer-format" id="rFormat"></div>
+        <ul id="rBullets"></ul>
+      </div>
+      <div class="card">
+        <div class="card-label">Your landing page — draft</div>
+        <div class="mini-site">
+          <div class="ms-head" id="rHeadline"></div>
+          <div class="ms-sub" id="rSub"></div>
+          <span class="ms-cta" id="rCta"></span>
+        </div>
+        <ul style="margin-top:0.9rem;">
+          <li><span class="ck">✓</span> <span id="rNicheLine"></span></li>
+          <li><span class="ck">✓</span> <span id="rAudienceLine"></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card plan-card">
+      <div class="card-label">Your first week — launch plan</div>
+      <div id="rPlan"></div>
+    </div>
+
+    <div class="claim" id="claimBox">
+      <div id="claimForm">
+        <h3>Claim this business — it's yours.</h3>
+        <p>Save your blueprint and get early access when the agents can run it for you on autopilot.</p>
+        <form class="claim-form" id="claimFormEl">
+          <input type="email" id="claimEmail" placeholder="you@email.com" required autocomplete="email">
+          <button type="submit" class="btn btn-claim" id="claimBtn">Claim it →</button>
+        </form>
+        <div class="claim-err" id="claimErr"></div>
+        <p class="claim-micro">Free. No card. One email with your blueprint — no spam.</p>
+      </div>
+      <div class="claimed" id="claimedBox">
+        <div class="big-tick">✓</div>
+        <h3>Saved. This one's yours.</h3>
+        <p id="claimedMsg">Your blueprint is claimed. We're onboarding early users to Autopilot in small batches — you're on the list and we'll email you.</p>
+      </div>
+    </div>
+
+    <div class="result-foot">
+      <a href="#" id="startOver">← Start over with a different idea</a>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var LS_KEY = 'lf_proto_v1';
+  var state = {
+    mode: 'new',
+    plan: 'free',
+    idea: '',
+    business: null,
+    claimed: false
+  };
+
+  // ---------- helpers ----------
+  function $(id) { return document.getElementById(id); }
+  function show(stepId) {
+    ['stepAsk', 'stepBuild', 'stepResult'].forEach(function (s) {
+      $(s).classList.toggle('on', s === stepId);
+    });
+    window.scrollTo({ top: 0 });
+  }
+  function save() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s && typeof s === 'object') Object.assign(state, s);
+      }
+    } catch (e) {}
+  }
+
+  // ---------- plan param (from pricing CTAs) ----------
+  var params = new URLSearchParams(location.search);
+  var planParam = params.get('plan');
+  if (planParam === 'pro' || planParam === 'scale') {
+    state.plan = planParam;
+    var note = $('planNote');
+    note.textContent = (planParam === 'pro' ? 'Pro · Autopilot' : 'Scale') +
+      ' is in private beta. Build your business free first — claiming it puts you at the front of the line.';
+    note.classList.add('on');
+  }
+
+  // ---------- step 1 ----------
+  var ideaEl = $('idea');
+  var goBtn = $('goBtn');
+
+  ideaEl.addEventListener('input', function () {
+    $('charHint').textContent = ideaEl.value.length + ' / 300';
+    goBtn.disabled = ideaEl.value.trim().length < 3;
+  });
+
+  document.querySelectorAll('.seg-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.seg-btn').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      state.mode = b.dataset.mode;
+      ideaEl.placeholder = state.mode === 'existing'
+        ? "e.g. I run a Shopify store — buried in support and admin…"
+        : "e.g. I'm good at fitness coaching and have $0 budget…";
+    });
+  });
+
+  $('chips').addEventListener('click', function (e) {
+    if (e.target.classList.contains('chip')) {
+      ideaEl.value = e.target.textContent;
+      ideaEl.dispatchEvent(new Event('input'));
+      ideaEl.focus();
+    }
+  });
+
+  goBtn.addEventListener('click', function () { startBuild(); });
+  ideaEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey && !goBtn.disabled) { e.preventDefault(); startBuild(); }
+  });
+
+  // ---------- step 2 : streaming build ----------
+  var AGENTS = ['positioning', 'brand', 'offer', 'landing', 'launchPlan'];
+  var timerId = null;
+  var startedAt = 0;
+
+  function agentRow(key) { return document.querySelector('.agent-row[data-agent="' + key + '"]'); }
+
+  function setAgentState(key, cls) {
+    var row = agentRow(key);
+    row.classList.remove('active', 'complete');
+    if (cls) row.classList.add(cls);
+  }
+
+  function setAgentOut(key, text) {
+    var out = agentRow(key).querySelector('.agent-out');
+    if (text) { out.textContent = text; out.classList.add('on'); }
+  }
+
+  function sectionComplete(key, b) {
+    if (!b) return false;
+    switch (key) {
+      case 'positioning': return !!(b.positioning && b.positioning.niche && b.positioning.audience && b.positioning.angle);
+      case 'brand':       return !!(b.brand && b.brand.name && b.brand.tagline);
+      case 'offer':       return !!(b.offer && b.offer.productName && b.offer.price && b.offer.bullets && b.offer.bullets.length >= 3);
+      case 'landing':     return !!(b.landing && b.landing.headline && b.landing.cta);
+      case 'launchPlan':  return !!(b.launchPlan && b.launchPlan.length >= 5 && b.launchPlan[4] && b.launchPlan[4].action);
+    }
+  }
+
+  function renderProgress(b) {
+    var reachedActive = false;
+    AGENTS.forEach(function (key) {
+      if (sectionComplete(key, b)) {
+        setAgentState(key, 'complete');
+      } else if (!reachedActive) {
+        setAgentState(key, 'active');
+        reachedActive = true;
+      } else {
+        setAgentState(key, null);
+      }
+    });
+    if (b) {
+      if (b.positioning && b.positioning.niche) setAgentOut('positioning', b.positioning.niche + (b.positioning.audience ? ' — for ' + b.positioning.audience : ''));
+      if (b.brand && b.brand.name) setAgentOut('brand', b.brand.name + (b.brand.tagline ? ' · “' + b.brand.tagline + '”' : ''));
+      if (b.offer && b.offer.productName) setAgentOut('offer', b.offer.productName + (b.offer.price ? ' · $' + b.offer.price : ''));
+      if (b.landing && b.landing.headline) setAgentOut('landing', '“' + b.landing.headline + '”');
+      if (b.launchPlan && b.launchPlan.length && b.launchPlan[0] && b.launchPlan[0].action) {
+        setAgentOut('launchPlan', b.launchPlan.filter(function (p) { return p && p.action; }).length + ' launch actions drafted');
+      }
+    }
+  }
+
+  function resetConsole() {
+    AGENTS.forEach(function (key) {
+      setAgentState(key, null);
+      var out = agentRow(key).querySelector('.agent-out');
+      out.textContent = '';
+      out.classList.remove('on');
+    });
+    setAgentState('positioning', 'active');
+    $('liveBadge').textContent = 'running';
+    $('liveBadge').classList.remove('done');
+    $('buildErr').classList.remove('on');
+    $('retryBtn').style.display = 'none';
+  }
+
+  function startBuild() {
+    state.idea = ideaEl.value.trim();
+    state.business = null;
+    state.claimed = false;
+    save();
+
+    $('buildIdea').textContent = 'You said: “' + state.idea + '”';
+    resetConsole();
+    show('stepBuild');
+
+    startedAt = Date.now();
+    clearInterval(timerId);
+    timerId = setInterval(function () {
+      $('consoleFoot').textContent = 'elapsed ' + Math.round((Date.now() - startedAt) / 1000) + 's';
+    }, 1000);
+
+    fetch('/api/prototype/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea: state.idea, mode: state.mode })
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.json().then(function (j) { throw new Error(j.error || 'Something went wrong.'); });
+      }
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) return;
+          buf += decoder.decode(r.value, { stream: true });
+          var frames = buf.split('\n\n');
+          buf = frames.pop();
+          frames.forEach(function (frame) {
+            var line = frame.split('\n').find(function (l) { return l.indexOf('data: ') === 0; });
+            if (!line) return;
+            var msg;
+            try { msg = JSON.parse(line.slice(6)); } catch (e) { return; }
+            if (msg.type === 'partial') {
+              renderProgress(msg.business);
+            } else if (msg.type === 'done') {
+              finishBuild(msg.business);
+            } else if (msg.type === 'error') {
+              throw new Error(msg.message);
+            }
+          });
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function (err) {
+      clearInterval(timerId);
+      $('liveBadge').textContent = 'stopped';
+      $('liveBadge').classList.add('done');
+      var e = $('buildErr');
+      e.textContent = err.message || 'The agents hit a snag. Please try again.';
+      e.classList.add('on');
+      $('retryBtn').style.display = 'inline-flex';
+    });
+  }
+
+  function finishBuild(business) {
+    clearInterval(timerId);
+    var secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+    AGENTS.forEach(function (k) { setAgentState(k, 'complete'); });
+    renderProgress(business);
+    $('liveBadge').textContent = 'complete';
+    $('liveBadge').classList.add('done');
+
+    state.business = business;
+    state.builtInSecs = secs;
+    save();
+
+    setTimeout(function () { renderResult(); show('stepResult'); }, 900);
+  }
+
+  $('retryBtn').addEventListener('click', function () { show('stepAsk'); });
+
+  // ---------- step 3 : result ----------
+  function esc(s) { return String(s == null ? '' : s); }
+
+  function renderResult() {
+    var b = state.business;
+    if (!b) return;
+
+    $('draftMeta').textContent = state.builtInSecs
+      ? 'Drafted by your agents in ' + state.builtInSecs + 's'
+      : 'Drafted by your agents';
+    $('rName').textContent = esc(b.brand && b.brand.name);
+    $('rTagline').textContent = esc(b.brand && b.brand.tagline);
+    $('rAngle').textContent = esc(b.positioning && b.positioning.angle);
+
+    $('rProduct').textContent = esc(b.offer && b.offer.productName);
+    $('rPrice').textContent = b.offer && b.offer.price ? '$' + b.offer.price : '';
+    $('rFormat').textContent = esc(b.offer && b.offer.format);
+
+    var bullets = $('rBullets');
+    bullets.innerHTML = '';
+    ((b.offer && b.offer.bullets) || []).slice(0, 3).forEach(function (t) {
+      var li = document.createElement('li');
+      var ck = document.createElement('span'); ck.className = 'ck'; ck.textContent = '✓';
+      li.appendChild(ck);
+      li.appendChild(document.createTextNode(' ' + esc(t)));
+      bullets.appendChild(li);
+    });
+
+    $('rHeadline').textContent = esc(b.landing && b.landing.headline);
+    $('rSub').textContent = esc(b.landing && b.landing.subheadline);
+    $('rCta').textContent = esc(b.landing && b.landing.cta);
+    $('rNicheLine').textContent = 'Niche: ' + esc(b.positioning && b.positioning.niche);
+    $('rAudienceLine').textContent = 'For: ' + esc(b.positioning && b.positioning.audience);
+
+    var plan = $('rPlan');
+    plan.innerHTML = '';
+    ((b.launchPlan) || []).slice(0, 7).forEach(function (p) {
+      if (!p || !p.action) return;
+      var row = document.createElement('div'); row.className = 'plan-row';
+      var day = document.createElement('div'); day.className = 'plan-day'; day.textContent = 'Day ' + esc(p.day);
+      var wrap = document.createElement('div');
+      var act = document.createElement('div'); act.className = 'plan-act'; act.textContent = esc(p.action);
+      var ch = document.createElement('div'); ch.className = 'plan-ch'; ch.textContent = esc(p.channel);
+      wrap.appendChild(act); wrap.appendChild(ch);
+      row.appendChild(day); row.appendChild(wrap);
+      plan.appendChild(row);
+    });
+
+    $('claimForm').style.display = state.claimed ? 'none' : 'block';
+    $('claimedBox').classList.toggle('on', !!state.claimed);
+  }
+
+  $('claimFormEl').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = $('claimEmail').value.trim();
+    var btn = $('claimBtn');
+    var errEl = $('claimErr');
+    errEl.classList.remove('on');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    fetch('/api/prototype/lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        idea: state.idea,
+        mode: state.mode,
+        plan: state.plan,
+        business: state.business
+      })
+    }).then(function (res) {
+      return res.json().then(function (j) {
+        if (!res.ok) throw new Error(j.error || 'Could not save. Try again.');
+        state.claimed = true;
+        save();
+        renderResult();
+      });
+    }).catch(function (err) {
+      errEl.textContent = err.message;
+      errEl.classList.add('on');
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = 'Claim it →';
+    });
+  });
+
+  $('startOver').addEventListener('click', function (e) {
+    e.preventDefault();
+    state.business = null;
+    state.claimed = false;
+    state.idea = '';
+    save();
+    ideaEl.value = '';
+    ideaEl.dispatchEvent(new Event('input'));
+    show('stepAsk');
+  });
+
+  // ---------- boot ----------
+  load();
+  // Re-apply plan from URL over stored state
+  if (planParam === 'pro' || planParam === 'scale') state.plan = planParam;
+
+  if (state.business) {
+    renderResult();
+    show('stepResult');
+  }
+})();
+</script>
+</body>
+</html>

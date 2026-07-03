@@ -562,7 +562,7 @@
   }
 
   function startBuild() {
-    state.idea = ideaEl.value.trim();
+    state.idea = ideaEl.value.trim() || state.idea;
     state.business = null;
     state.claimed = false;
     save();
@@ -577,53 +577,128 @@
       $('consoleFoot').textContent = 'elapsed ' + Math.round((Date.now() - startedAt) / 1000) + 's';
     }, 1000);
 
+    runGeneration();
+  }
+
+  var FRIENDLY_ERR = 'The agents hit a snag. Please try again.';
+  var finished = false;
+  var lastPartial = null;
+
+  // A partial blueprint that has every section is good enough to show.
+  function usable(b) {
+    return b && AGENTS.every(function (k) { return sectionComplete(k, b); });
+  }
+
+  function handleFrame(frame) {
+    // Split on both \n and \r\n; ignore SSE comments (heartbeats)
+    var line = frame.split(/\r?\n/).find(function (l) { return l.indexOf('data:') === 0; });
+    if (!line) return null;
+    var msg;
+    try { msg = JSON.parse(line.slice(5).trim()); } catch (e) { return null; }
+    if (msg.type === 'partial' && msg.business) {
+      lastPartial = msg.business;
+      renderProgress(msg.business);
+    } else if (msg.type === 'done' && msg.business) {
+      // A server-salvaged partial is only acceptable if every section rendered
+      if (msg.partial && !usable(msg.business)) return FRIENDLY_ERR;
+      finishBuild(msg.business);
+    } else if (msg.type === 'error') {
+      return msg.message || FRIENDLY_ERR;
+    }
+    return null;
+  }
+
+  function consumeText(text) {
+    var err = null;
+    text.split(/\r?\n\r?\n/).forEach(function (frame) {
+      var e = handleFrame(frame);
+      if (e) err = e;
+    });
+    return err;
+  }
+
+  function runGeneration() {
+    finished = false;
+    lastPartial = null;
+
     fetch('/api/prototype/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ idea: state.idea, mode: state.mode })
     }).then(function (res) {
       if (!res.ok) {
-        return res.json().then(function (j) { throw new Error(j.error || 'Something went wrong.'); });
+        // Error body may be JSON (our API) or HTML (a proxy) — don't assume
+        return res.text().then(function (t) {
+          var m = FRIENDLY_ERR;
+          try { m = JSON.parse(t).error || m; } catch (e) {}
+          throw new Error(m);
+        });
       }
+
+      // Fallback for browsers without streaming body support:
+      // wait for the full response, then parse every frame at once.
+      if (!res.body || typeof res.body.getReader !== 'function') {
+        return res.text().then(function (t) {
+          var e = consumeText(t);
+          if (!finished) {
+            if (e) throw new Error(e);
+            throw new Error(FRIENDLY_ERR);
+          }
+        });
+      }
+
       var reader = res.body.getReader();
       var decoder = new TextDecoder();
       var buf = '';
 
       function pump() {
         return reader.read().then(function (r) {
-          if (r.done) return;
-          buf += decoder.decode(r.value, { stream: true });
-          var frames = buf.split('\n\n');
-          buf = frames.pop();
-          frames.forEach(function (frame) {
-            var line = frame.split('\n').find(function (l) { return l.indexOf('data: ') === 0; });
-            if (!line) return;
-            var msg;
-            try { msg = JSON.parse(line.slice(6)); } catch (e) { return; }
-            if (msg.type === 'partial') {
-              renderProgress(msg.business);
-            } else if (msg.type === 'done') {
-              finishBuild(msg.business);
-            } else if (msg.type === 'error') {
-              throw new Error(msg.message);
+          if (r.done) {
+            // Stream ended: flush the remainder, then recover if needed
+            var e = consumeText(buf + decoder.decode());
+            if (!finished) {
+              if (usable(lastPartial)) { finishBuild(lastPartial); return; }
+              throw new Error(e || 'The connection dropped. Please try again.');
             }
+            return;
+          }
+          buf += decoder.decode(r.value, { stream: true });
+          var frames = buf.split(/\r?\n\r?\n/);
+          buf = frames.pop();
+          var err = null;
+          frames.forEach(function (frame) {
+            var e = handleFrame(frame);
+            if (e) err = e;
           });
+          if (err) throw new Error(err);
+          if (finished) { reader.cancel().catch(function () {}); return; }
           return pump();
         });
       }
       return pump();
     }).catch(function (err) {
+      if (finished) return;
+      // Salvage: if the agents got far enough before the drop, show the result
+      if (usable(lastPartial)) { finishBuild(lastPartial); return; }
+      console.error('[prototype] generation failed:', err);
       clearInterval(timerId);
       $('liveBadge').textContent = 'stopped';
       $('liveBadge').classList.add('done');
       var e = $('buildErr');
-      e.textContent = err.message || 'The agents hit a snag. Please try again.';
+      // Browser-internal messages (e.g. Safari pattern/stream errors) are
+      // meaningless to users — always show a friendly one.
+      var msg = err && err.message;
+      var isOurs = msg && /agents|limit|connection|business|email|try again/i.test(msg);
+      e.textContent = isOurs ? msg : FRIENDLY_ERR;
       e.classList.add('on');
       $('retryBtn').style.display = 'inline-flex';
     });
   }
 
   function finishBuild(business) {
+    if (finished) return;
+    finished = true;
     clearInterval(timerId);
     var secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
     AGENTS.forEach(function (k) { setAgentState(k, 'complete'); });
@@ -638,7 +713,9 @@
     setTimeout(function () { renderResult(); show('stepResult'); }, 900);
   }
 
-  $('retryBtn').addEventListener('click', function () { show('stepAsk'); });
+  $('retryBtn').addEventListener('click', function () {
+    if (state.idea) { startBuild(); } else { show('stepAsk'); }
+  });
 
   // ---------- step 3 : result ----------
   function esc(s) { return String(s == null ? '' : s); }

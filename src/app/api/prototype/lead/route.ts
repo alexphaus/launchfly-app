@@ -30,9 +30,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing business data.' }, { status: 400 });
   }
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    console.error('[prototype/lead] Supabase env vars missing');
+    return NextResponse.json(
+      { error: 'Could not save right now. Please try again.' },
+      { status: 503 }
+    );
+  }
+
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
   );
 
   const { error } = await supabase.from('prototype_leads').insert({

@@ -99,7 +99,8 @@ export async function POST(request: Request) {
       : `You are Launchfly's business-building agent team. The user wants to start a business from a skill or idea. Design a lean online business around it: a specific niche, a brandable name, one concrete paid offer at a realistic price, landing page copy, and a realistic first week of launch actions with zero budget. Be specific and practical — no hype, no invented metrics.`;
 
   const result = streamObject({
-    model: deepseek(CHAT_MODEL),
+    // .chat() forces the chat-completions API — DeepSeek does not support /responses
+    model: deepseek.chat(CHAT_MODEL),
     schema: businessSchema,
     system,
     prompt: `User input: "${idea}"`,

@@ -98,10 +98,6 @@
   .ask-head h1 { font-size: clamp(1.7rem, 5vw, 2.5rem); font-weight: 700; line-height: 1.15; margin-top: 1.1rem; }
   .ask-head p { color: var(--muted-2); margin-top: 0.7rem; font-size: 0.98rem; max-width: 34rem; margin-left: auto; margin-right: auto; }
 
-  .seg { display: inline-flex; gap: 0.3rem; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0.3rem; margin-bottom: 1.4rem; }
-  .seg-btn { border: none; background: transparent; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.85rem; color: var(--muted-2); padding: 0.55rem 1.15rem; border-radius: 999px; cursor: pointer; transition: all 0.18s ease; }
-  .seg-btn.active { background: #fff; color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
-
   .ask-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 1.4rem; box-shadow: 0 18px 50px rgba(0,0,0,0.05); text-align: left; }
   .ask-card textarea {
     width: 100%; border: none; outline: none; resize: none;
@@ -250,7 +246,7 @@
 
 <nav>
   <a href="index2.html" class="logo"><span>🚀</span> Launchfly</a>
-  <span class="nav-note" id="navNote">free · no card needed</span>
+  <span class="nav-note" id="navNote">free to launch · no card needed</span>
 </nav>
 
 <div class="wrap">
@@ -261,13 +257,6 @@
       <span class="eyebrow"><span class="dot"></span> Agents standing by</span>
       <h1>What are you good at?</h1>
       <p>One sentence is enough. The agents will draft your niche, brand, offer, landing copy and first-week launch plan — live.</p>
-    </div>
-
-    <div style="text-align:center;">
-      <div class="seg" role="tablist">
-        <button class="seg-btn active" data-mode="new" role="tab">Start a new business</button>
-        <button class="seg-btn" data-mode="existing" role="tab">Automate the one I have</button>
-      </div>
     </div>
 
     <div class="plan-note" id="planNote"></div>
@@ -394,19 +383,19 @@
 
     <div class="claim" id="claimBox">
       <div id="claimForm">
-        <h3>Claim this business — it's yours.</h3>
-        <p>Save your blueprint and get early access when the agents can run it for you on autopilot.</p>
+        <h3>Claim it — and let the agents get you paid.</h3>
+        <p>Next step: the agents put this live with a real checkout and start outreach — you approve everything from your phone. Free to launch. We take 5% only when you get paid.</p>
         <form class="claim-form" id="claimFormEl">
           <input type="email" id="claimEmail" placeholder="you@email.com" required autocomplete="email">
           <button type="submit" class="btn btn-claim" id="claimBtn">Claim it →</button>
         </form>
         <div class="claim-err" id="claimErr"></div>
-        <p class="claim-micro">Free. No card. One email with your blueprint — no spam.</p>
+        <p class="claim-micro">Free. No card. We only make money when you do.</p>
       </div>
       <div class="claimed" id="claimedBox">
         <div class="big-tick">✓</div>
         <h3>Saved. This one's yours.</h3>
-        <p id="claimedMsg">Your blueprint is claimed. We're onboarding early users to Autopilot in small batches — you're on the list and we'll email you.</p>
+        <p id="claimedMsg">We onboard founding users in small batches. You'll get an email when it's your turn to go live — and another when your first payment lands.</p>
       </div>
     </div>
 
@@ -457,8 +446,8 @@
   if (planParam === 'pro' || planParam === 'scale') {
     state.plan = planParam;
     var note = $('planNote');
-    note.textContent = (planParam === 'pro' ? 'Pro · Autopilot' : 'Scale') +
-      ' is in private beta. Build your business free first — claiming it puts you at the front of the line.';
+    note.textContent = (planParam === 'pro' ? 'Grow' : 'Scale') +
+      ' is in private beta. Launch your business free first — claiming it puts you at the front of the line.';
     note.classList.add('on');
   }
 
@@ -469,17 +458,6 @@
   ideaEl.addEventListener('input', function () {
     $('charHint').textContent = ideaEl.value.length + ' / 300';
     goBtn.disabled = ideaEl.value.trim().length < 3;
-  });
-
-  document.querySelectorAll('.seg-btn').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('.seg-btn').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active');
-      state.mode = b.dataset.mode;
-      ideaEl.placeholder = state.mode === 'existing'
-        ? "e.g. I run a Shopify store — buried in support and admin…"
-        : "e.g. I'm good at fitness coaching and have $0 budget…";
-    });
   });
 
   $('chips').addEventListener('click', function (e) {
@@ -817,6 +795,8 @@
 
   // ---------- boot ----------
   load();
+  // The flow is new-business only now; older stored state may say 'existing'
+  state.mode = 'new';
   // Re-apply plan from URL over stored state
   if (planParam === 'pro' || planParam === 'scale') state.plan = planParam;
 

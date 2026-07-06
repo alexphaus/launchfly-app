@@ -1,7 +1,7 @@
 {
-  "name": "30k Savings Tracker",
+  "name": "25k Savings Tracker",
   "short_name": "Savings",
-  "description": "Track your €30,000 savings goal",
+  "description": "Track your €25,000 savings goal",
   "start_url": "/savings-tracker.html",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>30k Savings Tracker</title>
+<title>25k Savings Tracker</title>
 <link rel="icon" type="image/png" href="/savings-tracker-icon.png">
 <link rel="apple-touch-icon" href="/savings-tracker-icon.png">
 <link rel="manifest" href="/savings-tracker-manifest.json">
@@ -224,7 +224,7 @@
 </head>
 <body>
 
-<h1>Savings tracker &mdash; &euro;30,000 goal</h1>
+<h1>Savings tracker &mdash; &euro;25,000 goal</h1>
   <p class="subtitle" id="deadline-line">Deadline: 30 Dec 2026</p>
   <p class="sync-status" id="sync-status">Loading...</p>
 
@@ -235,7 +235,7 @@
     </div>
     <div class="stat-card">
       <p class="label">Remaining</p>
-      <p class="value" id="remaining-amount">&euro;30,000</p>
+      <p class="value" id="remaining-amount">&euro;25,000</p>
     </div>
     <div class="stat-card" id="pace-card">
       <p class="label">&euro;/day needed</p>
@@ -261,23 +261,23 @@
   </div>
 
   <div class="grid" id="grid"></div>
-  <p class="row-marker" id="square-count">0 / 200 squares &middot; &euro;150 each</p>
+  <p class="row-marker" id="square-count">0 / 200 squares &middot; &euro;125 each</p>
 
 <div class="footer-row">
-  <p class="hint">Click a square each time you save &euro;150 &middot; syncs across your devices</p>
+  <p class="hint">Click a square each time you save &euro;125 &middot; syncs across your devices</p>
   <button id="reset-btn">Reset</button>
 </div>
 
 <script>
   var TOTAL = 200;
-  var UNIT = 150;
+  var UNIT = 125;
   var MILESTONE_EMOJIS = { 9: '\uD83D\uDEDF', 49: '\u2708\uFE0F', 99: '\uD83D\uDE0A', 149: '\uD83D\uDE0E', 199: '\u26F3\uFE0F' };
-  var GOAL = 30000;
-  var LEGACY_STORAGE_KEY = 'savings-tracker-30k-v2';
+  var GOAL = 25000;
+  var LEGACY_STORAGE_KEY = 'savings-tracker-25k-v2';
   var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
   var API_URL = '/api/personal/savings-tracker';
   var DEADLINE = new Date('2026-12-30T00:00:00');
-  var POLL_MS = 30000;
+  var POLL_MS = 30 * 1000;
 
   var grid = document.getElementById('grid');
   var savedAmountEl = document.getElementById('saved-amount');
@@ -550,9 +550,9 @@
     var pct = (count / TOTAL) * 100;
     var checks = [
       { key: '25', threshold: 25, text: 'Quarter of the way there \u2014 ' + formatEuro(total) + ' saved' },
-      { key: '50', threshold: 50, text: 'Halfway to \u20ac30,000. Keep going.' },
+      { key: '50', threshold: 50, text: 'Halfway to \u20ac25,000. Keep going.' },
       { key: '75', threshold: 75, text: 'Three quarters done \u2014 ' + formatEuro(GOAL - total) + ' left' },
-      { key: '100', threshold: 100, text: 'Goal reached. \u20ac30,000 saved.' }
+      { key: '100', threshold: 100, text: 'Goal reached. \u20ac25,000 saved.' }
     ];
     checks.forEach(function(c) {
       if (pct >= c.threshold && !data.milestonesShown[c.key]) {
@@ -573,7 +573,7 @@
 
     savedAmountEl.textContent = formatEuro(total);
     remainingAmountEl.textContent = formatEuro(remaining);
-    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares \u00b7 \u20ac150 each';
+    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares \u00b7 \u20ac125 each';
 
     if (days > 0 && remaining > 0) {
       var pace = remaining / days;

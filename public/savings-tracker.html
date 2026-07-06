@@ -277,7 +277,7 @@
   var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
   var API_URL = '/api/personal/savings-tracker';
   var DEADLINE = new Date('2026-12-30T00:00:00');
-  var POLL_MS = 30000;
+  var POLL_MS = 30 * 1000;
 
   var grid = document.getElementById('grid');
   var savedAmountEl = document.getElementById('saved-amount');

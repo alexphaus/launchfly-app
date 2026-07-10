@@ -261,17 +261,17 @@
   </div>
 
   <div class="grid" id="grid"></div>
-  <p class="row-marker" id="square-count">0 / 200 squares &middot; &euro;125 each</p>
+  <p class="row-marker" id="square-count">0 / 50 squares &middot; &euro;500 each</p>
 
 <div class="footer-row">
-  <p class="hint">Click a square each time you save &euro;125 &middot; syncs across your devices</p>
+  <p class="hint">Click a square each time you save &euro;500 &middot; syncs across your devices</p>
   <button id="reset-btn">Reset</button>
 </div>
 
 <script>
-  var TOTAL = 200;
-  var UNIT = 125;
-  var MILESTONE_EMOJIS = { 9: '\uD83D\uDEDF', 49: '\u2708\uFE0F', 99: '\uD83D\uDE0A', 149: '\uD83D\uDE0E', 199: '\u26F3\uFE0F' };
+  var TOTAL = 50;
+  var UNIT = 500;
+  var MILESTONE_EMOJIS = { 14: '\uD83D\uDEDF', 49: '\u26F3\uFE0F' };
   var GOAL = 25000;
   var LEGACY_STORAGE_KEY = 'savings-tracker-25k-v2';
   var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
@@ -550,9 +550,9 @@
     var pct = (count / TOTAL) * 100;
     var checks = [
       { key: '25', threshold: 25, text: 'Quarter of the way there \u2014 ' + formatEuro(total) + ' saved' },
-      { key: '50', threshold: 50, text: 'Halfway to \u20ac25,000. Keep going.' },
+      { key: '50', threshold: 50, text: 'Halfway to ' + formatEuro(GOAL) + '. Keep going.' },
       { key: '75', threshold: 75, text: 'Three quarters done \u2014 ' + formatEuro(GOAL - total) + ' left' },
-      { key: '100', threshold: 100, text: 'Goal reached. \u20ac25,000 saved.' }
+      { key: '100', threshold: 100, text: 'Goal reached. ' + formatEuro(GOAL) + ' saved.' }
     ];
     checks.forEach(function(c) {
       if (pct >= c.threshold && !data.milestonesShown[c.key]) {
@@ -573,7 +573,7 @@
 
     savedAmountEl.textContent = formatEuro(total);
     remainingAmountEl.textContent = formatEuro(remaining);
-    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares \u00b7 \u20ac125 each';
+    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares \u00b7 \u20ac500 each';
 
     if (days > 0 && remaining > 0) {
       var pace = remaining / days;
@@ -608,7 +608,6 @@
   function squareClasses(index, filled) {
     var classes = 'square' + (filled ? ' filled' : '');
     if (MILESTONE_EMOJIS[index]) classes += ' milestone-emoji';
-    if ((index + 1) % 50 === 0 && index !== TOTAL - 1) classes += ' milestone-edge';
     return classes;
   }
 

@@ -8,8 +8,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
+const SAVINGS_TOTAL = 50;
+
 const DEFAULT_DATA = {
-  filled: new Array(200).fill(false),
+  filled: new Array(SAVINGS_TOTAL).fill(false),
   fillDates: {},
   milestonesShown: {},
   lastSaveDate: null,
@@ -51,7 +53,7 @@ function normalizeData(raw: unknown) {
   const filled = Array.isArray(parsed.filled) ? parsed.filled : DEFAULT_DATA.filled;
 
   return {
-    filled: filled.length === 200 ? filled.map(Boolean) : [...DEFAULT_DATA.filled],
+    filled: filled.length === SAVINGS_TOTAL ? filled.map(Boolean) : [...DEFAULT_DATA.filled],
     fillDates:
       parsed.fillDates && typeof parsed.fillDates === 'object' && !Array.isArray(parsed.fillDates)
         ? (parsed.fillDates as Record<string, string>)

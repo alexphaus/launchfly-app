@@ -9,6 +9,7 @@ const supabase = createClient(
 );
 
 const SAVINGS_TOTAL = 50;
+const MRR_GOAL = 100000;
 
 const DEFAULT_DATA = {
   filled: new Array(SAVINGS_TOTAL).fill(false),
@@ -16,6 +17,7 @@ const DEFAULT_DATA = {
   milestonesShown: {},
   lastSaveDate: null,
   streak: 0,
+  mrr: 0,
 };
 
 function dbErrorResponse(action: 'load' | 'initialize' | 'save', error: unknown) {
@@ -66,6 +68,10 @@ function normalizeData(raw: unknown) {
         : {},
     lastSaveDate: typeof parsed.lastSaveDate === 'string' ? parsed.lastSaveDate : null,
     streak: typeof parsed.streak === 'number' ? parsed.streak : 0,
+    mrr:
+      typeof parsed.mrr === 'number' && Number.isFinite(parsed.mrr)
+        ? Math.min(Math.max(parsed.mrr, 0), MRR_GOAL)
+        : 0,
   };
 }
 

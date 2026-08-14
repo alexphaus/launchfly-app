@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>25k Savings Tracker</title>
+<title>100k/mo &amp; 25k Savings Tracker</title>
 <link rel="icon" type="image/png" href="/savings-tracker-icon.png">
 <link rel="apple-touch-icon" href="/savings-tracker-icon.png">
 <link rel="manifest" href="/savings-tracker-manifest.json">
@@ -216,13 +216,169 @@
   .sync-status.error { color: var(--red-dark); }
   .sync-status.saved { color: var(--green-dark); }
 
+  /* --- Monthly revenue goal --- */
+  .mrr-panel {
+    background: var(--bg-card);
+    border-radius: 14px;
+    padding: 18px 20px 14px;
+    margin-bottom: 2rem;
+  }
+  .mrr-eyebrow {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-secondary);
+    margin: 0 0 6px;
+  }
+  .mrr-current {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+    font-size: clamp(38px, 11vw, 60px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .mrr-current .mrr-per {
+    font-size: 0.32em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0;
+    margin-left: 4px;
+  }
+  .mrr-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 22px;
+  }
+  .mrr-meta strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .mrr-track {
+    position: relative;
+    height: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .mrr-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--green), var(--green-dark));
+    border-radius: 8px 0 0 8px;
+    transition: width 0.08s linear;
+  }
+  .mrr-tick {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 22px;
+    background: var(--border);
+    transform: translateX(-1px);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+  .mrr-tick.hit { background: var(--green-dark); }
+  .mrr-tick.goal { background: var(--text-tertiary); width: 3px; }
+
+  .mrr-slider {
+    position: absolute;
+    left: 0;
+    top: -13px;
+    width: 100%;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+  }
+  .mrr-slider:focus { outline: none; }
+  .mrr-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 4px solid var(--green-dark);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    cursor: grab;
+  }
+  .mrr-slider:active::-webkit-slider-thumb { cursor: grabbing; }
+  .mrr-slider::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 4px solid var(--green-dark);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    cursor: grab;
+  }
+  .mrr-slider:focus-visible::-webkit-slider-thumb { border-color: var(--green); }
+  .mrr-slider:focus-visible::-moz-range-thumb { border-color: var(--green); }
+
+  .mrr-labels {
+    position: relative;
+    height: 30px;
+    margin-top: 12px;
+  }
+  .mrr-label {
+    position: absolute;
+    top: 0;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    transform: translateX(-50%);
+  }
+  .mrr-label.hit {
+    color: var(--green-dark);
+    font-weight: 600;
+  }
+  .mrr-label.last { transform: translateX(-100%); }
+
+  .section-divider {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 0 0 1.75rem;
+  }
+
   @media (max-width: 480px) {
     .grid { grid-template-columns: repeat(10, 1fr); }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .mrr-panel { padding: 16px 14px 12px; }
+    /* Eight labels will not fit on one line at phone width, so drop every
+       other one to a second row instead of hiding milestones. */
+    .mrr-labels { height: 40px; }
+    .mrr-label { font-size: 10px; }
+    .mrr-label:nth-child(even) { top: 17px; }
   }
 </style>
 </head>
 <body>
+
+<section class="mrr-panel">
+  <p class="mrr-eyebrow">Monthly revenue &middot; goal &euro;100,000/mo</p>
+  <p class="mrr-current"><span id="mrr-value">&euro;0</span><span class="mrr-per">/mo</span></p>
+  <p class="mrr-meta" id="mrr-meta">Drag the slider to where you are today</p>
+
+  <div class="mrr-track">
+    <div class="mrr-fill" id="mrr-fill"></div>
+    <div id="mrr-ticks"></div>
+    <input type="range" class="mrr-slider" id="mrr-slider"
+           min="0" max="1000" step="1" value="0"
+           aria-label="Current monthly revenue"
+           aria-valuetext="&euro;0 per month">
+  </div>
+  <div class="mrr-labels" id="mrr-labels"></div>
+</section>
+
+<hr class="section-divider">
 
 <h1>Savings tracker &mdash; &euro;25,000 goal</h1>
   <p class="subtitle" id="deadline-line">Deadline: 30 Dec 2026</p>
@@ -279,7 +435,25 @@
   var DEADLINE = new Date('2026-12-30T00:00:00');
   var POLL_MS = 30 * 1000;
 
+  // Monthly revenue goal. Milestones are spaced evenly along the track rather
+  // than linearly by value - on a linear scale everything below 15k would be
+  // squashed into the first 15% and the early milestones would be unreadable.
+  var MRR_GOAL = 100000;
+  var MRR_STOPS = [0, 500, 1500, 3000, 5000, 10000, 15000, 30000, 100000];
+  var MRR_SEGMENTS = MRR_STOPS.length - 1;
+  var MRR_SEG_WIDTH = 100 / MRR_SEGMENTS;
+  var SLIDER_MAX = 1000;
+  var SNAP_PCT = 1.2;
+
   var grid = document.getElementById('grid');
+  var mrrSlider = document.getElementById('mrr-slider');
+  var mrrValueEl = document.getElementById('mrr-value');
+  var mrrMetaEl = document.getElementById('mrr-meta');
+  var mrrFill = document.getElementById('mrr-fill');
+  var mrrTicks = document.getElementById('mrr-ticks');
+  var mrrLabels = document.getElementById('mrr-labels');
+  var isDraggingMrr = false;
+  var isKeyboardMrr = false;
   var savedAmountEl = document.getElementById('saved-amount');
   var remainingAmountEl = document.getElementById('remaining-amount');
   var paceAmountEl = document.getElementById('pace-amount');
@@ -304,7 +478,8 @@
       fillDates: {},
       milestonesShown: {},
       lastSaveDate: null,
-      streak: 0
+      streak: 0,
+      mrr: 0
     };
   }
 
@@ -330,8 +505,15 @@
       fillDates: parsed.fillDates || {},
       milestonesShown: parsed.milestonesShown || {},
       lastSaveDate: parsed.lastSaveDate || null,
-      streak: parsed.streak || 0
+      streak: parsed.streak || 0,
+      mrr: clampMrr(parsed.mrr)
     };
+  }
+
+  function clampMrr(value) {
+    var n = typeof value === 'number' ? value : parseFloat(value);
+    if (!isFinite(n) || n < 0) return 0;
+    return Math.min(n, MRR_GOAL);
   }
 
   function loadLegacyLocalData() {
@@ -565,7 +747,111 @@
     });
   }
 
+  function formatCompactEuro(n) {
+    if (n >= 1000) {
+      var k = n / 1000;
+      return '€' + (k % 1 === 0 ? k : k.toFixed(1)) + 'k';
+    }
+    return '€' + n;
+  }
+
+  function roundMrr(v) {
+    if (v < 1000) return Math.round(v / 10) * 10;
+    if (v < 10000) return Math.round(v / 50) * 50;
+    if (v < 30000) return Math.round(v / 100) * 100;
+    return Math.round(v / 500) * 500;
+  }
+
+  // Track position (0-100) -> euros, interpolating inside the milestone band.
+  // Snapping is for dragging only: with the keyboard the arrow keys move in
+  // steps smaller than the snap zone, so snapping would pin the value to a
+  // milestone and make the arrows look broken.
+  function mrrPosToValue(pos, allowSnap) {
+    if (allowSnap) {
+      for (var i = 0; i < MRR_STOPS.length; i++) {
+        if (Math.abs(pos - i * MRR_SEG_WIDTH) <= SNAP_PCT) return MRR_STOPS[i];
+      }
+    }
+    var seg = Math.min(MRR_SEGMENTS - 1, Math.floor(pos / MRR_SEG_WIDTH));
+    var t = (pos - seg * MRR_SEG_WIDTH) / MRR_SEG_WIDTH;
+    var value = MRR_STOPS[seg] + t * (MRR_STOPS[seg + 1] - MRR_STOPS[seg]);
+    return clampMrr(roundMrr(value));
+  }
+
+  function mrrValueToPos(value) {
+    var v = clampMrr(value);
+    for (var i = 0; i < MRR_SEGMENTS; i++) {
+      if (v <= MRR_STOPS[i + 1]) {
+        var span = MRR_STOPS[i + 1] - MRR_STOPS[i];
+        var t = span === 0 ? 0 : (v - MRR_STOPS[i]) / span;
+        return (i + t) * MRR_SEG_WIDTH;
+      }
+    }
+    return 100;
+  }
+
+  function buildMrrScale() {
+    mrrTicks.innerHTML = '';
+    mrrLabels.innerHTML = '';
+    for (var i = 1; i < MRR_STOPS.length; i++) {
+      var pos = i * MRR_SEG_WIDTH;
+      var isLast = i === MRR_STOPS.length - 1;
+
+      var tick = document.createElement('div');
+      tick.className = 'mrr-tick' + (isLast ? ' goal' : '');
+      tick.style.left = pos + '%';
+      tick.setAttribute('data-value', MRR_STOPS[i]);
+      mrrTicks.appendChild(tick);
+
+      var label = document.createElement('span');
+      label.className = 'mrr-label' + (isLast ? ' last' : '');
+      label.style.left = pos + '%';
+      label.textContent = formatCompactEuro(MRR_STOPS[i]);
+      label.setAttribute('data-value', MRR_STOPS[i]);
+      mrrLabels.appendChild(label);
+    }
+  }
+
+  function nextMrrMilestone(value) {
+    for (var i = 1; i < MRR_STOPS.length; i++) {
+      if (value < MRR_STOPS[i]) return MRR_STOPS[i];
+    }
+    return null;
+  }
+
+  function renderMrr() {
+    var value = clampMrr(data.mrr);
+    var pos = mrrValueToPos(value);
+
+    mrrValueEl.textContent = formatEuro(value);
+    mrrFill.style.width = pos + '%';
+    if (!isDraggingMrr) mrrSlider.value = Math.round((pos / 100) * SLIDER_MAX);
+    mrrSlider.setAttribute('aria-valuetext', formatEuro(value) + ' per month');
+
+    var next = nextMrrMilestone(value);
+    var pctOfGoal = (value / MRR_GOAL) * 100;
+    if (next === null) {
+      mrrMetaEl.innerHTML = '<strong>Goal reached.</strong> €100k/mo.';
+    } else {
+      mrrMetaEl.innerHTML =
+        '<strong>' + pctOfGoal.toFixed(pctOfGoal < 10 ? 1 : 0) + '%</strong> of €100k/mo · ' +
+        'next milestone ' + formatCompactEuro(next) +
+        ' (' + formatEuro(next - value) + ' to go)';
+    }
+
+    var marks = document.querySelectorAll('.mrr-tick, .mrr-label');
+    for (var i = 0; i < marks.length; i++) {
+      var markValue = parseFloat(marks[i].getAttribute('data-value'));
+      if (value >= markValue) {
+        marks[i].classList.add('hit');
+      } else {
+        marks[i].classList.remove('hit');
+      }
+    }
+  }
+
   function render() {
+    renderMrr();
     var count = countFilled();
     var total = count * UNIT;
     var remaining = Math.max(0, GOAL - total);
@@ -659,6 +945,49 @@
     });
   }
 
+  // A save can land while a drag is still in flight; queue one follow-up save
+  // instead of dropping the value the user let go on.
+  var mrrSavePending = false;
+
+  async function commitMrr() {
+    if (!isReady) return;
+    if (isSaving) {
+      mrrSavePending = true;
+      return;
+    }
+    await saveData();
+    while (mrrSavePending) {
+      mrrSavePending = false;
+      await saveData();
+    }
+  }
+
+  function readSliderValue() {
+    return mrrPosToValue((parseFloat(mrrSlider.value) / SLIDER_MAX) * 100, !isKeyboardMrr);
+  }
+
+  mrrSlider.addEventListener('pointerdown', function() { isKeyboardMrr = false; });
+  mrrSlider.addEventListener('keydown', function() { isKeyboardMrr = true; });
+
+  mrrSlider.addEventListener('input', function() {
+    isDraggingMrr = true;
+    data.mrr = readSliderValue();
+    renderMrr();
+    saveLocalBackup();
+  });
+
+  mrrSlider.addEventListener('change', function() {
+    isDraggingMrr = false;
+    data.mrr = readSliderValue();
+    renderMrr();
+    saveLocalBackup();
+    commitMrr();
+  });
+
+  mrrSlider.addEventListener('blur', function() {
+    isDraggingMrr = false;
+  });
+
   resetBtn.addEventListener('click', async function() {
     if (!confirm('Reset all progress? This cannot be undone.')) return;
     data = emptyData();
@@ -669,6 +998,7 @@
   });
 
   (async function init() {
+    buildMrrScale();
     buildGrid();
     await bootstrapFromCloud();
     isReady = true;

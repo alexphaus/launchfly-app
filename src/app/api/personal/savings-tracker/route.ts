@@ -11,6 +11,8 @@ const supabase = createClient(
 const SAVINGS_TOTAL = 50;
 const MRR_GOAL = 100000;
 
+const MRR_HISTORY_MAX = 180;
+
 const DEFAULT_DATA = {
   filled: new Array(SAVINGS_TOTAL).fill(false),
   fillDates: {},
@@ -18,7 +20,27 @@ const DEFAULT_DATA = {
   lastSaveDate: null,
   streak: 0,
   mrr: 0,
+  mrrPeak: 0,
+  mrrHistory: [] as { d: string; v: number }[],
+  mrrUnlocks: {},
 };
+
+function clampMrr(raw: unknown) {
+  return typeof raw === 'number' && Number.isFinite(raw)
+    ? Math.min(Math.max(raw, 0), MRR_GOAL)
+    : 0;
+}
+
+function normalizeHistory(raw: unknown) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (entry): entry is { d: string; v: unknown } =>
+        !!entry && typeof entry === 'object' && typeof (entry as { d?: unknown }).d === 'string'
+    )
+    .map((entry) => ({ d: entry.d, v: clampMrr(entry.v) }))
+    .slice(-MRR_HISTORY_MAX);
+}
 
 function dbErrorResponse(action: 'load' | 'initialize' | 'save', error: unknown) {
   const code = (error as { code?: string } | null)?.code;
@@ -68,10 +90,13 @@ function normalizeData(raw: unknown) {
         : {},
     lastSaveDate: typeof parsed.lastSaveDate === 'string' ? parsed.lastSaveDate : null,
     streak: typeof parsed.streak === 'number' ? parsed.streak : 0,
-    mrr:
-      typeof parsed.mrr === 'number' && Number.isFinite(parsed.mrr)
-        ? Math.min(Math.max(parsed.mrr, 0), MRR_GOAL)
-        : 0,
+    mrr: clampMrr(parsed.mrr),
+    mrrPeak: Math.max(clampMrr(parsed.mrrPeak), clampMrr(parsed.mrr)),
+    mrrHistory: normalizeHistory(parsed.mrrHistory),
+    mrrUnlocks:
+      parsed.mrrUnlocks && typeof parsed.mrrUnlocks === 'object' && !Array.isArray(parsed.mrrUnlocks)
+        ? (parsed.mrrUnlocks as Record<string, string>)
+        : {},
   };
 }
 

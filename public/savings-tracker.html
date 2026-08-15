@@ -44,214 +44,115 @@
     font-size: 16px;
     line-height: 1.6;
   }
-  h1 {
-    font-family: 'Outfit', sans-serif;
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    margin: 0 0 0.25rem;
-  }
-  .subtitle {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0 0 1.5rem;
-  }
 
-  .stat-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
     gap: 10px;
-    margin-bottom: 1.5rem;
+    margin: 0 0 0.75rem;
   }
-  .stat-card {
-    background: var(--bg-card);
-    border-radius: 10px;
-    padding: 12px 14px;
+  .section-head h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0;
   }
-  .stat-card .label {
+  .section-head .goal {
     font-size: 12px;
     font-family: 'DM Mono', monospace;
-    color: var(--text-secondary);
-    margin: 0 0 4px;
-  }
-  .stat-card .value {
-    font-family: 'Outfit', sans-serif;
-    font-size: 19px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    margin: 0;
-  }
-  .stat-card.warn .value { color: var(--amber-dark); }
-  .stat-card.danger .value { color: var(--red-dark); }
-  .stat-card.good .value { color: var(--green-dark); }
-
-  .progress-track {
-    height: 12px;
-    background: var(--bg-secondary);
-    border-radius: 7px;
-    overflow: hidden;
-    margin-bottom: 6px;
-    position: relative;
-  }
-  .progress-fill {
-    height: 100%;
-    width: 0%;
-    background: var(--green);
-    transition: width 0.2s ease;
-  }
-  .milestone-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-    padding: 0 1px;
-  }
-  .milestone {
-    font-size: 11px;
-    font-family: 'DM Mono', monospace;
     color: var(--text-tertiary);
-    position: relative;
   }
-  .milestone.hit {
-    color: var(--green-dark);
-    font-weight: 600;
-  }
-
-  .banner {
-    display: none;
-    background: var(--green-light);
-    color: var(--green-dark);
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 1.25rem;
-  }
-  .banner.show { display: block; }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(20, 1fr);
-    gap: 4px;
-    margin-bottom: 0.5rem;
-  }
-  .row-marker {
-    font-size: 10px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-tertiary);
-    text-align: right;
-    margin-bottom: 1.5rem;
-  }
-  .square {
-    aspect-ratio: 1;
-    padding: 0;
-    border-radius: 3px;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: var(--bg-secondary);
-    transition: background 0.1s ease, transform 0.08s ease;
-    position: relative;
-  }
-  .square:hover {
-    transform: scale(1.1);
-  }
-  .square.filled {
-    background: var(--green);
-    border-color: var(--green-dark);
-  }
-  .square.milestone-edge {
-    border-right: 2px solid var(--text-tertiary);
-  }
-  .square:disabled {
-    cursor: wait;
-    opacity: 0.7;
-  }
-  .square.milestone-emoji .emoji {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(7px, 1.8vw, 12px);
-    line-height: 1;
-    pointer-events: none;
-  }
-
-  .footer-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .hint {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0;
-  }
-  button {
-    font-size: 13px;
-    font-family: inherit;
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  button:hover {
-    background: var(--bg-secondary);
-  }
-  button:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
   .sync-status {
     font-size: 12px;
     font-family: 'DM Mono', monospace;
     color: var(--text-tertiary);
-    margin: 0 0 1rem;
+    margin: 0 0 1.25rem;
   }
   .sync-status.syncing { color: var(--amber-dark); }
   .sync-status.error { color: var(--red-dark); }
   .sync-status.saved { color: var(--green-dark); }
 
-  /* --- Monthly revenue goal --- */
+  /* ---------- Revenue: the engine ---------- */
   .mrr-panel {
     background: var(--bg-card);
-    border-radius: 14px;
-    padding: 18px 20px 14px;
-    margin-bottom: 2rem;
+    border-radius: 16px;
+    padding: 20px 22px 16px;
+    margin-bottom: 14px;
   }
-  .mrr-eyebrow {
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-secondary);
-    margin: 0 0 6px;
+  .mrr-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
   }
   .mrr-current {
     font-family: 'Outfit', sans-serif;
     font-weight: 900;
-    font-size: clamp(38px, 11vw, 60px);
+    font-size: clamp(40px, 12vw, 64px);
     line-height: 1;
-    letter-spacing: -0.02em;
-    margin: 0 0 6px;
+    letter-spacing: -0.025em;
+    margin: 0;
   }
   .mrr-current .mrr-per {
-    font-size: 0.32em;
+    font-size: 0.3em;
     font-weight: 600;
     color: var(--text-secondary);
     letter-spacing: 0;
     margin-left: 4px;
   }
+  .level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--green-light);
+    color: var(--green-dark);
+    border-radius: 999px;
+    padding: 5px 13px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+  .level-badge.none {
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+  }
+  .level-badge .lock { font-size: 11px; }
+
   .mrr-meta {
     font-size: 13px;
     color: var(--text-secondary);
-    margin: 0 0 22px;
+    margin: 8px 0 0;
   }
-  .mrr-meta strong {
-    color: var(--text-primary);
-    font-weight: 600;
+  .mrr-meta strong { color: var(--text-primary); font-weight: 700; }
+  .mrr-peak {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--amber-dark);
+    margin: 4px 0 0;
+    display: none;
+  }
+  .mrr-peak.show { display: block; }
+
+  /* Sparkline of every value ever logged */
+  .spark-wrap {
+    margin: 16px 0 4px;
+    display: none;
+  }
+  .spark-wrap.show { display: block; }
+  .spark-wrap svg { display: block; width: 100%; height: 46px; overflow: visible; }
+  .spark-caption {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-tertiary);
+    margin: 2px 0 0;
   }
 
   .mrr-track {
@@ -260,6 +161,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
+    margin-top: 22px;
   }
   .mrr-fill {
     position: absolute;
@@ -271,6 +173,17 @@
     border-radius: 8px 0 0 8px;
     transition: width 0.08s linear;
   }
+  .mrr-peak-mark {
+    position: absolute;
+    top: -5px;
+    width: 2px;
+    height: 24px;
+    background: var(--amber);
+    border-radius: 1px;
+    pointer-events: none;
+    display: none;
+  }
+  .mrr-peak-mark.show { display: block; }
   .mrr-tick {
     position: absolute;
     top: -4px;
@@ -324,7 +237,7 @@
 
   .mrr-labels {
     position: relative;
-    height: 30px;
+    height: 34px;
     margin-top: 12px;
   }
   .mrr-label {
@@ -335,62 +248,271 @@
     color: var(--text-tertiary);
     white-space: nowrap;
     transform: translateX(-50%);
+    text-align: center;
   }
-  .mrr-label.hit {
-    color: var(--green-dark);
-    font-weight: 600;
+  .mrr-label .name {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.01em;
+    margin-top: 1px;
+    opacity: 0.85;
   }
+  .mrr-label.hit { color: var(--green-dark); font-weight: 600; }
   .mrr-label.last { transform: translateX(-100%); }
 
-  .section-divider {
-    border: 0;
-    border-top: 1px solid var(--border);
-    margin: 0 0 1.75rem;
+  /* ---------- The link between the two goals ---------- */
+  .bridge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 11px 16px;
+    margin-bottom: 2rem;
+  }
+  .bridge .arrow {
+    font-size: 15px;
+    color: var(--green);
+    line-height: 1;
+  }
+  .bridge strong { color: var(--text-primary); font-weight: 700; }
+  .bridge.ahead { border-color: var(--green); background: var(--green-light); color: var(--green-dark); }
+  .bridge.behind { border-color: var(--amber); background: var(--amber-light); color: var(--amber-dark); }
+
+  /* ---------- Savings: the outcome ---------- */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-secondary);
+    margin: 0 0 4px;
+  }
+  .stat-card .value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0;
+  }
+  .stat-card.warn .value { color: var(--amber-dark); }
+  .stat-card.danger .value { color: var(--red-dark); }
+  .stat-card.good .value { color: var(--green-dark); }
+
+  .banner {
+    display: none;
+    background: var(--green-light);
+    color: var(--green-dark);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+  }
+  .banner.show { display: block; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 4px;
+    margin-bottom: 0.5rem;
+  }
+  .row-marker {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-tertiary);
+    text-align: right;
+    margin-bottom: 1.5rem;
+  }
+  .square {
+    aspect-ratio: 1;
+    padding: 0;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    transition: background 0.1s ease, transform 0.08s ease;
+    position: relative;
+  }
+  .square:hover { transform: scale(1.1); }
+  .square.filled {
+    background: var(--green);
+    border-color: var(--green-dark);
+  }
+  .square.milestone-edge { border-right: 2px solid var(--text-tertiary); }
+  .square:disabled { cursor: wait; opacity: 0.7; }
+  .square.milestone-emoji .emoji {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(7px, 1.8vw, 12px);
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .hint { font-size: 13px; color: var(--text-secondary); margin: 0; }
+  button {
+    font-size: 13px;
+    font-family: inherit;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  button:hover { background: var(--bg-secondary); }
+  button:disabled { opacity: 0.6; cursor: wait; }
+
+  /* ---------- Level-up celebration ---------- */
+  .levelup {
+    position: fixed;
+    left: 50%;
+    top: 22%;
+    transform: translate(-50%, -12px);
+    background: var(--green-dark);
+    color: #fff;
+    border-radius: 16px;
+    padding: 18px 28px;
+    text-align: center;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 60;
+    max-width: 88vw;
+  }
+  .levelup.show { opacity: 1; transform: translate(-50%, 0); }
+  .levelup .kicker {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+  .levelup .name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 27px;
+    font-weight: 800;
+    line-height: 1.15;
+    margin: 3px 0 2px;
+  }
+  .levelup .amount { font-size: 13px; opacity: 0.85; }
+
+  .confetti-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 55;
+  }
+  .confetti {
+    position: absolute;
+    width: 9px;
+    height: 14px;
+    top: -20px;
+    opacity: 0.95;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    to { transform: translateY(105vh) rotate(720deg); opacity: 0.1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .confetti { display: none; }
+    .levelup { transition: none; }
   }
 
   @media (max-width: 480px) {
+    body { padding: 1.25rem 1rem 3rem; }
     .grid { grid-template-columns: repeat(10, 1fr); }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .mrr-panel { padding: 16px 14px 12px; }
     /* Eight labels will not fit on one line at phone width, so drop every
-       other one to a second row instead of hiding milestones. */
-    .mrr-labels { height: 40px; }
+       other one to a second row. Level names are dropped entirely here - the
+       current and next level are already named in the hero. */
+    .mrr-labels { height: 42px; }
     .mrr-label { font-size: 10px; }
-    .mrr-label:nth-child(even) { top: 17px; }
+    .mrr-label .name { display: none; }
+    .mrr-label:nth-child(even) { top: 18px; }
+    .mrr-hero { align-items: flex-start; flex-direction: column-reverse; gap: 6px; }
   }
 </style>
 </head>
 <body>
 
-<section class="mrr-panel">
-  <p class="mrr-eyebrow">Monthly revenue &middot; goal &euro;100,000/mo</p>
-  <p class="mrr-current"><span id="mrr-value">&euro;0</span><span class="mrr-per">/mo</span></p>
-  <p class="mrr-meta" id="mrr-meta">Drag the slider to where you are today</p>
-
-  <div class="mrr-track">
-    <div class="mrr-fill" id="mrr-fill"></div>
-    <div id="mrr-ticks"></div>
-    <input type="range" class="mrr-slider" id="mrr-slider"
-           min="0" max="1000" step="1" value="0"
-           aria-label="Current monthly revenue"
-           aria-valuetext="&euro;0 per month">
+<section>
+  <div class="section-head">
+    <h2>The engine</h2>
+    <span class="goal">goal &euro;100,000/mo</span>
   </div>
-  <div class="mrr-labels" id="mrr-labels"></div>
+
+  <div class="mrr-panel">
+    <div class="mrr-hero">
+      <p class="mrr-current"><span id="mrr-value">&euro;0</span><span class="mrr-per">/mo</span></p>
+      <span class="level-badge none" id="level-badge">Not started</span>
+    </div>
+    <p class="mrr-meta" id="mrr-meta">Drag the slider to where you are today</p>
+    <p class="mrr-peak" id="mrr-peak"></p>
+
+    <div class="spark-wrap" id="spark-wrap">
+      <svg id="spark" viewBox="0 0 300 46" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <p class="spark-caption" id="spark-caption"></p>
+    </div>
+
+    <div class="mrr-track">
+      <div class="mrr-fill" id="mrr-fill"></div>
+      <div class="mrr-peak-mark" id="mrr-peak-mark" title="Your best month"></div>
+      <div id="mrr-ticks"></div>
+      <input type="range" class="mrr-slider" id="mrr-slider"
+             min="0" max="1000" step="1" value="0"
+             aria-label="Current monthly revenue"
+             aria-valuetext="&euro;0 per month">
+    </div>
+    <div class="mrr-labels" id="mrr-labels"></div>
+  </div>
 </section>
 
-<hr class="section-divider">
+<div class="bridge" id="bridge">
+  <span class="arrow">&#8595;</span>
+  <span id="bridge-text">Fill a few squares to see how fast you are banking cash</span>
+</div>
 
-<h1>Savings tracker &mdash; &euro;25,000 goal</h1>
-  <p class="subtitle" id="deadline-line">Deadline: 30 Dec 2026</p>
+<section>
+  <div class="section-head">
+    <h2>Banked</h2>
+    <span class="goal" id="deadline-line">&euro;25,000 by 30 Dec 2026</span>
+  </div>
   <p class="sync-status" id="sync-status">Loading...</p>
 
   <div class="stat-grid" id="stat-grid">
     <div class="stat-card">
-      <p class="label">Saved</p>
+      <p class="label">Banked</p>
       <p class="value" id="saved-amount">&euro;0</p>
     </div>
     <div class="stat-card">
-      <p class="label">Remaining</p>
+      <p class="label">Left</p>
       <p class="value" id="remaining-amount">&euro;25,000</p>
     </div>
     <div class="stat-card" id="pace-card">
@@ -405,29 +527,25 @@
 
   <div class="banner" id="milestone-banner"></div>
 
-  <div class="progress-track">
-    <div class="progress-fill" id="progress-bar"></div>
-  </div>
-  <div class="milestone-row">
-    <span class="milestone" id="m-0">0%</span>
-    <span class="milestone" id="m-25">25%</span>
-    <span class="milestone" id="m-50">50%</span>
-    <span class="milestone" id="m-75">75%</span>
-    <span class="milestone" id="m-100">100%</span>
-  </div>
-
   <div class="grid" id="grid"></div>
   <p class="row-marker" id="square-count">0 / 50 squares &middot; &euro;500 each</p>
 
-<div class="footer-row">
-  <p class="hint">Click a square each time you save &euro;500 &middot; syncs across your devices</p>
-  <button id="reset-btn">Reset</button>
+  <div class="footer-row">
+    <p class="hint">Click a square each time you save &euro;500 &middot; syncs across your devices</p>
+    <button id="reset-btn">Reset</button>
+  </div>
+</section>
+
+<div class="levelup" id="levelup" role="status" aria-live="polite">
+  <p class="kicker">Level unlocked</p>
+  <p class="name" id="levelup-name"></p>
+  <p class="amount" id="levelup-amount"></p>
 </div>
 
 <script>
   var TOTAL = 50;
   var UNIT = 500;
-  var MILESTONE_EMOJIS = { 14: '\uD83D\uDEDF', 49: '\u26F3\uFE0F' };
+  var MILESTONE_EMOJIS = { 14: '🛟', 49: '⛳️' };
   var GOAL = 25000;
   var LEGACY_STORAGE_KEY = 'savings-tracker-25k-v2';
   var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
@@ -435,25 +553,31 @@
   var DEADLINE = new Date('2026-12-30T00:00:00');
   var POLL_MS = 30 * 1000;
 
-  // Monthly revenue goal. Milestones are spaced evenly along the track rather
-  // than linearly by value - on a linear scale everything below 15k would be
-  // squashed into the first 15% and the early milestones would be unreadable.
+  // Monthly revenue goal. Each threshold is a named level so the number line
+  // reads as a journey with chapters rather than eight abstract amounts.
+  // Rename freely - the names are the only thing here that is taste.
   var MRR_GOAL = 100000;
-  var MRR_STOPS = [0, 500, 1500, 3000, 5000, 10000, 15000, 30000, 100000];
+  var MRR_LEVELS = [
+    { v: 500,    name: 'First sales' },
+    { v: 1500,   name: 'Ramen' },
+    { v: 3000,   name: 'Rent covered' },
+    { v: 5000,   name: 'Full-time' },
+    { v: 10000,  name: 'Hiring' },
+    { v: 15000,  name: 'Small team' },
+    { v: 30000,  name: 'Scaling' },
+    { v: 100000, name: 'The goal' }
+  ];
+  // Milestones are spaced evenly along the track rather than linearly by
+  // value - on a linear scale everything below 15k would be squashed into the
+  // first 15% and the early levels would be unreadable.
+  var MRR_STOPS = [0].concat(MRR_LEVELS.map(function(l) { return l.v; }));
   var MRR_SEGMENTS = MRR_STOPS.length - 1;
   var MRR_SEG_WIDTH = 100 / MRR_SEGMENTS;
   var SLIDER_MAX = 1000;
   var SNAP_PCT = 1.2;
+  var HISTORY_MAX = 180;
 
   var grid = document.getElementById('grid');
-  var mrrSlider = document.getElementById('mrr-slider');
-  var mrrValueEl = document.getElementById('mrr-value');
-  var mrrMetaEl = document.getElementById('mrr-meta');
-  var mrrFill = document.getElementById('mrr-fill');
-  var mrrTicks = document.getElementById('mrr-ticks');
-  var mrrLabels = document.getElementById('mrr-labels');
-  var isDraggingMrr = false;
-  var isKeyboardMrr = false;
   var savedAmountEl = document.getElementById('saved-amount');
   var remainingAmountEl = document.getElementById('remaining-amount');
   var paceAmountEl = document.getElementById('pace-amount');
@@ -461,16 +585,35 @@
   var streakAmountEl = document.getElementById('streak-amount');
   var streakCard = document.getElementById('streak-card');
   var squareCountEl = document.getElementById('square-count');
-  var progressBar = document.getElementById('progress-bar');
   var resetBtn = document.getElementById('reset-btn');
   var banner = document.getElementById('milestone-banner');
   var syncStatusEl = document.getElementById('sync-status');
+
+  var mrrSlider = document.getElementById('mrr-slider');
+  var mrrValueEl = document.getElementById('mrr-value');
+  var mrrMetaEl = document.getElementById('mrr-meta');
+  var mrrPeakEl = document.getElementById('mrr-peak');
+  var mrrPeakMark = document.getElementById('mrr-peak-mark');
+  var mrrFill = document.getElementById('mrr-fill');
+  var mrrTicks = document.getElementById('mrr-ticks');
+  var mrrLabels = document.getElementById('mrr-labels');
+  var levelBadge = document.getElementById('level-badge');
+  var sparkWrap = document.getElementById('spark-wrap');
+  var sparkSvg = document.getElementById('spark');
+  var sparkCaption = document.getElementById('spark-caption');
+  var bridgeEl = document.getElementById('bridge');
+  var bridgeText = document.getElementById('bridge-text');
+  var levelupEl = document.getElementById('levelup');
+  var levelupName = document.getElementById('levelup-name');
+  var levelupAmount = document.getElementById('levelup-amount');
 
   var data = emptyData();
   var lastSyncedAt = null;
   var isSaving = false;
   var isReady = false;
   var pollTimer = null;
+  var isDraggingMrr = false;
+  var isKeyboardMrr = false;
 
   function emptyData() {
     return {
@@ -479,7 +622,10 @@
       milestonesShown: {},
       lastSaveDate: null,
       streak: 0,
-      mrr: 0
+      mrr: 0,
+      mrrPeak: 0,
+      mrrHistory: [],
+      mrrUnlocks: {}
     };
   }
 
@@ -496,6 +642,22 @@
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   }
 
+  function clampMrr(value) {
+    var n = typeof value === 'number' ? value : parseFloat(value);
+    if (!isFinite(n) || n < 0) return 0;
+    return Math.min(n, MRR_GOAL);
+  }
+
+  function normalizeHistory(raw) {
+    if (!Array.isArray(raw)) return [];
+    var out = [];
+    for (var i = 0; i < raw.length; i++) {
+      var e = raw[i];
+      if (e && typeof e.d === 'string') out.push({ d: e.d, v: clampMrr(e.v) });
+    }
+    return out.slice(-HISTORY_MAX);
+  }
+
   function normalizeData(parsed) {
     if (!parsed || !Array.isArray(parsed.filled) || parsed.filled.length !== TOTAL) {
       return emptyData();
@@ -506,14 +668,11 @@
       milestonesShown: parsed.milestonesShown || {},
       lastSaveDate: parsed.lastSaveDate || null,
       streak: parsed.streak || 0,
-      mrr: clampMrr(parsed.mrr)
+      mrr: clampMrr(parsed.mrr),
+      mrrPeak: Math.max(clampMrr(parsed.mrrPeak), clampMrr(parsed.mrr)),
+      mrrHistory: normalizeHistory(parsed.mrrHistory),
+      mrrUnlocks: parsed.mrrUnlocks && typeof parsed.mrrUnlocks === 'object' ? parsed.mrrUnlocks : {}
     };
-  }
-
-  function clampMrr(value) {
-    var n = typeof value === 'number' ? value : parseFloat(value);
-    if (!isFinite(n) || n < 0) return 0;
-    return Math.min(n, MRR_GOAL);
   }
 
   function loadLegacyLocalData() {
@@ -691,7 +850,15 @@
   }
 
   function formatEuro(n) {
-    return '\u20AC' + Math.round(n).toLocaleString('en-IE');
+    return '€' + Math.round(n).toLocaleString('en-IE');
+  }
+
+  function formatCompactEuro(n) {
+    if (n >= 1000) {
+      var k = n / 1000;
+      return '€' + (k % 1 === 0 ? k : k.toFixed(1)) + 'k';
+    }
+    return '€' + n;
   }
 
   function countFilled() {
@@ -731,10 +898,10 @@
   function checkMilestones(count, total) {
     var pct = (count / TOTAL) * 100;
     var checks = [
-      { key: '25', threshold: 25, text: 'Quarter of the way there \u2014 ' + formatEuro(total) + ' saved' },
+      { key: '25', threshold: 25, text: 'Quarter of the way there — ' + formatEuro(total) + ' banked' },
       { key: '50', threshold: 50, text: 'Halfway to ' + formatEuro(GOAL) + '. Keep going.' },
-      { key: '75', threshold: 75, text: 'Three quarters done \u2014 ' + formatEuro(GOAL - total) + ' left' },
-      { key: '100', threshold: 100, text: 'Goal reached. ' + formatEuro(GOAL) + ' saved.' }
+      { key: '75', threshold: 75, text: 'Three quarters done — ' + formatEuro(GOAL - total) + ' left' },
+      { key: '100', threshold: 100, text: 'Goal reached. ' + formatEuro(GOAL) + ' banked.' }
     ];
     checks.forEach(function(c) {
       if (pct >= c.threshold && !data.milestonesShown[c.key]) {
@@ -747,13 +914,7 @@
     });
   }
 
-  function formatCompactEuro(n) {
-    if (n >= 1000) {
-      var k = n / 1000;
-      return '€' + (k % 1 === 0 ? k : k.toFixed(1)) + 'k';
-    }
-    return '€' + n;
-  }
+  /* ---------- revenue scale ---------- */
 
   function roundMrr(v) {
     if (v < 1000) return Math.round(v / 10) * 10;
@@ -762,10 +923,10 @@
     return Math.round(v / 500) * 500;
   }
 
-  // Track position (0-100) -> euros, interpolating inside the milestone band.
+  // Track position (0-100) -> euros, interpolating inside the level band.
   // Snapping is for dragging only: with the keyboard the arrow keys move in
   // steps smaller than the snap zone, so snapping would pin the value to a
-  // milestone and make the arrows look broken.
+  // level and make the arrows look broken.
   function mrrPosToValue(pos, allowSnap) {
     if (allowSnap) {
       for (var i = 0; i < MRR_STOPS.length; i++) {
@@ -790,33 +951,141 @@
     return 100;
   }
 
+  function currentLevel(value) {
+    var found = null;
+    for (var i = 0; i < MRR_LEVELS.length; i++) {
+      if (value >= MRR_LEVELS[i].v) found = MRR_LEVELS[i];
+    }
+    return found;
+  }
+
+  function nextLevel(value) {
+    for (var i = 0; i < MRR_LEVELS.length; i++) {
+      if (value < MRR_LEVELS[i].v) return MRR_LEVELS[i];
+    }
+    return null;
+  }
+
   function buildMrrScale() {
     mrrTicks.innerHTML = '';
     mrrLabels.innerHTML = '';
-    for (var i = 1; i < MRR_STOPS.length; i++) {
-      var pos = i * MRR_SEG_WIDTH;
-      var isLast = i === MRR_STOPS.length - 1;
+    for (var i = 0; i < MRR_LEVELS.length; i++) {
+      var level = MRR_LEVELS[i];
+      var pos = (i + 1) * MRR_SEG_WIDTH;
+      var isLast = i === MRR_LEVELS.length - 1;
 
       var tick = document.createElement('div');
       tick.className = 'mrr-tick' + (isLast ? ' goal' : '');
       tick.style.left = pos + '%';
-      tick.setAttribute('data-value', MRR_STOPS[i]);
+      tick.setAttribute('data-value', level.v);
       mrrTicks.appendChild(tick);
 
       var label = document.createElement('span');
       label.className = 'mrr-label' + (isLast ? ' last' : '');
       label.style.left = pos + '%';
-      label.textContent = formatCompactEuro(MRR_STOPS[i]);
-      label.setAttribute('data-value', MRR_STOPS[i]);
+      label.setAttribute('data-value', level.v);
+      label.appendChild(document.createTextNode(formatCompactEuro(level.v)));
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = level.name;
+      label.appendChild(name);
       mrrLabels.appendChild(label);
     }
   }
 
-  function nextMrrMilestone(value) {
-    for (var i = 1; i < MRR_STOPS.length; i++) {
-      if (value < MRR_STOPS[i]) return MRR_STOPS[i];
+  /* ---------- celebration ---------- */
+
+  function confettiBurst() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var layer = document.createElement('div');
+    layer.className = 'confetti-layer';
+    var colors = ['#1d9e75', '#ef9f27', '#e24b4a', '#085041', '#9a8cf5'];
+    for (var i = 0; i < 34; i++) {
+      var bit = document.createElement('div');
+      bit.className = 'confetti';
+      bit.style.left = (Math.random() * 100) + '%';
+      bit.style.background = colors[i % colors.length];
+      bit.style.animationDuration = (1.6 + Math.random() * 1.3) + 's';
+      bit.style.animationDelay = (Math.random() * 0.35) + 's';
+      layer.appendChild(bit);
     }
-    return null;
+    document.body.appendChild(layer);
+    setTimeout(function() { layer.remove(); }, 3600);
+  }
+
+  function showLevelUp(level) {
+    levelupName.textContent = level.name;
+    levelupAmount.textContent = formatEuro(level.v) + '/mo';
+    levelupEl.classList.add('show');
+    confettiBurst();
+    setTimeout(function() { levelupEl.classList.remove('show'); }, 3800);
+  }
+
+  // Levels are a ratchet: crossing one records the date and never un-records
+  // it, so a bad month costs you the badge but not the history.
+  function checkLevelUps(value) {
+    var newest = null;
+    for (var i = 0; i < MRR_LEVELS.length; i++) {
+      var level = MRR_LEVELS[i];
+      if (value >= level.v && !data.mrrUnlocks[level.v]) {
+        data.mrrUnlocks[level.v] = todayStr();
+        newest = level;
+      }
+    }
+    if (newest && isReady) showLevelUp(newest);
+    return newest;
+  }
+
+  function recordHistory(value) {
+    var today = todayStr();
+    var last = data.mrrHistory[data.mrrHistory.length - 1];
+    if (last && last.d === today) {
+      last.v = value;
+    } else {
+      data.mrrHistory.push({ d: today, v: value });
+    }
+    if (data.mrrHistory.length > HISTORY_MAX) {
+      data.mrrHistory = data.mrrHistory.slice(-HISTORY_MAX);
+    }
+  }
+
+  function renderSparkline() {
+    var pts = data.mrrHistory;
+    if (pts.length < 2) {
+      sparkWrap.classList.remove('show');
+      return;
+    }
+    sparkWrap.classList.add('show');
+
+    var W = 300, H = 46, pad = 3;
+    var step = W / (pts.length - 1);
+    var coords = pts.map(function(p, i) {
+      // Same piecewise scale as the track, so early growth reads as real
+      // movement instead of a flat line hugging the axis.
+      var y = H - pad - (mrrValueToPos(p.v) / 100) * (H - pad * 2);
+      return { x: i * step, y: y };
+    });
+
+    var line = coords.map(function(c, i) {
+      return (i === 0 ? 'M' : 'L') + c.x.toFixed(1) + ' ' + c.y.toFixed(1);
+    }).join(' ');
+    var area = line + ' L' + W + ' ' + H + ' L0 ' + H + ' Z';
+    var lastPt = coords[coords.length - 1];
+
+    sparkSvg.innerHTML =
+      '<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#1d9e75" stop-opacity="0.28"/>' +
+      '<stop offset="100%" stop-color="#1d9e75" stop-opacity="0"/>' +
+      '</linearGradient></defs>' +
+      '<path d="' + area + '" fill="url(#sg)"/>' +
+      '<path d="' + line + '" fill="none" stroke="#1d9e75" stroke-width="2" ' +
+      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+      '<circle cx="' + lastPt.x.toFixed(1) + '" cy="' + lastPt.y.toFixed(1) + '" r="3" fill="#085041"/>';
+
+    var first = pts[0], last = pts[pts.length - 1];
+    var delta = last.v - first.v;
+    var deltaText = delta > 0 ? '+' + formatEuro(delta) : (delta < 0 ? '-' + formatEuro(-delta) : 'flat');
+    sparkCaption.textContent = pts.length + ' updates · ' + deltaText + ' since ' + first.d;
   }
 
   function renderMrr() {
@@ -828,15 +1097,37 @@
     if (!isDraggingMrr) mrrSlider.value = Math.round((pos / 100) * SLIDER_MAX);
     mrrSlider.setAttribute('aria-valuetext', formatEuro(value) + ' per month');
 
-    var next = nextMrrMilestone(value);
+    var level = currentLevel(value);
+    if (level) {
+      levelBadge.className = 'level-badge';
+      levelBadge.textContent = level.name;
+      var unlockedOn = data.mrrUnlocks[level.v];
+      levelBadge.title = unlockedOn ? 'Unlocked ' + unlockedOn : '';
+    } else {
+      levelBadge.className = 'level-badge none';
+      levelBadge.textContent = 'Not started';
+      levelBadge.title = '';
+    }
+
+    var next = nextLevel(value);
     var pctOfGoal = (value / MRR_GOAL) * 100;
-    if (next === null) {
+    if (!next) {
       mrrMetaEl.innerHTML = '<strong>Goal reached.</strong> €100k/mo.';
     } else {
       mrrMetaEl.innerHTML =
-        '<strong>' + pctOfGoal.toFixed(pctOfGoal < 10 ? 1 : 0) + '%</strong> of €100k/mo · ' +
-        'next milestone ' + formatCompactEuro(next) +
-        ' (' + formatEuro(next - value) + ' to go)';
+        '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name +
+        ' · ' + pctOfGoal.toFixed(pctOfGoal < 10 ? 1 : 0) + '% of €100k';
+    }
+
+    // A dip should not erase the win: the peak stays marked on the track.
+    if (data.mrrPeak > value) {
+      mrrPeakEl.classList.add('show');
+      mrrPeakEl.textContent = 'Best month: ' + formatEuro(data.mrrPeak);
+      mrrPeakMark.classList.add('show');
+      mrrPeakMark.style.left = mrrValueToPos(data.mrrPeak) + '%';
+    } else {
+      mrrPeakEl.classList.remove('show');
+      mrrPeakMark.classList.remove('show');
     }
 
     var marks = document.querySelectorAll('.mrr-tick, .mrr-label');
@@ -848,10 +1139,74 @@
         marks[i].classList.remove('hit');
       }
     }
+
+    renderSparkline();
+  }
+
+  /* ---------- the bridge: revenue -> cash ---------- */
+
+  // Measured from the squares actually filled, not from a guessed savings
+  // rate, so the projection reflects what is really happening.
+  function savingsVelocity() {
+    var dates = [];
+    for (var key in data.fillDates) {
+      if (data.fillDates.hasOwnProperty(key) && data.filled[key]) dates.push(data.fillDates[key]);
+    }
+    if (dates.length < 2) return null;
+    dates.sort();
+
+    var first = new Date(dates[0] + 'T00:00:00');
+    var last = new Date(dates[dates.length - 1] + 'T00:00:00');
+    var spanDays = (last - first) / 86400000;
+    if (spanDays < 1) return null;
+
+    var perDay = (dates.length - 1) / spanDays;
+    if (perDay <= 0) return null;
+
+    return {
+      perMonth: perDay * UNIT * 30.44,
+      daysToGoal: (TOTAL - countFilled()) / perDay
+    };
+  }
+
+  function renderBridge() {
+    var vel = savingsVelocity();
+    bridgeEl.className = 'bridge';
+
+    if (!vel) {
+      bridgeText.textContent = 'Fill a few squares to see how fast you are banking cash';
+      return;
+    }
+
+    if (countFilled() >= TOTAL) {
+      bridgeEl.className = 'bridge ahead';
+      bridgeText.innerHTML = '<strong>€25,000 banked.</strong> Goal complete.';
+      return;
+    }
+
+    var eta = new Date();
+    eta.setDate(eta.getDate() + Math.ceil(vel.daysToGoal));
+    var etaText = eta.toLocaleDateString('en-IE', { month: 'short', year: 'numeric' });
+
+    var diffDays = Math.round((DEADLINE - eta) / 86400000);
+    var verdict;
+    if (diffDays >= 0) {
+      bridgeEl.className = 'bridge ahead';
+      verdict = Math.round(diffDays / 30.44) + ' months ahead of deadline';
+    } else {
+      bridgeEl.className = 'bridge behind';
+      verdict = Math.round(-diffDays / 30.44) + ' months past deadline';
+    }
+
+    bridgeText.innerHTML =
+      'Banking <strong>' + formatEuro(vel.perMonth) + '/mo</strong> → ' +
+      '€25k by <strong>' + etaText + '</strong> · ' + verdict;
   }
 
   function render() {
     renderMrr();
+    renderBridge();
+
     var count = countFilled();
     var total = count * UNIT;
     var remaining = Math.max(0, GOAL - total);
@@ -859,7 +1214,7 @@
 
     savedAmountEl.textContent = formatEuro(total);
     remainingAmountEl.textContent = formatEuro(remaining);
-    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares \u00b7 \u20ac500 each';
+    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares · €500 each';
 
     if (days > 0 && remaining > 0) {
       var pace = remaining / days;
@@ -875,18 +1230,6 @@
 
     streakAmountEl.textContent = data.streak + (data.streak === 1 ? ' day' : ' days');
     streakCard.className = 'stat-card' + (data.streak >= 3 ? ' good' : '');
-
-    var pct = Math.min(100, (total / GOAL) * 100);
-    progressBar.style.width = pct.toFixed(1) + '%';
-
-    ['0', '25', '50', '75', '100'].forEach(function(m) {
-      var el = document.getElementById('m-' + m);
-      if (pct >= parseInt(m)) {
-        el.classList.add('hit');
-      } else {
-        el.classList.remove('hit');
-      }
-    });
 
     checkMilestones(count, total);
   }
@@ -945,6 +1288,8 @@
     });
   }
 
+  /* ---------- revenue slider ---------- */
+
   // A save can land while a drag is still in flight; queue one follow-up save
   // instead of dropping the value the user let go on.
   var mrrSavePending = false;
@@ -973,13 +1318,15 @@
     isDraggingMrr = true;
     data.mrr = readSliderValue();
     renderMrr();
-    saveLocalBackup();
   });
 
   mrrSlider.addEventListener('change', function() {
     isDraggingMrr = false;
     data.mrr = readSliderValue();
-    renderMrr();
+    data.mrrPeak = Math.max(data.mrrPeak || 0, data.mrr);
+    recordHistory(data.mrr);
+    checkLevelUps(data.mrr);
+    render();
     saveLocalBackup();
     commitMrr();
   });
@@ -1001,6 +1348,10 @@
     buildMrrScale();
     buildGrid();
     await bootstrapFromCloud();
+    // Backfill unlocks for a value that predates level tracking, without
+    // firing a celebration for history the user never saw happen.
+    checkLevelUps(data.mrr);
+    render();
     isReady = true;
     startPolling();
   })();

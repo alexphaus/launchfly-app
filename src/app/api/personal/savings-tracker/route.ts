@@ -25,7 +25,29 @@ const DEFAULT_DATA = {
   mrrHistory: [] as { d: string; v: number }[],
   mrrUnlocks: {},
   mrrUnit: 'day',
+  actions: [] as { id: string; text: string; value: string | null; done: boolean }[],
+  actionsSetAt: null as string | null,
 };
+
+const MAX_ACTIONS = 8;
+
+function normalizeActions(raw: unknown) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (entry): entry is { text: string; id?: unknown; value?: unknown; done?: unknown } =>
+        !!entry &&
+        typeof entry === 'object' &&
+        typeof (entry as { text?: unknown }).text === 'string'
+    )
+    .slice(0, MAX_ACTIONS)
+    .map((entry, index) => ({
+      id: typeof entry.id === 'string' ? entry.id : `a${index + 1}`,
+      text: entry.text.slice(0, 200),
+      value: typeof entry.value === 'string' ? entry.value.slice(0, 40) : null,
+      done: entry.done === true,
+    }));
+}
 
 function clampMrr(raw: unknown) {
   return typeof raw === 'number' && Number.isFinite(raw)
@@ -102,6 +124,8 @@ function normalizeData(raw: unknown) {
     // Passed through as-is (not defaulted to 'day'): the client uses its absence
     // to detect revenue saved under the old monthly scale and reset it once.
     mrrUnit: typeof parsed.mrrUnit === 'string' ? parsed.mrrUnit : null,
+    actions: normalizeActions(parsed.actions),
+    actionsSetAt: typeof parsed.actionsSetAt === 'string' ? parsed.actionsSetAt : null,
   };
 }
 

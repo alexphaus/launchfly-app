@@ -9,7 +9,8 @@ const supabase = createClient(
 );
 
 const SAVINGS_TOTAL = 50;
-const MRR_GOAL = 100000;
+// Revenue is tracked per day: €100k/mo / 30.44 ≈ €3,286, rounded to €3,300.
+const MRR_GOAL = 3300;
 
 const MRR_HISTORY_MAX = 180;
 
@@ -23,6 +24,7 @@ const DEFAULT_DATA = {
   mrrPeak: 0,
   mrrHistory: [] as { d: string; v: number }[],
   mrrUnlocks: {},
+  mrrUnit: 'day',
 };
 
 function clampMrr(raw: unknown) {
@@ -97,6 +99,9 @@ function normalizeData(raw: unknown) {
       parsed.mrrUnlocks && typeof parsed.mrrUnlocks === 'object' && !Array.isArray(parsed.mrrUnlocks)
         ? (parsed.mrrUnlocks as Record<string, string>)
         : {},
+    // Passed through as-is (not defaulted to 'day'): the client uses its absence
+    // to detect revenue saved under the old monthly scale and reset it once.
+    mrrUnit: typeof parsed.mrrUnit === 'string' ? parsed.mrrUnit : null,
   };
 }
 

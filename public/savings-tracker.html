@@ -182,6 +182,8 @@
     border-radius: 1px;
     pointer-events: none;
     display: none;
+    /* Matches the tick offset so a peak at 100% sits on the track, not past it. */
+    transform: translateX(-1px);
   }
   .mrr-peak-mark.show { display: block; }
   .mrr-tick {
@@ -843,6 +845,12 @@
     for (var i = 0; i < squares.length; i++) {
       squares[i].disabled = !enabled;
     }
+    // Action rows are buttons too - without this they stay lit during a save
+    // while their handler quietly drops the tap.
+    var rows = actionsListEl.querySelectorAll('.action-row');
+    for (var j = 0; j < rows.length; j++) {
+      rows[j].disabled = !enabled;
+    }
   }
 
   function apiFetch(method, body) {
@@ -883,6 +891,8 @@
     if (fromPoll && isSaving) return false;
     if (fromPoll && payload.updated_at === lastSyncedAt) return false;
 
+    var previousMrr = data ? clampMrr(data.mrr) : 0;
+
     data = normalizeData(payload.data);
     lastSyncedAt = payload.updated_at || null;
     saveLocalBackup();
@@ -891,9 +901,23 @@
     render();
 
     if (fromPoll) {
+      // An agent moving the number should still feel like crossing a level.
+      // Detected by comparing values rather than by writing to mrrUnlocks:
+      // this payload replaces `data` wholesale, so a local edit here would be
+      // lost on the next poll and re-fire the celebration every 30 seconds.
+      celebrateCrossing(previousMrr, clampMrr(data.mrr));
       setSyncStatus('saved', 'Updated from another device');
     }
     return true;
+  }
+
+  function celebrateCrossing(from, to) {
+    if (!isReady || to <= from) return;
+    var crossed = null;
+    for (var i = 0; i < MRR_LEVELS.length; i++) {
+      if (from < MRR_LEVELS[i].v && to >= MRR_LEVELS[i].v) crossed = MRR_LEVELS[i];
+    }
+    if (crossed) showLevelUp(crossed);
   }
 
   async function fetchRemote(fromPoll) {
@@ -1361,7 +1385,8 @@
       var row = document.createElement('button');
       row.type = 'button';
       row.className = 'action-row' + (action.done ? ' done' : '');
-      row.setAttribute('aria-pressed', action.done ? 'true' : 'false');
+      row.setAttribute('role', 'checkbox');
+      row.setAttribute('aria-checked', action.done ? 'true' : 'false');
 
       var box = document.createElement('span');
       box.className = 'action-box';
@@ -1384,7 +1409,11 @@
 
       row.addEventListener('click', function() {
         if (!isReady || isSaving) return;
-        data.actions[index].done = !data.actions[index].done;
+        // A poll can swap the list out from under a row rendered a moment ago,
+        // so match on identity rather than trusting the captured index.
+        var target = (data.actions || [])[index];
+        if (!target || target.text !== action.text) return;
+        target.done = !target.done;
         saveLocalBackup();
         renderActions();
         saveData();
@@ -1398,10 +1427,10 @@
     todayCountEl.className = 'today-count' + (doneCount === actions.length ? ' all-done' : '');
 
     // Say so rather than silently clearing them, so a list is never lost.
+    // actionsSetAt is a full timestamp; only its date decides staleness.
+    var setOn = data.actionsSetAt ? String(data.actionsSetAt).slice(0, 10) : null;
     todayStaleEl.textContent =
-      data.actionsSetAt && data.actionsSetAt !== todayStr()
-        ? 'Set on ' + data.actionsSetAt + ' · not updated today'
-        : '';
+      setOn && setOn !== todayStr() ? 'Set on ' + setOn + ' · not updated today' : '';
   }
 
   function render() {

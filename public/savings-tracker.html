@@ -449,13 +449,8 @@
     .grid { grid-template-columns: repeat(10, 1fr); }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .mrr-panel { padding: 16px 14px 12px; }
-    /* Eight labels will not fit on one line at phone width, so drop every
-       other one to a second row. Level names are dropped entirely here - the
-       current and next level are already named in the hero. */
-    .mrr-labels { height: 42px; }
+    /* Four levels fit on one row even on a narrow phone, names included. */
     .mrr-label { font-size: 10px; }
-    .mrr-label .name { display: none; }
-    .mrr-label:nth-child(even) { top: 18px; }
     .mrr-hero { align-items: flex-start; flex-direction: column-reverse; gap: 6px; }
   }
 </style>
@@ -465,15 +460,15 @@
 <section>
   <div class="section-head">
     <h2>The engine</h2>
-    <span class="goal">goal &euro;100,000/mo</span>
+    <span class="goal">goal &euro;3,300/day &middot; &euro;100k/mo</span>
   </div>
 
   <div class="mrr-panel">
     <div class="mrr-hero">
-      <p class="mrr-current"><span id="mrr-value">&euro;0</span><span class="mrr-per">/mo</span></p>
+      <p class="mrr-current"><span id="mrr-value">&euro;0</span><span class="mrr-per">/day</span></p>
       <span class="level-badge none" id="level-badge">Not started</span>
     </div>
-    <p class="mrr-meta" id="mrr-meta">Drag the slider to where you are today</p>
+    <p class="mrr-meta" id="mrr-meta">Drag the slider to what you closed today</p>
     <p class="mrr-peak" id="mrr-peak"></p>
 
     <div class="spark-wrap" id="spark-wrap">
@@ -483,12 +478,12 @@
 
     <div class="mrr-track">
       <div class="mrr-fill" id="mrr-fill"></div>
-      <div class="mrr-peak-mark" id="mrr-peak-mark" title="Your best month"></div>
+      <div class="mrr-peak-mark" id="mrr-peak-mark" title="Your best day"></div>
       <div id="mrr-ticks"></div>
       <input type="range" class="mrr-slider" id="mrr-slider"
              min="0" max="1000" step="1" value="0"
-             aria-label="Current monthly revenue"
-             aria-valuetext="&euro;0 per month">
+             aria-label="Revenue closed today"
+             aria-valuetext="&euro;0 per day">
     </div>
     <div class="mrr-labels" id="mrr-labels"></div>
   </div>
@@ -553,19 +548,17 @@
   var DEADLINE = new Date('2026-12-30T00:00:00');
   var POLL_MS = 30 * 1000;
 
-  // Monthly revenue goal. Each threshold is a named level so the number line
-  // reads as a journey with chapters rather than eight abstract amounts.
+  // Daily revenue. The goal is the same €100k/mo as before, expressed per day:
+  // 100000 / 30.44 = €3,286, rounded to €3,300. Each threshold is a named level
+  // so the number line reads as a journey rather than four abstract amounts.
   // Rename freely - the names are the only thing here that is taste.
-  var MRR_GOAL = 100000;
+  var DAYS_PER_MONTH = 30.44;
+  var MRR_GOAL = 3300;
   var MRR_LEVELS = [
-    { v: 500,    name: 'First sales' },
-    { v: 1500,   name: 'Ramen' },
-    { v: 3000,   name: 'Rent covered' },
-    { v: 5000,   name: 'Full-time' },
-    { v: 10000,  name: 'Hiring' },
-    { v: 15000,  name: 'Small team' },
-    { v: 30000,  name: 'Scaling' },
-    { v: 100000, name: 'The goal' }
+    { v: 100,  name: 'First sales' },
+    { v: 330,  name: 'Ramen' },
+    { v: 1000, name: 'Scaling' },
+    { v: 3300, name: 'The goal' }
   ];
   // Milestones are spaced evenly along the track rather than linearly by
   // value - on a linear scale everything below 15k would be squashed into the
@@ -625,7 +618,8 @@
       mrr: 0,
       mrrPeak: 0,
       mrrHistory: [],
-      mrrUnlocks: {}
+      mrrUnlocks: {},
+      mrrUnit: 'day'
     };
   }
 
@@ -662,16 +656,24 @@
     if (!parsed || !Array.isArray(parsed.filled) || parsed.filled.length !== TOTAL) {
       return emptyData();
     }
+    // Revenue used to be a monthly figure. Anything saved before the switch to
+    // a daily scale is in the wrong unit, so drop the revenue side once rather
+    // than plot €5,000/mo as a maxed-out day. Savings data is untouched.
+    var isDaily = parsed.mrrUnit === 'day';
+
     return {
       filled: parsed.filled.map(Boolean),
       fillDates: parsed.fillDates || {},
       milestonesShown: parsed.milestonesShown || {},
       lastSaveDate: parsed.lastSaveDate || null,
       streak: parsed.streak || 0,
-      mrr: clampMrr(parsed.mrr),
-      mrrPeak: Math.max(clampMrr(parsed.mrrPeak), clampMrr(parsed.mrr)),
-      mrrHistory: normalizeHistory(parsed.mrrHistory),
-      mrrUnlocks: parsed.mrrUnlocks && typeof parsed.mrrUnlocks === 'object' ? parsed.mrrUnlocks : {}
+      mrr: isDaily ? clampMrr(parsed.mrr) : 0,
+      mrrPeak: isDaily ? Math.max(clampMrr(parsed.mrrPeak), clampMrr(parsed.mrr)) : 0,
+      mrrHistory: isDaily ? normalizeHistory(parsed.mrrHistory) : [],
+      mrrUnlocks: isDaily && parsed.mrrUnlocks && typeof parsed.mrrUnlocks === 'object'
+        ? parsed.mrrUnlocks
+        : {},
+      mrrUnit: 'day'
     };
   }
 
@@ -917,10 +919,9 @@
   /* ---------- revenue scale ---------- */
 
   function roundMrr(v) {
+    if (v < 200) return Math.round(v / 5) * 5;
     if (v < 1000) return Math.round(v / 10) * 10;
-    if (v < 10000) return Math.round(v / 50) * 50;
-    if (v < 30000) return Math.round(v / 100) * 100;
-    return Math.round(v / 500) * 500;
+    return Math.round(v / 25) * 25;
   }
 
   // Track position (0-100) -> euros, interpolating inside the level band.
@@ -1110,19 +1111,21 @@
     }
 
     var next = nextLevel(value);
-    var pctOfGoal = (value / MRR_GOAL) * 100;
+    // Plain unit conversion, so a daily number still reads against the €100k/mo
+    // goal it came from.
+    var perMonth = value * DAYS_PER_MONTH;
     if (!next) {
-      mrrMetaEl.innerHTML = '<strong>Goal reached.</strong> €100k/mo.';
+      mrrMetaEl.innerHTML = '<strong>Goal reached.</strong> €3,300/day ≈ €100k/mo.';
     } else {
       mrrMetaEl.innerHTML =
         '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name +
-        ' · ' + pctOfGoal.toFixed(pctOfGoal < 10 ? 1 : 0) + '% of €100k';
+        ' · every day at this rate ≈ ' + formatEuro(perMonth) + '/mo';
     }
 
     // A dip should not erase the win: the peak stays marked on the track.
     if (data.mrrPeak > value) {
       mrrPeakEl.classList.add('show');
-      mrrPeakEl.textContent = 'Best month: ' + formatEuro(data.mrrPeak);
+      mrrPeakEl.textContent = 'Best day: ' + formatEuro(data.mrrPeak);
       mrrPeakMark.classList.add('show');
       mrrPeakMark.style.left = mrrValueToPos(data.mrrPeak) + '%';
     } else {

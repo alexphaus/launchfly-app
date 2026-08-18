@@ -138,8 +138,28 @@ function findAction(actions: Action[], ref: unknown) {
   return -1;
 }
 
+// The page computes "today" in the browser's local zone. Using UTC here would
+// disagree with it for the first hour of every day during Irish summer time,
+// splitting one day into two history entries and mislabelling a fresh list as
+// stale. en-CA formats as YYYY-MM-DD.
+const TRACKER_TZ = process.env.TRACKER_TZ || 'Europe/Dublin';
+
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TRACKER_TZ }).format(new Date());
+}
+
+// Levels the page celebrates, kept in step with MRR_LEVELS in savings-tracker.html.
+const MRR_LEVELS = [100, 330, 1000, 3300];
+
+function recordUnlocks(data: Record<string, unknown>, value: number) {
+  const unlocks =
+    data.mrrUnlocks && typeof data.mrrUnlocks === 'object' && !Array.isArray(data.mrrUnlocks)
+      ? { ...(data.mrrUnlocks as Record<string, string>) }
+      : {};
+  for (const level of MRR_LEVELS) {
+    if (value >= level && !unlocks[level]) unlocks[level] = todayStr();
+  }
+  data.mrrUnlocks = unlocks;
 }
 
 async function readData() {
@@ -225,13 +245,17 @@ export async function POST(request: NextRequest) {
         history.push({ d: todayStr(), v: value });
       }
       data.mrrHistory = history.slice(-180);
+      recordUnlocks(data, value);
       applied.push(`revenue=${value}`);
     }
 
     if (hasActions) {
       const actions = normalizeActions(body.actions);
       data.actions = actions;
-      data.actionsSetAt = todayStr();
+      // Full timestamp, not just the date: the page resolves a concurrent write
+      // by comparing this, and date granularity would not separate two writes
+      // made in the same 30-second poll window.
+      data.actionsSetAt = new Date().toISOString();
       applied.push(`actions=${actions.length}`);
     }
 

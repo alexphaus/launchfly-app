@@ -179,6 +179,25 @@ export async function PUT(request: NextRequest) {
 
   const normalized = normalizeData(body.data);
 
+  // The page PUTs the whole record from state that can be up to one poll
+  // interval old, so a list an agent posted in that window would be silently
+  // overwritten. Whoever set the list most recently keeps it; an equal stamp
+  // means the client is working from the current list and its tick-offs win.
+  const { data: current } = await supabase
+    .from('personal_savings_tracker')
+    .select('data')
+    .eq('id', TRACKER_ID)
+    .maybeSingle();
+
+  const stored = normalizeData(current?.data);
+  if (
+    stored.actionsSetAt &&
+    (!normalized.actionsSetAt || stored.actionsSetAt > normalized.actionsSetAt)
+  ) {
+    normalized.actions = stored.actions;
+    normalized.actionsSetAt = stored.actionsSetAt;
+  }
+
   const { data: row, error } = await supabase
     .from('personal_savings_tracker')
     .upsert(

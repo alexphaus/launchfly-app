@@ -141,6 +141,53 @@
   }
   .mrr-peak.show { display: block; }
 
+  /* Month to date - the goal is monthly, so it needs a real running total */
+  .month-row { margin: 16px 0 0; }
+  .month-line {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 6px;
+  }
+  .month-line strong {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+  .month-line .verdict { font-weight: 600; }
+  .month-line .verdict.ahead { color: var(--green-dark); }
+  .month-line .verdict.behind { color: var(--amber-dark); }
+  .month-line .note { color: var(--text-tertiary); }
+
+  .month-track {
+    position: relative;
+    height: 7px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .month-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: var(--green);
+    border-radius: 5px 0 0 5px;
+    transition: width 0.2s ease;
+  }
+  .month-fill.behind { background: var(--amber); }
+  /* Where you would be today if you were exactly on pace. */
+  .month-pace {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: var(--text-tertiary);
+    transform: translateX(-1px);
+  }
+
   /* Sparkline of every value ever logged */
   .spark-wrap {
     margin: 16px 0 4px;
@@ -571,6 +618,14 @@
     <p class="mrr-meta" id="mrr-meta">Drag the slider to what you closed today</p>
     <p class="mrr-peak" id="mrr-peak"></p>
 
+    <div class="month-row">
+      <p class="month-line" id="month-line"></p>
+      <div class="month-track">
+        <div class="month-fill" id="month-fill"></div>
+        <div class="month-pace" id="month-pace" title="Where you would be if exactly on pace"></div>
+      </div>
+    </div>
+
     <div class="spark-wrap" id="spark-wrap">
       <svg id="spark" viewBox="0 0 300 46" preserveAspectRatio="none" aria-hidden="true"></svg>
       <p class="spark-caption" id="spark-caption"></p>
@@ -662,7 +717,7 @@
   // 100000 / 30.44 = €3,286, rounded to €3,300. Each threshold is a named level
   // so the number line reads as a journey rather than four abstract amounts.
   // Rename freely - the names are the only thing here that is taste.
-  var DAYS_PER_MONTH = 30.44;
+  var MONTH_GOAL = 100000;
   var MRR_GOAL = 3300;
   var MRR_LEVELS = [
     { v: 100,  name: 'First sales' },
@@ -701,6 +756,9 @@
   var mrrTicks = document.getElementById('mrr-ticks');
   var mrrLabels = document.getElementById('mrr-labels');
   var levelBadge = document.getElementById('level-badge');
+  var monthLineEl = document.getElementById('month-line');
+  var monthFillEl = document.getElementById('month-fill');
+  var monthPaceEl = document.getElementById('month-pace');
   var sparkWrap = document.getElementById('spark-wrap');
   var sparkSvg = document.getElementById('spark');
   var sparkCaption = document.getElementById('spark-caption');
@@ -1207,8 +1265,69 @@
     }
   }
 
+  // The goal is monthly, so it needs a real running total. Extrapolating one
+  // good day into "≈€100k/mo" flattered the number and measured nothing.
+  function monthToDate() {
+    var now = new Date();
+    var prefix = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-';
+    var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    var dayOfMonth = now.getDate();
+
+    var total = 0;
+    var loggedDays = 0;
+    var history = data.mrrHistory || [];
+    for (var i = 0; i < history.length; i++) {
+      if (history[i].d.indexOf(prefix) === 0) {
+        total += history[i].v;
+        loggedDays++;
+      }
+    }
+
+    return {
+      total: total,
+      loggedDays: loggedDays,
+      dayOfMonth: dayOfMonth,
+      daysInMonth: daysInMonth,
+      expected: MONTH_GOAL * (dayOfMonth / daysInMonth),
+      loggedToday: history.length > 0 && history[history.length - 1].d === todayStr()
+    };
+  }
+
+  function renderMonth() {
+    var m = monthToDate();
+    var pct = Math.min(100, (m.total / MONTH_GOAL) * 100);
+    var pacePct = Math.min(100, (m.expected / MONTH_GOAL) * 100);
+    var behind = m.total < m.expected;
+
+    monthFillEl.style.width = pct.toFixed(1) + '%';
+    monthFillEl.className = 'month-fill' + (behind ? ' behind' : '');
+    monthPaceEl.style.left = pacePct.toFixed(1) + '%';
+
+    var gap = Math.abs(m.expected - m.total);
+    var verdict = behind
+      ? '<span class="verdict behind">' + formatEuro(gap) + ' behind pace</span>'
+      : '<span class="verdict ahead">' + formatEuro(gap) + ' ahead of pace</span>';
+
+    // Say when today is missing rather than letting the total look like a
+    // finished picture of the month.
+    var note = m.loggedToday
+      ? ''
+      : ' · <span class="note">today not logged</span>';
+
+    monthLineEl.innerHTML =
+      '<strong>' + formatEuro(m.total) + '</strong> of €100k this month · day ' +
+      m.dayOfMonth + '/' + m.daysInMonth + ' · ' + verdict + note;
+  }
+
+  function dayIndex(dateStr) {
+    var parts = String(dateStr).split('-');
+    return Date.UTC(+parts[0], +parts[1] - 1, +parts[2]) / 86400000;
+  }
+
   function renderSparkline() {
-    var pts = data.mrrHistory;
+    var pts = (data.mrrHistory || []).slice().sort(function(a, b) {
+      return a.d < b.d ? -1 : (a.d > b.d ? 1 : 0);
+    });
     if (pts.length < 2) {
       sparkWrap.classList.remove('show');
       return;
@@ -1216,12 +1335,19 @@
     sparkWrap.classList.add('show');
 
     var W = 300, H = 46, pad = 3;
-    var step = W / (pts.length - 1);
+    // Spaced by date, not by position. Index spacing drew a three-week gap
+    // identically to three consecutive days, which made a lapse look like
+    // steady progress on the one chart meant to show momentum.
+    var firstDay = dayIndex(pts[0].d);
+    var span = dayIndex(pts[pts.length - 1].d) - firstDay;
     var coords = pts.map(function(p, i) {
       // Same piecewise scale as the track, so early growth reads as real
       // movement instead of a flat line hugging the axis.
       var y = H - pad - (mrrValueToPos(p.v) / 100) * (H - pad * 2);
-      return { x: i * step, y: y };
+      var x = span > 0
+        ? ((dayIndex(p.d) - firstDay) / span) * W
+        : (i / (pts.length - 1)) * W;
+      return { x: x, y: y };
     });
 
     var line = coords.map(function(c, i) {
@@ -1238,12 +1364,23 @@
       '<path d="' + area + '" fill="url(#sg)"/>' +
       '<path d="' + line + '" fill="none" stroke="#1d9e75" stroke-width="2" ' +
       'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+      // Marking the real entries keeps the line honest: with dates on the x
+      // axis a long segment is an interpolation, not days of data.
+      (pts.length <= 20
+        ? coords.map(function(c) {
+            return '<circle cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) +
+              '" r="2" fill="#fff" stroke="#1d9e75" stroke-width="1.5"/>';
+          }).join('')
+        : '') +
       '<circle cx="' + lastPt.x.toFixed(1) + '" cy="' + lastPt.y.toFixed(1) + '" r="3" fill="#085041"/>';
 
     var first = pts[0], last = pts[pts.length - 1];
     var delta = last.v - first.v;
     var deltaText = delta > 0 ? '+' + formatEuro(delta) : (delta < 0 ? '-' + formatEuro(-delta) : 'flat');
-    sparkCaption.textContent = pts.length + ' updates · ' + deltaText + ' since ' + first.d;
+    var days = span + 1;
+    sparkCaption.textContent =
+      pts.length + (pts.length === 1 ? ' entry' : ' entries') +
+      ' across ' + days + (days === 1 ? ' day' : ' days') + ' · ' + deltaText;
   }
 
   function renderMrr() {
@@ -1268,15 +1405,10 @@
     }
 
     var next = nextLevel(value);
-    // Plain unit conversion, so a daily number still reads against the €100k/mo
-    // goal it came from.
-    var perMonth = value * DAYS_PER_MONTH;
     if (!next) {
-      mrrMetaEl.innerHTML = '<strong>Goal reached.</strong> €3,300/day ≈ €100k/mo.';
+      mrrMetaEl.innerHTML = '<strong>Top level.</strong> €3,300/day is €100k/mo pace.';
     } else {
-      mrrMetaEl.innerHTML =
-        '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name +
-        ' · every day at this rate ≈ ' + formatEuro(perMonth) + '/mo';
+      mrrMetaEl.innerHTML = '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name;
     }
 
     // A dip should not erase the win: the peak stays marked on the track.
@@ -1300,6 +1432,7 @@
       }
     }
 
+    renderMonth();
     renderSparkline();
   }
 

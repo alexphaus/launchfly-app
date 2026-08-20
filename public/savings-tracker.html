@@ -45,66 +45,104 @@
     line-height: 1.6;
   }
 
-  .section-head {
+  /* One card shape for all three blocks - the symmetry is most of the
+     simplification, and each block answers the same three questions:
+     where am I, where should I be, what is next. */
+  .card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+  }
+  .card-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    margin: 0 0 0.75rem;
+    margin: 0 0 10px;
   }
-  .section-head h2 {
+  .card-head h2 {
     font-family: 'Outfit', sans-serif;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--text-secondary);
     margin: 0;
   }
-  .section-head .goal {
+  .card-goal {
     font-size: 12px;
     font-family: 'DM Mono', monospace;
     color: var(--text-tertiary);
   }
-  .sync-status {
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-tertiary);
-    margin: 0 0 1.25rem;
-  }
-  .sync-status.syncing { color: var(--amber-dark); }
-  .sync-status.error { color: var(--red-dark); }
-  .sync-status.saved { color: var(--green-dark); }
 
-  /* ---------- Revenue: the engine ---------- */
-  .mrr-panel {
-    background: var(--bg-card);
-    border-radius: 16px;
-    padding: 20px 22px 16px;
-    margin-bottom: 14px;
-  }
-  .mrr-hero {
+  .hero-row {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 14px;
+    gap: 12px;
     flex-wrap: wrap;
   }
-  .mrr-current {
+  .hero {
     font-family: 'Outfit', sans-serif;
     font-weight: 900;
-    font-size: clamp(40px, 12vw, 64px);
+    font-size: clamp(34px, 10vw, 52px);
     line-height: 1;
     letter-spacing: -0.025em;
     margin: 0;
   }
-  .mrr-current .mrr-per {
+  .hero-unit {
     font-size: 0.3em;
     font-weight: 600;
     color: var(--text-secondary);
     letter-spacing: 0;
-    margin-left: 4px;
+    margin-left: 6px;
   }
+  .hero-sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 7px 0 0;
+  }
+  .hero-sub strong { color: var(--text-primary); font-weight: 700; }
+  .hero-sub .dim { color: var(--text-tertiary); }
+
+  .card-foot {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-tertiary);
+    margin: 10px 0 0;
+    line-height: 1.6;
+  }
+
+  /* One chip carries every on/off-pace verdict on the page. */
+  .chip {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    border-radius: 999px;
+    padding: 4px 11px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-bottom: 3px;
+  }
+  .chip.good { background: var(--green-light); color: var(--green-dark); }
+  .chip.warn { background: var(--amber-light); color: var(--amber-dark); }
+  .chip.danger { background: var(--red-light); color: var(--red-dark); }
+
+  /* Only speaks up when something is wrong or in flight. */
+  .sync-status {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text-tertiary);
+    margin: 0;
+    min-height: 1.2em;
+  }
+  .sync-status.syncing { color: var(--amber-dark); }
+  .sync-status.error { color: var(--red-dark); }
+  .sync-status.saved { color: var(--green-dark); }
+  .sync-status.quiet { visibility: hidden; }
+
+  /* ---------- Revenue: the engine ---------- */
   .level-badge {
     display: inline-flex;
     align-items: center;
@@ -126,23 +164,8 @@
   }
   .level-badge .lock { font-size: 11px; }
 
-  .mrr-meta {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 8px 0 0;
-  }
-  .mrr-meta strong { color: var(--text-primary); font-weight: 700; }
-  .mrr-peak {
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--amber-dark);
-    margin: 4px 0 0;
-    display: none;
-  }
-  .mrr-peak.show { display: block; }
-
   /* Month to date - the goal is monthly, so it needs a real running total */
-  .month-row { margin: 16px 0 0; }
+  .month-row { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--border); }
   .month-line {
     font-size: 13px;
     color: var(--text-secondary);
@@ -195,13 +218,6 @@
   }
   .spark-wrap.show { display: block; }
   .spark-wrap svg { display: block; width: 100%; height: 46px; overflow: visible; }
-  .spark-caption {
-    font-size: 11px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-tertiary);
-    margin: 2px 0 0;
-  }
-
   .mrr-track {
     position: relative;
     height: 14px;
@@ -311,35 +327,7 @@
   .mrr-label.last { transform: translateX(-100%); }
 
   /* ---------- Today's actions (agent-writable) ---------- */
-  .today-card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 16px 18px;
-    margin-bottom: 14px;
-  }
-  .today-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .today-head h3 {
-    font-family: 'Outfit', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-    margin: 0;
-  }
-  .today-count {
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-tertiary);
-  }
-  .today-count.all-done { color: var(--green-dark); font-weight: 600; }
+  #today-count.all-done { color: var(--green-dark); font-weight: 600; }
 
   .actions-list { list-style: none; margin: 0; padding: 0; }
   .action-row {
@@ -408,57 +396,7 @@
     margin: 8px 0 0;
   }
 
-  /* ---------- The link between the two goals ---------- */
-  .bridge {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    background: var(--bg);
-    border: 1px dashed var(--border);
-    border-radius: 12px;
-    padding: 11px 16px;
-    margin-bottom: 2rem;
-  }
-  .bridge .arrow {
-    font-size: 15px;
-    color: var(--green);
-    line-height: 1;
-  }
-  .bridge strong { color: var(--text-primary); font-weight: 700; }
-  .bridge.ahead { border-color: var(--green); background: var(--green-light); color: var(--green-dark); }
-  .bridge.behind { border-color: var(--amber); background: var(--amber-light); color: var(--amber-dark); }
-
   /* ---------- Savings: the outcome ---------- */
-  .stat-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 1.25rem;
-  }
-  .stat-card {
-    background: var(--bg-card);
-    border-radius: 10px;
-    padding: 12px 14px;
-  }
-  .stat-card .label {
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-secondary);
-    margin: 0 0 4px;
-  }
-  .stat-card .value {
-    font-family: 'Outfit', sans-serif;
-    font-size: 19px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    margin: 0;
-  }
-  .stat-card.warn .value { color: var(--amber-dark); }
-  .stat-card.danger .value { color: var(--red-dark); }
-  .stat-card.good .value { color: var(--green-dark); }
-
   .banner {
     display: none;
     background: var(--green-light);
@@ -475,14 +413,7 @@
     display: grid;
     grid-template-columns: repeat(20, 1fr);
     gap: 4px;
-    margin-bottom: 0.5rem;
-  }
-  .row-marker {
-    font-size: 10px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-tertiary);
-    text-align: right;
-    margin-bottom: 1.5rem;
+    margin: 16px 0 0;
   }
   .square {
     aspect-ratio: 1;
@@ -512,14 +443,13 @@
     pointer-events: none;
   }
 
-  .footer-row {
+  .page-foot {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    flex-wrap: wrap;
+    margin-top: 18px;
   }
-  .hint { font-size: 13px; color: var(--text-secondary); margin: 0; }
   button {
     font-size: 13px;
     font-family: inherit;
@@ -594,107 +524,82 @@
   @media (max-width: 480px) {
     body { padding: 1.25rem 1rem 3rem; }
     .grid { grid-template-columns: repeat(10, 1fr); }
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
-    .mrr-panel { padding: 16px 14px 12px; }
+    .card { padding: 16px 15px; }
     /* Four levels fit on one row even on a narrow phone, names included. */
     .mrr-label { font-size: 10px; }
-    .mrr-hero { align-items: flex-start; flex-direction: column-reverse; gap: 6px; }
+    .hero-row { align-items: flex-start; flex-direction: column-reverse; gap: 6px; }
   }
 </style>
 </head>
 <body>
 
-<section>
-  <div class="section-head">
-    <h2>The engine</h2>
-    <span class="goal">goal &euro;3,300/day &middot; &euro;100k/mo</span>
+<section class="card">
+  <div class="card-head">
+    <h2>Revenue</h2>
+    <span class="card-goal">&euro;100k / month</span>
   </div>
 
-  <div class="mrr-panel">
-    <div class="mrr-hero">
-      <p class="mrr-current"><span id="mrr-value">&euro;0</span><span class="mrr-per">/day</span></p>
-      <span class="level-badge none" id="level-badge">Not started</span>
-    </div>
-    <p class="mrr-meta" id="mrr-meta">Drag the slider to what you closed today</p>
-    <p class="mrr-peak" id="mrr-peak"></p>
+  <div class="hero-row">
+    <p class="hero"><span id="mrr-value">&euro;0</span><span class="hero-unit">today</span></p>
+    <span class="level-badge none" id="level-badge">Not started</span>
+  </div>
+  <p class="hero-sub" id="mrr-meta">Drag the slider to what you closed today</p>
 
-    <div class="month-row">
-      <p class="month-line" id="month-line"></p>
-      <div class="month-track">
-        <div class="month-fill" id="month-fill"></div>
-        <div class="month-pace" id="month-pace" title="Where you would be if exactly on pace"></div>
-      </div>
-    </div>
+  <div class="spark-wrap" id="spark-wrap">
+    <svg id="spark" viewBox="0 0 300 44" preserveAspectRatio="none" aria-hidden="true"></svg>
+  </div>
 
-    <div class="spark-wrap" id="spark-wrap">
-      <svg id="spark" viewBox="0 0 300 46" preserveAspectRatio="none" aria-hidden="true"></svg>
-      <p class="spark-caption" id="spark-caption"></p>
-    </div>
+  <div class="mrr-track">
+    <div class="mrr-fill" id="mrr-fill"></div>
+    <div class="mrr-peak-mark" id="mrr-peak-mark" title="Your best day"></div>
+    <div id="mrr-ticks"></div>
+    <input type="range" class="mrr-slider" id="mrr-slider"
+           min="0" max="1000" step="1" value="0"
+           aria-label="Revenue closed today"
+           aria-valuetext="&euro;0 per day">
+  </div>
+  <div class="mrr-labels" id="mrr-labels"></div>
 
-    <div class="mrr-track">
-      <div class="mrr-fill" id="mrr-fill"></div>
-      <div class="mrr-peak-mark" id="mrr-peak-mark" title="Your best day"></div>
-      <div id="mrr-ticks"></div>
-      <input type="range" class="mrr-slider" id="mrr-slider"
-             min="0" max="1000" step="1" value="0"
-             aria-label="Revenue closed today"
-             aria-valuetext="&euro;0 per day">
+  <div class="month-row">
+    <p class="month-line" id="month-line"></p>
+    <div class="month-track">
+      <div class="month-fill" id="month-fill"></div>
+      <div class="month-pace" id="month-pace" title="Where you would be if exactly on pace"></div>
     </div>
-    <div class="mrr-labels" id="mrr-labels"></div>
   </div>
 </section>
 
-<section class="today-card">
-  <div class="today-head">
-    <h3>Today</h3>
-    <span class="today-count" id="today-count"></span>
+<section class="card">
+  <div class="card-head">
+    <h2>Today</h2>
+    <span class="card-goal" id="today-count"></span>
   </div>
   <ul class="actions-list" id="actions-list"></ul>
   <p class="today-empty" id="today-empty">No actions set yet &mdash; an agent can post today&rsquo;s list to <code>/api/personal/tracker-agent</code>.</p>
   <p class="today-stale" id="today-stale"></p>
 </section>
 
-<section>
-  <div class="section-head">
-    <h2>Banked</h2>
-    <span class="goal" id="deadline-line">&euro;25,000 by 30 Dec 2026</span>
+<section class="card">
+  <div class="card-head">
+    <h2>Savings</h2>
+    <span class="card-goal">&euro;25k by 30 Dec 2026</span>
   </div>
-  <p class="sync-status" id="sync-status">Loading...</p>
 
-  <div class="stat-grid" id="stat-grid">
-    <div class="stat-card">
-      <p class="label">Banked</p>
-      <p class="value" id="saved-amount">&euro;0</p>
-    </div>
-    <div class="stat-card">
-      <p class="label">Left</p>
-      <p class="value" id="remaining-amount">&euro;25,000</p>
-    </div>
-    <div class="stat-card" id="pace-card">
-      <p class="label">&euro;/day needed</p>
-      <p class="value" id="pace-amount">&euro;0</p>
-    </div>
-    <div class="stat-card" id="streak-card">
-      <p class="label">Streak</p>
-      <p class="value" id="streak-amount">0 days</p>
-    </div>
+  <div class="hero-row">
+    <p class="hero"><span id="saved-amount">&euro;0</span><span class="hero-unit">banked</span></p>
+    <span class="chip" id="pace-chip">&euro;0/day needed</span>
   </div>
 
   <div class="banner" id="milestone-banner"></div>
 
-  <div class="bridge" id="bridge">
-    <span class="arrow">&#8595;</span>
-    <span id="bridge-text">Fill a few squares to see how fast you are banking cash</span>
-  </div>
-
-  <div class="grid" id="grid"></div>
-  <p class="row-marker" id="square-count">0 / 50 squares &middot; &euro;500 each</p>
-
-  <div class="footer-row">
-    <p class="hint">Click a square each time you save &euro;500 &middot; syncs across your devices</p>
-    <button id="reset-btn">Reset</button>
-  </div>
+  <div class="grid" id="grid" title="Click a square each time you save &euro;500"></div>
+  <p class="card-foot" id="savings-foot">0 / 50 squares &middot; &euro;500 each</p>
 </section>
+
+<div class="page-foot">
+  <p class="sync-status quiet" id="sync-status"></p>
+  <button id="reset-btn">Reset</button>
+</div>
 
 <div class="levelup" id="levelup" role="status" aria-live="polite">
   <p class="kicker">Level unlocked</p>
@@ -737,12 +642,6 @@
 
   var grid = document.getElementById('grid');
   var savedAmountEl = document.getElementById('saved-amount');
-  var remainingAmountEl = document.getElementById('remaining-amount');
-  var paceAmountEl = document.getElementById('pace-amount');
-  var paceCard = document.getElementById('pace-card');
-  var streakAmountEl = document.getElementById('streak-amount');
-  var streakCard = document.getElementById('streak-card');
-  var squareCountEl = document.getElementById('square-count');
   var resetBtn = document.getElementById('reset-btn');
   var banner = document.getElementById('milestone-banner');
   var syncStatusEl = document.getElementById('sync-status');
@@ -750,7 +649,6 @@
   var mrrSlider = document.getElementById('mrr-slider');
   var mrrValueEl = document.getElementById('mrr-value');
   var mrrMetaEl = document.getElementById('mrr-meta');
-  var mrrPeakEl = document.getElementById('mrr-peak');
   var mrrPeakMark = document.getElementById('mrr-peak-mark');
   var mrrFill = document.getElementById('mrr-fill');
   var mrrTicks = document.getElementById('mrr-ticks');
@@ -761,9 +659,8 @@
   var monthPaceEl = document.getElementById('month-pace');
   var sparkWrap = document.getElementById('spark-wrap');
   var sparkSvg = document.getElementById('spark');
-  var sparkCaption = document.getElementById('spark-caption');
-  var bridgeEl = document.getElementById('bridge');
-  var bridgeText = document.getElementById('bridge-text');
+  var paceChipEl = document.getElementById('pace-chip');
+  var savingsFootEl = document.getElementById('savings-foot');
   var actionsListEl = document.getElementById('actions-list');
   var todayCountEl = document.getElementById('today-count');
   var todayEmptyEl = document.getElementById('today-empty');
@@ -892,9 +789,19 @@
     } catch (e) {}
   }
 
+  var syncQuietTimer = null;
+
+  // A permanent "Synced" line is chrome. Errors and in-flight saves speak;
+  // success shows briefly and then gets out of the way.
   function setSyncStatus(state, message) {
     syncStatusEl.className = 'sync-status' + (state ? ' ' + state : '');
     syncStatusEl.textContent = message;
+    if (syncQuietTimer) clearTimeout(syncQuietTimer);
+    if (state === 'saved') {
+      syncQuietTimer = setTimeout(function() {
+        syncStatusEl.className = 'sync-status quiet';
+      }, 2500);
+    }
   }
 
   function setInteractive(enabled) {
@@ -1374,13 +1281,9 @@
         : '') +
       '<circle cx="' + lastPt.x.toFixed(1) + '" cy="' + lastPt.y.toFixed(1) + '" r="3" fill="#085041"/>';
 
-    var first = pts[0], last = pts[pts.length - 1];
-    var delta = last.v - first.v;
-    var deltaText = delta > 0 ? '+' + formatEuro(delta) : (delta < 0 ? '-' + formatEuro(-delta) : 'flat');
     var days = span + 1;
-    sparkCaption.textContent =
-      pts.length + (pts.length === 1 ? ' entry' : ' entries') +
-      ' across ' + days + (days === 1 ? ' day' : ' days') + ' · ' + deltaText;
+    sparkSvg.setAttribute('aria-label',
+      pts.length + ' entries across ' + days + (days === 1 ? ' day' : ' days'));
   }
 
   function renderMrr() {
@@ -1390,7 +1293,7 @@
     mrrValueEl.textContent = formatEuro(value);
     mrrFill.style.width = pos + '%';
     if (!isDraggingMrr) mrrSlider.value = Math.round((pos / 100) * SLIDER_MAX);
-    mrrSlider.setAttribute('aria-valuetext', formatEuro(value) + ' per month');
+    mrrSlider.setAttribute('aria-valuetext', formatEuro(value) + ' per day');
 
     var level = currentLevel(value);
     if (level) {
@@ -1405,22 +1308,20 @@
     }
 
     var next = nextLevel(value);
-    if (!next) {
-      mrrMetaEl.innerHTML = '<strong>Top level.</strong> €3,300/day is €100k/mo pace.';
-    } else {
-      mrrMetaEl.innerHTML = '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name;
-    }
+    var sub = next
+      ? '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name
+      : '<strong>Top level.</strong> €3,300/day is €100k/mo pace';
 
-    // A dip should not erase the win: the peak stays marked on the track.
+    // A dip should not erase the win: the peak stays marked on the track, and
+    // rides on the end of this line rather than taking a row of its own.
     if (data.mrrPeak > value) {
-      mrrPeakEl.classList.add('show');
-      mrrPeakEl.textContent = 'Best day: ' + formatEuro(data.mrrPeak);
+      sub += ' <span class="dim">· best ' + formatEuro(data.mrrPeak) + '</span>';
       mrrPeakMark.classList.add('show');
       mrrPeakMark.style.left = mrrValueToPos(data.mrrPeak) + '%';
     } else {
-      mrrPeakEl.classList.remove('show');
       mrrPeakMark.classList.remove('show');
     }
+    mrrMetaEl.innerHTML = sub;
 
     var marks = document.querySelectorAll('.mrr-tick, .mrr-label');
     for (var i = 0; i < marks.length; i++) {
@@ -1436,7 +1337,7 @@
     renderSparkline();
   }
 
-  /* ---------- the bridge: revenue -> cash ---------- */
+  /* ---------- savings pace ---------- */
 
   // Measured from the squares actually filled, not from a guessed savings
   // rate, so the projection reflects what is really happening.
@@ -1462,40 +1363,6 @@
     };
   }
 
-  function renderBridge() {
-    var vel = savingsVelocity();
-    bridgeEl.className = 'bridge';
-
-    if (!vel) {
-      bridgeText.textContent = 'Fill a few squares to see how fast you are banking cash';
-      return;
-    }
-
-    if (countFilled() >= TOTAL) {
-      bridgeEl.className = 'bridge ahead';
-      bridgeText.innerHTML = '<strong>€25,000 banked.</strong> Goal complete.';
-      return;
-    }
-
-    var eta = new Date();
-    eta.setDate(eta.getDate() + Math.ceil(vel.daysToGoal));
-    var etaText = eta.toLocaleDateString('en-IE', { month: 'short', year: 'numeric' });
-
-    var diffDays = Math.round((DEADLINE - eta) / 86400000);
-    var verdict;
-    if (diffDays >= 0) {
-      bridgeEl.className = 'bridge ahead';
-      verdict = Math.round(diffDays / 30.44) + ' months ahead of deadline';
-    } else {
-      bridgeEl.className = 'bridge behind';
-      verdict = Math.round(-diffDays / 30.44) + ' months past deadline';
-    }
-
-    bridgeText.innerHTML =
-      'Banking <strong>' + formatEuro(vel.perMonth) + '/mo</strong> → ' +
-      '€25k by <strong>' + etaText + '</strong> · ' + verdict;
-  }
-
   // Rebuilt wholesale so an agent replacing the list mid-session lands cleanly.
   function renderActions() {
     var actions = data.actions || [];
@@ -1504,7 +1371,7 @@
     if (!actions.length) {
       todayEmptyEl.style.display = 'block';
       todayCountEl.textContent = '';
-      todayCountEl.className = 'today-count';
+      todayCountEl.className = 'card-goal';
       todayStaleEl.textContent = '';
       return;
     }
@@ -1557,7 +1424,7 @@
     });
 
     todayCountEl.textContent = doneCount + ' / ' + actions.length + ' done';
-    todayCountEl.className = 'today-count' + (doneCount === actions.length ? ' all-done' : '');
+    todayCountEl.className = 'card-goal' + (doneCount === actions.length ? ' all-done' : '');
 
     // Say so rather than silently clearing them, so a list is never lost.
     // actionsSetAt is a full timestamp; only its date decides staleness.
@@ -1569,7 +1436,6 @@
   function render() {
     renderMrr();
     renderActions();
-    renderBridge();
 
     var count = countFilled();
     var total = count * UNIT;
@@ -1577,26 +1443,49 @@
     var days = daysRemaining();
 
     savedAmountEl.textContent = formatEuro(total);
-    remainingAmountEl.textContent = formatEuro(remaining);
-    squareCountEl.textContent = count + ' / ' + TOTAL + ' squares · €500 each';
 
-    if (days > 0 && remaining > 0) {
+    // "Left" was its own card, but it is only the goal minus this number and
+    // the empty squares already show it.
+    if (remaining <= 0) {
+      paceChipEl.textContent = 'Goal complete';
+      paceChipEl.className = 'chip good';
+    } else if (days > 0) {
       var pace = remaining / days;
-      paceAmountEl.textContent = formatEuro(pace);
-      paceCard.className = 'stat-card' + (pace > UNIT * 1.3 ? ' danger' : (pace > UNIT ? ' warn' : ' good'));
-    } else if (remaining <= 0) {
-      paceAmountEl.textContent = 'Done';
-      paceCard.className = 'stat-card good';
+      paceChipEl.textContent = formatEuro(pace) + '/day needed';
+      paceChipEl.className = 'chip ' + (pace > UNIT * 1.3 ? 'danger' : (pace > UNIT ? 'warn' : 'good'));
     } else {
-      paceAmountEl.textContent = 'Past due';
-      paceCard.className = 'stat-card danger';
+      paceChipEl.textContent = 'Past due';
+      paceChipEl.className = 'chip danger';
     }
 
-    streakAmountEl.textContent = data.streak + (data.streak === 1 ? ' day' : ' days');
-    streakCard.className = 'stat-card' + (data.streak >= 3 ? ' good' : '');
-
+    renderSavingsFoot(count, remaining);
     checkMilestones(count, total);
   }
+
+  // Squares counted, streak and projected finish on one line. They were three
+  // separate elements saying overlapping things about the same 50 squares.
+  function renderSavingsFoot(count, remaining) {
+    var parts = [count + ' / ' + TOTAL + ' squares'];
+    if (data.streak > 0) {
+      parts.push('streak ' + data.streak + (data.streak === 1 ? ' day' : ' days'));
+    }
+
+    var vel = savingsVelocity();
+    if (remaining <= 0) {
+      parts.push('done');
+    } else if (vel) {
+      var eta = new Date();
+      eta.setDate(eta.getDate() + Math.ceil(vel.daysToGoal));
+      var months = Math.round((DEADLINE - eta) / 86400000 / 30.44);
+      parts.push(
+        'at ' + formatEuro(vel.perMonth) + '/mo → ' +
+        eta.toLocaleDateString('en-IE', { month: 'short', year: 'numeric' }) +
+        (months >= 0 ? '' : ' (' + Math.abs(months) + 'mo late)')
+      );
+    }
+    savingsFootEl.textContent = parts.join(' · ');
+  }
+
 
   function squareClasses(index, filled) {
     var classes = 'square' + (filled ? ' filled' : '');

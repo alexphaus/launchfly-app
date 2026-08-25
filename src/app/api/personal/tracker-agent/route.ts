@@ -149,7 +149,7 @@ function todayStr() {
 }
 
 // Levels the page celebrates, kept in step with MRR_LEVELS in savings-tracker.html.
-const MRR_LEVELS = [150, 330, 1000, 3300];
+const MRR_LEVELS = [100, 330, 1000, 3300];
 
 function recordUnlocks(data: Record<string, unknown>, value: number) {
   const unlocks =

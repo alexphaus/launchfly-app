@@ -215,9 +215,37 @@
   .spark-wrap {
     margin: 16px 0 4px;
     display: none;
+    position: relative;
   }
   .spark-wrap.show { display: block; }
-  .spark-wrap svg { display: block; width: 100%; height: 46px; overflow: visible; }
+  .spark-wrap svg {
+    display: block;
+    width: 100%;
+    height: 46px;
+    overflow: visible;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  /* Tapping a point reads out that day rather than leaving the line mute. */
+  .spark-tip {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    background: var(--text-primary);
+    color: var(--bg);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    padding: 5px 9px;
+    border-radius: 7px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    z-index: 5;
+  }
+  .spark-tip.show { opacity: 1; }
+  .spark-tip .tip-value { font-weight: 500; }
+  .spark-tip .tip-date { opacity: 0.7; margin-left: 5px; }
   .mrr-track {
     position: relative;
     height: 14px;
@@ -260,6 +288,15 @@
     pointer-events: none;
   }
   .mrr-tick.hit { background: var(--green-dark); }
+  /* Below the floor the first tick is the only thing worth looking at. */
+  .mrr-tick.must-hit {
+    background: var(--amber);
+    animation: floor-pulse 1.9s ease-in-out infinite;
+  }
+  @keyframes floor-pulse {
+    0%, 100% { opacity: 1; height: 22px; top: -4px; }
+    50% { opacity: 0.5; height: 28px; top: -7px; }
+  }
   .mrr-tick.goal { background: var(--text-tertiary); width: 3px; }
 
   .mrr-slider {
@@ -324,6 +361,12 @@
     opacity: 0.85;
   }
   .mrr-label.hit { color: var(--green-dark); font-weight: 600; }
+  .mrr-label.must-hit { color: var(--amber-dark); font-weight: 700; }
+  .hero-sub.floor {
+    color: var(--amber-dark);
+    font-weight: 600;
+  }
+  .hero-sub.floor strong { color: var(--amber-dark); }
   .mrr-label.last { transform: translateX(-100%); }
 
   /* ---------- Today's actions (agent-writable) ---------- */
@@ -432,16 +475,28 @@
   }
   .square.milestone-edge { border-right: 2px solid var(--text-tertiary); }
   .square:disabled { cursor: wait; opacity: 0.7; }
-  .square.milestone-emoji .emoji {
+  /* A checkpoint you have to reach - the square says so, no icon needed. */
+  .square.checkpoint {
+    border: 2px solid var(--green);
+  }
+  .square.checkpoint:not(.filled) {
+    animation: checkpoint-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes checkpoint-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(29, 158, 117, 0.5); }
+    50% { box-shadow: 0 0 0 4px rgba(29, 158, 117, 0); }
+  }
+  .square.finish .flag {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: clamp(7px, 1.8vw, 12px);
-    line-height: 1;
+    color: var(--green-dark);
     pointer-events: none;
   }
+  .square.finish.filled .flag { color: #fff; }
+  .square.finish .flag svg { width: 58%; height: 58%; }
 
   .page-foot {
     display: flex;
@@ -546,7 +601,8 @@
   <p class="hero-sub" id="mrr-meta">Drag the slider to what you closed today</p>
 
   <div class="spark-wrap" id="spark-wrap">
-    <svg id="spark" viewBox="0 0 300 44" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <svg id="spark" viewBox="0 0 300 44" preserveAspectRatio="none" role="img"></svg>
+    <div class="spark-tip" id="spark-tip"></div>
   </div>
 
   <div class="mrr-track">
@@ -610,7 +666,10 @@
 <script>
   var TOTAL = 50;
   var UNIT = 500;
-  var MILESTONE_EMOJIS = { 14: '🛟', 49: '⛳️' };
+  // The 15th square is a checkpoint you have to reach, marked by the square
+  // itself rather than by an icon sitting in it. The last one is the finish.
+  var CHECKPOINT_INDEX = 14;
+  var FINISH_INDEX = TOTAL - 1;
   var GOAL = 25000;
   var LEGACY_STORAGE_KEY = 'savings-tracker-25k-v2';
   var LOCAL_BACKUP_KEY = 'savings-tracker-cloud-backup-v1';
@@ -625,11 +684,14 @@
   var MONTH_GOAL = 100000;
   var MRR_GOAL = 3300;
   var MRR_LEVELS = [
-    { v: 150,  name: 'First sales' },
-    { v: 330,  name: 'Ramen' },
-    { v: 1000, name: 'Scaling' },
-    { v: 3300, name: 'The goal' }
+    { v: 100,  name: 'Nomad' },
+    { v: 330,  name: 'Business' },
+    { v: 1000, name: 'SaaS' },
+    { v: 3300, name: 'Enterprise' }
   ];
+  // The floor. Below this the first level stops being one milestone among
+  // four and becomes the only thing the card asks for.
+  var DAILY_FLOOR = MRR_LEVELS[0].v;
   // Milestones are spaced evenly along the track rather than linearly by
   // value - on a linear scale everything below 15k would be squashed into the
   // first 15% and the early levels would be unreadable.
@@ -659,6 +721,10 @@
   var monthPaceEl = document.getElementById('month-pace');
   var sparkWrap = document.getElementById('spark-wrap');
   var sparkSvg = document.getElementById('spark');
+  var sparkTip = document.getElementById('spark-tip');
+  var sparkPoints = [];
+  var sparkSelected = null;
+  var sparkTapHandled = false;
   var paceChipEl = document.getElementById('pace-chip');
   var savingsFootEl = document.getElementById('savings-foot');
   var actionsListEl = document.getElementById('actions-list');
@@ -1254,8 +1320,10 @@
       var x = span > 0
         ? ((dayIndex(p.d) - firstDay) / span) * W
         : (i / (pts.length - 1)) * W;
-      return { x: x, y: y };
+      return { x: x, y: y, d: p.d, v: p.v };
     });
+    sparkPoints = coords;
+    if (sparkSelected !== null && sparkSelected >= coords.length) sparkSelected = null;
 
     var line = coords.map(function(c, i) {
       return (i === 0 ? 'M' : 'L') + c.x.toFixed(1) + ' ' + c.y.toFixed(1);
@@ -1279,7 +1347,12 @@
               '" r="2" fill="#fff" stroke="#1d9e75" stroke-width="1.5"/>';
           }).join('')
         : '') +
-      '<circle cx="' + lastPt.x.toFixed(1) + '" cy="' + lastPt.y.toFixed(1) + '" r="3" fill="#085041"/>';
+      '<circle cx="' + lastPt.x.toFixed(1) + '" cy="' + lastPt.y.toFixed(1) + '" r="3" fill="#085041"/>' +
+      (sparkSelected !== null && coords[sparkSelected]
+        ? '<circle cx="' + coords[sparkSelected].x.toFixed(1) + '" cy="' +
+          coords[sparkSelected].y.toFixed(1) + '" r="4.5" fill="#085041" ' +
+          'stroke="#fff" stroke-width="2"/>'
+        : '');
 
     var days = span + 1;
     sparkSvg.setAttribute('aria-label',
@@ -1308,9 +1381,14 @@
     }
 
     var next = nextLevel(value);
-    var sub = next
-      ? '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name
-      : '<strong>Top level.</strong> €3,300/day is €100k/mo pace';
+    // Below the floor the card asks for one thing only, and says it plainly.
+    var belowFloor = value < DAILY_FLOOR;
+    var sub = belowFloor
+      ? '<strong>' + formatEuro(DAILY_FLOOR - value) + '</strong> to ' + formatEuro(DAILY_FLOOR) +
+        ' — hit this first, every day'
+      : (next
+        ? '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name
+        : '<strong>Top level.</strong> €3,300/day is €100k/mo pace');
 
     // A dip should not erase the win: the peak stays marked on the track, and
     // rides on the end of this line rather than taking a row of its own.
@@ -1322,15 +1400,14 @@
       mrrPeakMark.classList.remove('show');
     }
     mrrMetaEl.innerHTML = sub;
+    mrrMetaEl.className = 'hero-sub' + (belowFloor ? ' floor' : '');
 
     var marks = document.querySelectorAll('.mrr-tick, .mrr-label');
     for (var i = 0; i < marks.length; i++) {
       var markValue = parseFloat(marks[i].getAttribute('data-value'));
-      if (value >= markValue) {
-        marks[i].classList.add('hit');
-      } else {
-        marks[i].classList.remove('hit');
-      }
+      var isFloor = markValue === DAILY_FLOOR;
+      marks[i].classList.toggle('hit', value >= markValue);
+      marks[i].classList.toggle('must-hit', isFloor && belowFloor);
     }
 
     renderMonth();
@@ -1489,7 +1566,8 @@
 
   function squareClasses(index, filled) {
     var classes = 'square' + (filled ? ' filled' : '');
-    if (MILESTONE_EMOJIS[index]) classes += ' milestone-emoji';
+    if (index === CHECKPOINT_INDEX) classes += ' checkpoint';
+    if (index === FINISH_INDEX) classes += ' finish';
     return classes;
   }
 
@@ -1500,12 +1578,15 @@
         var sq = document.createElement('button');
         sq.type = 'button';
         sq.className = squareClasses(index, data.filled[index]);
-        if (MILESTONE_EMOJIS[index]) {
-          var emoji = document.createElement('span');
-          emoji.className = 'emoji';
-          emoji.setAttribute('aria-hidden', 'true');
-          emoji.textContent = MILESTONE_EMOJIS[index];
-          sq.appendChild(emoji);
+        if (index === FINISH_INDEX) {
+          var flag = document.createElement('span');
+          flag.className = 'flag';
+          flag.setAttribute('aria-hidden', 'true');
+          flag.innerHTML =
+            '<svg viewBox="0 0 12 12" fill="none">' +
+            '<path d="M3 1.2v9.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+            '<path d="M4.2 2h5.1L7.9 4.1l1.4 2.1H4.2z" fill="currentColor"/></svg>';
+          sq.appendChild(flag);
         }
         sq.title = formatEuro((index + 1) * UNIT);
         sq.addEventListener('click', function() {
@@ -1563,6 +1644,77 @@
   function readSliderValue() {
     return mrrPosToValue((parseFloat(mrrSlider.value) / SLIDER_MAX) * 100, !isKeyboardMrr);
   }
+
+  /* ---------- sparkline read-out ---------- */
+
+  function formatDayLabel(dateStr) {
+    var parts = String(dateStr).split('-');
+    var d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    return d.toLocaleDateString('en-IE', { day: 'numeric', month: 'short' });
+  }
+
+  function showSparkTip(index) {
+    var point = sparkPoints[index];
+    if (!point) return;
+    var rect = sparkSvg.getBoundingClientRect();
+
+    sparkTip.innerHTML =
+      '<span class="tip-value">' + formatEuro(point.v) + '</span>' +
+      '<span class="tip-date">· ' + formatDayLabel(point.d) + '</span>';
+    // viewBox is 300x44 stretched to the rendered box, so scale both axes.
+    sparkTip.style.left = ((point.x / 300) * rect.width) + 'px';
+    sparkTip.style.top = (((point.y / 44) * rect.height) - 8) + 'px';
+    sparkTip.classList.add('show');
+
+    sparkSelected = index;
+    renderSparkline();
+  }
+
+  function hideSparkTip() {
+    sparkTip.classList.remove('show');
+    if (sparkSelected !== null) {
+      sparkSelected = null;
+      renderSparkline();
+    }
+  }
+
+  // Snap to the nearest point rather than requiring a hit on a 4px dot -
+  // anywhere on the line works, which is the only usable option on a phone.
+  function sparkIndexAt(clientX) {
+    if (!sparkPoints.length) return -1;
+    var rect = sparkSvg.getBoundingClientRect();
+    if (!rect.width) return -1;
+    var viewX = ((clientX - rect.left) / rect.width) * 300;
+    var best = 0;
+    var bestGap = Infinity;
+    for (var i = 0; i < sparkPoints.length; i++) {
+      var gap = Math.abs(sparkPoints[i].x - viewX);
+      if (gap < bestGap) { bestGap = gap; best = i; }
+    }
+    return best;
+  }
+
+  sparkSvg.addEventListener('pointerdown', function(event) {
+    var index = sparkIndexAt(event.clientX);
+    if (index === -1) return;
+    sparkTapHandled = true;
+    if (index === sparkSelected) {
+      hideSparkTip();
+    } else {
+      showSparkTip(index);
+    }
+  });
+
+  document.addEventListener('pointerdown', function() {
+    // Selecting a point re-renders the chart, which detaches the very node the
+    // tap landed on - so a containment check here would read it as an outside
+    // tap and close the tooltip immediately. The flag survives that.
+    if (sparkTapHandled) {
+      sparkTapHandled = false;
+      return;
+    }
+    if (sparkSelected !== null) hideSparkTip();
+  });
 
   mrrSlider.addEventListener('pointerdown', function() { isKeyboardMrr = false; });
   mrrSlider.addEventListener('keydown', function() { isKeyboardMrr = true; });

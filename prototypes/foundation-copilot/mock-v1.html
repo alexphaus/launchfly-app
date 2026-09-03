@@ -1,0 +1,777 @@
+<title>Foundation Copilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF8F4; --surface:#FFFFFF; --ink:#111111; --muted:#5C5D63; --dim:#9C9DA3;
+    --blue:#2B3EF0; --blue-ink:#FFFFFF; --cold:#D9432A; --won:#1B7F4B; --won-soft:#E4F3EA; --cold-soft:#FBE7E2;
+    --stage:#E9E6DD; --shadow:rgba(17,17,17,0.9); --nav:#111111; --nav-dim:#7A7B85;
+    --tint:#EEF0FF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#151412; --surface:#1E1D1A; --ink:#F3EFE6; --muted:#B3AFA5; --dim:#7B776E;
+      --blue:#6B78FF; --blue-ink:#0B0D2A; --cold:#FF6B52; --won:#4BC57F; --won-soft:#1B3325; --cold-soft:#3A1F1A;
+      --stage:#0E0E0D; --shadow:rgba(243,239,230,0.85); --nav:#F3EFE6; --nav-dim:#8A867C; --tint:#22243B;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#151412; --surface:#1E1D1A; --ink:#F3EFE6; --muted:#B3AFA5; --dim:#7B776E;
+    --blue:#6B78FF; --blue-ink:#0B0D2A; --cold:#FF6B52; --won:#4BC57F; --won-soft:#1B3325; --cold-soft:#3A1F1A;
+    --stage:#0E0E0D; --shadow:rgba(243,239,230,0.85); --nav:#F3EFE6; --nav-dim:#8A867C; --tint:#22243B;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Inter',system-ui,-apple-system,sans-serif; background:var(--stage); color:var(--ink);
+    display:flex; flex-direction:column; align-items:center; padding:24px 12px 40px; gap:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  button{font:inherit; color:inherit; background:none; border:none; cursor:pointer;}
+  button:focus-visible, .tap:focus-visible{outline:3px solid var(--blue); outline-offset:2px;}
+  .arch{font-family:'Archivo','Inter',sans-serif;}
+
+  /* demo strip (outside the phone) */
+  .demo{ width:390px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; color:var(--muted); font-weight:600; }
+  .demo .seg{ display:flex; border:2.5px solid var(--ink); border-radius:8px; overflow:hidden; background:var(--surface); }
+  .demo .seg button{ padding:6px 12px; font-family:'Archivo',sans-serif; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.02em; color:var(--ink); }
+  .demo .seg button.on{ background:var(--ink); color:var(--bg); }
+
+  .frame{
+    width:390px; height:844px; background:var(--bg); border-radius:26px; overflow:hidden; position:relative;
+    display:flex; flex-direction:column; border:3px solid var(--ink); box-shadow:10px 10px 0 var(--shadow);
+  }
+  @media (max-width:480px){
+    body{padding:0; gap:0;}
+    .demo{ width:100%; padding:8px 12px; background:var(--bg); border-bottom:2px solid var(--ink); }
+    .frame{ width:100%; height:100dvh; border-radius:0; border:none; box-shadow:none; }
+    .status{display:none;}
+    nav{ padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+  }
+
+  .status{ display:flex; justify-content:space-between; padding:16px 22px 4px; font-size:12px; font-weight:700; }
+
+  .header{ padding:8px 20px 12px; border-bottom:3px solid var(--ink); }
+  .header .row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .header h1{ font-family:'Archivo',sans-serif; font-size:22px; font-weight:800; letter-spacing:-0.4px; text-wrap:balance; }
+  .header p{ font-size:12px; color:var(--muted); margin-top:3px; font-weight:600; }
+  .capacity-btn{ background:var(--blue); border:2.5px solid var(--ink); color:var(--blue-ink); font-family:'Archivo',sans-serif; font-size:11px; font-weight:700; padding:8px 12px; border-radius:8px; display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  .north{ display:grid; grid-template-columns:1fr 1fr 1fr; margin-top:12px; border:2.5px solid var(--ink); border-radius:10px; overflow:hidden; background:var(--surface); }
+  .north div{ padding:8px 10px; border-right:2px solid var(--ink); }
+  .north div:last-child{ border-right:none; }
+  .north .k{ font-family:'Archivo',sans-serif; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .north .v{ font-family:'Archivo',sans-serif; font-size:17px; font-weight:800; margin-top:2px; line-height:1.1; }
+  .north .v small{ font-family:'Inter',sans-serif; font-size:11px; font-weight:600; color:var(--muted); }
+  .north .v.warn{ color:var(--cold); }
+
+  .content{ flex:1; overflow-y:auto; padding-bottom:16px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .section-label{ font-family:'Archivo',sans-serif; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.02em; padding:18px 20px 10px; display:flex; justify-content:flex-start; align-items:center; gap:0; }
+  .section-label::before{ content:''; display:inline-block; width:8px; height:8px; background:var(--blue); margin-right:8px; }
+  .section-label .count{ font-family:'Inter',sans-serif; color:var(--dim); font-weight:600; text-transform:none; letter-spacing:0; margin-left:auto; }
+
+  .card{ margin:0 20px; background:var(--surface); border:2.5px solid var(--ink); border-radius:12px; overflow:hidden; }
+  .card + .card{ margin-top:10px; }
+  .pad{ padding:16px 17px; }
+  .eyebrow{ font-family:'Archivo',sans-serif; font-size:11px; font-weight:800; color:var(--blue-ink); background:var(--blue); display:inline-block; padding:3px 8px; border-radius:5px; margin-bottom:9px; text-transform:uppercase; }
+  .eyebrow.ghost{ background:transparent; color:var(--ink); border:2px solid var(--ink); }
+  .read p{ font-size:14.5px; line-height:1.6; }
+  .read p mark{ background:var(--tint); color:inherit; padding:0 3px; border-radius:3px; font-weight:600; }
+  .evidence{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .ev{ font-size:11px; font-weight:700; border:2px solid var(--ink); border-radius:6px; padding:4px 8px; display:inline-flex; gap:6px; align-items:center; }
+  .ev b{ font-family:'Archivo',sans-serif; font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .ev.prior{ border-style:dashed; color:var(--muted); }
+  .link{ margin-top:11px; font-size:13px; font-weight:800; text-decoration:underline; text-underline-offset:3px; display:inline-block; }
+
+  .row{ display:flex; align-items:flex-start; gap:11px; padding:13px 16px; border-bottom:2px solid var(--ink); }
+  .row:last-child{ border-bottom:none; }
+  .row .txt{ flex:1; font-size:13.5px; line-height:1.4; font-weight:500; }
+  .row .sub{ font-size:11px; color:var(--muted); margin-top:3px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; }
+  .row .sub.cold{ color:var(--cold); }
+  .chip{ font-family:'Archivo',sans-serif; font-size:9.5px; font-weight:800; padding:4px 8px; border-radius:5px; white-space:nowrap; text-transform:uppercase; flex-shrink:0; margin-top:1px; }
+  .chip-ai{ background:var(--ink); color:var(--bg); }
+  .chip-you{ background:var(--surface); color:var(--ink); border:2px solid var(--ink); }
+  .chip-won{ background:var(--won-soft); color:var(--won); border:2px solid var(--won); }
+  .chip-cold{ background:var(--cold-soft); color:var(--cold); border:2px solid var(--cold); }
+  .chip-blue{ background:var(--blue); color:var(--blue-ink); }
+  .actions{ display:flex; gap:7px; margin-top:10px; flex-wrap:wrap; }
+  .btn{ font-family:'Archivo',sans-serif; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.02em; padding:8px 12px; border-radius:7px; border:2.5px solid var(--ink); color:var(--ink); background:var(--surface); }
+  .btn.primary{ background:var(--ink); color:var(--bg); }
+  .btn.blue{ background:var(--blue); color:var(--blue-ink); }
+  .btn.quiet{ border-color:transparent; color:var(--muted); padding-left:6px; padding-right:6px; }
+  .btn.wide{ width:100%; padding:13px; font-size:13px; text-align:center; }
+  .done{ opacity:.55; }
+  .done .txt{ text-decoration:line-through; }
+
+  .tonight{ margin:14px 20px 0; background:var(--ink); color:var(--bg); border-radius:12px; padding:16px 17px; border:2.5px solid var(--ink); }
+  .tonight .k{ font-family:'Archivo',sans-serif; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; opacity:.7; }
+  .tonight h2{ font-family:'Archivo',sans-serif; font-size:19px; font-weight:800; margin-top:6px; letter-spacing:-.3px; text-wrap:balance; }
+  .tonight p{ font-size:13px; line-height:1.5; margin-top:6px; opacity:.85; }
+  .tonight .btn{ background:var(--blue); color:var(--blue-ink); border-color:var(--blue); margin-top:12px; }
+  .tonight.logged{ background:var(--won-soft); color:var(--ink); border-color:var(--won); }
+  .tonight.logged .k{ color:var(--won); opacity:1; }
+  .tonight.small{ padding:12px 17px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .tonight.small h2{ font-size:14px; margin:0; }
+
+  .filters{ display:flex; gap:8px; padding:14px 20px 4px; overflow-x:auto; scrollbar-width:none; }
+  .fchip{ font-family:'Archivo',sans-serif; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:7px; border:2.5px solid var(--ink); white-space:nowrap; }
+  .fchip.active{ background:var(--ink); color:var(--bg); }
+
+  .capture{ margin:14px 20px 0; border:2.5px dashed var(--ink); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; }
+  .capture .t{ flex:1; font-size:12.5px; line-height:1.4; font-weight:600; }
+  .capture .t small{ display:block; color:var(--muted); font-weight:500; }
+  .capture .icons{ display:flex; gap:6px; }
+  .capture .icons button{ width:36px; height:36px; border:2.5px solid var(--ink); border-radius:8px; display:grid; place-items:center; background:var(--surface); }
+  .capture svg{ width:16px; height:16px; stroke:var(--ink); fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+
+  .deal{ display:flex; gap:12px; padding:14px 16px; border-bottom:2px solid var(--ink); width:100%; text-align:left; }
+  .deal:last-child{ border-bottom:none; }
+  .deal .body{ flex:1; min-width:0; }
+  .deal .name{ font-size:14.5px; font-weight:700; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .deal .meta{ font-size:12px; color:var(--muted); margin-top:4px; font-weight:500; line-height:1.4; }
+  .deal .meta .cold{ color:var(--cold); font-weight:700; }
+  .deal .meta .won{ color:var(--won); font-weight:700; }
+  .deal .val{ font-family:'Archivo',sans-serif; font-size:15px; font-weight:800; text-align:right; }
+  .deal .val small{ display:block; font-family:'Inter',sans-serif; font-size:10px; font-weight:700; color:var(--dim); text-transform:uppercase; margin-top:2px; }
+
+  .detail-head{ padding:14px 20px 0; }
+  .back{ font-family:'Archivo',sans-serif; font-size:12px; font-weight:800; text-transform:uppercase; display:inline-flex; gap:6px; align-items:center; margin-bottom:10px; }
+  .detail-head h2{ font-family:'Archivo',sans-serif; font-size:22px; font-weight:800; letter-spacing:-.4px; }
+  .detail-head .line{ display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); font-weight:600; }
+  .timeline{ padding:0 20px; }
+  .tl{ display:grid; grid-template-columns:54px 14px 1fr; gap:0 10px; }
+  .tl .when{ font-size:11px; font-weight:700; color:var(--muted); padding-top:14px; text-transform:uppercase; letter-spacing:.02em; }
+  .tl .dot{ position:relative; }
+  .tl .dot::before{ content:''; position:absolute; left:5px; top:0; bottom:0; width:2px; background:var(--ink); }
+  .tl .dot::after{ content:''; position:absolute; left:0; top:16px; width:12px; height:12px; background:var(--surface); border:2px solid var(--ink); }
+  .tl .dot.ai::after{ background:var(--ink); }
+  .tl .dot.win::after{ background:var(--won); border-color:var(--won); }
+  .tl .what{ padding:12px 0; font-size:13px; line-height:1.45; font-weight:500; border-bottom:2px solid var(--stage); }
+  .tl .what .src{ display:inline-block; font-family:'Archivo',sans-serif; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; border:1.5px solid var(--dim); color:var(--muted); padding:1px 5px; border-radius:4px; margin-left:6px; vertical-align:middle; }
+
+  .opp{ padding:16px 17px; border-bottom:2px solid var(--ink); }
+  .opp:last-child{ border-bottom:none; }
+  .opp .top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; }
+  .tag{ font-family:'Archivo',sans-serif; font-size:10px; font-weight:800; border:2px solid var(--ink); padding:3px 8px; border-radius:5px; text-transform:uppercase; }
+  .tier{ font-family:'Archivo',sans-serif; font-size:10px; font-weight:800; padding:3px 8px; border-radius:5px; text-transform:uppercase; }
+  .tier.strong{ background:var(--blue); color:var(--blue-ink); }
+  .tier.look{ border:2px solid var(--ink); }
+  .tier.signal{ border:2px dashed var(--ink); color:var(--muted); }
+  .opp .title{ font-size:15.5px; font-weight:700; line-height:1.4; }
+  .opp .why{ font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:5px; font-weight:500; }
+  .opp .why b{ color:var(--ink); }
+  .opp .val{ font-family:'Archivo',sans-serif; font-size:16px; font-weight:800; margin-top:8px; }
+
+  .goal{ padding:16px 17px; border-bottom:2px solid var(--ink); }
+  .goal:last-child{ border-bottom:none; }
+  .goal .top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .goal .name{ font-size:13.5px; font-weight:700; }
+  .goal .pct{ font-family:'Archivo',sans-serif; font-size:13px; font-weight:800; color:var(--blue); }
+  .goal .pct.warn{ color:var(--cold); }
+  .track{ height:9px; background:var(--surface); border:2px solid var(--ink); border-radius:5px; overflow:hidden; margin-bottom:7px; }
+  .fill{ height:100%; background:var(--blue); }
+  .fill.warn{ background:var(--cold); }
+  .goal .sub{ font-size:11.5px; color:var(--muted); font-weight:600; line-height:1.5; }
+
+  table.rates{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.rates th{ font-family:'Archivo',sans-serif; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); text-align:left; padding:10px 14px 6px; border-bottom:2px solid var(--ink); }
+  table.rates td{ padding:10px 14px; border-bottom:2px solid var(--stage); font-weight:500; }
+  table.rates tr:last-child td{ border-bottom:none; }
+  table.rates td.n, table.rates th.n{ text-align:right; }
+  table.rates td.rate{ font-family:'Archivo',sans-serif; font-weight:800; }
+  table.rates .bar{ display:inline-block; height:7px; background:var(--blue); vertical-align:middle; margin-right:6px; border:1.5px solid var(--ink); }
+  .foot{ padding:10px 14px 12px; font-size:11px; color:var(--dim); font-weight:600; line-height:1.5; }
+
+  .ctx{ display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-bottom:2px solid var(--ink); gap:10px; }
+  .ctx:last-child{ border-bottom:none; }
+  .ctx .l{ font-size:13.5px; font-weight:700; }
+  .ctx .s{ font-size:11px; color:var(--dim); margin-top:2px; font-weight:600; line-height:1.4; }
+  .ctx .on{ font-family:'Archivo',sans-serif; font-size:10.5px; font-weight:800; color:var(--won); text-transform:uppercase; white-space:nowrap; }
+  .ctx-note{ padding:10px 20px 4px; font-size:11.5px; color:var(--dim); line-height:1.5; font-weight:500; }
+
+  nav{ display:flex; border-top:3px solid var(--ink); background:var(--nav); padding:10px 6px 16px; }
+  nav button{ flex:1; font-family:'Archivo',sans-serif; font-size:10.5px; font-weight:700; color:var(--nav-dim); display:flex; flex-direction:column; align-items:center; gap:5px; padding:6px 0; text-transform:uppercase; position:relative; }
+  nav button svg{ width:20px; height:20px; stroke:var(--nav-dim); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  nav button.active{ color:var(--bg); }
+  nav button.active svg{ stroke:var(--blue); }
+  nav .badge{ position:absolute; top:2px; right:calc(50% - 20px); min-width:16px; height:16px; border-radius:8px; background:var(--blue); color:var(--blue-ink); font-size:9.5px; font-weight:800; display:grid; place-items:center; padding:0 4px; }
+
+  .overlay{ position:absolute; inset:0; background:rgba(17,17,17,0.45); opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:25; }
+  .overlay.open{ opacity:1; pointer-events:auto; }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; transform:translateY(110%); background:var(--surface); border-radius:20px 20px 0 0; padding:18px 20px 28px; z-index:30; transition:transform .3s cubic-bezier(.16,1,.3,1); border-top:3px solid var(--ink); max-height:78%; overflow-y:auto; }
+  .sheet.open{ transform:translateY(0); }
+  .handle{ width:40px; height:5px; background:var(--ink); border-radius:3px; margin:0 auto 16px; }
+  .sheet h3{ font-family:'Archivo',sans-serif; font-size:16px; font-weight:800; margin-bottom:4px; }
+  .sheet p.desc{ font-size:12px; color:var(--muted); margin-bottom:14px; line-height:1.5; font-weight:500; }
+  .opt{ display:flex; justify-content:space-between; align-items:center; padding:13px 14px; border:2.5px solid var(--ink); border-radius:10px; margin-bottom:9px; width:100%; text-align:left; }
+  .opt .ct{ font-size:13.5px; font-weight:700; }
+  .opt .cs{ font-size:11px; color:var(--muted); margin-top:2px; font-weight:600; }
+  .opt.on{ background:var(--ink); color:var(--bg); }
+  .opt.on .cs{ color:var(--bg); opacity:.7; }
+  .evrow{ display:grid; grid-template-columns:1fr auto; gap:10px; padding:11px 0; border-bottom:2px solid var(--stage); font-size:13px; }
+  .evrow:last-child{ border-bottom:none; }
+  .evrow .l b{ display:block; font-size:12px; }
+  .evrow .l span{ color:var(--muted); font-size:11.5px; font-weight:500; }
+  .evrow .r{ font-family:'Archivo',sans-serif; font-weight:800; font-size:14px; text-align:right; }
+  .evrow .r small{ display:block; font-family:'Inter',sans-serif; font-size:10px; color:var(--dim); font-weight:700; text-transform:uppercase; }
+  .draft{ border:2.5px solid var(--ink); border-radius:10px; padding:13px 14px; font-size:13.5px; line-height:1.55; white-space:pre-line; background:var(--bg); }
+
+  /* check-in flow */
+  .checkin{ position:absolute; inset:0; background:var(--bg); z-index:40; display:none; flex-direction:column; }
+  .checkin.open{ display:flex; }
+  .ck-head{ padding:18px 20px 12px; border-bottom:3px solid var(--ink); display:flex; align-items:center; justify-content:space-between; }
+  .ck-head h2{ font-family:'Archivo',sans-serif; font-size:18px; font-weight:800; }
+  .ck-head .steps{ display:flex; gap:6px; }
+  .ck-head .steps span{ width:26px; height:6px; border:2px solid var(--ink); border-radius:3px; }
+  .ck-head .steps span.on{ background:var(--blue); border-color:var(--blue); }
+  .ck-body{ flex:1; overflow-y:auto; }
+  .ck-step{ display:none; }
+  .ck-step.active{ display:block; }
+  .ck-q{ padding:18px 20px 6px; font-family:'Archivo',sans-serif; font-size:20px; font-weight:800; letter-spacing:-.3px; text-wrap:balance; }
+  .ck-sub{ padding:0 20px 12px; font-size:12.5px; color:var(--muted); font-weight:500; line-height:1.5; }
+  .tri{ display:flex; border:2.5px solid var(--ink); border-radius:8px; overflow:hidden; flex-shrink:0; }
+  .tri button{ font-family:'Archivo',sans-serif; font-size:10px; font-weight:800; text-transform:uppercase; padding:7px 9px; border-right:2px solid var(--ink); }
+  .tri button:last-child{ border-right:none; }
+  .tri button.on{ background:var(--ink); color:var(--bg); }
+  .tri button.on.won{ background:var(--won); color:#fff; }
+  .tri button.on.cold{ background:var(--cold); color:#fff; }
+  .stepper{ display:flex; align-items:center; border:2.5px solid var(--ink); border-radius:8px; overflow:hidden; flex-shrink:0; }
+  .stepper button{ width:34px; height:34px; font-family:'Archivo',sans-serif; font-size:16px; font-weight:800; }
+  .stepper .n{ width:34px; text-align:center; font-family:'Archivo',sans-serif; font-weight:800; font-size:14px; border-left:2px solid var(--ink); border-right:2px solid var(--ink); line-height:34px; }
+  .ck-foot{ padding:12px 20px calc(16px + env(safe-area-inset-bottom)); border-top:3px solid var(--ink); display:flex; gap:8px; background:var(--bg); }
+  textarea.note{ width:100%; border:2.5px solid var(--ink); border-radius:10px; padding:12px; font:inherit; font-size:13.5px; background:var(--surface); color:var(--ink); resize:none; min-height:84px; }
+  .mic{ display:flex; align-items:center; gap:10px; margin:10px 20px 0; padding:12px 14px; border:2.5px solid var(--ink); border-radius:10px; font-size:13px; font-weight:700; width:calc(100% - 40px); text-align:left; }
+  .mic svg{ width:18px; height:18px; stroke:var(--ink); fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .mic small{ display:block; font-weight:500; color:var(--muted); font-size:11.5px; }
+
+  @media (prefers-reduced-motion:reduce){ .sheet, .overlay{ transition:none; } }
+</style>
+
+<div class="demo">
+  <span>Foundation · v1 mock · flip the day:</span>
+  <div class="seg" role="group" aria-label="Time of day">
+    <button class="on" id="segAM" onclick="setTime('am')">Morning</button>
+    <button id="segPM" onclick="setTime('pm')">Evening</button>
+  </div>
+</div>
+
+<div class="frame">
+  <div class="status"><span id="clock">7:02</span><span>90%</span></div>
+
+  <div class="header">
+    <div class="row">
+      <div>
+        <h1 id="greet">Good morning, Alex</h1>
+        <p id="subline">THU 3 SEP · 3 NEED YOU · 1 DEAL GOING COLD</p>
+      </div>
+      <button class="capacity-btn" onclick="openSheet('cap')">⚡ <span id="capLabel">Deep focus</span></button>
+    </div>
+    <div class="north">
+      <div><div class="k">Runway</div><div class="v warn" id="runwayV">4.2 <small>mo</small></div></div>
+      <div><div class="k">September</div><div class="v" id="monthV">$1,500 <small>/ 2k</small></div></div>
+      <div><div class="k">Leaves PH</div><div class="v">23 <small>days</small></div></div>
+    </div>
+  </div>
+
+  <div class="content" id="content">
+
+    <!-- TODAY -->
+    <div class="view active" id="v-today">
+
+      <div id="todayAM">
+        <div class="section-label">Today's read</div>
+        <div class="card read pad">
+          <span class="eyebrow">From your log · last 14 days</span>
+          <p>You sent <mark>40 DMs</mark> and got <mark>1 reply</mark>. Your <mark>3 visits</mark> produced <mark>2 deposits</mark>. You leave in 23 days and Sea Nymph is on day 4 of silence. Send that close first, then move Thursday and Friday to Palawan visits instead of more DMs.</p>
+          <div class="evidence">
+            <span class="ev"><b>Your data</b> DMs 3%</span>
+            <span class="ev"><b>Your data</b> Visits 67%</span>
+            <span class="ev prior"><b>Prior</b> Visits ≈5× DMs, unverified</span>
+          </div>
+          <button class="link" onclick="openSheet('evidence')">See the evidence →</button>
+        </div>
+
+        <div class="section-label">Needs you <span class="count" id="needCount">2 open</span></div>
+        <div class="card" id="needList"></div>
+
+        <div class="section-label">Going cold <span class="count">silent 3+ days</span></div>
+        <div class="card" id="coldList"></div>
+
+        <div class="tonight small">
+          <div><div class="k">Tonight</div><h2>Check-in at 8:30 pm · about 60 seconds</h2></div>
+          <span class="chip chip-blue">Set</span>
+        </div>
+      </div>
+
+      <div id="todayPM" hidden>
+        <div class="tonight" id="tonightCard">
+          <div class="k">Tonight's check-in</div>
+          <h2>Three planned items, two deals to update. About 60 seconds.</h2>
+          <p>What you log tonight is what tomorrow's read is built from. Skip it and the read stays where it is.</p>
+          <button class="btn" onclick="openCheckin()">Start check-in</button>
+        </div>
+
+        <div class="section-label">Today so far</div>
+        <div class="card" id="pmSummary"></div>
+
+        <div class="section-label">Morning read <span class="count">for reference</span></div>
+        <div class="card read pad">
+          <p style="font-size:13.5px;color:var(--muted)">Send the Sea Nymph close first, then move Thursday and Friday to Palawan visits instead of more DMs.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEALS -->
+    <div class="view" id="v-deals">
+      <div id="dealsList">
+        <div class="capture">
+          <div class="t">Forward a WhatsApp or Telegram thread<small>The copilot reads it, files the deal, drafts the next touch.</small></div>
+          <div class="icons">
+            <button aria-label="Forward a thread"><svg viewBox="0 0 24 24"><path d="M4 12h12"/><path d="M12 6l6 6-6 6"/></svg></button>
+            <button aria-label="Paste text"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4V2h6v2"/></svg></button>
+            <button aria-label="Voice note"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
+          </div>
+        </div>
+        <div class="filters" id="dealFilters">
+          <button class="fchip active" data-f="all">All</button>
+          <button class="fchip" data-f="active">Active</button>
+          <button class="fchip" data-f="proposal">Proposal</button>
+          <button class="fchip" data-f="won">Won</button>
+          <button class="fchip" data-f="cold">Cold</button>
+        </div>
+        <div class="section-label">Pipeline <span class="count" id="pipeCount"></span></div>
+        <div class="card" id="dealCards"></div>
+        <div class="ctx-note">Days silent counts from the last message either side. Anything past 3 days shows on Today.</div>
+      </div>
+
+      <div id="dealDetail" hidden>
+        <div class="detail-head">
+          <button class="back" onclick="closeDeal()">← Pipeline</button>
+          <h2 id="ddName"></h2>
+          <div class="line" id="ddLine"></div>
+        </div>
+        <div class="section-label">Next move</div>
+        <div class="card pad" id="ddNext"></div>
+        <div class="section-label">Thread <span class="count">from WhatsApp + check-ins</span></div>
+        <div class="timeline"><div class="tl" id="ddTimeline"></div></div>
+      </div>
+    </div>
+
+    <!-- OPPS -->
+    <div class="view" id="v-opps">
+      <div class="filters">
+        <button class="fchip active">All</button>
+        <button class="fchip">Clients</button>
+        <button class="fchip">Subcontract</button>
+        <button class="fchip">Communities</button>
+        <button class="fchip">Signals</button>
+      </div>
+      <div class="section-label">Matched for you <span class="count">3 new</span></div>
+      <div class="card">
+        <div class="opp">
+          <div class="top"><span class="tag">Client</span><span class="tier strong">Strong fit</span></div>
+          <div class="title">WhatsApp booking build for an agency client</div>
+          <div class="why">Same n8n + inventory-lock pattern as <b>Bamboo Ridge</b>, which you closed at $1,400. Buyer already sold the client, so no discovery call.</div>
+          <div class="val">$1,800</div>
+          <div class="actions"><button class="btn primary">Draft intro</button><button class="btn">Save</button><button class="btn quiet">Not for me</button></div>
+        </div>
+        <div class="opp">
+          <div class="top"><span class="tag">Client</span><span class="tier look">Worth a look</span></div>
+          <div class="title">Make.com refund-flow fix, 3 day turnaround</div>
+          <div class="why">Small scope. Fits a <b>Moderate</b> day between Sea Nymph and Xen without touching the one-pager block.</div>
+          <div class="val">$950</div>
+          <div class="actions"><button class="btn primary">Draft intro</button><button class="btn">Save</button><button class="btn quiet">Not for me</button></div>
+        </div>
+        <div class="opp">
+          <div class="top"><span class="tag">Community</span><span class="tier look">Worth a look</span></div>
+          <div class="title">n8n Builders SEA · Telegram, 3 buyers posting weekly</div>
+          <div class="why">Two members are reachable through <b>Marco</b>, who referred Bamboo Ridge. Referrals are your best channel at 50%.</div>
+          <div class="actions"><button class="btn primary">Ask Marco for intro</button><button class="btn quiet">Not for me</button></div>
+        </div>
+        <div class="opp">
+          <div class="top"><span class="tag">Signal</span><span class="tier signal">Signal</span></div>
+          <div class="title">AU trades demand for voice-first intake is rising</div>
+          <div class="why">Three local competitors funded this month. Not actionable this week. Filed under the relocation plan.</div>
+          <div class="actions"><button class="btn">Read</button><button class="btn quiet">Dismiss</button></div>
+        </div>
+      </div>
+
+      <div class="section-label">You'd have matched <span class="count">if you had it</span></div>
+      <div class="card pad">
+        <span class="eyebrow ghost">Skill gap</span>
+        <div style="font-size:14px;font-weight:700;line-height:1.4">Voice AI intake · 2 requests this month, $2,400 combined</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.5;font-weight:500">Both asked for your exact stack plus a voice front end. Estimated 3 hours to be credible enough to quote.</div>
+        <div class="actions"><button class="btn">Show me the two</button><button class="btn quiet">Not now</button></div>
+      </div>
+    </div>
+
+    <!-- YOU -->
+    <div class="view" id="v-you">
+      <div class="section-label">Goals</div>
+      <div class="card">
+        <div class="goal">
+          <div class="top"><span class="name">Runway</span><span class="pct warn">4.2 mo</span></div>
+          <div class="track"><div class="fill warn" style="width:42%"></div></div>
+          <div class="sub">₱168k cash · ₱40k monthly burn. Every $1k closed adds about 1.4 months.</div>
+        </div>
+        <div class="goal">
+          <div class="top"><span class="name">September revenue</span><span class="pct" id="goalPct">75%</span></div>
+          <div class="track"><div class="fill" id="goalFill" style="width:75%"></div></div>
+          <div class="sub" id="goalSub">$1,500 of $2,000 · Sea Nymph deposit alone closes the gap.</div>
+        </div>
+        <div class="goal">
+          <div class="top"><span class="name">Relocation</span><span class="pct">23 days</span></div>
+          <div class="track"><div class="fill" style="width:62%"></div></div>
+          <div class="sub">Hard date. In-person visits stop after this. The read weighs everything against it.</div>
+        </div>
+      </div>
+
+      <div class="section-label">Your conversion rates <span class="count">last 30 days</span></div>
+      <div class="card">
+        <div style="overflow-x:auto">
+        <table class="rates">
+          <thead><tr><th>Channel</th><th class="n">Tries</th><th class="n">Wins</th><th class="n">Rate</th></tr></thead>
+          <tbody>
+            <tr><td>Referral intro</td><td class="n">4</td><td class="n">2</td><td class="n rate"><span class="bar" style="width:50px"></span>50%</td></tr>
+            <tr><td>In-person visit</td><td class="n">3</td><td class="n">2</td><td class="n rate"><span class="bar" style="width:67px"></span>67%</td></tr>
+            <tr><td>Bossjob lead</td><td class="n">6</td><td class="n">1</td><td class="n rate"><span class="bar" style="width:17px"></span>17%</td></tr>
+            <tr><td>Cold DM</td><td class="n">40</td><td class="n">1</td><td class="n rate"><span class="bar" style="width:3px"></span>3%</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="foot">A "win" is a reply that led to a call or deposit. Counted from your check-ins and forwarded threads, nothing estimated.</div>
+      </div>
+
+      <div class="section-label">Sources</div>
+      <div class="card">
+        <div class="ctx"><div><div class="l">WhatsApp</div><div class="s">Forwarding bot · 6 threads filed this week</div></div><span class="on">Connected</span></div>
+        <div class="ctx"><div><div class="l">Telegram</div><div class="s">Same bot, for the n8n groups</div></div><button class="btn">Connect</button></div>
+        <div class="ctx"><div><div class="l">Calendar</div><div class="s">Sharpens capacity and visit planning</div></div><button class="btn">Connect</button></div>
+        <div class="ctx"><div><div class="l">Bank or Wise</div><div class="s">Keeps runway exact instead of self-reported</div></div><button class="btn">Connect</button></div>
+      </div>
+      <div class="ctx-note">Your ledger is yours. Every deal, action and rate above can be exported as CSV at any time, and deleting the account deletes all of it.</div>
+      <div class="actions" style="padding:6px 20px 0"><button class="btn">Export ledger</button></div>
+    </div>
+
+  </div>
+
+  <nav>
+    <button class="tab active" data-view="today" onclick="switchTab('today', this)">
+      <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>Today<span class="badge" id="todayBadge">2</span>
+    </button>
+    <button class="tab" data-view="deals" onclick="switchTab('deals', this)">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/></svg>Deals
+    </button>
+    <button class="tab" data-view="opps" onclick="switchTab('opps', this)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Opps<span class="badge">3</span>
+    </button>
+    <button class="tab" data-view="you" onclick="switchTab('you', this)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>You
+    </button>
+  </nav>
+
+  <div class="overlay" id="overlay" onclick="closeSheet()"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true">
+    <div class="handle"></div>
+    <div id="sheetBody"></div>
+  </div>
+
+  <!-- CHECK-IN -->
+  <div class="checkin" id="checkin" role="dialog" aria-modal="true" aria-label="Evening check-in">
+    <div class="ck-head">
+      <h2>Tonight's check-in</h2>
+      <div class="steps"><span class="on" id="s1"></span><span id="s2"></span><span id="s3"></span></div>
+    </div>
+    <div class="ck-body">
+      <div class="ck-step active" id="ck1">
+        <div class="ck-q">What did you do today?</div>
+        <div class="ck-sub">Prefilled from this morning's plan. Tap to confirm or correct.</div>
+        <div class="card" id="ckPlan"></div>
+        <div class="section-label">Counts</div>
+        <div class="card">
+          <div class="row" style="align-items:center"><span class="txt">Cold DMs sent</span><div class="stepper"><button onclick="step('dms',-1)">−</button><span class="n" id="n-dms">0</span><button onclick="step('dms',1)">+</button></div></div>
+          <div class="row" style="align-items:center"><span class="txt">In-person visits</span><div class="stepper"><button onclick="step('visits',-1)">−</button><span class="n" id="n-visits">2</span><button onclick="step('visits',1)">+</button></div></div>
+          <div class="row" style="align-items:center"><span class="txt">Referral asks</span><div class="stepper"><button onclick="step('refs',-1)">−</button><span class="n" id="n-refs">0</span><button onclick="step('refs',1)">+</button></div></div>
+        </div>
+      </div>
+      <div class="ck-step" id="ck2">
+        <div class="ck-q">Did anything move?</div>
+        <div class="ck-sub">Only deals that had a touch today. Everything else stays as is.</div>
+        <div class="card" id="ckDeals"></div>
+      </div>
+      <div class="ck-step" id="ck3">
+        <div class="ck-q">Tomorrow?</div>
+        <div class="ck-sub">Capacity sets how the plan gets sized. Anything else goes in the note.</div>
+        <div style="padding:0 20px" id="ckCap"></div>
+        <div style="padding:6px 20px 0"><textarea class="note" placeholder="Xen wants a call Friday. Palawan boat leaves 6 am."></textarea></div>
+        <button class="mic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg><span>Or hold to talk<small>Transcribed and filed to the right deals.</small></span></button>
+      </div>
+    </div>
+    <div class="ck-foot">
+      <button class="btn" id="ckBack" onclick="ckNav(-1)">Back</button>
+      <button class="btn primary" style="flex:1" id="ckNext" onclick="ckNav(1)">Next</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- example data (Alex's pipeline, illustrative) ----------
+  const deals = [
+    { id:'sea', name:'Sea Nymph Resort', value:1200, stage:'proposal', silent:4, last:'You sent the proposal · Sat',
+      next:'Send the risk-reversal close now. Day 4 of silence on a proposal is where your last two cold deals died.',
+      timeline:[
+        ['Sat', 'You sent the proposal with two options: ₱25k setup + ₱4k/mo, or ₱35k flat.', 'WhatsApp', ''],
+        ['Fri', 'Maria asked whether the WhatsApp bot can hold a booking for 15 minutes while a guest pays.', 'WhatsApp', ''],
+        ['Fri', 'Copilot drafted the inventory-lock explanation. You edited the pricing line and sent it.', 'Draft', 'ai'],
+        ['Wed', 'Visit at the resort. Maria and the owner both present. Logged as in-person visit.', 'Check-in', ''],
+      ]},
+    { id:'xen', name:'Xen Studio', value:950, stage:'active', silent:1, last:'Xen asked for a Friday call · yesterday',
+      next:'Confirm the Friday call and send a one-line agenda. No draft needed yet.',
+      timeline:[
+        ['Yesterday','Xen asked if Friday afternoon works for a scoping call.','WhatsApp',''],
+        ['Mon','You forwarded the thread. Copilot filed it as a Make.com refund-flow fix, ~3 days.','Forward','ai'],
+      ]},
+    { id:'boss', name:'Bossjob subcontract lead', value:600, stage:'active', silent:0, last:'Intro drafted, waiting on you',
+      next:'Review the intro. It leads with the Bamboo Ridge result because that buyer is also agency-side.',
+      timeline:[
+        ['Today','Copilot drafted the intro message from the job post and your Bamboo Ridge write-up.','Draft','ai'],
+        ['Today','Lead sourced from Bossjob: agency needs an n8n builder for a WhatsApp booking flow.','Opps',''],
+      ]},
+    { id:'bamboo', name:'Bamboo Ridge', value:1400, stage:'won', silent:0, last:'Paid in full · Aug 22',
+      next:'Ask for the referral. Marco already offered to intro two people from the n8n group.',
+      timeline:[
+        ['Aug 22','Final payment received. Logged as won.','Check-in','win'],
+        ['Aug 9','Deposit received after the on-site visit.','Check-in','win'],
+        ['Aug 7','Visit. Walked through the inventory-lock flow with the owner.','Check-in',''],
+      ]},
+    { id:'coco', name:'Coco Beach Villas', value:800, stage:'cold', silent:11, last:'No reply to two nudges',
+      next:'Mark lost or try one in-person drop-by while you are in Palawan. Do not send a third DM.',
+      timeline:[
+        ['Aug 30','Second nudge, no reply.','WhatsApp',''],
+        ['Aug 25','First nudge, no reply.','WhatsApp',''],
+        ['Aug 23','Cold DM with the booking-bot pitch. Read, no reply.','WhatsApp',''],
+      ]},
+  ];
+
+  const state = {
+    time:'am', cap:'Deep focus',
+    plan:[
+      { id:'close', chip:'ai', txt:'Sea Nymph close · risk-reversal draft, ready to review', status:'open', draft:true },
+      { id:'onepager', chip:'you', txt:'90 min · subcontract sales one-pager', status:'open' },
+      { id:'intro', chip:'ai', txt:'Intro to the Bossjob subcontract lead, ready to review', status:'open', draft:true },
+    ],
+    counts:{ dms:0, visits:2, refs:0 },
+    moves:{}, ckStep:1, logged:false, dealFilter:'all',
+  };
+
+  const money = n => '$' + n.toLocaleString('en-US');
+  const $ = id => document.getElementById(id);
+
+  // ---------- Today ----------
+  function renderToday(){
+    const open = state.plan.filter(p=>p.status==='open');
+    $('needCount').textContent = open.length + ' open';
+    $('todayBadge').textContent = open.length; $('todayBadge').hidden = open.length===0;
+    $('needList').innerHTML = state.plan.map(p=>`
+      <div class="row ${p.status!=='open'?'done':''}">
+        <span class="chip ${p.chip==='ai'?'chip-ai':'chip-you'}">${p.chip==='ai'?'AI drafted':'Needs you'}</span>
+        <div style="flex:1">
+          <div class="txt">${p.txt}</div>
+          ${p.status==='open' ? `<div class="actions">
+            ${p.draft ? `<button class="btn primary" onclick="openSheet('draft','${p.id}')">Review &amp; send</button>` : `<button class="btn primary" onclick="markPlan('${p.id}','done')">Start block</button>`}
+            <button class="btn quiet" onclick="markPlan('${p.id}','skipped')">Skip</button>
+          </div>` : `<div class="sub" style="color:var(--won)">${p.status==='done'?'Sent · logged':'Skipped · logged'}</div>`}
+        </div>
+      </div>`).join('');
+
+    const cold = deals.filter(d=>d.silent>=3 && d.stage!=='won');
+    $('coldList').innerHTML = cold.map(d=>`
+      <div class="row">
+        <div style="flex:1">
+          <div class="txt">${d.name} · ${money(d.value)}</div>
+          <div class="sub cold">Day ${d.silent} silent · ${d.stage}</div>
+          <div class="actions">
+            <button class="btn" onclick="openDeal('${d.id}')">Open</button>
+            ${d.silent>7 ? `<button class="btn quiet">Mark lost</button>` : `<button class="btn quiet">Nudge draft</button>`}
+          </div>
+        </div>
+      </div>`).join('') || `<div class="row"><div class="txt" style="color:var(--muted)">Nothing silent past 3 days.</div></div>`;
+
+    const pm = [];
+    state.plan.forEach(p=>{ if(p.status!=='open') pm.push(`<div class="row"><span class="chip ${p.status==='done'?'chip-won':'chip-you'}">${p.status}</span><div class="txt">${p.txt}</div></div>`); });
+    pm.push(`<div class="row"><span class="chip chip-you">Logged</span><div class="txt">2 visits · 0 DMs so far</div></div>`);
+    $('pmSummary').innerHTML = pm.join('');
+  }
+
+  function markPlan(id, status){ const p = state.plan.find(x=>x.id===id); p.status = status; closeSheet(); renderToday(); }
+
+  function setTime(t){
+    state.time = t;
+    $('segAM').classList.toggle('on', t==='am'); $('segPM').classList.toggle('on', t==='pm');
+    $('todayAM').hidden = t!=='am'; $('todayPM').hidden = t!=='pm';
+    $('clock').textContent = t==='am' ? '7:02' : '8:31';
+    $('greet').textContent = t==='am' ? 'Good morning, Alex' : 'Good evening, Alex';
+    $('subline').textContent = t==='am' ? 'THU 3 SEP · 3 NEED YOU · 1 DEAL GOING COLD' : 'THU 3 SEP · CHECK-IN DUE · READ UPDATES 7:00 AM';
+    switchTab('today', document.querySelector('nav .tab[data-view="today"]'));
+  }
+
+  // ---------- Deals ----------
+  function renderDeals(){
+    const f = state.dealFilter;
+    const list = deals.filter(d=> f==='all' ? true : d.stage===f);
+    $('pipeCount').textContent = list.length + ' deals · ' + money(list.filter(d=>d.stage!=='won'&&d.stage!=='cold').reduce((a,d)=>a+d.value,0)) + ' open';
+    $('dealCards').innerHTML = list.map(d=>`
+      <button class="deal tap" onclick="openDeal('${d.id}')">
+        <div class="body">
+          <div class="name">${d.name} ${stageChip(d.stage)}</div>
+          <div class="meta">${d.last}${d.stage==='won'?'':' · '}${d.stage==='won'?'':d.silent>=3?`<span class="cold">${d.silent} days silent</span>`:d.silent===0?'touched today':d.silent+' day silent'}</div>
+        </div>
+        <div class="val">${money(d.value)}<small>${d.stage==='won'?'paid':'quoted'}</small></div>
+      </button>`).join('');
+  }
+  function stageChip(s){
+    if(s==='won') return `<span class="chip chip-won">Won</span>`;
+    if(s==='cold') return `<span class="chip chip-cold">Cold</span>`;
+    if(s==='proposal') return `<span class="chip chip-blue">Proposal</span>`;
+    return `<span class="chip chip-you">Active</span>`;
+  }
+  document.querySelectorAll('#dealFilters .fchip').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('#dealFilters .fchip').forEach(x=>x.classList.remove('active')); c.classList.add('active');
+    state.dealFilter = c.dataset.f; renderDeals();
+  }));
+  function openDeal(id){
+    const d = deals.find(x=>x.id===id);
+    $('ddName').textContent = d.name;
+    $('ddLine').innerHTML = `${stageChip(d.stage)} <span>${money(d.value)} ${d.stage==='won'?'paid':'quoted'}</span> <span>·</span> <span>${d.stage==='won'?'closed Aug 22':d.silent+' days silent'}</span>`;
+    $('ddNext').innerHTML = `<span class="eyebrow">Copilot suggests</span><p style="font-size:14px;line-height:1.55">${d.next}</p>
+      <div class="actions">${d.id==='sea'?`<button class="btn primary" onclick="openSheet('draft','close')">Review the close</button>`:`<button class="btn primary">Draft it</button>`}<button class="btn">Snooze 2 days</button><button class="btn quiet">Not this</button></div>`;
+    $('ddTimeline').innerHTML = d.timeline.map(t=>`<div class="when">${t[0]}</div><div class="dot ${t[3]}"></div><div class="what">${t[1]}<span class="src">${t[2]}</span></div>`).join('');
+    $('dealsList').hidden = true; $('dealDetail').hidden = false;
+    switchTab('deals', document.querySelector('nav .tab[data-view="deals"]'));
+    $('content').scrollTop = 0;
+  }
+  function closeDeal(){ $('dealsList').hidden = false; $('dealDetail').hidden = true; }
+
+  // ---------- Sheets ----------
+  const drafts = {
+    close: { title:'Sea Nymph · the close', to:'Maria, Sea Nymph Resort · WhatsApp', body:
+`Hi Maria, quick one before I head to Palawan next week.
+
+If the booking bot doesn't cut your double-bookings to zero in the first 30 days, I refund the ₱25k setup and you keep the workflows. No risk on your side.
+
+If that works, I can have it live before the long weekend. Should I send the deposit link?` },
+    intro: { title:'Bossjob lead · intro', to:'Agency buyer · Bossjob message', body:
+`Hi, I saw your post for an n8n builder for a WhatsApp booking flow.
+
+I shipped exactly this for Bamboo Ridge last month: inventory lock while the guest pays, deposit collection, automatic reminders. Live in 9 days.
+
+Happy to send the flow diagram if useful. Are you scoping this for one client or a template you'll reuse?` },
+  };
+  function openSheet(kind, arg){
+    let html = '';
+    if(kind==='cap'){
+      html = `<h3>Set your capacity</h3><p class="desc">The plan re-sizes to fit. Deep focus keeps the 90 minute block; Low energy drops it and keeps only the sends.</p>` +
+        ['Deep focus|2+ hours, high-value work','Moderate|~1 hour, calls and reviews','Low energy|30 min, sends and admin only'].map(o=>{ const [t,s]=o.split('|'); return `<button class="opt ${state.cap===t?'on':''}" onclick="setCap('${t}')"><div><div class="ct">${t}</div><div class="cs">${s}</div></div></button>`; }).join('');
+    } else if(kind==='evidence'){
+      html = `<h3>What the read is built from</h3><p class="desc">Rows are from your check-ins and forwarded threads. Priors are labelled and never counted as your data.</p>
+        <div class="evrow"><div class="l"><b>Cold DMs, 14 days</b><span>Logged in 9 check-ins</span></div><div class="r">1 / 40<small>3% reply</small></div></div>
+        <div class="evrow"><div class="l"><b>In-person visits, 30 days</b><span>Sea Nymph, Bamboo Ridge, Tuna Bay</span></div><div class="r">2 / 3<small>67% deposit</small></div></div>
+        <div class="evrow"><div class="l"><b>Sea Nymph silence</b><span>Last message: your proposal, Saturday</span></div><div class="r">4 days<small>proposal stage</small></div></div>
+        <div class="evrow"><div class="l"><b>Your cold deals died at</b><span>Coco Beach, Tuna Bay (earlier)</span></div><div class="r">day 4–5<small>of silence</small></div></div>
+        <div class="evrow"><div class="l"><b>Relocation</b><span>You set this on Aug 12</span></div><div class="r">23 days<small>hard date</small></div></div>
+        <div class="evrow"><div class="l"><b>Prior · visits ≈5× DMs</b><span>General SMB pattern. Your own ratio is higher. Not verified for Palawan.</span></div><div class="r" style="color:var(--muted)">prior</div></div>
+        <div class="actions" style="margin-top:14px"><button class="btn primary" onclick="closeSheet()">Makes sense</button><button class="btn quiet">Something's wrong</button></div>`;
+    } else if(kind==='draft'){
+      const d = drafts[arg==='intro'?'intro':'close'];
+      const planId = arg==='intro'?'intro':'close';
+      html = `<h3>${d.title}</h3><p class="desc">To ${d.to}. Sends from your number. Edits are kept for next time.</p>
+        <div class="draft">${d.body}</div>
+        <div class="actions" style="margin-top:12px"><button class="btn blue" style="flex:1" onclick="markPlan('${planId}','done')">Send it</button><button class="btn">Edit</button><button class="btn quiet" onclick="closeSheet()">Later</button></div>`;
+    }
+    $('sheetBody').innerHTML = html;
+    $('sheet').classList.add('open'); $('overlay').classList.add('open');
+  }
+  function closeSheet(){ $('sheet').classList.remove('open'); $('overlay').classList.remove('open'); }
+  function setCap(label){ state.cap = label; $('capLabel').textContent = label; closeSheet(); }
+
+  // ---------- Check-in ----------
+  function openCheckin(){
+    state.ckStep = 1; showCkStep();
+    $('ckPlan').innerHTML = state.plan.map(p=>`
+      <div class="row" style="align-items:center">
+        <div style="flex:1"><div class="txt">${p.txt}</div></div>
+        <div class="tri" data-plan="${p.id}">
+          <button class="${p.status==='done'?'on':''}" onclick="triPlan('${p.id}','done',this)">Done</button>
+          <button class="${p.status==='partial'?'on':''}" onclick="triPlan('${p.id}','partial',this)">Part</button>
+          <button class="${p.status==='skipped'?'on':''}" onclick="triPlan('${p.id}','skipped',this)">Skip</button>
+        </div>
+      </div>`).join('');
+    $('ckDeals').innerHTML = deals.filter(d=>d.stage!=='won').map(d=>`
+      <div class="row" style="align-items:center">
+        <div style="flex:1"><div class="txt">${d.name}</div><div class="sub">${d.stage} · ${money(d.value)}</div></div>
+        <div class="tri">
+          <button onclick="triMove('${d.id}','replied',this)">Replied</button>
+          <button onclick="triMove('${d.id}','deposit',this)">Deposit</button>
+          <button onclick="triMove('${d.id}','cold',this)">Cold</button>
+        </div>
+      </div>`).join('');
+    $('ckCap').innerHTML = ['Deep focus|2+ hours','Moderate|~1 hour','Low energy|30 min'].map(o=>{ const [t,s]=o.split('|'); return `<button class="opt ${state.cap===t?'on':''}" onclick="setCapCk('${t}',this)"><div><div class="ct">${t}</div><div class="cs">${s}</div></div></button>`; }).join('');
+    $('checkin').classList.add('open');
+  }
+  function triPlan(id, status, btn){ state.plan.find(p=>p.id===id).status = status; btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); }
+  function triMove(id, what, btn){
+    const on = btn.classList.contains('on');
+    btn.parentElement.querySelectorAll('button').forEach(b=>b.className='');
+    if(on){ delete state.moves[id]; return; }
+    btn.className = 'on ' + (what==='deposit'?'won':what==='cold'?'cold':''); state.moves[id] = what;
+  }
+  function step(k, d){ state.counts[k] = Math.max(0, state.counts[k]+d); $('n-'+k).textContent = state.counts[k]; }
+  function setCapCk(t, btn){ state.cap = t; $('capLabel').textContent = t; btn.parentElement.querySelectorAll('.opt').forEach(o=>o.classList.remove('on')); btn.classList.add('on'); }
+  function showCkStep(){
+    [1,2,3].forEach(i=>{ $('ck'+i).classList.toggle('active', state.ckStep===i); $('s'+i).classList.toggle('on', state.ckStep>=i); });
+    $('ckBack').textContent = state.ckStep===1 ? 'Cancel' : 'Back';
+    $('ckNext').textContent = state.ckStep===3 ? 'Log it' : 'Next';
+  }
+  function ckNav(d){
+    if(d<0 && state.ckStep===1){ $('checkin').classList.remove('open'); return; }
+    if(d>0 && state.ckStep===3){ finishCheckin(); return; }
+    state.ckStep += d; showCkStep(); document.querySelector('.ck-body').scrollTop = 0;
+  }
+  function finishCheckin(){
+    // apply moves to the pipeline so the loop is visible
+    let won = 0;
+    Object.entries(state.moves).forEach(([id,what])=>{
+      const d = deals.find(x=>x.id===id);
+      if(what==='deposit'){ d.stage='won'; d.silent=0; d.last='Deposit received · today'; won += d.value; d.timeline.unshift(['Today','Deposit received. Logged from tonight\'s check-in.','Check-in','win']); }
+      if(what==='replied'){ d.silent=0; d.last='Replied · today'; d.timeline.unshift(['Today','They replied. Logged from tonight\'s check-in.','Check-in','']); }
+      if(what==='cold'){ d.stage='cold'; d.timeline.unshift(['Today','Marked cold in tonight\'s check-in.','Check-in','']); }
+    });
+    if(won){
+      const total = 1500 + won; const pct = Math.min(100, Math.round(total/2000*100));
+      $('monthV').innerHTML = `${money(total)} <small>/ 2k</small>`;
+      $('goalPct').textContent = pct + '%'; $('goalFill').style.width = pct + '%';
+      $('goalSub').textContent = `${money(total)} of $2,000 · target ${pct>=100?'hit':'in reach'}. Runway now ${(4.2 + won/1000*1.4).toFixed(1)} months.`;
+      $('runwayV').innerHTML = `${(4.2 + won/1000*1.4).toFixed(1)} <small>mo</small>`;
+      $('runwayV').classList.toggle('warn', (4.2 + won/1000*1.4) < 6);
+    }
+    state.logged = true;
+    const c = state.counts; const moved = Object.keys(state.moves).length;
+    $('tonightCard').className = 'tonight logged';
+    $('tonightCard').innerHTML = `<div class="k">Logged · 8:33 pm</div><h2>Read updates at 7:00 am.</h2>
+      <p>${c.visits} visit${c.visits===1?'':'s'}, ${c.dms} DM${c.dms===1?'':'s'}, ${c.refs} referral ask${c.refs===1?'':'s'}. ${moved} deal${moved===1?'':'s'} moved${won?`, ${money(won)} in deposits`:''}. Tomorrow sized for ${state.cap.toLowerCase()}.</p>`;
+    $('checkin').classList.remove('open');
+    renderToday(); renderDeals();
+  }
+
+  // ---------- Nav ----------
+  function switchTab(id, el){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.querySelectorAll('nav .tab').forEach(t=>t.classList.remove('active'));
+    $('v-'+id).classList.add('active'); el.classList.add('active');
+    $('content').scrollTop = 0;
+  }
+  document.querySelectorAll('#v-opps .filters .fchip').forEach(c=>c.addEventListener('click',()=>{ document.querySelectorAll('#v-opps .filters .fchip').forEach(x=>x.classList.remove('active')); c.classList.add('active'); }));
+
+  renderToday(); renderDeals();
+</script>

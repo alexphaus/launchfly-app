@@ -288,15 +288,6 @@
     pointer-events: none;
   }
   .mrr-tick.hit { background: var(--green-dark); }
-  /* Below the floor the first tick is the only thing worth looking at. */
-  .mrr-tick.must-hit {
-    background: var(--amber);
-    animation: floor-pulse 1.9s ease-in-out infinite;
-  }
-  @keyframes floor-pulse {
-    0%, 100% { opacity: 1; height: 22px; top: -4px; }
-    50% { opacity: 0.5; height: 28px; top: -7px; }
-  }
   .mrr-tick.goal { background: var(--text-tertiary); width: 3px; }
 
   .mrr-slider {
@@ -361,12 +352,6 @@
     opacity: 0.85;
   }
   .mrr-label.hit { color: var(--green-dark); font-weight: 600; }
-  .mrr-label.must-hit { color: var(--amber-dark); font-weight: 700; }
-  .hero-sub.floor {
-    color: var(--amber-dark);
-    font-weight: 600;
-  }
-  .hero-sub.floor strong { color: var(--amber-dark); }
   .mrr-label.last { transform: translateX(-100%); }
 
   /* ---------- Today's actions (agent-writable) ---------- */
@@ -668,7 +653,7 @@
   var UNIT = 500;
   // The 15th square is a checkpoint you have to reach, marked by the square
   // itself rather than by an icon sitting in it. The last one is the finish.
-  var CHECKPOINT_INDEX = 14;
+  var CHECKPOINT_INDEX = 13;
   var FINISH_INDEX = TOTAL - 1;
   var GOAL = 25000;
   var LEGACY_STORAGE_KEY = 'savings-tracker-25k-v2';
@@ -684,14 +669,11 @@
   var MONTH_GOAL = 100000;
   var MRR_GOAL = 3300;
   var MRR_LEVELS = [
-    { v: 100,  name: 'Nomad' },
+    { v: 150,  name: 'Nomad' },
     { v: 330,  name: 'Business' },
     { v: 1000, name: 'SaaS' },
     { v: 3300, name: 'Enterprise' }
   ];
-  // The floor. Below this the first level stops being one milestone among
-  // four and becomes the only thing the card asks for.
-  var DAILY_FLOOR = MRR_LEVELS[0].v;
   // Milestones are spaced evenly along the track rather than linearly by
   // value - on a linear scale everything below 15k would be squashed into the
   // first 15% and the early levels would be unreadable.
@@ -1381,14 +1363,9 @@
     }
 
     var next = nextLevel(value);
-    // Below the floor the card asks for one thing only, and says it plainly.
-    var belowFloor = value < DAILY_FLOOR;
-    var sub = belowFloor
-      ? '<strong>' + formatEuro(DAILY_FLOOR - value) + '</strong> to ' + formatEuro(DAILY_FLOOR) +
-        ' — hit this first, every day'
-      : (next
-        ? '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name
-        : '<strong>Top level.</strong> €3,300/day is €100k/mo pace');
+    var sub = next
+      ? '<strong>' + formatEuro(next.v - value) + '</strong> to ' + next.name
+      : '<strong>Top level.</strong> €3,300/day is €100k/mo pace';
 
     // A dip should not erase the win: the peak stays marked on the track, and
     // rides on the end of this line rather than taking a row of its own.
@@ -1400,14 +1377,11 @@
       mrrPeakMark.classList.remove('show');
     }
     mrrMetaEl.innerHTML = sub;
-    mrrMetaEl.className = 'hero-sub' + (belowFloor ? ' floor' : '');
 
     var marks = document.querySelectorAll('.mrr-tick, .mrr-label');
     for (var i = 0; i < marks.length; i++) {
       var markValue = parseFloat(marks[i].getAttribute('data-value'));
-      var isFloor = markValue === DAILY_FLOOR;
       marks[i].classList.toggle('hit', value >= markValue);
-      marks[i].classList.toggle('must-hit', isFloor && belowFloor);
     }
 
     renderMonth();

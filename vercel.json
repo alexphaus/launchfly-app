@@ -6,6 +6,7 @@
     },
     { "path": "/api/cron/memory-consolidation", "schedule": "0 6 * * 0" },
     { "path": "/api/cron/memory-decay", "schedule": "0 7 * * 0" },
-    { "path": "/api/cron/reflection-pulse", "schedule": "0 8 * * 0" }
+    { "path": "/api/cron/reflection-pulse", "schedule": "0 8 * * 0" },
+    { "path": "/api/copilot/cron/daily", "schedule": "0 21 * * *" }
   ]
 }

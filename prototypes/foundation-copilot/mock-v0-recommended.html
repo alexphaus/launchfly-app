@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Foundation — Opportunity Copilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EEF1F7;
+    --card:#FFFFFF;
+    --ink:#1A1D29;
+    --muted:#7B8094;
+    --dim:#AEB2C2;
+    --accent:#4F63D2;
+    --accent-soft:#4F63D214;
+    --accent-soft2:#4F63D20A;
+    --ai:#3D9985;
+    --ai-soft:#3D998514;
+    --urgent:#C45C26;
+    --urgent-soft:#C45C2614;
+    --shadow: 0 10px 28px rgba(31,41,68,0.07);
+    --shadow-sm: 0 4px 14px rgba(31,41,68,0.05);
+    --shadow-nav: 0 14px 34px rgba(20,25,45,0.16);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Inter',sans-serif;
+    background:#DEE3ED;
+    display:flex; justify-content:center;
+    padding:32px 12px;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.heading{ font-family:'Sora',sans-serif; }
+
+  .frame{
+    width:390px; height:844px;
+    background:var(--bg);
+    border-radius:40px;
+    overflow:hidden;
+    position:relative;
+    display:flex; flex-direction:column;
+    box-shadow:0 30px 70px rgba(20,25,45,0.22);
+  }
+
+  .status{
+    display:flex; justify-content:space-between;
+    padding:18px 26px 4px;
+    font-size:12px; color:var(--muted); font-weight:600;
+  }
+  .status span:first-child{ color:var(--ink); }
+
+  .header{
+    padding:14px 24px 16px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+  }
+  .header h1{
+    font-size:22px; font-weight:700; letter-spacing:-0.3px;
+  }
+  .header p{
+    font-size:12.5px; color:var(--muted); margin-top:4px; font-weight:500;
+  }
+
+  .capacity-btn{
+    background:var(--card);
+    box-shadow:var(--shadow-sm);
+    color:var(--accent);
+    font-family:'Sora',sans-serif;
+    font-size:11.5px; font-weight:600;
+    padding:9px 15px;
+    border-radius:999px;
+    display:flex; align-items:center; gap:7px;
+    cursor:pointer;
+    white-space:nowrap;
+    border:none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .capacity-btn:active{ transform:scale(0.97); }
+  .capacity-dot{
+    width:6px; height:6px; border-radius:50%; background:var(--accent);
+  }
+
+  .content{
+    flex:1; overflow-y:auto;
+    padding:2px 22px 110px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .content::-webkit-scrollbar{ display:none; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .section-label{
+    font-size:11.5px; font-weight:700; color:var(--muted);
+    text-transform:uppercase; letter-spacing:0.06em;
+    padding:20px 4px 12px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .section-label span.count{
+    color:var(--dim); font-weight:600;
+    text-transform:none; letter-spacing:0;
+  }
+
+  /* Cards */
+  .card{
+    background:var(--card);
+    border-radius:28px;
+    box-shadow:var(--shadow);
+    padding:22px;
+    margin-bottom:16px;
+  }
+
+  .eyebrow{
+    font-size:11px; font-weight:700; color:var(--accent);
+    text-transform:uppercase; letter-spacing:0.06em;
+    margin-bottom:9px;
+  }
+  .insight p{
+    font-size:15px; line-height:1.65; color:var(--ink);
+  }
+  .insight .go{
+    margin-top:14px; font-size:13px; font-weight:700;
+    color:var(--accent); font-family:'Sora',sans-serif;
+    cursor:pointer;
+  }
+
+  /* Leverage plan */
+  .plan-card{
+    background:var(--card);
+    border-radius:28px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    margin-bottom:16px;
+  }
+  .prow{
+    display:flex; align-items:center; gap:12px;
+    padding:16px 22px;
+    border-bottom:1px solid #F1F2F7;
+  }
+  .prow:last-child{ border-bottom:none; }
+  .prow .txt{ flex:1; font-size:13.5px; line-height:1.45; }
+  .chip{
+    font-size:10px; font-weight:700;
+    padding:5px 11px; border-radius:999px;
+    white-space:nowrap;
+  }
+  .chip-ai{ background:var(--ai-soft); color:var(--ai); }
+  .chip-you{ background:#F1F2F7; color:var(--muted); }
+
+  .nrow{
+    display:flex; gap:12px;
+    padding:16px 22px;
+    border-bottom:1px solid #F1F2F7;
+  }
+  .nrow:last-child{ border-bottom:none; }
+  .ndot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--dim); margin-top:6px; flex-shrink:0;
+  }
+  .nrow.urgent .ndot{ background:var(--accent); }
+  .nrow .t{ font-size:13.5px; line-height:1.5; }
+  .nrow .s{ font-size:11.5px; color:var(--muted); margin-top:4px; font-weight:500; }
+
+  /* Filters */
+  .filters{
+    display:flex; gap:9px;
+    padding:16px 0 6px;
+    overflow-x:auto;
+  }
+  .fchip{
+    font-size:12.5px; font-weight:600;
+    padding:9px 16px; border-radius:999px;
+    background:var(--card);
+    box-shadow:var(--shadow-sm);
+    color:var(--muted);
+    white-space:nowrap; cursor:pointer;
+    font-family:'Sora',sans-serif;
+    border:none;
+    transition: all 0.15s ease;
+  }
+  .fchip.active{
+    background:var(--accent); color:#fff;
+    box-shadow:0 6px 16px rgba(79,99,210,0.3);
+  }
+
+  /* Match cards */
+  .match{
+    background:var(--card);
+    border-radius:28px;
+    box-shadow:var(--shadow);
+    padding:22px;
+    margin-bottom:16px;
+  }
+  .mtop{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:9px;
+  }
+  .tag{
+    font-size:10.5px; font-weight:700;
+    color:var(--accent); background:var(--accent-soft);
+    padding:5px 11px; border-radius:999px;
+  }
+  .mscore{
+    font-size:12.5px; font-weight:700;
+    color:var(--accent); font-family:'Sora',sans-serif;
+  }
+  .mtitle{
+    font-size:16px; font-weight:700;
+    line-height:1.4; margin-bottom:6px;
+    font-family:'Sora',sans-serif;
+  }
+  .mreason{
+    font-size:12.5px; color:var(--muted);
+    line-height:1.55; margin-bottom:14px;
+  }
+  .mbottom{
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .mvalue{
+    font-size:16px; font-weight:700;
+    font-family:'Sora',sans-serif;
+  }
+  .btrack{
+    flex:1; height:6px; background:#F1F2F7;
+    border-radius:999px; margin:0 14px; overflow:hidden;
+  }
+  .bfill{
+    height:100%; background:var(--accent);
+    border-radius:999px;
+  }
+  .btn-row{
+    display:flex; gap:10px; margin-top:16px;
+  }
+  .btn{
+    flex:1; padding:12px 16px;
+    border-radius:999px;
+    font-size:13px; font-weight:700;
+    border:none; cursor:pointer;
+    font-family:'Sora',sans-serif;
+    transition: transform 0.15s ease;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn-primary{
+    background:var(--accent); color:#fff;
+    box-shadow:0 4px 14px rgba(79,99,210,0.28);
+  }
+  .btn-secondary{
+    background:#F1F2F7; color:var(--ink);
+  }
+
+  /* Growth */
+  .gtop{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:10px;
+  }
+  .gtitle{
+    font-size:14.5px; font-weight:700;
+    font-family:'Sora',sans-serif;
+  }
+  .gpct{
+    font-size:12.5px; font-weight:700; color:var(--accent);
+  }
+  .gtrack{
+    height:7px; background:#F1F2F7;
+    border-radius:999px; overflow:hidden; margin-bottom:10px;
+  }
+  .gfill{
+    height:100%; background:var(--accent);
+    border-radius:999px;
+  }
+  .gnote{
+    font-size:12.5px; color:var(--muted); line-height:1.55;
+  }
+  .gcta{
+    font-size:12px; font-weight:700; color:var(--accent);
+    margin-top:10px; display:inline-block;
+    font-family:'Sora',sans-serif; cursor:pointer;
+  }
+
+  .learn{
+    background:var(--card);
+    border-radius:24px;
+    box-shadow:var(--shadow-sm);
+    padding:18px 20px;
+    display:flex; gap:14px; align-items:flex-start;
+    margin-bottom:14px;
+  }
+  .learn .lnum{
+    font-size:11px; font-weight:700;
+    color:var(--ai); background:var(--ai-soft);
+    border-radius:999px; padding:6px 10px;
+    font-family:'Sora',sans-serif;
+  }
+  .learn .lbody{ flex:1; }
+  .learn .lt{
+    font-size:13.5px; font-weight:700; margin-bottom:3px;
+    font-family:'Sora',sans-serif;
+  }
+  .learn .ls{
+    font-size:12px; color:var(--muted); line-height:1.55;
+  }
+
+  /* You / Goals */
+  .goal .top{
+    display:flex; justify-content:space-between; margin-bottom:10px;
+  }
+  .goal .name{
+    font-size:14px; font-weight:700;
+    font-family:'Sora',sans-serif;
+  }
+  .goal .pct{
+    font-size:13px; font-weight:700; color:var(--accent);
+  }
+  .goal .track{
+    height:8px; background:#F1F2F7;
+    border-radius:999px; overflow:hidden; margin-bottom:8px;
+  }
+  .goal .fill{
+    height:100%; background:var(--accent);
+    border-radius:999px;
+  }
+  .goal .sub{
+    font-size:11.5px; color:var(--muted); font-weight:500;
+  }
+
+  .ctx-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 22px;
+    border-bottom:1px solid #F1F2F7;
+  }
+  .ctx-row:last-child{ border-bottom:none; }
+  .ctx-row .l{ font-size:13.5px; font-weight:600; }
+  .ctx-row .s{ font-size:11.5px; color:var(--dim); margin-top:3px; }
+  .ctx-connect{
+    font-size:12px; font-weight:700; color:#fff;
+    background:var(--accent);
+    padding:7px 14px; border-radius:999px;
+    font-family:'Sora',sans-serif;
+    border:none; cursor:pointer;
+  }
+  .ctx-note{
+    padding:14px 4px 4px;
+    font-size:11.5px; color:var(--dim); line-height:1.6;
+  }
+
+  /* Floating pill nav */
+  nav{
+    position:absolute; left:20px; right:20px; bottom:20px;
+    display:flex; justify-content:space-around; align-items:center;
+    background:var(--card);
+    border-radius:999px;
+    padding:12px 10px;
+    box-shadow:var(--shadow-nav);
+    z-index:20;
+  }
+  nav button{
+    background:none; border:none;
+    font-family:'Sora',sans-serif;
+    font-size:10.5px; color:var(--dim);
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding:6px 10px; cursor:pointer;
+    border-radius:999px;
+    transition:background .15s ease, color .15s ease;
+  }
+  nav button svg{
+    width:19px; height:19px; stroke:var(--dim);
+  }
+  nav button.active{
+    color:var(--accent); font-weight:700;
+    background:var(--accent-soft);
+  }
+  nav button.active svg{ stroke:var(--accent); }
+
+  /* Capacity sheet */
+  .sheet-overlay{
+    position:absolute; inset:0;
+    background:rgba(26,29,41,0.35);
+    opacity:0; pointer-events:none;
+    transition:opacity .25s ease; z-index:25;
+  }
+  .sheet-overlay.open{ opacity:1; pointer-events:auto; }
+  .sheet{
+    position:absolute; left:0; right:0; bottom:-340px;
+    background:var(--bg);
+    border-radius:32px 32px 0 0;
+    padding:22px 24px 34px;
+    z-index:30;
+    transition:bottom .3s cubic-bezier(.16,1,.3,1);
+    box-shadow:0 -14px 34px rgba(20,25,45,0.16);
+  }
+  .sheet.open{ bottom:0; }
+  .handle{
+    width:38px; height:5px; background:#D5D9E3;
+    border-radius:999px; margin:0 auto 18px;
+  }
+  .sheet h3{
+    font-size:16px; font-weight:700; margin-bottom:4px;
+  }
+  .sheet p.desc{
+    font-size:12.5px; color:var(--muted);
+    margin-bottom:18px; line-height:1.55;
+  }
+  .cap-option{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 18px;
+    background:var(--card);
+    box-shadow:var(--shadow-sm);
+    border-radius:20px;
+    margin-bottom:11px;
+    cursor:pointer;
+    transition: transform 0.15s ease;
+  }
+  .cap-option:active{ transform:scale(0.98); }
+  .cap-option .ct{
+    font-size:14px; font-weight:700;
+    font-family:'Sora',sans-serif;
+  }
+  .cap-option .cs{
+    font-size:11.5px; color:var(--muted); margin-top:3px;
+  }
+
+  /* Toast */
+  .toast{
+    position:absolute; top:56px; left:50%;
+    transform:translateX(-50%) translateY(-12px);
+    background:var(--ink); color:#fff;
+    padding:10px 18px; border-radius:24px;
+    font-size:13.5px; font-weight:600;
+    opacity:0; transition:all 0.3s cubic-bezier(0.16,1,0.3,1);
+    z-index:40; pointer-events:none;
+    box-shadow:0 12px 40px rgba(15,23,42,0.15);
+    white-space:nowrap;
+  }
+  .toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="status"><span>9:41</span><span>90%</span></div>
+
+  <div class="toast" id="toast">Action saved</div>
+
+  <div class="header">
+    <div>
+      <h1>Good evening, Alex</h1>
+      <p>3 new matches · 2 actions need you</p>
+    </div>
+    <button class="capacity-btn" onclick="toggleSheet()">
+      <span class="capacity-dot"></span>
+      <span id="capLabel">Deep focus</span>
+    </button>
+  </div>
+
+  <div class="content">
+
+    <!-- TODAY -->
+    <div class="view active" id="v-today">
+      <div class="card insight">
+        <div class="eyebrow">Today's read</div>
+        <p>You've sent 40 DMs this week at a 3% reply rate. Owners in this segment respond to in-person visits at roughly five times that — and you're leaving the country in weeks. Worth shifting Thursday and Friday to Palawan visits instead of more DMs.</p>
+        <div class="go" onclick="showToast('Opening reasoning…')">See the reasoning →</div>
+      </div>
+
+      <div class="section-label">Today's leverage plan</div>
+      <div class="plan-card">
+        <div class="prow">
+          <span class="chip chip-ai">AI drafted</span>
+          <span class="txt">Outreach reply to Sea Nymph — risk-reversal close, ready to review</span>
+        </div>
+        <div class="prow">
+          <span class="chip chip-you">Needs you · 90 min</span>
+          <span class="txt">Build the subcontract sales one-pager</span>
+        </div>
+        <div class="prow">
+          <span class="chip chip-ai">AI drafted</span>
+          <span class="txt">Intro message to a subcontract lead, ready to review</span>
+        </div>
+      </div>
+
+      <div class="section-label">Next actions <span class="count">2 urgent</span></div>
+      <div class="plan-card">
+        <div class="nrow urgent">
+          <div class="ndot"></div>
+          <div>
+            <div class="t">Sea Nymph — day 4 with no deposit. Send the close before it goes cold.</div>
+            <div class="s">Due today</div>
+          </div>
+        </div>
+        <div class="nrow urgent">
+          <div class="ndot"></div>
+          <div>
+            <div class="t">Rotate the hardcoded ManyChat token before showing workflows to any buyer.</div>
+            <div class="s">Overdue</div>
+          </div>
+        </div>
+        <div class="nrow">
+          <div class="ndot"></div>
+          <div>
+            <div class="t">Runway dropped to 4.2 months. Setup fees below ₱25k are costing you time.</div>
+            <div class="s">Finance</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATCHES -->
+    <div class="view" id="v-opps">
+      <div class="filters">
+        <button class="fchip active">All</button>
+        <button class="fchip">Clients</button>
+        <button class="fchip">People</button>
+        <button class="fchip">Services</button>
+        <button class="fchip">Communities</button>
+      </div>
+      <div class="section-label">Matched for you <span class="count">3 new</span></div>
+
+      <div class="match">
+        <div class="mtop">
+          <span class="tag">Client</span>
+          <span class="mscore">92% match</span>
+        </div>
+        <div class="mtitle">WhatsApp booking build for an agency client</div>
+        <div class="mreason">Matches your n8n and inventory-locking work on bamboo_ridge. Buyer already sold the client.</div>
+        <div class="mbottom">
+          <div class="mvalue">$1,800</div>
+          <div class="btrack"><div class="bfill" style="width:92%"></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="showToast('Draft opened')">Draft outreach</button>
+          <button class="btn btn-secondary" onclick="showToast('Passed')">Pass</button>
+        </div>
+      </div>
+
+      <div class="match">
+        <div class="mtop">
+          <span class="tag">Client</span>
+          <span class="mscore">78% match</span>
+        </div>
+        <div class="mtitle">Make.com refund-flow fix, 3 day turnaround</div>
+        <div class="mreason">Smaller scope, fast close — good filler between Sea Nymph and Xen conversations.</div>
+        <div class="mbottom">
+          <div class="mvalue">$950</div>
+          <div class="btrack"><div class="bfill" style="width:78%"></div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="showToast('Draft opened')">Draft outreach</button>
+          <button class="btn btn-secondary" onclick="showToast('Passed')">Pass</button>
+        </div>
+      </div>
+
+      <div class="match">
+        <div class="mtop">
+          <span class="tag">Community</span>
+          <span class="mscore">64% match</span>
+        </div>
+        <div class="mtitle">n8n Builders SEA — Telegram group</div>
+        <div class="mreason">Active subcontract requests match your exact stack. Two members reachable by mutual contact.</div>
+        <div class="mbottom">
+          <div class="mvalue">Join</div>
+          <div class="btrack"><div class="bfill" style="width:64%"></div></div>
+        </div>
+      </div>
+
+      <div class="match">
+        <div class="mtop">
+          <span class="tag">Signal</span>
+          <span class="mscore">61% match</span>
+        </div>
+        <div class="mtitle">AU trades demand for voice-first intake is rising</div>
+        <div class="mreason">Three new local competitors funded this month. Early-mover window on chat-first is narrowing.</div>
+        <div class="mbottom">
+          <div class="mvalue">Read</div>
+          <div class="btrack"><div class="bfill" style="width:61%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GROWTH -->
+    <div class="view" id="v-growth">
+      <div class="section-label">Skill gaps vs. matches</div>
+      <div class="card">
+        <div class="gtop">
+          <span class="gtitle">Voice AI intake</span>
+          <span class="gpct">0%</span>
+        </div>
+        <div class="gtrack"><div class="gfill" style="width:0%"></div></div>
+        <div class="gnote">Shows up in 3 opportunities this month you weren't matched to.</div>
+        <span class="gcta" onclick="showToast('Opening details…')">See why it matters →</span>
+      </div>
+      <div class="card">
+        <div class="gtop">
+          <span class="gtitle">n8n workflow architecture</span>
+          <span class="gpct">90%</span>
+        </div>
+        <div class="gtrack"><div class="gfill" style="width:90%"></div></div>
+        <div class="gnote">Your strongest asset — driving most of this week's matches.</div>
+        <span class="gcta" onclick="showToast('Showcase tips opened')">Showcase in outreach →</span>
+      </div>
+
+      <div class="section-label">Worth learning this week</div>
+      <div class="learn">
+        <div class="lnum">01</div>
+        <div class="lbody">
+          <div class="lt">Framer micro-animations, 12 min</div>
+          <div class="ls">Three missed matches this month asked for interactive prototypes specifically.</div>
+        </div>
+      </div>
+      <div class="learn">
+        <div class="lnum">02</div>
+        <div class="lbody">
+          <div class="lt">Pricing subcontract work above cost-plus, 8 min</div>
+          <div class="ls">Ties directly to the ₱25k pricing note in today's actions.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- YOU -->
+    <div class="view" id="v-you">
+      <div class="section-label">Goals</div>
+      <div class="card goal">
+        <div class="top">
+          <span class="name">Monthly revenue</span>
+          <span class="pct">75%</span>
+        </div>
+        <div class="track"><div class="fill" style="width:75%"></div></div>
+        <div class="sub">$1,500 of $2,000 target</div>
+      </div>
+      <div class="card goal">
+        <div class="top">
+          <span class="name">Runway</span>
+          <span class="pct">4.2 mo</span>
+        </div>
+        <div class="track"><div class="fill" style="width:55%"></div></div>
+        <div class="sub">Priority: close before relocation</div>
+      </div>
+
+      <div class="section-label">Context sources <span class="count">foundation for later</span></div>
+      <div class="plan-card">
+        <div class="ctx-row">
+          <div>
+            <div class="l">Calendar</div>
+            <div class="s">Sharpens focus-window and nudge timing</div>
+          </div>
+          <button class="ctx-connect" onclick="showToast('Connecting…')">Connect</button>
+        </div>
+        <div class="ctx-row">
+          <div>
+            <div class="l">Business notes / CRM</div>
+            <div class="s">Improves client and lead matching</div>
+          </div>
+          <button class="ctx-connect" onclick="showToast('Connecting…')">Connect</button>
+        </div>
+        <div class="ctx-row">
+          <div>
+            <div class="l">Finances</div>
+            <div class="s">Keeps pricing and runway guidance current</div>
+          </div>
+          <button class="ctx-connect" onclick="showToast('Connecting…')">Connect</button>
+        </div>
+      </div>
+      <div class="ctx-note">Nothing is connected yet — matches above run on what you tell the copilot directly. Each source you add sharpens ranking, it doesn't unlock new tabs.</div>
+    </div>
+
+  </div>
+
+  <nav>
+    <button class="tab active" data-view="today" onclick="switchTab('today', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+      Today
+    </button>
+    <button class="tab" data-view="opps" onclick="switchTab('opps', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+      Matches
+    </button>
+    <button class="tab" data-view="growth" onclick="switchTab('growth', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+      Growth
+    </button>
+    <button class="tab" data-view="you" onclick="switchTab('you', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      You
+    </button>
+  </nav>
+
+  <div class="sheet-overlay" id="overlay" onclick="toggleSheet()"></div>
+  <div class="sheet" id="sheet">
+    <div class="handle"></div>
+    <h3>Set your capacity</h3>
+    <p class="desc">Matches and today's plan re-rank instantly to fit what you actually have right now.</p>
+    <div class="cap-option" onclick="setCap('Deep focus')">
+      <div>
+        <div class="ct">Deep focus</div>
+        <div class="cs">2+ hours, high-value work</div>
+      </div>
+    </div>
+    <div class="cap-option" onclick="setCap('Moderate')">
+      <div>
+        <div class="ct">Moderate</div>
+        <div class="cs">~1 hour, calls and reviews</div>
+      </div>
+    </div>
+    <div class="cap-option" onclick="setCap('Low energy')">
+      <div>
+        <div class="ct">Low energy</div>
+        <div class="cs">30 min, light admin only</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchTab(id, el){
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('nav .tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('v-' + id).classList.add('active');
+    el.classList.add('active');
+  }
+
+  function toggleSheet(){
+    document.getElementById('sheet').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+
+  function setCap(label){
+    document.getElementById('capLabel').innerText = label;
+    toggleSheet();
+    showToast('Plan re-aligned to ' + label);
+  }
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  document.querySelectorAll('.fchip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.fchip').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

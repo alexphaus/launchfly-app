@@ -70,6 +70,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Copilot responses are per-user; the later rule wins for the same header key.
+        source: '/api/copilot/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-store',
+          },
+        ],
+      },
     ];
   },
 };

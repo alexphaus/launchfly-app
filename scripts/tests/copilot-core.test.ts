@@ -45,9 +45,27 @@ const base = { created_at: now.toISOString(), score: 0 };
     { owner: 'you', minutes: 20, status: 'open' },
     { owner: 'you', minutes: 15, status: 'done' },
   ], 'low');
-  assert.deepEqual(plan.map((p) => `${p.owner}:${p.minutes}`), ['ai:5', 'you:90', 'you:15'], 'low capacity keeps AI items, first you item, done items');
+  assert.deepEqual(plan.map((p) => `${p.owner}:${p.minutes}`), ['ai:5', 'you:20', 'you:15'], 'low capacity keeps AI items, the tasks that fit, and done items');
+
+  // Regression: an oversized item listed first must not evict the cheap ones behind it.
+  const squeezed = selectPlan([
+    { owner: 'you', minutes: 90, status: 'open' },
+    { owner: 'you', minutes: 5, status: 'open' },
+  ], 'low');
+  assert.deepEqual(squeezed.map((p) => p.minutes), [5], 'a 90 min task first does not hide the 5 min task');
+
+  // But the plan is never empty: if nothing fits, show the cheapest single task.
+  const nothingFits = selectPlan([
+    { owner: 'you', minutes: 120, status: 'open' },
+    { owner: 'you', minutes: 90, status: 'open' },
+  ], 'low');
+  assert.deepEqual(nothingFits.map((p) => p.minutes), [90], 'falls back to the cheapest task, not the first');
+
+  assert.deepEqual(selectPlan([{ owner: 'you', minutes: undefined, status: 'open' }], 'low').length, 1, 'missing minutes default to 30 and still fit low');
+
   const planDeep = selectPlan([{ owner: 'you', minutes: 90, status: 'open' }, { owner: 'you', minutes: 50, status: 'open' }], 'deep');
   assert.equal(planDeep.length, 2, 'deep capacity fits both');
+  assert.deepEqual(selectPlan([{ owner: 'ai', minutes: 999, status: 'open' }], 'low').length, 1, 'AI-drafted items ignore the budget');
 }
 
 // --- schema normalisation

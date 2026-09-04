@@ -3,7 +3,7 @@
 // state and talks to /api/copilot. Optimistic where it is safe to be.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CAPACITY_META, type ActionStatus, type Capacity, type Goal, type HomeData, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
+import { CAPACITY_META, type ActionStatus, type Capacity, type Goal, type GrowthItem, type HomeData, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { del, get, post } from './api';
 import { greeting } from './format';
 import { IconGrowth, IconOpps, IconToday, IconYou } from './icons';
@@ -14,6 +14,12 @@ import GrowthView from './views/GrowthView';
 import OppsView from './views/OppsView';
 import TodayView from './views/TodayView';
 import YouView from './views/YouView';
+
+/** The sheet body stays mounted while it slides out, so each target needs its own
+ * identity or one goal's form state would be saved onto the next goal opened. */
+function sheetKey(s: SheetState): string {
+  return `${s.kind}:${'id' in s && s.id ? s.id : 'new'}`;
+}
 
 export default function CopilotApp({ initial }: { initial: HomeData }) {
   const [home, setHome] = useState<HomeData>(initial);
@@ -69,10 +75,25 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         await post('/context', { content, regenerate });
         await refresh();
         say(regenerate ? 'Added and re-planned' : 'Added to your context');
+        return true;
       } catch (e) {
         say(e instanceof Error ? e.message : 'Could not save');
+        return false;
       } finally {
         setBriefing(false);
+      }
+    },
+    async setGrowthStatus(id: string, status: GrowthItem['status']) {
+      setHome((h) => ({
+        ...h,
+        skills: status === 'active' ? h.skills : h.skills.filter((g) => g.id !== id),
+        lessons: status === 'active' ? h.lessons : h.lessons.filter((g) => g.id !== id),
+      }));
+      try {
+        await post(`/growth/${id}`, { status });
+      } catch (e) {
+        say(e instanceof Error ? e.message : 'Could not update');
+        void refresh();
       }
     },
     async setOppStatus(id: string, status: OpportunityStatus) {
@@ -170,7 +191,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       </nav>
 
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)}>
-        {sheet && <SheetContent sheet={sheet} home={home} actions={actions} />}
+        {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} />}
       </Sheet>
 
       {toast && <div className="cp-toast" role="status">{toast}</div>}

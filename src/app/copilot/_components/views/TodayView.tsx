@@ -12,8 +12,8 @@ export default function TodayView({ home, actions, briefing }: { home: HomeData;
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
     setSending(true);
-    await actions.addNote(note.trim(), regenerate);
-    setNote('');
+    const saved = await actions.addNote(note.trim(), regenerate);
+    if (saved) setNote('');   // keep the user's text if the save failed
     setSending(false);
   };
 

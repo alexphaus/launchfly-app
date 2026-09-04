@@ -74,10 +74,21 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     })));
   }
 
-  // Nudges: replace open ones so they never pile up.
-  await db.from('copilot_actions').delete().eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open');
-  if (out.nudges.length) {
-    await db.from('copilot_actions').insert(out.nudges.map((n) => ({
+  // Nudges: routine ones are regenerated freely so they never pile up, but an
+  // URGENT nudge the user has not acted on is never dropped just because this
+  // run failed to repeat it — that is real work quietly disappearing.
+  const { data: urgentOpen } = await db
+    .from('copilot_actions')
+    .select('title')
+    .eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open').eq('urgency', 'urgent');
+  const carried = new Set((urgentOpen ?? []).map((n: { title: string }) => norm(n.title)));
+
+  await db.from('copilot_actions').delete()
+    .eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open').neq('urgency', 'urgent');
+
+  const freshNudges = out.nudges.filter((n) => !carried.has(norm(n.title)));
+  if (freshNudges.length) {
+    await db.from('copilot_actions').insert(freshNudges.map((n) => ({
       profile_id: pid, kind: 'nudge', owner: 'you', title: n.title, urgency: n.urgency, due_label: n.due_label ?? null, for_date: today, agent_run_id: runId,
     })));
   }

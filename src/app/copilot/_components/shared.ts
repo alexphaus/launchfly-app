@@ -1,4 +1,4 @@
-import type { ActionStatus, Capacity, Goal, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
+import type { ActionStatus, Capacity, Goal, GrowthItem, OpportunityStatus, SourceKey } from '@/lib/copilot/types';
 
 export type Tab = 'today' | 'opps' | 'growth' | 'you';
 
@@ -15,9 +15,11 @@ export interface Actions {
   closeSheet(): void;
   setTab(t: Tab): void;
   runBrief(reason?: string): Promise<void>;
-  addNote(content: string, regenerate: boolean): Promise<void>;
+  /** Resolves false when the save failed, so callers can keep the user's text. */
+  addNote(content: string, regenerate: boolean): Promise<boolean>;
   setOppStatus(id: string, status: OpportunityStatus): Promise<void>;
   setActionStatus(id: string, status: ActionStatus): Promise<void>;
+  setGrowthStatus(id: string, status: GrowthItem['status']): Promise<void>;
   requestSource(key: SourceKey): Promise<void>;
   saveGoal(patch: Partial<Goal> & { id?: string; title?: string }): Promise<void>;
   setCapacity(c: Capacity): Promise<void>;

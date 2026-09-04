@@ -4,7 +4,11 @@
 // they did (type affinity from saves / skips). Runs at read time, so changing
 // capacity re-ranks instantly with no writes.
 
-import { CAPACITY_META, type Action, type Capacity, type Effort, type Opportunity, type OpportunityType } from './types';
+import { CAPACITY_META, type Action, type Capacity, type Effort, type Opportunity, type OpportunityType, type OutcomeKind } from './types';
+
+/** An LLM guess can never outrank a real listing. */
+export const INFERRED_SCORE_CAP = 70;
+export const SOURCED_BONUS = 8;
 
 export interface RankContext {
   capacity: Capacity;
@@ -20,7 +24,7 @@ export function clamp(n: number, lo = 0, hi = 100): number {
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
-export function scoreOpportunity(o: Pick<Opportunity, 'type' | 'effort' | 'fit_score' | 'created_at'>, ctx: RankContext): number {
+export function scoreOpportunity(o: Pick<Opportunity, 'type' | 'effort' | 'fit_score' | 'created_at'> & { source_kind?: Opportunity['source_kind'] }, ctx: RankContext): number {
   const now = ctx.now ?? new Date();
   let s = o.fit_score * 0.85;
 
@@ -35,14 +39,18 @@ export function scoreOpportunity(o: Pick<Opportunity, 'type' | 'effort' | 'fit_s
   const gap = Math.abs(EFFORT_RANK[o.effort] - CAPACITY_RANK[ctx.capacity]);
   s += gap === 0 ? 6 : gap === 1 ? 0 : -12;
 
-  // Freshness: lose 3 points per day, capped.
+  // Freshness: lose 3 points per day, capped. Sourced rows decay slower: a real
+  // business does not stop being real after a week.
   const ageDays = Math.max(0, (now.getTime() - new Date(o.created_at).getTime()) / 86_400_000);
-  s -= Math.min(15, ageDays * 3);
+  const sourced = o.source_kind === 'sourced';
+  s -= Math.min(15, ageDays * (sourced ? 1 : 3));
 
-  return clamp(s);
+  if (sourced) s += SOURCED_BONUS;
+  const out = clamp(s);
+  return sourced ? out : Math.min(out, INFERRED_SCORE_CAP);
 }
 
-export function rankOpportunities<T extends Pick<Opportunity, 'type' | 'effort' | 'fit_score' | 'created_at' | 'score'>>(opps: T[], ctx: RankContext): T[] {
+export function rankOpportunities<T extends Pick<Opportunity, 'type' | 'effort' | 'fit_score' | 'created_at' | 'score'> & { source_kind?: Opportunity['source_kind'] }>(opps: T[], ctx: RankContext): T[] {
   return opps
     .map((o) => ({ ...o, score: scoreOpportunity(o, ctx) }))
     .sort((a, b) => b.score - a.score);
@@ -95,6 +103,34 @@ export function computeTypeAffinity(events: Array<{ event_type: string; payload:
     const c = total[t] ?? 0;
     // Shrink toward neutral when there is little data.
     out[t] = Math.max(0.5, Math.min(1.5, 1 + (n / (c + 4)) * 0.5));
+  }
+  return out;
+}
+
+/**
+ * Outcome-weighted affinity. Saves and skips give a prior; real replies and wins
+ * per type move it further. A type that gets replies is worth more than one the
+ * user merely saved. Shrinks toward neutral with little data.
+ */
+export function computeOutcomeAffinity(
+  events: Array<{ event_type: string; payload: Record<string, unknown> }>,
+  sentByType: Partial<Record<OpportunityType, number>>,
+  outcomesByType: Partial<Record<OpportunityType, Partial<Record<OutcomeKind, number>>>>,
+): Record<OpportunityType, number> {
+  const base = computeTypeAffinity(events);
+  const out = { ...base };
+  for (const t of Object.keys(base) as OpportunityType[]) {
+    const sent = sentByType[t] ?? 0;
+    if (sent === 0) continue;
+    const o = outcomesByType[t] ?? {};
+    const replies = (o.reply ?? 0) + (o.meeting ?? 0) + (o.proposal ?? 0) + (o.won ?? 0);
+    const wins = o.won ?? 0;
+    // Reply rate above 10% lifts, below lowers; wins lift more. The signal is
+    // bounded so one lucky win on one send cannot saturate, then shrunk by volume.
+    const replyRate = replies / sent;
+    const signal = Math.max(-1, Math.min(1, (replyRate - 0.1) * 2 + (wins / sent) * 3));
+    const confidence = sent / (sent + 5);
+    out[t] = Math.max(0.5, Math.min(1.5, out[t] + signal * confidence));
   }
   return out;
 }

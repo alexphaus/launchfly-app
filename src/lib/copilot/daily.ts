@@ -1,0 +1,29 @@
+// src/lib/copilot/daily.ts
+// The whole loop for one profile: pull real supply → reconcile replies → brief.
+// Used by the cron and by "Find new matches". Each step is isolated so a
+// failing scraper never blocks the brief.
+
+import { runBrief, type BriefResult } from './brief';
+import { reconcileReplies } from './outcomes';
+import { runSupply, type SupplyResult } from './supply';
+
+export interface DailyResult {
+  supply: SupplyResult | { error: string } | null;
+  reconcile: { checked: number; matched: number } | { error: string } | null;
+  brief: Pick<BriefResult, 'agent' | 'fellBack'>;
+}
+
+export async function runDaily(profileId: string, opts: { reason: string; supply?: boolean; reconcile?: boolean } ): Promise<DailyResult> {
+  const out: DailyResult = { supply: null, reconcile: null, brief: { agent: 'starter', fellBack: false } };
+  if (opts.supply !== false) {
+    try { out.supply = await runSupply(profileId, { reason: opts.reason }); }
+    catch (e) { out.supply = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] supply failed', e); }
+  }
+  if (opts.reconcile !== false) {
+    try { out.reconcile = await reconcileReplies(profileId); }
+    catch (e) { out.reconcile = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] reconcile failed', e); }
+  }
+  const brief = await runBrief(profileId, { reason: opts.reason });
+  out.brief = { agent: brief.agent, fellBack: brief.fellBack };
+  return out;
+}

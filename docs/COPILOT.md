@@ -1,84 +1,134 @@
 # Copilot — opportunity engine (`/copilot`)
 
 A separate, mobile-first, installable web app living inside this repo. It shares
-nothing with the Launchfly business logic except the Supabase project and the
-Next.js runtime. Everything is under three folders:
+the Supabase project, the Next.js runtime and a few Launchfly primitives (the
+WhatsApp provider, Resend, the Apify Google Maps scraper, the prospect pipeline)
+but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
 | UI (installable PWA) | `src/app/copilot/` |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
-| Schema | `supabase/migrations/20260903_copilot_foundation.sql` |
+| Schema | `supabase/migrations/20260903_copilot_foundation.sql`, `20260904_copilot_close_the_loop.sql` |
+
+## The loop
+
+```
+real supply ───────────► copilot_opportunities (sourced, with contact)
+  hunter_prospects            │
+  Google Maps (Apify)         ▼
+                         agent ranks candidates + cites metrics ──► Today
+notes / goals / capacity ─┘                                          │
+                                                       AI-drafted opener + execution
+                                                                     │  (user taps Approve & send)
+                                            WhatsApp / email ◄───────┘
+                                                  │
+                        chat_history (inbound) ───┴──► copilot_outcomes (reply · meeting · won · lost)
+                                                              │
+                        ranking (outcome-weighted) ◄──────────┼──► goal current_value (won amount)
+                        metrics in the next read ◄────────────┘
+```
+
+Every arrow is implemented. Nothing leaves without the user's tap.
 
 ## Setup
 
-1. Run the migration in the Supabase SQL editor (or `supabase db push`).
-2. Environment:
+1. Run both migrations in the Supabase SQL editor, in order.
+2. Environment (all optional except the first two):
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=...        # already used by the app
 SUPABASE_SERVICE_KEY=...            # already used by the app
-COPILOT_SESSION_SECRET=...          # optional; any long random string. Falls back to the service key.
+COPILOT_SESSION_SECRET=...          # long random string; falls back to the service key
 
-# Agent (pick one; none = deterministic starter brief)
-COPILOT_AGENT_URL=https://...       # external vertical agent (preferred, see contract below)
-COPILOT_AGENT_SECRET=...            # sent as Bearer token
+# Agent (pick one; none = deterministic starter that still ranks real candidates)
+COPILOT_AGENT_URL=https://...       # external vertical agent (contract below)
+COPILOT_AGENT_SECRET=...
 #  or
-OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...   # LLM agent through the AI SDK
-COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL   # explicit override
+OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
+COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
 
+# Real supply
+APIFY_API_TOKEN=...                 # Google Maps adapter (same token Launchfly uses)
+
+# Approve & send
+ULTRAMSG_INSTANCE_ID / ULTRAMSG_TOKEN     or   EVOLUTION_BASE_URL / EVOLUTION_API_KEY / EVOLUTION_INSTANCE
+RESEND_API_KEY=... COPILOT_EMAIL_FROM="Alex <alex@yourdomain>"   # email channel and sign-in links (falls back to FROM_EMAIL)
+
+# Push
+COPILOT_VAPID_PUBLIC_KEY / COPILOT_VAPID_PRIVATE_KEY / COPILOT_VAPID_SUBJECT   # node scripts/copilot-vapid.mjs
+
+# Cron
 CRON_SECRET=...                     # REQUIRED for /api/copilot/cron/daily — it fails closed without one
-COPILOT_CRON_BATCH=25               # optional: max profiles per cron run
-COPILOT_CRON_BUDGET_MS=240000       # optional: stop starting new briefs past this point
+COPILOT_CRON_BATCH=25               # profiles per run
+COPILOT_CRON_BUDGET_MS=240000       # stop starting new profiles past this point
+
+NEXT_PUBLIC_APP_URL=https://...     # used in sign-in links; falls back to request host
 ```
 
-3. Open `/copilot`. New device → 3-screen onboarding → first brief → app.
-   Add to home screen installs it as its own app (manifest scoped to `/copilot`).
+3. Open `/copilot`. New device → 3 screens → first supply pull (prospect pipeline) → first brief.
+   Add to home screen installs it as its own app.
 
-## How it works
+### Scheduling the daily loop
 
-```
-onboarding / notes / connectors ──► copilot_context_items ─┐
-goals, capacity, hunt types ───────────────────────────────┤
-saves / skips / done (copilot_events) ─► type affinity ────┼─► ContextPack ─► Agent ─► BriefOutput
-                                                           │                              │
-                                                           └──── ranking.ts ◄─────────────┘
-                                                                     │
-                       insight · plan · nudges · opportunities · skills · lessons
-```
-
-- **Identity**: signed httpOnly cookie with the profile id (`session.ts`). No account wall.
-  Swap for Supabase Auth later; the data model does not change.
-- **Context pack** (`context.ts`): profile, goals, last 60 context items, connector
-  status, what the user saved / dismissed / acted on, learned type affinity.
-  Any new data source only has to write `copilot_context_items` to reach the agent.
-- **Agent** (`agent/`): one interface, three implementations, picked by env:
-  `webhook` (external service) → `llm` (AI SDK, OpenAI-compatible) → `starter`
-  (deterministic, never invents opportunities). A failing agent falls back to the starter
-  so Today always renders. Every run is logged in `copilot_agent_runs`.
-- **Ranking** (`ranking.ts`): `score = fit·0.85 + hunt-type ±, affinity ±20, capacity fit, freshness`.
-  Runs at read time, so changing capacity re-ranks instantly.
-- **Daily**: `/api/copilot/cron/daily` rebuilds briefs for profiles seen in the last
-  30 days. It fails closed without `CRON_SECRET`, processes at most `COPILOT_CRON_BATCH`
-  profiles, stops starting new briefs after `COPILOT_CRON_BUDGET_MS`, and reports
-  `truncated: true` rather than silently dropping anyone. Opening the app with no brief
-  for today also triggers one, so the app still works if the schedule is not wired up.
-
-### Scheduling the daily brief
-
-`vercel.json` carries the cron entry, but **that file only does anything on Vercel**.
-On a self-hosted deploy (Coolify, Docker, a VPS) it is inert — add a scheduled task
-that calls the endpoint instead:
+`vercel.json` carries a cron entry, but **that file only does anything on Vercel**. On a
+self-hosted deploy (Coolify, Docker, a VPS) add a scheduled task:
 
 ```
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/copilot/cron/daily
 ```
 
-In Coolify: the application → **Scheduled Tasks** → add the container command above on
-`0 21 * * *`. The same applies to the repo's four pre-existing crons
-(`reset-wa-counters`, `memory-consolidation`, `memory-decay`, `reflection-pulse`),
-which are also Vercel-only entries today.
+In Coolify: application → **Scheduled Tasks** → the command above on `0 21 * * *`. The daily
+run does supply → reply reconciliation → brief for every profile seen in the last 30 days, and
+reports `truncated: true` rather than silently dropping anyone. The app also runs the brief on
+open when today's is missing, so it works without the schedule; it just won't find new matches
+or notice replies until someone taps "Find new".
+
+## How each phase works
+
+**Identity** — signed httpOnly cookie carrying the profile id (`session.ts`). Optional email
+magic links (`auth.ts`): own tokens hashed in `copilot_login_tokens`, sent with Resend,
+consumed once by `/api/copilot/auth/callback`. Requested from inside the app it verifies and
+links the current profile; from `/copilot/login` it finds the profile by email. No third-party
+auth configuration. Onboarding is rate limited per IP and refuses when a session already exists.
+
+**Real supply** (`supply/`) — adapters implement `SupplyAdapter` and are registered in
+`supply/index.ts`. `hunter` reads Launchfly's `hunter_prospects`; `google_maps` runs the
+existing Apify scraper for each target segment in the target area. Candidates are upserted as
+`source_kind = 'sourced'` with a `contact` and deduped on `(profile, source, external_id)` —
+never by title. A deterministic `heuristicFit` (≤ 80) gives them a first score; the agent
+then ranks them properly. Inferred (LLM) opportunities are capped at 70 so a guess can never
+outrank a real business.
+
+**Agent** (`agent/`) — one interface, three implementations picked by env: `webhook` →
+`llm` → `starter`, with fallback to the starter so Today always renders. The context pack now
+carries `candidates` (to rank, not invent) and `metrics` (to cite). Output carries `rankings`
+and plan items may reference a candidate with a channel; those become send-ready executions.
+The starter ranks heuristically, drafts a templated opener for the best reachable candidate,
+and writes an insight from the real numbers — so the loop closes with zero API keys.
+
+**Approve & send** (`execution.ts`) — an execution is a draft bound to an action, an
+opportunity, a channel and a recipient. `POST /api/copilot/actions/:id/send` sends it through
+the existing WhatsApp provider (per-business instance when `linked_business_id` is set, env
+instance otherwise) or Resend. On success the action is done, a day-3 follow-up nudge plus a
+drafted follow-up are scheduled, and the daily purge leaves them alone (they carry no
+`agent_run_id`). Drafts can be edited in the sheet before sending, or cancelled.
+
+**Outcomes** (`outcomes.ts`) — `copilot_outcomes` records reply / meeting / proposal / won /
+lost / no_reply. `reconcileReplies` matches inbound WhatsApp (`chat_history`, role = user) to
+sent executions by phone, with no change to the existing webhooks. Won with an amount
+increments the primary currency goal and closes the opportunity. Everything feeds
+`computeOutcomeAffinity` (reply and win rates per type, shrunk by volume) and `computeMetrics`,
+which the read must cite. Replies trigger a push.
+
+**Context** — runway is two manual numbers on the profile (`finance`), shown in the read and
+the metrics. The pipeline (opportunities + executions + outcomes) *is* the CRM; there is nothing
+to connect. Calendar remains a foundation-only connector.
+
+**Push** (`push.ts`) — Web Push via VAPID. `public/sw.js` gained `push` and
+`notificationclick` handlers (additive; the fetch pass-through is unchanged). Urgent nudges and
+detected replies notify subscribed devices. Silently off until keys are set.
 
 ## External agent contract
 
@@ -89,33 +139,56 @@ which are also Vercel-only entries today.
 ```
 
 Respond with `BriefOutput` (or `{ "brief": BriefOutput }`). Types are in
-`src/lib/copilot/types.ts`; the full shape is in `agent/schema.ts` (`SYSTEM_PROMPT`).
-Output is normalised and capped server-side, so the agent can be generous.
-This is where search, scraping and real listing discovery belong.
+`src/lib/copilot/types.ts`; the full shape and rules are in `agent/schema.ts` (`SYSTEM_PROMPT`).
+The pack's `candidates` are real; return `rankings` for them. `metrics` are real; cite them.
+Plan items with `opportunity_ref` + `channel` + `ai_draft` become send-ready drafts.
+Output is normalised and capped server-side. This is where search, scraping and richer listing
+discovery belong; to add a source inside the app instead, implement one `SupplyAdapter`.
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/api/copilot/onboard` | create profile + goal + context, set cookie, first brief |
-| GET | `/api/copilot/home` | everything for the four tabs |
+| POST | `/api/copilot/onboard` | profile + goal + targeting + context, cookie, first supply, first brief |
+| GET | `/api/copilot/home` | everything for the four tabs, incl. metrics, drafts, outcomes |
 | POST | `/api/copilot/brief` | run the agent now |
+| POST | `/api/copilot/supply` | find new matches: supply → reconcile → brief |
 | POST | `/api/copilot/capacity` | `{ capacity }` |
 | POST | `/api/copilot/context` | `{ content, kind?, regenerate? }` — "tell the copilot" |
 | POST | `/api/copilot/goals` | create / update a goal |
+| POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
+| POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |
+| POST | `/api/copilot/opportunities/:id/draft` | draft an opener onto today's plan, send-ready |
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |
-| POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` — mark a skill or lesson |
+| POST/DELETE | `/api/copilot/actions/:id/send` | approve & send the attached draft (body may edit it) / cancel it |
+| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` |
+| POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |
+| POST | `/api/copilot/auth/magic-link` | `{ email }` — send a one-time sign-in link |
+| GET | `/api/copilot/auth/callback?token=` | consume the link, set the cookie |
+| POST/DELETE | `/api/copilot/push/subscribe` | register / remove a Web Push subscription |
 | DELETE | `/api/copilot/session` | forget this device |
-| GET | `/api/copilot/cron/daily` | scheduled briefs (Bearer `CRON_SECRET`) |
+| GET | `/api/copilot/cron/daily` | scheduled loop (Bearer `CRON_SECRET`, fails closed) |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).
 
-## Next steps the foundation is ready for
+## Tests
 
-- Real connectors: implement a sync that writes `copilot_context_items` and flips
-  `copilot_context_sources.status` to `connected`.
-- Account sync: replace the cookie with Supabase Auth; keep `profile_id`.
-- Push nudges: the `copilot_actions` rows with `urgency = 'urgent'` are the trigger.
-- Richer learning: `copilot_events` already records every interaction.
+```
+npm run test:copilot
+```
+
+Pure-module tests: ranking (sourced/inferred rule, capacity plan selection, outcome-weighted
+affinity), metrics, phone normalisation and heuristic fit, message templates, agent output
+normalisation, starter agent, session signing.
+
+## Known gaps
+
+- Email replies are not reconciled automatically yet (WhatsApp is); log them by hand on the match.
+- Cross-user learning ("people like you get 12% replies with this angle") needs more than one
+  user; `copilot_outcomes` is shaped for it.
+- Calendar is a placeholder. Growth (skills / lessons) is still agent-authored, not derived from
+  real job-post requirements.
+- The Google Maps adapter spends Apify credits per run; it runs from the cron and the button,
+  never on onboarding.

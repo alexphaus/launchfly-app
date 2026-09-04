@@ -12,6 +12,16 @@ export type ActionStatus = 'open' | 'done' | 'dismissed';
 export type GoalMetric = 'currency' | 'number' | 'percent' | 'none';
 export type SourceKey = 'calendar' | 'crm' | 'finance';
 export type SourceStatus = 'not_connected' | 'requested' | 'connected' | 'error';
+export type SourceKind = 'sourced' | 'inferred';
+export type Channel = 'whatsapp' | 'email';
+export type ApprovalState = 'needs_approval' | 'approved' | 'sent' | 'failed' | 'cancelled';
+export type OutcomeKind = 'reply' | 'meeting' | 'proposal' | 'won' | 'lost' | 'no_reply';
+
+/** How to reach the other side of an opportunity. All optional; sourced rows fill what they can. */
+export interface Contact { name?: string; whatsapp?: string; email?: string; website?: string }
+
+/** Manual runway inputs. Runway = cash / monthly_burn. */
+export interface Finance { monthly_burn?: number; cash?: number; currency?: string; updated_at?: string }
 
 export const OPPORTUNITY_TYPES: OpportunityType[] = ['client', 'people', 'service', 'community', 'signal'];
 export const SOURCE_KEYS: SourceKey[] = ['calendar', 'crm', 'finance'];
@@ -31,6 +41,12 @@ export interface Profile {
   timezone: string;
   capacity: Capacity;
   hunt_types: OpportunityType[];
+  /** Who they sell to and where; drives the supply adapters. */
+  target_segments: string[];
+  target_area: string | null;
+  linked_business_id: string | null;
+  finance: Finance;
+  email_verified_at: string | null;
   onboarding_complete: boolean;
   created_at: string;
 }
@@ -80,7 +96,70 @@ export interface Opportunity {
   url: string | null;
   status: OpportunityStatus;
   data: Record<string, unknown>;
+  external_id: string | null;
+  source_kind: SourceKind;
+  contact: Contact;
+  scored_at: string | null;
+  /** Latest outcome recorded against this opportunity; computed at read time. */
+  last_outcome?: OutcomeKind | null;
   created_at: string;
+}
+
+export interface Execution {
+  id: string;
+  action_id: string | null;
+  opportunity_id: string | null;
+  channel: Channel;
+  recipient: string;
+  subject: string | null;
+  body: string;
+  approval_state: ApprovalState;
+  provider: string | null;
+  external_message_id: string | null;
+  error: string | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export interface Outcome {
+  id: string;
+  opportunity_id: string | null;
+  action_id: string | null;
+  execution_id: string | null;
+  kind: OutcomeKind;
+  amount: number | null;
+  currency: string | null;
+  note: string | null;
+  source: 'manual' | 'system' | 'webhook';
+  occurred_at: string;
+}
+
+/** Real numbers computed from executions and outcomes. The read must cite these. */
+export interface Metrics {
+  window_days: number;
+  sent: number;
+  replies: number;
+  reply_rate: number | null;      // 0..1, null when nothing sent
+  meetings: number;
+  won: number;
+  won_amount: number;
+  lost: number;
+  awaiting_approval: number;
+  pipeline: { new: number; saved: number; sourced: number; inferred: number };
+  runway_months: number | null;
+}
+
+/** A sourced opportunity handed to the agent for ranking. */
+export interface Candidate {
+  id: string;
+  type: OpportunityType;
+  title: string;
+  summary: string;
+  source: string;
+  url: string | null;
+  contact: Contact;
+  fit_score: number;
+  scored: boolean;
 }
 
 export interface Action {
@@ -96,6 +175,8 @@ export interface Action {
   status: ActionStatus;
   opportunity_id: string | null;
   for_date: string;
+  /** Draft ready to approve and send, when the agent produced one. Joined at read time. */
+  execution?: Execution | null;
 }
 
 export interface Insight {
@@ -139,6 +220,11 @@ export interface HomeData {
   /** True when there is no brief for today yet; the client triggers one. */
   needsBrief: boolean;
   lastRun: { status: string; agent: string; finished_at: string | null } | null;
+  metrics: Metrics;
+  supplyLastRun: string | null;
+  account: { email: string | null; verified: boolean };
+  push: { publicKey: string | null; enabled: boolean };
+  channels: { whatsapp: boolean; email: boolean };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +234,7 @@ export interface HomeData {
 
 export interface ContextPack {
   today: string; // ISO date
-  profile: Pick<Profile, 'name' | 'headline' | 'location' | 'timezone' | 'capacity' | 'hunt_types'>;
+  profile: Pick<Profile, 'name' | 'headline' | 'location' | 'timezone' | 'capacity' | 'hunt_types' | 'target_segments' | 'target_area'>;
   goals: Array<Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days' | 'priority' | 'note'>>;
   context: Array<Pick<ContextItem, 'source' | 'kind' | 'content' | 'created_at'>>;
   sources: ContextSource[];
@@ -162,6 +248,10 @@ export interface ContextPack {
   };
   /** Learned preference weights per type, 0.5 .. 1.5 (1 = neutral). */
   typeAffinity: Record<OpportunityType, number>;
+  /** Sourced opportunities awaiting or refreshing a rank. The agent scores these; it does not invent them. */
+  candidates: Candidate[];
+  /** Real numbers. The insight must cite at least one. */
+  metrics: Metrics;
 }
 
 export interface BriefOpportunity {
@@ -183,6 +273,9 @@ export interface BriefAction {
   detail?: string;
   ai_draft?: string;
   minutes?: number;
+  /** Candidate id this action targets. With a channel and ai_draft it becomes a send-ready execution. */
+  opportunity_ref?: string;
+  channel?: Channel;
 }
 
 export interface BriefNudge {
@@ -193,6 +286,8 @@ export interface BriefNudge {
 
 export interface BriefOutput {
   insight: { body: string; reasoning?: string };
+  /** Scores for candidates in the pack. Unknown ids are ignored. */
+  rankings: Array<{ id: string; fit_score: number; reason: string }>;
   plan: BriefAction[];
   nudges: BriefNudge[];
   opportunities: BriefOpportunity[];

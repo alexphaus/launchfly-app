@@ -5,11 +5,15 @@
 import { copilotDb } from './db';
 import { runBrief } from './brief';
 import { addContextItem, ensureSources, logEvent } from './store';
+import { runSupply } from './supply';
 import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type OpportunityType } from './types';
 
 export interface OnboardingInput {
   name: string;
+  email?: string;
   headline?: string;
+  target_segments: string[];
+  target_area?: string;
   location?: string;
   timezone?: string;
   goal: { title: string; metric?: GoalMetric; unit?: string; target_value?: number; current_value?: number; horizon_days?: number };
@@ -31,8 +35,15 @@ export function parseOnboarding(body: unknown): OnboardingInput {
   const capacity = (Object.keys(CAPACITY_META) as Capacity[]).includes(b.capacity as Capacity) ? (b.capacity as Capacity) : 'moderate';
   const metric = (['currency', 'number', 'percent', 'none'] as GoalMetric[]).includes(g.metric as GoalMetric) ? (g.metric as GoalMetric) : 'none';
   const hunt = Array.isArray(b.hunt_types) ? (b.hunt_types as unknown[]).filter((t): t is OpportunityType => OPPORTUNITY_TYPES.includes(t as OpportunityType)) : [];
+  const rawSegments = Array.isArray(b.target_segments) ? (b.target_segments as unknown[]).map((x) => s(x, 40)) : s(b.target_segments, 240).split(',');
+  const target_segments = [...new Set(rawSegments.map((x) => x.trim()).filter(Boolean))].slice(0, 8);
+  const email = s(b.email, 120).toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('That email does not look right');
   return {
     name,
+    email: email || undefined,
+    target_segments,
+    target_area: s(b.target_area, 80) || s(b.location, 80) || undefined,
     headline: s(b.headline, 160) || undefined,
     location: s(b.location, 80) || undefined,
     timezone: s(b.timezone, 60) || 'UTC',
@@ -48,8 +59,9 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
   const { data: profile, error } = await db
     .from('copilot_profiles')
     .insert({
-      name: input.name, headline: input.headline ?? null, location: input.location ?? null, timezone: input.timezone ?? 'UTC',
-      capacity: input.capacity, hunt_types: input.hunt_types, onboarding_complete: true, last_seen_at: new Date().toISOString(),
+      name: input.name, email: input.email ?? null, headline: input.headline ?? null, location: input.location ?? null, timezone: input.timezone ?? 'UTC',
+      capacity: input.capacity, hunt_types: input.hunt_types, target_segments: input.target_segments, target_area: input.target_area ?? null,
+      onboarding_complete: true, last_seen_at: new Date().toISOString(),
     })
     .select('id')
     .single();
@@ -65,12 +77,16 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
   if (input.headline) facts.push({ kind: 'fact', content: `What I do: ${input.headline}`, weight: 1.5 });
   if (input.location) facts.push({ kind: 'fact', content: `Based in ${input.location}` });
   facts.push({ kind: 'preference', content: `Hunting for: ${input.hunt_types.join(', ')}` });
+  if (input.target_segments.length) facts.push({ kind: 'preference', content: `Sells to: ${input.target_segments.join(', ')}${input.target_area ? ` in ${input.target_area}` : ''}`, weight: 1.5 });
   if (input.notes) facts.push({ kind: 'fact', content: input.notes, weight: 1.4 });
   for (const f of facts) await addContextItem(pid, { source: 'onboarding', ...f });
 
   await ensureSources(pid);
   await logEvent(pid, 'onboarding_complete', { capacity: input.capacity, hunt_types: input.hunt_types });
 
+  // Free, fast supply first (the prospect pipeline) so the first brief has real candidates to rank.
+  try { await runSupply(pid, { only: ['hunter'], reason: 'onboarding', limit: 25 }); }
+  catch (err) { console.error('[copilot] onboarding supply failed:', err); }
   try {
     await runBrief(pid, { reason: 'onboarding' });
   } catch (err) {

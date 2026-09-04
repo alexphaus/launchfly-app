@@ -1,25 +1,44 @@
 'use client';
 import { useState } from 'react';
-import type { HomeData } from '@/lib/copilot/types';
+import type { Execution, HomeData } from '@/lib/copilot/types';
+import { money, pct } from '../format';
 import type { Actions } from '../shared';
 
-export default function TodayView({ home, actions, briefing }: { home: HomeData; actions: Actions; briefing: boolean }) {
+function execChip(e: Execution | null | undefined): { cls: string; label: string } | null {
+  if (!e) return null;
+  if (e.approval_state === 'sent') return { cls: 'sent', label: 'Sent' };
+  if (e.approval_state === 'failed') return { cls: 'failed', label: 'Failed' };
+  if (e.approval_state === 'cancelled') return null;
+  return { cls: 'send', label: 'Ready to send' };
+}
+
+export default function TodayView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
   const [showWhy, setShowWhy] = useState(false);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const urgent = home.nudges.filter((n) => n.urgency === 'urgent').length;
+  const m = home.metrics;
+  const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
 
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
     setSending(true);
     const saved = await actions.addNote(note.trim(), regenerate);
-    if (saved) setNote('');   // keep the user's text if the save failed
+    if (saved) setNote('');
     setSending(false);
   };
 
   return (
     <>
-      {briefing && <div className="cp-banner"><span className="dot" />Building today&apos;s brief</div>}
+      {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
+
+      <div className="cp-metrics" aria-label="Your numbers">
+        <div className="cp-stat"><div className="v">{m.sent}</div><div className="l">Sent</div></div>
+        <div className={`cp-stat ${m.replies ? 'hot' : ''}`}><div className="v">{m.replies}</div><div className="l">Replies</div></div>
+        <div className="cp-stat"><div className="v">{pct(m.reply_rate)}</div><div className="l">Reply rate</div></div>
+        <div className={`cp-stat ${m.won ? 'hot' : ''}`}><div className="v">{m.won_amount ? money(m.won_amount, currency) : m.won}</div><div className="l">Won</div></div>
+      </div>
+      <div className="cp-metrics-note">Last {m.window_days} days · real numbers from what you actually sent</div>
 
       {home.insight ? (
         <div className="cp-card cp-insight">
@@ -42,15 +61,18 @@ export default function TodayView({ home, actions, briefing }: { home: HomeData;
       <div className="cp-section"><span className="lead">Today&apos;s leverage plan</span></div>
       {home.plan.length ? (
         <div className="cp-list">
-          {home.plan.map((a) => (
-            <button key={a.id} className={`cp-row ${a.status === 'done' ? 'done' : ''}`} onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
-              <span className={`cp-chip ${a.status === 'done' ? 'done' : a.owner}`}>{a.status === 'done' ? 'Done' : a.owner === 'ai' ? 'AI drafted' : 'Needs you'}</span>
-              <span className="txt">{a.minutes && a.owner === 'you' && a.status !== 'done' ? `${a.minutes} min — ` : ''}{a.title}</span>
-            </button>
-          ))}
+          {home.plan.map((a) => {
+            const ec = a.status !== 'done' ? execChip(a.execution) : null;
+            return (
+              <button key={a.id} className={`cp-row ${a.status === 'done' ? 'done' : ''}`} onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
+                <span className={`cp-chip ${a.status === 'done' ? 'done' : ec ? ec.cls : a.owner}`}>{a.status === 'done' ? 'Done' : ec ? ec.label : a.owner === 'ai' ? 'AI drafted' : 'Needs you'}</span>
+                <span className="txt">{a.minutes && a.owner === 'you' && a.status !== 'done' ? `${a.minutes} min — ` : ''}{a.title}</span>
+              </button>
+            );
+          })}
         </div>
       ) : (
-        <div className="cp-empty"><b>Plan arrives with the brief</b>Two to five moves that fit your capacity, some drafted for you.</div>
+        <div className="cp-empty"><b>Plan arrives with the brief</b>Two to five moves that fit your capacity. Real matches get a drafted message you approve with one tap.</div>
       )}
 
       <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>
@@ -69,12 +91,7 @@ export default function TodayView({ home, actions, briefing }: { home: HomeData;
 
       <div className="cp-section"><span className="lead">Tell the copilot</span><span className="count">{home.contextCount} in context</span></div>
       <div className="cp-composer">
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="What changed? A win, a number, a constraint, a person, a lead that went cold…"
-          maxLength={2000}
-        />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="What changed? A win, a number, a constraint, a person, a lead that went cold…" maxLength={2000} />
         <div className="bar">
           <span className="hint">Lands in your context. Sharpens the next brief.</span>
           <button className="cp-btn" disabled={sending || !note.trim()} onClick={() => submit(false)}>Add</button>

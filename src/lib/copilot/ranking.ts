@@ -55,18 +55,27 @@ export function rankOpportunities<T extends Pick<Opportunity, 'type' | 'effort' 
  */
 export function selectPlan<T extends Pick<Action, 'owner' | 'minutes' | 'status'>>(actions: T[], capacity: Capacity): T[] {
   const budget = CAPACITY_META[capacity].minutes;
+  const cost = (a: T) => a.minutes ?? 30;
+  const keep = new Set<T>();
   let used = 0;
-  const out: T[] = [];
+
   for (const a of actions) {
-    if (a.status === 'done') { out.push(a); continue; }
-    if (a.owner === 'ai') { out.push(a); continue; }
-    const cost = a.minutes ?? 30;
-    if (used + cost <= budget || out.filter((x) => x.owner === 'you' && x.status !== 'done').length === 0) {
-      out.push(a);
-      used += cost;
-    }
+    // AI-drafted items only need a review, and finished items stay for the record.
+    if (a.status === 'done' || a.owner === 'ai') { keep.add(a); continue; }
+    if (used + cost(a) <= budget) { keep.add(a); used += cost(a); }
   }
-  return out;
+
+  // Never show a plan with nothing the user can do. If one oversized item blew
+  // the budget, fall back to the cheapest task rather than the first one.
+  const hasOpenYou = actions.some((a) => keep.has(a) && a.owner === 'you' && a.status !== 'done');
+  if (!hasOpenYou) {
+    const cheapest = actions
+      .filter((a) => a.owner === 'you' && a.status !== 'done')
+      .sort((x, y) => cost(x) - cost(y))[0];
+    if (cheapest) keep.add(cheapest);
+  }
+
+  return actions.filter((a) => keep.has(a));
 }
 
 /** Build affinity weights from what the user did with past suggestions. */

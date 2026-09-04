@@ -99,8 +99,14 @@ function LessonSheet({ home, id, actions }: { home: HomeData; id: string; action
   if (!l) return <p className="desc">Gone.</p>;
   const done = async () => {
     setBusy(true);
-    await actions.addNote(`Completed lesson: ${l.title}`, false);
-    actions.closeSheet();
+    try {
+      const saved = await actions.addNote(`Completed lesson: ${l.title}`, false);
+      if (!saved) return;                             // toast already shown; let them retry
+      await actions.setGrowthStatus(l.id, 'done');    // and take it out of the Growth list
+      actions.closeSheet();
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <>

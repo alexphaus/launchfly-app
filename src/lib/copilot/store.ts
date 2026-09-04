@@ -118,11 +118,31 @@ export async function setOpportunityStatus(profileId: string, id: string, status
   return data;
 }
 
+const ACTION_EVENT: Record<Action['status'], string> = {
+  done: 'action_done',
+  dismissed: 'action_dismissed',
+  open: 'action_reopened',
+};
+
 export async function setActionStatus(profileId: string, id: string, status: Action['status']) {
   const db = copilotDb();
   const { data } = await db.from('copilot_actions').update({ status }).eq('id', id).eq('profile_id', profileId).select('id, kind, owner, title').maybeSingle();
   if (!data) return null;
-  await logEvent(profileId, status === 'done' ? 'action_done' : 'action_dismissed', { action_id: id, kind: data.kind, owner: data.owner, title: data.title });
+  await logEvent(profileId, ACTION_EVENT[status], { action_id: id, kind: data.kind, owner: data.owner, title: data.title });
+  return data;
+}
+
+const GROWTH_EVENT: Record<GrowthItem['status'], string> = {
+  done: 'growth_done',
+  dismissed: 'growth_dismissed',
+  active: 'growth_reopened',
+};
+
+export async function setGrowthItemStatus(profileId: string, id: string, status: GrowthItem['status']) {
+  const db = copilotDb();
+  const { data } = await db.from('copilot_growth_items').update({ status }).eq('id', id).eq('profile_id', profileId).select('id, kind, title').maybeSingle();
+  if (!data) return null;
+  await logEvent(profileId, GROWTH_EVENT[status], { growth_item_id: id, kind: data.kind, title: data.title });
   return data;
 }
 

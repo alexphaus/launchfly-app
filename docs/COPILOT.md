@@ -28,7 +28,9 @@ COPILOT_AGENT_SECRET=...            # sent as Bearer token
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...   # LLM agent through the AI SDK
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL   # explicit override
 
-CRON_SECRET=...                     # protects /api/copilot/cron/daily (already used by other crons)
+CRON_SECRET=...                     # REQUIRED for /api/copilot/cron/daily — it fails closed without one
+COPILOT_CRON_BATCH=25               # optional: max profiles per cron run
+COPILOT_CRON_BUDGET_MS=240000       # optional: stop starting new briefs past this point
 ```
 
 3. Open `/copilot`. New device → 3-screen onboarding → first brief → app.
@@ -57,8 +59,26 @@ saves / skips / done (copilot_events) ─► type affinity ────┼─►
   so Today always renders. Every run is logged in `copilot_agent_runs`.
 - **Ranking** (`ranking.ts`): `score = fit·0.85 + hunt-type ±, affinity ±20, capacity fit, freshness`.
   Runs at read time, so changing capacity re-ranks instantly.
-- **Daily**: `/api/copilot/cron/daily` (Vercel cron, 21:00 UTC) rebuilds briefs for
-  profiles seen in the last 30 days. Opening the app with no brief for today also triggers one.
+- **Daily**: `/api/copilot/cron/daily` rebuilds briefs for profiles seen in the last
+  30 days. It fails closed without `CRON_SECRET`, processes at most `COPILOT_CRON_BATCH`
+  profiles, stops starting new briefs after `COPILOT_CRON_BUDGET_MS`, and reports
+  `truncated: true` rather than silently dropping anyone. Opening the app with no brief
+  for today also triggers one, so the app still works if the schedule is not wired up.
+
+### Scheduling the daily brief
+
+`vercel.json` carries the cron entry, but **that file only does anything on Vercel**.
+On a self-hosted deploy (Coolify, Docker, a VPS) it is inert — add a scheduled task
+that calls the endpoint instead:
+
+```
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/copilot/cron/daily
+```
+
+In Coolify: the application → **Scheduled Tasks** → add the container command above on
+`0 21 * * *`. The same applies to the repo's four pre-existing crons
+(`reset-wa-counters`, `memory-consolidation`, `memory-decay`, `reflection-pulse`),
+which are also Vercel-only entries today.
 
 ## External agent contract
 
@@ -85,6 +105,7 @@ This is where search, scraping and real listing discovery belong.
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |
+| POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` — mark a skill or lesson |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |
 | DELETE | `/api/copilot/session` | forget this device |
 | GET | `/api/copilot/cron/daily` | scheduled briefs (Bearer `CRON_SECRET`) |

@@ -14,6 +14,7 @@
     "test:workflow": "tsx scripts/tests/workflow-runner.test.ts",
     "test:workflow:unit": "tsx scripts/tests/workflow-runner.test.ts --no-e2e",
     "test:workflow:fast": "tsx scripts/tests/workflow-runner.test.ts --fast",
+    "test:copilot": "tsx scripts/tests/copilot-core.test.ts",
     "simulate": "node simulate-tally-form.js",
     "test:inngest": "node check-inngest.js",
     "test:quick": "node test-simulation.js quick",

@@ -1,7 +1,10 @@
-import type { Goal, OpportunityType } from '@/lib/copilot/types';
+import type { Goal, OpportunityType, OutcomeKind } from '@/lib/copilot/types';
 
 export const TYPE_LABEL: Record<OpportunityType, string> = { client: 'Client', people: 'People', service: 'Service', community: 'Community', signal: 'Signal' };
 export const TYPE_PLURAL: Record<OpportunityType, string> = { client: 'Clients', people: 'People', service: 'Services', community: 'Communities', signal: 'Signals' };
+export const OUTCOME_LABEL: Record<OutcomeKind, string> = { reply: 'Replied', meeting: 'Meeting', proposal: 'Proposal', won: 'Won', lost: 'Lost', no_reply: 'No reply' };
+const SOURCE_LABEL: Record<string, string> = { hunter: 'Pipeline', google_maps: 'Google Maps', inferred: 'Inferred' };
+export const sourceLabel = (s: string | null | undefined) => (s ? SOURCE_LABEL[s] ?? s.replace(/_/g, ' ') : 'unknown');
 
 export function greeting(timezone: string, name: string): string {
   let hour = new Date().getHours();
@@ -26,6 +29,20 @@ export function fmtValue(v: number, g: Pick<Goal, 'metric' | 'unit'>): string {
   return g.unit ? `${n} ${g.unit}` : n;
 }
 
+export function money(v: number, currency = '$'): string {
+  const n = Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : v.toLocaleString();
+  return `${currency}${n}`;
+}
+
+export function pct(r: number | null): string {
+  return r == null ? '—' : `${Math.round(r * 100)}%`;
+}
+
+export function maskPhone(p?: string): string | undefined {
+  if (!p) return undefined;
+  return p.length > 6 ? `+${p.slice(0, p.length - 4).replace(/\d/g, (d, i) => (i < 3 ? d : '•'))}${p.slice(-4)}` : p;
+}
+
 export function relTime(iso: string | null): string {
   if (!iso) return 'never';
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -34,4 +51,14 @@ export function relTime(iso: string | null): string {
   const h = Math.round(mins / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.round(h / 24)}d ago`;
+}
+
+/** Convert a base64url VAPID key for PushManager.subscribe. */
+export function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const out = new Uint8Array(new ArrayBuffer(raw.length));
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }

@@ -1,8 +1,10 @@
 // src/lib/copilot/agent/starter.ts
-// Deterministic first brief. Used when no agent is configured, and as the
-// fallback when the configured agent fails, so the app always has a Today view.
-// It never invents opportunities: matches appear once a real agent runs.
+// Deterministic brief. Used when no agent is configured, and as the fallback
+// when the configured agent fails, so the app always has a Today view.
+// It never invents opportunities — but since the loop closed it can rank REAL
+// candidates, cite REAL metrics, and draft a real opener the user can send.
 
+import { describeMetrics } from '../metrics';
 import { CAPACITY_META, type BriefOutput, type ContextPack, type OpportunityAgent } from '../types';
 
 export class StarterAgent implements OpportunityAgent {
@@ -12,50 +14,78 @@ export class StarterAgent implements OpportunityAgent {
     const goal = pack.goals[0];
     const cap = CAPACITY_META[pack.profile.capacity];
     const firstName = pack.profile.name.split(' ')[0];
+    const m = pack.metrics;
+    const currency = goal?.metric === 'currency' ? (goal.unit || '$') : '$';
     const knows = pack.context.filter((c) => c.source !== 'system').length;
-    const headline = pack.profile.headline ? `you ${pack.profile.headline.replace(/^i\s+/i, '').replace(/\.$/, '')}` : 'what you do';
+
+    // Rank real candidates: echo the heuristic, nudge reachable ones up.
+    const rankings = pack.candidates.map((c) => ({
+      id: c.id,
+      fit_score: Math.min(85, c.fit_score + (c.contact.whatsapp ? 5 : 0)),
+      reason: c.summary,
+    }));
+    const top = [...pack.candidates].sort((a, b) => b.fit_score - a.fit_score).find((c) => c.contact.whatsapp || c.contact.email);
 
     const goalLine = goal
-      ? `Your primary goal is "${goal.title}"${goal.target_value ? ` with a target of ${fmt(goal.target_value, goal.unit, goal.metric)}` : ''}${goal.horizon_days ? ` in ${goal.horizon_days} days` : ''}.`
-      : 'You have not set a goal yet, so ranking runs on your profile alone.';
+      ? `Goal: "${goal.title}"${goal.target_value ? ` at ${fmt(Number(goal.current_value ?? 0), goal.unit, goal.metric)} of ${fmt(goal.target_value, goal.unit, goal.metric)}` : ''}.`
+      : 'No goal set yet, so ranking runs on your profile alone.';
 
-    const body = `Day one, ${firstName}. I know ${headline}${pack.profile.location ? ` from ${pack.profile.location}` : ''} and I have ${knows} piece${knows === 1 ? '' : 's'} of context to work with. ${goalLine} Today's capacity is ${cap.label.toLowerCase()}, so the plan below fits in about ${cap.minutes} minutes. Every note you add sharpens the next brief.`;
+    const body = m.sent > 0
+      ? `${firstName}, the numbers: ${describeMetrics(m, currency)}. ${goalLine} ${m.reply_rate != null && m.reply_rate < 0.1 && m.sent >= 10 ? 'Under 10% replies means the opener, not the volume, is the problem. Change the angle before sending more.' : m.pipeline.sourced > 0 ? `You have ${m.pipeline.sourced} real matches waiting; today's plan drafts the best one.` : 'Run "Find new matches" so there is something real to send to.'} Capacity is ${cap.label.toLowerCase()}, so the plan fits in about ${cap.minutes} minutes.`
+      : `${firstName}, nothing has gone out yet. ${goalLine} ${pack.candidates.length ? `There are ${pack.candidates.length} real matches ranked below; the first message is drafted and waits for your approval.` : 'No real matches yet. Add who you sell to and where in the You tab, then tap "Find new matches".'} I know ${knows} thing${knows === 1 ? '' : 's'} about you so far; every note sharpens the next brief.`;
 
-    const plan: BriefOutput['plan'] = [
-      {
-        owner: 'ai',
-        title: 'One-line positioning you can paste anywhere, ready to review',
-        detail: 'Drafted from your profile. Edit it, then reuse it in outreach and bios.',
-        ai_draft: pack.profile.headline
-          ? `${firstName} — ${pack.profile.headline.replace(/\.$/, '')}.${goal ? ` Currently focused on: ${goal.title.toLowerCase()}.` : ''}`
-          : `${firstName} — tell me what you do and I will draft this line for you.`,
-        minutes: 5,
-      },
-      {
-        owner: 'you',
-        title: goal?.target_value != null && (goal.current_value ?? 0) === 0
-          ? `Set where you stand today on "${goal.title}" so progress is real`
-          : 'Write down the last 3 people or companies who paid you, and why they did',
-        detail: 'This is the highest-signal context for matching. Add it as a note in the You tab.',
-        minutes: 10,
-      },
-      {
-        owner: 'you',
-        title: 'Add one constraint I should respect (time, location, money, energy)',
-        detail: 'Constraints change what counts as a good opportunity.',
-        minutes: pack.profile.capacity === 'low' ? 5 : 15,
-      },
-    ];
-
-    const nudges: BriefOutput['nudges'] = [
-      { title: 'Matches appear after the first real agent run. Add context now so it has something to rank.', urgency: 'normal', due_label: 'Today' },
-    ];
-    if (!pack.sources.some((s) => s.status === 'connected')) {
-      nudges.push({ title: 'Nothing is connected yet. Tap Connect on a source to queue it for the agent.', urgency: 'info', due_label: 'Foundation' });
+    const plan: BriefOutput['plan'] = [];
+    if (top) {
+      const channel = top.contact.whatsapp ? 'whatsapp' as const : 'email' as const;
+      plan.push({
+        owner: 'ai', minutes: 3,
+        title: `Opener to ${top.contact.name || top.title}, ready to review`,
+        detail: `Highest-ranked real match with a reachable contact. Edit, then approve to send on ${channel}.`,
+        ai_draft: openerTemplate(pack.profile, top, channel),
+        opportunity_ref: top.id, channel,
+      });
+    }
+    plan.push({
+      owner: 'you',
+      title: goal?.target_value != null && Number(goal.current_value ?? 0) === 0 && m.won === 0
+        ? `Log where you stand today on "${goal.title}" so progress is real`
+        : m.sent > 0 && m.replies === 0
+          ? 'Write one sentence on why the last 5 recipients might have ignored you'
+          : 'Write down the last 3 people who paid you, and why they did',
+      detail: 'Highest-signal context for matching. Add it as a note on Today.',
+      minutes: 10,
+    });
+    if (!pack.profile.target_segments.length) {
+      plan.push({ owner: 'you', title: 'Set who you sell to and where, so real matches can be found', detail: 'You tab → Targeting. Two fields.', minutes: 2 });
+    } else {
+      plan.push({ owner: 'you', title: 'Add one constraint I should respect (time, location, money, energy)', detail: 'Constraints change what counts as a good opportunity.', minutes: pack.profile.capacity === 'low' ? 5 : 15 });
     }
 
-    return { insight: { body, reasoning: 'Starter brief: built from your onboarding answers only. No model was called.' }, plan, nudges, opportunities: [], skills: [], lessons: [] };
+    const nudges: BriefOutput['nudges'] = [];
+    if (m.awaiting_approval > 0) nudges.push({ title: `${m.awaiting_approval} drafted message${m.awaiting_approval === 1 ? ' is' : 's are'} waiting for your approval. Nothing goes out until you tap send.`, urgency: 'urgent', due_label: 'Today' });
+    if (m.runway_months != null && m.runway_months < 4) nudges.push({ title: `Runway is ${m.runway_months} months. Favour fast-close work over big builds until it passes 6.`, urgency: 'urgent', due_label: 'Finance' });
+    if (!pack.candidates.length) nudges.push({ title: 'No real matches in the pipeline. Tap "Find new matches" or add targeting in the You tab.', urgency: 'normal', due_label: 'Today' });
+    if (m.sent > 0 && m.replies === 0 && m.sent >= 5) nudges.push({ title: `${m.sent} sent, zero replies. Follow-ups are drafted automatically on day 3; approve them.`, urgency: 'normal', due_label: 'Outreach' });
+
+    return {
+      insight: { body, reasoning: `Starter brief: computed from ${m.sent} sends, ${m.replies} replies, ${pack.candidates.length} real candidates and your onboarding answers. No model was called.` },
+      rankings, plan, nudges, opportunities: [], skills: [], lessons: [],
+    };
   }
+}
+
+/** A plain, specific opener. Works for local service businesses; the LLM agent writes better ones. */
+export interface OpenerProfile { name: string; headline: string | null; target_area: string | null; location: string | null }
+export interface OpenerTarget { title: string; summary: string; contact: { name?: string } }
+
+export function openerTemplate(profile: OpenerProfile, c: OpenerTarget, channel: 'whatsapp' | 'email'): string {
+  const firstName = profile.name.split(' ')[0];
+  const who = c.contact.name || c.title;
+  const what = profile.headline ? profile.headline.replace(/^i\s+/i, '').replace(/\.$/, '') : 'set up automations that answer and book customers for small businesses';
+  const pain = /no website/i.test(c.summary) ? 'you have no website listed, so enquiries probably come in by phone or WhatsApp' : /few reviews/i.test(c.summary) ? 'you have only a few reviews online yet' : `you are in ${profile.target_area || profile.location || 'the area'}`;
+  const ask = 'Worth a 10-minute call this week? I can show a 2-minute example first, no strings.';
+  if (channel === 'whatsapp') return `Hi ${who}, ${firstName} here. I ${what}. Noticed ${pain}. ${ask}`;
+  return `Hi ${who},\n\nI ${what}. I noticed ${pain}, and businesses like yours usually lose a few enquiries a week that way.\n\n${ask}\n\n${firstName}`;
 }
 
 function fmt(v: number, unit: string | null | undefined, metric: string): string {

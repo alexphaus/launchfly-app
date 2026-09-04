@@ -6,6 +6,8 @@
 import { StarterAgent, getAgent } from './agent';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
+import { createDraftExecution } from './execution';
+import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
 import { getProfile } from './store';
 import type { BriefOutput, OpportunityAgent, Profile, ContextPack } from './types';
@@ -65,13 +67,40 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   await db.from('copilot_insights').delete().eq('profile_id', pid).eq('for_date', today);
   await db.from('copilot_insights').insert({ profile_id: pid, for_date: today, body: out.insight.body, reasoning: out.insight.reasoning ?? null, agent_run_id: runId });
 
-  // Today's plan: replace what is still open, keep what the user finished.
-  await db.from('copilot_actions').delete().eq('profile_id', pid).eq('kind', 'plan').eq('for_date', today).eq('status', 'open');
+  const candidateIds = new Set(pack.candidates.map((c) => c.id));
+  const rankCtx = { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: pack.typeAffinity };
+
+  // Rankings: the agent scored real candidates. Update fit, reason and stored score.
+  for (const r of out.rankings) {
+    if (!candidateIds.has(r.id)) continue;
+    const cand = pack.candidates.find((c) => c.id === r.id)!;
+    const stamp = new Date().toISOString();
+    await db.from('copilot_opportunities').update({
+      fit_score: r.fit_score, reason: r.reason || cand.summary, scored_at: stamp,
+      score: scoreOpportunity({ type: cand.type, effort: 'medium', fit_score: r.fit_score, created_at: stamp, source_kind: 'sourced' }, rankCtx),
+    }).eq('id', r.id).eq('profile_id', pid);
+  }
+
+  // Today's plan: replace what the AGENT generated and is still open. Keep what
+  // the user finished and anything the system scheduled (day-3 follow-ups have
+  // no agent_run_id and must survive the daily purge).
+  await db.from('copilot_actions').delete()
+    .eq('profile_id', pid).eq('kind', 'plan').eq('for_date', today).eq('status', 'open').not('agent_run_id', 'is', null);
   if (out.plan.length) {
-    await db.from('copilot_actions').insert(out.plan.map((p) => ({
+    const rows = out.plan.map((p) => ({
       profile_id: pid, kind: 'plan', owner: p.owner, title: p.title, detail: p.detail ?? null, ai_draft: p.ai_draft ?? null,
       minutes: p.minutes ?? null, for_date: today, agent_run_id: runId,
-    })));
+      opportunity_id: p.opportunity_ref && candidateIds.has(p.opportunity_ref) ? p.opportunity_ref : null,
+    }));
+    const { data: inserted } = await db.from('copilot_actions').insert(rows).select('id, title, opportunity_id');
+    // AI drafts that target a real candidate on a channel become send-ready executions.
+    for (const p of out.plan) {
+      if (p.owner !== 'ai' || !p.ai_draft || !p.channel || !p.opportunity_ref || !candidateIds.has(p.opportunity_ref)) continue;
+      const row = (inserted ?? []).find((r: { title: string; opportunity_id: string | null }) => r.title === p.title && r.opportunity_id === p.opportunity_ref);
+      if (!row) continue;
+      try { await createDraftExecution(pid, { actionId: row.id, opportunityId: p.opportunity_ref, channel: p.channel, body: p.ai_draft }); }
+      catch (e) { console.error('[copilot] draft execution failed', e); }
+    }
   }
 
   // Nudges: routine ones are regenerated freely so they never pile up, but an
@@ -84,13 +113,15 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   const carried = new Set((urgentOpen ?? []).map((n: { title: string }) => norm(n.title)));
 
   await db.from('copilot_actions').delete()
-    .eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open').neq('urgency', 'urgent');
+    .eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open').neq('urgency', 'urgent').not('agent_run_id', 'is', null);
 
   const freshNudges = out.nudges.filter((n) => !carried.has(norm(n.title)));
   if (freshNudges.length) {
     await db.from('copilot_actions').insert(freshNudges.map((n) => ({
       profile_id: pid, kind: 'nudge', owner: 'you', title: n.title, urgency: n.urgency, due_label: n.due_label ?? null, for_date: today, agent_run_id: runId,
     })));
+    const urgent = freshNudges.filter((n) => n.urgency === 'urgent');
+    if (urgent.length) void sendPush(pid, { title: urgent.length === 1 ? 'Needs you today' : `${urgent.length} things need you today`, body: urgent[0].title, url: '/copilot', tag: `urgent-${today}` });
   }
 
   // Opportunities: add new ones, never re-suggest a title the user already saw.
@@ -103,13 +134,13 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
       .map((o) => {
         const created_at = now.toISOString();
         const score = scoreOpportunity(
-          { type: o.type, effort: o.effort ?? 'medium', fit_score: o.fit_score, created_at },
+          { type: o.type, effort: o.effort ?? 'medium', fit_score: o.fit_score, created_at, source_kind: 'inferred' },
           { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: pack.typeAffinity, now },
         );
         return {
           profile_id: pid, type: o.type, title: o.title, reason: o.reason, value_label: o.value_label ?? null,
           value_amount: o.value_amount ?? null, currency: o.currency ?? null, effort: o.effort ?? 'medium',
-          fit_score: o.fit_score, score, source: o.source ?? 'inferred', url: o.url ?? null, agent_run_id: runId,
+          fit_score: o.fit_score, score, source: o.source ?? 'inferred', source_kind: 'inferred', contact: {}, url: o.url ?? null, agent_run_id: runId,
           expires_at: new Date(now.getTime() + 14 * 86_400_000).toISOString(),
         };
       });

@@ -1,11 +1,11 @@
-// Daily brief for every active copilot profile.
+// Daily loop for every active copilot profile: real supply → reply reconciliation → brief.
 //
 // Scheduling: vercel.json carries a cron entry for Vercel deploys. On a
 // self-hosted deploy (Coolify, Docker, a VPS) vercel.json is inert — add a
 // scheduled task that calls this endpoint instead:
 //   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/copilot/cron/daily
 import { NextRequest } from 'next/server';
-import { runBrief } from '@/lib/copilot/brief';
+import { runDaily } from '@/lib/copilot/daily';
 import { copilotDb } from '@/lib/copilot/db';
 import { fail, json } from '@/lib/copilot/http';
 
@@ -40,8 +40,8 @@ export async function GET(request: NextRequest) {
   for (const p of profiles ?? []) {
     if (Date.now() - startedAt > RUN_BUDGET_MS) { skipped += 1; continue; }
     try {
-      const r = await runBrief(p.id, { reason: 'cron' });
-      results.push({ id: p.id, ok: true, agent: r.agent });
+      const r = await runDaily(p.id, { reason: 'cron' });
+      results.push({ id: p.id, ok: true, agent: r.brief.agent });
     } catch (e) {
       results.push({ id: p.id, ok: false, error: e instanceof Error ? e.message : String(e) });
     }

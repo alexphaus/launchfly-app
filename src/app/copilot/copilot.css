@@ -221,3 +221,40 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-setup code { font-size: 12px; background: #fff; border: 2px solid var(--ink); padding: 2px 6px; border-radius: 5px; }
 
 @media (prefers-reduced-motion: reduce) { .cp-sheet, .cp-overlay { transition: none; } }
+
+/* ─── Closed loop additions ─────────────────────────────────────────────── */
+.cp-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 20px 0; }
+.cp-stat { background: var(--surface); border: 2.5px solid var(--ink); border-radius: 10px; padding: 10px 6px 9px; text-align: center; min-width: 0; }
+.cp-stat .v { font-family: var(--display); font-size: 18px; font-weight: 800; line-height: 1; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-stat .l { font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: var(--muted); margin-top: 6px; letter-spacing: 0.02em; }
+.cp-stat.hot .v { color: var(--blue); }
+.cp-metrics-note { margin: 6px 20px 0; font-size: 10.5px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+
+.cp-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cp-badge { font-family: var(--display); font-size: 9px; font-weight: 800; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; border: 2px solid var(--ink); line-height: 1; white-space: nowrap; }
+.cp-badge.real { background: var(--blue); color: #fff; border-color: var(--blue); }
+.cp-badge.inferred { color: var(--muted); border-color: var(--dim); }
+.cp-badge.outcome { background: var(--ink); color: #fff; }
+.cp-badge.won { background: var(--blue); color: #fff; border-color: var(--ink); }
+
+.cp-chip.send { background: var(--blue); color: #fff; }
+.cp-chip.sent { background: #fff; color: var(--blue); border: 2px solid var(--blue); }
+.cp-chip.failed { background: #fff; color: var(--ink); border: 2px dashed var(--ink); }
+
+.cp-sheet textarea.cp-input { min-height: 120px; resize: vertical; line-height: 1.45; font-size: 14px; }
+.cp-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 7px 0; border-bottom: 2px dashed #E5E2DA; }
+.cp-kv:last-child { border-bottom: 0; }
+.cp-kv b { font-weight: 700; text-align: right; }
+.cp-kv a { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.cp-subhead { font-family: var(--display); font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; }
+.cp-inline { display: flex; gap: 8px; flex-wrap: wrap; }
+.cp-inline .cp-btn { flex: 1 1 auto; }
+.cp-status-line { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 8px; }
+.cp-ok { color: var(--blue); }
+.cp-toggle { font-family: var(--display); font-size: 11px; font-weight: 800; text-transform: uppercase; border: 2.5px solid var(--ink); border-radius: 999px; padding: 5px 10px; background: #fff; }
+.cp-toggle.on { background: var(--ink); color: #fff; }
+
+/* Login */
+.cp-login { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 28px 20px; }
+.cp-login h2 { font-family: var(--display); font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
+.cp-login .sub { font-size: 13.5px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }

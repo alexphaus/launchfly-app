@@ -2,26 +2,19 @@
 // Data access for the copilot vertical. Every function takes a profileId that
 // has already been authenticated by the session cookie.
 
+import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { copilotDb, todayIso } from './db';
-import { computeTypeAffinity, rankOpportunities, selectPlan } from './ranking';
+import { channelsConfigured, executionsForActions } from './execution';
+import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
+import { hasSubscription, vapidPublicKey } from './push';
+import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
+
+export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
   SOURCE_KEYS,
-  type Action, type Capacity, type ContextItem, type ContextSource, type EventRow, type Goal,
+  type Action, type Capacity, type ContextItem, type ContextSource, type EventRow, type Finance, type Goal,
   type GrowthItem, type HomeData, type Insight, type Opportunity, type OpportunityType, type Profile, type SourceKey,
 } from './types';
-
-export async function getProfile(profileId: string): Promise<Profile | null> {
-  const { data } = await copilotDb().from('copilot_profiles').select('*').eq('id', profileId).maybeSingle();
-  return (data as Profile | null) ?? null;
-}
-
-export async function touchProfile(profileId: string) {
-  await copilotDb().from('copilot_profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', profileId);
-}
-
-export async function logEvent(profileId: string, event_type: string, payload: Record<string, unknown> = {}) {
-  await copilotDb().from('copilot_events').insert({ profile_id: profileId, event_type, payload });
-}
 
 export async function addContextItem(profileId: string, item: { source: string; kind?: string; content: string; data?: Record<string, unknown>; weight?: number }) {
   const { data, error } = await copilotDb()
@@ -46,7 +39,8 @@ export async function recentEvents(profileId: string, days = 90, limit = 500): P
 }
 
 export async function typeAffinityFor(profileId: string): Promise<Record<OpportunityType, number>> {
-  return computeTypeAffinity(await recentEvents(profileId));
+  const [events, stats] = await Promise.all([recentEvents(profileId), outcomeStatsByType(profileId)]);
+  return computeOutcomeAffinity(events, stats.sentByType, stats.outcomesByType);
 }
 
 export async function ensureSources(profileId: string): Promise<ContextSource[]> {
@@ -70,7 +64,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as Insight | null) ?? null),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -80,19 +74,30 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     ensureSources(profileId),
     db.from('copilot_context_items').select('id', { count: 'exact', head: true }).eq('profile_id', profileId).then((r) => r.count ?? 0),
     typeAffinityFor(profileId),
-    db.from('copilot_agent_runs').select('status, agent, finished_at').eq('profile_id', profileId).order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as HomeData['lastRun']) ?? null),
+    db.from('copilot_agent_runs').select('status, agent, finished_at').eq('profile_id', profileId).eq('kind', 'daily_brief').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as HomeData['lastRun']) ?? null),
+    loadMetrics(profileId, profile),
+    db.from('copilot_agent_runs').select('finished_at').eq('profile_id', profileId).eq('kind', 'supply').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data?.finished_at as string | null) ?? null),
+    hasSubscription(profileId),
   ]);
+
+  // Join send-ready drafts onto today's plan and the latest outcome onto each match.
+  const [execMap, outcomeMap] = await Promise.all([
+    executionsForActions(profileId, planRows.map((a) => a.id)),
+    lastOutcomeByOpportunity(profileId, oppRows.map((o) => o.id)),
+  ]);
+  const planWithExec = planRows.map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
+  const oppsWithOutcome = oppRows.map((o) => ({ ...o, last_outcome: outcomeMap[o.id] ?? null }));
 
   const URGENCY_ORDER = { urgent: 0, normal: 1, info: 2 } as const;
   const nudges = [...nudgeRows].sort((a, b) => URGENCY_ORDER[a.urgency] - URGENCY_ORDER[b.urgency]).slice(0, 6);
 
-  const opportunities = rankOpportunities(oppRows, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
+  const opportunities = rankOpportunities(oppsWithOutcome, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
 
   return {
     profile,
     goals,
     insight,
-    plan: selectPlan(planRows, profile.capacity),
+    plan: selectPlan(planWithExec, profile.capacity),
     nudges,
     opportunities,
     skills: growth.filter((g) => g.kind === 'skill').slice(0, 4),
@@ -101,6 +106,11 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     contextCount: ctxCount,
     needsBrief: !insight || insight.for_date !== today,
     lastRun,
+    metrics,
+    supplyLastRun: supplyRun,
+    account: { email: profile.email, verified: !!profile.email_verified_at },
+    push: { publicKey: vapidPublicKey(), enabled: pushEnabled },
+    channels: channelsConfigured(profile),
   };
 }
 
@@ -115,20 +125,6 @@ export async function setOpportunityStatus(profileId: string, id: string, status
   if (!data) return null;
   const map: Record<string, string> = { saved: 'opportunity_saved', dismissed: 'opportunity_dismissed', acted: 'opportunity_acted', new: 'opportunity_reset' };
   await logEvent(profileId, map[status], { opportunity_id: id, type: data.type, title: data.title });
-  return data;
-}
-
-const ACTION_EVENT: Record<Action['status'], string> = {
-  done: 'action_done',
-  dismissed: 'action_dismissed',
-  open: 'action_reopened',
-};
-
-export async function setActionStatus(profileId: string, id: string, status: Action['status']) {
-  const db = copilotDb();
-  const { data } = await db.from('copilot_actions').update({ status }).eq('id', id).eq('profile_id', profileId).select('id, kind, owner, title').maybeSingle();
-  if (!data) return null;
-  await logEvent(profileId, ACTION_EVENT[status], { action_id: id, kind: data.kind, owner: data.owner, title: data.title });
   return data;
 }
 
@@ -170,4 +166,18 @@ export async function requestSource(profileId: string, key: SourceKey) {
   await ensureSources(profileId);
   await copilotDb().from('copilot_context_sources').update({ status: 'requested' }).eq('profile_id', profileId).eq('source_key', key);
   await logEvent(profileId, 'source_requested', { source_key: key });
+}
+
+export async function setFinance(profileId: string, finance: Finance) {
+  const clean: Finance = { ...finance, updated_at: new Date().toISOString() };
+  await copilotDb().from('copilot_profiles').update({ finance: clean }).eq('id', profileId);
+  await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null });
+}
+
+export async function setTargeting(profileId: string, t: { target_segments?: string[]; target_area?: string | null }) {
+  const patch: Record<string, unknown> = {};
+  if (t.target_segments) patch.target_segments = t.target_segments.map((x) => x.trim()).filter(Boolean).slice(0, 8);
+  if (t.target_area !== undefined) patch.target_area = t.target_area?.trim() || null;
+  if (Object.keys(patch).length) await copilotDb().from('copilot_profiles').update(patch).eq('id', profileId);
+  await logEvent(profileId, 'targeting_updated', patch);
 }

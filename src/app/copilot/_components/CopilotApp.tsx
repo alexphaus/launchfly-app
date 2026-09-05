@@ -90,11 +90,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       }
     },
     async setGrowthStatus(id: string, status: GrowthItem['status']) {
-      setHome((h) => ({
-        ...h,
-        skills: status === 'active' ? h.skills : h.skills.filter((g) => g.id !== id),
-        lessons: status === 'active' ? h.lessons : h.lessons.filter((g) => g.id !== id),
-      }));
+      setHome((h) => ({ ...h, lessons: status === 'active' ? h.lessons : h.lessons.filter((g) => g.id !== id) }));
       try { await post(`/growth/${id}`, { status }); } catch (e) { fail(e, 'Could not update'); void refresh(); }
     },
     async setOppStatus(id: string, status: OpportunityStatus) {

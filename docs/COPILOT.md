@@ -136,6 +136,18 @@ increments the primary currency goal and closes the opportunity. Everything feed
 `computeOutcomeAffinity` (reply and win rates per type, shrunk by volume) and `computeMetrics`,
 which the read must cite. Replies trigger a push.
 
+**Growth is measured, not guessed** — the tab used to render an LLM's invented
+"skill level 0-100" as a progress bar, which reads as measurement and was not.
+`diagnose.ts` replaces it with arithmetic over real rows: a funnel
+(matched → drafted → sent → replied → meeting → won) with the worst-converting
+step highlighted, a channel comparison, a source comparison, and a demand gap —
+terms recurring across real matches that the offer never mentions. Three rules
+it obeys: never show a number that was not computed; never compare without
+`MIN_SAMPLE` (5) on both sides; when nothing can be concluded, say which step is
+blocking instead of filling space. The agent now returns an empty `skills` array
+and at most **one** lesson, which is dropped unless it carries a real URL — and
+returning none is a valid answer.
+
 **Context** — runway is two manual numbers on the profile (`finance`), shown in the read and
 the metrics. The pipeline (opportunities + executions + outcomes) *is* the CRM; there is nothing
 to connect. Calendar remains a foundation-only connector.

@@ -1,6 +1,8 @@
 // src/lib/copilot/types.ts
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
+import type { Diagnosis } from './diagnose';
+
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
 export type Effort = 'light' | 'medium' | 'deep';
@@ -234,7 +236,9 @@ export interface HomeData {
   plan: Action[];
   nudges: Action[];
   opportunities: Opportunity[];
-  skills: GrowthItem[];
+  /** Computed from real rows. Replaces the old invented skill levels. */
+  diagnosis: Diagnosis;
+  /** At most one lesson, and only when the diagnosis produced a stuck point. */
   lessons: GrowthItem[];
   sources: ContextSource[];
   contextCount: number;

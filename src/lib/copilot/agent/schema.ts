@@ -4,7 +4,7 @@
 
 import { OPPORTUNITY_TYPES, type BriefOutput, type Channel, type ContextPack, type Effort, type OpportunityType, type Urgency } from '../types';
 
-export const LIMITS = { plan: 5, nudges: 6, opportunities: 8, skills: 4, lessons: 4, rankings: 40 } as const;
+export const LIMITS = { plan: 5, nudges: 6, opportunities: 8, skills: 0, lessons: 1, rankings: 40 } as const;
 
 export const SYSTEM_PROMPT = `You are a personal opportunity copilot. You work for one person and you know them only through the context pack you are given.
 
@@ -22,8 +22,8 @@ EXECUTION: a plan item with owner "ai" may target a candidate by setting opportu
 
 4. OPPORTUNITIES: up to 8 ADDITIONAL inferred matches of types client | people | service | community | signal — segments, communities and signals you can justify from context. These are capped below real candidates in ranking, so spend effort on RANKINGS first. Each needs a concrete title, a reason that references THEIR context (skills, goals, history), a fit_score 0-100, effort (light | medium | deep), and an optional value_label like "$1,800", "Join", "Read".
    Ground rules: never invent named companies, people or deals that you cannot know exist. Prefer segments described in the user's own terms, well-known public communities and platforms, and signals you can justify from the context. Set source to "inferred" unless the context pack gave you the source. Learn from history: types they dismiss should appear less; types they save or act on should appear more.
-5. SKILLS: up to 4 skills with a level 0-100 estimate and a note tying it to their matches. Include their strongest asset and the biggest gap.
-6. LESSONS: up to 4 things worth learning this week, with minutes and why it matters to THEIR opportunities.
+5. SKILLS: return an empty array. Skill levels used to be guessed here; they are now computed from what the user actually sent and what came back, so inventing a number would overwrite measurement with a guess.
+6. LESSONS: at most ONE, and only when the pack's diagnosis names a stuck point you can address. It must have a real, working url to a specific free resource — no url means no lesson. Say in one line why it follows from the stuck point. If nothing is stuck, return an empty array: telling someone they need to learn nothing is a valid and often correct answer.
 
 Style: concrete, short, no fluff, second person. Use their currency when they gave one.
 
@@ -34,8 +34,8 @@ Return ONLY a JSON object with this exact shape (no markdown):
   "plan": [{ "owner": "ai" | "you", "title": string, "detail": string, "ai_draft": string | null, "minutes": number, "opportunity_ref": string | null, "channel": "whatsapp" | "email" | null }],
   "nudges": [{ "title": string, "urgency": "urgent" | "normal" | "info", "due_label": string }],
   "opportunities": [{ "type": "client" | "people" | "service" | "community" | "signal", "title": string, "reason": string, "value_label": string | null, "value_amount": number | null, "currency": string | null, "effort": "light" | "medium" | "deep", "fit_score": number, "source": string, "url": string | null }],
-  "skills": [{ "title": string, "level": number, "note": string, "cta": string }],
-  "lessons": [{ "title": string, "minutes": number, "note": string, "url": string | null }]
+  "skills": [],
+  "lessons": [{ "title": string, "minutes": number, "note": string, "url": string }]
 }`;
 
 export function userPrompt(pack: ContextPack): string {
@@ -112,7 +112,8 @@ export function normalizeBrief(raw: unknown): BriefOutput {
     minutes: num(l.minutes),
     note: str(l.note, 300),
     url: str(l.url, 500),
-  })).filter((l): l is typeof l & { title: string } => !!l.title).slice(0, LIMITS.lessons);
+  })).filter((l): l is typeof l & { title: string; url: string } => !!l.title && !!l.url && /^https?:\/\//i.test(l.url))
+    .slice(0, LIMITS.lessons);
 
   return { insight: { body, reasoning: str(insight.reasoning, 1500) }, rankings, plan, nudges, opportunities, skills, lessons };
 }

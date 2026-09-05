@@ -58,7 +58,10 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </div>
       )}
 
-      <div className="cp-section"><span className="lead">Today&apos;s leverage plan</span></div>
+      <div className="cp-section">
+        <span className="lead">Today&apos;s leverage plan</span>
+        {home.planOverflow > 0 && <span className="count">{home.plan.filter((a) => a.status === 'open').length} of {home.plan.filter((a) => a.status === 'open').length + home.planOverflow}</span>}
+      </div>
       {home.plan.length ? (
         <div className="cp-list">
           {home.plan.map((a) => {
@@ -73,6 +76,12 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </div>
       ) : (
         <div className="cp-empty"><b>Plan arrives with the brief</b>Two to five moves that fit your capacity. Real matches get a drafted message you approve with one tap.</div>
+      )}
+
+      {home.planOverflow > 0 && (
+        <div className="cp-note" style={{ marginTop: 8 }}>
+          {home.planOverflow} more draft{home.planOverflow === 1 ? '' : 's'} waiting behind these. A plan you can finish beats a queue you cannot — clear these first and the next batch moves up.
+        </div>
       )}
 
       <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>

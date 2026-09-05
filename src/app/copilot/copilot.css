@@ -278,3 +278,6 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-finding .cp-f-action { font-size: 13px; font-weight: 700; line-height: 1.45; margin-top: 10px; }
 .cp-finding.thin { border-style: dashed; }
 .cp-finding.thin .cp-eyebrow { background: var(--ink); }
+.cp-stage.outside .cp-stage-track { border-style: dashed; }
+.cp-stage.outside .cp-stage-fill { background: repeating-linear-gradient(45deg, var(--dim) 0 4px, transparent 4px 8px); }
+.cp-stage.outside .cp-stage-rate { color: var(--dim); text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.03em; }

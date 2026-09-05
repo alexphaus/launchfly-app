@@ -1,7 +1,7 @@
 // Pure-module checks for the copilot vertical. No database, no network.
 // Run: npx tsx scripts/tests/copilot-core.test.ts
 import assert from 'node:assert/strict';
-import { computeTypeAffinity, rankOpportunities, scoreOpportunity, selectPlan } from '../../src/lib/copilot/ranking';
+import { AI_REVIEW_MINUTES, MAX_PLAN_ITEMS, computeTypeAffinity, rankOpportunities, scoreOpportunity, selectPlan } from '../../src/lib/copilot/ranking';
 import { extractJson, normalizeBrief } from '../../src/lib/copilot/agent/schema';
 import { StarterAgent } from '../../src/lib/copilot/agent/starter';
 import type { ContextPack } from '../../src/lib/copilot/types';
@@ -47,7 +47,7 @@ const base = { created_at: now.toISOString(), score: 0 };
     { owner: 'you', minutes: 20, status: 'open' },
     { owner: 'you', minutes: 15, status: 'done' },
   ], 'low');
-  assert.deepEqual(plan.map((p) => `${p.owner}:${p.minutes}`), ['ai:5', 'you:20', 'you:15'], 'low capacity keeps AI items, the tasks that fit, and done items');
+  assert.deepEqual(plan.map((p) => `${p.owner}:${p.minutes}`), ['ai:5', 'you:20', 'you:15'], 'low capacity keeps what fits, in order, plus done items');
 
   // Regression: an oversized item listed first must not evict the cheap ones behind it.
   const squeezed = selectPlan([
@@ -67,7 +67,29 @@ const base = { created_at: now.toISOString(), score: 0 };
 
   const planDeep = selectPlan([{ owner: 'you', minutes: 90, status: 'open' }, { owner: 'you', minutes: 50, status: 'open' }], 'deep');
   assert.equal(planDeep.length, 2, 'deep capacity fits both');
-  assert.deepEqual(selectPlan([{ owner: 'ai', minutes: 999, status: 'open' }], 'low').length, 1, 'AI-drafted items ignore the budget');
+  assert.deepEqual(selectPlan([{ owner: 'ai', minutes: 999, status: 'open' }], 'low').length, 1, 'one oversized item still beats an empty plan');
+
+  // A plan is a shortlist. Thirty drafts is a queue, and rendering all of them
+  // is what made Today unreadable on a real account.
+  const flood = Array.from({ length: 30 }, () => ({ owner: 'ai' as const, minutes: undefined, status: 'open' as const }));
+  assert.equal(selectPlan(flood, 'deep').length, MAX_PLAN_ITEMS, 'the shortlist is capped however much capacity there is');
+  assert.equal(selectPlan([...flood, { owner: 'you', minutes: 10, status: 'done' }], 'deep').length, MAX_PLAN_ITEMS + 1, 'finished items are shown for the record and do not use a slot');
+
+  // AI drafts cost a review, so they compete for the budget like everything else.
+  const budgeted = selectPlan([
+    { owner: 'ai', minutes: 20, status: 'open' },
+    { owner: 'ai', minutes: 20, status: 'open' },
+  ], 'low');
+  assert.equal(budgeted.length, 1, 'a 30 min budget does not fit two 20 min reviews');
+  assert.equal(selectPlan([{ owner: 'ai', minutes: undefined, status: 'open' }, { owner: 'you', minutes: 28, status: 'open' }], 'low').length, 2, `an unestimated AI item costs ${AI_REVIEW_MINUTES} min, not 30`);
+
+  // Regression: capping the plan let cheap drafts eat all five slots, so the one
+  // thing only the user could do fell off the bottom of their day.
+  const crowded = selectPlan([...flood, { owner: 'you' as const, minutes: 20, status: 'open' as const, tag: 'call-back' }], 'moderate');
+  assert.equal(crowded.length, MAX_PLAN_ITEMS, 'still a shortlist');
+  assert.ok(crowded.some((a) => 'tag' in a), 'work only the user can do reaches the plan past a pile of drafts');
+  assert.equal(crowded.filter((a) => a.owner === 'ai').length, MAX_PLAN_ITEMS - 1, 'drafts take back the slots nothing else wanted');
+  assert.equal(selectPlan(flood, 'moderate').filter((a) => a.owner === 'ai').length, MAX_PLAN_ITEMS, 'with no other work the ceiling does not shrink the plan');
 }
 
 // --- schema normalisation
@@ -423,6 +445,41 @@ async function growth() {
     offer: {},
   });
   assert.equal(dedupe.stages.find((s) => s.key === 'replied')!.count, 1, 'two replies from one lead is one');
+  assert.equal(big.outsideFunnel, 0, 'an outcome on a match this app sent is inside the funnel');
+
+  // 7. Funnel integrity. The shape that broke the live account: outcomes logged
+  //    by hand on work that never went out through the copilot. 12 matched,
+  //    4 drafted, 0 sent, 1 reply and 6 meetings — which used to render as 600%.
+  const mIds = Array.from({ length: 6 }, (_, i) => `m${i}`);
+  const broken = diagnose({
+    opportunities: [...Array.from({ length: 12 }, (_, i) => opp(`b${i}`)), ...mIds.map((i) => opp(i))],
+    executions: mIds.slice(0, 4).map((i) => exec(i, 'whatsapp', 'needs_approval')),
+    outcomes: [{ kind: 'reply', opportunity_id: 'm0' }, ...mIds.map((i) => ({ kind: 'meeting' as const, opportunity_id: i }))],
+    offer: {},
+  });
+  const meeting = broken.stages.find((s) => s.key === 'meeting')!;
+  assert.equal(meeting.count, 6, 'the count is never massaged');
+  assert.equal(meeting.rate, 1, 'a conversion rate is a share of the stage above it, so it never exceeds 100%');
+  assert.equal(meeting.exceedsPrevious, true, 'a stage holding more than the one above it is flagged, not rendered as a conversion');
+  assert.equal(broken.stages.find((s) => s.key === 'replied')!.exceedsPrevious, true, '1 reply against 0 sent is off-chain too');
+  assert.ok(!broken.stages.some((s) => s.exceedsPrevious && s.key === broken.bottleneck?.key), 'a broken chain is never named the bottleneck');
+  assert.equal(broken.outsideFunnel, 6, 'six leads carry outcomes with no send behind them');
+  const outside = broken.findings.find((f) => f.kind === 'outside')!;
+  assert.match(outside.headline, /6 matches have outcomes this app never sent/);
+  assert.match(outside.action!, /I sent it/, 'the fix is named, not just the problem');
+  assert.equal(broken.thin, false, 'there is still a real bottleneck to report here');
+
+  // 8. Off-chain outcomes alone are not a diagnosis: still thin, and still says why.
+  const alone = diagnose({
+    opportunities: Array.from({ length: 4 }, (_, i) => opp(`s${i}`)),
+    executions: [],
+    outcomes: [{ kind: 'reply', opportunity_id: 's0' }],
+    offer: {},
+  });
+  assert.equal(alone.outsideFunnel, 1);
+  assert.deepEqual(alone.findings.map((f) => f.kind), ['outside', 'insufficient']);
+  assert.match(alone.findings[0].headline, /1 match has an outcome/, 'singular reads as English');
+  assert.equal(alone.thin, true, 'an explanation of why the funnel looks odd is not a finding about the work');
 
   console.log('copilot-core: measured-growth checks passed');
 }

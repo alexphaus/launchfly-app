@@ -12,6 +12,7 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
   channel: 'Channel',
   source: 'Source',
   demand: 'Market demand',
+  outside: 'Logged outside the app',
   insufficient: 'Not enough data yet',
 };
 
@@ -29,6 +30,7 @@ export default function GrowthView({ home, actions }: { home: HomeData; actions:
         ))}
         <div className="cp-help" style={{ marginTop: 10 }}>
           Counted from your matches, drafts, sends and logged outcomes. A lead that replied twice counts once.
+          {d.stages.some((s) => s.exceedsPrevious) && ' A dashed bar holds more than the stage above it, so those outcomes came from work you sent some other way — the count is real, the conversion is not.'}
         </div>
       </div>
 
@@ -66,12 +68,13 @@ export default function GrowthView({ home, actions }: { home: HomeData; actions:
 function Stage({ stage, max, isBottleneck }: { stage: FunnelStage; max: number; isBottleneck: boolean }) {
   const width = Math.round((stage.count / max) * 100);
   return (
-    <div className={`cp-stage ${isBottleneck ? 'drop' : ''}`}>
+    <div className={`cp-stage ${isBottleneck ? 'drop' : ''} ${stage.exceedsPrevious ? 'outside' : ''}`}>
       <div className="cp-stage-top">
         <span className="cp-stage-label">{stage.label}</span>
         <span className="cp-stage-count">
           {stage.count}
-          {stage.rate !== null && <span className="cp-stage-rate">{Math.round(stage.rate * 100)}%</span>}
+          {stage.rate !== null && !stage.exceedsPrevious && <span className="cp-stage-rate">{Math.round(stage.rate * 100)}%</span>}
+          {stage.exceedsPrevious && <span className="cp-stage-rate">outside</span>}
         </span>
       </div>
       <div className="cp-stage-track"><div className="cp-stage-fill" style={{ width: `${width}%` }} /></div>

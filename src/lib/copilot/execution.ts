@@ -68,6 +68,23 @@ export async function createDraftExecution(
   return data as Execution;
 }
 
+/**
+ * The action id of an open draft already targeting this opportunity, if any.
+ * Drafting is idempotent: tapping "Draft WhatsApp" twice, or an agent run
+ * re-proposing a match that already has a draft, must not produce two messages
+ * queued for the same person.
+ */
+export async function openDraftForOpportunity(profileId: string, opportunityId: string): Promise<{ actionId: string; executionId: string } | null> {
+  const { data } = await copilotDb()
+    .from('copilot_executions')
+    .select('id, action_id')
+    .eq('profile_id', profileId).eq('opportunity_id', opportunityId)
+    .in('approval_state', ['needs_approval', 'approved', 'failed'])
+    .order('created_at', { ascending: false })
+    .limit(1).maybeSingle();
+  return data?.action_id ? { actionId: data.action_id, executionId: data.id } : null;
+}
+
 export async function getExecution(profileId: string, id: string): Promise<Execution | null> {
   const { data } = await copilotDb().from('copilot_executions').select('*').eq('id', id).eq('profile_id', profileId).maybeSingle();
   return (data as Execution | null) ?? null;

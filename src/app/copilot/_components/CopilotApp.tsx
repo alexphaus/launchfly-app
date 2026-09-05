@@ -173,11 +173,12 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
     async draftFor(oppId, channel?: Channel) {
       try {
-        const r = await post<{ home: HomeData; actionId: string; execution: unknown | null }>(`/opportunities/${oppId}/draft`, { channel });
+        const r = await post<{ home: HomeData; actionId: string; execution: unknown | null; existing?: boolean }>(`/opportunities/${oppId}/draft`, { channel });
         setHome(r.home);
         setTab('today');
         openSheet({ kind: 'action', id: r.actionId });
-        say(r.execution ? 'Drafted. Review and approve to send.' : 'Drafted. No contact on that channel, copy it manually.');
+        // Drafting twice opens the message already waiting rather than writing a second one.
+        say(r.existing ? 'Already drafted — here it is.' : r.execution ? 'Drafted. Review and approve to send.' : 'Drafted. No contact on that channel, copy it manually.');
         return true;
       } catch (e) { fail(e, 'Could not draft'); return false; }
     },
@@ -221,8 +222,10 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
   };
 
-  const newMatches = home.opportunities.filter((o) => o.status === 'new').length;
-  const drafts = home.plan.filter((a) => a.execution && (a.execution.approval_state === 'needs_approval' || a.execution.approval_state === 'approved')).length;
+  // Counted from metrics, not from what is on screen: the plan is a capped
+  // shortlist, so counting it told the user 5 drafts were waiting when 30 were.
+  const newMatches = home.metrics.pipeline.new;
+  const drafts = home.metrics.awaiting_approval;
   const needYou = home.plan.filter((a) => a.owner === 'you' && a.status === 'open').length + home.nudges.filter((n) => n.urgency === 'urgent').length;
 
   return (
@@ -230,7 +233,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       <header className="cp-header">
         <div>
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
-          <p>{newMatches} new match{newMatches === 1 ? '' : 'es'} · {drafts ? `${drafts} to approve · ` : ''}{needYou} need you</p>
+          <p>{newMatches} new match{newMatches === 1 ? '' : 'es'} · {drafts ? `${drafts} to approve · ` : ''}{needYou} need{needYou === 1 ? 's' : ''} you</p>
         </div>
         <button className="cp-capacity" onClick={() => openSheet({ kind: 'capacity' })} aria-label="Set your capacity">
           ⚡ <span>{CAPACITY_META[home.profile.capacity].label}</span>

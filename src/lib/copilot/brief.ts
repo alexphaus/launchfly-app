@@ -6,7 +6,7 @@
 import { StarterAgent, getAgent } from './agent';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
-import { createDraftExecution } from './execution';
+import { createDraftExecution, openDraftForOpportunity } from './execution';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
 import { getProfile } from './store';
@@ -98,8 +98,11 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
       if (p.owner !== 'ai' || !p.ai_draft || !p.channel || !p.opportunity_ref || !candidateIds.has(p.opportunity_ref)) continue;
       const row = (inserted ?? []).find((r: { title: string; opportunity_id: string | null }) => r.title === p.title && r.opportunity_id === p.opportunity_ref);
       if (!row) continue;
-      try { await createDraftExecution(pid, { actionId: row.id, opportunityId: p.opportunity_ref, channel: p.channel, body: p.ai_draft }); }
-      catch (e) { console.error('[copilot] draft execution failed', e); }
+      try {
+        // Never queue a second message to someone who already has one waiting.
+        if (await openDraftForOpportunity(pid, p.opportunity_ref)) continue;
+        await createDraftExecution(pid, { actionId: row.id, opportunityId: p.opportunity_ref, channel: p.channel, body: p.ai_draft });
+      } catch (e) { console.error('[copilot] draft execution failed', e); }
     }
   }
 

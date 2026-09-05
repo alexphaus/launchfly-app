@@ -56,30 +56,45 @@ export function rankOpportunities<T extends Pick<Opportunity, 'type' | 'effort' 
     .sort((a, b) => b.score - a.score);
 }
 
-/**
- * Pick today's leverage plan for the current capacity.
- * AI-drafted items are always kept (they only need a review). "Needs you" items
- * are kept while their estimated minutes fit inside the capacity budget.
- */
+/** A plan is a shortlist. Past this many open items it stops being a plan and
+ *  becomes a queue — which is what the Drafts waiting count is for. */
+export const MAX_PLAN_ITEMS = 5;
+/** Drafts are cheap, so without a ceiling of their own thirty of them fill every
+ *  slot and the day's real work never appears. */
+export const MAX_AI_PLAN_ITEMS = 3;
+/** Reviewing and sending a drafted message is short, but it is not free. */
+export const AI_REVIEW_MINUTES = 2;
+
 export function selectPlan<T extends Pick<Action, 'owner' | 'minutes' | 'status'>>(actions: T[], capacity: Capacity): T[] {
   const budget = CAPACITY_META[capacity].minutes;
-  const cost = (a: T) => a.minutes ?? 30;
+  const cost = (a: T) => a.minutes ?? (a.owner === 'ai' ? AI_REVIEW_MINUTES : 30);
   const keep = new Set<T>();
   let used = 0;
+  let open = 0;
+  let ai = 0;
 
+  // Finished items stay for the record and cost nothing.
+  for (const a of actions) if (a.status === 'done') keep.add(a);
+
+  const fits = (a: T) => open < MAX_PLAN_ITEMS && used + cost(a) <= budget;
+  const take = (a: T) => { keep.add(a); used += cost(a); open += 1; if (a.owner === 'ai') ai += 1; };
+
+  // First pass holds drafts to their ceiling, so work only the user can do still
+  // reaches the plan. Second pass hands any slot nothing else wanted back to them.
   for (const a of actions) {
-    // AI-drafted items only need a review, and finished items stay for the record.
-    if (a.status === 'done' || a.owner === 'ai') { keep.add(a); continue; }
-    if (used + cost(a) <= budget) { keep.add(a); used += cost(a); }
+    if (keep.has(a) || (a.owner === 'ai' && ai >= MAX_AI_PLAN_ITEMS)) continue;
+    if (fits(a)) take(a);
+  }
+  for (const a of actions) {
+    if (keep.has(a)) continue;
+    if (fits(a)) take(a);
   }
 
   // Never show a plan with nothing the user can do. If one oversized item blew
   // the budget, fall back to the cheapest task rather than the first one.
-  const hasOpenYou = actions.some((a) => keep.has(a) && a.owner === 'you' && a.status !== 'done');
-  if (!hasOpenYou) {
-    const cheapest = actions
-      .filter((a) => a.owner === 'you' && a.status !== 'done')
-      .sort((x, y) => cost(x) - cost(y))[0];
+  const hasOpen = actions.some((a) => keep.has(a) && a.status !== 'done');
+  if (!hasOpen) {
+    const cheapest = actions.filter((a) => a.status !== 'done').sort((x, y) => cost(x) - cost(y))[0];
     if (cheapest) keep.add(cheapest);
   }
 

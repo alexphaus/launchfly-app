@@ -93,6 +93,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lastOutcomeByOpportunity(profileId, oppRows.map((o) => o.id)),
   ]);
   const planWithExec = planRows.map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
+  const shortlist = selectPlan(planWithExec, profile.capacity);
+  const planOverflow = planWithExec.filter((a) => a.status === 'open' && !shortlist.includes(a)).length;
   const oppsWithOutcome = oppRows.map((o) => ({ ...o, last_outcome: outcomeMap[o.id] ?? null }));
 
   const URGENCY_ORDER = { urgent: 0, normal: 1, info: 2 } as const;
@@ -104,7 +106,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     profile,
     goals,
     insight,
-    plan: selectPlan(planWithExec, profile.capacity),
+    plan: shortlist,
+    planOverflow,
     nudges,
     opportunities,
     diagnosis: diagnose({ opportunities: allOpps, executions: allExecs, outcomes: allOutcomes, offer: profile.offer ?? {} }),

@@ -21,12 +21,15 @@ export interface FunnelStage {
   key: 'matched' | 'drafted' | 'sent' | 'replied' | 'meeting' | 'won';
   label: string;
   count: number;
-  /** Conversion from the previous stage, null for the first and when the previous stage is 0. */
+  /** Conversion from the previous stage, null for the first and when the previous stage is 0. Never above 1. */
   rate: number | null;
+  /** True when this stage holds more than the one above it — outcomes logged for
+   *  work this app did not send. The count is still the truth; the rate is not. */
+  exceedsPrevious?: boolean;
 }
 
 export interface Finding {
-  kind: 'bottleneck' | 'channel' | 'source' | 'demand' | 'insufficient';
+  kind: 'bottleneck' | 'channel' | 'source' | 'demand' | 'outside' | 'insufficient';
   /** One sentence, always citing the numbers behind it. */
   headline: string;
   detail: string;
@@ -38,6 +41,12 @@ export interface Finding {
 
 export interface Diagnosis {
   stages: FunnelStage[];
+  /**
+   * Outcomes recorded against matches this app never sent — logged by hand, or
+   * work that happened over the phone. Real, but outside the funnel's chain, so
+   * the rates below Sent understate what actually happened.
+   */
+  outsideFunnel: number;
   /** The stage with the worst conversion that has enough data to judge. */
   bottleneck: FunnelStage | null;
   findings: Finding[];
@@ -52,7 +61,9 @@ export interface DiagnoseInput {
   offer: Offer;
 }
 
-const pctOf = (n: number, d: number): number | null => (d > 0 ? Math.round((n / d) * 1000) / 1000 : null);
+// A conversion rate is a share of the stage above it, so it is capped at 1.
+// Without this, 6 meetings logged against 1 reply rendered as "600%".
+const pctOf = (n: number, d: number): number | null => (d > 0 ? Math.min(1, Math.round((n / d) * 1000) / 1000) : null);
 const asPct = (r: number) => `${Math.round(r * 100)}%`;
 
 export function diagnose(input: DiagnoseInput): Diagnosis {
@@ -76,11 +87,22 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     { key: 'meeting', label: 'Meeting', count: count('meeting'), rate: pctOf(count('meeting'), replied) },
     { key: 'won', label: 'Won', count: count('won'), rate: pctOf(count('won'), count('meeting') || replied) },
   ];
+  // Flag any stage holding more than the one above it. The count stays honest;
+  // the flag tells the UI not to present its rate as a conversion.
+  for (let i = 1; i < stages.length; i++) {
+    if (stages[i].count > stages[i - 1].count) stages[i].exceedsPrevious = true;
+  }
+
+  // Outcomes on opportunities with no sent execution: real work the app did not do.
+  const sentOppIds = new Set(sentExecs.map((e) => e.opportunity_id).filter(Boolean));
+  const outsideFunnel = new Set(
+    outcomes.filter((o) => o.opportunity_id && !sentOppIds.has(o.opportunity_id)).map((o) => o.opportunity_id),
+  ).size;
 
   const findings: Finding[] = [];
 
   // --- The bottleneck: the earliest stage that loses the most, with enough volume to judge.
-  const judgeable = stages.filter((s) => s.rate !== null && stages[stages.findIndex((x) => x.key === s.key) - 1].count >= MIN_SAMPLE);
+  const judgeable = stages.filter((s, i) => s.rate !== null && !s.exceedsPrevious && stages[i - 1].count >= MIN_SAMPLE);
   const bottleneck = judgeable.length ? judgeable.reduce((worst, s) => (s.rate! < worst.rate! ? s : worst)) : null;
 
   if (bottleneck) {
@@ -151,8 +173,18 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     });
   }
 
+  // --- Outcomes logged outside the app: explain the funnel rather than let it look broken.
+  if (outsideFunnel > 0) {
+    findings.push({
+      kind: 'outside',
+      headline: `${outsideFunnel} ${outsideFunnel === 1 ? 'match has an outcome' : 'matches have outcomes'} this app never sent.`,
+      detail: 'You logged a reply, meeting or win on work that went out some other way. The counts above include it; the rates below Sent do not, so they read lower than reality.',
+      action: 'Send through the copilot — even by tapping "I sent it" — and the funnel starts measuring the whole picture.',
+    });
+  }
+
   // --- Nothing yet: say exactly what is missing rather than filling space.
-  const thin = findings.length === 0;
+  const thin = findings.every((f) => f.kind === 'outside');
   if (thin) {
     const blocker = sent === 0
       ? drafted === 0
@@ -164,7 +196,7 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     findings.push({ kind: 'insufficient', headline: blocker.headline, detail: 'Everything on this tab is computed from what you actually sent and what came back. Nothing here is estimated.', action: blocker.action });
   }
 
-  return { stages, bottleneck, findings, thin };
+  return { stages, bottleneck, findings, thin, outsideFunnel };
 }
 
 const label = (ch: string) => (ch === 'whatsapp' ? 'WhatsApp' : 'Email');

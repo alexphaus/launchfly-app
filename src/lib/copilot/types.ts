@@ -238,6 +238,8 @@ export interface HomeData {
   opportunities: Opportunity[];
   /** Computed from real rows. Replaces the old invented skill levels. */
   diagnosis: Diagnosis;
+  /** Open plan items that did not fit today's shortlist. They are not lost — they queue. */
+  planOverflow: number;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */
   lessons: GrowthItem[];
   sources: ContextSource[];

@@ -319,3 +319,18 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-price-faq p { font-size: 13.5px; line-height: 1.6; color: var(--muted); }
 .cp-price-faq p + p { margin-top: 12px; padding-top: 12px; border-top: 2px dashed var(--ink); }
 .cp-price-faq b { color: var(--ink); }
+
+/* ── Intro (signed-out landing) and the allowance wall ─────────────────────── */
+.cp-intro h1 { font-family: var(--display); font-size: 32px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 12px; }
+.cp-intro .sub { font-size: 14px; line-height: 1.6; color: var(--muted); margin-bottom: 20px; }
+.cp-intro-steps { counter-reset: cp-i; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.cp-intro-steps li { counter-increment: cp-i; position: relative; padding-left: 34px; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.cp-intro-steps li::before { content: '0' counter(cp-i); position: absolute; left: 0; top: 1px; font-family: var(--display); font-size: 11px; font-weight: 800; color: #fff; background: var(--ink); padding: 3px 5px; border-radius: 4px; }
+.cp-intro-steps b { color: var(--ink); }
+.cp-intro-plan { font-size: 13px; line-height: 1.55; color: var(--muted); padding-top: 14px; border-top: 2px dashed var(--ink); }
+.cp-intro-plan a, .cp-help a { color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+.cp-wall { margin-top: 14px; border-style: dashed; }
+.cp-wall p { font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.cp-wall .cp-btn.block { display: block; width: 100%; text-align: center; margin-top: 12px; text-decoration: none; }
+.cp-wall-sub { margin-top: 10px; font-size: 12px; color: var(--dim); }

@@ -22,8 +22,8 @@ export default function PricingClient({ state }: { state: PricingState }) {
   const [error, setError] = useState<string | null>(null);
 
   const start = async (plan: PlanKey) => {
-    if (plan === 'free') { window.location.href = '/copilot'; return; }
-    if (!state.signedIn) { window.location.href = '/copilot'; return; }
+    if (plan === 'free') { window.location.href = state.signedIn ? '/copilot' : '/copilot?start=1'; return; }
+    if (!state.signedIn) { window.location.href = '/copilot?start=1'; return; }
     setBusy(plan);
     setError(null);
     try {

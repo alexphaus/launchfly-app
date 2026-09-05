@@ -1,5 +1,15 @@
 # Copilot — opportunity engine (`/copilot`)
 
+> **Multi-user rule.** Nobody sends under an identity they do not own, and nobody
+> reads another user's supply. A profile may only send through the API when it
+> has its own WhatsApp instance (`linked_business_id`) or its own verified
+> sending address (`email_from`) *and* `send_mode = 'api'`. Everyone else gets
+> `send_mode = 'manual'`: the draft opens pre-filled in their own WhatsApp or
+> mail app via a `wa.me` / `mailto` link, they send it, and tap "I sent it" —
+> which records the same execution, schedules the same day-3 follow-up, and
+> feeds the same metrics. The server's WhatsApp and Resend credentials are the
+> operator's and are never used on a user's behalf.
+
 A separate, mobile-first, installable web app living inside this repo. It shares
 the Supabase project, the Next.js runtime and a few Launchfly primitives (the
 WhatsApp provider, Resend, the Apify Google Maps scraper, the prospect pipeline)
@@ -45,6 +55,8 @@ COPILOT_SESSION_SECRET=...          # long random string; falls back to the serv
 # Agent (pick one; none = deterministic starter that still ranks real candidates)
 COPILOT_AGENT_URL=https://...       # external vertical agent (contract below)
 COPILOT_AGENT_SECRET=...
+COPILOT_SUPPLY_URL=https://...      # external supply service (contract below)
+COPILOT_SUPPLY_SECRET=...
 #  or
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
@@ -94,8 +106,10 @@ links the current profile; from `/copilot/login` it finds the profile by email. 
 auth configuration. Onboarding is rate limited per IP and refuses when a session already exists.
 
 **Real supply** (`supply/`) — adapters implement `SupplyAdapter` and are registered in
-`supply/index.ts`. `hunter` reads Launchfly's `hunter_prospects`; `google_maps` runs the
-existing Apify scraper for each target segment in the target area. Candidates are upserted as
+`supply/index.ts`. `hunter` reads Launchfly's `hunter_prospects` — a **shared** operator
+table, so it is only offered to profiles with a `linked_business_id` and refuses to run
+otherwise; `google_maps` runs the existing Apify scraper for each target segment in the
+target area; `remote` calls an external supply service (see below). Candidates are upserted as
 `source_kind = 'sourced'` with a `contact` and deduped on `(profile, source, external_id)` —
 never by title. A deterministic `heuristicFit` (≤ 80) gives them a first score; the agent
 then ranks them properly. Inferred (LLM) opportunities are capped at 70 so a guess can never
@@ -130,6 +144,42 @@ to connect. Calendar remains a foundation-only connector.
 `notificationclick` handlers (additive; the fetch pass-through is unchanged). Urgent nudges and
 detected replies notify subscribed devices. Silently off until keys are set.
 
+## Offer — what every draft is built from
+
+`copilot_profiles.offer` holds `{ sells, for_who, problem, price_band, proof_url }`. It is
+asked for in onboarding and editable in You → Your offer. Openers are assembled from it, the
+proof link replaces the vague "I can show you an example", and the agent prompt requires
+messages in the user's own words. With no offer the template falls back to the headline and
+stays deliberately vague rather than inventing a business. Nothing in the copy assumes an
+industry, country, channel or company size.
+
+## External supply agent
+
+Supply can be outsourced without touching this app — an n8n workflow, or a small service
+fanning out to Exa, Apify, job boards. Set `COPILOT_SUPPLY_URL` (and optionally
+`COPILOT_SUPPLY_SECRET`) and the `remote` adapter calls it:
+
+```
+POST $COPILOT_SUPPLY_URL          Authorization: Bearer $COPILOT_SUPPLY_SECRET
+{ "kind": "discover", "limit": 40,
+  "profile": { headline, offer, location, target_segments, target_area, hunt_types } }
+
+-> { "candidates": [ {
+      "external_id": "stable-id-in-your-source",   // required — this is how dedupe works
+      "title": "Acme Resort",                       // required
+      "summary": "why this is worth a message",
+      "type": "client|people|service|community|signal",
+      "url": "https://…",
+      "contact": { "name": "Maria", "whatsapp": "+63…", "email": "…", "website": "…" },
+      "effort": "light|medium|deep",
+      "data": { "anything": "kept for the agent" }
+    } ] }
+```
+
+A bare array is accepted too. Everything is normalised and capped server-side: rows without a
+title or a stable `external_id` are dropped, phones are normalised, unknown enums fall back.
+Return facts, not adjectives — the agent scores and words them.
+
 ## External agent contract
 
 `POST $COPILOT_AGENT_URL` with `Authorization: Bearer $COPILOT_AGENT_SECRET`:
@@ -157,11 +207,13 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/context` | `{ content, kind?, regenerate? }` — "tell the copilot" |
 | POST | `/api/copilot/goals` | create / update a goal |
 | POST | `/api/copilot/targeting` | `{ target_segments, target_area }` |
+| POST | `/api/copilot/offer` | `{ sells, for_who, problem, price_band, proof_url }` |
 | POST | `/api/copilot/finance` | `{ monthly_burn, cash, currency }` |
 | POST | `/api/copilot/opportunities/:id` | `{ status: saved \| dismissed \| acted \| new }` |
 | POST | `/api/copilot/opportunities/:id/draft` | draft an opener onto today's plan, send-ready |
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |
-| POST/DELETE | `/api/copilot/actions/:id/send` | approve & send the attached draft (body may edit it) / cancel it |
+| POST/DELETE | `/api/copilot/actions/:id/send` | approve & send via API (only when the profile owns the channel) / cancel |
+| POST | `/api/copilot/actions/:id/sent` | manual dispatch: "I sent it from my own app" |
 | POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` |
 | POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |
@@ -183,6 +235,11 @@ Pure-module tests: ranking (sourced/inferred rule, capacity plan selection, outc
 affinity), metrics, phone normalisation and heuristic fit, message templates, agent output
 normalisation, starter agent, session signing.
 
+## Quotas
+
+Per profile, per day: 40 sends, 10 supply runs, 30 briefs. Onboarding is limited to 5 per IP
+per hour and refuses when the device already has a copilot. Stored in `copilot_rate_limits`.
+
 ## Known gaps
 
 - Email replies are not reconciled automatically yet (WhatsApp is); log them by hand on the match.
@@ -190,5 +247,8 @@ normalisation, starter agent, session signing.
   user; `copilot_outcomes` is shaped for it.
 - Calendar is a placeholder. Growth (skills / lessons) is still agent-authored, not derived from
   real job-post requirements.
-- The Google Maps adapter spends Apify credits per run; it runs from the cron and the button,
-  never on onboarding.
+- The Google Maps adapter spends Apify credits per run from the operator's token; it runs from
+  the cron and the button, never on onboarding. Per-user billing does not exist yet.
+- API sending needs a per-profile channel, and there is no UI to provision one — set
+  `linked_business_id` / `email_from` and `send_mode` in the database. Manual dispatch is the
+  path everyone else uses, and it is the default.

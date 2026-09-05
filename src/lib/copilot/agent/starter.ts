@@ -5,7 +5,7 @@
 // candidates, cite REAL metrics, and draft a real opener the user can send.
 
 import { describeMetrics } from '../metrics';
-import { CAPACITY_META, type BriefOutput, type ContextPack, type OpportunityAgent } from '../types';
+import { CAPACITY_META, type BriefOutput, type ContextPack, type Offer, type OpportunityAgent } from '../types';
 
 export class StarterAgent implements OpportunityAgent {
   readonly name = 'starter' as const;
@@ -74,19 +74,42 @@ export class StarterAgent implements OpportunityAgent {
   }
 }
 
-/** A plain, specific opener. Works for local service businesses; the LLM agent writes better ones. */
-export interface OpenerProfile { name: string; headline: string | null; target_area: string | null; location: string | null }
+export interface OpenerProfile { name: string; headline: string | null; target_area: string | null; location: string | null; offer?: Offer }
 export interface OpenerTarget { title: string; summary: string; contact: { name?: string } }
 
+/**
+ * A plain, specific opener built from the user's OWN offer. Nothing about the
+ * message assumes a vertical: if they filled in the offer it is theirs, and if
+ * they did not we fall back to their headline rather than inventing a business.
+ * The LLM agent writes better ones; this is the floor, not the ceiling.
+ */
 export function openerTemplate(profile: OpenerProfile, c: OpenerTarget, channel: 'whatsapp' | 'email'): string {
   const firstName = profile.name.split(' ')[0];
   const who = c.contact.name || c.title;
-  const what = profile.headline ? profile.headline.replace(/^i\s+/i, '').replace(/\.$/, '') : 'set up automations that answer and book customers for small businesses';
-  const pain = /no website/i.test(c.summary) ? 'you have no website listed, so enquiries probably come in by phone or WhatsApp' : /few reviews/i.test(c.summary) ? 'you have only a few reviews online yet' : `you are in ${profile.target_area || profile.location || 'the area'}`;
-  const ask = 'Worth a 10-minute call this week? I can show a 2-minute example first, no strings.';
-  if (channel === 'whatsapp') return `Hi ${who}, ${firstName} here. I ${what}. Noticed ${pain}. ${ask}`;
-  return `Hi ${who},\n\nI ${what}. I noticed ${pain}, and businesses like yours usually lose a few enquiries a week that way.\n\n${ask}\n\n${firstName}`;
+  const o = profile.offer ?? {};
+  const what = o.sells?.trim() || profile.headline?.replace(/^i\s+/i, '').replace(/\.$/, '').trim();
+  const problem = o.problem?.trim();
+  const proof = o.proof_url?.trim();
+
+  // Only claim to have noticed something we actually know from the listing.
+  const observed = /no website/i.test(c.summary) ? 'you have no website listed'
+    : /few reviews/i.test(c.summary) ? 'you have only a few reviews online so far'
+    : null;
+
+  const opening = what ? `I ${startsWithVerb(what) ? what : `work on ${what}`}` : 'I work with businesses like yours';
+  const hook = observed && problem ? `Noticed ${observed} — usually that means ${lower(problem)}.`
+    : observed ? `Noticed ${observed}.`
+    : problem ? `Most ${o.for_who?.trim() || 'people I work with'} tell me ${lower(problem)}.`
+    : null;
+  const ask = proof ? `Worth a 10-minute call this week? Here is an example first: ${proof}` : 'Worth a 10-minute call this week? I can show a 2-minute example first, no strings.';
+
+  if (channel === 'whatsapp') return [`Hi ${who}, ${firstName} here.`, `${opening}.`, hook, ask].filter(Boolean).join(' ');
+  return `Hi ${who},\n\n${opening}. ${hook ?? ''}\n\n${ask}\n\n${firstName}`.replace(/ \n/g, '\n');
 }
+
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+/** "build X" reads as "I build X"; "WhatsApp automations" needs "I work on ...". */
+const startsWithVerb = (s: string) => /^(build|make|set up|design|write|run|help|do|create|fix|automate|manage|teach|coach)\b/i.test(s.trim());
 
 function fmt(v: number, unit: string | null | undefined, metric: string): string {
   if (metric === 'currency') return `${unit ?? '$'}${v.toLocaleString()}`.replace(/^([A-Z]{3})(\d)/, '$1 $2');

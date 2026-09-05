@@ -28,6 +28,12 @@ export default function YouView({ home, actions, briefing, finding }: { home: Ho
         <div className="cp-empty"><b>No active goal</b>Ranking runs on your profile alone. Add one so matches point somewhere.</div>
       )}
 
+      <div className="cp-section"><span className="lead">Your offer</span><span className="count">drives every draft</span></div>
+      <button className="cp-card cp-goal" onClick={() => actions.openSheet({ kind: 'offer' })}>
+        <div className="top"><span className="name">{p.offer?.sells || 'What do you sell?'}</span><span className="pct">{p.offer?.sells ? 'Edit' : 'Set'}</span></div>
+        <div className="sub">{p.offer?.sells ? [p.offer.for_who && `For ${p.offer.for_who}`, p.offer.price_band, p.offer.proof_url ? 'proof link set' : 'no proof link yet'].filter(Boolean).join(' · ') : 'Messages fall back to your headline and stay vague until this is filled in'}</div>
+      </button>
+
       <div className="cp-section"><span className="lead">Targeting</span><span className="count">drives real supply</span></div>
       <button className="cp-card cp-goal" onClick={() => actions.openSheet({ kind: 'targeting' })}>
         <div className="top"><span className="name">{p.target_segments.length ? p.target_segments.join(', ') : 'Who do you sell to?'}</span><span className="pct">{p.target_segments.length ? 'Edit' : 'Set'}</span></div>
@@ -75,7 +81,12 @@ export default function YouView({ home, actions, briefing, finding }: { home: Ho
           <button className="cp-connect ghost" onClick={() => actions.openSheet({ kind: 'reset' })}>Forget device</button>
         </div>
       </div>
-      <div className="cp-note">Channels on this server: WhatsApp {home.channels.whatsapp ? 'on' : 'off'} · Email {home.channels.email ? 'on' : 'off'} · Push {home.push.publicKey ? 'available' : 'off'}.</div>
+      <div className="cp-note">
+        {home.channels.mode === 'api'
+          ? `Sending directly from your own account: WhatsApp ${home.channels.whatsapp ? 'on' : 'off'} · Email ${home.channels.email ? 'on' : 'off'}.`
+          : 'Drafts open pre-filled in your own WhatsApp or mail app, so messages come from you, not from this server.'}
+        {' '}Push {home.push.publicKey ? (home.push.enabled ? 'on' : 'available') : 'off'}.
+      </div>
     </>
   );
 }

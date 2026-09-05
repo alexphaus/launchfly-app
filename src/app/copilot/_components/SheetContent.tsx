@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
-import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Opportunity } from '@/lib/copilot/types';
+import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
 
@@ -17,6 +17,7 @@ export default function SheetContent({ sheet, home, actions }: { sheet: SheetSta
     case 'targeting': return <TargetingSheet home={home} actions={actions} />;
     case 'account': return <AccountSheet home={home} actions={actions} />;
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;
+    case 'offer': return <OfferSheet home={home} actions={actions} />;
   }
 }
 
@@ -59,7 +60,7 @@ function ActionSheet({ home, id, actions }: { home: HomeData; id: string; action
       {a.detail && <p className="desc">{a.detail}</p>}
 
       {exec ? (
-        <ExecutionPanel action={a} exec={exec} actions={actions} />
+        <ExecutionPanel action={a} exec={exec} home={home} actions={actions} />
       ) : a.ai_draft ? (
         <>
           <div className="cp-draft-label"><span>Draft, ready to review</span><button className="cp-textlink" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button></div>
@@ -84,17 +85,26 @@ function ExecChip({ exec }: { exec: Execution }) {
   return <span className="cp-chip send">Ready to send</span>;
 }
 
-function ExecutionPanel({ action, exec, actions }: { action: Action; exec: Execution; actions: Actions }) {
+function ExecutionPanel({ action, exec, home, actions }: { action: Action; exec: Execution; home: HomeData; actions: Actions }) {
   const [body, setBody] = useState(exec.body);
   const [subject, setSubject] = useState(exec.subject ?? '');
   const [busy, setBusy] = useState(false);
+  const [opened, setOpened] = useState(false);
   const editable = ['needs_approval', 'approved', 'failed'].includes(exec.approval_state);
+  // The app only sends through the API when this copilot owns the identity the
+  // message goes out under. Otherwise the user sends from their own app.
+  const canApiSend = home.channels[exec.channel];
   const send = async () => { setBusy(true); try { await actions.sendAction(action.id, { body, subject: exec.channel === 'email' ? subject : undefined }); } finally { setBusy(false); } };
+  const logSent = async () => { setBusy(true); try { await actions.markSent(action.id, { body, subject: exec.channel === 'email' ? subject : undefined }); } finally { setBusy(false); } };
+  // Rebuild the link from the edited text, not the stored draft.
+  const link = exec.channel === 'whatsapp'
+    ? `https://wa.me/${exec.recipient.replace(/\D/g, '')}?text=${encodeURIComponent(body)}`
+    : `mailto:${exec.recipient}?${new URLSearchParams({ ...(subject ? { subject } : {}), body }).toString()}`;
   return (
     <>
       <div className="cp-kv"><span>Channel</span><b>{exec.channel === 'whatsapp' ? 'WhatsApp' : 'Email'}</b></div>
       <div className="cp-kv"><span>To</span><b>{exec.channel === 'whatsapp' ? maskPhone(exec.recipient) : exec.recipient}</b></div>
-      {exec.approval_state === 'sent' && <div className="cp-kv"><span>Sent</span><b className="cp-ok">{relTime(exec.sent_at)}{exec.provider ? ` via ${exec.provider}` : ''}</b></div>}
+      {exec.approval_state === 'sent' && <div className="cp-kv"><span>Sent</span><b className="cp-ok">{relTime(exec.sent_at)}{exec.dispatch === 'manual' ? ' · by you' : exec.provider ? ` via ${exec.provider}` : ''}</b></div>}
       {exec.approval_state === 'failed' && exec.error && <div className="cp-error" style={{ marginTop: 10 }}>{exec.error}</div>}
 
       {editable ? (
@@ -104,11 +114,26 @@ function ExecutionPanel({ action, exec, actions }: { action: Action; exec: Execu
             <label className="cp-label">Message · edit before sending</label>
             <textarea className="cp-input" value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} />
           </div>
-          <div className="cp-btn-row" style={{ marginTop: 4 }}>
-            <button className="cp-btn primary" disabled={busy || !body.trim()} onClick={send}>{busy ? 'Sending…' : exec.approval_state === 'failed' ? 'Retry send' : 'Approve & send'}</button>
-            <button className="cp-btn" disabled={busy} onClick={() => actions.cancelDraft(action.id)}>Cancel draft</button>
-          </div>
-          <p className="cp-help">Nothing goes out until you tap send. A follow-up is drafted automatically for day 3.</p>
+          {canApiSend ? (
+            <>
+              <div className="cp-btn-row" style={{ marginTop: 4 }}>
+                <button className="cp-btn primary" disabled={busy || !body.trim()} onClick={send}>{busy ? 'Sending…' : exec.approval_state === 'failed' ? 'Retry send' : 'Approve & send'}</button>
+                <button className="cp-btn" disabled={busy} onClick={() => actions.cancelDraft(action.id)}>Cancel draft</button>
+              </div>
+              <p className="cp-help">Sends from your own {exec.channel === 'whatsapp' ? 'WhatsApp number' : 'verified address'}. Nothing goes out until you tap send. A follow-up is drafted for day 3.</p>
+            </>
+          ) : (
+            <>
+              <div className="cp-btn-row" style={{ marginTop: 4 }}>
+                <a className="cp-btn primary" href={link} target="_blank" rel="noreferrer" onClick={() => setOpened(true)} style={{ textDecoration: 'none' }}>
+                  Open in {exec.channel === 'whatsapp' ? 'WhatsApp' : 'email'}
+                </a>
+                <button className={`cp-btn ${opened ? 'dark' : ''}`} disabled={busy || !body.trim()} onClick={logSent}>I sent it</button>
+              </div>
+              <p className="cp-help">Opens pre-filled in your own {exec.channel === 'whatsapp' ? 'WhatsApp' : 'mail app'}, so it comes from you. Tap “I sent it” and the copilot tracks the reply and drafts the day-3 follow-up.</p>
+              <button className="cp-textlink" style={{ marginTop: 10 }} onClick={() => actions.cancelDraft(action.id)}>Cancel draft</button>
+            </>
+          )}
         </>
       ) : exec.approval_state === 'sent' ? (
         <>
@@ -133,8 +158,8 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
   const [busy, setBusy] = useState(false);
   if (!o) return <p className="desc">Gone.</p>;
   const c = o.contact ?? {};
-  const canWa = !!c.whatsapp && home.channels.whatsapp;
-  const canEmail = !!c.email && home.channels.email;
+  const canWa = !!c.whatsapp;
+  const canEmail = !!c.email;
   const draft = async (ch: 'whatsapp' | 'email') => { setBusy(true); try { await actions.draftFor(o.id, ch); } finally { setBusy(false); } };
   return (
     <>
@@ -162,10 +187,10 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
         <>
           <div className="cp-subhead">Reach out</div>
           <div className="cp-inline">
-            {c.whatsapp && <button className="cp-btn primary" disabled={busy || !canWa} onClick={() => draft('whatsapp')} title={canWa ? '' : 'WhatsApp is not configured on this server'}>Draft WhatsApp</button>}
-            {c.email && <button className="cp-btn primary" disabled={busy || !canEmail} onClick={() => draft('email')} title={canEmail ? '' : 'Email is not configured on this server'}>Draft email</button>}
+            {canWa && <button className="cp-btn primary" disabled={busy} onClick={() => draft('whatsapp')}>Draft WhatsApp</button>}
+            {canEmail && <button className="cp-btn primary" disabled={busy} onClick={() => draft('email')}>Draft email</button>}
           </div>
-          {((c.whatsapp && !canWa) || (c.email && !canEmail)) && <p className="cp-help">A channel is greyed out because it is not configured on the server yet.</p>}
+          <p className="cp-help">{home.channels.mode === 'api' ? 'Drafted, then sent from your own account once you approve.' : 'Drafted here, sent from your own WhatsApp or mail app so it comes from you.'}</p>
         </>
       )}
 
@@ -375,6 +400,36 @@ function AccountSheet({ home, actions }: { home: HomeData; actions: Actions }) {
         <button className={`cp-toggle ${home.push.enabled ? 'on' : ''}`} disabled={pushBusy || !home.push.publicKey} onClick={togglePush}>{home.push.enabled ? 'On' : 'Off'}</button>
       </div>
       <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Done</button></div>
+    </>
+  );
+}
+
+function OfferSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const o = home.profile.offer ?? {};
+  const [sells, setSells] = useState(o.sells ?? '');
+  const [forWho, setForWho] = useState(o.for_who ?? home.profile.target_segments.join(', '));
+  const [problem, setProblem] = useState(o.problem ?? '');
+  const [price, setPrice] = useState(o.price_band ?? '');
+  const [proof, setProof] = useState(o.proof_url ?? '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    await actions.saveOffer({ sells, for_who: forWho, problem, price_band: price, proof_url: proof });
+    setBusy(false);
+  };
+  return (
+    <>
+      <h3>What do you sell?</h3>
+      <p className="desc">Every message the copilot drafts is built from this. Without it, drafts fall back to your one-line headline and stay vague.</p>
+      <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input sm" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={120} /></div>
+      <div className="cp-field"><label className="cp-label">For</label><input className="cp-input sm" value={forWho} onChange={(e) => setForWho(e.target.value)} placeholder="resorts and tour operators" maxLength={120} /></div>
+      <div className="cp-field"><label className="cp-label">The problem it solves</label><input className="cp-input sm" value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="enquiries arrive after hours and go unanswered" maxLength={240} /><div className="cp-help">Written as the customer would feel it, not as a feature.</div></div>
+      <div className="cp-field"><label className="cp-label">Price band (optional)</label><input className="cp-input sm" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="$400–1,500 per build" maxLength={60} /></div>
+      <div className="cp-field"><label className="cp-label">One link that proves it (optional)</label><input className="cp-input sm" type="url" inputMode="url" value={proof} onChange={(e) => setProof(e.target.value)} placeholder="https://…" maxLength={300} /><div className="cp-help">Goes into openers as the example, instead of a vague offer to show one.</div></div>
+      <div className="cp-btn-row">
+        <button className="cp-btn primary" disabled={busy || !sells.trim()} onClick={save}>Save</button>
+        <button className="cp-btn" onClick={actions.closeSheet}>Back</button>
+      </div>
     </>
   );
 }

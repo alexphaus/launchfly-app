@@ -13,7 +13,7 @@ export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
   SOURCE_KEYS,
   type Action, type Capacity, type ContextItem, type ContextSource, type EventRow, type Finance, type Goal,
-  type GrowthItem, type HomeData, type Insight, type Opportunity, type OpportunityType, type Profile, type SourceKey,
+  type GrowthItem, type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type Profile, type SendMode, type SourceKey,
 } from './types';
 
 export async function addContextItem(profileId: string, item: { source: string; kind?: string; content: string; data?: Record<string, unknown>; weight?: number }) {
@@ -180,4 +180,26 @@ export async function setTargeting(profileId: string, t: { target_segments?: str
   if (t.target_area !== undefined) patch.target_area = t.target_area?.trim() || null;
   if (Object.keys(patch).length) await copilotDb().from('copilot_profiles').update(patch).eq('id', profileId);
   await logEvent(profileId, 'targeting_updated', patch);
+}
+
+export async function setOffer(profileId: string, offer: Offer) {
+  const clean: Offer = {
+    sells: offer.sells?.trim().slice(0, 120) || undefined,
+    for_who: offer.for_who?.trim().slice(0, 120) || undefined,
+    problem: offer.problem?.trim().slice(0, 240) || undefined,
+    price_band: offer.price_band?.trim().slice(0, 60) || undefined,
+    proof_url: offer.proof_url?.trim().slice(0, 300) || undefined,
+  };
+  await copilotDb().from('copilot_profiles').update({ offer: clean }).eq('id', profileId);
+  // The offer is the single biggest lever on message quality, so it is context too.
+  const line = [clean.sells && `I sell ${clean.sells}`, clean.for_who && `to ${clean.for_who}`, clean.problem && `— the problem it solves: ${clean.problem}`, clean.price_band && `(${clean.price_band})`].filter(Boolean).join(' ');
+  if (line) await addContextItem(profileId, { source: 'offer', kind: 'fact', content: line, weight: 1.6 });
+  await logEvent(profileId, 'offer_updated', { has_proof: !!clean.proof_url });
+}
+
+export async function setSendMode(profileId: string, mode: SendMode, emailFrom?: string | null) {
+  const patch: Record<string, unknown> = { send_mode: mode };
+  if (emailFrom !== undefined) patch.email_from = emailFrom?.trim() || null;
+  await copilotDb().from('copilot_profiles').update(patch).eq('id', profileId);
+  await logEvent(profileId, 'send_mode_set', { mode });
 }

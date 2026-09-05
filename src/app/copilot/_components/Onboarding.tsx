@@ -23,6 +23,10 @@ export default function Onboarding() {
   const [current, setCurrent] = useState('');
   const [horizon, setHorizon] = useState(90);
   const [notes, setNotes] = useState('');
+  const [sells, setSells] = useState('');
+  const [forWho, setForWho] = useState('');
+  const [problem, setProblem] = useState('');
+  const [proof, setProof] = useState('');
   const [segments, setSegments] = useState('');
   const [area, setArea] = useState('');
   const [hunt, setHunt] = useState<OpportunityType[]>([...OPPORTUNITY_TYPES]);
@@ -36,8 +40,9 @@ export default function Onboarding() {
     const e = q.get('email'); if (e) setEmail(e);
   }, []);
   useEffect(() => { if (!area && location) setArea(location); }, [location, area]);
+  useEffect(() => { if (!segments && forWho) setSegments(forWho); }, [forWho, segments]);
 
-  const canNext = step === 0 ? name.trim().length > 0 : step === 1 ? goalTitle.trim().length > 0 : hunt.length > 0;
+  const canNext = step === 0 ? name.trim().length > 0 : step === 1 ? goalTitle.trim().length > 0 : sells.trim().length > 0 && hunt.length > 0;
   const toggleHunt = (t: OpportunityType) => setHunt((h) => (h.includes(t) ? h.filter((x) => x !== t) : [...h, t]));
 
   const finish = async () => {
@@ -50,6 +55,7 @@ export default function Onboarding() {
         goal: { title: goalTitle, metric, unit: metric === 'none' ? undefined : unit, target_value: target === '' ? undefined : Number(target), current_value: current === '' ? undefined : Number(current), horizon_days: horizon },
         capacity, hunt_types: hunt, notes,
         target_segments: segments, target_area: area,
+        offer: { sells, for_who: forWho, problem, proof_url: proof.trim() || undefined },
       });
       router.refresh();
     } catch (e) {
@@ -106,10 +112,19 @@ export default function Onboarding() {
 
           {step === 2 && (
             <>
-              <h2>Who do you sell to?</h2>
-              <p className="sub">This is what makes matches real: actual businesses, found and ranked for you.</p>
-              <div className="cp-field"><label className="cp-label">Segments, comma separated</label><input className="cp-input" autoFocus value={segments} onChange={(e) => setSegments(e.target.value)} placeholder="pest control, aircon service, plumbing" maxLength={240} /><div className="cp-help">Searched on Google Maps and matched against your prospect pipeline. Skip it and the copilot runs on your notes only.</div></div>
-              <div className="cp-field"><label className="cp-label">Where?</label><input className="cp-input" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Puerto Princesa, Palawan" maxLength={80} /></div>
+              <h2>What do you sell, and to whom?</h2>
+              <p className="sub">This is what makes matches real and messages sound like you.</p>
+              <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={120} /></div>
+              <div className="cp-field"><label className="cp-label">For</label><input className="cp-input" value={forWho} onChange={(e) => setForWho(e.target.value)} placeholder="resorts and tour operators" maxLength={120} /></div>
+              <div className="cp-field"><label className="cp-label">The problem it solves</label><input className="cp-input" value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="enquiries arrive after hours and go unanswered" maxLength={240} /><div className="cp-help">Every drafted message is built from this. Say it the way your customer would feel it.</div></div>
+              <div className="cp-field"><label className="cp-label">One link that proves it (optional)</label><input className="cp-input" type="url" inputMode="url" value={proof} onChange={(e) => setProof(e.target.value)} placeholder="https://…" maxLength={300} /></div>
+              <div className="cp-field"><label className="cp-label">Where to look for them</label>
+                <div className="cp-input-row">
+                  <input className="cp-input" value={segments} onChange={(e) => setSegments(e.target.value)} placeholder="resort, dive shop" maxLength={240} />
+                  <input className="cp-input" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Palawan" maxLength={80} />
+                </div>
+                <div className="cp-help">Business type and area, searched on Google Maps. Leave blank if your clients are not local — the copilot will run on what you tell it instead.</div>
+              </div>
               <div className="cp-field"><label className="cp-label">Also look for</label>
                 <div className="cp-chips">{OPPORTUNITY_TYPES.map((t) => <button key={t} className={`cp-fchip ${hunt.includes(t) ? 'active' : ''}`} onClick={() => toggleHunt(t)}>{TYPE_PLURAL[t]}</button>)}</div>
               </div>

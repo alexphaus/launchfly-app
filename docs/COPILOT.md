@@ -44,7 +44,7 @@ Every arrow is implemented. Nothing leaves without the user's tap.
 
 ## Setup
 
-1. Run both migrations in the Supabase SQL editor, in order.
+1. Run every `supabase/migrations/2026090*_copilot_*.sql` in the SQL editor, in order.
 2. Environment (all optional except the first two):
 
 ```
@@ -76,7 +76,16 @@ CRON_SECRET=...                     # REQUIRED for /api/copilot/cron/daily — i
 COPILOT_CRON_BATCH=25               # profiles per run
 COPILOT_CRON_BUDGET_MS=240000       # stop starting new profiles past this point
 
-NEXT_PUBLIC_APP_URL=https://...     # used in sign-in links; falls back to request host
+NEXT_PUBLIC_APP_URL=https://...     # sign-in links AND Stripe return urls; falls back to request host
+
+# Billing (no keys = free plan for everyone, upgrade buttons hidden — see COPILOT_BILLING.md)
+STRIPE_SECRET_KEY=sk_live_...
+COPILOT_STRIPE_WEBHOOK_SECRET=whsec_...    # its OWN endpoint secret, not the one /api/webhook/stripe uses
+STRIPE_PRICE_COPILOT_PRO_MONTHLY=price_...
+STRIPE_PRICE_COPILOT_PRO_YEARLY=price_...
+STRIPE_PRICE_COPILOT_OPERATOR_MONTHLY=price_...
+STRIPE_PRICE_COPILOT_OPERATOR_YEARLY=price_...
+NEXT_PUBLIC_COPILOT_CURRENCY=$             # display only; Stripe decides what is charged
 ```
 
 3. Open `/copilot`. New device → 3 screens → first supply pull (prospect pipeline) → first brief.

@@ -12,6 +12,7 @@ const MAX_SEGMENTS_PER_RUN = 3;
 export const googleMapsAdapter: SupplyAdapter = {
   key: 'google_maps',
   label: 'Google Maps',
+  billable: true,
   async available(profile) {
     if (!profile.target_segments.length || !(profile.target_area || profile.location)) return false;
     try { await getApifyToken(profile.linked_business_id ?? undefined); return true; } catch { return false; }

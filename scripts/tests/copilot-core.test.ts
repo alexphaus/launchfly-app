@@ -263,7 +263,7 @@ import { remoteAdapter } from '../../src/lib/copilot/supply/remote';
 import type { Profile } from '../../src/lib/copilot/types';
 
 async function multiUser() {
-  const base = { linked_business_id: null, send_mode: 'manual', email_from: null } as Pick<Profile, 'linked_business_id' | 'send_mode' | 'email_from'>;
+  const base = { linked_business_id: null, send_mode: 'manual', email_from: null } as Pick<Profile, 'linked_business_id' | 'send_mode' | 'email_from'> & Partial<Pick<Profile, 'plan' | 'plan_status'>>;
 
   // A profile may never send through the API under an identity it does not own.
   process.env.ULTRAMSG_INSTANCE_ID = 'shared'; process.env.ULTRAMSG_TOKEN = 'shared';
@@ -271,7 +271,11 @@ async function multiUser() {
   assert.deepEqual(channelsConfigured(base), { whatsapp: false, email: false, mode: 'manual' }, 'server credentials never grant a user API sending');
   assert.deepEqual(channelsConfigured({ ...base, send_mode: 'api' }), { whatsapp: false, email: false, mode: 'api' }, 'api mode alone is not enough');
   assert.deepEqual(channelsConfigured({ ...base, send_mode: 'api', linked_business_id: 'biz-1' }).whatsapp, true, 'own business unlocks WhatsApp');
-  assert.equal(channelsConfigured({ ...base, send_mode: 'api', email_from: 'me@mine.com' }).email, true, 'own verified sender unlocks email');
+  assert.equal(channelsConfigured({ ...base, send_mode: 'api', email_from: 'me@mine.com', plan: 'pro', plan_status: 'active' }).email, true, 'own verified sender on a paid plan unlocks email');
+  // Sending from your own address is a paid feature. The manual mailto link is
+  // not, so a free user is never blocked from actually sending the message.
+  assert.equal(channelsConfigured({ ...base, send_mode: 'api', email_from: 'me@mine.com' }).email, false, 'free plan does not send through the API');
+  assert.equal(channelsConfigured({ ...base, send_mode: 'api', email_from: 'me@mine.com', plan: 'pro', plan_status: 'canceled' }).email, false, 'a lapsed plan loses API sending with it');
   assert.equal(channelsConfigured(null).mode, 'manual', 'default is manual');
 
   // The prospect pipeline is a shared Launchfly table: only linked profiles see it.
@@ -337,7 +341,7 @@ async function multiUser() {
 multiUser().catch((e) => { console.error(e); process.exit(1); });
 
 // ─── Measured growth: diagnosis instead of invented skill levels ────────────
-import { MIN_SAMPLE, demandGap, diagnose } from '../../src/lib/copilot/diagnose';
+import { MIN_SAMPLE, demandGap, diagnose, selectLesson } from '../../src/lib/copilot/diagnose';
 
 async function growth() {
   const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown> }> = {}) =>
@@ -481,7 +485,112 @@ async function growth() {
   assert.match(alone.findings[0].headline, /1 match has an outcome/, 'singular reads as English');
   assert.equal(alone.thin, true, 'an explanation of why the funnel looks odd is not a finding about the work');
 
+  // 9. "Worth learning — because of the above" is enforced, not assumed.
+  const live = { kind: 'lesson', url: 'https://example.com/x' };
+  const deadEnd = { kind: 'lesson', url: null };          // written before a url was required
+  const skill = { kind: 'skill', url: null };             // replaced by the diagnosis; never rendered
+
+  // demandDiag carries a demand finding with a topic, so a lesson is allowed.
+  assert.ok(demandDiag.findings.some((f) => f.topic), 'the fixture really does name a stuck point');
+  assert.deepEqual(selectLesson([live], demandDiag), [live], 'a real lesson shows when something is stuck');
+  assert.deepEqual(selectLesson([deadEnd], demandDiag), [], 'a lesson with nothing to open is never shown');
+  assert.deepEqual(selectLesson([deadEnd, live], demandDiag), [live], 'the dead row does not consume the single slot');
+  assert.deepEqual(selectLesson([skill, live], demandDiag), [live], 'skills are not lessons');
+  assert.equal(selectLesson([live, live], demandDiag).length, 1, 'at most one');
+
+  // Nothing stuck: the honest answer is no lesson at all, not a stale one.
+  assert.equal(none.findings.some((f) => f.topic), false);
+  assert.deepEqual(selectLesson([live], none), [], 'no stuck point, no lesson — whatever is stored');
+
   console.log('copilot-core: measured-growth checks passed');
 }
 
 growth().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── Plans, metering and the Stripe seam ────────────────────────────────────
+import {
+  PLANS, effectivePlan, isPlanKey, limitsFor, monthlyEquivalent, priceEnvKey, remaining, savingsPercent,
+} from '../../src/lib/copilot/plans';
+import { periodKey } from '../../src/lib/copilot/usage';
+import { planFromSubscription, type SubscriptionShape } from '../../src/lib/copilot/billing';
+
+async function billing() {
+  // 1. Every paid plan must beat the free one on the thing being sold, or the
+  //    price is not defensible.
+  for (const key of ['pro', 'operator'] as const) {
+    assert.ok(PLANS[key].limits.matchesPerMonth > PLANS.free.limits.matchesPerMonth, `${key} must offer more supply than free`);
+    assert.ok(PLANS[key].price.monthly > 0, `${key} must cost something`);
+  }
+  assert.ok(PLANS.operator.limits.matchesPerMonth > PLANS.pro.limits.matchesPerMonth, 'the top tier must be worth the jump');
+  assert.equal(Object.values(PLANS).filter((p) => p.recommended).length, 1, 'exactly one plan is recommended');
+
+  // 2. Yearly is ten months, framed per month, and the badge matches the maths.
+  assert.equal(PLANS.pro.price.yearly, PLANS.pro.price.monthly * 10);
+  assert.equal(monthlyEquivalent(PLANS.pro, 'monthly'), 29);
+  assert.equal(monthlyEquivalent(PLANS.pro, 'yearly'), Math.round((290 / 12) * 100) / 100);
+  assert.equal(savingsPercent(PLANS.pro), 17, 'two months free reads as 17% off');
+  assert.equal(savingsPercent(PLANS.free), 0, 'a free plan has no discount to advertise');
+
+  // 3. A lapsed subscription degrades to free limits — it never locks the account.
+  assert.equal(effectivePlan({ plan: 'pro', plan_status: 'active' }).key, 'pro');
+  assert.equal(effectivePlan({ plan: 'pro', plan_status: 'trialing' }).key, 'pro', 'a trial entitles');
+  for (const status of ['past_due', 'canceled', 'incomplete'] as const) {
+    assert.equal(effectivePlan({ plan: 'pro', plan_status: status }).key, 'free', `${status} falls back to free`);
+  }
+  assert.equal(limitsFor({ plan: 'operator', plan_status: 'canceled' }).matchesPerMonth, PLANS.free.limits.matchesPerMonth);
+  // Garbage in the column must not crash a page render.
+  assert.equal(effectivePlan({ plan: 'enterprise', plan_status: 'active' }).key, 'free', 'an unknown plan is free, not a throw');
+  assert.equal(effectivePlan({}).key, 'free');
+  assert.equal(isPlanKey('pro'), true);
+  assert.equal(isPlanKey('enterprise'), false);
+
+  // 4. Allowance arithmetic never goes negative, however the counters drift.
+  assert.equal(remaining(25, 30), 0, 'an overshoot reads as zero left, not minus five');
+  assert.equal(remaining(25, -3), 25);
+  assert.equal(remaining(400, 130), 270);
+
+  // 5. The month is the user's month, not the server's.
+  const newYear = new Date('2026-01-01T00:30:00Z');   // still December in Los Angeles
+  assert.equal(periodKey('UTC', newYear), '2026-01');
+  assert.equal(periodKey('America/Los_Angeles', newYear), '2025-12', 'the allowance resets on the user’s calendar');
+  assert.equal(periodKey('Not/AZone', newYear), '2026-01', 'a bad timezone falls back rather than throwing');
+
+  // 6. Env keys are the contract with the deploy — a typo here is a silent no-sale.
+  assert.equal(priceEnvKey('pro', 'monthly'), 'STRIPE_PRICE_COPILOT_PRO_MONTHLY');
+  assert.equal(priceEnvKey('operator', 'yearly'), 'STRIPE_PRICE_COPILOT_OPERATOR_YEARLY');
+
+  // 7. Resolving a subscription to a plan. Metadata wins; the price id is the
+  //    fallback, because the Stripe Billing Portal does not copy metadata when
+  //    someone switches plan there.
+  const sub = (over: Partial<SubscriptionShape>): SubscriptionShape =>
+    ({ id: 'sub_1', status: 'active', customer: 'cus_1', ...over });
+  assert.equal(planFromSubscription(sub({ metadata: { plan: 'operator' } })), 'operator');
+  assert.equal(planFromSubscription(sub({ items: { data: [{ price: { id: 'price_x', metadata: { plan: 'pro' } } }] } })), 'pro', 'price metadata is read too');
+  assert.equal(planFromSubscription(sub({ metadata: { plan: 'enterprise' } })), null, 'an unrecognised plan resolves to nothing, never to a paid tier');
+  assert.equal(planFromSubscription(sub({})), null, 'no metadata and no price is not an upgrade');
+
+  process.env.STRIPE_PRICE_COPILOT_OPERATOR_YEARLY = 'price_op_year';
+  assert.equal(planFromSubscription(sub({ items: { data: [{ price: { id: 'price_op_year' } }] } })), 'operator', 'a portal plan switch resolves by price id');
+  assert.equal(planFromSubscription(sub({ items: { data: [{ price: { id: 'price_unknown' } }] } })), null);
+  delete process.env.STRIPE_PRICE_COPILOT_OPERATOR_YEARLY;
+
+  // 8. Only paid supply is metered. Charging for a RemoteOK listing would be
+  //    charging for an HTTP request, and onboarding pulls free sources first —
+  //    metering those spent a new user's whole free month on day one.
+  const { ADAPTERS } = await import('../../src/lib/copilot/supply');
+  const billable = ADAPTERS.filter((a) => a.billable).map((a) => a.key);
+  const free = ADAPTERS.filter((a) => !a.billable).map((a) => a.key);
+  assert.deepEqual(billable, ['google_maps'], 'scraping credits are the only per-match cost');
+  assert.deepEqual(free.sort(), ['hunter', 'remote'], 'the shared pipeline and public listings are free to serve');
+
+  // 9. Nothing is advertised that cannot be switched on. send_mode has no route
+  //    behind it, so API sending must not appear in the pricing copy.
+  for (const p of Object.values(PLANS)) {
+    assert.ok(!p.features.some((f) => /verified address|send.*email.*from your own/i.test(f)),
+      `${p.key} advertises API sending, which nothing in the app can enable`);
+  }
+
+  console.log('copilot-core: plans-and-billing checks passed');
+}
+
+billing().catch((e) => { console.error(e); process.exit(1); });

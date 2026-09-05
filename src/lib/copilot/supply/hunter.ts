@@ -17,6 +17,7 @@ const OPEN_STATUSES = ['new', 'opener_queued', 'opener_sent', 'replied', 'previe
 export const hunterAdapter: SupplyAdapter = {
   key: 'hunter',
   label: 'Prospect pipeline',
+  billable: false,
   // hunter_prospects is Launchfly's own shared table, not per-copilot-user data.
   // Only profiles explicitly linked to a business may read it; everyone else
   // gets their supply from Google Maps and the remote adapter instead.

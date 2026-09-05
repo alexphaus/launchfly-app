@@ -281,3 +281,56 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-stage.outside .cp-stage-track { border-style: dashed; }
 .cp-stage.outside .cp-stage-fill { background: repeating-linear-gradient(45deg, var(--dim) 0 4px, transparent 4px 8px); }
 .cp-stage.outside .cp-stage-rate { color: var(--dim); text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.03em; }
+
+/* ── Pricing ──────────────────────────────────────────────────────────────── */
+.cp-pricing { padding-top: calc(18px + env(safe-area-inset-top)); }
+.cp-price-head { padding: 8px 20px 4px; }
+.cp-price-head h1 { font-family: var(--display); font-size: 34px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
+.cp-price-head p { margin-top: 12px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.cp-price-alert { border-style: dashed; font-size: 13.5px; line-height: 1.55; }
+
+.cp-toggle { display: flex; gap: 0; margin: 18px 20px 14px; border: 2.5px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.cp-toggle button { flex: 1; padding: 10px 8px; font-family: var(--display); font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; background: var(--surface); color: var(--ink); }
+.cp-toggle button + button { border-left: 2.5px solid var(--ink); }
+.cp-toggle button.on { background: var(--ink); color: #fff; }
+
+.cp-plan.pick { border-width: 3.5px; }
+.cp-plan.current { background: #fff; }
+.cp-plan-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cp-plan-name { font-family: var(--display); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.cp-plan-tag { margin-top: 3px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-plan-badge { flex-shrink: 0; font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; background: var(--blue); color: #fff; padding: 4px 8px; border-radius: 5px; }
+.cp-plan-badge.on { background: var(--ink); }
+
+.cp-plan-price { margin: 14px 0 12px; display: flex; align-items: baseline; gap: 6px; }
+.cp-plan-price .amount { font-family: var(--display); font-size: 38px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.cp-plan-price .per { font-size: 12.5px; color: var(--muted); }
+
+.cp-plan-features { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.cp-plan-features li { position: relative; padding-left: 18px; font-size: 13.5px; line-height: 1.5; }
+.cp-plan-features li::before { content: ''; position: absolute; left: 0; top: 7px; width: 7px; height: 7px; background: var(--blue); }
+.cp-plan-features li:first-child { font-weight: 700; }
+
+.cp-plan-cta { display: block; width: 100%; text-align: center; padding: 13px; border: 2.5px solid var(--ink); border-radius: 10px; background: var(--surface); color: var(--ink); font-family: var(--display); font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; }
+.cp-plan-cta.primary { background: var(--blue); color: #fff; }
+.cp-plan-cta.ghost { background: transparent; }
+.cp-plan-cta:disabled { opacity: 0.45; }
+
+.cp-price-faq p { font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.cp-price-faq p + p { margin-top: 12px; padding-top: 12px; border-top: 2px dashed var(--ink); }
+.cp-price-faq b { color: var(--ink); }
+
+/* ── Intro (signed-out landing) and the allowance wall ─────────────────────── */
+.cp-intro h1 { font-family: var(--display); font-size: 32px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 12px; }
+.cp-intro .sub { font-size: 14px; line-height: 1.6; color: var(--muted); margin-bottom: 20px; }
+.cp-intro-steps { counter-reset: cp-i; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.cp-intro-steps li { counter-increment: cp-i; position: relative; padding-left: 34px; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.cp-intro-steps li::before { content: '0' counter(cp-i); position: absolute; left: 0; top: 1px; font-family: var(--display); font-size: 11px; font-weight: 800; color: #fff; background: var(--ink); padding: 3px 5px; border-radius: 4px; }
+.cp-intro-steps b { color: var(--ink); }
+.cp-intro-plan { font-size: 13px; line-height: 1.55; color: var(--muted); padding-top: 14px; border-top: 2px dashed var(--ink); }
+.cp-intro-plan a, .cp-help a { color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+.cp-wall { margin-top: 14px; border-style: dashed; }
+.cp-wall p { font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.cp-wall .cp-btn.block { display: block; width: 100%; text-align: center; margin-top: 12px; text-decoration: none; }
+.cp-wall-sub { margin-top: 10px; font-size: 12px; color: var(--dim); }

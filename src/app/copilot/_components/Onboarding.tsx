@@ -1,7 +1,13 @@
 'use client';
-// Three screens, under a minute. Who you are, what you are going for, who you sell to.
+// An intro that says what this is, then three screens under a minute: who you
+// are, what you are going for, who you sell to.
+//
+// The intro exists because /copilot is the link people get sent. Landing a
+// stranger straight on "What should I call you?" asks them to fill in a form for
+// something nobody has explained yet.
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { PLANS } from '@/lib/copilot/plans';
 import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type OpportunityType } from '@/lib/copilot/types';
 import { post } from './api';
 import { TYPE_PLURAL } from './format';
@@ -11,6 +17,7 @@ const HORIZONS = [30, 90, 180];
 
 export default function Onboarding() {
   const router = useRouter();
+  const [intro, setIntro] = useState(true);
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -37,7 +44,8 @@ export default function Onboarding() {
   // A sign-in link for an email we do not know yet lands here with ?email=.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const e = q.get('email'); if (e) setEmail(e);
+    const e = q.get('email'); if (e) { setEmail(e); setIntro(false); }
+    if (q.get('start') === '1') setIntro(false);
   }, []);
   useEffect(() => { if (!area && location) setArea(location); }, [location, area]);
   useEffect(() => { if (!segments && forWho) setSegments(forWho); }, [forWho, segments]);
@@ -69,13 +77,33 @@ export default function Onboarding() {
       <div className="cp-ob">
         <div className="cp-ob-head">
           <div className="cp-wordmark">COPILOT</div>
-          <div className="cp-steps">{[0, 1, 2].map((i) => <span key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>
+          {!intro && <div className="cp-steps">{[0, 1, 2].map((i) => <span key={i} className={i < step ? 'done' : i === step ? 'on' : ''} />)}</div>}
         </div>
 
         <div className="cp-ob-body">
           {error && <div className="cp-error">{error}</div>}
 
-          {step === 0 && (
+          {intro && (
+            <div className="cp-intro">
+              <h1>Find the work.<br />Not the leads.</h1>
+              <p className="sub">
+                Tell it what you sell and who buys it. Every morning it brings real businesses that
+                fit, an opener already drafted for each one, and the honest number on what came back.
+              </p>
+              <ol className="cp-intro-steps">
+                <li><b>It looks.</b> Real businesses in your area, matched against your offer — not a list you scrape yourself.</li>
+                <li><b>It drafts.</b> Each match arrives with an opener written from your offer, ready to review.</li>
+                <li><b>You send.</b> It opens in your own WhatsApp or mail app. Nothing goes out by itself, ever.</li>
+                <li><b>It measures.</b> Replies, meetings and wins go back in, and it tells you where you are losing.</li>
+              </ol>
+              <p className="cp-intro-plan">
+                Free is {PLANS.free.limits.matchesPerMonth} real matches a month and the whole engine —
+                no card, nothing to cancel. <a href="/copilot/pricing">See the plans →</a>
+              </p>
+            </div>
+          )}
+
+          {!intro && step === 0 && (
             <>
               <h2>Let&apos;s set you up.</h2>
               <p className="sub">Three quick screens. You can change everything later.</p>
@@ -86,7 +114,7 @@ export default function Onboarding() {
             </>
           )}
 
-          {step === 1 && (
+          {!intro && step === 1 && (
             <>
               <h2>What are you going for?</h2>
               <p className="sub">One goal is enough. Ranking points at it, and wins you log move it.</p>
@@ -110,7 +138,7 @@ export default function Onboarding() {
             </>
           )}
 
-          {step === 2 && (
+          {!intro && step === 2 && (
             <>
               <h2>What do you sell, and to whom?</h2>
               <p className="sub">This is what makes matches real and messages sound like you.</p>
@@ -128,6 +156,10 @@ export default function Onboarding() {
               <div className="cp-field"><label className="cp-label">Also look for</label>
                 <div className="cp-chips">{OPPORTUNITY_TYPES.map((t) => <button key={t} className={`cp-fchip ${hunt.includes(t) ? 'active' : ''}`} onClick={() => toggleHunt(t)}>{TYPE_PLURAL[t]}</button>)}</div>
               </div>
+              <div className="cp-help" style={{ marginBottom: 14 }}>
+                You start on Free: {PLANS.free.limits.matchesPerMonth} real matches a month, no card.
+                Nothing is sent without you tapping send. <a href="/copilot/pricing">Plans →</a>
+              </div>
               <div className="cp-field"><label className="cp-label">Capacity today</label>
                 {(Object.keys(CAPACITY_META) as Capacity[]).map((c) => (
                   <button key={c} className={`cp-option ${capacity === c ? 'active' : ''}`} onClick={() => setCapacity(c)}>
@@ -140,11 +172,13 @@ export default function Onboarding() {
         </div>
 
         <div className="cp-ob-foot">
-          {step > 0 && <button className="cp-btn" disabled={busy} onClick={() => setStep((s) => s - 1)}>Back</button>}
-          {step === 0 && <a className="cp-btn" href="/copilot/login" style={{ textDecoration: 'none' }}>Sign in</a>}
-          {step < 2
+          {intro && <a className="cp-btn" href="/copilot/login" style={{ textDecoration: 'none' }}>Sign in</a>}
+          {intro && <button className="cp-btn primary" onClick={() => setIntro(false)}>Start free</button>}
+          {!intro && step > 0 && <button className="cp-btn" disabled={busy} onClick={() => setStep((s) => s - 1)}>Back</button>}
+          {!intro && step === 0 && <a className="cp-btn" href="/copilot/login" style={{ textDecoration: 'none' }}>Sign in</a>}
+          {!intro && (step < 2
             ? <button className="cp-btn primary" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Continue</button>
-            : <button className="cp-btn primary" disabled={!canNext || busy} onClick={finish}>{busy ? 'Finding matches & building your brief…' : 'Start my copilot'}</button>}
+            : <button className="cp-btn primary" disabled={!canNext || busy} onClick={finish}>{busy ? 'Finding matches & building your brief…' : 'Start my copilot'}</button>)}
         </div>
       </div>
     </div>

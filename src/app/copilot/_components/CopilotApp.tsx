@@ -66,6 +66,20 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     }
   }, [initial.needsBrief, runBrief]);
 
+  // Back from Stripe. The webhook that flips the plan and the redirect race each
+  // other, so confirm the payment immediately and re-read once the webhook has
+  // had a moment — otherwise someone who just paid lands on a page still
+  // showing the free plan and reasonably assumes it failed.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const upgraded = params.get('upgraded');
+    if (!upgraded) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    say('Payment received. Your new allowance is live.');
+    const t = setTimeout(() => { void refresh(); }, 2500);
+    return () => clearTimeout(t);
+  }, [say, refresh]);
+
   const openSheet = (s: SheetState) => { setSheet(s); setSheetOpen(true); };
   const closeSheet = () => setSheetOpen(false);
   const fail = (e: unknown, fallback: string) => say(e instanceof Error ? e.message : fallback);
@@ -194,6 +208,12 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
     async saveFinance(f) {
       try { const r = await post<{ home: HomeData }>('/finance', f); setHome(r.home); closeSheet(); say('Runway updated'); return true; } catch (e) { fail(e, 'Could not save'); return false; }
+    },
+    async openBilling() {
+      try {
+        const r = await post<{ url: string }>('/billing/portal', {});
+        window.location.href = r.url;
+      } catch (e) { fail(e, 'Could not open billing'); }
     },
     async saveTargeting(t) {
       try { const r = await post<{ home: HomeData }>('/targeting', t); setHome(r.home); say('Targeting saved'); return true; } catch (e) { fail(e, 'Could not save'); return false; }

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { PLANS } from '@/lib/copilot/plans';
 import type { Execution, HomeData } from '@/lib/copilot/types';
 import { money, pct } from '../format';
 import type { Actions } from '../shared';
@@ -18,6 +19,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
   const [sending, setSending] = useState(false);
   const urgent = home.nudges.filter((n) => n.urgency === 'urgent').length;
   const m = home.metrics;
+  const b = home.billing;
   const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
 
   const submit = async (regenerate: boolean) => {
@@ -39,6 +41,26 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         <div className={`cp-stat ${m.won ? 'hot' : ''}`}><div className="v">{m.won_amount ? money(m.won_amount, currency) : m.won}</div><div className="l">Won</div></div>
       </div>
       <div className="cp-metrics-note">Last {m.window_days} days · real numbers from what you actually sent</div>
+
+      {/* The wall is only useful where it is hit. A toast on the Find button
+          disappears; this stays until they act on it or the month turns. */}
+      {b.matches.remaining === 0 && (
+        <div className="cp-card cp-wall">
+          <div className="cp-eyebrow">Out of matches</div>
+          <p>
+            You have used all {b.matches.limit} matches on {PLANS[b.effective].name} this month. Your brief,
+            drafts and funnel keep running on what you already have — only new supply stops.
+          </p>
+          {b.effective !== 'operator' && (
+            <a className="cp-btn primary block" href="/copilot/pricing">
+              See plans — {PLANS[b.effective === 'free' ? 'pro' : 'operator'].limits.matchesPerMonth.toLocaleString()} a month
+            </a>
+          )}
+          <p className="cp-wall-sub">
+            Resets on the 1st.{b.effective === 'operator' && ' If you are hitting 2,000 a month, get in touch and we will size something.'}
+          </p>
+        </div>
+      )}
 
       {home.insight ? (
         <div className="cp-card cp-insight">

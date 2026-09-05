@@ -341,7 +341,7 @@ async function multiUser() {
 multiUser().catch((e) => { console.error(e); process.exit(1); });
 
 // ─── Measured growth: diagnosis instead of invented skill levels ────────────
-import { MIN_SAMPLE, demandGap, diagnose } from '../../src/lib/copilot/diagnose';
+import { MIN_SAMPLE, demandGap, diagnose, selectLesson } from '../../src/lib/copilot/diagnose';
 
 async function growth() {
   const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown> }> = {}) =>
@@ -484,6 +484,23 @@ async function growth() {
   assert.deepEqual(alone.findings.map((f) => f.kind), ['outside', 'insufficient']);
   assert.match(alone.findings[0].headline, /1 match has an outcome/, 'singular reads as English');
   assert.equal(alone.thin, true, 'an explanation of why the funnel looks odd is not a finding about the work');
+
+  // 9. "Worth learning — because of the above" is enforced, not assumed.
+  const live = { kind: 'lesson', url: 'https://example.com/x' };
+  const deadEnd = { kind: 'lesson', url: null };          // written before a url was required
+  const skill = { kind: 'skill', url: null };             // replaced by the diagnosis; never rendered
+
+  // demandDiag carries a demand finding with a topic, so a lesson is allowed.
+  assert.ok(demandDiag.findings.some((f) => f.topic), 'the fixture really does name a stuck point');
+  assert.deepEqual(selectLesson([live], demandDiag), [live], 'a real lesson shows when something is stuck');
+  assert.deepEqual(selectLesson([deadEnd], demandDiag), [], 'a lesson with nothing to open is never shown');
+  assert.deepEqual(selectLesson([deadEnd, live], demandDiag), [live], 'the dead row does not consume the single slot');
+  assert.deepEqual(selectLesson([skill, live], demandDiag), [live], 'skills are not lessons');
+  assert.equal(selectLesson([live, live], demandDiag).length, 1, 'at most one');
+
+  // Nothing stuck: the honest answer is no lesson at all, not a stale one.
+  assert.equal(none.findings.some((f) => f.topic), false);
+  assert.deepEqual(selectLesson([live], none), [], 'no stuck point, no lesson — whatever is stored');
 
   console.log('copilot-core: measured-growth checks passed');
 }

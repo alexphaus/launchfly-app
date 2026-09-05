@@ -4,7 +4,7 @@
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { copilotDb, todayIso } from './db';
-import { diagnose } from './diagnose';
+import { diagnose, selectLesson } from './diagnose';
 import { channelsConfigured, executionsForActions } from './execution';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
@@ -105,6 +105,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const opportunities = rankOpportunities(oppsWithOutcome, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
 
+  const diagnosis = diagnose({ opportunities: allOpps, executions: allExecs, outcomes: allOutcomes, offer: profile.offer ?? {} });
+  const lessons = selectLesson(growth, diagnosis);
+
   return {
     profile,
     goals,
@@ -126,8 +129,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     },
     nudges,
     opportunities,
-    diagnosis: diagnose({ opportunities: allOpps, executions: allExecs, outcomes: allOutcomes, offer: profile.offer ?? {} }),
-    lessons: growth.filter((g) => g.kind === 'lesson').slice(0, 1),
+    diagnosis,
+    lessons,
     sources,
     contextCount: ctxCount,
     needsBrief: !insight || insight.for_date !== today,

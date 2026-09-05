@@ -199,6 +199,27 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
   return { stages, bottleneck, findings, thin, outsideFunnel };
 }
 
+/**
+ * The one lesson the Growth tab may show.
+ *
+ * "Worth learning — because of the above" is a promise, so it is enforced here
+ * rather than assumed: no stuck point in the diagnosis, no lesson. GrowthView
+ * already says the right thing in that case — the gap is something to change,
+ * not something to study.
+ *
+ * A lesson with no url is also never shown. Rows written before the agent schema
+ * required a working link open as a dead end: a title, a note, and no way to
+ * actually learn the thing.
+ */
+export function selectLesson<T extends { kind: string; url?: string | null }>(
+  items: T[],
+  diagnosis: Pick<Diagnosis, 'findings'>,
+): T[] {
+  const stuckPoint = diagnosis.findings.some((f) => f.topic);
+  if (!stuckPoint) return [];
+  return items.filter((g) => g.kind === 'lesson' && !!g.url).slice(0, 1);
+}
+
 const label = (ch: string) => (ch === 'whatsapp' ? 'WhatsApp' : 'Email');
 
 const BOTTLENECK_DETAIL: Record<FunnelStage['key'], string> = {

@@ -6,7 +6,7 @@ import { copilotDb } from './db';
 import { runBrief } from './brief';
 import { addContextItem, ensureSources, logEvent } from './store';
 import { runSupply } from './supply';
-import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type OpportunityType } from './types';
+import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type Offer, type OpportunityType } from './types';
 
 export interface OnboardingInput {
   name: string;
@@ -14,6 +14,7 @@ export interface OnboardingInput {
   headline?: string;
   target_segments: string[];
   target_area?: string;
+  offer: Offer;
   location?: string;
   timezone?: string;
   goal: { title: string; metric?: GoalMetric; unit?: string; target_value?: number; current_value?: number; horizon_days?: number };
@@ -39,8 +40,18 @@ export function parseOnboarding(body: unknown): OnboardingInput {
   const target_segments = [...new Set(rawSegments.map((x) => x.trim()).filter(Boolean))].slice(0, 8);
   const email = s(b.email, 120).toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('That email does not look right');
+  const o = (b.offer ?? {}) as Record<string, unknown>;
+  const proof = s(o.proof_url, 300);
+  const offer: Offer = {
+    sells: s(o.sells, 120) || undefined,
+    for_who: s(o.for_who, 120) || undefined,
+    problem: s(o.problem, 240) || undefined,
+    price_band: s(o.price_band, 60) || undefined,
+    proof_url: proof && /^https?:\/\//i.test(proof) ? proof : undefined,
+  };
   return {
     name,
+    offer,
     email: email || undefined,
     target_segments,
     target_area: s(b.target_area, 80) || s(b.location, 80) || undefined,
@@ -60,7 +71,7 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
     .from('copilot_profiles')
     .insert({
       name: input.name, email: input.email ?? null, headline: input.headline ?? null, location: input.location ?? null, timezone: input.timezone ?? 'UTC',
-      capacity: input.capacity, hunt_types: input.hunt_types, target_segments: input.target_segments, target_area: input.target_area ?? null,
+      capacity: input.capacity, hunt_types: input.hunt_types, target_segments: input.target_segments, target_area: input.target_area ?? null, offer: input.offer,
       onboarding_complete: true, last_seen_at: new Date().toISOString(),
     })
     .select('id')
@@ -78,14 +89,18 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
   if (input.location) facts.push({ kind: 'fact', content: `Based in ${input.location}` });
   facts.push({ kind: 'preference', content: `Hunting for: ${input.hunt_types.join(', ')}` });
   if (input.target_segments.length) facts.push({ kind: 'preference', content: `Sells to: ${input.target_segments.join(', ')}${input.target_area ? ` in ${input.target_area}` : ''}`, weight: 1.5 });
+  const offerLine = [input.offer.sells && `I sell ${input.offer.sells}`, input.offer.for_who && `to ${input.offer.for_who}`, input.offer.problem && `— the problem it solves: ${input.offer.problem}`].filter(Boolean).join(' ');
+  if (offerLine) facts.push({ kind: 'fact', content: offerLine, weight: 1.6 });
   if (input.notes) facts.push({ kind: 'fact', content: input.notes, weight: 1.4 });
   for (const f of facts) await addContextItem(pid, { source: 'onboarding', ...f });
 
   await ensureSources(pid);
   await logEvent(pid, 'onboarding_complete', { capacity: input.capacity, hunt_types: input.hunt_types });
 
-  // Free, fast supply first (the prospect pipeline) so the first brief has real candidates to rank.
-  try { await runSupply(pid, { only: ['hunter'], reason: 'onboarding', limit: 25 }); }
+  // Supply that costs nothing per run, so the first brief has real candidates to
+  // rank. Google Maps is excluded here: it spends scraping credits and belongs
+  // to the daily run and the explicit "Find new matches" tap.
+  try { await runSupply(pid, { only: ['hunter', 'remote'], reason: 'onboarding', limit: 25 }); }
   catch (err) { console.error('[copilot] onboarding supply failed:', err); }
   try {
     await runBrief(pid, { reason: 'onboarding' });

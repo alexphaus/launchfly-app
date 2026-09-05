@@ -7,9 +7,10 @@ import { scoreOpportunity } from '../ranking';
 import { getProfile, logEvent, typeAffinityFor } from '../store';
 import { googleMapsAdapter } from './google-maps';
 import { hunterAdapter } from './hunter';
+import { remoteAdapter } from './remote';
 import { heuristicFit, type SupplyAdapter, type SupplyCandidate } from './types';
 
-export const ADAPTERS: SupplyAdapter[] = [hunterAdapter, googleMapsAdapter];
+export const ADAPTERS: SupplyAdapter[] = [hunterAdapter, googleMapsAdapter, remoteAdapter];
 
 export interface SupplyResult {
   runId: string;

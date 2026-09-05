@@ -9,14 +9,41 @@ import { copilotDb, todayIso } from './db';
 import { getProfile, logEvent, setActionStatus } from './base';
 import type { Channel, Execution, Opportunity, Profile } from './types';
 
-export function channelsConfigured(profile?: Pick<Profile, 'linked_business_id'> | null): { whatsapp: boolean; email: boolean } {
-  const envWhatsApp =
-    !!(process.env.ULTRAMSG_INSTANCE_ID && process.env.ULTRAMSG_TOKEN) ||
-    !!(process.env.EVOLUTION_BASE_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE);
+/**
+ * Whether THIS profile may send through the API on each channel.
+ *
+ * The rule that matters: a profile may only send through the API when it owns
+ * the identity the message would go out under. WhatsApp needs its own linked
+ * business (its own instance); email needs its own verified from address. The
+ * server's env credentials are Launchfly's, not the user's — sending a friend's
+ * cold outreach from them would impersonate the operator and put that number
+ * and domain at risk. Everyone else sends by hand from their own app, which is
+ * what `send_mode = 'manual'` is for.
+ */
+export function channelsConfigured(profile?: Pick<Profile, 'linked_business_id' | 'send_mode' | 'email_from'> | null): { whatsapp: boolean; email: boolean; mode: Profile['send_mode'] } {
+  const mode = profile?.send_mode ?? 'manual';
+  if (mode !== 'api') return { whatsapp: false, email: false, mode };
   return {
-    whatsapp: envWhatsApp || !!profile?.linked_business_id,
-    email: !!process.env.RESEND_API_KEY && !!(process.env.COPILOT_EMAIL_FROM || process.env.FROM_EMAIL),
+    whatsapp: !!profile?.linked_business_id,
+    email: !!process.env.RESEND_API_KEY && !!profile?.email_from,
+    mode,
   };
+}
+
+/** A link that opens the message pre-filled in the user's OWN WhatsApp or mail client. */
+export function deepLink(exec: Pick<Execution, 'channel' | 'recipient' | 'subject' | 'body'>): string {
+  if (exec.channel === 'whatsapp') {
+    return `https://wa.me/${exec.recipient.replace(/\D/g, '')}?text=${encodeURIComponent(exec.body)}`;
+  }
+  const params = new URLSearchParams();
+  if (exec.subject) params.set('subject', exec.subject);
+  params.set('body', exec.body);
+  return `mailto:${exec.recipient}?${params.toString()}`;
+}
+
+/** Attach the deep link so the client can offer "open in my WhatsApp" for unsent drafts. */
+export function withDeepLink<T extends Pick<Execution, 'channel' | 'recipient' | 'subject' | 'body' | 'approval_state'>>(exec: T): T & { deep_link: string | null } {
+  return { ...exec, deep_link: exec.approval_state === 'sent' || exec.approval_state === 'cancelled' ? null : deepLink(exec) };
 }
 
 export function recipientFor(opp: Pick<Opportunity, 'contact'>, channel: Channel): string | null {
@@ -50,7 +77,7 @@ export async function executionsForActions(profileId: string, actionIds: string[
   if (!actionIds.length) return {};
   const { data } = await copilotDb().from('copilot_executions').select('*').eq('profile_id', profileId).in('action_id', actionIds).order('created_at', { ascending: false });
   const out: Record<string, Execution> = {};
-  for (const e of (data ?? []) as Execution[]) if (e.action_id && !out[e.action_id]) out[e.action_id] = e;
+  for (const e of (data ?? []) as Execution[]) if (e.action_id && !out[e.action_id]) out[e.action_id] = withDeepLink(e);
   return out;
 }
 
@@ -66,6 +93,14 @@ export async function sendExecution(profileId: string, executionId: string, over
   const body = (overrides.body ?? exec.body).trim();
   const subject = overrides.subject ?? exec.subject ?? undefined;
   if (!body) throw new Error('Message is empty');
+
+  // Never send under an identity this profile does not own.
+  const allowed = channelsConfigured(profile);
+  if (!allowed[exec.channel]) {
+    throw new Error(exec.channel === 'whatsapp'
+      ? 'This copilot has no WhatsApp number of its own. Use "Open in WhatsApp" to send it yourself.'
+      : 'This copilot has no verified sending address. Use "Open in email" to send it yourself.');
+  }
   await db.from('copilot_executions').update({ approval_state: 'approved', body, subject: subject ?? null }).eq('id', exec.id);
 
   let sent = false; let provider = ''; let externalId: string | undefined; let error: string | undefined;
@@ -76,8 +111,8 @@ export async function sendExecution(profileId: string, executionId: string, over
       const r = await wa.sendWhatsApp(exec.recipient, body, profile.linked_business_id ?? undefined);
       sent = r.sent; externalId = r.id; error = r.error;
     } else {
-      const from = process.env.COPILOT_EMAIL_FROM || process.env.FROM_EMAIL;
-      if (!process.env.RESEND_API_KEY || !from) throw new Error('Email is not configured (RESEND_API_KEY, COPILOT_EMAIL_FROM)');
+      const from = profile.email_from;   // this profile's own verified sender, never the server's
+      if (!process.env.RESEND_API_KEY || !from) throw new Error('No verified sending address for this copilot');
       provider = 'resend';
       const resend = new Resend(process.env.RESEND_API_KEY);
       const r = await resend.emails.send({ from, to: exec.recipient, subject: subject || 'Quick note', text: body });
@@ -93,13 +128,41 @@ export async function sendExecution(profileId: string, executionId: string, over
   }).eq('id', exec.id).select('*').single();
 
   if (sent) {
-    if (exec.action_id) await setActionStatus(profileId, exec.action_id, 'done');
-    await logEvent(profileId, 'execution_sent', { execution_id: exec.id, channel: exec.channel, opportunity_id: exec.opportunity_id });
-    await scheduleFollowUp(profile, updated as Execution);
+    await afterSend(profile, updated as Execution, 'api');
   } else {
     await logEvent(profileId, 'execution_failed', { execution_id: exec.id, channel: exec.channel, error });
   }
   return updated as Execution;
+}
+
+/**
+ * The user opened the draft in their own WhatsApp or mail client and sent it.
+ * Same bookkeeping as an API send — the loop does not care which hand pressed
+ * the button, only that a message went out and a reply may follow.
+ */
+export async function markSentManually(profileId: string, executionId: string, overrides: { body?: string; subject?: string } = {}): Promise<Execution> {
+  const db = copilotDb();
+  const exec = await getExecution(profileId, executionId);
+  if (!exec) throw new Error('Draft not found');
+  if (exec.approval_state === 'sent') return exec;
+  const profile = await getProfile(profileId);
+  if (!profile) throw new Error('profile not found');
+  const body = (overrides.body ?? exec.body).trim();
+  if (!body) throw new Error('Message is empty');
+
+  const { data: updated } = await db.from('copilot_executions').update({
+    approval_state: 'sent', dispatch: 'manual', provider: 'manual', body,
+    subject: overrides.subject ?? exec.subject ?? null, error: null, sent_at: new Date().toISOString(),
+  }).eq('id', exec.id).select('*').single();
+
+  await afterSend(profile, updated as Execution, 'manual');
+  return updated as Execution;
+}
+
+async function afterSend(profile: Profile, exec: Execution, dispatch: 'api' | 'manual') {
+  if (exec.action_id) await setActionStatus(profile.id, exec.action_id, 'done');
+  await logEvent(profile.id, 'execution_sent', { execution_id: exec.id, channel: exec.channel, opportunity_id: exec.opportunity_id, dispatch });
+  await scheduleFollowUp(profile, exec);
 }
 
 export async function cancelExecution(profileId: string, executionId: string) {
@@ -125,14 +188,15 @@ async function scheduleFollowUp(profile: Profile, exec: Execution) {
     profile_id: profile.id, kind: 'plan', owner: 'ai', minutes: 3, for_date: followDate, opportunity_id: opp.id,
     title: `Follow-up to ${name}, ready to review`,
     detail: 'Auto-drafted 3 days after your first message. Edit before sending if they replied elsewhere.',
-    ai_draft: followUpTemplate(name, firstName, exec.channel),
+    ai_draft: followUpTemplate(name, firstName, exec.channel, profile.offer?.proof_url),
   }).select('id').single();
-  if (action) await createDraftExecution(profile.id, { actionId: action.id, opportunityId: opp.id, channel: exec.channel, body: followUpTemplate(name, firstName, exec.channel), subject: exec.subject ? `Re: ${exec.subject}` : undefined });
+  if (action) await createDraftExecution(profile.id, { actionId: action.id, opportunityId: opp.id, channel: exec.channel, body: followUpTemplate(name, firstName, exec.channel, profile.offer?.proof_url), subject: exec.subject ? `Re: ${exec.subject}` : undefined });
 }
 
-export function followUpTemplate(name: string, firstName: string, channel: Channel): string {
+export function followUpTemplate(name: string, firstName: string, channel: Channel, proofUrl?: string | null): string {
   const greet = channel === 'whatsapp' ? `Hi ${name}, ` : `Hi ${name},\n\n`;
-  return `${greet}quick follow-up on my note from a few days ago. Happy to show you a 2-minute example of what I meant, no strings. Worth a 10-minute call this week?${channel === 'whatsapp' ? ' — ' : '\n\n'}${firstName}`;
+  const proof = proofUrl ? ` Here is an example of the kind of thing I mean: ${proofUrl}.` : ' Happy to show you a 2-minute example of what I meant, no strings.';
+  return `${greet}quick follow-up on my note from a few days ago.${proof} Worth a 10-minute call this week?${channel === 'whatsapp' ? ' — ' : '\n\n'}${firstName}`;
 }
 
 function addDays(iso: string, days: number): string {

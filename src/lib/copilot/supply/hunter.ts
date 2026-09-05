@@ -17,8 +17,12 @@ const OPEN_STATUSES = ['new', 'opener_queued', 'opener_sent', 'replied', 'previe
 export const hunterAdapter: SupplyAdapter = {
   key: 'hunter',
   label: 'Prospect pipeline',
-  available: () => true,
+  // hunter_prospects is Launchfly's own shared table, not per-copilot-user data.
+  // Only profiles explicitly linked to a business may read it; everyone else
+  // gets their supply from Google Maps and the remote adapter instead.
+  available: (profile) => !!profile.linked_business_id,
   async discover(profile: Profile, { limit }) {
+    if (!profile.linked_business_id) return [];   // belt and braces: never read the shared pool unscoped
     let q = copilotDb()
       .from('hunter_prospects')
       .select('id, business_name, service_type, area, whatsapp_number, owner_name, website_url, facebook_url, google_maps_url, instagram_url, email, pain_signals, status, notes, source')

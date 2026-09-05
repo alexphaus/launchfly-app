@@ -1,4 +1,4 @@
-import type { ActionStatus, Capacity, Channel, Goal, GrowthItem, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
+import type { ActionStatus, Capacity, Channel, Goal, GrowthItem, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 export type Tab = 'today' | 'opps' | 'growth' | 'you';
 
@@ -12,7 +12,8 @@ export type SheetState =
   | { kind: 'finance' }
   | { kind: 'targeting' }
   | { kind: 'account' }
-  | { kind: 'won'; oppId: string };
+  | { kind: 'won'; oppId: string }
+  | { kind: 'offer' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -39,6 +40,9 @@ export interface Actions {
   resetDevice(): Promise<void>;
   // — closed loop —
   sendAction(id: string, overrides?: { body?: string; subject?: string }): Promise<boolean>;
+  /** Manual dispatch: the user sent it from their own app, we just record it. */
+  markSent(id: string, overrides?: { body?: string; subject?: string }): Promise<boolean>;
+  saveOffer(offer: Offer): Promise<boolean>;
   cancelDraft(id: string): Promise<void>;
   recordOutcome(input: OutcomeInput): Promise<boolean>;
   draftFor(oppId: string, channel?: Channel): Promise<boolean>;

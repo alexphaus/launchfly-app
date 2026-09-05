@@ -46,7 +46,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     profile: {
       name: profile.name, headline: profile.headline, location: profile.location,
       timezone: profile.timezone, capacity: profile.capacity, hunt_types: profile.hunt_types,
-      target_segments: profile.target_segments, target_area: profile.target_area,
+      target_segments: profile.target_segments, target_area: profile.target_area, offer: profile.offer,
     },
     goals,
     context: context

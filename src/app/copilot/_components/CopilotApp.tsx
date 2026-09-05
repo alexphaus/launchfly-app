@@ -3,7 +3,7 @@
 // state and talks to /api/copilot. Optimistic where it is safe to be.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type GrowthItem, type HomeData, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
+import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type GrowthItem, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
 import { IconGrowth, IconOpps, IconToday, IconYou } from './icons';
@@ -149,6 +149,19 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         void refresh();
         return false;
       }
+    },
+    async markSent(id, overrides) {
+      try {
+        const r = await post<{ home: HomeData }>(`/actions/${id}/sent`, overrides ?? {});
+        setHome(r.home);
+        say('Logged as sent. Follow-up drafted for day 3.');
+        closeSheet();
+        return true;
+      } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
+    },
+    async saveOffer(offer: Offer) {
+      try { const r = await post<{ home: HomeData }>('/offer', offer); setHome(r.home); closeSheet(); say('Saved. Drafts will use your words now.'); return true; }
+      catch (e) { fail(e, 'Could not save'); return false; }
     },
     async cancelDraft(id) {
       try { await api(`/actions/${id}/send`, { method: 'DELETE' }); await refresh(); closeSheet(); say('Draft cancelled'); } catch (e) { fail(e, 'Could not cancel'); }

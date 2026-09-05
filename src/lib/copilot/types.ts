@@ -16,6 +16,21 @@ export type SourceKind = 'sourced' | 'inferred';
 export type Channel = 'whatsapp' | 'email';
 export type ApprovalState = 'needs_approval' | 'approved' | 'sent' | 'failed' | 'cancelled';
 export type OutcomeKind = 'reply' | 'meeting' | 'proposal' | 'won' | 'lost' | 'no_reply';
+export type SendMode = 'manual' | 'api';
+export type Dispatch = 'api' | 'manual';
+
+/**
+ * What this person sells. Replaces guessing from a one-line headline, and is
+ * what every drafted message is built from — so the copy is theirs, not the
+ * template author's.
+ */
+export interface Offer {
+  sells?: string;        // "WhatsApp booking automations"
+  for_who?: string;      // "resorts and tour operators"
+  problem?: string;      // "enquiries arrive after hours and go unanswered"
+  price_band?: string;   // "$400-1,500 per build"
+  proof_url?: string;    // one link that shows the work
+}
 
 /** How to reach the other side of an opportunity. All optional; sourced rows fill what they can. */
 export interface Contact { name?: string; whatsapp?: string; email?: string; website?: string }
@@ -46,6 +61,9 @@ export interface Profile {
   target_area: string | null;
   linked_business_id: string | null;
   finance: Finance;
+  offer: Offer;
+  send_mode: SendMode;
+  email_from: string | null;
   email_verified_at: string | null;
   onboarding_complete: boolean;
   created_at: string;
@@ -118,6 +136,9 @@ export interface Execution {
   external_message_id: string | null;
   error: string | null;
   sent_at: string | null;
+  dispatch: Dispatch;
+  /** Pre-filled wa.me / mailto link, present when this execution is sent by hand. */
+  deep_link?: string | null;
   created_at: string;
 }
 
@@ -224,7 +245,8 @@ export interface HomeData {
   supplyLastRun: string | null;
   account: { email: string | null; verified: boolean };
   push: { publicKey: string | null; enabled: boolean };
-  channels: { whatsapp: boolean; email: boolean };
+  /** Whether this PROFILE may send on each channel through the API, and how it sends. */
+  channels: { whatsapp: boolean; email: boolean; mode: SendMode };
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +256,7 @@ export interface HomeData {
 
 export interface ContextPack {
   today: string; // ISO date
-  profile: Pick<Profile, 'name' | 'headline' | 'location' | 'timezone' | 'capacity' | 'hunt_types' | 'target_segments' | 'target_area'>;
+  profile: Pick<Profile, 'name' | 'headline' | 'location' | 'timezone' | 'capacity' | 'hunt_types' | 'target_segments' | 'target_area' | 'offer'>;
   goals: Array<Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days' | 'priority' | 'note'>>;
   context: Array<Pick<ContextItem, 'source' | 'kind' | 'content' | 'created_at'>>;
   sources: ContextSource[];

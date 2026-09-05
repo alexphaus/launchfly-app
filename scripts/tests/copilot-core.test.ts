@@ -231,3 +231,83 @@ async function closedLoop() {
 }
 
 closedLoop().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── Multi-user safety ──────────────────────────────────────────────────────
+import { channelsConfigured, deepLink } from '../../src/lib/copilot/execution';
+import { hunterAdapter } from '../../src/lib/copilot/supply/hunter';
+import { remoteAdapter } from '../../src/lib/copilot/supply/remote';
+import type { Profile } from '../../src/lib/copilot/types';
+
+async function multiUser() {
+  const base = { linked_business_id: null, send_mode: 'manual', email_from: null } as Pick<Profile, 'linked_business_id' | 'send_mode' | 'email_from'>;
+
+  // A profile may never send through the API under an identity it does not own.
+  process.env.ULTRAMSG_INSTANCE_ID = 'shared'; process.env.ULTRAMSG_TOKEN = 'shared';
+  process.env.RESEND_API_KEY = 'shared';
+  assert.deepEqual(channelsConfigured(base), { whatsapp: false, email: false, mode: 'manual' }, 'server credentials never grant a user API sending');
+  assert.deepEqual(channelsConfigured({ ...base, send_mode: 'api' }), { whatsapp: false, email: false, mode: 'api' }, 'api mode alone is not enough');
+  assert.deepEqual(channelsConfigured({ ...base, send_mode: 'api', linked_business_id: 'biz-1' }).whatsapp, true, 'own business unlocks WhatsApp');
+  assert.equal(channelsConfigured({ ...base, send_mode: 'api', email_from: 'me@mine.com' }).email, true, 'own verified sender unlocks email');
+  assert.equal(channelsConfigured(null).mode, 'manual', 'default is manual');
+
+  // The prospect pipeline is a shared Launchfly table: only linked profiles see it.
+  const unlinked = { linked_business_id: null } as Profile;
+  assert.equal(await hunterAdapter.available(unlinked), false, 'unlinked profile cannot read the shared prospect pool');
+  assert.equal(await hunterAdapter.available({ linked_business_id: 'biz-1' } as Profile), true);
+  assert.deepEqual(await hunterAdapter.discover(unlinked, { limit: 10 }), [], 'discover refuses even if called directly');
+
+  // Deep links carry the message into the user's own app.
+  const wa = deepLink({ channel: 'whatsapp', recipient: '+63 917 123 4567', subject: null, body: 'Hi Maria & co' });
+  assert.ok(wa.startsWith('https://wa.me/639171234567?text='), `wa.me link strips punctuation (${wa})`);
+  assert.match(wa, /Hi%20Maria%20%26%20co/, 'body is url-encoded');
+  const mail = deepLink({ channel: 'email', recipient: 'a@b.com', subject: 'Quick note', body: 'Hello' });
+  assert.ok(mail.startsWith('mailto:a@b.com?'), 'mailto link');
+  assert.match(mail, /subject=Quick\+note/);
+
+  // Remote supply output is untrusted: normalised, and junk is dropped.
+  process.env.COPILOT_SUPPLY_URL = 'https://example.invalid/supply';
+  assert.equal(remoteAdapter.available({} as Profile), true);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ candidates: [
+    { id: 'x1', title: 'Real Co', summary: 'A real one', type: 'client', contact: { phone: '0917 123 4567' } },
+    { title: 'No id — dropped' },
+    { id: 'x2' },
+    { id: 'x3', title: 'Bad type', type: 'wizard', effort: 'teleport', contact: { email: 'z@z.com' } },
+  ] }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+  try {
+    const got = await remoteAdapter.discover({ headline: null, offer: {}, location: null, target_segments: [], target_area: null, hunt_types: [] } as unknown as Profile, { limit: 10 });
+    assert.equal(got.length, 2, 'rows without a title or stable id are dropped');
+    assert.equal(got[0].contact.whatsapp, '639171234567', 'phone normalised');
+    assert.equal(got[1].type, 'client', 'unknown type falls back');
+    assert.equal(got[1].effort, 'medium', 'unknown effort falls back');
+    assert.equal(got[0].source, 'remote');
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.COPILOT_SUPPLY_URL;
+  }
+
+  // Openers are built from the user's own offer, never a hardcoded vertical.
+  const designer = openerTemplate(
+    { name: 'Sam Lee', headline: null, target_area: null, location: 'Berlin', offer: { sells: 'brand identity systems', for_who: 'seed-stage startups', problem: 'their deck and their site look like two different companies', proof_url: 'https://sam.example/work' } },
+    { title: 'Acme GmbH', summary: 'Seed startup in Berlin.', contact: { name: 'Jonas' } }, 'whatsapp');
+  assert.match(designer, /Hi Jonas, Sam here\./);
+  assert.match(designer, /I work on brand identity systems/, 'noun phrase gets "work on"');
+  assert.match(designer, /their deck and their site look like two different companies/);
+  assert.match(designer, /https:\/\/sam\.example\/work/, 'proof link replaces the vague offer');
+  assert.doesNotMatch(designer, /automation|WhatsApp booking|small businesses/i, 'no trace of the original vertical');
+
+  const builder = openerTemplate(
+    { name: 'Alex', headline: null, target_area: 'Palawan', location: null, offer: { sells: 'build WhatsApp booking flows', for_who: 'resorts' } },
+    { title: 'Sea Nymph', summary: 'Resort. Pain: no website.', contact: {} }, 'whatsapp');
+  assert.match(builder, /I build WhatsApp booking flows/, 'verb phrase is used as-is');
+  assert.match(builder, /Noticed you have no website listed/);
+
+  // No offer, no headline: vague but never invented.
+  const bare = openerTemplate({ name: 'Kim', headline: null, target_area: null, location: null }, { title: 'Someone', summary: 'nothing known', contact: {} }, 'email');
+  assert.match(bare, /I work with businesses like yours/);
+  assert.doesNotMatch(bare, /undefined|\$\{|null/);
+
+  console.log('copilot-core: multi-user checks passed');
+}
+
+multiUser().catch((e) => { console.error(e); process.exit(1); });

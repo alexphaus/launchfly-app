@@ -4,6 +4,7 @@
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { copilotDb, todayIso } from './db';
+import { diagnose } from './diagnose';
 import { channelsConfigured, executionsForActions } from './execution';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
@@ -64,7 +65,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as Insight | null) ?? null),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -78,6 +79,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadMetrics(profileId, profile),
     db.from('copilot_agent_runs').select('finished_at').eq('profile_id', profileId).eq('kind', 'supply').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data?.finished_at as string | null) ?? null),
     hasSubscription(profileId),
+    // Rows for the diagnosis: every opportunity (not just open ones), every
+    // execution and every outcome. The funnel is meaningless if acted-on rows
+    // are filtered out of the top of it.
+    db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['opportunities']),
+    db.from('copilot_executions').select('approval_state, channel, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['executions']),
+    db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['outcomes']),
   ]);
 
   // Join send-ready drafts onto today's plan and the latest outcome onto each match.
@@ -100,8 +107,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     plan: selectPlan(planWithExec, profile.capacity),
     nudges,
     opportunities,
-    skills: growth.filter((g) => g.kind === 'skill').slice(0, 4),
-    lessons: growth.filter((g) => g.kind === 'lesson').slice(0, 4),
+    diagnosis: diagnose({ opportunities: allOpps, executions: allExecs, outcomes: allOutcomes, offer: profile.offer ?? {} }),
+    lessons: growth.filter((g) => g.kind === 'lesson').slice(0, 1),
     sources,
     contextCount: ctxCount,
     needsBrief: !insight || insight.for_date !== today,

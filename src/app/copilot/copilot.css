@@ -258,3 +258,23 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-login { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 28px 20px; }
 .cp-login h2 { font-family: var(--display); font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
 .cp-login .sub { font-size: 13.5px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+
+/* ─── Measured growth ───────────────────────────────────────────────────── */
+.cp-stage { margin-bottom: 12px; }
+.cp-stage:last-of-type { margin-bottom: 2px; }
+.cp-stage-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; gap: 10px; }
+.cp-stage-label { font-size: 13.5px; font-weight: 700; }
+.cp-stage-count { font-family: var(--display); font-size: 15px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; }
+.cp-stage-rate { font-size: 11px; font-weight: 700; color: var(--muted); }
+.cp-stage-track { height: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 4px; overflow: hidden; }
+.cp-stage-fill { height: 100%; background: var(--ink); }
+.cp-stage.drop .cp-stage-label { color: var(--blue); }
+.cp-stage.drop .cp-stage-rate { color: var(--blue); }
+.cp-stage.drop .cp-stage-fill { background: var(--blue); }
+.cp-stage.drop .cp-stage-track { border-color: var(--blue); }
+
+.cp-finding .cp-f-head { font-size: 14.5px; font-weight: 700; line-height: 1.45; }
+.cp-finding .cp-f-detail { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 7px; font-weight: 500; }
+.cp-finding .cp-f-action { font-size: 13px; font-weight: 700; line-height: 1.45; margin-top: 10px; }
+.cp-finding.thin { border-style: dashed; }
+.cp-finding.thin .cp-eyebrow { background: var(--ink); }

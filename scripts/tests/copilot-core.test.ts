@@ -72,7 +72,7 @@ const base = { created_at: now.toISOString(), score: 0 };
 
 // --- schema normalisation
 {
-  const raw = extractJson('Here you go:\n```json\n{"insight":{"body":"Do X.","reasoning":"Because Y"},"plan":[{"owner":"robot","title":"T","minutes":"20"}],"nudges":[{"title":"N","urgency":"loud"}],"opportunities":[{"type":"clients","title":"O","reason":"R","fit_score":150},{"title":""}],"skills":[{"title":"S","level":-5}],"lessons":[{"title":"L","minutes":12}]}\n```');
+  const raw = extractJson('Here you go:\n```json\n{"insight":{"body":"Do X.","reasoning":"Because Y"},"plan":[{"owner":"robot","title":"T","minutes":"20"}],"nudges":[{"title":"N","urgency":"loud"}],"opportunities":[{"type":"clients","title":"O","reason":"R","fit_score":150},{"title":""}],"skills":[{"title":"S","level":-5}],"lessons":[{"title":"L","minutes":12,"url":"https://example.com/l"},{"title":"No url — dropped","minutes":5}]}\n```');
   const b = normalizeBrief(raw);
   assert.equal(b.plan[0].owner, 'you', 'unknown owner falls back to you');
   assert.equal(b.plan[0].minutes, 20, 'numeric strings coerce');
@@ -81,8 +81,10 @@ const base = { created_at: now.toISOString(), score: 0 };
   assert.equal(b.opportunities[0].type, 'signal', 'unknown type falls back to signal');
   assert.equal(b.opportunities[0].fit_score, 100, 'fit clamps to 100');
   assert.equal(b.opportunities[0].source, 'inferred');
-  assert.equal(b.skills[0].level, 0, 'level clamps to 0');
+  assert.deepEqual(b.skills, [], 'skill levels are computed now, so the agent may not invent any');
   assert.throws(() => normalizeBrief({}), /insight/);
+  assert.equal(b.lessons.length, 1, 'a lesson without a real url is dropped');
+  assert.equal(b.lessons[0].url, 'https://example.com/l');
   const many = normalizeBrief({ insight: { body: 'x' }, opportunities: Array.from({ length: 20 }, (_, i) => ({ type: 'client', title: `t${i}`, reason: 'r', fit_score: 50 })) });
   assert.equal(many.opportunities.length, 8, 'opportunities capped');
 }
@@ -311,3 +313,118 @@ async function multiUser() {
 }
 
 multiUser().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── Measured growth: diagnosis instead of invented skill levels ────────────
+import { MIN_SAMPLE, demandGap, diagnose } from '../../src/lib/copilot/diagnose';
+
+async function growth() {
+  const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown> }> = {}) =>
+    ({ id, status: 'new' as const, source: over.source ?? 'google_maps', source_kind: over.source_kind ?? 'sourced' as const, data: over.data ?? {}, reason: '', title: id });
+  const exec = (opportunity_id: string | null, channel: 'whatsapp' | 'email', state: 'sent' | 'needs_approval' | 'cancelled' = 'sent') =>
+    ({ approval_state: state, channel, opportunity_id });
+
+  // 1. Nothing sent: refuses to invent, and names the exact blocker.
+  const none = diagnose({ opportunities: [opp('a'), opp('b')], executions: [], outcomes: [], offer: {} });
+  assert.equal(none.thin, true);
+  assert.equal(none.findings.length, 1, 'exactly one honest finding, not filler');
+  assert.equal(none.findings[0].kind, 'insufficient');
+  assert.match(none.findings[0].headline, /2 matches, nothing drafted yet/);
+  assert.equal(none.bottleneck, null, 'no bottleneck claimed without volume');
+  assert.equal(none.stages[0].count, 2);
+
+  const noMatches = diagnose({ opportunities: [], executions: [], outcomes: [], offer: {} });
+  assert.match(noMatches.findings[0].headline, /No matches yet/);
+  const drafted = diagnose({ opportunities: [opp('a')], executions: [exec('a', 'whatsapp', 'needs_approval')], outcomes: [], offer: {} });
+  assert.match(drafted.findings[0].headline, /1 drafted, nothing sent yet/);
+  const tooFew = diagnose({ opportunities: [opp('a')], executions: [exec('a', 'whatsapp')], outcomes: [], offer: {} });
+  assert.match(tooFew.findings[0].headline, /Only 1 sent so far/);
+
+  // 2. A real bottleneck, computed. 10 sent, 1 reply -> Sent→Replied is worst.
+  const ids = Array.from({ length: 10 }, (_, i) => `o${i}`);
+  const big = diagnose({
+    opportunities: ids.map((i) => opp(i)),
+    executions: ids.map((i) => exec(i, 'whatsapp')),
+    outcomes: [{ kind: 'reply', opportunity_id: 'o0' }],
+    offer: {},
+  });
+  assert.equal(big.thin, false);
+  assert.equal(big.bottleneck?.key, 'replied', 'the 10%% reply step is the bottleneck');
+  const b = big.findings.find((f) => f.kind === 'bottleneck')!;
+  assert.match(b.headline, /Sent → Replied is where you lose most: 1 of 10 \(10%\)/);
+  assert.ok(b.action && /opener/.test(b.action), 'action names the opener, not the list');
+
+  // 3. Channel comparison needs a real sample on BOTH sides.
+  const lopsided = diagnose({
+    opportunities: ids.map((i) => opp(i)),
+    executions: [...ids.slice(0, 8).map((i) => exec(i, 'whatsapp')), exec('o8', 'email'), exec('o9', 'email')],
+    outcomes: ids.slice(0, 4).map((i) => ({ kind: 'reply' as const, opportunity_id: i })),
+    offer: {},
+  });
+  assert.ok(!lopsided.findings.some((f) => f.kind === 'channel'), `2 emails is below MIN_SAMPLE=${MIN_SAMPLE}, no comparison`);
+
+  const fair = diagnose({
+    opportunities: ids.map((i) => opp(i)),
+    executions: [...ids.slice(0, 5).map((i) => exec(i, 'whatsapp')), ...ids.slice(5).map((i) => exec(i, 'email'))],
+    outcomes: [{ kind: 'reply', opportunity_id: 'o0' }, { kind: 'reply', opportunity_id: 'o1' }, { kind: 'reply', opportunity_id: 'o2' }],
+    offer: {},
+  });
+  const ch = fair.findings.find((f) => f.kind === 'channel');
+  assert.ok(ch, 'even samples produce a comparison');
+  assert.match(ch!.headline, /WhatsApp replies at 60%, Email at 0%/);
+  assert.match(ch!.detail, /Same person, same offer/);
+
+  // 4. Source comparison: where a match came from predicts whether it answers.
+  const src = diagnose({
+    opportunities: [...ids.slice(0, 5).map((i) => opp(i, { source: 'hunter' })), ...ids.slice(5).map((i) => opp(i, { source: 'remoteok' }))],
+    executions: ids.map((i) => exec(i, 'whatsapp')),
+    outcomes: ids.slice(0, 4).map((i) => ({ kind: 'reply' as const, opportunity_id: i })),
+    offer: {},
+  });
+  const sf = src.findings.find((f) => f.kind === 'source');
+  assert.ok(sf, 'source comparison fires');
+  assert.match(sf!.headline, /hunter reply at 80%; remoteok at 0%/);
+
+  // 5. Demand gap: recurring terms the offer does not cover.
+  const withTags = [
+    opp('t1', { data: { tags: ['voice ai', 'design'] } }),
+    opp('t2', { data: { tags: ['voice ai'] } }),
+    opp('t3', { data: { tags: ['voice ai', 'design'] } }),
+    opp('t4', { data: { pain_signals: ['no_website'] } }),
+    opp('t5', { source_kind: 'inferred', data: { tags: ['voice ai', 'voice ai', 'voice ai'] } }),  // inferred ignored
+  ];
+  const gap = demandGap(withTags, { sells: 'brand identity systems' });
+  assert.equal(gap[0].term, 'voice ai');
+  assert.equal(gap[0].count, 3, 'counted once per opportunity, inferred rows excluded');
+  assert.ok(!gap.some((g) => g.term === 'no website'), 'below MIN_DEMAND');
+  // A term already in the offer is not a gap.
+  assert.equal(demandGap(withTags, { sells: 'voice ai intake systems' }).some((g) => g.term === 'voice ai'), false);
+
+  const demandDiag = diagnose({ opportunities: withTags, executions: [], outcomes: [], offer: { sells: 'brand identity' } });
+  const df = demandDiag.findings.find((f) => f.kind === 'demand')!;
+  assert.match(df.headline, /"voice ai" appears in 3 of your matches and is not in your offer/);
+  assert.equal(df.topic, 'voice ai');
+  // With one term the detail must not just restate the headline.
+  assert.doesNotMatch(df.detail, /^voice ai \(3\)/, 'single term is not echoed back');
+  assert.match(df.detail, /That is what the market/);
+  const twoTerms = diagnose({ opportunities: [...withTags, opp('t6', { data: { tags: ['seo', 'voice ai'] } }), opp('t7', { data: { tags: ['seo'] } }), opp('t8', { data: { tags: ['seo'] } })], executions: [], outcomes: [], offer: { sells: 'brand identity' } });
+  assert.match(twoTerms.findings.find((f) => f.kind === 'demand')!.detail, /Also recurring: seo \(3\)/, 'extra terms listed only when they exist');
+
+  // 6. Every rate shown is real: no finding may contain an uncomputed number.
+  for (const d of [none, big, fair, src, demandDiag]) {
+    for (const s of d.stages) {
+      assert.ok(s.rate === null || (s.rate >= 0 && s.rate <= 1), 'rates are fractions or null, never invented');
+    }
+  }
+  // A reply logged twice for one lead counts as one converted lead.
+  const dedupe = diagnose({
+    opportunities: ids.map((i) => opp(i)),
+    executions: ids.map((i) => exec(i, 'whatsapp')),
+    outcomes: [{ kind: 'reply', opportunity_id: 'o0' }, { kind: 'reply', opportunity_id: 'o0' }],
+    offer: {},
+  });
+  assert.equal(dedupe.stages.find((s) => s.key === 'replied')!.count, 1, 'two replies from one lead is one');
+
+  console.log('copilot-core: measured-growth checks passed');
+}
+
+growth().catch((e) => { console.error(e); process.exit(1); });

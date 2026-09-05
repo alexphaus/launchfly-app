@@ -1,0 +1,196 @@
+{
+  "name": "Copilot — supply agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "copilot-supply",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ],
+      "id": "n-webhook",
+      "name": "Webhook",
+      "webhookId": "copilot-supply"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify the caller and turn the profile into search terms.\n// Replace SECRET with the same value you put in COPILOT_SUPPLY_SECRET.\nconst SECRET = 'REPLACE_WITH_COPILOT_SUPPLY_SECRET';\n\nconst req = $input.first().json;\nconst authorized = !SECRET || (req.headers?.authorization || '') === `Bearer ${SECRET}`;\n\nconst body = req.body ?? {};\nconst p = body.profile ?? {};\nconst offer = p.offer ?? {};\n\n// Search on what this person actually sells, not on a hardcoded vertical.\n// The app sends offer.{sells,for_who,problem}, target_segments and target_area.\nconst terms = [offer.for_who, offer.sells, ...(p.target_segments ?? [])]\n  .filter(Boolean)\n  .flatMap((s) => String(s).toLowerCase().split(/[,/]| and /))\n  .map((s) => s.trim())\n  .filter((s) => s.length > 2);\n\nreturn [{\n  json: {\n    authorized,\n    limit: Math.min(Number(body.limit) || 40, 50),\n    area: p.target_area || p.location || '',\n    terms,\n    offer,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        0
+      ],
+      "id": "n-auth",
+      "name": "Authorize & plan"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "id": "n-if",
+      "name": "Authorized?"
+    },
+    {
+      "parameters": {
+        "url": "https://remoteok.com/api",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -100
+      ],
+      "id": "n-src",
+      "name": "Source: RemoteOK"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn one source's rows into the contract the app expects.\n// Required per row: external_id (stable across runs — this is how dedupe works)\n// and title. Everything else is optional and normalised app-side.\nconst plan = $('Authorize & plan').first().json;\nconst terms = plan.terms ?? [];\n\n// RemoteOK returns a JSON array whose first element is a legal notice.\n// Depending on your n8n version the HTTP node hands that back as one item\n// containing an array, or as many items. Handle both.\nconst raw = $input.all().map((i) => i.json);\nconst rows = raw.length === 1 && Array.isArray(raw[0]) ? raw[0] : raw;\n\nconst candidates = [];\nfor (const j of rows) {\n  if (!j || !j.id || !j.position) continue;              // legal notice / junk\n  const tags = Array.isArray(j.tags) ? j.tags : [];\n  const hay = `${j.position} ${j.company ?? ''} ${tags.join(' ')} ${j.description ?? ''}`.toLowerCase();\n  // No terms yet (empty offer) -> let everything through rather than nothing.\n  if (terms.length && !terms.some((t) => hay.includes(t))) continue;\n\n  candidates.push({\n    source: 'remoteok',\n    external_id: `remoteok:${j.id}`,\n    type: 'client',\n    title: `${j.position}${j.company ? ` — ${j.company}` : ''}`,\n    // Facts only. The agent decides what it means and how to word it.\n    summary: [\n      j.company ? `${j.company} is hiring for ${j.position}.` : `${j.position}.`,\n      tags.length ? `Stack: ${tags.slice(0, 6).join(', ')}.` : null,\n      j.location ? `Location: ${j.location}.` : null,\n      j.date ? `Posted ${String(j.date).slice(0, 10)}.` : null,\n    ].filter(Boolean).join(' '),\n    url: j.url || j.apply_url || null,\n    // Job boards give a link, not a phone number. With no contact the app\n    // shows the match and the link but offers no drafted message — which is\n    // correct, there is nobody to message yet.\n    contact: { website: j.company_url || undefined },\n    effort: 'medium',\n    value_label: j.salary_min ? `$${Number(j.salary_min).toLocaleString()}+` : undefined,\n    data: { tags, location: j.location, posted: j.date, board: 'remoteok' },\n  });\n}\n\nreturn [{ json: { candidates: candidates.slice(0, plan.limit) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        -100
+      ],
+      "id": "n-norm",
+      "name": "Normalize → candidates"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        760,
+        -100
+      ],
+      "id": "n-ok",
+      "name": "Respond 200"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        320,
+        120
+      ],
+      "id": "n-401",
+      "name": "Respond 401"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Authorize & plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize & plan": {
+      "main": [
+        [
+          {
+            "node": "Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Source: RemoteOK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source: RemoteOK": {
+      "main": [
+        [
+          {
+            "node": "Normalize → candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize → candidates": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

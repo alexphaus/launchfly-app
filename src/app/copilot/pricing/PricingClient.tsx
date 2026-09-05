@@ -109,14 +109,16 @@ export default function PricingClient({ state }: { state: PricingState }) {
         <div className="cp-section"><span className="lead">What counts as a match</span></div>
         <div className="cp-card cp-price-faq">
           <p>
-            <b>A match is one real business or listing the copilot found for you</b> — a name, a contact
-            and a reason it fits your offer. Duplicates you have already been shown never count twice,
-            and a search that finds nothing costs you nothing.
+            <b>A match is one real business the copilot found for you</b> — a name, a contact and a
+            reason it fits your offer. Only matches from sources that cost money to search count
+            against your allowance; free sources never do, and they keep arriving after it runs out.
+            Duplicates you have already been shown never count twice, and a search that finds nothing
+            costs you nothing.
           </p>
           <p>
-            <b>Sending is always free and always yours.</b> On every plan, drafts open pre-filled in your
-            own WhatsApp or mail app, so messages come from you rather than from a server. Paid plans add
-            sending directly from your own verified address when you want it.
+            <b>Sending is always free and always yours.</b> On every plan, drafts open pre-filled in
+            your own WhatsApp or mail app, so messages come from you rather than from a server. Sending
+            is never metered and never rationed.
           </p>
           <p>
             <b>Nothing is deleted if you stop paying.</b> Your matches, funnel, outcomes and history stay.

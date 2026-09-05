@@ -19,8 +19,11 @@ WhatsApp or mail app.
 | Matches / month | 25 | **400** | 2,000 |
 | Briefs / day | 1 | 3 | 10 |
 | Target segments | 2 | 5 | 12 |
-| Send from your own address | — | yes | yes |
 | Automatic day-3 follow-ups | — | yes | yes |
+
+`emailApi` exists as an entitlement but is **not advertised**: no route sets
+`send_mode`, so nothing in the app can turn it on. Build the send-mode route and
+an address-verification flow before putting it back on the pricing page.
 
 Rough cost of goods at the cap: Pro is around $2 of scraping plus $1–2 of tokens
 against $29. Operator is roughly $13 against $79. Both leave room for the free
@@ -126,10 +129,19 @@ fresh allowance at 1am because the server thinks it is already the first.
 Increments go through the `copilot_bump_usage` Postgres function so two supply
 runs finishing at once cannot both read 40 and both write 45.
 
-Only matches the user actually **received** are metered: a failed adapter, or a
-run that returns nothing but duplicates, costs them nothing. The allowance also
-caps what the adapters are *asked* for — scraping 400 places and discarding 380
-would bill the credits anyway.
+Only matches the user actually **received from a billable adapter** are metered.
+`SupplyAdapter.billable` marks the ones that spend money — today just
+`google_maps`, which burns Apify credits. `hunter` (a shared internal table) and
+`remote` (a public HTTP endpoint) are free to serve, so they are never metered
+and are never stopped when the allowance runs out.
+
+That distinction matters more than it looks: onboarding pulls the free adapters
+first, so metering them spent a new user's entire free month on day one.
+
+A failed adapter, or a run that returns nothing but duplicates, also costs
+nothing. The allowance caps what billable adapters are *asked* for, not only what
+is counted afterwards — scraping 400 places and discarding 380 bills the credits
+anyway.
 
 ## Changing the pricing
 

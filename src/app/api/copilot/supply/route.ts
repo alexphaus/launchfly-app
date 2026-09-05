@@ -20,7 +20,7 @@ export async function POST() {
   const limits = limitsFor(profile);
   const used = (await getUsage(auth.pid, periodKey(profile.timezone))).matches;
   if (used >= limits.matchesPerMonth) {
-    return fail(`You have used all ${limits.matchesPerMonth} matches on your plan this month. Upgrade for more, or keep working the ones you have.`, 402);
+    return fail(`You have used all ${limits.matchesPerMonth} matches on your plan this month. Your daily brief keeps running on what you already have — upgrade for more, or this resets on the 1st.`, 402);
   }
   const rl = await rateLimit(`copilot:supply:${auth.pid}`, 10, 86400);
   if (!rl.ok) return fail('You have refreshed matches 10 times today. Each run costs scraping credits; try again tomorrow.', 429);

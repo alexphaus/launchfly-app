@@ -574,6 +574,22 @@ async function billing() {
   assert.equal(planFromSubscription(sub({ items: { data: [{ price: { id: 'price_unknown' } }] } })), null);
   delete process.env.STRIPE_PRICE_COPILOT_OPERATOR_YEARLY;
 
+  // 8. Only paid supply is metered. Charging for a RemoteOK listing would be
+  //    charging for an HTTP request, and onboarding pulls free sources first —
+  //    metering those spent a new user's whole free month on day one.
+  const { ADAPTERS } = await import('../../src/lib/copilot/supply');
+  const billable = ADAPTERS.filter((a) => a.billable).map((a) => a.key);
+  const free = ADAPTERS.filter((a) => !a.billable).map((a) => a.key);
+  assert.deepEqual(billable, ['google_maps'], 'scraping credits are the only per-match cost');
+  assert.deepEqual(free.sort(), ['hunter', 'remote'], 'the shared pipeline and public listings are free to serve');
+
+  // 9. Nothing is advertised that cannot be switched on. send_mode has no route
+  //    behind it, so API sending must not appear in the pricing copy.
+  for (const p of Object.values(PLANS)) {
+    assert.ok(!p.features.some((f) => /verified address|send.*email.*from your own/i.test(f)),
+      `${p.key} advertises API sending, which nothing in the app can enable`);
+  }
+
   console.log('copilot-core: plans-and-billing checks passed');
 }
 

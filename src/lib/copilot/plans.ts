@@ -21,7 +21,9 @@ export interface PlanLimits {
   briefsPerDay: number;
   /** Target segments the supply adapters will search. Each one is a separate scrape. */
   segments: number;
-  /** Send directly from a verified address instead of handing over a mailto link. */
+  /** Send directly from a verified address instead of handing over a mailto link.
+   *  Entitlement only for now — no route sets send_mode, so nothing can turn it
+   *  on. Deliberately absent from the pricing copy until that exists. */
   emailApi: boolean;
   /** Automatic day-3 follow-up drafts on sent messages with no reply. */
   followUps: boolean;
@@ -70,7 +72,6 @@ export const PLANS: Record<PlanKey, Plan> = {
       '400 real matches a month',
       'Find new matches on demand, three briefs a day',
       'Automatic day-3 follow-ups on silence',
-      'Send email from your own verified address',
       'Five target segments',
       'Push nudges when something needs you',
     ],

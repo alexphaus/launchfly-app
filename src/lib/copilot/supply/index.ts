@@ -28,14 +28,17 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('profile not found');
 
-  // The monthly allowance caps what the adapters are ASKED for, not just what is
-  // counted afterwards. Scraping 400 places and discarding 380 would bill the
-  // credits anyway, so the cap has to reach the request.
+  // The monthly allowance applies to BILLABLE adapters only, and caps what they
+  // are ASKED for rather than only what is counted afterwards: scraping 400
+  // places and discarding 380 bills the credits anyway. Free sources are neither
+  // metered nor stopped — charging for a RemoteOK listing would be charging for
+  // an HTTP request, and cutting one off once the allowance is gone punishes a
+  // user for something that costs nothing to serve.
   const plan = limitsFor(profile);
   const period = periodKey(profile.timezone);
   const usedBefore = (await getUsage(profileId, period)).matches;
   const allowance = Math.max(0, plan.matchesPerMonth - usedBefore);
-  const limit = Math.min(opts.limit ?? 40, allowance);
+  const asked = opts.limit ?? 40;
 
   const { data: run } = await db.from('copilot_agent_runs')
     .insert({ profile_id: profileId, kind: 'supply', agent: 'adapters', input_summary: { reason: opts.reason ?? 'manual', adapters: opts.only ?? ADAPTERS.map((a) => a.key) } })
@@ -48,9 +51,12 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
     quota: { limit: plan.matchesPerMonth, used: usedBefore, remaining: allowance, exhausted: allowance <= 0 },
   };
 
+  let billableInserted = 0;
+
   for (const adapter of ADAPTERS) {
     if (opts.only && !opts.only.includes(adapter.key)) continue;
-    if (allowance <= 0) { result.perAdapter[adapter.key] = { found: 0, inserted: 0, skipped: 'monthly match allowance used up' }; continue; }
+    const limit = adapter.billable ? Math.min(asked, allowance - billableInserted) : asked;
+    if (limit <= 0) { result.perAdapter[adapter.key] = { found: 0, inserted: 0, skipped: 'monthly match allowance used up' }; continue; }
     const entry = { found: 0, inserted: 0 } as SupplyResult['perAdapter'][string];
     result.perAdapter[adapter.key] = entry;
     try {
@@ -79,16 +85,17 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
       if (error) throw error;
       entry.inserted = inserted?.length ?? 0;
       result.inserted += entry.inserted;
+      if (adapter.billable) billableInserted += entry.inserted;
     } catch (e) {
       entry.error = e instanceof Error ? e.message : String(e);
       console.error(`[copilot/supply] ${adapter.key} failed:`, entry.error);
     }
   }
 
-  // Meter what the user actually received, not what was scraped: a failed
-  // adapter or an all-duplicates run costs them nothing.
-  if (result.inserted > 0) {
-    const total = await bumpUsage(profileId, period, 'matches', result.inserted);
+  // Meter what the user actually received from a paid source: a failed adapter,
+  // an all-duplicates run, or anything from a free source costs them nothing.
+  if (billableInserted > 0) {
+    const total = await bumpUsage(profileId, period, 'matches', billableInserted);
     if (total) result.quota.used = total;
   }
   result.quota.remaining = Math.max(0, plan.matchesPerMonth - result.quota.used);

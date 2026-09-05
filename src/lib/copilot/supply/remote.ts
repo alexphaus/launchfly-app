@@ -20,6 +20,7 @@ const TIMEOUT_MS = 90_000;
 export const remoteAdapter: SupplyAdapter = {
   key: 'remote',
   label: 'External supply agent',
+  billable: false,
   available: () => !!process.env.COPILOT_SUPPLY_URL,
   async discover(profile: Profile, { limit }) {
     const url = process.env.COPILOT_SUPPLY_URL!;

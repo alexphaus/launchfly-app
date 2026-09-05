@@ -20,6 +20,13 @@ export interface SupplyCandidate {
 export interface SupplyAdapter {
   key: string;
   label: string;
+  /**
+   * True when a run spends money — scraping credits, a paid API. Only billable
+   * matches are metered against the plan: a listing from a free source must
+   * never eat somebody's monthly allowance, and must keep arriving after that
+   * allowance is gone.
+   */
+  billable: boolean;
   /** False when the adapter cannot run in this deployment (missing token etc.). */
   available(profile: Profile): boolean | Promise<boolean>;
   discover(profile: Profile, opts: { limit: number }): Promise<SupplyCandidate[]>;

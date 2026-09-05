@@ -195,6 +195,12 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     async saveFinance(f) {
       try { const r = await post<{ home: HomeData }>('/finance', f); setHome(r.home); closeSheet(); say('Runway updated'); return true; } catch (e) { fail(e, 'Could not save'); return false; }
     },
+    async openBilling() {
+      try {
+        const r = await post<{ url: string }>('/billing/portal', {});
+        window.location.href = r.url;
+      } catch (e) { fail(e, 'Could not open billing'); }
+    },
     async saveTargeting(t) {
       try { const r = await post<{ home: HomeData }>('/targeting', t); setHome(r.home); say('Targeting saved'); return true; } catch (e) { fail(e, 'Could not save'); return false; }
     },

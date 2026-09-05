@@ -35,6 +35,8 @@ export interface Actions {
   setActionStatus(id: string, status: ActionStatus): Promise<void>;
   setGrowthStatus(id: string, status: GrowthItem['status']): Promise<void>;
   requestSource(key: SourceKey): Promise<void>;
+  /** Send the user to Stripe's hosted billing portal. */
+  openBilling(): Promise<void>;
   saveGoal(patch: Partial<Goal> & { id?: string; title?: string }): Promise<void>;
   setCapacity(c: Capacity): Promise<void>;
   resetDevice(): Promise<void>;

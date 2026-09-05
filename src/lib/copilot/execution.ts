@@ -7,6 +7,7 @@ import { Resend } from 'resend';
 import { getWhatsAppProvider } from '@/lib/whatsapp-provider';
 import { copilotDb, todayIso } from './db';
 import { getProfile, logEvent, setActionStatus } from './base';
+import { limitsFor } from './plans';
 import type { Channel, Execution, Opportunity, Profile } from './types';
 
 /**
@@ -20,12 +21,14 @@ import type { Channel, Execution, Opportunity, Profile } from './types';
  * and domain at risk. Everyone else sends by hand from their own app, which is
  * what `send_mode = 'manual'` is for.
  */
-export function channelsConfigured(profile?: Pick<Profile, 'linked_business_id' | 'send_mode' | 'email_from'> | null): { whatsapp: boolean; email: boolean; mode: Profile['send_mode'] } {
+export function channelsConfigured(profile?: (Pick<Profile, 'linked_business_id' | 'send_mode' | 'email_from'> & Partial<Pick<Profile, 'plan' | 'plan_status'>>) | null): { whatsapp: boolean; email: boolean; mode: Profile['send_mode'] } {
   const mode = profile?.send_mode ?? 'manual';
   if (mode !== 'api') return { whatsapp: false, email: false, mode };
   return {
     whatsapp: !!profile?.linked_business_id,
-    email: !!process.env.RESEND_API_KEY && !!profile?.email_from,
+    // Sending from the user's own address is a paid feature; the manual mailto
+    // link is always available, so nobody is blocked from actually sending.
+    email: !!process.env.RESEND_API_KEY && !!profile?.email_from && limitsFor(profile ?? {}).emailApi,
     mode,
   };
 }
@@ -189,6 +192,7 @@ export async function cancelExecution(profileId: string, executionId: string) {
 /** After a send: a nudge in 3 days and a drafted follow-up the user can approve then. */
 async function scheduleFollowUp(profile: Profile, exec: Execution) {
   if (!exec.opportunity_id) return;
+  if (!limitsFor(profile).followUps) return;   // paid feature; the send itself still happens
   const db = copilotDb();
   const { data: opp } = await db.from('copilot_opportunities').select('id, title, contact').eq('id', exec.opportunity_id).maybeSingle();
   if (!opp) return;

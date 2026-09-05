@@ -3,8 +3,10 @@
 // Dedupe is by (profile, source, external_id), never by title.
 
 import { copilotDb } from '../db';
+import { limitsFor } from '../plans';
 import { scoreOpportunity } from '../ranking';
 import { getProfile, logEvent, typeAffinityFor } from '../store';
+import { bumpUsage, getUsage, periodKey } from '../usage';
 import { googleMapsAdapter } from './google-maps';
 import { hunterAdapter } from './hunter';
 import { remoteAdapter } from './remote';
@@ -17,13 +19,23 @@ export interface SupplyResult {
   found: number;
   inserted: number;
   perAdapter: Record<string, { found: number; inserted: number; skipped?: string; error?: string }>;
+  /** Monthly match allowance left after this run, and what it was capped at. */
+  quota: { limit: number; used: number; remaining: number; exhausted: boolean };
 }
 
 export async function runSupply(profileId: string, opts: { limit?: number; only?: string[]; reason?: string } = {}): Promise<SupplyResult> {
   const db = copilotDb();
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('profile not found');
-  const limit = opts.limit ?? 40;
+
+  // The monthly allowance caps what the adapters are ASKED for, not just what is
+  // counted afterwards. Scraping 400 places and discarding 380 would bill the
+  // credits anyway, so the cap has to reach the request.
+  const plan = limitsFor(profile);
+  const period = periodKey(profile.timezone);
+  const usedBefore = (await getUsage(profileId, period)).matches;
+  const allowance = Math.max(0, plan.matchesPerMonth - usedBefore);
+  const limit = Math.min(opts.limit ?? 40, allowance);
 
   const { data: run } = await db.from('copilot_agent_runs')
     .insert({ profile_id: profileId, kind: 'supply', agent: 'adapters', input_summary: { reason: opts.reason ?? 'manual', adapters: opts.only ?? ADAPTERS.map((a) => a.key) } })
@@ -31,15 +43,19 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
   const runId = run?.id as string;
 
   const affinity = await typeAffinityFor(profileId);
-  const result: SupplyResult = { runId, found: 0, inserted: 0, perAdapter: {} };
+  const result: SupplyResult = {
+    runId, found: 0, inserted: 0, perAdapter: {},
+    quota: { limit: plan.matchesPerMonth, used: usedBefore, remaining: allowance, exhausted: allowance <= 0 },
+  };
 
   for (const adapter of ADAPTERS) {
     if (opts.only && !opts.only.includes(adapter.key)) continue;
+    if (allowance <= 0) { result.perAdapter[adapter.key] = { found: 0, inserted: 0, skipped: 'monthly match allowance used up' }; continue; }
     const entry = { found: 0, inserted: 0 } as SupplyResult['perAdapter'][string];
     result.perAdapter[adapter.key] = entry;
     try {
       if (!(await adapter.available(profile))) { entry.skipped = 'not configured for this profile'; continue; }
-      const candidates = await adapter.discover(profile, { limit });
+      const candidates = await adapter.discover({ ...profile, target_segments: profile.target_segments.slice(0, plan.segments) }, { limit });
       entry.found = candidates.length;
       result.found += candidates.length;
       if (!candidates.length) continue;
@@ -69,7 +85,16 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
     }
   }
 
+  // Meter what the user actually received, not what was scraped: a failed
+  // adapter or an all-duplicates run costs them nothing.
+  if (result.inserted > 0) {
+    const total = await bumpUsage(profileId, period, 'matches', result.inserted);
+    if (total) result.quota.used = total;
+  }
+  result.quota.remaining = Math.max(0, plan.matchesPerMonth - result.quota.used);
+  result.quota.exhausted = result.quota.remaining <= 0;
+
   await db.from('copilot_agent_runs').update({ status: 'ok', output: result as unknown as Record<string, unknown>, finished_at: new Date().toISOString() }).eq('id', runId);
-  await logEvent(profileId, 'supply_run', { found: result.found, inserted: result.inserted });
+  await logEvent(profileId, 'supply_run', { found: result.found, inserted: result.inserted, plan_remaining: result.quota.remaining });
   return result;
 }

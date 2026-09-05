@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { PLANS } from '@/lib/copilot/plans';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { goalProgress, money, relTime } from '../format';
 import type { Actions } from '../shared';
@@ -10,6 +11,7 @@ export default function YouView({ home, actions, briefing, finding }: { home: Ho
   const m = home.metrics;
   const p = home.profile;
   const calendar = home.sources.find((s) => s.source_key === 'calendar');
+  const b = home.billing;
   const currency = p.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
 
   return (
@@ -61,6 +63,30 @@ export default function YouView({ home, actions, briefing, finding }: { home: Ho
         )}
       </div>
       <div className="cp-note">{home.contextCount} context item{home.contextCount === 1 ? '' : 's'} so far. Every note, outcome and sent message sharpens ranking.</div>
+
+      <div className="cp-section"><span className="lead">Plan</span><span className="count">{b.matches.remaining} match{b.matches.remaining === 1 ? '' : 'es'} left this month</span></div>
+      <div className="cp-list">
+        <div className="cp-ctx">
+          <div>
+            <div className="l">{PLANS[b.effective].name}{b.plan !== b.effective ? ` · ${PLANS[b.plan].name} lapsed` : ''}</div>
+            <div className="s">
+              {b.matches.used} of {b.matches.limit} matches used
+              {b.cancelsAtPeriodEnd && b.renewsAt ? ` · ends ${mounted ? relTime(b.renewsAt) : '…'}`
+                : b.renewsAt && b.effective !== 'free' ? ` · renews ${mounted ? relTime(b.renewsAt) : '…'}` : ''}
+            </div>
+          </div>
+          {b.effective === 'free'
+            ? <a className="cp-connect" href="/copilot/pricing">Upgrade</a>
+            : <button className="cp-connect ghost" onClick={() => actions.openBilling()}>Manage</button>}
+        </div>
+        <div className="cp-ctx">
+          <div><div className="l">This month</div><div className="s">Allowance resets on the 1st. Duplicates never count twice.</div></div>
+          <span className="cp-connect ghost">{b.matches.used}/{b.matches.limit}</span>
+        </div>
+      </div>
+      {b.status === 'past_due' && (
+        <div className="cp-note">A payment failed, so you are on free limits for now. Everything you built is still here — fix the card and it comes straight back.</div>
+      )}
 
       <div className="cp-section"><span className="lead">Copilot</span></div>
       <div className="cp-list">

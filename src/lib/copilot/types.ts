@@ -2,6 +2,7 @@
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
 import type { Diagnosis } from './diagnose';
+import type { PlanKey, PlanStatus } from './plans';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
 export type OpportunityType = 'client' | 'people' | 'service' | 'community' | 'signal';
@@ -67,6 +68,12 @@ export interface Profile {
   send_mode: SendMode;
   email_from: string | null;
   email_verified_at: string | null;
+  plan: PlanKey;
+  plan_status: PlanStatus;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan_renews_at: string | null;
+  plan_cancels_at_period_end: boolean;
   onboarding_complete: boolean;
   created_at: string;
 }
@@ -228,6 +235,18 @@ export interface EventRow {
   created_at: string;
 }
 
+export interface BillingSummary {
+  plan: PlanKey;
+  /** The plan whose limits actually apply — free when a subscription has lapsed. */
+  effective: PlanKey;
+  status: PlanStatus;
+  renewsAt: string | null;
+  cancelsAtPeriodEnd: boolean;
+  matches: { used: number; limit: number; remaining: number };
+  /** False when Stripe is not configured, so the UI hides upgrade buttons that cannot work. */
+  checkoutReady: boolean;
+}
+
 /** Everything the client needs to render all four tabs. One request. */
 export interface HomeData {
   profile: Profile;
@@ -240,6 +259,8 @@ export interface HomeData {
   diagnosis: Diagnosis;
   /** Open plan items that did not fit today's shortlist. They are not lost — they queue. */
   planOverflow: number;
+  /** Current plan and what is left of this month's metered allowance. */
+  billing: BillingSummary;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */
   lessons: GrowthItem[];
   sources: ContextSource[];

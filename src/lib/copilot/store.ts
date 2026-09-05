@@ -8,7 +8,9 @@ import { diagnose } from './diagnose';
 import { channelsConfigured, executionsForActions } from './execution';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
+import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
 import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
+import { getUsage, periodKey } from './usage';
 
 export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
@@ -65,7 +67,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes, usage] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as Insight | null) ?? null),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -85,6 +87,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['opportunities']),
     db.from('copilot_executions').select('approval_state, channel, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['executions']),
     db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['outcomes']),
+    getUsage(profileId, periodKey(profile.timezone)),
   ]);
 
   // Join send-ready drafts onto today's plan and the latest outcome onto each match.
@@ -108,6 +111,19 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     insight,
     plan: shortlist,
     planOverflow,
+    billing: {
+      plan: isPlanKey(profile.plan) ? profile.plan : 'free',
+      effective: effectivePlan(profile).key,
+      status: profile.plan_status ?? 'active',
+      renewsAt: profile.plan_renews_at ?? null,
+      cancelsAtPeriodEnd: !!profile.plan_cancels_at_period_end,
+      matches: {
+        used: usage.matches,
+        limit: effectivePlan(profile).limits.matchesPerMonth,
+        remaining: remaining(effectivePlan(profile).limits.matchesPerMonth, usage.matches),
+      },
+      checkoutReady: billingConfigured(),
+    },
     nudges,
     opportunities,
     diagnosis: diagnose({ opportunities: allOpps, executions: allExecs, outcomes: allOutcomes, offer: profile.offer ?? {} }),

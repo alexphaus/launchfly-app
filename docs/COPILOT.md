@@ -180,6 +180,9 @@ A bare array is accepted too. Everything is normalised and capped server-side: r
 title or a stable `external_id` are dropped, phones are normalised, unknown enums fall back.
 Return facts, not adjectives — the agent scores and words them.
 
+> Building the supply service itself — the contract, a runnable mock, and an
+> importable n8n workflow — is covered in **[COPILOT_SUPPLY_AGENT.md](./COPILOT_SUPPLY_AGENT.md)**.
+
 ## External agent contract
 
 `POST $COPILOT_AGENT_URL` with `Authorization: Bearer $COPILOT_AGENT_SECRET`:

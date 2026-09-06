@@ -1,6 +1,7 @@
 import type { ActionStatus, Capacity, Channel, Goal, GrowthItem, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
-export type Tab = 'today' | 'opps' | 'growth' | 'you';
+/** Three tabs. You is a sheet behind the header avatar, not a destination. */
+export type Tab = 'today' | 'pipeline' | 'signals';
 
 export type SheetState =
   | { kind: 'capacity' }
@@ -13,7 +14,8 @@ export type SheetState =
   | { kind: 'targeting' }
   | { kind: 'account' }
   | { kind: 'won'; oppId: string }
-  | { kind: 'offer' };
+  | { kind: 'offer' }
+  | { kind: 'you' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -25,7 +27,9 @@ export interface OutcomeInput {
 }
 
 export interface Actions {
+  /** Push a sheet. Opening one from inside another returns to the first on close. */
   openSheet(s: SheetState): void;
+  /** Pop the top sheet. */
   closeSheet(): void;
   setTab(t: Tab): void;
   runBrief(reason?: string): Promise<void>;

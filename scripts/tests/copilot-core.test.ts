@@ -638,3 +638,42 @@ async function sending() {
 }
 
 sending().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── Pipeline stages: where each real business actually is ──────────────────
+import { STAGE_ORDER, groupPipeline, stageOf } from '../../src/lib/copilot/pipeline';
+
+async function pipeline() {
+  const ex = (approval_state: 'needs_approval' | 'approved' | 'failed' | 'sent' | 'cancelled') => ({ approval_state });
+
+  // 1. The latest outcome wins; a send only matters when nothing came back.
+  assert.equal(stageOf({ last_outcome: 'won' }, ex('sent')), 'won');
+  assert.equal(stageOf({ last_outcome: 'lost' }, ex('sent')), 'lost');
+  assert.equal(stageOf({ last_outcome: 'meeting' }, ex('sent')), 'meeting');
+  assert.equal(stageOf({ last_outcome: 'proposal' }, null), 'meeting', 'a proposal is the meeting stage');
+  assert.equal(stageOf({ last_outcome: 'reply' }, null), 'replied', 'a reply logged outside the app still counts');
+  assert.equal(stageOf({ last_outcome: 'no_reply' }, null), 'sent', 'no reply implies a send even when the app did not do it');
+  assert.equal(stageOf({ last_outcome: null }, ex('sent')), 'sent');
+  for (const s of ['needs_approval', 'approved', 'failed'] as const) assert.equal(stageOf({}, ex(s)), 'to_send', `${s} is still the user's to send`);
+  assert.equal(stageOf({}, ex('cancelled')), 'not_drafted', 'a cancelled draft is as good as none');
+  assert.equal(stageOf({}, null), 'not_drafted');
+  assert.equal(stageOf({ last_outcome: 'won' }, null), 'won', 'a win with no send behind it is still a win');
+
+  // 2. Grouping follows display order and drops empty stages.
+  const rows = [
+    { id: 'a', stage: stageOf({}, null) },
+    { id: 'b', stage: stageOf({ last_outcome: 'won' }, null) },
+    { id: 'c', stage: stageOf({}, ex('needs_approval')) },
+    { id: 'd', stage: stageOf({}, ex('needs_approval')) },
+    { id: 'e', stage: stageOf({ last_outcome: 'reply' }, ex('sent')) },
+  ];
+  const groups = groupPipeline(rows);
+  assert.deepEqual(groups.map((g) => g.stage), ['to_send', 'replied', 'won', 'not_drafted'], 'display order, empties dropped');
+  assert.deepEqual(groups[0].rows.map((r) => r.id), ['c', 'd'], 'rows keep their order inside a stage');
+  assert.deepEqual(groupPipeline([]), []);
+  assert.equal(STAGE_ORDER[0], 'to_send', 'the ones needing a tap come first');
+  assert.equal(STAGE_ORDER[STAGE_ORDER.length - 1], 'not_drafted', 'the untouched pile comes last');
+
+  console.log('copilot-core: pipeline checks passed');
+}
+
+pipeline().catch((e) => { console.error(e); process.exit(1); });

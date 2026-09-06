@@ -5,9 +5,11 @@ import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
+import YouView from './views/YouView';
 
-export default function SheetContent({ sheet, home, actions }: { sheet: SheetState; home: HomeData; actions: Actions }) {
+export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
+    case 'you': return <div className="cp-sheet-embed"><YouView home={home} actions={actions} briefing={briefing} /></div>;
     case 'capacity': return <CapacitySheet current={home.profile.capacity} onPick={actions.setCapacity} />;
     case 'action': return <ActionSheet home={home} id={sheet.id} actions={actions} />;
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
@@ -157,7 +159,7 @@ function ExecutionPanel({ action, exec, home, actions }: { action: Action; exec:
 /* ─── Opportunities ─────────────────────────────────────────────────────── */
 
 function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: Actions }) {
-  const found = home.opportunities.find((x) => x.id === id);
+  const found = home.opportunities.find((x) => x.id === id) ?? home.pipeline.find((r) => r.opportunity.id === id)?.opportunity;
   const snap = useRef(found);
   if (found) snap.current = found;
   const o = snap.current;
@@ -228,7 +230,7 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
 }
 
 function WonSheet({ home, oppId, actions }: { home: HomeData; oppId: string; actions: Actions }) {
-  const o = home.opportunities.find((x) => x.id === oppId);
+  const o = home.opportunities.find((x) => x.id === oppId) ?? home.pipeline.find((r) => r.opportunity.id === oppId)?.opportunity;
   const goal = home.goals.find((g) => g.metric === 'currency');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState(goal?.unit || '$');

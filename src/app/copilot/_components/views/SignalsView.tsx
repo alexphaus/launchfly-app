@@ -1,14 +1,15 @@
 'use client';
-// Where you're losing. Every number here was computed from rows the user
-// created — sends, replies, outcomes, real matches. Nothing is estimated, and
-// when there is not enough data the tab says so rather than filling the space.
+// What the market in front of you keeps asking for, then where you are losing.
+// Every number here was computed from rows the user created — real matches,
+// sends, replies, outcomes. Nothing is estimated, and when there is not enough
+// data the tab says so rather than filling the space.
 
 import type { Finding, FunnelStage } from '@/lib/copilot/diagnose';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 
 const KIND_LABEL: Record<Finding['kind'], string> = {
-  bottleneck: 'Biggest drop',
+  bottleneck: 'Where you lose most',
   channel: 'Channel',
   source: 'Source',
   demand: 'Market demand',
@@ -16,13 +17,43 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
   insufficient: 'Not enough data yet',
 };
 
-export default function GrowthView({ home, actions }: { home: HomeData; actions: Actions }) {
+export default function SignalsView({ home, actions }: { home: HomeData; actions: Actions }) {
   const d = home.diagnosis;
   const max = Math.max(...d.stages.map((s) => s.count), 1);
   const lesson = home.lessons[0];
+  const sourced = home.metrics.pipeline.sourced;
+  // The demand section IS the demand finding, so the card would repeat it.
+  const findings = d.findings.filter((f) => f.kind !== 'demand');
+  const offerSet = !!home.profile.offer?.sells;
 
   return (
     <>
+      <div className="cp-section"><span className="lead">What they keep asking for</span><span className="count">{sourced ? `across ${sourced} real matches` : 'no real matches yet'}</span></div>
+      {d.demand.length ? (
+        <>
+          <div className="cp-list">
+            {d.demand.map((t) => (
+              <div key={t.term} className="cp-drow">
+                <div className="cp-dmain">
+                  <div className="t">{t.term}</div>
+                  <div className="s">{t.count} {t.count === 1 ? 'business' : 'businesses'}</div>
+                </div>
+                <div className="cp-dbar"><div className="cp-dfill" style={{ width: `${Math.round((t.count / d.demand[0].count) * 100)}%` }} /></div>
+              </div>
+            ))}
+          </div>
+          <div className="cp-note">
+            Tags and pain signals recurring across the real businesses matched to you, that your offer does not mention.
+            {offerSet ? ' Either add one to what you sell, or stop matching on the segments that need it.' : ' Set your offer and these become the gap between it and the market.'}
+          </div>
+        </>
+      ) : (
+        <div className="cp-empty">
+          <b>Nothing recurring yet</b>
+          Demand shows once several real matches share a need your offer does not cover. It is measured, never guessed — so an empty list means the market has not repeated itself yet, not that there is nothing to learn.
+        </div>
+      )}
+
       <div className="cp-section"><span className="lead">Your funnel</span><span className="count">all time</span></div>
       <div className="cp-card">
         {d.stages.map((s) => (
@@ -34,15 +65,19 @@ export default function GrowthView({ home, actions }: { home: HomeData; actions:
         </div>
       </div>
 
-      <div className="cp-section"><span className="lead">{d.thin ? 'What the numbers can tell you' : 'What the numbers say'}</span></div>
-      {d.findings.map((f, i) => (
-        <div key={i} className={`cp-card cp-finding ${f.kind === 'insufficient' ? 'thin' : ''}`}>
-          <div className="cp-eyebrow">{KIND_LABEL[f.kind]}</div>
-          <p className="cp-f-head">{f.headline}</p>
-          {f.detail && <p className="cp-f-detail">{f.detail}</p>}
-          {f.action && <p className="cp-f-action">→ {f.action}</p>}
-        </div>
-      ))}
+      {findings.length > 0 && (
+        <>
+          <div className="cp-section"><span className="lead">{d.thin ? 'What the numbers can tell you' : 'What the numbers say'}</span></div>
+          {findings.map((f, i) => (
+            <div key={i} className={`cp-card cp-finding ${f.kind === 'insufficient' ? 'thin' : ''}`}>
+              <div className="cp-eyebrow">{KIND_LABEL[f.kind]}</div>
+              <p className="cp-f-head">{f.headline}</p>
+              {f.detail && <p className="cp-f-detail">{f.detail}</p>}
+              {f.action && <p className="cp-f-action">→ {f.action}</p>}
+            </div>
+          ))}
+        </>
+      )}
 
       {lesson ? (
         <>

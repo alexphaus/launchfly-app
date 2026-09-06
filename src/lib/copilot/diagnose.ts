@@ -50,6 +50,13 @@ export interface Diagnosis {
   /** The stage with the worst conversion that has enough data to judge. */
   bottleneck: FunnelStage | null;
   findings: Finding[];
+  /**
+   * What the market in front of you keeps asking for: terms recurring across real
+   * matches that the offer does not cover, most common first. This is the one
+   * measurement in the app nothing else can make, so it gets its own field
+   * rather than living only inside a finding.
+   */
+  demand: Array<{ term: string; count: number }>;
   /** True when nothing can honestly be concluded yet. */
   thin: boolean;
 }
@@ -196,7 +203,7 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     findings.push({ kind: 'insufficient', headline: blocker.headline, detail: 'Everything on this tab is computed from what you actually sent and what came back. Nothing here is estimated.', action: blocker.action });
   }
 
-  return { stages, bottleneck, findings, thin, outsideFunnel };
+  return { stages, bottleneck, findings, thin, outsideFunnel, demand };
 }
 
 /**

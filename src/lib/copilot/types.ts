@@ -2,6 +2,7 @@
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
 import type { Diagnosis } from './diagnose';
+import type { PipelineStage } from './pipeline';
 import type { PlanKey, PlanStatus } from './plans';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
@@ -215,6 +216,8 @@ export interface Insight {
   eyebrow: string;
   body: string;
   reasoning: string | null;
+  /** 'daily' is the brief; 'weekly' is the Signals read. Absent on rows older than the column. */
+  kind?: 'daily' | 'weekly';
 }
 
 export interface GrowthItem {
@@ -257,7 +260,15 @@ export interface QueueItem extends Action {
   opp: { id: string; title: string; name: string | null; segment: string | null; score: number } | null;
 }
 
-/** Everything the client needs to render all four tabs. One request. */
+/** One real business in the pipeline, with where it actually is. */
+export interface PipelineRow {
+  opportunity: Opportunity;
+  /** Latest execution for this business, if any, with its deep link. */
+  execution: Execution | null;
+  stage: PipelineStage;
+}
+
+/** Everything the client needs to render the three tabs and the You sheet. One request. */
 export interface HomeData {
   profile: Profile;
   goals: Goal[];
@@ -275,6 +286,10 @@ export interface HomeData {
    * sent is still the most important thing on Thursday.
    */
   queue: QueueItem[];
+  /** Sourced businesses only — the ones with a contact — grouped by stage on the Pipeline tab. */
+  pipeline: PipelineRow[];
+  /** The latest weekly Signals read, when one has been written. */
+  weekly: Insight | null;
   /** Current plan and what is left of this month's metered allowance. */
   billing: BillingSummary;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */

@@ -65,8 +65,9 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   const norm = (s: string) => s.trim().toLowerCase();
 
   // Insight: one per day.
-  await db.from('copilot_insights').delete().eq('profile_id', pid).eq('for_date', today);
-  await db.from('copilot_insights').insert({ profile_id: pid, for_date: today, body: out.insight.body, reasoning: out.insight.reasoning ?? null, agent_run_id: runId });
+  // Only the daily row is replaced; the weekly Signals read lives beside it.
+  await db.from('copilot_insights').delete().eq('profile_id', pid).eq('for_date', today).eq('kind', 'daily');
+  await db.from('copilot_insights').insert({ profile_id: pid, kind: 'daily', for_date: today, body: out.insight.body, reasoning: out.insight.reasoning ?? null, agent_run_id: runId });
 
   const candidateIds = new Set(pack.candidates.map((c) => c.id));
   const rankCtx = { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: pack.typeAffinity };

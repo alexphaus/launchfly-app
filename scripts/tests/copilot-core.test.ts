@@ -351,11 +351,11 @@ async function multiUser() {
 multiUser().catch((e) => { console.error(e); process.exit(1); });
 
 // ─── Measured growth: diagnosis instead of invented skill levels ────────────
-import { MIN_SAMPLE, demandGap, diagnose, selectLesson } from '../../src/lib/copilot/diagnose';
+import { MIN_SAMPLE, MIN_WEEKLY, demandGap, demandTrend, diagnose, isoWeekKey, segmentDemand, segmentOf, selectLesson } from '../../src/lib/copilot/diagnose';
 
 async function growth() {
-  const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown> }> = {}) =>
-    ({ id, status: 'new' as const, source: over.source ?? 'google_maps', source_kind: over.source_kind ?? 'sourced' as const, data: over.data ?? {}, reason: '', title: id });
+  const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown>; created_at: string }> = {}) =>
+    ({ id, status: 'new' as const, source: over.source ?? 'google_maps', source_kind: over.source_kind ?? 'sourced' as const, data: over.data ?? {}, reason: '', title: id, created_at: over.created_at ?? '2026-09-01T00:00:00Z' });
   const exec = (opportunity_id: string | null, channel: 'whatsapp' | 'email', state: 'sent' | 'needs_approval' | 'cancelled' = 'sent') =>
     ({ approval_state: state, channel, opportunity_id });
 
@@ -512,6 +512,71 @@ async function growth() {
   assert.equal(none.findings.some((f) => f.topic), false);
   assert.deepEqual(selectLesson([live], none), [], 'no stuck point, no lesson — whatever is stored');
 
+  // 10. ISO weeks. Monday-based; the week with the year's first Thursday is W01.
+  assert.equal(isoWeekKey(new Date('2026-01-01T12:00:00Z')), '2026-W01');
+  assert.equal(isoWeekKey(new Date('2025-12-29T12:00:00Z')), '2026-W01', 'the Monday before New Year already belongs to 2026');
+  assert.equal(isoWeekKey(new Date('2027-01-01T12:00:00Z')), '2026-W53', '2026 starts on a Thursday, so it has 53 weeks');
+  assert.equal(isoWeekKey(new Date('2026-09-06T23:59:00Z')), '2026-W36', 'Sunday closes the week');
+  assert.equal(isoWeekKey(new Date('2026-09-07T00:00:00Z')), '2026-W37', 'Monday opens the next');
+
+  // 11. Demand over time. `now` is Sunday 6 Sep 2026 (W36); previous four weeks are W32–W35.
+  const now = new Date('2026-09-06T12:00:00Z');
+  const thisWk = '2026-09-02T10:00:00Z';                       // W36
+  const prevWks = ['2026-08-05T10:00:00Z', '2026-08-12T10:00:00Z', '2026-08-19T10:00:00Z', '2026-08-26T10:00:00Z']; // W32..W35
+  const tagged = (id: string, tag: string, created_at: string, extra: Record<string, unknown> = {}) => opp(id, { data: { tags: [tag], ...extra }, created_at });
+  const trendOpps = [
+    // "new": three this week, nothing before
+    tagged('n1', 'voice ai', thisWk), tagged('n2', 'voice ai', thisWk), tagged('n3', 'voice ai', thisWk),
+    // "rising": four this week against one a week before
+    ...prevWks.map((d, i) => tagged(`r${i}`, 'facebook ads', d)),
+    tagged('r4', 'facebook ads', thisWk), tagged('r5', 'facebook ads', thisWk), tagged('r6', 'facebook ads', thisWk), tagged('r7', 'facebook ads', thisWk),
+    // "steady": one this week against one a week — below MIN_WEEKLY either side
+    ...prevWks.map((d, i) => tagged(`s${i}`, 'renovation', d)), tagged('s4', 'renovation', thisWk),
+    // "falling": three a week before, none this week
+    ...prevWks.flatMap((d, i) => [0, 1, 2].map((j) => tagged(`f${i}${j}`, 'no website', d))),
+    // noise that must be ignored
+    tagged('inf', 'voice ai', thisWk, {}), // overwritten below to inferred
+    opp('seg', { data: { tags: ['pest control'], segment: 'pest control' }, created_at: thisWk }),
+    tagged('off', 'landing pages', thisWk),
+  ];
+  trendOpps[trendOpps.length - 3] = { ...trendOpps[trendOpps.length - 3], source_kind: 'inferred' as const };
+  const tr = demandTrend(trendOpps, { sells: 'landing pages' }, { now, targetSegments: ['pest control'] });
+  const by = Object.fromEntries(tr.map((t) => [t.term, t]));
+  assert.equal(by['voice ai'].trend, 'new'); assert.equal(by['voice ai'].count, 3, 'the inferred row did not count');
+  assert.equal(by['facebook ads'].trend, 'rising'); assert.equal(by['facebook ads'].thisWeek, 4); assert.equal(by['facebook ads'].prevWeeklyAvg, 1);
+  assert.equal(by['renovation'].trend, 'steady', `one a week is below MIN_WEEKLY=${MIN_WEEKLY} on both sides`);
+  assert.equal(by['no website'].trend, 'falling'); assert.equal(by['no website'].thisWeek, 0); assert.equal(by['no website'].prevWeeklyAvg, 3);
+  assert.equal(by['landing pages'], undefined, 'a term already in the offer is not demand');
+  assert.equal(by['pest control'], undefined, 'a target segment is targeting, not demand');
+  assert.ok(tr.length <= 5, 'top five only');
+  assert.equal(tr[0].term, 'no website', 'sorted by all-time count first');
+  // The old shape still works for callers that only want counts.
+  assert.deepEqual(demandGap(trendOpps, { sells: 'landing pages' }).map((g) => g.term), tr.map((t) => t.term));
+
+  // 12. Per-segment: segment, then service_type, then a target segment named in category.
+  const seg = [
+    opp('a1', { data: { segment: 'Pest_Control', tags: ['facebook ads', 'no website'] } }),
+    opp('a2', { data: { segment: 'pest control', tags: ['facebook ads'] } }),
+    opp('b1', { data: { service_type: 'staycation', tags: ['facebook ads'] } }),
+    opp('c1', { data: { category: 'Plumbing contractor in Manila', tags: ['renovation'] } }),
+    opp('d1', { data: { tags: ['renovation'] } }),                       // no segment at all: not grouped
+    opp('e1', { source_kind: 'inferred', data: { segment: 'pest control', tags: ['facebook ads'] } }),
+  ];
+  assert.equal(segmentOf(seg[0], []), 'pest control', 'normalised: lower case, underscores to spaces');
+  assert.equal(segmentOf(seg[2], []), 'staycation');
+  assert.equal(segmentOf(seg[3], ['plumbing']), 'plumbing', 'a target segment found inside the category');
+  assert.equal(segmentOf(seg[4], ['plumbing']), null);
+  const sd = segmentDemand(seg, { sells: 'landing pages' }, ['plumbing']);
+  assert.deepEqual(sd.map((s) => s.segment), ['pest control', 'staycation', 'plumbing'], 'most businesses first; inferred and ungrouped rows excluded');
+  assert.equal(sd[0].businesses, 2);
+  assert.deepEqual(sd[0].wants[0], { term: 'facebook ads', count: 2 });
+  assert.ok(!sd[0].wants.some((w) => w.term === 'pest control'), 'a segment never wants itself');
+  // And a term's own segment list points back the same way.
+  assert.deepEqual(demandTrend(seg, { sells: 'landing pages' }, { now, targetSegments: ['plumbing'] }).find((t) => t.term === 'facebook ads')!.segments[0], { segment: 'pest control', count: 2 });
+
+  // 13. The lesson gate still sees the demand finding with its topic.
+  assert.ok(diagnose({ opportunities: trendOpps, executions: [], outcomes: [], offer: { sells: 'landing pages' }, now }).findings.some((f) => f.kind === 'demand' && f.topic));
+
   console.log('copilot-core: measured-growth checks passed');
 }
 
@@ -638,3 +703,79 @@ async function sending() {
 }
 
 sending().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── Pipeline stages: where each real business actually is ──────────────────
+import { STAGE_ORDER, groupPipeline, stageOf } from '../../src/lib/copilot/pipeline';
+
+async function pipeline() {
+  const ex = (approval_state: 'needs_approval' | 'approved' | 'failed' | 'sent' | 'cancelled') => ({ approval_state });
+
+  // 1. The latest outcome wins; a send only matters when nothing came back.
+  assert.equal(stageOf({ last_outcome: 'won' }, ex('sent')), 'won');
+  assert.equal(stageOf({ last_outcome: 'lost' }, ex('sent')), 'lost');
+  assert.equal(stageOf({ last_outcome: 'meeting' }, ex('sent')), 'meeting');
+  assert.equal(stageOf({ last_outcome: 'proposal' }, null), 'meeting', 'a proposal is the meeting stage');
+  assert.equal(stageOf({ last_outcome: 'reply' }, null), 'replied', 'a reply logged outside the app still counts');
+  assert.equal(stageOf({ last_outcome: 'no_reply' }, null), 'sent', 'no reply implies a send even when the app did not do it');
+  assert.equal(stageOf({ last_outcome: null }, ex('sent')), 'sent');
+  for (const s of ['needs_approval', 'approved', 'failed'] as const) assert.equal(stageOf({}, ex(s)), 'to_send', `${s} is still the user's to send`);
+  assert.equal(stageOf({}, ex('cancelled')), 'not_drafted', 'a cancelled draft is as good as none');
+  assert.equal(stageOf({}, null), 'not_drafted');
+  assert.equal(stageOf({ last_outcome: 'won' }, null), 'won', 'a win with no send behind it is still a win');
+
+  // 2. Grouping follows display order and drops empty stages.
+  const rows = [
+    { id: 'a', stage: stageOf({}, null) },
+    { id: 'b', stage: stageOf({ last_outcome: 'won' }, null) },
+    { id: 'c', stage: stageOf({}, ex('needs_approval')) },
+    { id: 'd', stage: stageOf({}, ex('needs_approval')) },
+    { id: 'e', stage: stageOf({ last_outcome: 'reply' }, ex('sent')) },
+  ];
+  const groups = groupPipeline(rows);
+  assert.deepEqual(groups.map((g) => g.stage), ['to_send', 'replied', 'won', 'not_drafted'], 'display order, empties dropped');
+  assert.deepEqual(groups[0].rows.map((r) => r.id), ['c', 'd'], 'rows keep their order inside a stage');
+  assert.deepEqual(groupPipeline([]), []);
+  assert.equal(STAGE_ORDER[0], 'to_send', 'the ones needing a tap come first');
+  assert.equal(STAGE_ORDER[STAGE_ORDER.length - 1], 'not_drafted', 'the untouched pile comes last');
+
+  console.log('copilot-core: pipeline checks passed');
+}
+
+pipeline().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── The weekly Signals read ────────────────────────────────────────────────
+import { WEEKLY_EYEBROW, composeWeekly, weekdayIn } from '../../src/lib/copilot/weekly';
+
+async function weekly() {
+  // 1. Monday is the profile's Monday. 6 Sep 2026 20:00Z is Sunday in London and already Monday in Manila.
+  const sunEveUtc = new Date('2026-09-06T20:00:00Z');
+  assert.equal(weekdayIn('Asia/Manila', sunEveUtc), 1, 'Monday in Manila');
+  assert.equal(weekdayIn('UTC', sunEveUtc), 7, 'still Sunday in UTC');
+  assert.equal(weekdayIn('Europe/Lisbon', new Date('2026-09-07T09:00:00Z')), 1);
+  assert.equal(weekdayIn('Not/AZone', sunEveUtc), 7, 'a bad timezone falls back to UTC rather than throwing');
+
+  // 2. The read names the top three with where they show up and how they moved.
+  const term = (t: string, count: number, trend: 'new' | 'rising' | 'steady' | 'falling', seg: string, thisWeek = 2) =>
+    ({ term: t, count, thisWeek, prevWeeklyAvg: 1, trend, segments: [{ segment: seg, count }] });
+  const d = {
+    demand: [term('facebook ads', 40, 'rising', 'pest control'), term('renovation', 36, 'steady', 'staycation'), term('whatsapp for sales', 30, 'new', 'plumbing'), term('extra', 5, 'steady', 'x')],
+    segments: [{ segment: 'pest control', businesses: 18, wants: [] }, { segment: 'staycation', businesses: 12, wants: [] }],
+  };
+  const w = composeWeekly(d, { sent: 4, replies: 1 })!;
+  assert.match(w.push.title, /^3 things 30 businesses in your segments keep asking for$/);
+  assert.match(w.body, /1\. facebook ads \(40, mostly pest control — rising\)/);
+  assert.match(w.body, /3\. whatsapp for sales \(30, mostly plumbing — new this week\)/);
+  assert.doesNotMatch(w.body, /extra/, 'only the top three');
+  assert.match(w.body, /You sent 4 and got 1 reply/);
+  assert.equal(w.push.body, 'facebook ads · renovation · whatsapp for sales');
+  assert.match(composeWeekly(d, { sent: 0, replies: 0 })!.body, /Nothing has gone out yet/);
+  assert.match(composeWeekly({ demand: d.demand.slice(0, 1), segments: d.segments }, { sent: 0, replies: 0 })!.push.title, /^1 thing 30 businesses/);
+
+  // 3. Nothing recurring means no read — not "0 things".
+  assert.equal(composeWeekly({ demand: [], segments: d.segments }, { sent: 4, replies: 1 }), null);
+  assert.equal(typeof WEEKLY_EYEBROW, 'string');
+
+  console.log('copilot-core: weekly-signals checks passed');
+}
+
+weekly().catch((e) => { console.error(e); process.exit(1); });

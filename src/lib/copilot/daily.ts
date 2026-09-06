@@ -6,15 +6,18 @@
 import { runBrief, type BriefResult } from './brief';
 import { reconcileReplies } from './outcomes';
 import { runSupply, type SupplyResult } from './supply';
+import { runWeeklySignals } from './weekly';
 
 export interface DailyResult {
   supply: SupplyResult | { error: string } | null;
   reconcile: { checked: number; matched: number } | { error: string } | null;
   brief: Pick<BriefResult, 'agent' | 'fellBack'>;
+  /** Monday only, cron only: the weekly Signals read. */
+  weekly: { wrote: boolean; reason?: string } | { error: string } | null;
 }
 
 export async function runDaily(profileId: string, opts: { reason: string; supply?: boolean; reconcile?: boolean } ): Promise<DailyResult> {
-  const out: DailyResult = { supply: null, reconcile: null, brief: { agent: 'starter', fellBack: false } };
+  const out: DailyResult = { supply: null, reconcile: null, brief: { agent: 'starter', fellBack: false }, weekly: null };
   if (opts.supply !== false) {
     try { out.supply = await runSupply(profileId, { reason: opts.reason }); }
     catch (e) { out.supply = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] supply failed', e); }
@@ -25,5 +28,11 @@ export async function runDaily(profileId: string, opts: { reason: string; supply
   }
   const brief = await runBrief(profileId, { reason: opts.reason });
   out.brief = { agent: brief.agent, fellBack: brief.fellBack };
+  // The weekly read rides the cron, not the "Find new matches" tap: it decides
+  // for itself whether it is Monday in the profile's timezone.
+  if (opts.reason === 'cron') {
+    try { out.weekly = await runWeeklySignals(profileId); }
+    catch (e) { out.weekly = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] weekly failed', e); }
+  }
   return out;
 }

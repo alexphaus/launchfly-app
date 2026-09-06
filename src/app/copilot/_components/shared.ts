@@ -1,6 +1,7 @@
 import type { ActionStatus, Capacity, Channel, Goal, GrowthItem, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
-export type Tab = 'today' | 'opps' | 'growth' | 'you';
+/** Three tabs. You is a sheet behind the header avatar, not a destination. */
+export type Tab = 'today' | 'pipeline' | 'signals';
 
 export type SheetState =
   | { kind: 'capacity' }
@@ -13,7 +14,9 @@ export type SheetState =
   | { kind: 'targeting' }
   | { kind: 'account' }
   | { kind: 'won'; oppId: string }
-  | { kind: 'offer' };
+  | { kind: 'offer' }
+  | { kind: 'you' }
+  | { kind: 'demand'; term: string };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -25,7 +28,9 @@ export interface OutcomeInput {
 }
 
 export interface Actions {
+  /** Push a sheet. Opening one from inside another returns to the first on close. */
   openSheet(s: SheetState): void;
+  /** Pop the top sheet. */
   closeSheet(): void;
   setTab(t: Tab): void;
   runBrief(reason?: string): Promise<void>;
@@ -51,6 +56,8 @@ export interface Actions {
   findMatches(): Promise<void>;
   saveFinance(f: { monthly_burn?: number; cash?: number; currency?: string }): Promise<boolean>;
   saveTargeting(t: { target_segments: string[]; target_area: string }): Promise<boolean>;
+  /** Signals → "Stop matching <segment>": drops one segment and everything drafted for it. */
+  dropSegment(segment: string): Promise<boolean>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
 }

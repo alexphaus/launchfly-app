@@ -350,3 +350,47 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-fold { display: block; margin: 8px 20px 0; font-size: 12.5px; }
 .cp-block { border-style: solid; border-width: 3px; }
 .cp-block p b { color: var(--ink); }
+
+/* ── Three tabs: header avatar, You as a sheet, Pipeline and Signals rows ─── */
+.cp-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.cp-avatar { width: 36px; height: 36px; border-radius: 9px; border: 2.5px solid var(--ink); background: var(--ink); color: #fff; font-family: var(--display); font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cp-sheet-embed .cp-section, .cp-sheet-embed .cp-card, .cp-sheet-embed .cp-list, .cp-sheet-embed .cp-note, .cp-sheet-embed .cp-empty, .cp-sheet-embed .cp-metrics { margin-left: 0; margin-right: 0; }
+.cp-sheet-embed .cp-section { padding-left: 0; padding-right: 0; }
+.cp-sheet-embed .cp-section:first-child { padding-top: 4px; }
+.cp-sheet-embed .cp-goal { width: 100%; }
+.cp-sheet-embed .cp-note { margin-bottom: 8px; }
+.cp-section.sub { padding-top: 14px; padding-bottom: 8px; }
+.cp-section.sub .lead { font-size: 11px; color: var(--muted); }
+.cp-prow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 2px solid var(--ink); width: 100%; text-align: left; }
+.cp-prow:last-child { border-bottom: none; }
+.cp-pmain { flex: 1; min-width: 0; }
+.cp-pmain .t { font-size: 14px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-pmain .s { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-drow { padding: 12px 16px; border-bottom: 2px solid var(--ink); }
+.cp-drow:last-child { border-bottom: none; }
+.cp-dmain { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+.cp-dmain .t { font-size: 14.5px; font-weight: 700; text-transform: capitalize; }
+.cp-dmain .s { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); white-space: nowrap; }
+.cp-dbar { height: 8px; border: 2px solid var(--ink); border-radius: 5px; overflow: hidden; background: #fff; }
+.cp-dfill { height: 100%; background: var(--blue); }
+/* Two controls now share the header's right side; keep the greeting on one line at 390px. */
+.cp-header { gap: 10px; }
+.cp-header h1 { font-size: 20px; }
+.cp-capacity { padding: 7px 10px; font-size: 10.5px; }
+.cp-avatar { width: 34px; height: 34px; font-size: 13px; }
+
+/* ── Signals as the product: trends, segments, the demand sheet ───────────── */
+.cp-drow { display: block; width: 100%; text-align: left; }
+.cp-dsub { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); margin-top: 6px; }
+.cp-dmain .cp-chip.trend { flex-shrink: 0; }
+.cp-chip.trend.new { background: var(--blue); color: #fff; }
+.cp-chip.trend.rising { background: var(--ink); color: #fff; }
+.cp-chip.trend.steady { background: #fff; color: var(--muted); border: 2px solid var(--dim); }
+.cp-chip.trend.falling { background: #fff; color: var(--ink); border: 2px dashed var(--ink); }
+.cp-srow { padding: 12px 16px; border-bottom: 2px solid var(--ink); }
+.cp-srow:last-child { border-bottom: none; }
+.cp-srow .cp-dmain { margin-bottom: 4px; }
+.cp-wants { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-wants b { color: var(--ink); }
+/* A full-width button may carry a sentence; let it wrap instead of clipping. */
+.cp-btn.block { white-space: normal; line-height: 1.3; }

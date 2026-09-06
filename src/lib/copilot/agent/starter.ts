@@ -5,6 +5,7 @@
 // candidates, cite REAL metrics, and draft a real opener the user can send.
 
 import { describeMetrics } from '../metrics';
+import { OFFER_TASK_DETAIL, OFFER_TASK_TITLE, offerIsEmpty } from '../offer';
 import { CAPACITY_META, type BriefOutput, type ContextPack, type Offer, type OpportunityAgent } from '../types';
 
 export class StarterAgent implements OpportunityAgent {
@@ -25,17 +26,27 @@ export class StarterAgent implements OpportunityAgent {
       reason: c.summary,
     }));
     const top = [...pack.candidates].sort((a, b) => b.fit_score - a.fit_score).find((c) => c.contact.whatsapp || c.contact.email);
+    // Nothing is drafted from a blank offer. A message written from nothing is
+    // not the user's, and the live account proved it: 44 such drafts, 0 sent.
+    const noOffer = offerIsEmpty(pack.profile.offer);
 
     const goalLine = goal
       ? `Goal: "${goal.title}"${goal.target_value ? ` at ${fmt(Number(goal.current_value ?? 0), goal.unit, goal.metric)} of ${fmt(goal.target_value, goal.unit, goal.metric)}` : ''}.`
       : 'No goal set yet, so ranking runs on your profile alone.';
 
+    const supplyLine = noOffer && pack.candidates.length
+      ? `There are ${pack.candidates.length} real matches ranked below, but nothing can be drafted until you say what you sell — set your offer and every one gets an opener in your words.`
+      : pack.candidates.length ? `There are ${pack.candidates.length} real matches ranked below; the first message is drafted and waits for your approval.`
+      : 'No real matches yet. Add who you sell to and where in the You tab, then tap "Find new matches".';
+
     const body = m.sent > 0
-      ? `${firstName}, the numbers: ${describeMetrics(m, currency)}. ${goalLine} ${m.reply_rate != null && m.reply_rate < 0.1 && m.sent >= 10 ? 'Under 10% replies means the opener, not the volume, is the problem. Change the angle before sending more.' : m.pipeline.sourced > 0 ? `You have ${m.pipeline.sourced} real matches waiting; today's plan drafts the best one.` : 'Run "Find new matches" so there is something real to send to.'} Capacity is ${cap.label.toLowerCase()}, so the plan fits in about ${cap.minutes} minutes.`
-      : `${firstName}, nothing has gone out yet. ${goalLine} ${pack.candidates.length ? `There are ${pack.candidates.length} real matches ranked below; the first message is drafted and waits for your approval.` : 'No real matches yet. Add who you sell to and where in the You tab, then tap "Find new matches".'} I know ${knows} thing${knows === 1 ? '' : 's'} about you so far; every note sharpens the next brief.`;
+      ? `${firstName}, the numbers: ${describeMetrics(m, currency)}. ${goalLine} ${m.reply_rate != null && m.reply_rate < 0.1 && m.sent >= 10 ? 'Under 10% replies means the opener, not the volume, is the problem. Change the angle before sending more.' : noOffer ? 'Your offer is empty, so nothing new is drafted until you set it.' : m.pipeline.sourced > 0 ? `You have ${m.pipeline.sourced} real matches waiting; today's plan drafts the best one.` : 'Run "Find new matches" so there is something real to send to.'} Capacity is ${cap.label.toLowerCase()}, so the plan fits in about ${cap.minutes} minutes.`
+      : `${firstName}, nothing has gone out yet. ${goalLine} ${supplyLine} I know ${knows} thing${knows === 1 ? '' : 's'} about you so far; every note sharpens the next brief.`;
 
     const plan: BriefOutput['plan'] = [];
-    if (top) {
+    if (noOffer) {
+      plan.push({ owner: 'you', title: OFFER_TASK_TITLE, detail: OFFER_TASK_DETAIL, minutes: 3 });
+    } else if (top) {
       const channel = top.contact.whatsapp ? 'whatsapp' as const : 'email' as const;
       plan.push({
         owner: 'ai', minutes: 3,

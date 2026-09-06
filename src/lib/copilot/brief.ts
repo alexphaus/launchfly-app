@@ -7,6 +7,7 @@ import { StarterAgent, getAgent } from './agent';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
 import { createDraftExecution, openDraftForOpportunity } from './execution';
+import { OFFER_TASK_DETAIL, OFFER_TASK_TITLE, offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
 import { getProfile } from './store';
@@ -86,6 +87,19 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   // no agent_run_id and must survive the daily purge).
   await db.from('copilot_actions').delete()
     .eq('profile_id', pid).eq('kind', 'plan').eq('for_date', today).eq('status', 'open').not('agent_run_id', 'is', null);
+
+  // Server-side rule, whatever the agent proposed: no draft is written from an
+  // empty offer. The message would be a stranger's template, and the account
+  // this was built for proved nobody sends those. The plan carries one task
+  // instead — set the offer — and every draft is written the moment it is.
+  if (offerIsEmpty(profile.offer)) {
+    out.plan = out.plan.filter((p) => !(p.owner === 'ai' && p.ai_draft && p.channel && p.opportunity_ref));
+    const norm2 = (s: string) => s.trim().toLowerCase();
+    if (!out.plan.some((p) => norm2(p.title) === norm2(OFFER_TASK_TITLE))) {
+      out.plan.unshift({ owner: 'you', title: OFFER_TASK_TITLE, detail: OFFER_TASK_DETAIL, minutes: 3 });
+    }
+  }
+
   if (out.plan.length) {
     const rows = out.plan.map((p) => ({
       profile_id: pid, kind: 'plan', owner: p.owner, title: p.title, detail: p.detail ?? null, ai_draft: p.ai_draft ?? null,

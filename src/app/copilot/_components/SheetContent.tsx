@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
+import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
@@ -38,12 +39,14 @@ function CapacitySheet({ current, onPick }: { current: Capacity; onPick: (c: Cap
 /* ─── Actions: plan items and nudges, with approve-and-send when a draft exists ─── */
 
 function ActionSheet({ home, id, actions }: { home: HomeData; id: string; actions: Actions }) {
-  const found = home.plan.find((x) => x.id === id) ?? home.nudges.find((x) => x.id === id);
+  const found = home.plan.find((x) => x.id === id) ?? home.queue.find((x) => x.id === id) ?? home.nudges.find((x) => x.id === id);
   const snap = useRef(found);
   if (found) snap.current = found;
   const a = snap.current;
   const [copied, setCopied] = useState(false);
   if (!a) return <p className="desc">Gone.</p>;
+  // The one task that unblocks everything else gets its own button.
+  const isOfferTask = a.title.trim().toLowerCase() === OFFER_TASK_TITLE.toLowerCase();
   const copy = async () => {
     try { await navigator.clipboard.writeText(a.ai_draft ?? ''); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
   };
@@ -68,8 +71,11 @@ function ActionSheet({ home, id, actions }: { home: HomeData; id: string; action
         </>
       ) : null}
 
+      {isOfferTask && a.status !== 'done' && (
+        <button className="cp-btn primary block" style={{ marginTop: 12 }} onClick={() => actions.openSheet({ kind: 'offer' })}>Set your offer</button>
+      )}
       <div className="cp-btn-row">
-        {a.status !== 'done' && <button className={`cp-btn ${exec ? '' : 'primary'}`} onClick={() => actions.setActionStatus(a.id, 'done')}>Done</button>}
+        {a.status !== 'done' && <button className={`cp-btn ${exec || isOfferTask ? '' : 'primary'}`} onClick={() => actions.setActionStatus(a.id, 'done')}>Done</button>}
         {a.status === 'done' && <button className="cp-btn" onClick={() => actions.setActionStatus(a.id, 'open')}>Reopen</button>}
         <button className="cp-btn" onClick={() => actions.setActionStatus(a.id, 'dismissed')}>Skip</button>
       </div>
@@ -186,11 +192,20 @@ function OppSheet({ home, id, actions }: { home: HomeData; id: string; actions: 
       {(c.whatsapp || c.email) && (
         <>
           <div className="cp-subhead">Reach out</div>
-          <div className="cp-inline">
-            {canWa && <button className="cp-btn primary" disabled={busy} onClick={() => draft('whatsapp')}>Draft WhatsApp</button>}
-            {canEmail && <button className="cp-btn primary" disabled={busy} onClick={() => draft('email')}>Draft email</button>}
-          </div>
-          <p className="cp-help">{home.channels.mode === 'api' ? 'Drafted, then sent from your own account once you approve.' : 'Drafted here, sent from your own WhatsApp or mail app so it comes from you.'}</p>
+          {offerIsEmpty(home.profile.offer) ? (
+            <>
+              <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'offer' })}>Set your offer to draft</button>
+              <p className="cp-help">Every opener is written from what you sell. Nothing is drafted from a blank.</p>
+            </>
+          ) : (
+            <>
+              <div className="cp-inline">
+                {canWa && <button className="cp-btn primary" disabled={busy} onClick={() => draft('whatsapp')}>Draft WhatsApp</button>}
+                {canEmail && <button className="cp-btn primary" disabled={busy} onClick={() => draft('email')}>Draft email</button>}
+              </div>
+              <p className="cp-help">{home.channels.mode === 'api' ? 'Drafted, then sent from your own account once you approve.' : 'Drafted here, sent from your own WhatsApp or mail app so it comes from you.'}</p>
+            </>
+          )}
         </>
       )}
 
@@ -421,7 +436,7 @@ function OfferSheet({ home, actions }: { home: HomeData; actions: Actions }) {
     <>
       <h3>What do you sell?</h3>
       <p className="desc">Every message the copilot drafts is built from this. Without it, drafts fall back to your one-line headline and stay vague.</p>
-      <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input sm" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={120} /></div>
+      <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input sm" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={240} /></div>
       <div className="cp-field"><label className="cp-label">For</label><input className="cp-input sm" value={forWho} onChange={(e) => setForWho(e.target.value)} placeholder="resorts and tour operators" maxLength={120} /></div>
       <div className="cp-field"><label className="cp-label">The problem it solves</label><input className="cp-input sm" value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="enquiries arrive after hours and go unanswered" maxLength={240} /><div className="cp-help">Written as the customer would feel it, not as a feature.</div></div>
       <div className="cp-field"><label className="cp-label">Price band (optional)</label><input className="cp-input sm" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="$400–1,500 per build" maxLength={60} /></div>

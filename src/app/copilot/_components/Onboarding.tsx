@@ -142,7 +142,7 @@ export default function Onboarding() {
             <>
               <h2>What do you sell, and to whom?</h2>
               <p className="sub">This is what makes matches real and messages sound like you.</p>
-              <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={120} /></div>
+              <div className="cp-field"><label className="cp-label">I sell / I build</label><input className="cp-input" autoFocus value={sells} onChange={(e) => setSells(e.target.value)} placeholder="WhatsApp booking automations" maxLength={240} /></div>
               <div className="cp-field"><label className="cp-label">For</label><input className="cp-input" value={forWho} onChange={(e) => setForWho(e.target.value)} placeholder="resorts and tour operators" maxLength={120} /></div>
               <div className="cp-field"><label className="cp-label">The problem it solves</label><input className="cp-input" value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="enquiries arrive after hours and go unanswered" maxLength={240} /><div className="cp-help">Every drafted message is built from this. Say it the way your customer would feel it.</div></div>
               <div className="cp-field"><label className="cp-label">One link that proves it (optional)</label><input className="cp-input" type="url" inputMode="url" value={proof} onChange={(e) => setProof(e.target.value)} placeholder="https://…" maxLength={300} /></div>

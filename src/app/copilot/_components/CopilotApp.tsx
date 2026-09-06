@@ -3,6 +3,7 @@
 // state and talks to /api/copilot. Optimistic where it is safe to be.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type GrowthItem, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
@@ -124,6 +125,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       setHome((h) => ({
         ...h,
         plan: h.plan.map((a) => (a.id === id ? { ...a, status } : a)).filter((a) => a.status !== 'dismissed'),
+        queue: h.queue.filter((q) => q.id !== id || status === 'open'),
         nudges: h.nudges.filter((a) => a.id !== id || status === 'open'),
       }));
       closeSheet();
@@ -170,7 +172,12 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
     async saveOffer(offer: Offer) {
-      try { const r = await post<{ home: HomeData }>('/offer', offer); setHome(r.home); closeSheet(); say('Saved. Drafts will use your words now.'); return true; }
+      try {
+        const r = await post<{ home: HomeData; rewritten?: number }>('/offer', offer);
+        setHome(r.home); closeSheet();
+        say(r.rewritten ? `Saved. ${r.rewritten} waiting draft${r.rewritten === 1 ? '' : 's'} rewritten in your words.` : 'Saved. Drafts will use your words now.');
+        return true;
+      }
       catch (e) { fail(e, 'Could not save'); return false; }
     },
     async cancelDraft(id) {
@@ -242,18 +249,22 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
   };
 
-  // Counted from metrics, not from what is on screen: the plan is a capped
-  // shortlist, so counting it told the user 5 drafts were waiting when 30 were.
-  const newMatches = home.metrics.pipeline.new;
-  const drafts = home.metrics.awaiting_approval;
-  const needYou = home.plan.filter((a) => a.owner === 'you' && a.status === 'open').length + home.nudges.filter((n) => n.urgency === 'urgent').length;
+  // Sending first. The old line led with "107 new matches" — celebrating the side
+  // of the funnel that was never the problem.
+  const headline = offerIsEmpty(home.profile.offer)
+    ? 'Set your offer to start sending'
+    : [
+        `${home.queue.length} to send`,
+        `${home.metrics.replies} replied`,
+        home.metrics.runway_months != null ? `runway ${home.metrics.runway_months} mo` : null,
+      ].filter(Boolean).join(' · ');
 
   return (
     <div className="cp-frame">
       <header className="cp-header">
         <div>
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
-          <p>{newMatches} new match{newMatches === 1 ? '' : 'es'} · {drafts ? `${drafts} to approve · ` : ''}{needYou} need{needYou === 1 ? 's' : ''} you</p>
+          <p>{headline}</p>
         </div>
         <button className="cp-capacity" onClick={() => openSheet({ kind: 'capacity' })} aria-label="Set your capacity">
           ⚡ <span>{CAPACITY_META[home.profile.capacity].label}</span>

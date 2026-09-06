@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { AI_REVIEW_MINUTES, MAX_PLAN_ITEMS, computeTypeAffinity, rankOpportunities, scoreOpportunity, selectPlan } from '../../src/lib/copilot/ranking';
 import { extractJson, normalizeBrief } from '../../src/lib/copilot/agent/schema';
 import { StarterAgent } from '../../src/lib/copilot/agent/starter';
+import { OFFER_TASK_TITLE, SELLS_MAX, addTermToOffer, offerChangedMaterially, offerIsEmpty } from '../../src/lib/copilot/offer';
 import type { ContextPack } from '../../src/lib/copilot/types';
 
 process.env.COPILOT_SESSION_SECRET ||= 'test-secret';
@@ -115,7 +116,7 @@ const base = { created_at: now.toISOString(), score: 0 };
 {
   const basePack: ContextPack = {
     today: '2026-09-03',
-    profile: { name: 'Alex Ph', headline: 'build WhatsApp automations', location: 'Palawan', timezone: 'Asia/Manila', capacity: 'low', hunt_types: ['client'], target_segments: ['resort'], target_area: 'Palawan' },
+    profile: { name: 'Alex Ph', headline: 'build WhatsApp automations', location: 'Palawan', timezone: 'Asia/Manila', capacity: 'low', hunt_types: ['client'], target_segments: ['resort'], target_area: 'Palawan', offer: { sells: 'WhatsApp booking automations' } },
     goals: [{ title: 'Monthly revenue', metric: 'currency', unit: '$', target_value: 2000, current_value: 0, horizon_days: 90, priority: 1, note: null }],
     context: [{ source: 'onboarding', kind: 'fact', content: 'What I do: build WhatsApp automations', created_at: '2026-09-03T00:00:00Z' }],
     sources: [{ source_key: 'calendar', status: 'not_connected', last_synced_at: null }],
@@ -143,6 +144,15 @@ const base = { created_at: now.toISOString(), score: 0 };
   assert.ok(ai && ai.ai_draft && ai.opportunity_ref === 'c1' && ai.channel === 'whatsapp', 'drafts a WhatsApp opener bound to the candidate');
   assert.match(ai!.ai_draft!, /Hi Maria, Alex here/);
   assert.match(drafted.insight.body, /1 real match/);
+
+  // Same reachable candidate, blank offer: nothing is drafted. The live account
+  // had 44 openers written from nothing and sent none of them.
+  const blank: ContextPack = { ...withCandidate, profile: { ...withCandidate.profile, offer: {} } };
+  const gated = await new StarterAgent().generateBrief(blank);
+  assert.ok(!gated.plan.some((p) => p.owner === 'ai'), 'no opener is drafted from an empty offer');
+  assert.equal(gated.plan[0].title, OFFER_TASK_TITLE, 'the plan leads with setting the offer');
+  assert.match(gated.insight.body, /until you say what you sell/, 'the insight says why nothing is drafted');
+  assert.deepEqual(gated.rankings.map((r) => r.id), ['c1'], 'ranking still happens — only drafting waits');
 }
 
 // --- session cookie
@@ -594,3 +604,37 @@ async function billing() {
 }
 
 billing().catch((e) => { console.error(e); process.exit(1); });
+
+// ─── The offer gate: nothing is drafted from a blank ────────────────────────
+async function sending() {
+  // 1. Empty means no `sells`. Whitespace is empty. Anything else is an offer.
+  assert.equal(offerIsEmpty(undefined), true);
+  assert.equal(offerIsEmpty(null), true);
+  assert.equal(offerIsEmpty({}), true);
+  assert.equal(offerIsEmpty({ sells: '   ' }), true);
+  assert.equal(offerIsEmpty({ for_who: 'resorts', problem: 'no bookings' }), true, 'who and problem without sells is still not an offer');
+  assert.equal(offerIsEmpty({ sells: 'landing pages' }), false);
+
+  // 2. Only changes that alter what a message would say count as material.
+  const base = { sells: 'Landing pages', for_who: 'studios', problem: 'ads with no page', price_band: '$500', proof_url: 'https://x.y/a' };
+  assert.equal(offerChangedMaterially(base, { ...base, price_band: '$900' }), false, 'price band never appears in an opener');
+  assert.equal(offerChangedMaterially(base, { ...base, sells: '  landing PAGES ' }), false, 'case and whitespace are not a rewrite');
+  assert.equal(offerChangedMaterially(base, { ...base, problem: 'no website at all' }), true, 'the problem is in every hook');
+  assert.equal(offerChangedMaterially(base, { ...base, proof_url: undefined }), true, 'losing the proof link changes the ask');
+  assert.equal(offerChangedMaterially({}, { sells: 'x' }), true, 'first ever offer is material');
+  assert.equal(offerChangedMaterially(undefined, {}), false, 'blank to blank is nothing');
+
+  // 3. Adding a demand term to what you sell: appended, deduped, capped.
+  assert.equal(addTermToOffer({ sells: 'Booking flows' }, 'facebook ads').sells, 'Booking flows, facebook ads');
+  assert.equal(addTermToOffer({}, 'facebook ads').sells, 'facebook ads', 'first term stands alone');
+  assert.equal(addTermToOffer({ sells: 'Booking flows, facebook ads' }, 'Facebook Ads').sells, 'Booking flows, facebook ads', 'case-insensitive dedupe');
+  assert.equal(addTermToOffer({ sells: 'x' }, '   ').sells, 'x', 'blank term is a no-op');
+  const long = { sells: 'a'.repeat(SELLS_MAX - 5) };
+  assert.equal(addTermToOffer(long, 'facebook ads').sells, long.sells, 'never overflows the column');
+  const untouched = { sells: 'x', problem: 'p' };
+  assert.deepEqual(addTermToOffer(untouched, 'y'), { sells: 'x, y', problem: 'p' }, 'other fields survive');
+
+  console.log('copilot-core: offer-gate checks passed');
+}
+
+sending().catch((e) => { console.error(e); process.exit(1); });

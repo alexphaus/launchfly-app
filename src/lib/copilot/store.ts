@@ -5,8 +5,9 @@
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { copilotDb, todayIso } from './db';
 import { diagnose, selectLesson } from './diagnose';
-import { cancelOpenDrafts, channelsConfigured, executionsForActions, loadSendQueue, regenerateOpeners } from './execution';
+import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
+import { stageOf } from './pipeline';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
@@ -17,7 +18,7 @@ export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
   SOURCE_KEYS,
   type Action, type Capacity, type ContextItem, type ContextSource, type EventRow, type Finance, type Goal,
-  type GrowthItem, type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type Profile, type SendMode, type SourceKey,
+  type GrowthItem, type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type PipelineRow, type Profile, type SendMode, type SourceKey,
 } from './types';
 
 export async function addContextItem(profileId: string, item: { source: string; kind?: string; content: string; data?: Record<string, unknown>; weight?: number }) {
@@ -68,7 +69,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes, usage, queue] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes, usage, queue, pipelineRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as Insight | null) ?? null),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -90,13 +91,24 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['outcomes']),
     getUsage(profileId, periodKey(profile.timezone)),
     loadSendQueue(profileId),
+    // The pipeline: real businesses only, whatever state they are in. Dismissed
+    // ones are gone; everything else has a place on the board.
+    db.from('copilot_opportunities').select('*').eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved', 'acted']).order('score', { ascending: false }).limit(200).then((r) => (r.data ?? []) as Opportunity[]),
   ]);
 
-  // Join send-ready drafts onto today's plan and the latest outcome onto each match.
-  const [execMap, outcomeMap] = await Promise.all([
+  // Join send-ready drafts onto today's plan, the latest outcome onto each
+  // match, and the latest execution onto each pipeline row.
+  const pipelineIds = pipelineRows.map((o) => o.id);
+  const [execMap, outcomeMap, latestExecByOpp] = await Promise.all([
     executionsForActions(profileId, planRows.map((a) => a.id)),
-    lastOutcomeByOpportunity(profileId, oppRows.map((o) => o.id)),
+    lastOutcomeByOpportunity(profileId, [...new Set([...oppRows.map((o) => o.id), ...pipelineIds])]),
+    latestExecutionByOpportunity(profileId, pipelineIds),
   ]);
+  const pipeline: PipelineRow[] = pipelineRows.map((o) => {
+    const opportunity = { ...o, last_outcome: outcomeMap[o.id] ?? null };
+    const execution = latestExecByOpp[o.id] ?? null;
+    return { opportunity, execution, stage: stageOf(opportunity, execution) };
+  });
   // Anything in the send queue is rendered there, not in the plan too.
   const queueIds = new Set(queue.map((q) => q.id));
   const planWithExec = planRows.filter((a) => !queueIds.has(a.id)).map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
@@ -119,6 +131,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     plan: shortlist,
     planOverflow,
     queue,
+    pipeline,
     billing: {
       plan: isPlanKey(profile.plan) ? profile.plan : 'free',
       effective: effectivePlan(profile).key,

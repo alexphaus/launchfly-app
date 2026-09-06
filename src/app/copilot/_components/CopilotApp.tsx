@@ -1,20 +1,23 @@
 'use client';
-// The installed app: header, four tabs, bottom sheet, toast. Holds all client
+// The installed app: header, three tabs, bottom sheet, toast. Holds all client
 // state and talks to /api/copilot. Optimistic where it is safe to be.
+//
+// Three tabs, not four. Today is the send queue, Pipeline is the real
+// businesses, Signals is what the market keeps asking for. "You" was settings
+// with goals bolted on, so it lives behind the header avatar.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type GrowthItem, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
-import { IconGrowth, IconOpps, IconToday, IconYou } from './icons';
+import { IconPipeline, IconSignals, IconToday } from './icons';
 import Sheet from './Sheet';
 import SheetContent from './SheetContent';
 import type { Actions, OutcomeInput, SheetState, Tab } from './shared';
-import GrowthView from './views/GrowthView';
-import OppsView from './views/OppsView';
+import PipelineView from './views/PipelineView';
+import SignalsView from './views/SignalsView';
 import TodayView from './views/TodayView';
-import YouView from './views/YouView';
 
 /** The sheet body stays mounted while it slides out, so each target needs its own
  * identity or one goal's form state would be saved onto the next goal opened. */
@@ -23,16 +26,29 @@ function sheetKey(s: SheetState): string {
   return `${s.kind}:${id}`;
 }
 
+const TABS: Tab[] = ['today', 'pipeline', 'signals'];
+
 export default function CopilotApp({ initial }: { initial: HomeData }) {
   const [home, setHome] = useState<HomeData>(initial);
   const [tab, setTab] = useState<Tab>('today');
-  const [sheet, setSheet] = useState<SheetState | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // Sheets stack: Goal opened from You returns to You on close. The last one
+  // shown stays mounted while the sheet slides out, so the content does not
+  // blank mid-animation.
+  const [stack, setStack] = useState<SheetState[]>([]);
+  const lastSheet = useRef<SheetState | null>(null);
+  const top = stack[stack.length - 1] ?? null;
+  if (top) lastSheet.current = top;
+  const sheet = top ?? lastSheet.current;
+  const sheetOpen = stack.length > 0;
   const [briefing, setBriefing] = useState(false);
   const [finding, setFinding] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const briefStarted = useRef(false);
+  // One scroll container serves all tabs, so without this a tab opens wherever
+  // the last one was scrolled to.
+  const mainRef = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (mainRef.current) mainRef.current.scrollTop = 0; }, [tab]);
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -81,8 +97,10 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     return () => clearTimeout(t);
   }, [say, refresh]);
 
-  const openSheet = (s: SheetState) => { setSheet(s); setSheetOpen(true); };
-  const closeSheet = () => setSheetOpen(false);
+  const openSheet = (s: SheetState) => setStack((st) => [...st, s]);
+  const closeSheet = () => setStack((st) => st.slice(0, -1));
+  /** Overlay tap or Escape: everything goes, not just the top. */
+  const dismissSheets = useCallback(() => setStack([]), []);
   const fail = (e: unknown, fallback: string) => say(e instanceof Error ? e.message : fallback);
 
   const actions: Actions = {
@@ -197,7 +215,9 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         const r = await post<{ home: HomeData; actionId: string; execution: unknown | null; existing?: boolean }>(`/opportunities/${oppId}/draft`, { channel });
         setHome(r.home);
         setTab('today');
-        openSheet({ kind: 'action', id: r.actionId });
+        // The draft replaces whatever sheet asked for it; closing it should
+        // land on Today, not back on the business.
+        setStack([{ kind: 'action', id: r.actionId }]);
         // Drafting twice opens the message already waiting rather than writing a second one.
         say(r.existing ? 'Already drafted — here it is.' : r.execution ? 'Drafted. Review and approve to send.' : 'Drafted. No contact on that channel, copy it manually.');
         return true;
@@ -266,27 +286,33 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
           <p>{headline}</p>
         </div>
-        <button className="cp-capacity" onClick={() => openSheet({ kind: 'capacity' })} aria-label="Set your capacity">
-          ⚡ <span>{CAPACITY_META[home.profile.capacity].label}</span>
-        </button>
+        <div className="cp-header-right">
+          <button className="cp-capacity" onClick={() => openSheet({ kind: 'capacity' })} aria-label="Set your capacity">
+            ⚡ <span>{CAPACITY_META[home.profile.capacity].label}</span>
+          </button>
+          <button className="cp-avatar" onClick={() => openSheet({ kind: 'you' })} aria-label="You: goals, offer, targeting, plan, account">
+            {(home.profile.name.trim()[0] ?? '?').toUpperCase()}
+          </button>
+        </div>
       </header>
 
-      <main className="cp-content">
+      <main className="cp-content" ref={mainRef}>
         {tab === 'today' && <TodayView home={home} actions={actions} briefing={briefing} finding={finding} />}
-        {tab === 'opps' && <OppsView home={home} actions={actions} finding={finding} />}
-        {tab === 'growth' && <GrowthView home={home} actions={actions} />}
-        {tab === 'you' && <YouView home={home} actions={actions} briefing={briefing} finding={finding} />}
+        {tab === 'pipeline' && <PipelineView home={home} actions={actions} finding={finding} />}
+        {tab === 'signals' && <SignalsView home={home} actions={actions} />}
       </main>
 
       <nav className="cp-nav" aria-label="Sections">
-        <button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}><IconToday />Today</button>
-        <button className={tab === 'opps' ? 'active' : ''} onClick={() => setTab('opps')}><IconOpps />Opps</button>
-        <button className={tab === 'growth' ? 'active' : ''} onClick={() => setTab('growth')}><IconGrowth />Growth</button>
-        <button className={tab === 'you' ? 'active' : ''} onClick={() => setTab('you')}><IconYou />You</button>
+        {TABS.map((t) => (
+          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
+            {t === 'today' ? <IconToday /> : t === 'pipeline' ? <IconPipeline /> : <IconSignals />}
+            {t === 'today' ? 'Today' : t === 'pipeline' ? 'Pipeline' : 'Signals'}
+          </button>
+        ))}
       </nav>
 
-      <Sheet open={sheetOpen} onClose={closeSheet}>
-        {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} />}
+      <Sheet open={sheetOpen} onClose={dismissSheets}>
+        {sheet && <SheetContent key={sheetKey(sheet)} sheet={sheet} home={home} actions={actions} briefing={briefing} />}
       </Sheet>
 
       {toast && <div className="cp-toast" role="status">{toast}</div>}

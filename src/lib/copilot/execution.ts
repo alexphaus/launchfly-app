@@ -224,6 +224,15 @@ export async function getExecution(profileId: string, id: string): Promise<Execu
   return (data as Execution | null) ?? null;
 }
 
+/** The most recent execution per business, for the pipeline board. */
+export async function latestExecutionByOpportunity(profileId: string, oppIds: string[]): Promise<Record<string, Execution>> {
+  if (!oppIds.length) return {};
+  const { data } = await copilotDb().from('copilot_executions').select('*').eq('profile_id', profileId).in('opportunity_id', oppIds).order('created_at', { ascending: false });
+  const out: Record<string, Execution> = {};
+  for (const e of (data ?? []) as Execution[]) if (e.opportunity_id && !out[e.opportunity_id]) out[e.opportunity_id] = withDeepLink(e);
+  return out;
+}
+
 export async function executionsForActions(profileId: string, actionIds: string[]): Promise<Record<string, Execution>> {
   if (!actionIds.length) return {};
   const { data } = await copilotDb().from('copilot_executions').select('*').eq('profile_id', profileId).in('action_id', actionIds).order('created_at', { ascending: false });

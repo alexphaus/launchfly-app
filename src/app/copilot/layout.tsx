@@ -9,7 +9,7 @@ const archivo = Archivo({ subsets: ['latin'], weight: ['500', '700', '800'], var
 
 export const metadata: Metadata = {
   title: { absolute: 'Copilot' },
-  description: 'Your opportunity engine. Daily leverage plan, ranked matches, and the skills that unlock more of them.',
+  description: 'Real businesses that fit what you sell, an opener drafted for each, and what the market in front of you keeps asking for.',
   manifest: '/copilot/manifest.webmanifest',
   icons: { icon: '/copilot/icon-192.png', apple: '/copilot/apple-touch-icon.png' },
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Copilot' },

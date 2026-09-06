@@ -224,7 +224,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/copilot/onboard` | profile + goal + targeting + context, cookie, first supply, first brief |
-| GET | `/api/copilot/home` | everything for the four tabs, incl. metrics, drafts, outcomes |
+| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis, metrics |
 | POST | `/api/copilot/brief` | run the agent now |
 | POST | `/api/copilot/supply` | find new matches: supply → reconcile → brief |
 | POST | `/api/copilot/capacity` | `{ capacity }` |

@@ -5,7 +5,9 @@ import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { goalProgress, money, relTime } from '../format';
 import type { Actions } from '../shared';
 
-export default function YouView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
+// Lives in the sheet behind the header avatar: goals, offer, targeting, runway,
+// plan, agent, account. Settings with the context the ranking runs on.
+export default function YouView({ home, actions, briefing }: { home: HomeData; actions: Actions; briefing: boolean }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const m = home.metrics;
@@ -41,15 +43,6 @@ export default function YouView({ home, actions, briefing, finding }: { home: Ho
         <div className="top"><span className="name">{p.target_segments.length ? p.target_segments.join(', ') : 'Who do you sell to?'}</span><span className="pct">{p.target_segments.length ? 'Edit' : 'Set'}</span></div>
         <div className="sub">{p.target_area || p.location ? `In ${p.target_area || p.location}` : 'No area set'} · searched on Google Maps and matched against your prospect pipeline</div>
       </button>
-
-      <div className="cp-section"><span className="lead">Pipeline</span><span className="count">this is your CRM</span></div>
-      <div className="cp-list">
-        <div className="cp-ctx"><div><div className="l">Real matches</div><div className="s">{m.pipeline.sourced} open{m.pipeline.inferred ? ` · ${m.pipeline.inferred} inferred` : ''}</div></div>
-          <button className="cp-connect" disabled={finding} onClick={() => actions.findMatches()}>{finding ? 'Finding…' : 'Find new'}</button></div>
-        <div className="cp-ctx"><div><div className="l">Drafts waiting</div><div className="s">Approve on Today. Nothing sends by itself.</div></div><span className={`cp-connect ${m.awaiting_approval ? 'blue' : 'ghost'}`}>{m.awaiting_approval}</span></div>
-        <div className="cp-ctx"><div><div className="l">Sent → replies → won</div><div className="s">Last {m.window_days} days · replies auto-detected from WhatsApp</div></div><span className="cp-connect ghost">{m.sent} → {m.replies} → {m.won}</span></div>
-      </div>
-      <div className="cp-note">Last supply run {mounted ? relTime(home.supplyLastRun) : '…'}. The daily cron pulls new matches, reconciles replies and rebuilds the brief.</div>
 
       <div className="cp-section"><span className="lead">Context</span></div>
       <div className="cp-list">

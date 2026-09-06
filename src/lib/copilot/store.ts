@@ -5,7 +5,8 @@
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { copilotDb, todayIso } from './db';
 import { diagnose, selectLesson } from './diagnose';
-import { channelsConfigured, executionsForActions } from './execution';
+import { cancelOpenDrafts, channelsConfigured, executionsForActions, loadSendQueue, regenerateOpeners } from './execution';
+import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
@@ -67,7 +68,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes, usage] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes, usage, queue] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as Insight | null) ?? null),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -88,6 +89,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_executions').select('approval_state, channel, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['executions']),
     db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['outcomes']),
     getUsage(profileId, periodKey(profile.timezone)),
+    loadSendQueue(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan and the latest outcome onto each match.
@@ -95,7 +97,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     executionsForActions(profileId, planRows.map((a) => a.id)),
     lastOutcomeByOpportunity(profileId, oppRows.map((o) => o.id)),
   ]);
-  const planWithExec = planRows.map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
+  // Anything in the send queue is rendered there, not in the plan too.
+  const queueIds = new Set(queue.map((q) => q.id));
+  const planWithExec = planRows.filter((a) => !queueIds.has(a.id)).map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
   const shortlist = selectPlan(planWithExec, profile.capacity);
   const planOverflow = planWithExec.filter((a) => a.status === 'open' && !shortlist.includes(a)).length;
   const oppsWithOutcome = oppRows.map((o) => ({ ...o, last_outcome: outcomeMap[o.id] ?? null }));
@@ -114,6 +118,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     insight,
     plan: shortlist,
     planOverflow,
+    queue,
     billing: {
       plan: isPlanKey(profile.plan) ? profile.plan : 'free',
       effective: effectivePlan(profile).key,
@@ -211,19 +216,32 @@ export async function setTargeting(profileId: string, t: { target_segments?: str
   await logEvent(profileId, 'targeting_updated', patch);
 }
 
-export async function setOffer(profileId: string, offer: Offer) {
+/**
+ * Save the offer. When it changes materially, every opener written from the old
+ * offer is retired and rewritten from the new one right away, so the queue is
+ * full of the user's own words the moment they save — not three days later.
+ */
+export async function setOffer(profileId: string, offer: Offer): Promise<{ offer: Offer; rewritten: number }> {
   const clean: Offer = {
-    sells: offer.sells?.trim().slice(0, 120) || undefined,
+    sells: offer.sells?.trim().slice(0, SELLS_MAX) || undefined,
     for_who: offer.for_who?.trim().slice(0, 120) || undefined,
     problem: offer.problem?.trim().slice(0, 240) || undefined,
     price_band: offer.price_band?.trim().slice(0, 60) || undefined,
     proof_url: offer.proof_url?.trim().slice(0, 300) || undefined,
   };
+  const before = await getProfile(profileId);
   await copilotDb().from('copilot_profiles').update({ offer: clean }).eq('id', profileId);
   // The offer is the single biggest lever on message quality, so it is context too.
   const line = [clean.sells && `I sell ${clean.sells}`, clean.for_who && `to ${clean.for_who}`, clean.problem && `— the problem it solves: ${clean.problem}`, clean.price_band && `(${clean.price_band})`].filter(Boolean).join(' ');
   if (line) await addContextItem(profileId, { source: 'offer', kind: 'fact', content: line, weight: 1.6 });
   await logEvent(profileId, 'offer_updated', { has_proof: !!clean.proof_url });
+
+  let rewritten = 0;
+  if (before && offerChangedMaterially(before.offer, clean) && !offerIsEmpty(clean)) {
+    const { opportunityIds } = await cancelOpenDrafts(profileId, { reason: 'offer_changed' });
+    rewritten = await regenerateOpeners({ ...before, offer: clean }, opportunityIds);
+  }
+  return { offer: clean, rewritten };
 }
 
 export async function setSendMode(profileId: string, mode: SendMode, emailFrom?: string | null) {

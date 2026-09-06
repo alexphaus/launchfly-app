@@ -247,6 +247,16 @@ export interface BillingSummary {
   checkoutReady: boolean;
 }
 
+/**
+ * One row of the send queue: a draft waiting for the user, from ANY day. It is
+ * the action row (so the action sheet works unchanged) plus the execution that
+ * makes it sendable and the business it is addressed to.
+ */
+export interface QueueItem extends Action {
+  execution: Execution;
+  opp: { id: string; title: string; name: string | null; segment: string | null; score: number } | null;
+}
+
 /** Everything the client needs to render all four tabs. One request. */
 export interface HomeData {
   profile: Profile;
@@ -259,6 +269,12 @@ export interface HomeData {
   diagnosis: Diagnosis;
   /** Open plan items that did not fit today's shortlist. They are not lost — they queue. */
   planOverflow: number;
+  /**
+   * Every draft still waiting to be sent, whatever day it was written. Built
+   * from executions, not from today's plan — a draft from Tuesday that nobody
+   * sent is still the most important thing on Thursday.
+   */
+  queue: QueueItem[];
   /** Current plan and what is left of this month's metered allowance. */
   billing: BillingSummary;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */

@@ -334,3 +334,19 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-wall p { font-size: 13.5px; line-height: 1.6; color: var(--muted); }
 .cp-wall .cp-btn.block { display: block; width: 100%; text-align: center; margin-top: 12px; text-decoration: none; }
 .cp-wall-sub { margin-top: 10px; font-size: 12px; color: var(--dim); }
+
+/* ── Send queue ─────────────────────────────────────────────────────────────── */
+.cp-metrics { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
+.cp-stat.hero { border-color: var(--blue); border-width: 3px; }
+.cp-stat.hero .v { font-size: 26px; }
+.cp-qrow { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 16px; border-bottom: 2px solid var(--ink); }
+.cp-qrow:last-child { border-bottom: none; }
+.cp-qrow.failed { background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0,0,0,0.03) 6px 12px); }
+.cp-qwho { flex: 1; min-width: 0; text-align: left; display: flex; flex-direction: column; gap: 2px; }
+.cp-qwho .name { font-size: 14px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-qwho .sub { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-qacts { display: flex; gap: 6px; flex-shrink: 0; }
+.cp-btn.sm { padding: 8px 10px; font-size: 11px; }
+.cp-fold { display: block; margin: 8px 20px 0; font-size: 12.5px; }
+.cp-block { border-style: solid; border-width: 3px; }
+.cp-block p b { color: var(--ink); }

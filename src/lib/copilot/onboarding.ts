@@ -43,7 +43,7 @@ export function parseOnboarding(body: unknown): OnboardingInput {
   const o = (b.offer ?? {}) as Record<string, unknown>;
   const proof = s(o.proof_url, 300);
   const offer: Offer = {
-    sells: s(o.sells, 120) || undefined,
+    sells: s(o.sells, 240) || undefined,
     for_who: s(o.for_who, 120) || undefined,
     problem: s(o.problem, 240) || undefined,
     price_band: s(o.price_band, 60) || undefined,

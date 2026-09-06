@@ -15,7 +15,8 @@ export type SheetState =
   | { kind: 'account' }
   | { kind: 'won'; oppId: string }
   | { kind: 'offer' }
-  | { kind: 'you' };
+  | { kind: 'you' }
+  | { kind: 'demand'; term: string };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -55,6 +56,8 @@ export interface Actions {
   findMatches(): Promise<void>;
   saveFinance(f: { monthly_burn?: number; cash?: number; currency?: string }): Promise<boolean>;
   saveTargeting(t: { target_segments: string[]; target_area: string }): Promise<boolean>;
+  /** Signals → "Stop matching <segment>": drops one segment and everything drafted for it. */
+  dropSegment(segment: string): Promise<boolean>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
 }

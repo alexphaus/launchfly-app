@@ -22,7 +22,7 @@ import TodayView from './views/TodayView';
 /** The sheet body stays mounted while it slides out, so each target needs its own
  * identity or one goal's form state would be saved onto the next goal opened. */
 function sheetKey(s: SheetState): string {
-  const id = 'id' in s && s.id ? s.id : 'oppId' in s ? s.oppId : 'new';
+  const id = 'id' in s && s.id ? s.id : 'oppId' in s ? s.oppId : 'term' in s ? s.term : 'new';
   return `${s.kind}:${id}`;
 }
 
@@ -90,8 +90,12 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const upgraded = params.get('upgraded');
-    if (!upgraded) return;
+    // The weekly push deep-links to a tab.
+    const wanted = params.get('tab');
+    if (wanted && (TABS as string[]).includes(wanted)) setTab(wanted as Tab);
+    if (!upgraded && !wanted) return;
     window.history.replaceState({}, '', window.location.pathname);
+    if (!upgraded) return;
     say('Payment received. Your new allowance is live.');
     const t = setTimeout(() => { void refresh(); }, 2500);
     return () => clearTimeout(t);
@@ -243,7 +247,23 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       } catch (e) { fail(e, 'Could not open billing'); }
     },
     async saveTargeting(t) {
-      try { const r = await post<{ home: HomeData }>('/targeting', t); setHome(r.home); say('Targeting saved'); return true; } catch (e) { fail(e, 'Could not save'); return false; }
+      try {
+        const r = await post<{ home: HomeData; dropped?: number }>('/targeting', t);
+        setHome(r.home);
+        say(r.dropped ? `Targeting saved. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} from dropped segments set aside.` : 'Targeting saved');
+        return true;
+      } catch (e) { fail(e, 'Could not save'); return false; }
+    },
+    async dropSegment(segment) {
+      const key = segment.trim().toLowerCase();
+      const target_segments = home.profile.target_segments.filter((s) => s.trim().toLowerCase() !== key);
+      try {
+        const r = await post<{ home: HomeData; dropped?: number }>('/targeting', { target_segments, target_area: home.profile.target_area ?? home.profile.location ?? '' });
+        setHome(r.home);
+        closeSheet();
+        say(r.dropped ? `Stopped matching ${segment}. ${r.dropped} ${r.dropped === 1 ? 'business' : 'businesses'} and their drafts set aside.` : `Stopped matching ${segment}.`);
+        return true;
+      } catch (e) { fail(e, 'Could not update targeting'); return false; }
     },
     async requestLoginLink(email) {
       try { await post('/auth/magic-link', { email }); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Could not send' }; }

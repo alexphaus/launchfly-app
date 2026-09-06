@@ -73,6 +73,8 @@ COPILOT_VAPID_PUBLIC_KEY / COPILOT_VAPID_PRIVATE_KEY / COPILOT_VAPID_SUBJECT   #
 
 # Cron
 CRON_SECRET=...                     # REQUIRED for /api/copilot/cron/daily — it fails closed without one
+#   On the profile's Monday the cron also writes the weekly Signals read (copilot_insights.kind='weekly')
+#   and pushes it, deep-linking to /copilot?tab=signals. Idempotent per ISO week.
 COPILOT_CRON_BATCH=25               # profiles per run
 COPILOT_CRON_BUDGET_MS=240000       # stop starting new profiles past this point
 
@@ -224,7 +226,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/copilot/onboard` | profile + goal + targeting + context, cookie, first supply, first brief |
-| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis, metrics |
+| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis (demand with weekly trend and per-segment read), latest weekly Signals insight, metrics |
 | POST | `/api/copilot/brief` | run the agent now |
 | POST | `/api/copilot/supply` | find new matches: supply → reconcile → brief |
 | POST | `/api/copilot/capacity` | `{ capacity }` |

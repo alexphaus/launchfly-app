@@ -56,16 +56,46 @@ export interface Diagnosis {
    * measurement in the app nothing else can make, so it gets its own field
    * rather than living only inside a finding.
    */
-  demand: Array<{ term: string; count: number }>;
+  demand: DemandTerm[];
+  /** The same demand read, grouped by the segment the businesses belong to. */
+  segments: SegmentDemand[];
   /** True when nothing can honestly be concluded yet. */
   thin: boolean;
 }
 
+/** Below this many in a week, a movement is noise and the label stays 'steady'. */
+export const MIN_WEEKLY = 2;
+
+export type DemandTrend = 'new' | 'rising' | 'steady' | 'falling';
+
+export interface DemandTerm {
+  term: string;
+  /** Businesses (all time) whose listing carries this want. */
+  count: number;
+  /** Businesses found in the current ISO week carrying it. */
+  thisWeek: number;
+  /** Mean per week over the previous four ISO weeks. */
+  prevWeeklyAvg: number;
+  trend: DemandTrend;
+  /** Where it shows up, most first. */
+  segments: Array<{ segment: string; count: number }>;
+}
+
+export interface SegmentDemand {
+  segment: string;
+  businesses: number;
+  /** What the businesses in this segment keep wanting, most first. */
+  wants: Array<{ term: string; count: number }>;
+}
+
 export interface DiagnoseInput {
-  opportunities: Array<Pick<Opportunity, 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'> & { id: string }>;
+  opportunities: Array<Pick<Opportunity, 'status' | 'source' | 'source_kind' | 'data' | 'reason' | 'title'> & Partial<Pick<Opportunity, 'created_at'>> & { id: string }>;
   executions: Array<Pick<Execution, 'approval_state' | 'channel' | 'opportunity_id'>>;
   outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'>>;
   offer: Offer;
+  /** The user's own segments: a grouping key, never counted as demand. */
+  targetSegments?: string[];
+  now?: Date;
 }
 
 // A conversion rate is a share of the stage above it, so it is capped at 1.
@@ -75,6 +105,8 @@ const asPct = (r: number) => `${Math.round(r * 100)}%`;
 
 export function diagnose(input: DiagnoseInput): Diagnosis {
   const { opportunities, executions, outcomes, offer } = input;
+  const targetSegments = input.targetSegments ?? [];
+  const now = input.now ?? new Date();
 
   const sentExecs = executions.filter((e) => e.approval_state === 'sent');
   const drafted = executions.filter((e) => e.approval_state !== 'cancelled').length;
@@ -166,7 +198,8 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
   }
 
   // --- Demand the offer does not cover: terms recurring across real matches.
-  const demand = demandGap(opportunities, offer);
+  const demand = demandTrend(opportunities, offer, { now, targetSegments });
+  const segments = segmentDemand(opportunities, offer, targetSegments);
   if (demand.length) {
     const top = demand[0];
     findings.push({
@@ -203,7 +236,7 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     findings.push({ kind: 'insufficient', headline: blocker.headline, detail: 'Everything on this tab is computed from what you actually sent and what came back. Nothing here is estimated.', action: blocker.action });
   }
 
-  return { stages, bottleneck, findings, thin, outsideFunnel, demand };
+  return { stages, bottleneck, findings, thin, outsideFunnel, demand, segments };
 }
 
 /**
@@ -256,37 +289,155 @@ const BOTTLENECK_TOPIC: Record<FunnelStage['key'], string | undefined> = {
 
 const STOPWORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'you', 'your', 'are', 'has', 'have', 'not', 'new', 'all', 'any', 'can', 'per', 'via', 'inc', 'ltd', 'llc', 'com', 'www', 'services', 'service', 'business', 'company', 'pain', 'signals', 'none', 'other', 'general']);
 
-/** Terms recurring across real matches that the offer never mentions. */
+const normTerm = (s: string) => s.toLowerCase().replace(/_/g, ' ').trim();
+
+/**
+ * ISO-8601 week key, 'YYYY-Www'. Monday-based; the week containing the year's
+ * first Thursday is week 1, so 2025-12-29 is 2026-W01 and 2027-01-01 is 2026-W53.
+ */
+export function isoWeekKey(d: Date): string {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = t.getUTCDay() || 7;                       // Mon=1 … Sun=7
+  t.setUTCDate(t.getUTCDate() + 4 - day);               // Thursday of this week
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+/** The ISO week key `n` weeks before the one containing `now`. */
+function weekKeyOffset(now: Date, n: number): string {
+  return isoWeekKey(new Date(now.getTime() - n * 7 * 86_400_000));
+}
+
+/**
+ * Which of the user's segments a business belongs to. Its own segment field
+ * first, then service type, then a target segment mentioned in its category.
+ * A grouping key — never counted as demand, because it is what the user chose.
+ */
+export function segmentOf(o: DiagnoseInput['opportunities'][number], targetSegments: string[]): string | null {
+  const d = (o.data ?? {}) as Record<string, unknown>;
+  for (const key of ['segment', 'service_type']) {
+    const v = d[key];
+    if (typeof v === 'string' && v.trim()) return normTerm(v);
+  }
+  const cat = typeof d.category === 'string' ? normTerm(d.category) : '';
+  const hit = targetSegments.map(normTerm).find((s) => s && cat.includes(s));
+  return hit ?? (cat || null);
+}
+
+/**
+ * What a business wants, from its tags and pain signals only. Segment, service
+ * type and category are excluded: "pest control" appearing on twenty pest
+ * control businesses is targeting, not the market asking for pest control.
+ */
+export function wantsOf(o: DiagnoseInput['opportunities'][number], offer: Offer, targetSegments: string[] = []): Set<string> {
+  const offerText = [offer.sells, offer.for_who, offer.problem].filter(Boolean).join(' ').toLowerCase();
+  const segs = new Set(targetSegments.map(normTerm));
+  const d = (o.data ?? {}) as Record<string, unknown>;
+  const out = new Set<string>();
+  for (const key of ['tags', 'pain_signals']) {
+    const v = d[key];
+    if (!Array.isArray(v)) continue;
+    for (const raw of v) {
+      if (typeof raw !== 'string') continue;
+      const t = normTerm(raw);
+      if (t.length < 3 || STOPWORDS.has(t)) continue;
+      if (offerText.includes(t)) continue;             // already part of what they sell
+      if (segs.has(t)) continue;                       // their own targeting, not demand
+      out.add(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * Terms recurring across real matches that the offer never mentions, with how
+ * they moved: what was found this ISO week against the mean of the previous
+ * four. Thresholds: MIN_DEMAND on the all-time count (weekly volume on a
+ * 25-match plan is too small to gate on), MIN_WEEKLY before a movement earns a
+ * label. `created_at` is when the match was FOUND, not when the market changed,
+ * so copy that reads this should say "in matches found this week".
+ */
+export function demandTrend(
+  opportunities: DiagnoseInput['opportunities'],
+  offer: Offer,
+  opts: { now?: Date; targetSegments?: string[]; weeks?: number } = {},
+): DemandTerm[] {
+  const now = opts.now ?? new Date();
+  const targetSegments = opts.targetSegments ?? [];
+  const weeks = opts.weeks ?? 4;
+  const thisKey = isoWeekKey(now);
+  const prevKeys = new Set(Array.from({ length: weeks }, (_, i) => weekKeyOffset(now, i + 1)));
+
+  const total = new Map<string, number>();
+  const thisWeek = new Map<string, number>();
+  const prev = new Map<string, number>();
+  const bySeg = new Map<string, Map<string, number>>();
+
+  for (const o of opportunities) {
+    if (o.source_kind !== 'sourced') continue;        // only real matches carry real demand
+    const week = o.created_at ? isoWeekKey(new Date(o.created_at)) : null;
+    const seg = segmentOf(o, targetSegments);
+    for (const t of wantsOf(o, offer, targetSegments)) {
+      total.set(t, (total.get(t) ?? 0) + 1);
+      if (week === thisKey) thisWeek.set(t, (thisWeek.get(t) ?? 0) + 1);
+      else if (week && prevKeys.has(week)) prev.set(t, (prev.get(t) ?? 0) + 1);
+      if (seg) {
+        const m = bySeg.get(t) ?? new Map<string, number>();
+        m.set(seg, (m.get(seg) ?? 0) + 1);
+        bySeg.set(t, m);
+      }
+    }
+  }
+
+  return [...total.entries()]
+    .filter(([, c]) => c >= MIN_DEMAND)
+    .map(([term, count]) => {
+      const tw = thisWeek.get(term) ?? 0;
+      const avg = Math.round(((prev.get(term) ?? 0) / weeks) * 100) / 100;
+      const trend: DemandTrend =
+        tw >= MIN_WEEKLY && avg === 0 ? 'new'
+        : tw >= MIN_WEEKLY && tw >= 1.5 * avg ? 'rising'
+        : avg >= MIN_WEEKLY && tw <= 0.5 * avg ? 'falling'
+        : 'steady';
+      const segments = [...(bySeg.get(term) ?? new Map<string, number>()).entries()]
+        .map(([segment, c]) => ({ segment, count: c }))
+        .sort((a, b) => b.count - a.count);
+      return { term, count, thisWeek: tw, prevWeeklyAvg: avg, trend, segments };
+    })
+    .sort((a, b) => b.count - a.count || b.thisWeek - a.thisWeek)
+    .slice(0, 5);
+}
+
+/** The demand read turned around: per segment, what its businesses keep wanting. */
+export function segmentDemand(
+  opportunities: DiagnoseInput['opportunities'],
+  offer: Offer,
+  targetSegments: string[] = [],
+): SegmentDemand[] {
+  const groups = new Map<string, { businesses: number; wants: Map<string, number> }>();
+  for (const o of opportunities) {
+    if (o.source_kind !== 'sourced') continue;
+    const seg = segmentOf(o, targetSegments);
+    if (!seg) continue;
+    const g = groups.get(seg) ?? { businesses: 0, wants: new Map<string, number>() };
+    g.businesses += 1;
+    for (const t of wantsOf(o, offer, targetSegments)) g.wants.set(t, (g.wants.get(t) ?? 0) + 1);
+    groups.set(seg, g);
+  }
+  return [...groups.entries()]
+    .map(([segment, g]) => ({
+      segment,
+      businesses: g.businesses,
+      wants: [...g.wants.entries()].map(([term, count]) => ({ term, count })).sort((a, b) => b.count - a.count).slice(0, 4),
+    }))
+    .sort((a, b) => b.businesses - a.businesses);
+}
+
+/** Terms recurring across real matches that the offer never mentions. All-time shape; see demandTrend. */
 export function demandGap(
   opportunities: DiagnoseInput['opportunities'],
   offer: Offer,
 ): Array<{ term: string; count: number }> {
-  const offerText = [offer.sells, offer.for_who, offer.problem].filter(Boolean).join(' ').toLowerCase();
-  const counts = new Map<string, number>();
-
-  for (const o of opportunities) {
-    if (o.source_kind !== 'sourced') continue;      // only real matches carry real demand
-    const d = o.data ?? {};
-    const terms = new Set<string>();
-    for (const key of ['tags', 'pain_signals']) {
-      const v = (d as Record<string, unknown>)[key];
-      if (Array.isArray(v)) for (const t of v) if (typeof t === 'string') terms.add(t.toLowerCase().replace(/_/g, ' ').trim());
-    }
-    for (const key of ['segment', 'service_type', 'category']) {
-      const v = (d as Record<string, unknown>)[key];
-      if (typeof v === 'string' && v.trim()) terms.add(v.toLowerCase().replace(/_/g, ' ').trim());
-    }
-    // Count each term once per opportunity.
-    for (const t of terms) {
-      if (t.length < 3 || STOPWORDS.has(t)) continue;
-      if (offerText.includes(t)) continue;           // already part of what they sell
-      counts.set(t, (counts.get(t) ?? 0) + 1);
-    }
-  }
-
-  return [...counts.entries()]
-    .filter(([, c]) => c >= MIN_DEMAND)
-    .map(([term, count]) => ({ term, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  return demandTrend(opportunities, offer).map(({ term, count }) => ({ term, count }));
 }

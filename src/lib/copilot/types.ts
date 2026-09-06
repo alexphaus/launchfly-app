@@ -216,6 +216,8 @@ export interface Insight {
   eyebrow: string;
   body: string;
   reasoning: string | null;
+  /** 'daily' is the brief; 'weekly' is the Signals read. Absent on rows older than the column. */
+  kind?: 'daily' | 'weekly';
 }
 
 export interface GrowthItem {
@@ -286,6 +288,8 @@ export interface HomeData {
   queue: QueueItem[];
   /** Sourced businesses only — the ones with a contact — grouped by stage on the Pipeline tab. */
   pipeline: PipelineRow[];
+  /** The latest weekly Signals read, when one has been written. */
+  weekly: Insight | null;
   /** Current plan and what is left of this month's metered allowance. */
   billing: BillingSummary;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */

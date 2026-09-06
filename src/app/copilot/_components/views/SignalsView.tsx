@@ -4,7 +4,7 @@
 // sends, replies, outcomes. Nothing is estimated, and when there is not enough
 // data the tab says so rather than filling the space.
 
-import type { Finding, FunnelStage } from '@/lib/copilot/diagnose';
+import type { DemandTrend, Finding, FunnelStage } from '@/lib/copilot/diagnose';
 import type { HomeData } from '@/lib/copilot/types';
 import type { Actions } from '../shared';
 
@@ -17,6 +17,8 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
   insufficient: 'Not enough data yet',
 };
 
+export const TREND_LABEL: Record<DemandTrend, string> = { new: 'New this week', rising: 'Rising', steady: 'Steady', falling: 'Fading' };
+
 export default function SignalsView({ home, actions }: { home: HomeData; actions: Actions }) {
   const d = home.diagnosis;
   const max = Math.max(...d.stages.map((s) => s.count), 1);
@@ -28,23 +30,35 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
 
   return (
     <>
+      {home.weekly && (
+        <div className="cp-card cp-insight" style={{ marginTop: 14 }}>
+          <div className="cp-eyebrow">{home.weekly.eyebrow}</div>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{home.weekly.body}</p>
+        </div>
+      )}
+
       <div className="cp-section"><span className="lead">What they keep asking for</span><span className="count">{sourced ? `across ${sourced} real matches` : 'no real matches yet'}</span></div>
       {d.demand.length ? (
         <>
           <div className="cp-list">
             {d.demand.map((t) => (
-              <div key={t.term} className="cp-drow">
+              <button key={t.term} className="cp-drow" onClick={() => actions.openSheet({ kind: 'demand', term: t.term })}>
                 <div className="cp-dmain">
                   <div className="t">{t.term}</div>
-                  <div className="s">{t.count} {t.count === 1 ? 'business' : 'businesses'}</div>
+                  <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>
                 </div>
                 <div className="cp-dbar"><div className="cp-dfill" style={{ width: `${Math.round((t.count / d.demand[0].count) * 100)}%` }} /></div>
-              </div>
+                <div className="cp-dsub">
+                  {t.count} {t.count === 1 ? 'business' : 'businesses'}
+                  {t.thisWeek > 0 && ` · ${t.thisWeek} found this week`}
+                  {t.segments[0] && ` · mostly ${t.segments[0].segment}`}
+                </div>
+              </button>
             ))}
           </div>
           <div className="cp-note">
-            Tags and pain signals recurring across the real businesses matched to you, that your offer does not mention.
-            {offerSet ? ' Either add one to what you sell, or stop matching on the segments that need it.' : ' Set your offer and these become the gap between it and the market.'}
+            Tags and pain signals recurring across the real businesses matched to you, that your offer does not mention. Tap one to add it to what you sell, or to stop matching the segments that need it.
+            {!offerSet && ' Set your offer first and these become the gap between it and the market.'}
           </div>
         </>
       ) : (
@@ -52,6 +66,28 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
           <b>Nothing recurring yet</b>
           Demand shows once several real matches share a need your offer does not cover. It is measured, never guessed — so an empty list means the market has not repeated itself yet, not that there is nothing to learn.
         </div>
+      )}
+
+      {d.segments.length > 0 && (
+        <>
+          <div className="cp-section"><span className="lead">By segment</span><span className="count">{d.segments.length} you target</span></div>
+          <div className="cp-list">
+            {d.segments.map((s) => (
+              <div key={s.segment} className="cp-srow">
+                <div className="cp-dmain">
+                  <div className="t">{s.segment}</div>
+                  <span className="cp-dsub">{s.businesses} {s.businesses === 1 ? 'business' : 'businesses'}</span>
+                </div>
+                <div className="cp-wants">
+                  {s.wants.length
+                    ? s.wants.map((w, i) => <span key={w.term}>{i > 0 && ' · '}<b>{w.count}</b> {w.term}</span>)
+                    : <span>nothing recurring your offer does not already cover</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="cp-note">A segment whose businesses keep wanting something you do not sell is either a gap in the offer or the wrong segment. Both are one tap away on the terms above.</div>
+        </>
       )}
 
       <div className="cp-section"><span className="lead">Your funnel</span><span className="count">all time</span></div>

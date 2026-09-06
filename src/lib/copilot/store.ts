@@ -4,7 +4,7 @@
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { copilotDb, todayIso } from './db';
-import { diagnose, selectLesson } from './diagnose';
+import { diagnose, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { stageOf } from './pipeline';
@@ -63,15 +63,45 @@ export async function ensureSources(profileId: string): Promise<ContextSource[]>
   return SOURCE_KEYS.map((k) => all.find((s) => s.source_key === k)!) as ContextSource[];
 }
 
+/**
+ * Rows for the diagnosis: every opportunity (not just open ones), every
+ * execution and every outcome. The funnel is meaningless if acted-on rows are
+ * filtered out of the top of it. Shared by the home read and the weekly brief.
+ */
+export async function loadDiagnosisRows(profileId: string): Promise<Pick<DiagnoseInput, 'opportunities' | 'executions' | 'outcomes'>> {
+  const db = copilotDb();
+  const [opportunities, executions, outcomes] = await Promise.all([
+    db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title, created_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['opportunities']),
+    db.from('copilot_executions').select('approval_state, channel, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['executions']),
+    db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
+  ]);
+  return { opportunities, executions, outcomes };
+}
+
+/**
+ * Newest insight of one kind. If the `kind` column is not there yet (migration
+ * 20260908 not applied), fall back to the unfiltered newest row for 'daily' so
+ * Today never shows "No brief yet" because of deploy order.
+ */
+async function latestInsight(profileId: string, kind: 'daily' | 'weekly'): Promise<Insight | null> {
+  const db = copilotDb();
+  const q = () => db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning, kind').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1);
+  const r = await q().eq('kind', kind).maybeSingle();
+  if (!r.error) return (r.data as Insight | null) ?? null;
+  if (kind === 'weekly') return null;
+  const fallback = await db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return (fallback.data as Insight | null) ?? null;
+}
+
 export async function loadHome(profileId: string): Promise<HomeData | null> {
   const db = copilotDb();
   const profile = await getProfile(profileId);
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, allOpps, allExecs, allOutcomes, usage, queue, pipelineRows] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
-    db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as Insight | null) ?? null),
+    latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'nudge').eq('status', 'open').order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as Action[]),
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).in('status', ['new', 'saved']).order('created_at', { ascending: false }).limit(60).then((r) => ((r.data ?? []) as (Opportunity & { expires_at: string | null })[]).filter((o) => !o.expires_at || new Date(o.expires_at) > new Date()).slice(0, 40)),
@@ -83,12 +113,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadMetrics(profileId, profile),
     db.from('copilot_agent_runs').select('finished_at').eq('profile_id', profileId).eq('kind', 'supply').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data?.finished_at as string | null) ?? null),
     hasSubscription(profileId),
-    // Rows for the diagnosis: every opportunity (not just open ones), every
-    // execution and every outcome. The funnel is meaningless if acted-on rows
-    // are filtered out of the top of it.
-    db.from('copilot_opportunities').select('id, status, source, source_kind, data, reason, title').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['opportunities']),
-    db.from('copilot_executions').select('approval_state, channel, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['executions']),
-    db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as Parameters<typeof diagnose>[0]['outcomes']),
+    loadDiagnosisRows(profileId),
+    latestInsight(profileId, 'weekly'),
     getUsage(profileId, periodKey(profile.timezone)),
     loadSendQueue(profileId),
     // The pipeline: real businesses only, whatever state they are in. Dismissed
@@ -121,7 +147,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const opportunities = rankOpportunities(oppsWithOutcome, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
 
-  const diagnosis = diagnose({ opportunities: allOpps, executions: allExecs, outcomes: allOutcomes, offer: profile.offer ?? {} });
+  const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
   const lessons = selectLesson(growth, diagnosis);
 
   return {
@@ -132,6 +158,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     planOverflow,
     queue,
     pipeline,
+    weekly,
     billing: {
       plan: isPlanKey(profile.plan) ? profile.plan : 'free',
       effective: effectivePlan(profile).key,
@@ -221,12 +248,39 @@ export async function setFinance(profileId: string, finance: Finance) {
   await logEvent(profileId, 'finance_updated', { monthly_burn: clean.monthly_burn ?? null, cash: clean.cash ?? null });
 }
 
-export async function setTargeting(profileId: string, t: { target_segments?: string[]; target_area?: string | null }) {
+/**
+ * Save targeting. Dropping a segment also retires that segment's waiting drafts
+ * and sets its businesses aside (status only — reversible in SQL), so Pipeline
+ * and Today stop showing work the user just said they do not want.
+ */
+export async function setTargeting(profileId: string, t: { target_segments?: string[]; target_area?: string | null }): Promise<{ dropped: number }> {
+  const db = copilotDb();
+  const before = await getProfile(profileId);
   const patch: Record<string, unknown> = {};
   if (t.target_segments) patch.target_segments = t.target_segments.map((x) => x.trim()).filter(Boolean).slice(0, 8);
   if (t.target_area !== undefined) patch.target_area = t.target_area?.trim() || null;
-  if (Object.keys(patch).length) await copilotDb().from('copilot_profiles').update(patch).eq('id', profileId);
+  if (Object.keys(patch).length) await db.from('copilot_profiles').update(patch).eq('id', profileId);
   await logEvent(profileId, 'targeting_updated', patch);
+
+  let dropped = 0;
+  if (before && t.target_segments) {
+    const norm = (s: string) => s.trim().toLowerCase();
+    const next = new Set(t.target_segments.map(norm));
+    const removed = before.target_segments.map(norm).filter((s) => s && !next.has(s));
+    if (removed.length) {
+      const { data } = await db.from('copilot_opportunities').select('id, data, status, source, source_kind, reason, title')
+        .eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved']);
+      const removedSet = new Set(removed);
+      const ids = ((data ?? []) as DiagnoseInput['opportunities']).filter((o) => { const s = segmentOf(o, removed); return !!s && removedSet.has(s); }).map((o) => o.id);
+      if (ids.length) {
+        await cancelOpenDrafts(profileId, { reason: 'segment_dropped', opportunityIds: ids });
+        await db.from('copilot_opportunities').update({ status: 'dismissed' }).in('id', ids);
+        await logEvent(profileId, 'segment_dropped', { segments: removed, businesses: ids.length });
+        dropped = ids.length;
+      }
+    }
+  }
+  return { dropped };
 }
 
 /**

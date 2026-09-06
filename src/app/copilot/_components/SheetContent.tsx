@@ -1,15 +1,17 @@
 'use client';
 import { useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
-import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
+import { OFFER_TASK_TITLE, addTermToOffer, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
+import { TREND_LABEL } from './views/SignalsView';
 import YouView from './views/YouView';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
     case 'you': return <div className="cp-sheet-embed"><YouView home={home} actions={actions} briefing={briefing} /></div>;
+    case 'demand': return <DemandSheet home={home} term={sheet.term} actions={actions} />;
     case 'capacity': return <CapacitySheet current={home.profile.capacity} onPick={actions.setCapacity} />;
     case 'action': return <ActionSheet home={home} id={sheet.id} actions={actions} />;
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
@@ -252,6 +254,76 @@ function WonSheet({ home, oppId, actions }: { home: HomeData; oppId: string; act
         <button className="cp-btn primary" disabled={busy} onClick={save}>Log win</button>
         <button className="cp-btn" onClick={actions.closeSheet}>Back</button>
       </div>
+    </>
+  );
+}
+
+/* ─── Signals ────────────────────────────────────────────────────────────── */
+
+/**
+ * One demand term, and the two honest things to do about it: put it in the
+ * offer, or stop matching the segments that keep asking for it. Dropping a
+ * segment hides its businesses, so it asks twice.
+ */
+function DemandSheet({ home, term, actions }: { home: HomeData; term: string; actions: Actions }) {
+  const found = home.diagnosis.demand.find((x) => x.term === term);
+  const snap = useRef(found);
+  if (found) snap.current = found;
+  const t = snap.current;
+  const [busy, setBusy] = useState(false);
+  const [confirmSeg, setConfirmSeg] = useState<string | null>(null);
+  if (!t) return <p className="desc">Gone.</p>;
+  const offer = home.profile.offer ?? {};
+  const noOffer = offerIsEmpty(offer);
+  const already = (offer.sells ?? '').toLowerCase().includes(term.toLowerCase());
+  const run = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+  const movement = t.trend === 'new' ? `${t.thisWeek} of them found this week, none before`
+    : t.trend === 'rising' ? `${t.thisWeek} found this week against about ${t.prevWeeklyAvg} a week before`
+    : t.trend === 'falling' ? `${t.thisWeek} found this week, down from about ${t.prevWeeklyAvg} a week`
+    : t.thisWeek ? `${t.thisWeek} found this week` : 'none found this week';
+  return (
+    <>
+      <div className="meta">
+        <span className="cp-chip ai">Market demand</span>
+        <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>
+      </div>
+      <h3 style={{ textTransform: 'capitalize' }}>{term}</h3>
+      <p className="desc">{t.count} real {t.count === 1 ? 'business' : 'businesses'} matched to you carry this — {movement}. Your offer does not mention it.</p>
+
+      {t.segments.length > 0 && (
+        <>
+          <div className="cp-subhead">Where it shows up</div>
+          {t.segments.map((s) => <div key={s.segment} className="cp-kv"><span style={{ textTransform: 'capitalize' }}>{s.segment}</span><b>{s.count}</b></div>)}
+        </>
+      )}
+
+      <div className="cp-subhead">Sell it</div>
+      <button className="cp-btn primary block" disabled={busy || already || noOffer} onClick={() => run(() => actions.saveOffer(addTermToOffer(offer, term)))}>
+        {already ? 'Already in your offer' : 'Add it to what you sell'}
+      </button>
+      <p className="cp-help">
+        {noOffer ? 'Set your offer first — there is nothing to add to yet.' : 'Appends to what you sell. Every waiting draft is rewritten to mention it, and the brief rebuilds.'}
+      </p>
+      {noOffer && <button className="cp-btn block" style={{ marginTop: 8 }} onClick={() => actions.openSheet({ kind: 'offer' })}>Set your offer</button>}
+
+      {t.segments.length > 0 && (
+        <>
+          <div className="cp-subhead">Or stop matching where it keeps coming up</div>
+          {t.segments.map((s) => (
+            confirmSeg === s.segment ? (
+              <div key={s.segment} className="cp-btn-row" style={{ marginTop: 0, marginBottom: 8 }}>
+                <button className="cp-btn dark" disabled={busy} onClick={() => run(() => actions.dropSegment(s.segment))}>Yes, drop {s.segment}</button>
+                <button className="cp-btn" disabled={busy} onClick={() => setConfirmSeg(null)}>Keep</button>
+              </div>
+            ) : (
+              <button key={s.segment} className="cp-btn block" style={{ marginBottom: 8 }} disabled={busy} onClick={() => setConfirmSeg(s.segment)}>Stop matching {s.segment}</button>
+            )
+          ))}
+          <p className="cp-help">Removes the segment from targeting, retires its waiting drafts and sets its businesses aside. Reversible in the database, not in the app — so it asks twice.</p>
+        </>
+      )}
+
+      <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Back</button></div>
     </>
   );
 }

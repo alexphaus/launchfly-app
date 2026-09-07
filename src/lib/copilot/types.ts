@@ -404,8 +404,13 @@ export interface BriefOutput {
   lessons: Array<{ title: string; minutes?: number; note?: string; url?: string }>;
 }
 
+/** What the caller can afford to wait for a brief. The nightly cron reaches the
+ *  app on localhost and has minutes; every other caller is a tap sitting behind
+ *  a reverse proxy that gives up long before the model does. */
+export interface BriefRunOpts { timeoutMs?: number }
+
 export interface OpportunityAgent {
   readonly name: 'webhook' | 'llm' | 'starter';
   readonly model?: string;
-  generateBrief(pack: ContextPack): Promise<BriefOutput>;
+  generateBrief(pack: ContextPack, opts?: BriefRunOpts): Promise<BriefOutput>;
 }

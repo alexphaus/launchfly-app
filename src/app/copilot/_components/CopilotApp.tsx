@@ -303,7 +303,10 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
 
   // Sending first. The old line led with "107 new matches" — celebrating the side
   // of the funnel that was never the problem.
-  const headline = offerIsEmpty(home.profile.offer)
+  // Once the call carries the instruction, repeating it here is the fourth time
+  // the same sentence appears above the fold. The header goes back to being the
+  // status line it was built to be.
+  const headline = offerIsEmpty(home.profile.offer) && !home.decision
     ? 'Set your offer to start sending'
     : [
         `${home.queue.length} to send`,

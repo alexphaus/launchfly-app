@@ -390,13 +390,19 @@ export function demandTrend(
     }
   }
 
+  // Nothing scraped this week means nothing can be said about direction. Without
+  // this guard every term reads "falling" the moment supply pauses — five
+  // identical chips claiming the market cooled, when all that happened is that
+  // nobody looked. A trend needs a week that was actually observed.
+  const looked = [...thisWeek.values()].some((n) => n > 0);
+
   return [...total.entries()]
     .filter(([, c]) => c >= MIN_DEMAND)
     .map(([term, count]) => {
       const tw = thisWeek.get(term) ?? 0;
       const avg = Math.round(((prev.get(term) ?? 0) / weeks) * 100) / 100;
-      const trend: DemandTrend =
-        tw >= MIN_WEEKLY && avg === 0 ? 'new'
+      const trend: DemandTrend = !looked ? 'steady'
+        : tw >= MIN_WEEKLY && avg === 0 ? 'new'
         : tw >= MIN_WEEKLY && tw >= 1.5 * avg ? 'rising'
         : avg >= MIN_WEEKLY && tw <= 0.5 * avg ? 'falling'
         : 'steady';

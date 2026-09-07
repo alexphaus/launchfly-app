@@ -50,7 +50,9 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
               <button key={t.term} className="cp-drow" onClick={() => actions.openSheet({ kind: 'demand', term: t.term })}>
                 <div className="cp-dmain">
                   <div className="t">{t.term}</div>
-                  <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>
+                  {/* "Steady" is the default, and a chip on every row that reads
+                      the same is decoration. Only a move earns one. */}
+                  {t.trend !== 'steady' && <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>}
                 </div>
                 <div className="cp-dbar"><div className="cp-dfill" style={{ width: `${Math.round((t.count / d.demand[0].count) * 100)}%` }} /></div>
                 <div className="cp-dsub">
@@ -62,7 +64,7 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
             ))}
           </div>
           <div className="cp-note">
-            Tags and pain signals recurring across the real businesses matched to you, that your offer does not mention. Tap one to add it to what you sell, or to stop matching the segments that need it.
+            Recurring in your matches and missing from your offer. Tap one to add it, or to stop matching the segments that want it.
             {!offerSet && ' Set your offer first and these become the gap between it and the market.'}
           </div>
         </>
@@ -91,7 +93,7 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
               </div>
             ))}
           </div>
-          <div className="cp-note">A segment whose businesses keep wanting something you do not sell is either a gap in the offer or the wrong segment. Both are one tap away on the terms above.</div>
+          <div className="cp-note">A segment that keeps wanting what you do not sell is a gap in the offer, or the wrong segment.</div>
         </>
       )}
 
@@ -169,7 +171,6 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
               </div>
             </button>
           </div>
-          <div className="cp-note">One thing, tied to the stuck point above. If nothing is stuck, nothing appears here — that is the correct answer, not an empty state.</div>
         </>
       ) : (
         !d.thin && <div className="cp-note" style={{ marginTop: 14 }}>Nothing to learn right now. The gap above is something to change, not something to study.</div>

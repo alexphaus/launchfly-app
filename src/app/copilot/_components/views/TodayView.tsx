@@ -3,7 +3,7 @@
 // out of the door or to record what came back.
 import { useState } from 'react';
 import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
-import { offerIsEmpty } from '@/lib/copilot/offer';
+import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
 import type { Execution, HomeData, QueueItem } from '@/lib/copilot/types';
@@ -12,6 +12,8 @@ import type { Actions } from '../shared';
 
 /** How many queue rows show before the fold. A queue is a queue; it is not capped, only folded. */
 const QUEUE_FOLD = 5;
+/** Six reminders under a decision is a list, not a next action. */
+const NUDGE_FOLD = 3;
 
 function execChip(e: Execution | null | undefined): { cls: string; label: string } | null {
   if (!e) return null;
@@ -27,12 +29,16 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [unfold, setUnfold] = useState(false);
+  const [moreNudges, setMoreNudges] = useState(false);
   const urgent = home.nudges.filter((n) => n.urgency === 'urgent').length;
   const m = home.metrics;
   const b = home.billing;
   const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
   const noOffer = offerIsEmpty(home.profile.offer);
   const queue = home.queue;
+  // With a blank offer the call, its button and this row all say the same thing.
+  // The row is the one that carries no new information, so it goes.
+  const plan = home.decision && noOffer ? home.plan.filter((a) => a.title !== OFFER_TASK_TITLE) : home.plan;
   const visible = unfold ? queue : queue.slice(0, QUEUE_FOLD);
 
   const submit = async (regenerate: boolean) => {
@@ -47,7 +53,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
     <>
       {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
 
-      {home.decision && <CallCard decision={home.decision} actions={actions} />}
+      {home.decision && <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} />}
 
       {/* Sent is the hero. The app has a supply surplus and a sending deficit, and
           the headline number should be on the side that needs to move. */}
@@ -77,21 +83,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </div>
       )}
 
-      {noOffer ? (
-        /* Nothing is drafted from a blank offer, so there is no queue to show.
-           Say why, with the number that makes it concrete. */
-        <div className="cp-card cp-wall cp-block">
-          <div className="cp-eyebrow">Nothing sends yet</div>
-          <p>
-            <b>Nothing sends until you say what you sell.</b>{' '}
-            {m.pipeline.sourced > 0
-              ? `${m.pipeline.sourced} real ${m.pipeline.sourced === 1 ? 'business is' : 'businesses are'} waiting for an opener. Every one is written from your offer — two lines, in your words.`
-              : 'Every opener is written from your offer — two lines, in your words. Set it and the copilot starts drafting.'}
-          </p>
-          <button className="cp-btn primary block" onClick={() => actions.openSheet({ kind: 'offer' })}>Set your offer</button>
-          <p className="cp-wall-sub">Takes about three minutes. Drafts appear the moment you save.</p>
-        </div>
-      ) : (
+      {noOffer ? null : (
         <>
           <div className="cp-section">
             <span className="lead">To send</span>
@@ -114,7 +106,10 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </>
       )}
 
-      {home.insight ? (
+      {/* The read is the reasoning behind the call, so when there is a call it
+          lives inside that card. Two AI-written paragraphs stacked at the top of
+          Today was the single heaviest thing on this screen. */}
+      {home.insight && !home.decision ? (
         <div className="cp-card cp-insight">
           <div className="cp-eyebrow">{home.insight.eyebrow}</div>
           <p>{home.insight.body}</p>
@@ -125,21 +120,21 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
             </>
           )}
         </div>
-      ) : (
+      ) : !home.insight && !home.decision ? (
         <div className="cp-empty" style={{ marginTop: 14 }}>
           <b>No brief yet</b>
           The copilot writes one read of your day, every day. {briefing ? 'Building it now.' : <button className="cp-textlink" onClick={() => actions.runBrief('manual')}>Build it now</button>}
         </div>
-      )}
+      ) : null}
 
-      {(home.plan.length > 0 || home.planOverflow > 0) && (
+      {(plan.length > 0 || home.planOverflow > 0) && (
         <>
           <div className="cp-section">
             <span className="lead">Also today</span>
-            {home.planOverflow > 0 && <span className="count">{home.plan.filter((a) => a.status === 'open').length} of {home.plan.filter((a) => a.status === 'open').length + home.planOverflow}</span>}
+            {home.planOverflow > 0 && <span className="count">{plan.filter((a) => a.status === 'open').length} of {plan.filter((a) => a.status === 'open').length + home.planOverflow}</span>}
           </div>
           <div className="cp-list">
-            {home.plan.map((a) => {
+            {plan.map((a) => {
               const ec = a.status !== 'done' ? execChip(a.execution) : null;
               return (
                 <button key={a.id} className={`cp-row ${a.status === 'done' ? 'done' : ''}`} onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
@@ -159,14 +154,21 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
 
       <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>
       {home.nudges.length ? (
+        <>
         <div className="cp-list">
-          {home.nudges.map((n) => (
+          {(moreNudges ? home.nudges : home.nudges.slice(0, NUDGE_FOLD)).map((n) => (
             <button key={n.id} className={`cp-nrow ${n.urgency}`} onClick={() => actions.openSheet({ kind: 'action', id: n.id })}>
               <div className="cp-ndot" />
               <div><div className="t">{n.title}</div>{n.due_label && <div className="s">{n.due_label}</div>}</div>
             </button>
           ))}
         </div>
+        {home.nudges.length > NUDGE_FOLD && (
+          <button className="cp-textlink cp-fold" onClick={() => setMoreNudges((v) => !v)}>
+            {moreNudges ? 'Show fewer' : `Show ${home.nudges.length - NUDGE_FOLD} more`}
+          </button>
+        )}
+        </>
       ) : (
         <div className="cp-empty"><b>Nothing pressing</b>Nudges show up here when something is about to go cold or needs a decision.</div>
       )}
@@ -198,8 +200,9 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
  * The three buttons are the only place the app finds out whether it was right —
  * so "Wrong call" is offered as plainly as "I did it".
  */
-function CallCard({ decision, actions }: { decision: Decision; actions: Actions }) {
+function CallCard({ decision, home, actions, noOffer }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean }) {
   const [busy, setBusy] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
   const verdict = verdictOf(decision);
   const moved = movedBy(decision);
   const answered = decision.response !== 'pending';
@@ -243,6 +246,19 @@ function CallCard({ decision, actions }: { decision: Decision; actions: Actions 
           <div className="cp-missing"><b>What would change this</b> {decision.missing}</div>
         )}
 
+        {/* The call is only a call if you can act on it here. With a blank offer
+            the server guarantees this IS the offer call, so the button that used
+            to sit in its own wall card below belongs on it. */}
+        {noOffer && (
+          <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'offer' })}>
+            Set your offer — about three minutes
+          </button>
+        )}
+
+        {/* One line, not a card. A `dont` that merely restates instead_of is not
+            worth a second block; the starter no longer emits one at all. */}
+        {decision.dont && <div className="cp-notdo"><b>Not today</b> {decision.dont.title}{decision.dont.why ? ` — ${decision.dont.why}` : ''}</div>}
+
         {answered ? (
           <div className="cp-verdict">
             <span className={`cp-chip verdict ${verdict}`}>{VERDICT_LABEL[verdict]}</span>
@@ -263,13 +279,20 @@ function CallCard({ decision, actions }: { decision: Decision; actions: Actions 
             <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
           </div>
         )}
+
+        {home.insight && (
+          <>
+            <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the read' : 'See the read →'}</button>
+            {showWhy && (
+              <div className="cp-reasoning">
+                {home.insight.body}
+                {home.insight.reasoning ? `\n\n${home.insight.reasoning}` : ''}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {decision.dont && (
-        <div className="cp-empty cp-dont">
-          <b>{decision.dont.title}</b>{decision.dont.why}
-        </div>
-      )}
     </>
   );
 }

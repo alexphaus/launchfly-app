@@ -228,6 +228,12 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * The floor. Used when no model is configured and when the configured one fails,
  * so Today always leads with a call rather than a blank card.
  *
+ * It never returns a `dont`. Every version that did just restated `instead_of`
+ * in the imperative — "instead of finding more matches you cannot write to"
+ * beside "do not run another match search" — which cost a whole card to say the
+ * same sentence twice. The field stays for a model that can name something
+ * genuinely different from the alternative it already ruled out.
+ *
  * The order matters more than any individual rung: a broken opener outranks an
  * unsent queue, because sending more of a message nobody answers is the most
  * expensive thing on this list.
@@ -248,7 +254,7 @@ export function starterDecision(input: StarterDecisionInput): { decision: Decisi
         instead_of: 'Finding more matches you still cannot write to.',
         confidence: 'high', topic: 'offer', verify_metric: 'sent',
       },
-      dont: m.pipeline.sourced > 0 ? { title: 'Do not run another match search', why: `You already have ${m.pipeline.sourced} you cannot write to yet.` } : null,
+      dont: null,
     };
   }
 
@@ -267,7 +273,7 @@ export function starterDecision(input: StarterDecisionInput): { decision: Decisi
         missing: thin ? 'Ten sends is the smallest sample that separates a weak opener from bad luck. You are at ' + m.sent + '.' : undefined,
         topic: 'opener', verify_metric: 'replies',
       },
-      dont: { title: 'Do not approve the waiting drafts as written', why: 'They use the opener that has not worked yet.' },
+      dont: null,
     };
   }
 
@@ -283,7 +289,7 @@ export function starterDecision(input: StarterDecisionInput): { decision: Decisi
         instead_of: 'New outreach to people who have never heard of you.',
         confidence: 'high', topic: 'converting', verify_metric: 'meetings',
       },
-      dont: { title: 'Do not start a new batch today', why: 'The warm replies go cold first.' },
+      dont: null,
     };
   }
 
@@ -299,7 +305,7 @@ export function starterDecision(input: StarterDecisionInput): { decision: Decisi
         instead_of: 'Another match search.',
         confidence: 'high', topic: 'sending', verify_metric: 'sent',
       },
-      dont: { title: 'Do not find new matches today', why: `${m.pipeline.sourced} are already here and ${queue} are written.` },
+      dont: null,
     };
   }
 

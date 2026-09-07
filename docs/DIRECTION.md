@@ -6,6 +6,10 @@ works that way, so a decision does not get re-litigated every few weeks.
 
 Written for whoever picks this up next, including an agent starting cold.
 
+Last substantially revised **September 2026**, when the competitive picture
+changed and four of the six layers this document claimed turned out to be
+someone else's free product. See **The harness threat**.
+
 ---
 
 ## The one-line thesis
@@ -13,37 +17,106 @@ Written for whoever picks this up next, including an agent starting cold.
 > **Persistent, outcome-compounding outbound infrastructure for people who sell
 > to local businesses on WhatsApp.**
 
-Frontier models will keep getting better at reasoning, writing and advice. That
-makes this app more useful, not less — but only if it stays the layer models
-cannot be:
+This document used to plan for one threat: frontier models getting better at
+reasoning, writing and advice. That was the wrong threat. What arrived was not a
+better model but a better **harness** — a personal agent with persistent memory,
+a built-in cron and a gateway into WhatsApp, self-hosted and MIT-licensed. Half
+the list that used to sit here has been cut because that harness now does it,
+free.
 
-- **A ledger with a cron.** Persistent state, outcomes attached, running while
-  you sleep. A chat window forgets; this does not.
-- **Real-world supply joined up.** Google Maps → matched → drafted → sent →
-  replied → won, in one chain, with the joins kept.
-- **A truthful system of record.** What was actually sent, what actually came
-  back. The model can reason over it; it cannot know it.
-- **Aggregate demand from your own live pool.** "Facebook ads appears in 40 of
-  *your* matches and is not in your offer." Nothing general can compute that.
-- **A decision, and whether it was right.** One call a day, the trade-off it
-  implies, and the metric read back three days later.
-- **"From you" delivery.** Drafts open pre-filled in the user's own WhatsApp.
-  The model writes; the user stays the sender.
+What is left, and why each one survives:
+
+- **A maintained supply pool.** 140 deduped businesses keyed by `place_id`, with
+  contact channels, segment, rating and pain signals, refreshed under a budget.
+  That is a database and a scraping bill, not a memory file.
+- **Aggregate demand computed over that pool.** "Facebook ads appears in 40 of
+  *your* 140 matches and is not in your offer" is a group-by minus the offer
+  text. Recall cannot produce it; only rows can.
+- **A truthful outcome ledger.** This execution, this body, this recipient, sent
+  at this timestamp, reply matched at this one, won for this amount — joined.
+  Measurement about the world, not an agent's self-report about its own
+  behaviour.
+- **A decision record that grades itself.** One call, one named metric, read back
+  three days later against a stored snapshot.
+
+The property those four share is the whole thesis:
+
+> **Rows, not recollection.**
+
+Anything this product can only *remember* is commodity now. Anything it can
+*compute over* is not.
 
 ## The survival test
 
-Before building anything, ask:
+The old test asked whether a ten-times-better model would make a feature
+redundant. It passed things it should have failed, because the competition was
+never going to be a raw model — it was going to be a model with memory, a
+scheduler and your WhatsApp session. Ask this instead:
 
-> **If the frontier model gets ten times better tomorrow, does this still need
-> *my* persistent state, *my* live supply, or *my* outcome ledger to work?**
+> **Could a self-hosted personal agent with persistent memory, a cron and a
+> WhatsApp gateway do this after a week of use — or does it need rows it never
+> collected?**
 
-**Yes** → build it. Signals, ranking from outcomes, the overnight queue, the
-truthful funnel, the offer-feedback loop, the decision record.
+**Needs rows** → build it. The supply pool, demand aggregation, the outcome
+ledger, decision grading, the send queue.
 
-**No** → do not. Standalone smart drafts, generic prioritisation, one-shot
-analysis of a pasted list, broad planning, motivational framing. Anything a user
-gets by opening Claude alongside Maps and WhatsApp is a thin wrapper, and a thin
-wrapper loses.
+**A week of memory covers it** → do not. Morning briefs, insight and advice,
+drafting an opener, remembering preferences, nudges, "what should I do today".
+These are not weak features. They are someone else's product now, given away
+and self-hosted, and building a nicer one is competing on the only ground the
+competition has already conceded for free.
+
+---
+
+## The harness threat
+
+Recorded **September 2026**, with names and dates, because a document that says
+"nothing general can do this" ages badly without them.
+
+**OpenClaw**, and its successor **Hermes Agent** (Nous Research, February 2026,
+MIT, self-hosted), are personal agents with persistent memory across sessions, a
+built-in cron, subagents, and one gateway reaching 20+ platforms including
+WhatsApp, Telegram, Signal and Slack. Hermes additionally claims a learning loop
+that builds skills from experience. They run on the user's own machine, which
+means they hold the user's own WhatsApp session.
+
+Six layers this document used to claim. Four of them fell:
+
+| Layer once claimed here | Verdict |
+| --- | --- |
+| Memory of the user across sessions | **Gone.** Persistent, and improving on its own. |
+| Running while you sleep | **Gone.** Built-in cron. |
+| The read — insight, advice, "what matters today" | **Gone.** On a better model than the one writing our briefs. |
+| **"From you" delivery** | **Gone, and theirs is better.** An agent holding your WhatsApp session sends as you properly; a deep link is a workaround for not having one. Invariant 4 — nobody sends under an identity they do not own — is served better by software on your own laptop than by anything server-side. |
+| Real-world supply joined up | **Holds.** They can call a scraper once. They do not maintain a deduped pool across months under a budget. |
+| Aggregate demand from your own pool | **Holds**, and is the strongest thing in the product. |
+| A truthful system of record | **Holds.** Their learning is an agent's self-report about its own behaviour; this is measurement about the world. |
+| A decision, and whether it was right | **Holds.** Needs snapshots over time, not recall. |
+
+Nothing stops Hermes adding a database. The durable part was never the schema —
+it is the maintained pool and the outcome joins, which are operational work
+rather than code.
+
+**The uncomfortable corroboration.** This app's own funnel already ran the
+experiment: 140 matched → 44 drafted → **0 sent**, 6 meetings happening outside
+it, and its author preferring Claude and Grok for thinking. The layers a general
+harness takes are almost exactly the layers of this app that were never used.
+The threat is not a forecast. It is in the usage data, and it predates the
+competition.
+
+**The direction that follows — argued, not decided.** Stop competing on the
+surface; become the tool the harness calls. Hermes and OpenClaw both take tools
+and skills. A skill exposing `matches()`, `demand()`, `queue()` and
+`record_outcome()` gives someone their own agent *plus* a substrate they cannot
+keep in a Markdown file: the harness delivers the morning message, which it does
+better than a PWA, and this supplies the numbers that stop it being generic.
+Most of the routes already exist under `/api/copilot/*`; the gap is an MCP
+server and auth scoping. Carried as an open question below rather than as a
+plan, because no external user has been asked.
+
+Sources, as of this revision: [openclaw.ai](https://openclaw.ai/) ·
+[hermes-agent.nousresearch.com](https://hermes-agent.nousresearch.com/) ·
+[Hermes feature overview](https://hermes-agent.nousresearch.com/docs/user-guide/features/overview)
 
 ---
 
@@ -69,6 +142,12 @@ new.
 - **Competing with Claude Code on building.** The app should *export* what it
   knows to a model, not try to be one. A context pack the user pastes into a
   chat is the honest version of "help me build this".
+- **Competing on the morning message.** A self-hosted harness already delivers a
+  daily brief over WhatsApp with better memory and a better model. A nicer
+  version of that is the one thing the competition gives away. The **send queue**
+  stays a real screen — one-tap approve over a thirty-item queue genuinely beats
+  a chat thread — but the brief text, the lesson and the nudges are not worth
+  defending.
 
 ---
 
@@ -122,6 +201,16 @@ and outflows with dates, entered by hand, no integration — which turns runway
 from a number into a forecast and makes "collect the deposit" rankable against
 "send ten messages". Calendar second. Delivery/projects third.
 
+That ordering still passes the revised survival test — each one is rows nobody
+else collected — but it now competes with the harness question above, and loses
+on cost. Widening the sensor is months of collection before anything ranks
+differently. Exposing what is *already* collected to an agent the user is
+running anyway is an MCP server over routes that exist. Do the cheap one first.
+
+Note that the one-line thesis survived the revision unchanged. "Infrastructure"
+was the right word before there was a reason for it; it now describes the
+direction better than "copilot" does.
+
 ---
 
 ## Open, and honest
@@ -130,9 +219,15 @@ from a number into a forecast and makes "collect the deposit" rankable against
   Until one goes out and one reply comes back, everything downstream is
   speculation. This is the highest-value thing anyone can do, and it is not a
   feature.
-- **The cron has never fired in production** (see `CLAUDE.md` → Deploying).
-  Until it does, the most defensible property in the thesis — running while you
-  sleep — does not exist, and the weekly Signals push has never sent.
+- **The cron fires now, and the agent behind it never ran.** A Coolify scheduled
+  task running `scripts/copilot-cron.mjs` reached `200 in 220.7s — 2/2 profiles
+  ok`. But every `daily_brief | llm` row in `copilot_agent_runs` was `error`,
+  aborted at exactly 30.0s by this codebase's own timeout, so every brief anyone
+  has read was the deterministic starter. Fixed by giving the cron a budget
+  separate from the interactive one; the lesson worth keeping is that a
+  capability can be fully built, fully deployed, logging success at the top
+  level, and dead one layer down. Check `copilot_agent_runs.status` before
+  believing any claim in this file.
 - **No external user.** "Me first, clients later" was the right call; whether
   "later" is real is unanswered. Five conversations would answer it.
 - **No completed Stripe checkout, ever.** The billing layer is untested against
@@ -143,3 +238,13 @@ from a number into a forecast and makes "collect the deposit" rankable against
 - **Unknown: supply unit economics.** Pro promises 400 matches/month, Operator
   2,000. Apify cost per *inserted* match is not measured against those prices.
 - **No account deletion.** "Forget device" clears a cookie; the profile stays.
+- **Unknown: whether the surface is worth keeping at all.** If the harness
+  argument above is right, Today's brief, insight, lesson and nudges are dead
+  weight, and the send queue is the only screen worth defending. Nobody has
+  tested a copilot that is an MCP server plus one approval screen. This is the
+  cheapest large experiment available and it has not been run.
+- **Unknown: whether the moat is operational or imaginary.** "They cannot
+  maintain a deduped pool under a budget" is an assertion about effort, not
+  about capability. If a Hermes skill plus one Apify key gets someone 80% of
+  the pool, the remaining 20% is not a business. Nobody has tried to build the
+  competitor to find out.

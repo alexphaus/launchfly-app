@@ -440,6 +440,42 @@ knobs stay out of the code; invalid JSON is logged and ignored. Note that the
 SDK speaks the **Responses API** (`input`, `max_output_tokens`), not Chat
 Completions — worth knowing when comparing against a raw `curl`.
 
+## What the agent gets to read
+
+`buildContextPack` is the only place "more data in" becomes "more context for
+the agent". Three of its fields carry text, and all three were sitting in the
+database for months before anything read them.
+
+| field | source | why it is not something a model can know |
+| --- | --- | --- |
+| `replies` | `copilot_outcomes.note`, written by `reconcileReplies` | what a real prospect wrote back to a message this person actually sent |
+| `sent` | `copilot_executions.body` joined to reply outcomes | which openers got an answer and which were ignored |
+| `demand` | `demandTrend()` over the user's own sourced matches | wants counted across their live pool, already filtered to gaps in the offer |
+
+**Replies were the expensive omission.** `reconcileReplies` matched inbound
+WhatsApp messages by phone and selected `phone, created_at` — so the system knew
+*that* someone replied and never once knew *what they said*. The body now rides
+along on the same match: it is only ever read for a phone this profile itself
+sent to, after its own `sent_at`, which is what keeps one user's inbox out of
+another's pack.
+
+**Both halves or neither.** `selectSentExamples` returns replied *and* ignored
+openers, capped separately (`MAX_SENT_PER_BUCKET`). A model shown only the ones
+that worked concludes that everything works. Silence counts only after
+`NO_REPLY_AFTER_DAYS` (3) — a message sent yesterday and unanswered is pending,
+not a result, the same rule `gradeDecisions` applies to a call.
+
+**Budget.** The pack is serialised whole into the prompt (`userPrompt`), so
+every field costs tokens on a model that already needs two minutes. Worst case
+these three add ~5.6KB (~1,400 tokens) to a ~9KB pack — negligible for latency,
+which is dominated by 6-11k *reasoning* tokens, but the caps in
+`conversations.ts` are why it stays that way. Raise one and it is the metrics
+the decision has to cite that get pushed out.
+
+Adding a field is not enough on its own: `SYSTEM_PROMPT` has a section per
+field, and a field the prompt never names is a field the model ignores. A test
+asserts those sections stay.
+
 ## External supply agent
 
 Supply can be outsourced without touching this app — an n8n workflow, or a small service

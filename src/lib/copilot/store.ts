@@ -3,6 +3,7 @@
 // has already been authenticated by the session cookie.
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
+import { selectReplies, selectSentExamples, type PackReply, type PackSentExample } from './conversations';
 import { addDays, copilotDb, todayIso } from './db';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
@@ -77,6 +78,77 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
     db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
   ]);
   return { opportunities, executions, outcomes };
+}
+
+/**
+ * What the market keeps asking for, read straight from the user's own matches.
+ *
+ * Narrower than loadDiagnosisRows on purpose: demand only ever looks at sourced
+ * rows, and only needs the columns wantsOf/segmentOf read. Capped because the
+ * pack build is on the brief's critical path — newest first, so the weekly
+ * trend is always whole and only the far tail of the all-time count is lost.
+ */
+const MAX_DEMAND_ROWS = 500;
+
+export async function loadDemandRows(profileId: string): Promise<DiagnoseInput['opportunities']> {
+  const { data } = await copilotDb()
+    .from('copilot_opportunities')
+    .select('id, status, source, source_kind, data, reason, title, created_at')
+    .eq('profile_id', profileId)
+    .eq('source_kind', 'sourced')
+    .order('created_at', { ascending: false })
+    .limit(MAX_DEMAND_ROWS);
+  return (data ?? []) as DiagnoseInput['opportunities'];
+}
+
+/**
+ * The two halves of a conversation: what this person sent, and what came back
+ * in the other person's own words. Both were already in the database and
+ * neither had ever reached the agent.
+ */
+export async function loadConversations(profileId: string, now = new Date()): Promise<{ replies: PackReply[]; sent: PackSentExample[] }> {
+  const db = copilotDb();
+  // Read wider than the pack carries: selectReplies drops rows with no body
+  // (every reply matched before the body was captured), and selectSentExamples
+  // needs enough history to find three that have actually been ignored.
+  const [replyRows, sentRows] = await Promise.all([
+    db.from('copilot_outcomes').select('note, occurred_at, opportunity_id')
+      .eq('profile_id', profileId).eq('kind', 'reply')
+      .order('occurred_at', { ascending: false }).limit(40)
+      .then((r) => (r.data ?? []) as Array<{ note: string | null; occurred_at: string; opportunity_id: string | null }>),
+    db.from('copilot_executions').select('id, body, sent_at')
+      .eq('profile_id', profileId).eq('approval_state', 'sent')
+      .order('sent_at', { ascending: false }).limit(60)
+      .then((r) => (r.data ?? []) as Array<{ id: string; body: string | null; sent_at: string | null }>),
+  ]);
+
+  // Name the business that replied, so a reply reads as coming from someone
+  // rather than from nowhere. And ask directly which of THESE openers were
+  // answered: deriving that from the reply window above would mislabel an
+  // opener whose reply fell outside it, teaching the model that a message
+  // which worked did not.
+  const oppIds = [...new Set(replyRows.map((r) => r.opportunity_id).filter((id): id is string => !!id))];
+  const execIds = sentRows.map((r) => r.id);
+  const [titles, repliedExecutionIds] = await Promise.all([
+    (async () => {
+      const map = new Map<string, string>();
+      if (!oppIds.length) return map;
+      const { data } = await db.from('copilot_opportunities').select('id, title').in('id', oppIds);
+      for (const o of (data ?? []) as Array<{ id: string; title: string }>) map.set(o.id, o.title);
+      return map;
+    })(),
+    (async () => {
+      if (!execIds.length) return new Set<string>();
+      const { data } = await db.from('copilot_outcomes').select('execution_id')
+        .eq('profile_id', profileId).eq('kind', 'reply').in('execution_id', execIds);
+      return new Set(((data ?? []) as Array<{ execution_id: string | null }>).map((r) => r.execution_id).filter((id): id is string => !!id));
+    })(),
+  ]);
+
+  return {
+    replies: selectReplies(replyRows.map((r) => ({ note: r.note, occurred_at: r.occurred_at, business: r.opportunity_id ? titles.get(r.opportunity_id) ?? null : null }))),
+    sent: selectSentExamples(sentRows, repliedExecutionIds, { now }),
+  };
 }
 
 /**

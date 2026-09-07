@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PLANS } from '@/lib/copilot/plans';
+import { useShell } from './shell';
 import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type OpportunityType } from '@/lib/copilot/types';
 import { post } from './api';
 import { TYPE_PLURAL } from './format';
@@ -17,6 +18,7 @@ const HORIZONS = [30, 90, 180];
 
 export default function Onboarding() {
   const router = useRouter();
+  const shell = useShell();
   const [intro, setIntro] = useState(true);
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
@@ -98,7 +100,7 @@ export default function Onboarding() {
               </ol>
               <p className="cp-intro-plan">
                 Free is {PLANS.free.limits.matchesPerMonth} real matches a month and the whole engine —
-                no card, nothing to cancel. <a href="/copilot/pricing">See the plans →</a>
+                no card, nothing to cancel. <a href={`${shell}/pricing`}>See the plans →</a>
               </p>
             </div>
           )}
@@ -158,7 +160,7 @@ export default function Onboarding() {
               </div>
               <div className="cp-help" style={{ marginBottom: 14 }}>
                 You start on Free: {PLANS.free.limits.matchesPerMonth} real matches a month, no card.
-                Nothing is sent without you tapping send. <a href="/copilot/pricing">Plans →</a>
+                Nothing is sent without you tapping send. <a href={`${shell}/pricing`}>Plans →</a>
               </div>
               <div className="cp-field"><label className="cp-label">Capacity today</label>
                 {(Object.keys(CAPACITY_META) as Capacity[]).map((c) => (
@@ -172,10 +174,10 @@ export default function Onboarding() {
         </div>
 
         <div className="cp-ob-foot">
-          {intro && <a className="cp-btn" href="/copilot/login" style={{ textDecoration: 'none' }}>Sign in</a>}
+          {intro && <a className="cp-btn" href={`${shell}/login`} style={{ textDecoration: 'none' }}>Sign in</a>}
           {intro && <button className="cp-btn primary" onClick={() => setIntro(false)}>Start free</button>}
           {!intro && step > 0 && <button className="cp-btn" disabled={busy} onClick={() => setStep((s) => s - 1)}>Back</button>}
-          {!intro && step === 0 && <a className="cp-btn" href="/copilot/login" style={{ textDecoration: 'none' }}>Sign in</a>}
+          {!intro && step === 0 && <a className="cp-btn" href={`${shell}/login`} style={{ textDecoration: 'none' }}>Sign in</a>}
           {!intro && (step < 2
             ? <button className="cp-btn primary" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>Continue</button>
             : <button className="cp-btn primary" disabled={!canNext || busy} onClick={finish}>{busy ? 'Finding matches & building your brief…' : 'Start my copilot'}</button>)}

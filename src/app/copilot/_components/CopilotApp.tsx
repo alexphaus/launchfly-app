@@ -13,6 +13,7 @@ import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
 import { IconPipeline, IconSignals, IconToday } from './icons';
 import Sheet from './Sheet';
+import { useShell } from './shell';
 import SheetContent from './SheetContent';
 import type { Actions, OutcomeInput, SheetState, Tab } from './shared';
 import PipelineView from './views/PipelineView';
@@ -29,6 +30,7 @@ function sheetKey(s: SheetState): string {
 const TABS: Tab[] = ['today', 'pipeline', 'signals'];
 
 export default function CopilotApp({ initial }: { initial: HomeData }) {
+  const shell = useShell();
   const [home, setHome] = useState<HomeData>(initial);
   const [tab, setTab] = useState<Tab>('today');
   // Sheets stack: Goal opened from You returns to You on close. The last one
@@ -242,7 +244,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
     async openBilling() {
       try {
-        const r = await post<{ url: string }>('/billing/portal', {});
+        const r = await post<{ url: string }>('/billing/portal', { shell });
         window.location.href = r.url;
       } catch (e) { fail(e, 'Could not open billing'); }
     },

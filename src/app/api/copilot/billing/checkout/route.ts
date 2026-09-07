@@ -2,6 +2,7 @@ import { createCheckoutSession } from '@/lib/copilot/billing';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 import { rateLimit } from '@/lib/copilot/limits';
 import { isPlanKey } from '@/lib/copilot/plans';
+import { toShell } from '@/lib/copilot/shell';
 import { getProfile } from '@/lib/copilot/store';
 
 export const runtime = 'nodejs';
@@ -17,12 +18,14 @@ export async function POST(req: Request) {
   const plan = b.plan;
   if (!isPlanKey(plan) || plan === 'free') return fail('Pick a paid plan', 400);
   const period = b.period === 'yearly' ? 'yearly' : 'monthly';
+  // Come back to the shell the checkout was started from, not always the bold one.
+  const shell = toShell(b.shell);
 
   const profile = await getProfile(auth.pid);
   if (!profile) return fail('Not found', 404);
 
   try {
-    return json({ ok: true, url: await createCheckoutSession(profile, plan, period) });
+    return json({ ok: true, url: await createCheckoutSession(profile, plan, period, shell) });
   } catch (e) {
     console.error('[copilot] checkout failed', e);
     return fail(e instanceof Error && /no stripe price/i.test(e.message) ? 'That plan is not on sale yet.' : 'Could not start checkout.', 502);

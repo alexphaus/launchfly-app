@@ -17,10 +17,43 @@ but none of the business logic. Everything is under:
 
 | Layer | Path |
 | --- | --- |
-| UI (installable PWA) | `src/app/copilot/` |
+| UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql`, `20260904_copilot_close_the_loop.sql` |
+
+## Two shells, one app
+
+`/copilot` and `/lifeos` are the same application. Same session cookie (`path:
+'/'`), same database, same components, same three tabs — `src/app/lifeos/`
+contains only a layout and four thin pages, all of which render the entries in
+`src/app/copilot/_components/`. The single difference is `data-theme="soft"` on
+`.cp-root`, plus Sora in place of Archivo:
+
+| | `/copilot` | `/lifeos` |
+| --- | --- | --- |
+| Surface | 2.5px ink borders, hard corners | shadow and space, 24px corners |
+| Nav | full-width black bar | floating white pill |
+| Accent | `#2B3EF0` on `#FAF8F4` | `#4F63D2` on `#EEF1F7` |
+| Face | Archivo | Sora |
+| Manifest | `/copilot/manifest.webmanifest` | `/lifeos/manifest.webmanifest` |
+
+Both install separately, so both can be lived with for a week and one of them
+chosen. Switch between them under the header avatar → Copilot → **Look**.
+
+The theme is one additive block at the end of `src/app/copilot/copilot.css`,
+where every rule is scoped to `.cp-root[data-theme="soft"]` — the bold theme
+cannot regress from anything the calm one adds, and a test in
+`scripts/tests/copilot-core.test.ts` (`two-shells`) fails if a rule in that
+block is ever written unscoped.
+
+Anything that builds an in-app link or a redirect has to stay inside the shell
+the viewer opened, or a tap on "Plans" silently changes the theme. The legal set
+of shells lives in `src/lib/copilot/shell.ts` and nowhere else: `useShell()` for
+hrefs on the client, `toShell()` to narrow the value a client sends before it is
+concatenated into a Stripe `success_url`. One thing still lands on `/copilot`
+whichever shell asked for it — the emailed magic link, whose target is fixed
+when the token is written.
 
 ## The loop
 

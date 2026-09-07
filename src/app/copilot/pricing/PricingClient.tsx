@@ -7,6 +7,7 @@ import {
   CURRENCY, PLANS, PLAN_ORDER, monthlyEquivalent, savingsPercent,
   type BillingPeriod, type Plan, type PlanKey,
 } from '@/lib/copilot/plans';
+import { useShell } from '../_components/shell';
 
 export interface PricingState {
   signedIn: boolean;
@@ -17,20 +18,21 @@ export interface PricingState {
 }
 
 export default function PricingClient({ state }: { state: PricingState }) {
+  const shell = useShell();
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [busy, setBusy] = useState<PlanKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const start = async (plan: PlanKey) => {
-    if (plan === 'free') { window.location.href = state.signedIn ? '/copilot' : '/copilot?start=1'; return; }
-    if (!state.signedIn) { window.location.href = '/copilot?start=1'; return; }
+    if (plan === 'free') { window.location.href = state.signedIn ? shell : `${shell}?start=1`; return; }
+    if (!state.signedIn) { window.location.href = `${shell}?start=1`; return; }
     setBusy(plan);
     setError(null);
     try {
       const r = await fetch('/api/copilot/billing/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ plan, period }),
+        body: JSON.stringify({ plan, period, shell }),
       });
       const data = await r.json();
       if (!r.ok || !data.url) throw new Error(data.error || 'Could not start checkout');
@@ -44,7 +46,7 @@ export default function PricingClient({ state }: { state: PricingState }) {
   const manage = async () => {
     setBusy('free');
     try {
-      const r = await fetch('/api/copilot/billing/portal', { method: 'POST' });
+      const r = await fetch('/api/copilot/billing/portal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shell }) });
       const data = await r.json();
       if (!r.ok || !data.url) throw new Error(data.error || 'Could not open billing');
       window.location.href = data.url;
@@ -132,7 +134,7 @@ export default function PricingClient({ state }: { state: PricingState }) {
 
         <div className="cp-note" style={{ marginBottom: 32 }}>
           Prices in {CURRENCY === '$' ? 'USD' : CURRENCY}. Payments and cards are handled by Stripe — this
-          app never sees a card number. <a href="/copilot">Back to the app →</a>
+          app never sees a card number. <a href={shell}>Back to the app →</a>
         </div>
       </main>
     </div>
@@ -142,6 +144,7 @@ export default function PricingClient({ state }: { state: PricingState }) {
 function PlanCard({ plan, period, state, busy, onPick, onManage }: {
   plan: Plan; period: BillingPeriod; state: PricingState; busy: boolean; onPick: () => void; onManage: () => void;
 }) {
+  const shell = useShell();
   const isCurrent = state.currentPlan === plan.key && !state.lapsed;
   const price = monthlyEquivalent(plan, period);
   const paid = plan.key !== 'free';
@@ -173,7 +176,7 @@ function PlanCard({ plan, period, state, busy, onPick, onManage }: {
           {busy ? 'Opening…' : 'Manage billing'}
         </button>
       ) : isCurrent ? (
-        <a className="cp-plan-cta ghost" href="/copilot">Open the app</a>
+        <a className="cp-plan-cta ghost" href={shell}>Open the app</a>
       ) : (
         <button
           className={`cp-plan-cta ${plan.recommended ? 'primary' : ''}`}

@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
+import { useShell } from '../shell';
 import type { Execution, HomeData, QueueItem } from '@/lib/copilot/types';
 import { money } from '../format';
 import type { Actions } from '../shared';
@@ -20,6 +21,7 @@ function execChip(e: Execution | null | undefined): { cls: string; label: string
 }
 
 export default function TodayView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
+  const shell = useShell();
   const [showWhy, setShowWhy] = useState(false);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
@@ -62,7 +64,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
             drafts and funnel keep running on what you already have — only new supply stops.
           </p>
           {b.effective !== 'operator' && (
-            <a className="cp-btn primary block" href="/copilot/pricing">
+            <a className="cp-btn primary block" href={`${shell}/pricing`}>
               See plans — {PLANS[b.effective === 'free' ? 'pro' : 'operator'].limits.matchesPerMonth.toLocaleString()} a month
             </a>
           )}

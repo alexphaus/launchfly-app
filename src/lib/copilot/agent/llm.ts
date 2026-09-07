@@ -25,9 +25,19 @@ import { SYSTEM_PROMPT, extractJson, normalizeBrief, userPrompt } from './schema
 
 interface LlmConfig { apiKey: string; baseURL?: string; model: string }
 
-/** Below the route's maxDuration and below the proxy's own timeout, so there is
- *  room left for the starter to run and the brief to be persisted. */
-const DEFAULT_TIMEOUT_MS = 55_000;
+/**
+ * Deliberately conservative. 55s was chosen against a guess that the proxy
+ * allowed 60, and it still 504'd — so the real limit is lower than that and
+ * nobody has measured it. 30s fits comfortably under anything plausible.
+ *
+ * The cost of being too low is a starter brief, and the client says so
+ * ("Agent unavailable, showed a starter brief"). The cost of being too high is
+ * a 504 with the generation billed and nothing shown. Those are not symmetric.
+ *
+ * Measure the real ceiling with GET /api/copilot/health?sleep=N — walk N up
+ * until it returns 504 — then raise COPILOT_AI_TIMEOUT_MS to sit under it.
+ */
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function timeoutMs(): number {
   const raw = Number(process.env.COPILOT_AI_TIMEOUT_MS);

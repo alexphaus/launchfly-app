@@ -1078,7 +1078,7 @@ async function agentLimits() {
   //    the generation ran for five minutes, the proxy gave up, and the user got
   //    nothing while the tokens were billed anyway.
   reset();
-  assert.equal(timeoutMs(), 55_000, 'there must always be a limit');
+  assert.equal(timeoutMs(), 30_000, 'there must always be a limit');
   assert.ok(timeoutMs() < 90_000, 'and it must sit below the route maxDuration so the starter still has room');
 
   process.env.COPILOT_AI_TIMEOUT_MS = '20000';
@@ -1086,7 +1086,7 @@ async function agentLimits() {
   // Nonsense must not disable the bound.
   for (const bad of ['0', '-1', 'soon', '', 'NaN']) {
     process.env.COPILOT_AI_TIMEOUT_MS = bad;
-    assert.equal(timeoutMs(), 55_000, `"${bad}" should fall back to the default, not remove the limit`);
+    assert.equal(timeoutMs(), 30_000, `"${bad}" should fall back to the default, not remove the limit`);
   }
 
   // 2. The token cap is opt-in; absent means absent, never zero.

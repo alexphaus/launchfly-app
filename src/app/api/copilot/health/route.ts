@@ -32,11 +32,35 @@ const PROBES: Array<{ table: string; column: string; migration: string }> = [
   { table: 'copilot_decisions', column: 'headline', migration: '20260909_copilot_decisions.sql' },
 ];
 
+/**
+ * Every timeout in this app is set relative to one number nobody has measured:
+ * how long the reverse proxy in front of it will wait. Guessing produced a 55s
+ * agent budget that still 504s, which means the real limit is lower.
+ *
+ * `?sleep=20` holds the response open for twenty seconds and then returns. Walk
+ * it up — 10, 20, 30, 45 — and the first value that answers with 504 instead of
+ * JSON is the proxy's limit, measured rather than assumed. Capped at 120s, and
+ * behind the same auth as the rest of this route so it cannot be used to hold
+ * connections open from outside.
+ */
+const MAX_SLEEP_MS = 120_000;
+
 export async function GET(req: Request) {
   const cron = process.env.CRON_SECRET;
   const authorised = (await currentProfileId()) !== null
     || (!!cron && req.headers.get('authorization') === `Bearer ${cron}`);
   if (!authorised) return fail('Not signed in', 401);
+
+  const sleep = Math.min(Math.max(Number(new URL(req.url).searchParams.get('sleep')) || 0, 0), MAX_SLEEP_MS / 1000);
+  if (sleep > 0) {
+    const started = Date.now();
+    await new Promise((r) => setTimeout(r, sleep * 1000));
+    return Response.json({
+      ok: true,
+      slept: `${((Date.now() - started) / 1000).toFixed(1)}s`,
+      note: 'If you are reading this, the proxy tolerated that duration. Increase ?sleep until you get a 504 instead; that is the real limit every timeout here should sit under.',
+    }, { headers: NO_STORE });
+  }
 
   const db = copilotDb();
   // Reach the database before drawing conclusions about it. Without this, an

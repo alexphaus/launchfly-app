@@ -316,7 +316,21 @@ allows less (Coolify/Traefik commonly 60s), so the request dies first and the
 user sees a 504 having paid for a brief they never got.
 
 `LlmAgent` is therefore bounded: **one attempt**, aborted at
-`COPILOT_AI_TIMEOUT_MS` (default 55s). The abort raises, `runBrief` catches it,
+`COPILOT_AI_TIMEOUT_MS` (default 30s).
+
+That default is deliberately conservative. 55s was tried first, against a guess
+that the proxy allowed 60, and it still 504'd — so the ceiling is lower than
+that and had never been measured. Measure it:
+
+```
+GET /api/copilot/health?sleep=10   → JSON
+GET /api/copilot/health?sleep=30   → JSON
+GET /api/copilot/health?sleep=45   → 504   ← the proxy's real limit is here
+```
+
+Then set `COPILOT_AI_TIMEOUT_MS` under it. The failure modes are not symmetric:
+too low costs a starter brief and the client says so; too high costs a 504 with
+the generation billed and nothing shown. The abort raises, `runBrief` catches it,
 and the starter writes the brief instead — the fallback that already existed but
 could never fire while the call hung. Keep the timeout below both `maxDuration`
 and the proxy, so the starter still has room to run.

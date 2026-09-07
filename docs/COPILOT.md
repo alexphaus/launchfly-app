@@ -306,6 +306,34 @@ messages in the user's own words. With no offer the template falls back to the h
 stays deliberately vague rather than inventing a business. Nothing in the copy assumes an
 industry, country, channel or company size.
 
+## When the brief 504s
+
+A reasoning model on this prompt can spend 6,000-11,000 tokens thinking before
+it answers. Observed on GLM-5.3-Flash through OpenRouter: generations of 75s,
+120s, 185s, 318s and 335s, every one finishing normally and every one billed.
+`/api/copilot/brief` allows 90s and the reverse proxy in front of it usually
+allows less (Coolify/Traefik commonly 60s), so the request dies first and the
+user sees a 504 having paid for a brief they never got.
+
+`LlmAgent` is therefore bounded: **one attempt**, aborted at
+`COPILOT_AI_TIMEOUT_MS` (default 55s). The abort raises, `runBrief` catches it,
+and the starter writes the brief instead — the fallback that already existed but
+could never fire while the call hung. Keep the timeout below both `maxDuration`
+and the proxy, so the starter still has room to run.
+
+Cutting a reasoning model off is a poor fix by itself, so two knobs make it fast
+enough to finish inside the window:
+
+```
+COPILOT_AI_EXTRA_BODY={"reasoning":{"effort":"low"},"provider":{"sort":"latency"}}
+COPILOT_AI_MAX_OUTPUT_TOKENS=6000
+```
+
+`COPILOT_AI_EXTRA_BODY` is merged into the request body so endpoint-specific
+knobs stay out of the code; invalid JSON is logged and ignored. Note that the
+SDK speaks the **Responses API** (`input`, `max_output_tokens`), not Chat
+Completions — worth knowing when comparing against a raw `curl`.
+
 ## External supply agent
 
 Supply can be outsourced without touching this app — an n8n workflow, or a small service

@@ -1064,3 +1064,51 @@ async function signin() {
 }
 
 signin().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The agent must fail fast, not hang
+// ─────────────────────────────────────────────────────────────────────────────
+import { extraBody, maxOutputTokens, timeoutMs } from '../../src/lib/copilot/agent/llm';
+
+async function agentLimits() {
+  const env = { ...process.env };
+  const reset = () => { for (const k of ['COPILOT_AI_TIMEOUT_MS', 'COPILOT_AI_MAX_OUTPUT_TOKENS', 'COPILOT_AI_EXTRA_BODY']) delete process.env[k]; };
+
+  // 1. A bounded default, always. An unbounded call is what produced the 504:
+  //    the generation ran for five minutes, the proxy gave up, and the user got
+  //    nothing while the tokens were billed anyway.
+  reset();
+  assert.equal(timeoutMs(), 55_000, 'there must always be a limit');
+  assert.ok(timeoutMs() < 90_000, 'and it must sit below the route maxDuration so the starter still has room');
+
+  process.env.COPILOT_AI_TIMEOUT_MS = '20000';
+  assert.equal(timeoutMs(), 20_000);
+  // Nonsense must not disable the bound.
+  for (const bad of ['0', '-1', 'soon', '', 'NaN']) {
+    process.env.COPILOT_AI_TIMEOUT_MS = bad;
+    assert.equal(timeoutMs(), 55_000, `"${bad}" should fall back to the default, not remove the limit`);
+  }
+
+  // 2. The token cap is opt-in; absent means absent, never zero.
+  reset();
+  assert.equal(maxOutputTokens(), undefined);
+  process.env.COPILOT_AI_MAX_OUTPUT_TOKENS = '4000';
+  assert.equal(maxOutputTokens(), 4000);
+  process.env.COPILOT_AI_MAX_OUTPUT_TOKENS = 'lots';
+  assert.equal(maxOutputTokens(), undefined, 'an unparseable cap is no cap, not a cap of zero');
+
+  // 3. Endpoint-specific body fields, and never a crash from a typo in an env var.
+  reset();
+  assert.equal(extraBody(), null);
+  process.env.COPILOT_AI_EXTRA_BODY = '{"reasoning":{"effort":"low"}}';
+  assert.deepEqual(extraBody(), { reasoning: { effort: 'low' } });
+  for (const bad of ['{oops', '[1,2]', '"a string"', 'null', '  ']) {
+    process.env.COPILOT_AI_EXTRA_BODY = bad;
+    assert.equal(extraBody(), null, `${bad} must be ignored, not thrown`);
+  }
+
+  process.env = env;
+  console.log('copilot-core: agent-limits checks passed');
+}
+
+agentLimits().catch((e) => { console.error(e); process.exit(1); });

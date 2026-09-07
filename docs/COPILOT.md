@@ -334,6 +334,43 @@ messages in the user's own words. With no offer the template falls back to the h
 stays deliberately vague rather than inventing a business. Nothing in the copy assumes an
 industry, country, channel or company size.
 
+## Setting up the scheduled loop
+
+Nothing in this app wakes up on its own until this exists. No overnight supply,
+no brief waiting in the morning, no weekly Signals read, no push — every one is
+downstream of the cron, and the cron has never run.
+
+`vercel.json` is inert here (this is not a Vercel deploy), so the schedule has to
+come from Coolify. Its **Scheduled Tasks** run a command *inside the container*,
+which is the right place for it: the app is reached on localhost and Traefik is
+never involved, so the proxy timeout that turns a long brief into a 504 does not
+apply. The cron gets its full `maxDuration`.
+
+Coolify → the application → **Scheduled Tasks** → add:
+
+| Field | Value |
+| --- | --- |
+| Name | `copilot daily` |
+| Command | `node scripts/copilot-cron.mjs` |
+| Frequency | `0 21 * * *` |
+
+No arguments. It reads `CRON_SECRET` (or `COPILOT_CRON_SECRET` — the route
+accepts either, because insisting on the prefix is what kept this switched off)
+and `PORT` from the environment the container already has, summarises the run
+into one log line, and exits non-zero on failure so a broken schedule shows red
+rather than quietly succeeding.
+
+Check it without waiting for 21:00 — run it once from the container shell, then:
+
+```sql
+select kind, agent, status, finished_at from copilot_agent_runs
+ order by started_at desc limit 10;
+```
+
+Rows with `kind = 'daily_brief'` and a `finished_at` mean the loop is alive. On a
+Monday there should also be a `copilot_insights` row with `kind = 'weekly'`, and
+a notification.
+
 ## When the brief 504s
 
 A reasoning model on this prompt can spend 6,000-11,000 tokens thinking before

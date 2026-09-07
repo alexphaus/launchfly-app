@@ -3,7 +3,8 @@
 // has already been authenticated by the session cookie.
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
-import { copilotDb, todayIso } from './db';
+import { addDays, copilotDb, todayIso } from './db';
+import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
@@ -93,13 +94,184 @@ async function latestInsight(profileId: string, kind: 'daily' | 'weekly'): Promi
   return (fallback.data as Insight | null) ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Decisions: the calls this app made, and how they landed
+// ---------------------------------------------------------------------------
+// The one table a frontier model cannot reconstruct for a user. Everything here
+// is read-mostly; the sweep that grades old calls lives in daily.ts.
+
+const DECISION_COLS = 'id, for_date, headline, because, instead_of, confidence, missing, topic, dont_title, dont_why, changed, snapshot, response, verify_metric, verify_baseline, verify_after, verified_at';
+
+interface DecisionRow {
+  id: string; for_date: string; headline: string; because: unknown; instead_of: string | null;
+  confidence: string; missing: string | null; topic: string | null;
+  dont_title: string | null; dont_why: string | null; changed: unknown; snapshot: unknown;
+  response: string; verify_metric: string | null; verify_baseline: number | string | null;
+  verify_after: number | string | null; verified_at: string | null;
+}
+
+const asNum = (v: unknown): number => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : 0);
+
+function toDecision(r: DecisionRow): Decision {
+  return {
+    id: r.id,
+    for_date: r.for_date,
+    headline: r.headline,
+    because: Array.isArray(r.because) ? (r.because as unknown[]).filter((b): b is string => typeof b === 'string') : [],
+    instead_of: r.instead_of,
+    confidence: r.confidence === 'low' ? 'low' : 'high',
+    missing: r.missing,
+    topic: r.topic,
+    dont: r.dont_title ? { title: r.dont_title, why: r.dont_why ?? '' } : null,
+    changed: Array.isArray(r.changed) ? (r.changed as Change[]) : [],
+    response: (DECISION_RESPONSES as readonly string[]).includes(r.response) ? (r.response as DecisionResponse) : 'pending',
+    verify: {
+      metric: (r.verify_metric ?? 'none') as DecisionMetric,
+      baseline: asNum(r.verify_baseline),
+      // Postgres numerics arrive as strings; an unverified call must stay null
+      // rather than silently grading itself as "moved by 0".
+      after: r.verify_after == null ? null : asNum(r.verify_after),
+      verifiedAt: r.verified_at,
+    },
+  };
+}
+
+/** Newest first. Powers today's card and the record on Signals from one read. */
+export async function loadDecisions(profileId: string, limit = 10): Promise<Decision[]> {
+  const { data, error } = await copilotDb()
+    .from('copilot_decisions').select(DECISION_COLS)
+    .eq('profile_id', profileId).order('for_date', { ascending: false }).limit(limit);
+  // The table arrives in a later migration than the code that reads it, so a
+  // missing table degrades to "no calls yet" instead of a blank Today.
+  if (error) return [];
+  return ((data ?? []) as DecisionRow[]).map(toDecision);
+}
+
+/** The snapshot the NEXT brief diffs against: the most recent call before today. */
+export async function previousSnapshot(profileId: string, beforeDate: string): Promise<DecisionSnapshot | null> {
+  const { data, error } = await copilotDb()
+    .from('copilot_decisions').select('snapshot')
+    .eq('profile_id', profileId).lt('for_date', beforeDate)
+    .order('for_date', { ascending: false }).limit(1).maybeSingle();
+  if (error || !data?.snapshot || typeof data.snapshot !== 'object') return null;
+  const snap = data.snapshot as Partial<DecisionSnapshot>;
+  return typeof snap.sent === 'number' ? (snap as DecisionSnapshot) : null;
+}
+
+export interface SaveDecisionInput {
+  forDate: string;
+  runId: string | null;
+  draft: DecisionDraft;
+  dont: DontDraft | null;
+  changed: Change[];
+  snapshot: DecisionSnapshot;
+  /** The named metric as it stands right now. The call is graded against this. */
+  baseline: number;
+}
+
+/** One call per day: a re-run of the brief replaces today's rather than stacking. */
+export async function saveDecision(profileId: string, input: SaveDecisionInput): Promise<void> {
+  const d = input.draft;
+  const { error } = await copilotDb().from('copilot_decisions').upsert({
+    profile_id: profileId,
+    for_date: input.forDate,
+    agent_run_id: input.runId,
+    headline: d.headline,
+    because: d.because ?? [],
+    instead_of: d.instead_of ?? null,
+    confidence: d.confidence === 'low' ? 'low' : 'high',
+    missing: d.missing ?? null,
+    topic: d.topic ?? null,
+    dont_title: input.dont?.title ?? null,
+    dont_why: input.dont?.why ?? null,
+    changed: input.changed,
+    snapshot: input.snapshot,
+    verify_metric: d.verify_metric ?? 'none',
+    verify_baseline: input.baseline,
+  }, { onConflict: 'profile_id,for_date' });
+  if (error) console.error('[copilot] saveDecision failed', error.message);
+}
+
+/**
+ * What the user did about today's call. 'ignored' is never accepted here — it is
+ * inferred by the sweep from a call that was still pending when the next one
+ * arrived, because asking someone to self-report having ignored something
+ * produces a flattering record rather than a true one.
+ */
+export async function respondToDecision(profileId: string, forDate: string, response: Exclude<DecisionResponse, 'pending' | 'ignored'>): Promise<Decision | null> {
+  const { data, error } = await copilotDb()
+    .from('copilot_decisions')
+    .update({ response, responded_at: new Date().toISOString() })
+    .eq('profile_id', profileId).eq('for_date', forDate)
+    .select(DECISION_COLS).maybeSingle();
+  if (error || !data) return null;
+  await logEvent(profileId, 'decision_response', { for_date: forDate, response });
+  return toDecision(data as DecisionRow);
+}
+
+export interface DecisionSweep { ignored: number; verified: number }
+
+/**
+ * Grade the open record before a new call is made. Two passes, both against the
+ * ledger rather than against anyone's memory:
+ *
+ *  1. A call still pending when the next one arrives was ignored. This is
+ *     inferred, never asked — a self-reported "did you do it?" produces a
+ *     flattering record, and a flattering record is worth nothing.
+ *  2. A call old enough to have landed gets its named metric read back. The
+ *     metric window rolls, so a value can fall as well as rise; the delta is
+ *     the signal, and a call that named a number which then went nowhere is a
+ *     call that did not work, whatever it felt like at the time.
+ *
+ * Never throws: grading yesterday must not be able to stop today's brief.
+ */
+export async function gradeDecisions(profileId: string, opts: { now?: Date } = {}): Promise<DecisionSweep> {
+  const out: DecisionSweep = { ignored: 0, verified: 0 };
+  try {
+    const db = copilotDb();
+    const profile = await getProfile(profileId);
+    if (!profile) return out;
+    const now = opts.now ?? new Date();
+    const today = todayIso(profile.timezone);
+
+    const expired = await db.from('copilot_decisions')
+      .update({ response: 'ignored', responded_at: now.toISOString() })
+      .eq('profile_id', profileId).eq('response', 'pending').lt('for_date', today)
+      .select('id');
+    out.ignored = expired.data?.length ?? 0;
+
+    const due = await db.from('copilot_decisions')
+      .select('id, verify_metric')
+      .eq('profile_id', profileId).is('verified_at', null)
+      .lte('for_date', addDays(today, -VERIFY_AFTER_DAYS))
+      .neq('verify_metric', 'none')
+      .limit(30);
+    const rows = (due.data ?? []) as Array<{ id: string; verify_metric: DecisionMetric }>;
+    if (!rows.length) return out;
+
+    const metrics = await loadMetrics(profileId, profile);
+    // One update per distinct metric rather than one per row: at most five.
+    const byMetric = new Map<DecisionMetric, string[]>();
+    for (const r of rows) byMetric.set(r.verify_metric, [...(byMetric.get(r.verify_metric) ?? []), r.id]);
+    for (const [metric, ids] of byMetric) {
+      await db.from('copilot_decisions')
+        .update({ verify_after: metricValue(metrics, metric), verified_at: now.toISOString() })
+        .in('id', ids);
+      out.verified += ids.length;
+    }
+  } catch (e) {
+    console.error('[copilot] gradeDecisions failed', e);
+  }
+  return out;
+}
+
 export async function loadHome(profileId: string): Promise<HomeData | null> {
   const db = copilotDb();
   const profile = await getProfile(profileId);
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -120,6 +292,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     // The pipeline: real businesses only, whatever state they are in. Dismissed
     // ones are gone; everything else has a place on the board.
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved', 'acted']).order('score', { ascending: false }).limit(200).then((r) => (r.data ?? []) as Opportunity[]),
+    loadDecisions(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -154,6 +327,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     profile,
     goals,
     insight,
+    // Today's call leads the screen; the rest of the log is the record on Signals.
+    decision: decisionLog.find((d) => d.for_date === today) ?? null,
+    decisionLog,
     plan: shortlist,
     planOverflow,
     queue,

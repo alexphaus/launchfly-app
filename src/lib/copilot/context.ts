@@ -6,8 +6,9 @@
 // metrics to cite.
 
 import { copilotDb, todayIso } from './db';
+import { changesSince, movedBy, snapshotOf } from './decision';
 import { loadMetrics } from './outcomes';
-import { getProfile, typeAffinityFor } from './store';
+import { getProfile, loadDecisions, previousSnapshot, typeAffinityFor } from './store';
 import type { Action, Candidate, ContextItem, ContextPack, ContextSource, Goal, Opportunity } from './types';
 
 const MAX_CONTEXT_ITEMS = 60;
@@ -18,7 +19,8 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('profile not found');
 
-  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics] = await Promise.all([
+  const today = todayIso(profile.timezone);
+  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent] = await Promise.all([
     db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_context_items').select('source, kind, content, created_at, weight').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(MAX_CONTEXT_ITEMS).then((r) => (r.data ?? []) as ContextItem[]),
     db.from('copilot_context_sources').select('source_key, status, last_synced_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as ContextSource[]),
@@ -31,6 +33,8 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
       .order('scored_at', { ascending: true, nullsFirst: true }).order('created_at', { ascending: false }).limit(MAX_CANDIDATES)
       .then((r) => (r.data ?? []) as Pick<Opportunity, 'id' | 'type' | 'title' | 'reason' | 'source' | 'url' | 'contact' | 'fit_score' | 'scored_at'>[]),
     loadMetrics(profileId, profile),
+    previousSnapshot(profileId, today),
+    loadDecisions(profileId, 8),
   ]);
 
   const pick = (s: Opportunity['status']) => opps.filter((o) => o.status === s).map((o) => ({ type: o.type, title: o.title }));
@@ -42,7 +46,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   }));
 
   return {
-    today: todayIso(profile.timezone),
+    today,
     profile: {
       name: profile.name, headline: profile.headline, location: profile.location,
       timezone: profile.timezone, capacity: profile.capacity, hunt_types: profile.hunt_types,
@@ -60,6 +64,12 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
       doneActions: actions.filter((a) => a.status === 'done').map((a) => ({ title: a.title, owner: a.owner })),
       openActions: actions.filter((a) => a.status === 'open').map((a) => ({ title: a.title, owner: a.owner, urgency: a.urgency })),
     },
+    // Computed here, not asked of the model: "what moved" is a fact about the
+    // ledger, and a model asked to remember it will invent it.
+    changed: changesSince(prevSnap, snapshotOf(metrics)),
+    // The record of previous calls. Without it the agent recommends the same
+    // thing every morning and never learns it has been ignored eight times.
+    recentDecisions: recent.map((d) => ({ for_date: d.for_date, headline: d.headline, topic: d.topic, response: d.response, moved: movedBy(d) })),
     typeAffinity: affinity,
     candidates,
     metrics,

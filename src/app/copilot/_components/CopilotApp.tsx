@@ -267,6 +267,16 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return true;
       } catch (e) { fail(e, 'Could not update targeting'); return false; }
     },
+    async answerCall(response) {
+      try {
+        const r = await post<{ home: HomeData }>('/decision', { response });
+        setHome(r.home);
+        say(response === 'did' ? 'Logged. The number it named gets read back in 3 days.'
+          : response === 'rejected' ? 'Noted. A call you keep turning down is worth knowing about.'
+          : 'Logged as a wrong call. That is the most useful thing you can tell it.');
+        return true;
+      } catch (e) { fail(e, 'Could not record'); return false; }
+    },
     async requestLoginLink(email) {
       try { await post('/auth/magic-link', { email }); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Could not send' }; }
     },

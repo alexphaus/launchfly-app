@@ -4,8 +4,10 @@
 // sends, replies, outcomes. Nothing is estimated, and when there is not enough
 // data the tab says so rather than filling the space.
 
+import { MIN_REVIEW, VERDICT_LABEL, decisionReview, movedBy, verdictOf } from '@/lib/copilot/decision';
 import type { DemandTrend, Finding, FunnelStage } from '@/lib/copilot/diagnose';
 import type { HomeData } from '@/lib/copilot/types';
+import { shortDay } from '../format';
 import type { Actions } from '../shared';
 
 const KIND_LABEL: Record<Finding['kind'], string> = {
@@ -27,6 +29,9 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
   // The demand section IS the demand finding, so the card would repeat it.
   const findings = d.findings.filter((f) => f.kind !== 'demand');
   const offerSet = !!home.profile.offer?.sells;
+  // The record of calls this app made. Not advice — the ledger read back.
+  const log = home.decisionLog;
+  const review = decisionReview(log);
 
   return (
     <>
@@ -87,6 +92,43 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
             ))}
           </div>
           <div className="cp-note">A segment whose businesses keep wanting something you do not sell is either a gap in the offer or the wrong segment. Both are one tap away on the terms above.</div>
+        </>
+      )}
+
+      {log.length > 0 && (
+        <>
+          <div className="cp-section"><span className="lead">Your calls</span><span className="count">{log.length === 1 ? 'the first one' : `last ${log.length}`}</span></div>
+          {review.line && <div className="cp-card cp-review"><p>{review.line}</p></div>}
+          <div className="cp-list">
+            {log.map((c) => {
+              const v = verdictOf(c);
+              const moved = movedBy(c);
+              return (
+                <div key={c.id} className="cp-crow">
+                  <div className="cp-dmain">
+                    <div className="t">{c.headline}</div>
+                    <span className={`cp-chip verdict ${v}`}>{VERDICT_LABEL[v]}</span>
+                  </div>
+                  <div className="cp-dsub">
+                    {shortDay(c.for_date)}
+                    {c.topic ? ` · ${c.topic}` : ''}
+                    {/* Movement is only attributed to a call the user says they made.
+                        A number that moved while a call sat ignored proves nothing. */}
+                    {c.response === 'did' && moved != null && c.verify.metric !== 'none'
+                      ? ` · ${c.verify.metric.replace('_', ' ')} ${moved === 0 ? 'unchanged' : `${moved > 0 ? '+' : ''}${moved}`}`
+                      : ''}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!review.line && (
+            <div className="cp-note">
+              {log.length < MIN_REVIEW
+                ? `${MIN_REVIEW - log.length} more call${MIN_REVIEW - log.length === 1 ? '' : 's'} before there is a pattern worth naming.`
+                : 'No pattern yet. A call that keeps being made and never works shows up here.'}
+            </div>
+          )}
         </>
       )}
 

@@ -20,7 +20,56 @@ but none of the business logic. Everything is under:
 | UI (installable PWA) | `src/app/copilot/` (bold) and `src/app/lifeos/` (calm) |
 | API | `src/app/api/copilot/` |
 | Core | `src/lib/copilot/` |
-| Schema | `supabase/migrations/20260903_copilot_foundation.sql`, `20260904_copilot_close_the_loop.sql` |
+| Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
+
+## The call
+
+Every brief ends in one decision, not a list. The agent's output carries a
+`decision` object — headline, `because[]` citing real numbers, `instead_of`,
+`confidence`, `topic`, and the one `verify_metric` it stakes itself on — plus a
+`dont`. Without those fields the model could only smuggle a decision into
+`insight.body` as prose, where nothing can rank it, act on it, or check it
+later. `src/lib/copilot/decision.ts` holds the pure half; `copilot_decisions`
+holds the record.
+
+```
+    changed[]  ──►  DECISION  ──►  did / rejected / wrong / ignored  ──►  verdict
+  (computed        (one move,       (the user, except "ignored")      (the ledger,
+   from the         one trade-off,                                     3 days later)
+   ledger)          one metric)
+```
+
+Four rules keep the record honest:
+
+- **The floor is deterministic.** `starterDecision()` is a ladder over the same
+  metrics the insight cites — a broken opener outranks an unsent queue, because
+  sending more of a message nobody answers is the most expensive thing on the
+  list. It runs when no model is configured, when the model fails, when the
+  model returns no decision, and always when the offer is blank (the same rule
+  that strips drafts written from nothing).
+- **"Ignored" is inferred, never asked.** A call still pending when the next one
+  arrives was ignored. Asking someone to self-report having ignored something
+  produces a flattering record, and a flattering record cannot tell you which of
+  your calls were wrong.
+- **Grading is against the ledger.** The decision names one metric; the baseline
+  is snapshotted when the call is made, and `gradeDecisions()` reads the same
+  metric back `VERIFY_AFTER_DAYS` later. The metric window rolls, so a value can
+  fall — the delta is the signal. Movement is only attributed to a call the user
+  says they made.
+- **"Low confidence" is a first-class answer.** `missing` then names the one fact
+  that would settle it. A system that is never unsure is not being honest about
+  a twelve-message sample.
+
+The compounding part is `topic`. `decisionReview()` groups by it, so the app can
+say *"3 of your last 5 calls were about sending, and you have not done one of
+them"* — a sentence no general model can produce about you, because it requires
+the record of what this app told **you** to do and what you did about it.
+
+The sweep runs at the top of `runBrief`, so the pack the agent reads already
+knows which of its previous calls were ignored, and the prompt forbids simply
+repeating a topic with that history. `DailyResult.brief.graded` reports the
+sweep, which is how you can tell from outside the app whether the record is
+being graded or merely accumulating.
 
 ## Two shells, one app
 
@@ -274,6 +323,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST/DELETE | `/api/copilot/actions/:id/send` | approve & send via API (only when the profile owns the channel) / cancel |
 | POST | `/api/copilot/actions/:id/sent` | manual dispatch: "I sent it from my own app" |
 | POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` |
+| POST | `/api/copilot/decision` | `{ response: did \| rejected \| wrong }` — what you did about today's call |
 | POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |
 | POST | `/api/copilot/auth/magic-link` | `{ email }` — send a one-time sign-in link |

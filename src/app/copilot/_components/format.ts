@@ -43,6 +43,14 @@ export function maskPhone(p?: string): string | undefined {
   return p.length > 6 ? `+${p.slice(0, p.length - 4).replace(/\d/g, (d, i) => (i < 3 ? d : '•'))}${p.slice(-4)}` : p;
 }
 
+/** "7 Sep" for a YYYY-MM-DD day. Calls are listed by day, not by instant, so
+ *  this must never construct a timestamp and drift across a timezone. */
+export function shortDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] ?? m}`;
+}
+
 export function relTime(iso: string | null): string {
   if (!iso) return 'never';
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);

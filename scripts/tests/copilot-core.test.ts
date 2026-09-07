@@ -836,3 +836,187 @@ async function shells() {
 }
 
 shells().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The call, and whether it was right
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  MIN_TOPIC_RUN, VERIFY_AFTER_DAYS, changesSince, decisionReview, metricValue,
+  movedBy, snapshotOf, starterDecision, verdictOf,
+  type Decision, type DecisionResponse, type DecisionMetric,
+} from '../../src/lib/copilot/decision';
+import type { Metrics } from '../../src/lib/copilot/types';
+
+function metrics(over: Partial<Metrics> = {}): Metrics {
+  return {
+    window_days: 30, sent: 0, replies: 0, reply_rate: null, meetings: 0, won: 0, won_amount: 0,
+    lost: 0, awaiting_approval: 0, pipeline: { new: 0, saved: 0, sourced: 0, inferred: 0 },
+    runway_months: null, ...over,
+  };
+}
+
+/** Only the fields verdictOf and decisionReview actually read. */
+const call = (response: DecisionResponse, over: { topic?: string; metric?: DecisionMetric; baseline?: number; after?: number | null } = {}) => ({
+  topic: over.topic ?? null,
+  response,
+  verify: { metric: over.metric ?? 'sent' as DecisionMetric, baseline: over.baseline ?? 0, after: over.after ?? null, verifiedAt: null },
+}) as Pick<Decision, 'topic' | 'response' | 'verify'>;
+
+async function decisions() {
+  // ── 1. What changed: only what moved, and never on the first brief ────────
+  const before = snapshotOf(metrics({ sent: 3, replies: 0, awaiting_approval: 7, runway_months: 3.4 }));
+  const after = snapshotOf(metrics({ sent: 5, replies: 1, awaiting_approval: 5, runway_months: 3.1 }));
+  assert.deepEqual(changesSince(null, after), [], 'the first brief has nothing to compare against');
+  assert.deepEqual(changesSince(before, before), [], 'a still week reports no change, not four zeros');
+  const changed = changesSince(before, after);
+  assert.equal(changed[0].what, 'Runway', 'the constraint is read first');
+  assert.deepEqual(changed[0], { what: 'Runway', from: '3.4 mo', to: '3.1 mo' });
+  assert.ok(changed.some((c) => c.what === 'Replies' && c.from === '0' && c.to === '1'));
+  assert.ok(changed.findIndex((c) => c.what === 'Replies') < changed.findIndex((c) => c.what === 'Sent'), 'outcomes outrank effort');
+  assert.ok(changed.length <= 4);
+  // A null runway on one side is not a change from nothing to nothing.
+  assert.deepEqual(changesSince(snapshotOf(metrics({ sent: 1 })), snapshotOf(metrics({ sent: 1 }))), []);
+
+  // ── 2. Grading is against the ledger, not against how it felt ─────────────
+  assert.equal(verdictOf(call('pending')), 'open');
+  assert.equal(verdictOf(call('rejected')), 'rejected');
+  assert.equal(verdictOf(call('ignored')), 'ignored');
+  assert.equal(verdictOf(call('wrong')), 'wrong');
+  assert.equal(verdictOf(call('did')), 'measuring', 'done but not read back yet');
+  assert.equal(verdictOf(call('did', { metric: 'none' })), 'done', 'nothing measurable to wait for');
+  assert.equal(verdictOf(call('did', { baseline: 4, after: 9 })), 'worked');
+  assert.equal(verdictOf(call('did', { baseline: 4, after: 4 })), 'no_movement');
+  // The metric window rolls, so a value can fall. Falling is not working.
+  assert.equal(verdictOf(call('did', { baseline: 9, after: 4 })), 'no_movement');
+  assert.equal(movedBy(call('did', { baseline: 4, after: 9 })), 5);
+  assert.equal(movedBy(call('did')), null, 'unread is null, never 0');
+  assert.equal(metricValue(metrics({ won_amount: 1200 }), 'won_amount'), 1200);
+  assert.equal(metricValue(metrics({ sent: 3 }), 'none'), 0);
+
+  // ── 3. The record read back ───────────────────────────────────────────────
+  assert.equal(decisionReview([]).line, null);
+  assert.equal(decisionReview([call('did', { baseline: 0, after: 2 })]).line, null, 'one call is not a pattern');
+
+  // Recommended three times, never once acted on.
+  const avoided = decisionReview([
+    call('ignored', { topic: 'sending' }), call('ignored', { topic: 'sending' }), call('rejected', { topic: 'sending' }),
+    call('did', { topic: 'opener', baseline: 0, after: 1 }),
+  ]);
+  assert.equal(avoided.avoidedTopic?.topic, 'sending');
+  assert.equal(avoided.avoidedTopic?.count, MIN_TOPIC_RUN);
+  assert.match(avoided.line ?? '', /3 of your last 4 calls were about sending/);
+  assert.equal(avoided.deadTopic, null, 'never acted on is not the same as never worked');
+
+  // Acted on three times and the number never moved.
+  const dead = decisionReview([
+    call('did', { topic: 'lead volume', baseline: 5, after: 5 }),
+    call('did', { topic: 'lead volume', baseline: 5, after: 5 }),
+    call('did', { topic: 'lead volume', baseline: 5, after: 4 }),
+    call('did', { topic: 'opener', baseline: 0, after: 3 }),
+  ]);
+  assert.equal(dead.deadTopic?.topic, 'lead volume');
+  assert.match(dead.line ?? '', /You did them and the number did not move/);
+  assert.equal(dead.worked, 1);
+  assert.equal(dead.noMovement, 3);
+
+  // A topic that ever worked is not dead, however often it is repeated.
+  const alive = decisionReview([
+    call('did', { topic: 'sending', baseline: 0, after: 4 }),
+    call('did', { topic: 'sending', baseline: 4, after: 4 }),
+    call('did', { topic: 'sending', baseline: 4, after: 4 }),
+    call('did', { topic: 'sending', baseline: 4, after: 4 }),
+  ]);
+  assert.equal(alive.deadTopic, null);
+  assert.match(alive.line ?? '', /1 of your last 4 calls moved the number/);
+
+  const lazy = decisionReview([call('ignored'), call('ignored'), call('ignored'), call('ignored')]);
+  assert.match(lazy.line ?? '', /A call nobody makes is not a call/);
+
+  // ── 4. The deterministic ladder ───────────────────────────────────────────
+  const ladder = (m: Partial<Metrics>, over: { candidates?: number; offerEmpty?: boolean; hasSegments?: boolean } = {}) =>
+    starterDecision({ metrics: metrics(m), candidates: over.candidates ?? 5, offerEmpty: over.offerEmpty ?? false, hasSegments: over.hasSegments ?? true });
+
+  // A blank offer outranks everything: nothing below it can produce a message.
+  const blank = ladder({ pipeline: { new: 0, saved: 0, sourced: 12, inferred: 0 }, awaiting_approval: 4 }, { offerEmpty: true });
+  assert.equal(blank.decision.topic, 'offer');
+  assert.match(blank.decision.headline, /^Say what you sell/);
+  assert.equal(blank.decision.verify_metric, 'sent');
+  assert.match(blank.dont?.title ?? '', /Do not run another match search/);
+
+  // A broken opener outranks an unsent queue: more sends make it worse.
+  const broken = ladder({ sent: 12, replies: 0, awaiting_approval: 7 });
+  assert.equal(broken.decision.topic, 'opener');
+  assert.equal(broken.decision.verify_metric, 'replies');
+  assert.equal(broken.decision.confidence, 'high');
+  assert.match(broken.decision.instead_of ?? '', /7 drafts/);
+
+  // Under ten sends the same call is honestly unsure, and says what would settle it.
+  const thin = ladder({ sent: 6, replies: 0 });
+  assert.equal(thin.decision.confidence, 'low');
+  assert.match(thin.decision.missing ?? '', /Ten sends/);
+
+  // A reply nobody followed up beats any amount of new outreach.
+  const warm = ladder({ sent: 20, replies: 3, meetings: 0, awaiting_approval: 9 });
+  assert.equal(warm.decision.topic, 'converting');
+  assert.equal(warm.decision.verify_metric, 'meetings');
+
+  // The live account's actual state: drafted plenty, sent nothing.
+  const stuck = ladder({ sent: 0, awaiting_approval: 7, pipeline: { new: 96, saved: 0, sourced: 140, inferred: 0 } });
+  assert.equal(stuck.decision.topic, 'sending');
+  assert.match(stuck.decision.headline, /Send the 7 drafts already written/);
+  assert.match(stuck.decision.instead_of ?? '', /Another match search/);
+  assert.match(stuck.dont?.title ?? '', /Do not find new matches/);
+  assert.ok(stuck.decision.because.some((b) => /7 drafted, 0 sent/.test(b)), 'every line cites a real number');
+
+  // A short runway changes the reasoning, not the call.
+  const broke = ladder({ awaiting_approval: 2, runway_months: 2.1 });
+  assert.ok(broke.decision.because.some((b) => /Runway is 2.1 months/.test(b)));
+
+  assert.equal(ladder({}, { hasSegments: false }).decision.topic, 'targeting');
+  assert.equal(ladder({}, { candidates: 0 }).decision.topic, 'supply');
+  // Nothing wrong, nothing waiting: start.
+  const fresh = ladder({});
+  assert.equal(fresh.decision.topic, 'sending');
+  assert.equal(fresh.decision.confidence, 'low', 'a first move is not a measured one');
+  // Every rung names a real alternative, or it is not a decision.
+  for (const l of [blank, broken, thin, warm, stuck, fresh]) {
+    assert.ok(l.decision.instead_of, `${l.decision.topic} must name what it rules out`);
+    assert.ok(l.decision.because.length > 0);
+    assert.ok(l.decision.headline.length < 90, 'a headline is one move, not a paragraph');
+  }
+
+  // ── 5. Agent output is never trusted ──────────────────────────────────────
+  const base = { insight: { body: 'x' }, rankings: [], plan: [], nudges: [], opportunities: [], skills: [], lessons: [] };
+  // No headline is no decision: the caller falls back to the ladder rather than
+  // rendering an empty card.
+  assert.equal(normalizeBrief({ ...base, decision: { because: ['a'] } }).decision, null);
+  assert.equal(normalizeBrief(base).decision, null);
+  assert.equal(normalizeBrief({ ...base, decision: 'send things' }).decision, null);
+
+  const ok = normalizeBrief({
+    ...base,
+    decision: {
+      headline: 'Send the five drafts.', because: ['a', 'b', 'c', 'd', 'e'],
+      instead_of: 'Another search', confidence: 'nonsense', missing: 'more sends',
+      topic: 'SENDING', verify_metric: 'clicks',
+    },
+    dont: { title: 'Do not search', why: 'You have 96.' },
+  });
+  assert.equal(ok.decision?.because.length, 3, 'because is capped');
+  assert.equal(ok.decision?.confidence, 'high', 'an unknown confidence is not treated as unsure');
+  assert.equal(ok.decision?.missing, undefined, 'a high-confidence call carries no missing fact');
+  assert.equal(ok.decision?.topic, 'sending', 'topics are grouped case-insensitively');
+  assert.equal(ok.decision?.verify_metric, 'none', 'an unknown metric grades nothing rather than guessing');
+  assert.equal(ok.dont?.title, 'Do not search');
+
+  const unsure = normalizeBrief({ ...base, decision: { headline: 'h', confidence: 'low', missing: 'a bigger sample' } });
+  assert.equal(unsure.decision?.missing, 'a bigger sample');
+  assert.deepEqual(unsure.decision?.because, [], 'no evidence is an empty list, not a fabricated one');
+  // A dont with no title is no dont.
+  assert.equal(normalizeBrief({ ...base, dont: { why: 'because' } }).dont, null);
+
+  assert.equal(VERIFY_AFTER_DAYS, 3);
+  console.log('copilot-core: decision checks passed');
+}
+
+decisions().catch((e) => { console.error(e); process.exit(1); });

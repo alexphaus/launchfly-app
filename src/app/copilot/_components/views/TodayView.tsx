@@ -2,6 +2,7 @@
 // Today is a send queue. Everything else on this screen exists to get a message
 // out of the door or to record what came back.
 import { useState } from 'react';
+import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
 import { offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
@@ -45,6 +46,8 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
   return (
     <>
       {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
+
+      {home.decision && <CallCard decision={home.decision} actions={actions} />}
 
       {/* Sent is the hero. The app has a supply surplus and a sending deficit, and
           the headline number should be on the side that needs to move. */}
@@ -186,6 +189,91 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
  * WhatsApp or mail app (or sends via API when this profile owns the channel);
  * "I sent it" records that it went. Tapping the text opens the full sheet to edit.
  */
+/**
+ * The one call, and what it is instead of.
+ *
+ * This card is the difference between an app that lists five good things and
+ * one that picks. It leads the screen on purpose: a decision buried under a
+ * metrics strip is a suggestion, and suggestions are what a chat window is for.
+ * The three buttons are the only place the app finds out whether it was right —
+ * so "Wrong call" is offered as plainly as "I did it".
+ */
+function CallCard({ decision, actions }: { decision: Decision; actions: Actions }) {
+  const [busy, setBusy] = useState(false);
+  const verdict = verdictOf(decision);
+  const moved = movedBy(decision);
+  const answered = decision.response !== 'pending';
+
+  const answer = async (r: 'did' | 'rejected' | 'wrong') => {
+    setBusy(true);
+    await actions.answerCall(r);
+    setBusy(false);
+  };
+
+  return (
+    <>
+      {decision.changed.length > 0 && (
+        <div className="cp-changed" aria-label="What changed since the last brief">
+          {decision.changed.map((c) => (
+            <span key={c.what} className="cp-change">
+              <b>{c.what}</b> {c.from} <span className="arrow">→</span> {c.to}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="cp-card cp-call">
+        <div className="cp-call-top">
+          <div className="cp-eyebrow">Today’s call</div>
+          {decision.confidence === 'low' && <span className="cp-chip unsure">Not sure</span>}
+        </div>
+        <h2 className="cp-call-head">{decision.headline}</h2>
+
+        {decision.because.length > 0 && (
+          <ul className="cp-because">
+            {decision.because.map((b, i) => <li key={i}>{b}</li>)}
+          </ul>
+        )}
+
+        {decision.instead_of && (
+          <div className="cp-instead"><b>Instead of</b> {decision.instead_of}</div>
+        )}
+
+        {decision.missing && (
+          <div className="cp-missing"><b>What would change this</b> {decision.missing}</div>
+        )}
+
+        {answered ? (
+          <div className="cp-verdict">
+            <span className={`cp-chip verdict ${verdict}`}>{VERDICT_LABEL[verdict]}</span>
+            <span className="cp-verdict-note">
+              {verdict === 'measuring' && decision.verify.metric !== 'none'
+                ? `Reading ${decision.verify.metric.replace('_', ' ')} back in a few days. It was ${decision.verify.baseline} when you decided.`
+                : verdict === 'worked' ? `${decision.verify.metric.replace('_', ' ')} moved by ${moved}.`
+                : verdict === 'no_movement' ? `${decision.verify.metric.replace('_', ' ')} did not move.`
+                : verdict === 'wrong' ? 'Recorded. It will not make this call the same way again.'
+                : verdict === 'rejected' ? 'Recorded.'
+                : 'Recorded.'}
+            </span>
+          </div>
+        ) : (
+          <div className="cp-btn-row">
+            <button className="cp-btn primary" disabled={busy} onClick={() => answer('did')}>I did it</button>
+            <button className="cp-btn" disabled={busy} onClick={() => answer('rejected')}>Not doing it</button>
+            <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
+          </div>
+        )}
+      </div>
+
+      {decision.dont && (
+        <div className="cp-empty cp-dont">
+          <b>{decision.dont.title}</b>{decision.dont.why}
+        </div>
+      )}
+    </>
+  );
+}
+
 function QueueRow({ q, home, actions }: { q: QueueItem; home: HomeData; actions: Actions }) {
   const [busy, setBusy] = useState(false);
   const e = q.execution;

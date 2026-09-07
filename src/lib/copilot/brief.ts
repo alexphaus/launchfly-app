@@ -6,18 +6,23 @@
 import { StarterAgent, getAgent } from './agent';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
+import { metricValue, snapshotOf, starterDecision } from './decision';
 import { createDraftExecution, openDraftForOpportunity } from './execution';
 import { OFFER_TASK_DETAIL, OFFER_TASK_TITLE, offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
-import { getProfile } from './store';
+import { getProfile, gradeDecisions, saveDecision } from './store';
+import type { DecisionSweep } from './store';
 import type { BriefOutput, OpportunityAgent, Profile, ContextPack } from './types';
 
-export interface BriefResult { runId: string; agent: OpportunityAgent['name']; output: BriefOutput; fellBack: boolean }
+export interface BriefResult { runId: string; agent: OpportunityAgent['name']; output: BriefOutput; fellBack: boolean; graded: DecisionSweep }
 
 export async function runBrief(profileId: string, opts: { reason?: string } = {}): Promise<BriefResult> {
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('profile not found');
+  // Grade the open record first, so the pack the agent reads already knows
+  // which of its previous calls were ignored and which moved nothing.
+  const graded = await gradeDecisions(profileId);
   const pack = await buildContextPack(profileId);
   const summary = { reason: opts.reason ?? 'manual', goals: pack.goals.length, context: pack.context.length, capacity: pack.profile.capacity };
 
@@ -41,7 +46,7 @@ export async function runBrief(profileId: string, opts: { reason?: string } = {}
     await finishRun(runId, 'ok', output);
   }
   await persistBrief(profile, pack, runId, output);
-  return { runId, agent: agent.name, output, fellBack };
+  return { runId, agent: agent.name, output, fellBack, graded };
 }
 
 async function startRun(profileId: string, agent: OpportunityAgent, input_summary: Record<string, unknown>): Promise<string> {
@@ -69,6 +74,31 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   await db.from('copilot_insights').delete().eq('profile_id', pid).eq('for_date', today).eq('kind', 'daily');
   await db.from('copilot_insights').insert({ profile_id: pid, kind: 'daily', for_date: today, body: out.insight.body, reasoning: out.insight.reasoning ?? null, agent_run_id: runId });
 
+  // ─── Today's call ─────────────────────────────────────────────────────────
+  // A brief with no decision is the old product: a list of things to consider.
+  // The starter's ladder is the floor, so Today always leads with one move.
+  // And when the offer is blank the server picks the call whatever the agent
+  // proposed — the same rule that strips drafts written from nothing, because
+  // "send the waiting drafts" is wrong advice when none of them can exist.
+  const blankOffer = offerIsEmpty(profile.offer);
+  const floor = starterDecision({
+    metrics: pack.metrics,
+    candidates: pack.candidates.length,
+    offerEmpty: blankOffer,
+    hasSegments: profile.target_segments.length > 0,
+  });
+  const useFloor = blankOffer || !out.decision;
+  out.decision = useFloor ? floor.decision : out.decision;
+  out.dont = useFloor ? floor.dont : out.dont;
+  if (out.decision) {
+    await saveDecision(pid, {
+      forDate: today, runId, draft: out.decision, dont: out.dont,
+      changed: pack.changed,
+      snapshot: snapshotOf(pack.metrics),
+      baseline: metricValue(pack.metrics, out.decision.verify_metric ?? 'none'),
+    });
+  }
+
   const candidateIds = new Set(pack.candidates.map((c) => c.id));
   const rankCtx = { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: pack.typeAffinity };
 
@@ -93,7 +123,7 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   // empty offer. The message would be a stranger's template, and the account
   // this was built for proved nobody sends those. The plan carries one task
   // instead — set the offer — and every draft is written the moment it is.
-  if (offerIsEmpty(profile.offer)) {
+  if (blankOffer) {
     out.plan = out.plan.filter((p) => !(p.owner === 'ai' && p.ai_draft && p.channel && p.opportunity_ref));
     const norm2 = (s: string) => s.trim().toLowerCase();
     if (!out.plan.some((p) => norm2(p.title) === norm2(OFFER_TASK_TITLE))) {

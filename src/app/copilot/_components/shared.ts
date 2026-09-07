@@ -58,6 +58,8 @@ export interface Actions {
   saveTargeting(t: { target_segments: string[]; target_area: string }): Promise<boolean>;
   /** Signals → "Stop matching <segment>": drops one segment and everything drafted for it. */
   dropSegment(segment: string): Promise<boolean>;
+  /** What you did about today's call. "Ignored" is never sent — it is inferred. */
+  answerCall(response: 'did' | 'rejected' | 'wrong'): Promise<boolean>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
 }

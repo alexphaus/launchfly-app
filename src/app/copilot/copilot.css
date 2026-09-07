@@ -395,6 +395,46 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 /* A full-width button may carry a sentence; let it wrap instead of clipping. */
 .cp-btn.block { white-space: normal; line-height: 1.3; }
 
+/* ── The call: what changed, the one move, and whether it was right ───────── */
+/* Today leads with this, above the numbers. A decision under a metrics strip is
+   a suggestion, and the app already had plenty of those. */
+.cp-changed { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 20px 0; }
+.cp-change { font-family: var(--display); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); border: 2px solid var(--frame); border-radius: 6px; padding: 4px 8px; white-space: nowrap; }
+.cp-change b { color: var(--ink); font-weight: 800; }
+.cp-change .arrow { color: var(--blue); font-weight: 800; }
+
+.cp-call { margin-top: 14px; border-width: 3px; }
+.cp-call-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cp-call-head { font-family: var(--display); font-size: 19px; font-weight: 800; line-height: 1.25; letter-spacing: -0.3px; margin: 2px 0 12px; }
+.cp-chip.unsure { background: #fff; color: var(--muted); border: 2px dashed var(--ink); flex-shrink: 0; }
+
+.cp-because { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.cp-because li { position: relative; padding-left: 15px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.cp-because li::before { content: ''; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--blue); }
+
+.cp-instead, .cp-missing { font-size: 12.5px; line-height: 1.5; color: var(--muted); padding-top: 10px; border-top: 2px dashed var(--ink); }
+.cp-missing { border-top-style: dotted; }
+.cp-instead b, .cp-missing b { font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink); display: block; margin-bottom: 3px; }
+.cp-call .cp-btn-row .cp-btn { font-size: 11px; padding: 11px 8px; }
+
+.cp-verdict { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 2px solid var(--frame); }
+.cp-verdict-note { flex: 1; min-width: 140px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.cp-chip.verdict { border: 2px solid var(--ink); background: #fff; color: var(--ink); flex-shrink: 0; }
+.cp-chip.verdict.worked { background: var(--blue); color: #fff; border-color: var(--blue); }
+.cp-chip.verdict.no_movement, .cp-chip.verdict.wrong { background: var(--ink); color: #fff; }
+.cp-chip.verdict.ignored, .cp-chip.verdict.rejected { border-style: dashed; color: var(--muted); }
+.cp-chip.verdict.measuring, .cp-chip.verdict.open { color: var(--muted); border-color: var(--dim); }
+
+/* "Not today" is a decision too, so it is rendered as one rather than hidden. */
+.cp-dont { margin-top: 0; }
+
+/* The record, on Signals. */
+.cp-review p { font-size: 13.5px; line-height: 1.55; font-weight: 500; }
+.cp-crow { padding: 12px 16px; border-bottom: 2px solid var(--ink); }
+.cp-crow:last-child { border-bottom: none; }
+.cp-crow .cp-dmain { align-items: flex-start; margin-bottom: 4px; }
+.cp-crow .cp-dmain .t { font-size: 13.5px; font-weight: 700; text-transform: none; line-height: 1.35; }
+
 /* ══ /lifeos — the calm theme ═══════════════════════════════════════════════
    The same markup, the same three tabs, the same data. Only the surface
    changes: ink borders become shadow and space, squares become pills, black
@@ -596,3 +636,19 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-plan-cta.ghost { background: var(--line); color: var(--muted); box-shadow: none; }
 .cp-root[data-theme="soft"] .cp-price-faq p + p { border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp-price-head h1 { font-weight: 700; letter-spacing: -0.02em; }
+
+/* ── The call ─────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-changed { margin: 14px 24px 0; gap: 8px; }
+.cp-root[data-theme="soft"] .cp-change { border: 0; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-sm); text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11px; padding: 6px 12px; }
+.cp-root[data-theme="soft"] .cp-call { border: 0; }
+.cp-root[data-theme="soft"] .cp-call-head { font-weight: 700; font-size: 19px; letter-spacing: -0.2px; }
+.cp-root[data-theme="soft"] .cp-chip.unsure { background: var(--line); color: var(--muted); border: 0; }
+.cp-root[data-theme="soft"] .cp-because li::before { border-radius: 50%; }
+.cp-root[data-theme="soft"] :is(.cp-instead, .cp-missing) { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] :is(.cp-instead b, .cp-missing b) { text-transform: none; letter-spacing: 0; font-size: 11.5px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-verdict { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp-chip.verdict { border: 0; background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-chip.verdict.worked { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] :is(.cp-chip.verdict.no_movement, .cp-chip.verdict.wrong) { background: rgba(194, 112, 61, 0.1); color: #A85F2E; }
+.cp-root[data-theme="soft"] .cp-chip.verdict.measuring { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp-crow { padding-left: 22px; padding-right: 22px; border-bottom-color: var(--line); border-bottom-width: 1px; }

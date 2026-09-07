@@ -13,11 +13,16 @@ export default function LoginView() {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (q.get('error') === 'expired') setError('That link has expired or was already used. Request a new one.');
+    // "used" is worth naming precisely: it almost always means a mail scanner
+    // opened the link first, not that the person clicked it twice.
+    const reason = q.get('error');
+    if (reason === 'used') setError('That link had already been opened. Some mail apps follow links before you do — request a fresh one and it will work.');
+    else if (reason === 'expired') setError('That link expired. They last 15 minutes; request another.');
+    else if (reason) setError('That link was not recognised. Request a new one.');
   }, []);
   const send = async () => {
     setState('sending'); setError(null);
-    try { await post('/auth/magic-link', { email: email.trim() }); setState('sent'); }
+    try { await post('/auth/magic-link', { email: email.trim(), shell }); setState('sent'); }
     catch (e) { setState('error'); setError(e instanceof Error ? e.message : 'Could not send'); }
   };
   return (

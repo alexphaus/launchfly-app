@@ -194,7 +194,12 @@ or notice replies until someone taps "Find new".
 
 **Identity** — signed httpOnly cookie carrying the profile id (`session.ts`). Optional email
 magic links (`auth.ts`): own tokens hashed in `copilot_login_tokens`, sent with Resend,
-consumed once by `/api/copilot/auth/callback`. Requested from inside the app it verifies and
+consumed once by `/api/copilot/auth/callback` — but only by its `POST`. The
+`GET` the email links to merely checks the token and forwards to
+`{shell}/auth/confirm`, because Gmail scans every URL in an email and Resend
+rewrites them through `resend-links.com`; a token spent on `GET` is dead before
+the recipient taps it. The button on that page is the only thing that spends
+one, and `?shell=/lifeos` on the link brings the calm shell back. Requested from inside the app it verifies and
 links the current profile; from `/copilot/login` it finds the profile by email. No third-party
 auth configuration. Onboarding is rate limited per IP and refuses when a session already exists.
 

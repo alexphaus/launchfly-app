@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { describeDbError } from '@/lib/copilot/db';
 import { completeOnboarding, parseOnboarding } from '@/lib/copilot/onboarding';
 import { setSessionCookie } from '@/lib/copilot/session';
 import { NO_STORE, fail, readJson } from '@/lib/copilot/http';
@@ -23,6 +24,6 @@ export async function POST(req: Request) {
     return res;
   } catch (e) {
     console.error('[copilot] onboarding failed', e);
-    return fail('Could not create your copilot. Check the database migration and try again.', 500);
+    return fail(describeDbError(e, 'Could not create your copilot.'), 500);
   }
 }

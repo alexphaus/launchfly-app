@@ -1175,3 +1175,83 @@ async function edge() {
 }
 
 edge().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// What was said, on both sides
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  MAX_SENT_PER_BUCKET, NO_REPLY_AFTER_DAYS, REPLY_TEXT_MAX,
+  selectReplies, selectSentExamples, trimMessage,
+} from '../../src/lib/copilot/conversations';
+import { SYSTEM_PROMPT as PROMPT } from '../../src/lib/copilot/agent/schema';
+
+async function conversations() {
+  // 1. Trimming. A WhatsApp body is mostly newlines by weight, and the pack is
+  //    serialised whole into a prompt that already takes two minutes to answer.
+  assert.equal(trimMessage('  hello\n\n  there \t world ', 100), 'hello there world');
+  assert.equal(trimMessage(null, 100), '');
+  assert.equal(trimMessage(undefined, 100), '');
+  assert.equal(trimMessage('   ', 100), '', 'whitespace is not a message');
+  const long = trimMessage('x'.repeat(500), 20);
+  assert.equal(long.length, 20, 'the cap is a cap, including the ellipsis');
+  assert.ok(long.endsWith('…'));
+  assert.equal(trimMessage('exact', 5), 'exact', 'a body at the limit is not truncated');
+
+  // 2. Replies. Every reply matched before the body was captured has note null;
+  //    those rows are history, not facts, and must not reach the prompt.
+  const replies = selectReplies([
+    { note: null, occurred_at: '2026-09-06T10:00:00Z', business: 'Old Match' },
+    { note: '   ', occurred_at: '2026-09-06T11:00:00Z' },
+    { note: 'How much is it?', occurred_at: '2026-09-05T10:00:00Z', business: 'Bright Dental' },
+    { note: 'Not interested, we have someone', occurred_at: '2026-09-07T09:00:00Z', business: 'Pest Pros' },
+  ]);
+  assert.equal(replies.length, 2, 'bodiless rows dropped');
+  assert.equal(replies[0].business, 'Pest Pros', 'newest first');
+  assert.equal(replies[1].text, 'How much is it?');
+  assert.equal(selectReplies(Array.from({ length: 20 }, (_, i) => ({ note: `r${i}`, occurred_at: `2026-09-0${(i % 9) + 1}T10:00:00Z` })), 3).length, 3);
+  assert.ok(REPLY_TEXT_MAX > 0);
+
+  // 3. Sent examples. The point is the contrast, so both buckets or neither is
+  //    meaningful — a model shown only winners concludes everything works.
+  const now = new Date('2026-09-07T12:00:00Z');
+  const sent = selectSentExamples([
+    { id: 'replied-1', body: 'Hi Bright Dental, saw you have no booking link.', sent_at: '2026-09-06T08:00:00Z' },
+    { id: 'pending-1', body: 'Sent yesterday, nobody has had time to answer yet.', sent_at: '2026-09-06T09:00:00Z' },
+    { id: 'ignored-1', body: 'Hello, I do websites, let me know.', sent_at: '2026-09-01T09:00:00Z' },
+    { id: 'nobody', body: '   ', sent_at: '2026-09-01T09:00:00Z' },
+    { id: 'draft', body: 'Never sent.', sent_at: null },
+  ], new Set(['replied-1']), { now });
+
+  assert.deepEqual(sent.map((s) => s.replied), [true, false], 'one of each, replied first');
+  assert.match(sent[0].text, /Bright Dental/);
+  assert.match(sent[1].text, /I do websites/);
+  assert.ok(!sent.some((s) => s.text.includes('nobody has had time')), `silence younger than ${NO_REPLY_AFTER_DAYS} days is pending, not a result`);
+  assert.ok(!sent.some((s) => s.text.includes('Never sent')), 'an unsent draft is not evidence');
+  assert.ok(!sent.some((s) => !s.text.trim()), 'an empty body teaches nothing');
+
+  // A reply is a reply however old; only silence has to mature.
+  const oldReply = selectSentExamples(
+    [{ id: 'r', body: 'Ancient but answered.', sent_at: '2026-01-01T09:00:00Z' }],
+    new Set(['r']), { now },
+  );
+  assert.deepEqual(oldReply.map((s) => s.replied), [true]);
+
+  // Buckets are capped independently, so a run of wins cannot crowd out losses.
+  const many = selectSentExamples(
+    Array.from({ length: 20 }, (_, i) => ({ id: `w${i}`, body: `won ${i}`, sent_at: '2026-09-01T09:00:00Z' }))
+      .concat(Array.from({ length: 20 }, (_, i) => ({ id: `l${i}`, body: `lost ${i}`, sent_at: '2026-09-01T09:00:00Z' }))),
+    new Set(Array.from({ length: 20 }, (_, i) => `w${i}`)), { now },
+  );
+  assert.equal(many.filter((s) => s.replied).length, MAX_SENT_PER_BUCKET);
+  assert.equal(many.filter((s) => !s.replied).length, MAX_SENT_PER_BUCKET);
+
+  // 4. A field the agent is never told about is a field it ignores. These three
+  //    were in the database for months and reached nothing.
+  for (const section of ['REPLIES:', 'SENT:', 'DEMAND:']) {
+    assert.ok(PROMPT.includes(section), `${section} must stay in the system prompt`);
+  }
+
+  console.log('copilot-core: conversation checks passed');
+}
+
+conversations().catch((e) => { console.error(e); process.exit(1); });

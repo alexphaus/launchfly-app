@@ -4,6 +4,7 @@
 // It never invents opportunities — but since the loop closed it can rank REAL
 // candidates, cite REAL metrics, and draft a real opener the user can send.
 
+import { starterDecision } from '../decision';
 import { describeMetrics } from '../metrics';
 import { OFFER_TASK_DETAIL, OFFER_TASK_TITLE, offerIsEmpty } from '../offer';
 import { CAPACITY_META, type BriefOutput, type ContextPack, type Offer, type OpportunityAgent } from '../types';
@@ -78,7 +79,15 @@ export class StarterAgent implements OpportunityAgent {
     if (!pack.candidates.length) nudges.push({ title: 'No real matches in the pipeline. Tap "Find new matches" or add targeting in the You tab.', urgency: 'normal', due_label: 'Today' });
     if (m.sent > 0 && m.replies === 0 && m.sent >= 5) nudges.push({ title: `${m.sent} sent, zero replies. Follow-ups are drafted automatically on day 3; approve them.`, urgency: 'normal', due_label: 'Outreach' });
 
+    // The call is a ladder over the same numbers the insight cites, so the
+    // floor is never a blank card: a deterministic decision beats no decision.
+    const { decision, dont } = starterDecision({
+      metrics: m, candidates: pack.candidates.length,
+      offerEmpty: noOffer, hasSegments: pack.profile.target_segments.length > 0,
+    });
+
     return {
+      decision, dont,
       insight: { body, reasoning: `Starter brief: computed from ${m.sent} sends, ${m.replies} replies, ${pack.candidates.length} real candidates and your onboarding answers. No model was called.` },
       rankings, plan, nudges, opportunities: [], skills: [], lessons: [],
     };

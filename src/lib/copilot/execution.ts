@@ -6,7 +6,7 @@
 import { Resend } from 'resend';
 import { getWhatsAppProvider } from '@/lib/whatsapp-provider';
 import { openerTemplate } from './agent/starter';
-import { copilotDb, todayIso } from './db';
+import { addDays, copilotDb, todayIso } from './db';
 import { getProfile, logEvent, setActionStatus } from './base';
 import { limitsFor } from './plans';
 import type { Channel, Execution, Opportunity, Profile, QueueItem } from './types';
@@ -360,8 +360,3 @@ export function followUpTemplate(name: string, firstName: string, channel: Chann
   return `${greet}quick follow-up on my note from a few days ago.${proof} Worth a 10-minute call this week?${channel === 'whatsapp' ? ' — ' : '\n\n'}${firstName}`;
 }
 
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}

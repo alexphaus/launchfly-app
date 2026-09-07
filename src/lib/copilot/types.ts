@@ -1,6 +1,7 @@
 // src/lib/copilot/types.ts
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
+import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis } from './diagnose';
 import type { PipelineStage } from './pipeline';
 import type { PlanKey, PlanStatus } from './plans';
@@ -232,6 +233,8 @@ export interface GrowthItem {
   status: 'active' | 'done' | 'dismissed';
 }
 
+export type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse };
+
 export interface EventRow {
   event_type: string;
   payload: Record<string, unknown>;
@@ -273,6 +276,14 @@ export interface HomeData {
   profile: Profile;
   goals: Goal[];
   insight: Insight | null;
+  /**
+   * Today's one call: what to do, what it is instead of, and the number that
+   * should move if it was right. The insight above is the read of the
+   * situation; this is the decision that follows from it.
+   */
+  decision: Decision | null;
+  /** The recent record of calls, newest first. Read back on Signals. */
+  decisionLog: Decision[];
   plan: Action[];
   nudges: Action[];
   opportunities: Opportunity[];
@@ -326,6 +337,14 @@ export interface ContextPack {
     doneActions: Array<Pick<Action, 'title' | 'owner'>>;
     openActions: Array<Pick<Action, 'title' | 'owner' | 'urgency'>>;
   };
+  /** What moved since the previous brief. Computed here, never by the model. */
+  changed: Change[];
+  /**
+   * The calls this app has already made, and how they landed. Without this the
+   * agent recommends the same thing every morning and never learns that the
+   * user has ignored it nine times.
+   */
+  recentDecisions: Array<{ for_date: string; headline: string; topic: string | null; response: DecisionResponse; moved: number | null }>;
   /** Learned preference weights per type, 0.5 .. 1.5 (1 = neutral). */
   typeAffinity: Record<OpportunityType, number>;
   /** Sourced opportunities awaiting or refreshing a rank. The agent scores these; it does not invent them. */
@@ -366,6 +385,10 @@ export interface BriefNudge {
 
 export interface BriefOutput {
   insight: { body: string; reasoning?: string };
+  /** The one move for today, with its trade-off and the metric it stakes itself on. */
+  decision: DecisionDraft | null;
+  /** The one thing explicitly not worth doing today. */
+  dont: DontDraft | null;
   /** Scores for candidates in the pack. Unknown ids are ignored. */
   rankings: Array<{ id: string; fit_score: number; reason: string }>;
   plan: BriefAction[];

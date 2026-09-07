@@ -23,3 +23,11 @@ export function todayIso(timezone = 'UTC'): string {
     return new Date().toISOString().slice(0, 10);
   }
 }
+
+/** Shift a YYYY-MM-DD day. Dates are compared as days, never as instants, so
+ *  this stays in UTC and never drifts by an hour across a DST boundary. */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

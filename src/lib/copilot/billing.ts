@@ -10,6 +10,7 @@
 import { getStripe } from '@/lib/payments/stripe';
 import { copilotDb } from './db';
 import { isPlanKey, priceIdFor, type BillingPeriod, type PlanKey, type PlanStatus } from './plans';
+import { DEFAULT_SHELL, type Shell } from './shell';
 import type { Profile } from './types';
 
 export { billingConfigured } from './plans';
@@ -41,6 +42,7 @@ export async function createCheckoutSession(
   profile: Profile,
   plan: Exclude<PlanKey, 'free'>,
   period: BillingPeriod,
+  shell: Shell = DEFAULT_SHELL,
 ): Promise<string> {
   const price = priceIdFor(plan, period);
   if (!price) throw new Error(`No Stripe price configured for ${plan} ${period}`);
@@ -55,20 +57,20 @@ export async function createCheckoutSession(
     metadata: { copilot_profile_id: profile.id, plan },
     subscription_data: { metadata: { copilot_profile_id: profile.id, plan } },
     allow_promotion_codes: true,
-    success_url: `${appUrl()}/copilot?upgraded=${plan}`,
-    cancel_url: `${appUrl()}/copilot/pricing?cancelled=1`,
+    success_url: `${appUrl()}${shell}?upgraded=${plan}`,
+    cancel_url: `${appUrl()}${shell}/pricing?cancelled=1`,
   });
   if (!session.url) throw new Error('Stripe returned no checkout url');
   return session.url;
 }
 
 /** Stripe-hosted page for changing card, switching plan or cancelling. */
-export async function createPortalSession(profile: Profile): Promise<string> {
+export async function createPortalSession(profile: Profile, shell: Shell = DEFAULT_SHELL): Promise<string> {
   if (!profile.stripe_customer_id) throw new Error('No subscription to manage');
   const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: profile.stripe_customer_id,
-    return_url: `${appUrl()}/copilot`,
+    return_url: `${appUrl()}${shell}`,
   });
   return session.url;
 }

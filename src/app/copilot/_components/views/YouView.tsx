@@ -4,6 +4,7 @@ import { PLANS } from '@/lib/copilot/plans';
 import { CAPACITY_META, type HomeData } from '@/lib/copilot/types';
 import { goalProgress, money, relTime } from '../format';
 import type { Actions } from '../shared';
+import { useShell } from '../shell';
 
 // Lives in the sheet behind the header avatar: goals, offer, targeting, runway,
 // plan, agent, account. Settings with the context the ranking runs on.
@@ -15,6 +16,10 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
   const calendar = home.sources.find((s) => s.source_key === 'calendar');
   const b = home.billing;
   const currency = p.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '$';
+  // Two shells render this same app. The switch lives here so either one can be
+  // opened from the other without typing a URL, and neither is the "real" one.
+  const shell = useShell();
+  const soft = shell === '/lifeos';
 
   return (
     <>
@@ -69,7 +74,7 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
             </div>
           </div>
           {b.effective === 'free'
-            ? <a className="cp-connect" href="/copilot/pricing">Upgrade</a>
+            ? <a className="cp-connect" href={`${shell}/pricing`}>Upgrade</a>
             : <button className="cp-connect ghost" onClick={() => actions.openBilling()}>Manage</button>}
         </div>
         <div className="cp-ctx">
@@ -90,6 +95,10 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
         <div className="cp-ctx">
           <div><div className="l">Capacity</div><div className="s">{CAPACITY_META[p.capacity].sub}</div></div>
           <button className="cp-connect ghost" onClick={() => actions.openSheet({ kind: 'capacity' })}>{CAPACITY_META[p.capacity].label}</button>
+        </div>
+        <div className="cp-ctx">
+          <div><div className="l">Look</div><div className="s">{soft ? 'Calm: soft cards, quiet type, floating nav' : 'Bold: ink borders, hard edges, block nav'}</div></div>
+          <a className="cp-connect ghost" href={soft ? '/copilot' : '/lifeos'}>{soft ? 'Try bold' : 'Try calm'}</a>
         </div>
         <div className="cp-ctx">
           <div><div className="l">Account</div><div className="s">{home.account.email ? `${home.account.email}${home.account.verified ? ' · verified' : ' · not verified'}` : 'This device only. Add an email to sign in elsewhere.'}{home.push.enabled ? ' · push on' : ''}</div></div>

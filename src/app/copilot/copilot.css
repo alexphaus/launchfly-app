@@ -394,3 +394,205 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-wants b { color: var(--ink); }
 /* A full-width button may carry a sentence; let it wrap instead of clipping. */
 .cp-btn.block { white-space: normal; line-height: 1.3; }
+
+/* ══ /lifeos — the calm theme ═══════════════════════════════════════════════
+   The same markup, the same three tabs, the same data. Only the surface
+   changes: ink borders become shadow and space, squares become pills, black
+   fills become tinted ones. Every rule below is scoped to [data-theme="soft"],
+   so the bold theme at /copilot cannot regress from anything here.
+   Set by src/app/lifeos/layout.tsx, which swaps Archivo for Sora. */
+
+.cp-root[data-theme="soft"] {
+  --bg: #EEF1F7;
+  --surface: #FFFFFF;
+  --ink: #1A1D29;
+  --muted: #7B8094;
+  --dim: #AEB2C2;
+  --blue: #4F63D2;
+  --frame: #DEE3ED;
+  /* Soft-only tokens. The bold theme has no equivalent and never reads these. */
+  --tint: rgba(79, 99, 210, 0.08);
+  --ai: #3D9985;
+  --ai-tint: rgba(61, 153, 133, 0.09);
+  --line: #F1F2F7;
+  --track: #F1F2F7;
+  --fill-quiet: #C6CBDA;
+  --shadow: 0 10px 28px rgba(31, 41, 68, 0.07);
+  --shadow-sm: 0 4px 14px rgba(31, 41, 68, 0.05);
+  --lift: 0 6px 16px rgba(79, 99, 210, 0.28);
+}
+html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { background: #DEE3ED; }
+
+/* ── Frame ────────────────────────────────────────────────────────────────── */
+@media (min-width: 520px) and (min-height: 700px) {
+  .cp-root[data-theme="soft"] .cp-frame { border: 0; border-radius: 40px; box-shadow: 0 30px 70px rgba(20, 25, 45, 0.22); }
+}
+/* The nav floats over the content instead of sitting under it. */
+.cp-root[data-theme="soft"] .cp-content { padding-bottom: 108px; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-header { border-bottom: 0; padding-bottom: 10px; }
+/* Sora sets wider than Archivo; 19px keeps the greeting on one line at 390px. */
+.cp-root[data-theme="soft"] .cp-header h1 { font-weight: 700; letter-spacing: -0.3px; font-size: 19px; }
+.cp-root[data-theme="soft"] .cp-header p { text-transform: none; font-weight: 500; font-size: 12.5px; letter-spacing: 0; }
+.cp-root[data-theme="soft"] .cp-capacity { background: var(--surface); color: var(--blue); border: 0; border-radius: 999px; box-shadow: var(--shadow-sm); font-weight: 600; font-size: 11.5px; padding: 9px 14px; }
+.cp-root[data-theme="soft"] .cp-avatar { width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--tint); color: var(--blue); font-weight: 700; font-size: 13.5px; }
+
+/* ── Section labels and the insight eyebrow ───────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-section { color: var(--muted); font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; padding: 20px 24px 12px; }
+.cp-root[data-theme="soft"] .cp-section::before { display: none; }
+.cp-root[data-theme="soft"] .cp-section .link { color: var(--blue); text-decoration: none; font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-eyebrow { background: transparent; color: var(--blue); padding: 0; border-radius: 0; letter-spacing: 0.06em; font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-finding.thin .cp-eyebrow { background: transparent; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-go, .cp-root[data-theme="soft"] .cp-gcta, .cp-root[data-theme="soft"] .cp-textlink,
+.cp-root[data-theme="soft"] .cp-fold { color: var(--blue); text-decoration: none; }
+.cp-root[data-theme="soft"] .cp-reasoning { border-top: 1px solid var(--line); }
+
+/* ── Cards, lists, rows ───────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] :is(.cp-card, .cp-list, .cp-composer) {
+  border: 0; border-radius: 24px; box-shadow: var(--shadow); margin-left: 22px; margin-right: 22px; padding-left: 22px; padding-right: 22px;
+}
+.cp-root[data-theme="soft"] .cp-list { padding-left: 0; padding-right: 0; }
+.cp-root[data-theme="soft"] .cp-composer { padding: 0; }
+.cp-root[data-theme="soft"] .cp-card { padding-top: 20px; padding-bottom: 20px; margin-bottom: 16px; }
+.cp-root[data-theme="soft"] .cp-insight { margin-top: 12px; margin-bottom: 4px; }
+.cp-root[data-theme="soft"] .cp-insight p { font-size: 15px; line-height: 1.65; }
+/* One hairline replaces every 2px ink rule between rows. */
+.cp-root[data-theme="soft"] :is(.cp-row, .cp-nrow, .cp-match, .cp-ctx, .cp-qrow, .cp-prow, .cp-drow, .cp-srow) { border-bottom-color: var(--line); border-bottom-width: 1px; }
+.cp-root[data-theme="soft"] :is(.cp-row, .cp-nrow, .cp-ctx, .cp-qrow, .cp-prow, .cp-drow, .cp-srow) { padding-left: 22px; padding-right: 22px; }
+.cp-root[data-theme="soft"] .cp-match { padding-left: 22px; padding-right: 22px; }
+.cp-root[data-theme="soft"] .cp-ndot { border: 0; border-radius: 50%; width: 7px; height: 7px; margin-top: 6px; background: var(--dim); }
+.cp-root[data-theme="soft"] .cp-nrow.urgent .cp-ndot { background: var(--blue); }
+.cp-root[data-theme="soft"] .cp-nrow.info .cp-ndot { background: var(--fill-quiet); }
+.cp-root[data-theme="soft"] :is(.cp-nrow .s, .cp-qwho .sub, .cp-pmain .s, .cp-dmain .s, .cp-dsub, .cp-metrics-note, .cp-ctx .s) { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11.5px; }
+/* The bold theme hatches a failed send. Hatching is too loud here, but the row
+   still has to look different from one that has simply not gone out yet. */
+.cp-root[data-theme="soft"] .cp-qrow.failed { background: rgba(194, 112, 61, 0.06); }
+.cp-root[data-theme="soft"] .cp-learn { padding: 18px 22px; }
+.cp-root[data-theme="soft"] .cp-lnum { background: var(--ai-tint); color: var(--ai); border-radius: 999px; padding: 6px 11px; }
+.cp-root[data-theme="soft"] .cp-note, .cp-root[data-theme="soft"] .cp-metrics-note { padding-left: 26px; padding-right: 26px; }
+.cp-root[data-theme="soft"] .cp-kv { border-bottom: 1px solid var(--line); }
+
+/* ── Chips, tags, badges ──────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] :is(.cp-chip, .cp-tag, .cp-badge, .cp-connect, .cp-fchip, .cp-score) { border-radius: 999px; text-transform: none; letter-spacing: 0; }
+.cp-root[data-theme="soft"] .cp-chip { font-size: 10.5px; font-weight: 700; padding: 5px 11px; border: 0; }
+.cp-root[data-theme="soft"] .cp-chip.ai { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp-chip.you { background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-chip.done { background: var(--line); color: var(--dim); }
+.cp-root[data-theme="soft"] .cp-chip.send { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp-chip.sent { background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-chip.failed { background: rgba(194, 112, 61, 0.1); color: #A85F2E; }
+.cp-root[data-theme="soft"] .cp-chip.trend.new { background: var(--blue); color: #fff; }
+.cp-root[data-theme="soft"] .cp-chip.trend.rising { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp-chip.trend.steady { background: var(--line); color: var(--muted); border: 0; }
+.cp-root[data-theme="soft"] .cp-chip.trend.falling { background: var(--line); color: var(--dim); border: 0; }
+.cp-root[data-theme="soft"] .cp-tag { background: var(--tint); color: var(--blue); border: 0; padding: 5px 11px; font-size: 10.5px; }
+.cp-root[data-theme="soft"] .cp-tag.saved { background: var(--blue); color: #fff; }
+.cp-root[data-theme="soft"] .cp-score { background: transparent; color: var(--blue); padding: 0; font-size: 12.5px; }
+.cp-root[data-theme="soft"] .cp-badge { border: 0; padding: 4px 9px; font-size: 9.5px; }
+.cp-root[data-theme="soft"] .cp-badge.real { background: var(--tint); color: var(--blue); }
+.cp-root[data-theme="soft"] .cp-badge.inferred { background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-badge.outcome { background: var(--line); color: var(--ink); }
+.cp-root[data-theme="soft"] .cp-badge.won { background: var(--ai-tint); color: var(--ai); }
+.cp-root[data-theme="soft"] .cp-fchip { border: 0; background: var(--surface); color: var(--muted); box-shadow: var(--shadow-sm); font-weight: 600; padding: 9px 16px; }
+.cp-root[data-theme="soft"] .cp-fchip.active { background: var(--blue); color: #fff; box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp-connect { background: var(--blue); color: #fff; border: 0; padding: 7px 14px; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp-connect.ghost { background: var(--line); color: var(--muted); border: 0; }
+.cp-root[data-theme="soft"] .cp-connect.blue { background: var(--tint); color: var(--blue); }
+
+/* ── Progress tracks ──────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] :is(.cp-track, .cp-gtrack, .cp-goal .track, .cp-stage-track, .cp-dbar) { border: 0; border-radius: 999px; background: var(--track); }
+.cp-root[data-theme="soft"] :is(.cp-fill, .cp-gfill, .cp-goal .fill, .cp-dfill) { background: var(--blue); border-radius: 999px; }
+.cp-root[data-theme="soft"] .cp-stage-fill { background: var(--fill-quiet); border-radius: 999px; }
+.cp-root[data-theme="soft"] .cp-stage.drop .cp-stage-fill { background: var(--blue); }
+.cp-root[data-theme="soft"] .cp-stage.outside .cp-stage-track { border: 0; }
+.cp-root[data-theme="soft"] .cp-stage.outside .cp-stage-fill { background: repeating-linear-gradient(45deg, var(--dim) 0 4px, transparent 4px 8px); }
+.cp-root[data-theme="soft"] .cp-stage.outside .cp-stage-rate { text-transform: none; font-size: 11px; letter-spacing: 0; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-btn { border: 0; border-radius: 999px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12.5px; padding: 11px 17px; }
+.cp-root[data-theme="soft"] .cp-btn.primary { background: var(--blue); color: #fff; box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp-btn.dark { background: var(--ink); color: #fff; box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp-btn.sm { padding: 8px 12px; font-size: 11.5px; }
+.cp-root[data-theme="soft"] .cp-btn.block { padding: 15px; font-size: 13px; }
+.cp-root[data-theme="soft"] .cp-toggle { border: 0; border-radius: 999px; box-shadow: var(--shadow-sm); background: var(--surface); overflow: hidden; }
+.cp-root[data-theme="soft"] .cp-toggle button { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp-toggle button + button { border-left: 1px solid var(--line); }
+
+/* ── Floating pill nav ────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-nav {
+  position: absolute; left: 20px; right: 20px; bottom: calc(18px + env(safe-area-inset-bottom));
+  background: var(--surface); border-top: 0; border-radius: 999px;
+  padding: 11px 10px; justify-content: space-around;
+  box-shadow: 0 14px 34px rgba(20, 25, 45, 0.16); z-index: 20;
+}
+.cp-root[data-theme="soft"] .cp-nav button { flex: 0 1 auto; color: var(--dim); text-transform: none; letter-spacing: 0; border-radius: 999px; padding: 6px 14px; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp-nav button svg { stroke: var(--dim); width: 19px; height: 19px; }
+.cp-root[data-theme="soft"] .cp-nav button.active { color: var(--blue); background: var(--tint); font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-nav button.active svg { stroke: var(--blue); }
+
+/* ── Sheet ────────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-overlay { background: rgba(26, 29, 41, 0.35); }
+.cp-root[data-theme="soft"] .cp-sheet { background: var(--bg); border-top: 0; border-radius: 32px 32px 0 0; padding: 22px 24px calc(30px + env(safe-area-inset-bottom)); box-shadow: 0 -14px 34px rgba(20, 25, 45, 0.16); }
+.cp-root[data-theme="soft"] .cp-handle { background: #D5D9E3; border-radius: 999px; width: 38px; }
+.cp-root[data-theme="soft"] .cp-sheet h3 { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-sheet .desc { font-weight: 400; }
+.cp-root[data-theme="soft"] .cp-option { border: 0; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); padding: 16px 18px; }
+.cp-root[data-theme="soft"] .cp-option.active { background: var(--blue); color: #fff; box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp-option .cs { font-weight: 500; }
+.cp-root[data-theme="soft"] .cp-option.active .cs { color: #DDE2F7; }
+.cp-root[data-theme="soft"] .cp-draft { border: 0; border-radius: 18px; background: var(--line); padding: 14px 16px; }
+.cp-root[data-theme="soft"] .cp-draft-label { text-transform: none; letter-spacing: 0; font-weight: 600; }
+/* The You view is embedded in the sheet, where the frame gutters do not apply. */
+.cp-root[data-theme="soft"] .cp-sheet-embed :is(.cp-card, .cp-list, .cp-note, .cp-empty, .cp-metrics) { margin-left: 0; margin-right: 0; }
+.cp-root[data-theme="soft"] .cp-sheet-embed :is(.cp-section, .cp-note) { padding-left: 0; padding-right: 0; }
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-input { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 13px 15px; box-shadow: var(--shadow-sm); }
+.cp-root[data-theme="soft"] .cp-input:focus { box-shadow: 0 0 0 3px var(--tint); border-color: var(--blue); }
+.cp-root[data-theme="soft"] .cp-label { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-composer .bar { border-top: 1px solid var(--line); padding: 11px 14px; }
+.cp-root[data-theme="soft"] .cp-composer textarea { padding: 15px 18px; }
+.cp-root[data-theme="soft"] .cp-error { border: 0; border-radius: 16px; background: rgba(194, 112, 61, 0.1); color: #A85F2E; font-weight: 500; }
+.cp-root[data-theme="soft"] .cp-subhead { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* ── Metrics ──────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-metrics { margin-left: 22px; margin-right: 22px; gap: 10px; }
+.cp-root[data-theme="soft"] .cp-stat { border: 0; border-radius: 20px; box-shadow: var(--shadow-sm); padding: 13px 8px 12px; }
+.cp-root[data-theme="soft"] .cp-stat .v { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-stat .l { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 10.5px; }
+.cp-root[data-theme="soft"] .cp-stat.hero { background: var(--tint); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp-stat.hero .v { color: var(--blue); }
+
+/* ── Dashed things become tinted things ──────────────────────────────────── */
+.cp-root[data-theme="soft"] :is(.cp-empty, .cp-wall, .cp-block, .cp-finding.thin, .cp-price-alert) { border: 0; border-radius: 24px; background: var(--tint); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp-empty { margin-left: 22px; margin-right: 22px; padding: 20px 22px; }
+.cp-root[data-theme="soft"] .cp-block { background: var(--surface); box-shadow: var(--shadow); }
+.cp-root[data-theme="soft"] .cp-banner { border: 0; border-radius: 999px; background: var(--surface); color: var(--muted); box-shadow: var(--shadow-sm); text-transform: none; letter-spacing: 0; font-weight: 600; margin: 12px 24px 0; padding: 10px 16px; }
+.cp-root[data-theme="soft"] .cp-banner .dot { background: var(--blue); border-radius: 50%; width: 6px; height: 6px; }
+.cp-root[data-theme="soft"] .cp-toast { border: 0; border-radius: 999px; box-shadow: 0 14px 34px rgba(20, 25, 45, 0.24); bottom: calc(96px + env(safe-area-inset-bottom)); font-weight: 600; }
+
+/* ── Onboarding, login, the signed-out intro ─────────────────────────────── */
+.cp-root[data-theme="soft"] :is(.cp-ob-head, .cp-ob-foot) { border: 0; }
+.cp-root[data-theme="soft"] .cp-ob-foot { background: transparent; }
+.cp-root[data-theme="soft"] .cp-wordmark::before { border: 0; border-radius: 50%; background: var(--blue); }
+.cp-root[data-theme="soft"] .cp-steps span { border: 0; border-radius: 999px; background: var(--line); }
+.cp-root[data-theme="soft"] .cp-steps span.on { background: var(--blue); }
+.cp-root[data-theme="soft"] .cp-steps span.done { background: var(--tint); }
+.cp-root[data-theme="soft"] :is(.cp-ob h2, .cp-login h2, .cp-intro h1) { font-weight: 700; letter-spacing: -0.4px; }
+.cp-root[data-theme="soft"] .cp-intro-steps li::before { background: var(--tint); color: var(--blue); border-radius: 999px; padding: 3px 7px; }
+.cp-root[data-theme="soft"] .cp-intro-plan { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] :is(.cp-intro-plan a, .cp-help a) { color: var(--blue); text-decoration: none; }
+.cp-root[data-theme="soft"] .cp-setup code { border: 0; border-radius: 6px; background: var(--line); }
+
+/* ── Pricing ──────────────────────────────────────────────────────────────── */
+.cp-root[data-theme="soft"] .cp-plan.pick { box-shadow: 0 10px 28px rgba(79, 99, 210, 0.16); }
+.cp-root[data-theme="soft"] .cp-plan-name { font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-plan-badge { border-radius: 999px; text-transform: none; letter-spacing: 0; padding: 5px 11px; }
+.cp-root[data-theme="soft"] .cp-plan-badge.on { background: var(--line); color: var(--muted); }
+.cp-root[data-theme="soft"] .cp-plan-features li::before { border-radius: 50%; background: var(--blue); }
+.cp-root[data-theme="soft"] .cp-plan-cta { border: 0; border-radius: 999px; box-shadow: var(--shadow-sm); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.cp-root[data-theme="soft"] .cp-plan-cta.primary { background: var(--blue); color: #fff; box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp-plan-cta.ghost { background: var(--line); color: var(--muted); box-shadow: none; }
+.cp-root[data-theme="soft"] .cp-price-faq p + p { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp-price-head h1 { font-weight: 700; letter-spacing: -0.02em; }

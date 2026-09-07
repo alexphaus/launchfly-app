@@ -779,3 +779,60 @@ async function weekly() {
 }
 
 weekly().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Two shells, one app
+// ─────────────────────────────────────────────────────────────────────────────
+import { readFileSync } from 'node:fs';
+import { DEFAULT_SHELL, SHELLS, shellOf, toShell } from '../../src/lib/copilot/shell';
+
+async function shells() {
+  // 1. Which shell a path belongs to. Anything not under /lifeos is the bold one,
+  //    including the pages that live outside both (/, /pricing on the main site).
+  assert.equal(shellOf('/lifeos'), '/lifeos');
+  assert.equal(shellOf('/lifeos/pricing'), '/lifeos');
+  assert.equal(shellOf('/copilot'), '/copilot');
+  assert.equal(shellOf('/copilot/login'), '/copilot');
+  assert.equal(shellOf(null), DEFAULT_SHELL);
+  assert.equal(shellOf(undefined), DEFAULT_SHELL);
+  assert.equal(shellOf('/'), DEFAULT_SHELL);
+
+  // 2. toShell guards a redirect target. The Stripe success_url is built by
+  //    concatenating this onto the app origin, so anything not on the list has to
+  //    collapse to the default rather than travel through.
+  for (const s of SHELLS) assert.equal(toShell(s), s);
+  for (const hostile of ['https://evil.example', '//evil.example', '/lifeos/../../evil', 'lifeos', '/lifeosX', '', ' /lifeos', null, undefined, 7, {}, ['/lifeos']]) {
+    assert.equal(toShell(hostile), DEFAULT_SHELL, `toShell should refuse ${JSON.stringify(hostile)}`);
+  }
+
+  // 3. The calm theme is additive: every rule in it is scoped to
+  //    [data-theme="soft"], so /copilot cannot regress from anything /lifeos adds.
+  const css = readFileSync(new URL('../../src/app/copilot/copilot.css', import.meta.url), 'utf8');
+  const marker = '/lifeos — the calm theme';
+  const at = css.indexOf(marker);
+  assert.ok(at > 0, 'the soft theme block should still be in copilot.css');
+  const block = css.slice(at).replace(/\/\*[\s\S]*?\*\//g, '');
+  let depth = 0;
+  let buf = '';
+  let rules = 0;
+  for (const ch of block) {
+    if (ch === '{') {
+      const sel = buf.trim().replace(/\s+/g, ' ');
+      if (sel && !sel.startsWith('@')) {
+        rules++;
+        assert.ok(sel.includes('[data-theme="soft"]'), `unscoped rule in the soft theme: ${sel}`);
+      }
+      depth++; buf = '';
+    } else if (ch === '}') {
+      depth--; buf = '';
+    } else {
+      buf += ch;
+    }
+  }
+  assert.equal(depth, 0, 'braces in the soft theme block should balance');
+  assert.ok(rules > 40, `expected the soft theme to actually restyle the app, saw ${rules} rules`);
+
+  console.log('copilot-core: two-shells checks passed');
+}
+
+shells().catch((e) => { console.error(e); process.exit(1); });

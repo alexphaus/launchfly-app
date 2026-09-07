@@ -60,6 +60,13 @@ Four rules keep the record honest:
   that would settle it. A system that is never unsure is not being honest about
   a twelve-message sample.
 
+Today renders **one** card for all of it. The call absorbs the primary action,
+the "not today" line and the daily read (behind *See the read*) because the
+first version shipped them as four separate blocks that all said the same
+sentence — with a blank offer, "set your offer" appeared four times above the
+fold. `starterDecision` never emits a `dont` for the same reason: every rung's
+version merely restated `instead_of` in the imperative.
+
 The compounding part is `topic`. `decisionReview()` groups by it, so the app can
 say *"3 of your last 5 calls were about sending, and you have not done one of
 them"* — a sentence no general model can produce about you, because it requires

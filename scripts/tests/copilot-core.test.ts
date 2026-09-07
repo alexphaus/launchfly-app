@@ -941,7 +941,6 @@ async function decisions() {
   assert.equal(blank.decision.topic, 'offer');
   assert.match(blank.decision.headline, /^Say what you sell/);
   assert.equal(blank.decision.verify_metric, 'sent');
-  assert.match(blank.dont?.title ?? '', /Do not run another match search/);
 
   // A broken opener outranks an unsent queue: more sends make it worse.
   const broken = ladder({ sent: 12, replies: 0, awaiting_approval: 7 });
@@ -965,7 +964,6 @@ async function decisions() {
   assert.equal(stuck.decision.topic, 'sending');
   assert.match(stuck.decision.headline, /Send the 7 drafts already written/);
   assert.match(stuck.decision.instead_of ?? '', /Another match search/);
-  assert.match(stuck.dont?.title ?? '', /Do not find new matches/);
   assert.ok(stuck.decision.because.some((b) => /7 drafted, 0 sent/.test(b)), 'every line cites a real number');
 
   // A short runway changes the reasoning, not the call.
@@ -1014,6 +1012,13 @@ async function decisions() {
   assert.deepEqual(unsure.decision?.because, [], 'no evidence is an empty list, not a fabricated one');
   // A dont with no title is no dont.
   assert.equal(normalizeBrief({ ...base, dont: { why: 'because' } }).dont, null);
+
+  // The ladder never emits a `dont`. Every version that did restated instead_of
+  // in the imperative, which cost a whole card on Today to say one sentence
+  // twice. The field survives for a model that can name something different.
+  for (const l of [blank, broken, thin, warm, stuck, fresh]) {
+    assert.equal(l.dont, null, `${l.decision.topic} must not restate its own trade-off`);
+  }
 
   assert.equal(VERIFY_AFTER_DAYS, 3);
   console.log('copilot-core: decision checks passed');

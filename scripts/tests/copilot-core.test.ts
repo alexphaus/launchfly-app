@@ -1280,3 +1280,63 @@ async function conversations() {
 }
 
 conversations().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One row per business, not one per business per user
+// ─────────────────────────────────────────────────────────────────────────────
+import { TITLE_MAX, areaOfCandidate, businessKey, businessRow, businessRows, segmentOfCandidate } from '../../src/lib/copilot/businesses';
+import type { SupplyCandidate } from '../../src/lib/copilot/supply/types';
+
+async function sharedPool() {
+  const cand = (over: Partial<SupplyCandidate> = {}): SupplyCandidate => ({
+    source: 'google_maps', external_id: 'place-1', type: 'client',
+    title: 'Bright Dental', summary: 'Dentist in Cebu.', url: 'https://bright.example',
+    contact: { whatsapp: '639171234567' },
+    data: { segment: 'dentist', city: 'Cebu', pain_signals: ['no_website'] },
+    ...over,
+  });
+  const now = new Date('2026-09-09T00:00:00Z');
+
+  // 1. The business is what two users cannot disagree about. Everything
+  //    profile-specific — fit, reason, effort, status — stays on the claim.
+  const row = businessRow(cand(), now)!;
+  assert.equal(row.source, 'google_maps');
+  assert.equal(row.external_id, 'place-1');
+  assert.equal(row.segment, 'dentist');
+  assert.equal(row.area, 'Cebu');
+  assert.equal(row.last_seen_at, now.toISOString());
+  for (const leaked of ['fit_score', 'reason', 'effort', 'profile_id', 'score', 'status']) {
+    assert.ok(!(leaked in row), `${leaked} belongs to the claim, not the business`);
+  }
+
+  // 2. Without a stable id there is nothing to dedupe on, and a row that cannot
+  //    dedupe is the per-profile silo again with extra steps.
+  assert.equal(businessRow(cand({ external_id: '' }), now), null);
+  assert.equal(businessRow(cand({ external_id: '   ' }), now), null);
+  assert.equal(businessRow(cand({ title: '' }), now), null);
+  assert.equal(businessRow(cand({ source: '' }), now), null);
+
+  // 3. Segment and area fall back through the shapes different adapters use.
+  assert.equal(segmentOfCandidate(cand({ data: { service_type: 'pest control' } })), 'pest control');
+  assert.equal(segmentOfCandidate(cand({ data: { category: 'Dentist' } })), 'Dentist');
+  assert.equal(segmentOfCandidate(cand({ data: {} })), null);
+  assert.equal(areaOfCandidate(cand({ data: { area: 'Mandaue' } })), 'Mandaue');
+  assert.equal(areaOfCandidate(cand({ data: {} })), null);
+  assert.equal(businessRow(cand({ title: 'x'.repeat(400) }), now)!.title.length, TITLE_MAX);
+
+  // 4. One scrape can return the same place twice across two segment queries.
+  //    Sent to a single upsert that is exactly the error "ON CONFLICT DO UPDATE
+  //    cannot affect row a second time", which fails the whole statement.
+  const batch = businessRows([cand(), cand({ title: 'Bright Dental Clinic' }), cand({ external_id: 'place-2' })], now);
+  assert.equal(batch.length, 2, 'deduped within the batch');
+  assert.equal(batch[0].title, 'Bright Dental Clinic', 'last one wins, being the freshest scrape');
+  assert.equal(businessRows([cand({ external_id: '' })], now).length, 0);
+
+  // 5. The key must match the unique index, or claims link to nothing.
+  assert.equal(businessKey('google_maps', 'place-1'), businessKey(row.source, row.external_id));
+  assert.notEqual(businessKey('hunter', 'place-1'), businessKey('google_maps', 'place-1'));
+
+  console.log('copilot-core: shared-pool checks passed');
+}
+
+sharedPool().catch((e) => { console.error(e); process.exit(1); });

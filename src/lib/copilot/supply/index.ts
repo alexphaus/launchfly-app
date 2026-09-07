@@ -1,7 +1,13 @@
 // src/lib/copilot/supply/index.ts
 // Runs every available adapter and upserts candidates as sourced opportunities.
 // Dedupe is by (profile, source, external_id), never by title.
+//
+// Every candidate is also written through to copilot_businesses, the pool
+// shared by all profiles. Nothing reads it yet; it accumulates now so that
+// territory, contact quality and regional demand have history to work with when
+// there are enough users for them to mean anything. See docs/RESHAPE.md.
 
+import { businessKey, businessRows } from '../businesses';
 import { copilotDb } from '../db';
 import { limitsFor } from '../plans';
 import { scoreOpportunity } from '../ranking';
@@ -78,9 +84,22 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
           agent_run_id: runId, expires_at: null,
         };
       });
+      // The shared pool first, so each claim can point at the business it is a
+      // claim on. Failure here is never allowed to cost the user their matches:
+      // the ids come back null and the profile rows go in exactly as before.
+      const businessIds = await upsertBusinesses(candidates, now);
+      // When the pool is not there yet the key is left off the payload
+      // entirely rather than sent as null. PostgREST rejects the whole
+      // statement for an unknown column (PGRST204), so including it before the
+      // migration runs would cost the user every match on this run — and code
+      // ships before SQL does in this project.
+      const claims = businessIds
+        ? rows.map((r) => ({ ...r, business_id: businessIds.get(businessKey(r.source, r.external_id)) ?? null }))
+        : rows;
+
       // ON CONFLICT (profile_id, source, external_id) DO NOTHING — existing rows keep their status and agent score.
       const { data: inserted, error } = await db.from('copilot_opportunities')
-        .upsert(rows, { onConflict: 'profile_id,source,external_id', ignoreDuplicates: true })
+        .upsert(claims, { onConflict: 'profile_id,source,external_id', ignoreDuplicates: true })
         .select('id');
       if (error) throw error;
       entry.inserted = inserted?.length ?? 0;
@@ -104,4 +123,41 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
   await db.from('copilot_agent_runs').update({ status: 'ok', output: result as unknown as Record<string, unknown>, finished_at: new Date().toISOString() }).eq('id', runId);
   await logEvent(profileId, 'supply_run', { found: result.found, inserted: result.inserted, plan_remaining: result.quota.remaining });
   return result;
+}
+
+/** Logged once per process. A missing table is a deploy-order fact, not news. */
+let poolWarned = false;
+
+/**
+ * Write every candidate through to the shared pool and return its id by key,
+ * or null when the pool is not available.
+ *
+ * Never throws. This runs inside the per-adapter try block, so an exception
+ * here would be recorded as that adapter failing and would cost the user the
+ * matches it just found — a bookkeeping table must not be able to do that.
+ */
+async function upsertBusinesses(candidates: SupplyCandidate[], now: Date): Promise<Map<string, string> | null> {
+  const rows = businessRows(candidates, now);
+  if (!rows.length) return new Map();
+  try {
+    // Not ignoreDuplicates: a business seen again should have its last_seen_at
+    // and its details refreshed, and the ids of existing rows are needed to
+    // link this profile's claim to them.
+    const { data, error } = await copilotDb()
+      .from('copilot_businesses')
+      .upsert(rows, { onConflict: 'source,external_id' })
+      .select('id, source, external_id');
+    if (error) throw error;
+    const out = new Map<string, string>();
+    for (const r of (data ?? []) as Array<{ id: string; source: string; external_id: string }>) {
+      out.set(businessKey(r.source, r.external_id), r.id);
+    }
+    return out;
+  } catch (e) {
+    if (!poolWarned) {
+      poolWarned = true;
+      console.warn('[copilot/supply] shared pool unavailable, writing profile rows only:', e instanceof Error ? e.message : e);
+    }
+    return null;
+  }
 }

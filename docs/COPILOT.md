@@ -342,6 +342,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/auth/callback?token=` | consume the link, set the cookie |
 | POST/DELETE | `/api/copilot/push/subscribe` | register / remove a Web Push subscription |
 | DELETE | `/api/copilot/session` | forget this device |
+| GET | `/api/copilot/health` | what this deployment actually has: missing env vars by name, unapplied migrations by file (session or cron bearer) |
 | GET | `/api/copilot/cron/daily` | scheduled loop (Bearer `CRON_SECRET`, fails closed) |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).

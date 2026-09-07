@@ -15,7 +15,7 @@ import { getProfile, gradeDecisions, saveDecision } from './store';
 import type { DecisionSweep } from './store';
 import type { BriefOutput, OpportunityAgent, Profile, ContextPack } from './types';
 
-export interface BriefResult { runId: string; agent: OpportunityAgent['name']; output: BriefOutput; fellBack: boolean; graded: DecisionSweep }
+export interface BriefResult { runId: string; agent: OpportunityAgent['name']; output: BriefOutput; fellBack: boolean; graded: DecisionSweep; pushed: number }
 
 export async function runBrief(profileId: string, opts: { reason?: string } = {}): Promise<BriefResult> {
   const profile = await getProfile(profileId);
@@ -45,8 +45,8 @@ export async function runBrief(profileId: string, opts: { reason?: string } = {}
     output = await agent.generateBrief(pack);
     await finishRun(runId, 'ok', output);
   }
-  await persistBrief(profile, pack, runId, output);
-  return { runId, agent: agent.name, output, fellBack, graded };
+  const pushed = await persistBrief(profile, pack, runId, output, opts.reason ?? 'manual');
+  return { runId, agent: agent.name, output, fellBack, graded, pushed };
 }
 
 async function startRun(profileId: string, agent: OpportunityAgent, input_summary: Record<string, unknown>): Promise<string> {
@@ -63,7 +63,7 @@ async function finishRun(runId: string, status: 'ok' | 'error', output: BriefOut
   await copilotDb().from('copilot_agent_runs').update({ status, output, error: error ?? null, finished_at: new Date().toISOString() }).eq('id', runId);
 }
 
-async function persistBrief(profile: Profile, pack: ContextPack, runId: string, out: BriefOutput) {
+async function persistBrief(profile: Profile, pack: ContextPack, runId: string, out: BriefOutput, reason: string): Promise<number> {
   const db = copilotDb();
   const pid = profile.id;
   const today = pack.today;
@@ -168,8 +168,6 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     await db.from('copilot_actions').insert(freshNudges.map((n) => ({
       profile_id: pid, kind: 'nudge', owner: 'you', title: n.title, urgency: n.urgency, due_label: n.due_label ?? null, for_date: today, agent_run_id: runId,
     })));
-    const urgent = freshNudges.filter((n) => n.urgency === 'urgent');
-    if (urgent.length) void sendPush(pid, { title: urgent.length === 1 ? 'Needs you today' : `${urgent.length} things need you today`, body: urgent[0].title, url: '/copilot', tag: `urgent-${today}` });
   }
 
   // Opportunities: add new ones, never re-suggest a title the user already saw.
@@ -208,5 +206,55 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     if (newLessons.length) {
       await db.from('copilot_growth_items').insert(newLessons.map((l) => ({ profile_id: pid, kind: 'lesson', title: l.title, minutes: l.minutes ?? null, note: l.note ?? null, url: l.url ?? null, agent_run_id: runId })));
     }
+  }
+
+  return notifyBrief(profile, out, reason, today);
+}
+
+/**
+ * One notification a day, carrying the call.
+ *
+ * Push has existed for months and has never delivered anything, for three
+ * reasons that all had to be fixed at once:
+ *
+ *  - It only ever fired for urgent nudges, and only for *fresh* ones. Urgent
+ *    nudges are deliberately carried forward until acted on, so anything that
+ *    persists — "follow up with Briones" — pushes once and is silent forever
+ *    after. The nudges that matter most were the ones that went quiet.
+ *  - It fired from any brief, including the one that runs when the app is
+ *    opened. A notification sent to somebody already looking at the screen is
+ *    at best suppressed and at worst noise, so this now sends only from the
+ *    cron: the one moment the user is definitionally not here.
+ *  - It never carried the decision, which is the only thing in the app worth
+ *    interrupting someone for. A count of nudges is not a reason to open a
+ *    phone; "send the 7 drafts already written" is.
+ *
+ * Never throws, and awaited rather than fired-and-forgotten so the cron report
+ * can say whether it actually went.
+ */
+/** What today's notification should say, or null for silence. Pure, so the
+ *  rules above are testable without a database or a push service. */
+export function notifyPayload(
+  out: { decision: { headline: string } | null; nudges: Array<{ title: string; urgency: string }> },
+  reason: string,
+): { title: string; body: string } | null {
+  if (reason !== 'cron') return null;
+  if (out.decision) return { title: 'Today’s call', body: out.decision.headline };
+  const urgent = out.nudges.filter((n) => n.urgency === 'urgent');
+  if (!urgent.length) return null;
+  return { title: urgent.length === 1 ? 'Needs you today' : `${urgent.length} things need you today`, body: urgent[0].title };
+}
+
+async function notifyBrief(profile: Profile, out: BriefOutput, reason: string, today: string): Promise<number> {
+  const payload = notifyPayload(out, reason);
+  if (!payload) return 0;
+  try {
+    // One tag per day: a second run replaces the notification rather than
+    // stacking a duplicate on the lock screen.
+    const { sent } = await sendPush(profile.id, { ...payload, url: '/copilot', tag: `daily-${today}` });
+    return sent;
+  } catch (e) {
+    console.error('[copilot] daily push failed', e);
+    return 0;
   }
 }

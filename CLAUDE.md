@@ -73,6 +73,12 @@ That route also reads `process.env.CRON_SECRET`, while `.env.local` here defines
 closed with a 503 even once a scheduler exists. Check both before concluding the
 scheduler is broken.
 
+To find out what is actually missing rather than guessing, paste
+`scripts/sql/copilot-schema-check.sql` into the Supabase SQL editor: every row
+it returns is a column or table the code expects and the database lacks, with
+the file that adds it. No rows and a `PGRST204` still showing means the cache is
+stale, not the schema — `notify pgrst, 'reload schema';`.
+
 Migrations are **not** applied automatically. `supabase/migrations/*.sql` are run
 by hand in the Supabase SQL editor. Several are still unapplied in production —
 a missing column shows up as a runtime error like `column "plan" does not exist`,

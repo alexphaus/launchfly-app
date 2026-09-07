@@ -1,45 +1,39 @@
 'use client';
 // Today is a send queue. Everything else on this screen exists to get a message
 // out of the door or to record what came back.
+//
+// The advisory layer used to live here too — an insight card, "Also today", a
+// list of nudges. It is gone (docs/RESHAPE.md). A self-hosted agent on the
+// user's own phone writes a better daily brief than this ever did, with better
+// memory and a better model, so maintaining a worse one was competing on the
+// only ground the competition gives away. What is kept is what needs rows:
+// the queue, the numbers behind it, the decision RECORD and its grading, and
+// the composer that puts context into the ledger.
 import { useState } from 'react';
 import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
-import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
+import { offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
-import type { Execution, HomeData, QueueItem } from '@/lib/copilot/types';
+import type { HomeData, QueueItem } from '@/lib/copilot/types';
 import { money } from '../format';
 import type { Actions } from '../shared';
 
 /** How many queue rows show before the fold. A queue is a queue; it is not capped, only folded. */
 const QUEUE_FOLD = 5;
-/** Six reminders under a decision is a list, not a next action. */
-const NUDGE_FOLD = 3;
-
-function execChip(e: Execution | null | undefined): { cls: string; label: string } | null {
-  if (!e) return null;
-  if (e.approval_state === 'sent') return { cls: 'sent', label: 'Sent' };
-  if (e.approval_state === 'failed') return { cls: 'failed', label: 'Failed' };
-  if (e.approval_state === 'cancelled') return null;
-  return { cls: 'send', label: 'Ready to send' };
-}
-
 export default function TodayView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
   const shell = useShell();
-  const [showWhy, setShowWhy] = useState(false);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [unfold, setUnfold] = useState(false);
-  const [moreNudges, setMoreNudges] = useState(false);
-  const urgent = home.nudges.filter((n) => n.urgency === 'urgent').length;
   const m = home.metrics;
   const b = home.billing;
   const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
   const noOffer = offerIsEmpty(home.profile.offer);
   const queue = home.queue;
-  // With a blank offer the call, its button and this row all say the same thing.
-  // The row is the one that carries no new information, so it goes.
-  const plan = home.decision && noOffer ? home.plan.filter((a) => a.title !== OFFER_TASK_TITLE) : home.plan;
   const visible = unfold ? queue : queue.slice(0, QUEUE_FOLD);
+  // Rendered in one of two slots, never both.
+  const call = home.decision ? <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} /> : null;
+  const callFirst = noOffer;
 
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
@@ -53,7 +47,25 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
     <>
       {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
 
-      {home.decision && <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} />}
+      {/* With a blank offer nothing can be drafted, so the call IS the screen.
+          Otherwise the queue leads and the call sits beneath it. The decision
+          record is a row asset and stays; leading with its prose is the part
+          that was advice. */}
+      {callFirst && call}
+
+      {/* What moved since the last brief. This used to open the call card, which
+          read correctly while the call led the screen; with the queue on top it
+          was a stray line between two blocks. It describes these numbers, so it
+          sits on them. */}
+      {home.decision && home.decision.changed.length > 0 && (
+        <div className="cp-changed" aria-label="What changed since the last brief">
+          {home.decision.changed.map((c) => (
+            <span key={c.what} className="cp-change">
+              <b>{c.what}</b> {c.from} <span className="arrow">→</span> {c.to}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Sent is the hero. The app has a supply surplus and a sending deficit, and
           the headline number should be on the side that needs to move. */}
@@ -69,7 +81,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         <div className="cp-card cp-wall">
           <div className="cp-eyebrow">Out of matches</div>
           <p>
-            You have used all {b.matches.limit} matches on {PLANS[b.effective].name} this month. Your brief,
+            You have used all {b.matches.limit} matches on {PLANS[b.effective].name} this month. Your queue,
             drafts and funnel keep running on what you already have — only new supply stops.
           </p>
           {b.effective !== 'operator' && (
@@ -106,72 +118,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </>
       )}
 
-      {/* The read is the reasoning behind the call, so when there is a call it
-          lives inside that card. Two AI-written paragraphs stacked at the top of
-          Today was the single heaviest thing on this screen. */}
-      {home.insight && !home.decision ? (
-        <div className="cp-card cp-insight">
-          <div className="cp-eyebrow">{home.insight.eyebrow}</div>
-          <p>{home.insight.body}</p>
-          {home.insight.reasoning && (
-            <>
-              <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the reasoning' : 'See the reasoning →'}</button>
-              {showWhy && <div className="cp-reasoning">{home.insight.reasoning}</div>}
-            </>
-          )}
-        </div>
-      ) : !home.insight && !home.decision ? (
-        <div className="cp-empty" style={{ marginTop: 14 }}>
-          <b>No brief yet</b>
-          The copilot writes one read of your day, every day. {briefing ? 'Building it now.' : <button className="cp-textlink" onClick={() => actions.runBrief('manual')}>Build it now</button>}
-        </div>
-      ) : null}
-
-      {(plan.length > 0 || home.planOverflow > 0) && (
-        <>
-          <div className="cp-section">
-            <span className="lead">Also today</span>
-            {home.planOverflow > 0 && <span className="count">{plan.filter((a) => a.status === 'open').length} of {plan.filter((a) => a.status === 'open').length + home.planOverflow}</span>}
-          </div>
-          <div className="cp-list">
-            {plan.map((a) => {
-              const ec = a.status !== 'done' ? execChip(a.execution) : null;
-              return (
-                <button key={a.id} className={`cp-row ${a.status === 'done' ? 'done' : ''}`} onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
-                  <span className={`cp-chip ${a.status === 'done' ? 'done' : ec ? ec.cls : a.owner}`}>{a.status === 'done' ? 'Done' : ec ? ec.label : a.owner === 'ai' ? 'AI drafted' : 'Needs you'}</span>
-                  <span className="txt">{a.minutes && a.owner === 'you' && a.status !== 'done' ? `${a.minutes} min — ` : ''}{a.title}</span>
-                </button>
-              );
-            })}
-          </div>
-          {home.planOverflow > 0 && (
-            <div className="cp-note" style={{ marginTop: 8 }}>
-              {home.planOverflow} more behind these. A plan you can finish beats a list you cannot.
-            </div>
-          )}
-        </>
-      )}
-
-      <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>
-      {home.nudges.length ? (
-        <>
-        <div className="cp-list">
-          {(moreNudges ? home.nudges : home.nudges.slice(0, NUDGE_FOLD)).map((n) => (
-            <button key={n.id} className={`cp-nrow ${n.urgency}`} onClick={() => actions.openSheet({ kind: 'action', id: n.id })}>
-              <div className="cp-ndot" />
-              <div><div className="t">{n.title}</div>{n.due_label && <div className="s">{n.due_label}</div>}</div>
-            </button>
-          ))}
-        </div>
-        {home.nudges.length > NUDGE_FOLD && (
-          <button className="cp-textlink cp-fold" onClick={() => setMoreNudges((v) => !v)}>
-            {moreNudges ? 'Show fewer' : `Show ${home.nudges.length - NUDGE_FOLD} more`}
-          </button>
-        )}
-        </>
-      ) : (
-        <div className="cp-empty"><b>Nothing pressing</b>Nudges show up here when something is about to go cold or needs a decision.</div>
-      )}
+      {!callFirst && call}
 
       <div className="cp-section"><span className="lead">Tell the copilot</span><span className="count">{home.contextCount} in context</span></div>
       <div className="cp-composer">
@@ -215,16 +162,6 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
 
   return (
     <>
-      {decision.changed.length > 0 && (
-        <div className="cp-changed" aria-label="What changed since the last brief">
-          {decision.changed.map((c) => (
-            <span key={c.what} className="cp-change">
-              <b>{c.what}</b> {c.from} <span className="arrow">→</span> {c.to}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="cp-card cp-call">
         <div className="cp-call-top">
           <div className="cp-eyebrow">Today’s call</div>
@@ -292,7 +229,6 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
           </>
         )}
       </div>
-
     </>
   );
 }

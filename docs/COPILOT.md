@@ -22,6 +22,42 @@ but none of the business logic. Everything is under:
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
 
+## Which model writes the brief
+
+Already configurable; nothing needs adding. `resolveLlmConfig()` takes the first
+match:
+
+| Set | Endpoint | Model |
+| --- | --- | --- |
+| `COPILOT_AI_API_KEY` + `COPILOT_AI_BASE_URL` + `COPILOT_AI_MODEL` | whatever you point it at | whatever you name |
+| `OPENAI_API_KEY` alone | OpenAI | `gpt-4o-mini` |
+| `DEEPSEEK_API_KEY` alone | DeepSeek | `deepseek-chat` |
+
+**A deployment with only `OPENAI_API_KEY` set is running `gpt-4o-mini`** — the
+oldest, weakest option in that table, and the default nobody chose. Setting the
+three explicit variables costs a redeploy and no code.
+
+The prompt is ~1,850 tokens of system rules plus ~7,550 of context pack, for
+~9,400 in and ~2,000 out per brief, once per user per day. At solo scale the
+cost difference between any two frontier models is cents a month, so choose on
+reliability, not on price.
+
+Reliability here means one thing: does the reply survive `normalizeBrief` and
+obey the rules? A model that reasons well and wraps its JSON in prose is worth
+nothing — the run falls back to the starter and nobody is told. Measure it
+rather than guessing:
+
+```bash
+COPILOT_AI_API_KEY=sk-or-... COPILOT_AI_BASE_URL=https://openrouter.ai/api/v1 \
+  npm run bench:models -- z-ai/glm-5.3-flash openai/gpt-5.6-luna
+```
+
+It runs the real system prompt through the real normalizer twice per model —
+once normally, once with a blank offer — and scores what actually breaks. Two
+checks are disqualifying: **survives normalizeBrief**, and **blank offer:
+drafted nothing**. The second is invariant 1, and the reason this project has
+44 unsent drafts in its history.
+
 ## The call
 
 Every brief ends in one decision, not a list. The agent's output carries a

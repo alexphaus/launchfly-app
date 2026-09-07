@@ -114,6 +114,34 @@ repeating a topic with that history. `DailyResult.brief.graded` reports the
 sweep, which is how you can tell from outside the app whether the record is
 being graded or merely accumulating.
 
+## What to get better at
+
+"Worth learning" asked the agent for an article with a working URL — the single
+thing a model is least able to supply. It either invents the link, which breaks
+invariant 2, or, told not to, returns nothing. Told not to, it returned nothing
+almost every day, and the section sat empty on a product whose whole point is
+compounding.
+
+The gate was not the problem; the supply was. `growthEdge()` computes the
+capability instead of fetching it, in priority order:
+
+1. **From your calls** — a topic in the decision record acted on three or more
+   times where the metric it named never moved. Repeating something that does
+   not work is the most expensive gap there is, and nothing but the record can
+   see it.
+2. **From your funnel** — the bottleneck stage, named as a capability. Every
+   stage has one now: `BOTTLENECK_TOPIC` had no entry for `drafted` or `sent`,
+   so the most common bottleneck in this product produced the emptiest answer.
+3. **From your matches** — the top demand term the offer does not cover.
+
+Each carries evidence citing a number from rows the user created, and one
+bounded experiment for the week rather than a reading list. `null` only for an
+account with nothing measured yet — a real empty state instead of a permanent
+one.
+
+A lesson with a real URL still renders, underneath, as a bonus. It is no longer
+the reason the section exists.
+
 ## Two shells, one app
 
 `/copilot` and `/lifeos` are the same application. Same session cookie (`path:

@@ -4,8 +4,8 @@
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { addDays, copilotDb, todayIso } from './db';
-import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
-import { diagnose, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
+import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
+import { diagnose, growthEdge, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { stageOf } from './pipeline';
@@ -322,6 +322,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
   const lessons = selectLesson(growth, diagnosis);
+  // The record is what makes "you keep doing this and it does not work"
+  // possible; nothing else in the app can see it.
+  const edge = growthEdge(diagnosis, { deadTopic: decisionReview(decisionLog).deadTopic });
 
   return {
     profile,
@@ -352,6 +355,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     opportunities,
     diagnosis,
     lessons,
+    edge,
     sources,
     contextCount: ctxCount,
     needsBrief: !insight || insight.for_date !== today,

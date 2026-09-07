@@ -1112,3 +1112,66 @@ async function agentLimits() {
 }
 
 agentLimits().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Something to get better at, every day there is data
+// ─────────────────────────────────────────────────────────────────────────────
+import { growthEdge } from '../../src/lib/copilot/diagnose';
+
+async function edge() {
+  const stages = [
+    { key: 'matched' as const, label: 'Matched', count: 157, rate: null },
+    { key: 'drafted' as const, label: 'Drafted', count: 33, rate: 0.21 },
+    { key: 'sent' as const, label: 'Sent', count: 0, rate: 0 },
+  ];
+  const bottleneck = (label: string) => ({ kind: 'bottleneck' as const, headline: `Drafted → ${label} is where you lose most: 0 of 33 (0%).`, detail: '' });
+  const demand = [{ term: 'running facebook ads', count: 40, thisWeek: 0, prevWeeklyAvg: 3, trend: 'steady' as const, segments: [] }];
+
+  // 1. The live account's exact state. The old gate produced nothing here,
+  //    because BOTTLENECK_TOPIC had no entry for 'sent' — the most common
+  //    bottleneck in this product got the emptiest answer.
+  const stuck = growthEdge({ findings: [bottleneck('Sent')], stages, demand });
+  assert.equal(stuck?.source, 'funnel');
+  assert.match(stuck!.capability, /sending what you have already written/);
+  assert.ok(stuck!.because.some((b) => /\d/.test(b)), 'evidence cites a number');
+  // The bottleneck card sits directly above this one; repeating its headline
+  // was the duplication that made Today feel heavy in the first place.
+  assert.doesNotMatch(stuck!.because[0], /where you lose most/, 'must not restate the card above it');
+  assert.match(stuck!.because[0], /33 of 33 stopped at drafted/);
+  assert.match(stuck!.experiment, /Send five/);
+
+  // 2. Repeating something that does not work outranks the funnel: only the
+  //    decision record can see it, and it is the more expensive gap.
+  const dead = growthEdge({ findings: [bottleneck('Sent')], stages, demand }, { deadTopic: { topic: 'lead volume', count: 4 } });
+  assert.equal(dead?.source, 'decisions');
+  assert.match(dead!.capability, /lead volume/);
+  assert.match(dead!.because[0], /4 calls about lead volume/);
+  assert.match(dead!.experiment, /Stop repeating it/);
+
+  // 3. Nothing leaking: the gap is what the market wants and you cannot sell.
+  const gap = growthEdge({ findings: [], stages, demand });
+  assert.equal(gap?.source, 'demand');
+  assert.match(gap!.capability, /selling running facebook ads/);
+  assert.match(gap!.because[0], /40 businesses/);
+
+  // 4. A brand-new account is the only real empty state.
+  assert.equal(growthEdge({ findings: [], stages: [], demand: [] }), null);
+
+  // 5. Every stage names a capability and an experiment — no stage may fall
+  //    through to silence the way 'sent' used to.
+  for (const label of ['Matched', 'Drafted', 'Sent', 'Replied', 'Meeting', 'Won']) {
+    const all = [
+      ...stages,
+      { key: 'replied' as const, label: 'Replied', count: 2, rate: 0.1 },
+      { key: 'meeting' as const, label: 'Meeting', count: 1, rate: 0.5 },
+      { key: 'won' as const, label: 'Won', count: 1, rate: 1 },
+    ];
+    const e = growthEdge({ findings: [bottleneck(label)], stages: all, demand });
+    assert.ok(e, `${label} must produce an edge`);
+    assert.ok(e!.capability.length > 3 && e!.experiment.length > 20, `${label} needs a real capability and experiment`);
+  }
+
+  console.log('copilot-core: growth-edge checks passed');
+}
+
+edge().catch((e) => { console.error(e); process.exit(1); });

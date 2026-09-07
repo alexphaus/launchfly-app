@@ -124,7 +124,12 @@ without reading why it exists.
 7. **Never advertise a capability with no route behind it.** `emailApi` was
    sold on the pricing page while `setSendMode()` had no caller; a test now
    fails if it comes back.
-8. **CSS is scoped.** Everything lives under `.cp-root` in
+8. **A one-time token is never spent by a `GET`.** Gmail scans every link in an
+   email and Resend rewrites them through its own click tracker, so a magic
+   link consumed on `GET` is dead before the recipient taps it — this locked
+   the live account out. The `GET` peeks; a `POST` behind a real button
+   consumes.
+9. **CSS is scoped.** Everything lives under `.cp-root` in
    `src/app/copilot/copilot.css`, and every calm-theme rule under
    `.cp-root[data-theme="soft"]`. A test walks the theme block and fails on an
    unscoped rule.

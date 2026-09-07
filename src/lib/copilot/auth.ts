@@ -7,6 +7,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { Resend } from 'resend';
 import { copilotDb } from './db';
+import { DEFAULT_SHELL, type Shell } from './shell';
 import { rateLimit } from './limits';
 import { logEvent } from './base';
 
@@ -25,10 +26,21 @@ export function appBaseUrl(req: Request): string {
 }
 
 const hash = (t: string) => createHash('sha256').update(t).digest('hex');
+
+/**
+ * The URL that goes in the email. The shell rides along so someone who asked to
+ * sign in from /lifeos does not land in the bold theme; it is validated again on
+ * the way back, never trusted from the query string.
+ */
+export function signInLink(baseUrl: string, token: string, shell: Shell = DEFAULT_SHELL): string {
+  const qs = new URLSearchParams({ token });
+  if (shell !== DEFAULT_SHELL) qs.set('shell', shell);
+  return `${baseUrl.replace(/\/$/, '')}/api/copilot/auth/callback?${qs.toString()}`;
+}
 const normEmail = (e: string) => e.trim().toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export async function requestMagicLink(input: { email: string; profileId?: string | null; baseUrl: string; ip?: string }): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+export async function requestMagicLink(input: { email: string; profileId?: string | null; baseUrl: string; ip?: string; shell?: Shell }): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const email = normEmail(input.email);
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'That email does not look right', status: 400 };
   if (!loginConfigured()) return { ok: false, error: 'Sign-in email is not configured on this server', status: 503 };
@@ -50,7 +62,7 @@ export async function requestMagicLink(input: { email: string; profileId?: strin
     await db.from('copilot_profiles').update({ pending_login_email: email }).eq('id', input.profileId);
   }
 
-  const link = `${input.baseUrl}/api/copilot/auth/callback?token=${encodeURIComponent(token)}`;
+  const link = signInLink(input.baseUrl, token, input.shell);
   const from = process.env.COPILOT_EMAIL_FROM || process.env.FROM_EMAIL!;
   const resend = new Resend(process.env.RESEND_API_KEY);
   const r = await resend.emails.send({
@@ -63,17 +75,42 @@ export async function requestMagicLink(input: { email: string; profileId?: strin
   return { ok: true };
 }
 
+/** Why a link did not work. 'used' is the one worth telling people about: it
+ *  usually means something followed the link before they did. */
+export type MagicLinkFailure = 'used' | 'expired' | 'unknown';
+
 export type MagicLinkResult =
   | { kind: 'profile'; profileId: string }
   | { kind: 'new'; email: string }
-  | { kind: 'invalid' };
+  | { kind: 'invalid'; reason: MagicLinkFailure };
+
+/**
+ * Is this token still good, without spending it?
+ *
+ * Every URL in an email gets fetched by things that are not the recipient:
+ * Gmail scans links, and Resend rewrites them through its own click-tracking
+ * redirector. A one-time token that is consumed by a GET is therefore dead
+ * before the person taps it — which is exactly what happened in production.
+ * So the GET only peeks, and the token is spent by a POST behind a real click.
+ */
+export async function peekMagicLink(token: string): Promise<{ ok: true } | { ok: false; reason: MagicLinkFailure }> {
+  if (!token) return { ok: false, reason: 'unknown' };
+  const { data: row } = await copilotDb()
+    .from('copilot_login_tokens').select('used_at, expires_at').eq('token_hash', hash(token)).maybeSingle();
+  if (!row) return { ok: false, reason: 'unknown' };
+  if (row.used_at) return { ok: false, reason: 'used' };
+  if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false, reason: 'expired' };
+  return { ok: true };
+}
 
 /** Consume a token once. Links to the requesting profile, else finds the profile by email, else signals a new user. */
 export async function consumeMagicLink(token: string): Promise<MagicLinkResult> {
-  if (!token) return { kind: 'invalid' };
+  if (!token) return { kind: 'invalid', reason: 'unknown' };
   const db = copilotDb();
   const { data: row } = await db.from('copilot_login_tokens').select('id, profile_id, email, expires_at, used_at').eq('token_hash', hash(token)).maybeSingle();
-  if (!row || row.used_at || new Date(row.expires_at).getTime() < Date.now()) return { kind: 'invalid' };
+  if (!row) return { kind: 'invalid', reason: 'unknown' };
+  if (row.used_at) return { kind: 'invalid', reason: 'used' };
+  if (new Date(row.expires_at).getTime() < Date.now()) return { kind: 'invalid', reason: 'expired' };
   await db.from('copilot_login_tokens').update({ used_at: new Date().toISOString() }).eq('id', row.id);
 
   const now = new Date().toISOString();

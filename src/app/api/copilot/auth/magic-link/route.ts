@@ -1,6 +1,7 @@
 import { appBaseUrl, requestMagicLink } from '@/lib/copilot/auth';
 import { clientIp } from '@/lib/copilot/limits';
 import { currentProfileId } from '@/lib/copilot/session';
+import { toShell } from '@/lib/copilot/shell';
 import { fail, json, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
   const b = await readJson(req);
   if (typeof b.email !== 'string') return fail('Email required');
   const profileId = await currentProfileId();
-  const r = await requestMagicLink({ email: b.email, profileId, baseUrl: appBaseUrl(req), ip: clientIp(req) });
+  const r = await requestMagicLink({ email: b.email, profileId, baseUrl: appBaseUrl(req), ip: clientIp(req), shell: toShell(b.shell) });
   if (!r.ok) return fail(r.error, r.status);
   return json({ ok: true });
 }

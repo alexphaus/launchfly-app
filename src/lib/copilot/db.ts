@@ -31,3 +31,33 @@ export function addDays(iso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * Turn a Postgres/PostgREST failure into something the person reading the screen
+ * can act on.
+ *
+ * The generic "check the database migration" this replaces was a guess, and it
+ * sent us looking in the wrong place: the code is the whole diagnosis. 42703 and
+ * 42P01 really are an unapplied migration; 23505 means the row already exists
+ * and the answer is to sign in, not to run SQL.
+ */
+export function describeDbError(e: unknown, fallback = 'Something went wrong.'): string {
+  const err = (e ?? null) as { code?: string; message?: string } | null;
+  const code = typeof err?.code === 'string' ? err.code : undefined;
+  const msg = typeof err?.message === 'string' ? err.message.trim() : '';
+  switch (code) {
+    case '42703':
+    case '42P01':
+      return `The database is missing something this needs — ${msg || 'an unknown column or table'}. Apply the outstanding files in supabase/migrations and try again.`;
+    case '23505':
+      return 'That already exists. Sign in instead of creating a second copilot.';
+    case '23502':
+      return `A required field was empty${msg ? ` — ${msg}` : ''}.`;
+    case '23503':
+      return `A record this links to is missing${msg ? ` — ${msg}` : ''}.`;
+    case '42501':
+      return 'The database refused the write. Check that the service key is set, not the anon key.';
+    default:
+      return code ? `${fallback} (database error ${code})` : fallback;
+  }
+}

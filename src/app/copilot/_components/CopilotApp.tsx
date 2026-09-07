@@ -278,7 +278,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       } catch (e) { fail(e, 'Could not record'); return false; }
     },
     async requestLoginLink(email) {
-      try { await post('/auth/magic-link', { email }); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Could not send' }; }
+      try { await post('/auth/magic-link', { email, shell }); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Could not send' }; }
     },
     async setPush(enabled) {
       try {

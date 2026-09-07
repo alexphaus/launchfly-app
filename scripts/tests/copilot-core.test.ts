@@ -1020,3 +1020,42 @@ async function decisions() {
 }
 
 decisions().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Signing in: a link nothing else can spend
+// ─────────────────────────────────────────────────────────────────────────────
+import { signInLink } from '../../src/lib/copilot/auth';
+import { describeDbError } from '../../src/lib/copilot/db';
+
+async function signin() {
+  // 1. The shell rides on the link, and only when it is not the default — the
+  //    bold shell must keep the shorter URL it has always had.
+  assert.equal(signInLink('https://launchfly.ai', 'abc'), 'https://launchfly.ai/api/copilot/auth/callback?token=abc');
+  assert.equal(signInLink('https://launchfly.ai/', 'abc'), 'https://launchfly.ai/api/copilot/auth/callback?token=abc', 'a trailing slash must not double up');
+  assert.equal(signInLink('https://launchfly.ai', 'abc', '/copilot'), 'https://launchfly.ai/api/copilot/auth/callback?token=abc');
+  assert.equal(signInLink('https://launchfly.ai', 'abc', '/lifeos'), 'https://launchfly.ai/api/copilot/auth/callback?token=abc&shell=%2Flifeos');
+
+  // 2. Tokens are base64url, which contains characters a query string cares
+  //    about. An unescaped one silently signs nobody in.
+  const raw = 'a+b/c=d&e';
+  const link = signInLink('https://launchfly.ai', raw);
+  assert.ok(!link.includes('a+b/c=d&e'), 'the token must be escaped');
+  assert.equal(new URL(link).searchParams.get('token'), raw, 'and must survive the round trip');
+
+  // 3. The failure the user actually sees names the cause, rather than blaming
+  //    a migration for everything.
+  assert.match(describeDbError({ code: '42703', message: 'column "plan" does not exist' }), /missing something this needs — column "plan" does not exist/);
+  assert.match(describeDbError({ code: '42P01', message: 'relation "copilot_decisions" does not exist' }), /supabase\/migrations/);
+  assert.match(describeDbError({ code: '23505' }), /Sign in instead/);
+  assert.doesNotMatch(describeDbError({ code: '23505' }), /migration/, 'a duplicate row is not a migration problem');
+  assert.match(describeDbError({ code: '42501' }), /service key/);
+  // An unknown code still carries the code, because that is the part worth
+  // pasting into a search. It must not carry the raw message.
+  assert.equal(describeDbError({ code: 'XX000', message: 'internal detail' }, 'Could not create your copilot.'), 'Could not create your copilot. (database error XX000)');
+  assert.equal(describeDbError(null, 'Could not create your copilot.'), 'Could not create your copilot.');
+  assert.equal(describeDbError(new Error('boom'), 'Nope.'), 'Nope.');
+
+  console.log('copilot-core: sign-in checks passed');
+}
+
+signin().catch((e) => { console.error(e); process.exit(1); });

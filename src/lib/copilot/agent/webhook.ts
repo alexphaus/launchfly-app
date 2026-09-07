@@ -7,7 +7,7 @@
 //   { "kind": "daily_brief", "pack": ContextPack }
 //   -> BriefOutput JSON (or { "brief": BriefOutput })
 
-import type { BriefOutput, ContextPack, OpportunityAgent } from '../types';
+import type { BriefOutput, BriefRunOpts, ContextPack, OpportunityAgent } from '../types';
 import { normalizeBrief } from './schema';
 
 export class WebhookAgent implements OpportunityAgent {
@@ -18,9 +18,11 @@ export class WebhookAgent implements OpportunityAgent {
     this.model = new URL(url).host;
   }
 
-  async generateBrief(pack: ContextPack): Promise<BriefOutput> {
+  async generateBrief(pack: ContextPack, opts?: BriefRunOpts): Promise<BriefOutput> {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), this.timeoutMs);
+    // Same physics as the LLM agent: an external service is no less subject to
+    // the proxy in front of the caller than a model is.
+    const t = setTimeout(() => ctrl.abort(), opts?.timeoutMs ?? this.timeoutMs);
     try {
       const res = await fetch(this.url, {
         method: 'POST',

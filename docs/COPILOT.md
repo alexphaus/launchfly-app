@@ -383,6 +383,31 @@ user sees a 504 having paid for a brief they never got.
 `LlmAgent` is therefore bounded: **one attempt**, aborted at
 `COPILOT_AI_TIMEOUT_MS` (default 30s).
 
+**Two budgets, because there are two callers.** `budgetForReason()` picks them:
+
+| reason | budget | env var | default |
+| --- | --- | --- | --- |
+| `cron` | the nightly run, started by `scripts/copilot-cron.mjs` against `127.0.0.1` | `COPILOT_AI_CRON_TIMEOUT_MS` | 120s |
+| anything else | a tap — `manual`, `offer`, `note` — sitting behind the proxy | `COPILOT_AI_TIMEOUT_MS` | 30s |
+
+The distinction is the whole point: **Traefik is not in the cron's path**, so
+the ceiling that forces 30s does not apply to it. Sharing one number cost every
+brief in production. `copilot_agent_runs` showed the cron healthy —
+`200 in 220.7s — 2/2 profiles ok` — while every `llm` row read
+`status = error`, `The operation was aborted due to timeout`, at exactly 30.0s
+from `started_at`. The model was answering normally; this file was hanging up on
+it. Every brief the user read for weeks was the starter fallback.
+
+Two things now make that legible from the row alone, because the row is usually
+all that is left: `input_summary.budget_ms` records what the run was bounded by,
+and the abort is re-thrown naming the budget and the variable that sets it
+rather than the SDK's bare "The operation was aborted due to timeout" — which
+reads exactly like an endpoint rejecting the request, and was read that way.
+
+Keep `COPILOT_AI_CRON_TIMEOUT_MS` under `/api/copilot/cron/daily`'s
+`maxDuration` (300s), remembering it is spent **once per profile** and that
+supply and reconcile run first.
+
 That default is deliberately conservative. 55s was tried first, against a guess
 that the proxy allowed 60, and it still 504'd — so the ceiling is lower than
 that and had never been measured. Measure it:
@@ -393,7 +418,9 @@ GET /api/copilot/health?sleep=30   → JSON
 GET /api/copilot/health?sleep=45   → 504   ← the proxy's real limit is here
 ```
 
-Then set `COPILOT_AI_TIMEOUT_MS` under it. The failure modes are not symmetric:
+Then set `COPILOT_AI_TIMEOUT_MS` under it. This measurement bounds the
+interactive budget only; the cron's is bounded by `maxDuration`, not by the
+proxy. The failure modes are not symmetric:
 too low costs a starter brief and the client says so; too high costs a 504 with
 the generation billed and nothing shown. The abort raises, `runBrief` catches it,
 and the starter writes the brief instead — the fallback that already existed but

@@ -1068,11 +1068,11 @@ signin().catch((e) => { console.error(e); process.exit(1); });
 // ─────────────────────────────────────────────────────────────────────────────
 // The agent must fail fast, not hang
 // ─────────────────────────────────────────────────────────────────────────────
-import { extraBody, maxOutputTokens, timeoutMs } from '../../src/lib/copilot/agent/llm';
+import { budgetForReason, cronTimeoutMs, extraBody, maxOutputTokens, timeoutMs } from '../../src/lib/copilot/agent/llm';
 
 async function agentLimits() {
   const env = { ...process.env };
-  const reset = () => { for (const k of ['COPILOT_AI_TIMEOUT_MS', 'COPILOT_AI_MAX_OUTPUT_TOKENS', 'COPILOT_AI_EXTRA_BODY']) delete process.env[k]; };
+  const reset = () => { for (const k of ['COPILOT_AI_TIMEOUT_MS', 'COPILOT_AI_CRON_TIMEOUT_MS', 'COPILOT_AI_MAX_OUTPUT_TOKENS', 'COPILOT_AI_EXTRA_BODY']) delete process.env[k]; };
 
   // 1. A bounded default, always. An unbounded call is what produced the 504:
   //    the generation ran for five minutes, the proxy gave up, and the user got
@@ -1105,6 +1105,31 @@ async function agentLimits() {
   for (const bad of ['{oops', '[1,2]', '"a string"', 'null', '  ']) {
     process.env.COPILOT_AI_EXTRA_BODY = bad;
     assert.equal(extraBody(), null, `${bad} must be ignored, not thrown`);
+  }
+
+  // 4. The two budgets are separate, because the two callers are.
+  //    Sharing them is not hypothetical: production ran for weeks with every
+  //    nightly generation aborted at exactly 30.0s and falling back to the
+  //    starter, while the model was answering perfectly well — the 30s exists
+  //    only because a tap sits behind Traefik, and the cron does not.
+  reset();
+  assert.equal(budgetForReason('cron'), 120_000, 'the nightly run is not behind the proxy');
+  for (const reason of ['manual', 'offer', 'note', 'onboard', '']) {
+    assert.equal(budgetForReason(reason), 30_000, `"${reason}" is a tap and must take the short budget`);
+  }
+  assert.ok(cronTimeoutMs() > timeoutMs(), 'the cron must never be the more impatient of the two');
+
+  // Tuning one must not silently move the other.
+  process.env.COPILOT_AI_TIMEOUT_MS = '45000';
+  assert.equal(budgetForReason('manual'), 45_000);
+  assert.equal(budgetForReason('cron'), 120_000, 'the interactive knob must not reach the cron');
+  reset();
+  process.env.COPILOT_AI_CRON_TIMEOUT_MS = '240000';
+  assert.equal(budgetForReason('cron'), 240_000);
+  assert.equal(budgetForReason('manual'), 30_000, 'and the cron knob must not reach a tap');
+  for (const bad of ['0', '-1', 'later', '', 'NaN']) {
+    process.env.COPILOT_AI_CRON_TIMEOUT_MS = bad;
+    assert.equal(budgetForReason('cron'), 120_000, `"${bad}" should fall back, not remove the limit`);
   }
 
   process.env = env;

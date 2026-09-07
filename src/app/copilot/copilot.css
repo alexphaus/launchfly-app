@@ -443,6 +443,16 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-notdo b { font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink); display: block; margin-bottom: 3px; }
 .cp-call .cp-go { display: inline-block; margin-top: 14px; }
 
+/* ── What to get better at ────────────────────────────────────────────────── */
+/* The capability is stored lowercase so it reads correctly inside a sentence
+   elsewhere; only the first letter is lifted here. `capitalize` would Title
+   Case The Whole Phrase, which reads like a course catalogue. */
+.cp-edge-head { font-family: var(--display); font-size: 17px; font-weight: 800; line-height: 1.3; letter-spacing: -0.2px; margin-bottom: 11px; }
+.cp-edge-head::first-letter { text-transform: uppercase; }
+.cp-edge .cp-because { margin-bottom: 0; }
+.cp-edge-try { margin-top: 12px; padding-top: 11px; border-top: 2px dashed var(--ink); font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.cp-edge-try b { font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink); display: block; margin-bottom: 3px; }
+
 /* ══ /lifeos — the calm theme ═══════════════════════════════════════════════
    The same markup, the same three tabs, the same data. Only the surface
    changes: ink borders become shadow and space, squares become pills, black
@@ -663,3 +673,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 
 .cp-root[data-theme="soft"] .cp-notdo { border-top: 1px solid var(--line); }
 .cp-root[data-theme="soft"] .cp-notdo b { text-transform: none; letter-spacing: 0; font-size: 11.5px; color: var(--muted); }
+
+.cp-root[data-theme="soft"] .cp-edge-head { font-weight: 700; letter-spacing: 0; }
+.cp-root[data-theme="soft"] .cp-edge-try { border-top: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp-edge-try b { text-transform: none; letter-spacing: 0; font-size: 11.5px; color: var(--muted); }

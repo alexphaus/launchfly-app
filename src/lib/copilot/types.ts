@@ -2,7 +2,7 @@
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
-import type { Diagnosis } from './diagnose';
+import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
 import type { PlanKey, PlanStatus } from './plans';
 
@@ -305,6 +305,12 @@ export interface HomeData {
   billing: BillingSummary;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */
   lessons: GrowthItem[];
+  /**
+   * The one capability to work on, computed from the funnel, the demand read and
+   * the decision record. Replaces a section that asked a model for an article
+   * URL and therefore sat empty almost every day.
+   */
+  edge: GrowthEdge | null;
   sources: ContextSource[];
   contextCount: number;
   /** True when there is no brief for today yet; the client triggers one. */

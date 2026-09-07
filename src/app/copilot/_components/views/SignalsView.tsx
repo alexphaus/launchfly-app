@@ -25,6 +25,7 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
   const d = home.diagnosis;
   const max = Math.max(...d.stages.map((s) => s.count), 1);
   const lesson = home.lessons[0];
+  const edge = home.edge;
   const sourced = home.metrics.pipeline.sourced;
   // The demand section IS the demand finding, so the card would repeat it.
   const findings = d.findings.filter((f) => f.kind !== 'demand');
@@ -159,21 +160,37 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
         </>
       )}
 
-      {lesson ? (
+      {/* The gap is computed from the funnel, the demand read and the decision
+          record, so this section has something to say every day the app has any
+          data at all. A lesson link is a bonus when a real one exists, never the
+          reason the section is here. */}
+      {edge ? (
         <>
-          <div className="cp-section"><span className="lead">Worth learning</span><span className="count">because of the above</span></div>
-          <div className="cp-card" style={{ padding: 0 }}>
-            <button className="cp-learn" onClick={() => actions.openSheet({ kind: 'lesson', id: lesson.id })}>
-              <div className="cp-lnum">01</div>
-              <div style={{ flex: 1 }}>
-                <div className="cp-lt">{lesson.title}{lesson.minutes ? `, ${lesson.minutes} min` : ''}</div>
-                {lesson.note && <div className="cp-ls">{lesson.note}</div>}
-              </div>
-            </button>
+          <div className="cp-section">
+            <span className="lead">Get better at</span>
+            <span className="count">{edge.source === 'decisions' ? 'from your calls' : edge.source === 'funnel' ? 'from your funnel' : 'from your matches'}</span>
           </div>
+          <div className="cp-card cp-edge">
+            <h3 className="cp-edge-head">{edge.capability}</h3>
+            <ul className="cp-because">
+              {edge.because.map((b, i) => <li key={i}>{b}</li>)}
+            </ul>
+            <div className="cp-edge-try"><b>Try this week</b> {edge.experiment}</div>
+          </div>
+          {lesson && (
+            <div className="cp-card" style={{ padding: 0 }}>
+              <button className="cp-learn" onClick={() => actions.openSheet({ kind: 'lesson', id: lesson.id })}>
+                <div className="cp-lnum">01</div>
+                <div style={{ flex: 1 }}>
+                  <div className="cp-lt">{lesson.title}{lesson.minutes ? `, ${lesson.minutes} min` : ''}</div>
+                  {lesson.note && <div className="cp-ls">{lesson.note}</div>}
+                </div>
+              </button>
+            </div>
+          )}
         </>
       ) : (
-        !d.thin && <div className="cp-note" style={{ marginTop: 14 }}>Nothing to learn right now. The gap above is something to change, not something to study.</div>
+        !d.thin && <div className="cp-note" style={{ marginTop: 14 }}>Nothing measured yet. Send something and this fills in.</div>
       )}
     </>
   );

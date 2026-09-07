@@ -21,7 +21,8 @@
     "test:quick": "node test-simulation.js quick",
     "test:full": "node test-simulation.js full",
     "test:session": "node test-simulation.js session",
-    "debug": "node test-simulation.js diagnostic"
+    "debug": "node test-simulation.js diagnostic",
+    "bench:models": "tsx scripts/copilot-model-bench.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.19",

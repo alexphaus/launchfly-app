@@ -6,7 +6,10 @@
 //   DEEPSEEK_API_KEY                                               DeepSeek, deepseek-chat
 //
 // Tuning, all optional:
-//   COPILOT_AI_TIMEOUT_MS          abort a slow generation (default 55s)
+//   COPILOT_AI_TIMEOUT_MS          abort a slow generation on a request the
+//                                  user is waiting on (default 30s)
+//   COPILOT_AI_CRON_TIMEOUT_MS     the same bound for the nightly run, which
+//                                  nobody is waiting on (default 120s)
 //   COPILOT_AI_MAX_OUTPUT_TOKENS   cap the reply
 //   COPILOT_AI_EXTRA_BODY          JSON merged into the request body, for
 //                                  endpoint-specific knobs this file should not
@@ -20,7 +23,7 @@
 
 import { createOpenAI } from '@ai-sdk/openai';
 import { generateText } from 'ai';
-import type { BriefOutput, ContextPack, OpportunityAgent } from '../types';
+import type { BriefOutput, BriefRunOpts, ContextPack, OpportunityAgent } from '../types';
 import { SYSTEM_PROMPT, extractJson, normalizeBrief, userPrompt } from './schema';
 
 interface LlmConfig { apiKey: string; baseURL?: string; model: string }
@@ -39,9 +42,39 @@ interface LlmConfig { apiKey: string; baseURL?: string; model: string }
  */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * The nightly run is a different problem wearing the same name. It is started
+ * by scripts/copilot-cron.mjs against 127.0.0.1, so Traefik is not in the path
+ * and the ceiling that forces 30s above simply does not exist. Sharing one
+ * budget between the two cost every brief in production: the cron ran, the
+ * model was answering normally, and this file aborted it at exactly 30.0s on
+ * every single run for weeks — so every brief the user read was the starter.
+ *
+ * 120s is chosen against the generations recorded in docs/COPILOT.md (75s,
+ * 120s, 185s, 318s, 335s on GLM-5.3-Flash) and against the cron route's own
+ * maxDuration of 300s, which the whole loop — supply, reconcile, brief, per
+ * profile, sequentially — still has to fit inside. Raise it only alongside
+ * that, and remember it is spent once per profile.
+ */
+const DEFAULT_CRON_TIMEOUT_MS = 120_000;
+
+function envMs(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
+
 export function timeoutMs(): number {
-  const raw = Number(process.env.COPILOT_AI_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+  return envMs('COPILOT_AI_TIMEOUT_MS', DEFAULT_TIMEOUT_MS);
+}
+
+export function cronTimeoutMs(): number {
+  return envMs('COPILOT_AI_CRON_TIMEOUT_MS', DEFAULT_CRON_TIMEOUT_MS);
+}
+
+/** What the caller can afford to wait, by why the brief is being run. Only the
+ *  cron escapes the proxy; every other reason is a tap behind one. */
+export function budgetForReason(reason: string): number {
+  return reason === 'cron' ? cronTimeoutMs() : timeoutMs();
 }
 
 export function maxOutputTokens(): number | undefined {
@@ -102,19 +135,32 @@ export class LlmAgent implements OpportunityAgent {
     });
   }
 
-  async generateBrief(pack: ContextPack): Promise<BriefOutput> {
+  async generateBrief(pack: ContextPack, opts?: BriefRunOpts): Promise<BriefOutput> {
+    const budget = opts?.timeoutMs ?? timeoutMs();
     // One attempt, hard bounded. Retrying a generation that ran long doubles the
     // wall clock and the bill for the same likely outcome; the starter is the
     // better answer to a slow provider.
-    const { text } = await generateText({
-      model: this.provider(this.model),
-      system: SYSTEM_PROMPT,
-      prompt: userPrompt(pack),
-      temperature: 0.4,
-      maxRetries: 0,
-      maxOutputTokens: maxOutputTokens(),
-      abortSignal: AbortSignal.timeout(timeoutMs()),
-    });
-    return normalizeBrief(extractJson(text));
+    try {
+      const { text } = await generateText({
+        model: this.provider(this.model),
+        system: SYSTEM_PROMPT,
+        prompt: userPrompt(pack),
+        temperature: 0.4,
+        maxRetries: 0,
+        maxOutputTokens: maxOutputTokens(),
+        abortSignal: AbortSignal.timeout(budget),
+      });
+      return normalizeBrief(extractJson(text));
+    } catch (err) {
+      // The bare SDK message is "The operation was aborted due to timeout",
+      // which names neither the budget nor who set it. That cost a wrong
+      // diagnosis: it reads exactly like an endpoint rejecting the request,
+      // and copilot_agent_runs.error is usually all anyone has to go on.
+      const message = err instanceof Error ? err.message : String(err);
+      if (/abort|timeout/i.test(message)) {
+        throw new Error(`${this.model} did not answer within ${budget}ms — raise COPILOT_AI_TIMEOUT_MS (or COPILOT_AI_CRON_TIMEOUT_MS for the nightly run), or pick a faster model`);
+      }
+      throw err;
+    }
   }
 }

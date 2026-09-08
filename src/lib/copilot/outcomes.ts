@@ -3,6 +3,7 @@
 // reconciling inbound WhatsApp messages against what we sent, and later from
 // webhooks. They move goals, ranking, and the read.
 
+import { REPLY_TEXT_MAX, trimMessage } from './conversations';
 import { copilotDb } from './db';
 import { computeMetrics } from './metrics';
 import { sendPush } from './push';
@@ -76,15 +77,28 @@ export async function reconcileReplies(profileId: string): Promise<{ checked: nu
 
   const phones = [...new Set(pending.map((e) => digits(e.recipient)))];
   const earliest = pending.reduce((m, e) => (e.sent_at! < m ? e.sent_at! : m), pending[0].sent_at!);
-  const { data: inbound } = await db.from('chat_history').select('phone, created_at').in('phone', phones).eq('role', 'user').gte('created_at', earliest).order('created_at');
-  const msgs = (inbound ?? []) as { phone: string; created_at: string }[];
+  // content, not just the timestamp. Selecting only phone and created_at is how
+  // this ran for months: the system knew that somebody replied and never once
+  // knew what they said, which is the most useful text it has access to.
+  // The body is only ever read for a phone this profile itself sent to, after
+  // its own sent_at — the match below is what keeps one user's inbox out of
+  // another's pack.
+  const { data: inbound } = await db.from('chat_history').select('phone, content, created_at').in('phone', phones).eq('role', 'user').gte('created_at', earliest).order('created_at');
+  const msgs = (inbound ?? []) as { phone: string; content: string | null; created_at: string }[];
 
   let matched = 0;
   for (const e of pending) {
     const p = digits(e.recipient);
     const hit = msgs.find((m) => (m.phone === p || m.phone.endsWith(p.slice(-9))) && m.created_at > e.sent_at!);
     if (!hit) continue;
-    await recordOutcome(profileId, { kind: 'reply', source: 'system', execution_id: e.id, action_id: e.action_id, opportunity_id: e.opportunity_id, occurred_at: hit.created_at });
+    await recordOutcome(profileId, {
+      kind: 'reply', source: 'system', execution_id: e.id, action_id: e.action_id, opportunity_id: e.opportunity_id,
+      occurred_at: hit.created_at,
+      // note already existed on copilot_outcomes and was always null for a
+      // system-matched reply. Trimmed at the write so the row cannot grow
+      // without bound on a pasted wall of text.
+      note: trimMessage(hit.content, REPLY_TEXT_MAX) || null,
+    });
     matched += 1;
   }
   return { checked: execs.length, matched };

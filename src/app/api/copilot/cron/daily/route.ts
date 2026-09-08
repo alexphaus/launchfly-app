@@ -19,8 +19,13 @@ const BATCH = Number(process.env.COPILOT_CRON_BATCH ?? 25);
 export async function GET(request: NextRequest) {
   // Fail closed. This endpoint spends model credits per profile, so an
   // unconfigured secret must not leave it open to the world.
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) return fail('CRON_SECRET is not configured; refusing to run.', 503);
+  // Both names are accepted. The route asked for CRON_SECRET while the
+  // environment defined COPILOT_CRON_SECRET, and the endpoint failed closed
+  // with a 503 nobody was reading — one of the reasons this loop had never run.
+  // Rejecting the operator's own secret over a prefix is a footgun, not a
+  // safety property.
+  const cronSecret = process.env.CRON_SECRET || process.env.COPILOT_CRON_SECRET;
+  if (!cronSecret) return fail('Neither CRON_SECRET nor COPILOT_CRON_SECRET is configured; refusing to run.', 503);
   if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) return fail('Unauthorized', 401);
 
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();

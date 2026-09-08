@@ -82,7 +82,7 @@ export async function GET(req: Request) {
     signInEmail: { ok: has('RESEND_API_KEY') && has('COPILOT_EMAIL_FROM', 'FROM_EMAIL'), needs: ['RESEND_API_KEY', 'COPILOT_EMAIL_FROM (or FROM_EMAIL)'] },
     // Reads CRON_SECRET specifically. COPILOT_CRON_SECRET is a different name and
     // will not be seen — this deployment has had exactly that mismatch.
-    scheduledLoop: { ok: has('CRON_SECRET'), needs: ['CRON_SECRET'], note: has('COPILOT_CRON_SECRET') && !has('CRON_SECRET') ? 'COPILOT_CRON_SECRET is set but the route reads CRON_SECRET' : undefined },
+    scheduledLoop: { ok: has('CRON_SECRET', 'COPILOT_CRON_SECRET'), needs: ['CRON_SECRET (or COPILOT_CRON_SECRET)'], note: 'Set the schedule as a Coolify Scheduled Task: node scripts/copilot-cron.mjs' },
     checkout: { ok: has('STRIPE_SECRET_KEY') && !!priceIdFor('pro', 'monthly'), needs: ['STRIPE_SECRET_KEY', 'STRIPE_PRICE_COPILOT_PRO_MONTHLY', 'STRIPE_PRICE_COPILOT_PRO_YEARLY', 'STRIPE_PRICE_COPILOT_OPERATOR_MONTHLY', 'STRIPE_PRICE_COPILOT_OPERATOR_YEARLY'] },
     // Without this a paid checkout completes and the plan never upgrades: Stripe
     // retries into a 503 and the profile stays on free limits.

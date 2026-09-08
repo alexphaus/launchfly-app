@@ -1240,6 +1240,44 @@ async function edge() {
 edge().catch((e) => { console.error(e); process.exit(1); });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// One notification a day, carrying the call
+// ─────────────────────────────────────────────────────────────────────────────
+import { notifyPayload } from '../../src/lib/copilot/brief';
+
+async function notifications() {
+  const call = { headline: 'Send the 7 drafts already written before finding anything new.', because: [], verify_metric: 'sent' as const };
+  const urgent = [{ title: 'Follow up with Briones and MAPECON', urgency: 'urgent' as const, due_label: 'Overdue' }];
+
+  // 1. Only the cron notifies. A brief also runs when the app is opened, and a
+  //    notification to somebody already looking at the screen is noise — that
+  //    is most of why push has never been seen.
+  for (const reason of ['manual', 'daily', 'onboarding', 'offer', 'supply']) {
+    assert.equal(notifyPayload({ decision: call, nudges: urgent }, reason), null, `${reason} must not notify`);
+  }
+
+  // 2. The call is what gets carried. A count of nudges is not a reason to pick
+  //    up a phone; one move is.
+  const p = notifyPayload({ decision: call, nudges: urgent }, 'cron');
+  assert.equal(p?.title, 'Today’s call');
+  assert.equal(p?.body, call.headline);
+
+  // 3. No decision: fall back to the urgent nudge rather than staying silent.
+  const fallback = notifyPayload({ decision: null, nudges: urgent }, 'cron');
+  assert.equal(fallback?.title, 'Needs you today');
+  assert.match(fallback!.body, /Briones/);
+  assert.equal(notifyPayload({ decision: null, nudges: [urgent[0], { ...urgent[0], title: 'Second thing' }] }, 'cron')?.title, '2 things need you today');
+
+  // 4. Nothing to say is silence, not an empty notification.
+  assert.equal(notifyPayload({ decision: null, nudges: [] }, 'cron'), null);
+  assert.equal(notifyPayload({ decision: null, nudges: [{ title: 'Not urgent', urgency: 'normal' as const }] }, 'cron'), null,
+    'a non-urgent nudge is not worth interrupting anyone for');
+
+  console.log('copilot-core: notification checks passed');
+}
+
+notifications().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // What was said, on both sides
 // ─────────────────────────────────────────────────────────────────────────────
 import {

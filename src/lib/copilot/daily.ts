@@ -11,13 +11,13 @@ import { runWeeklySignals } from './weekly';
 export interface DailyResult {
   supply: SupplyResult | { error: string } | null;
   reconcile: { checked: number; matched: number } | { error: string } | null;
-  brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded'> & { skipped?: string };
+  brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed'> & { skipped?: string };
   /** Monday only, cron only: the weekly Signals read. */
   weekly: { wrote: boolean; reason?: string } | { error: string } | null;
 }
 
 export async function runDaily(profileId: string, opts: { reason: string; supply?: boolean; reconcile?: boolean; deadline?: number } ): Promise<DailyResult> {
-  const out: DailyResult = { supply: null, reconcile: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 } }, weekly: null };
+  const out: DailyResult = { supply: null, reconcile: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 }, weekly: null };
   if (opts.supply !== false) {
     try { out.supply = await runSupply(profileId, { reason: opts.reason, deadline: opts.deadline }); }
     catch (e) { out.supply = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] supply failed', e); }
@@ -36,7 +36,7 @@ export async function runDaily(profileId: string, opts: { reason: string; supply
   const brief = await runBrief(profileId, { reason: opts.reason });
   // Surfaced in the cron report: it is how you can tell from outside whether
   // the record is actually being graded, or just accumulating.
-  out.brief = { agent: brief.agent, fellBack: brief.fellBack, graded: brief.graded };
+  out.brief = { agent: brief.agent, fellBack: brief.fellBack, graded: brief.graded, pushed: brief.pushed };
   // The weekly read rides the cron, not the "Find new matches" tap: it decides
   // for itself whether it is Monday in the profile's timezone.
   if (opts.reason === 'cron') {

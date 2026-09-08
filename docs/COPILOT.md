@@ -141,6 +141,33 @@ one.
 
 A lesson with a real URL still renders, underneath, as a bonus. It is no longer
 the reason the section exists.
+## Push
+
+Three things had to be wrong at once for a notification never to arrive, and all
+three were:
+
+- **It only fired for *fresh* urgent nudges.** Urgent nudges are deliberately
+  carried forward until acted on, so anything that persists — "follow up with
+  Briones" — pushed once and was silent forever after. The nudges that mattered
+  most were the ones that went quiet.
+- **It fired from any brief, including the one that runs when the app opens.**
+  A notification sent to somebody already looking at the screen is suppressed at
+  best and noise at worst.
+- **It never carried the decision**, which is the only thing here worth
+  interrupting someone for. A count of nudges is not a reason to pick up a
+  phone; "send the 7 drafts already written" is.
+
+So: **one notification a day, from the cron only, carrying the call.** It falls
+back to the top urgent nudge when there is no decision, and stays silent when
+there is neither. `notifyPayload()` holds the rule and is pure, so the gates are
+tested without a push service. `DailyResult.brief.pushed` reports how many
+devices it reached, which is how you tell from outside whether push is working
+at all.
+
+Everything above depends on the cron running. Until it does, there is nothing to
+notify anyone about — see **When the brief 504s** and the deploy notes in
+`CLAUDE.md`. Check the keys are set at all with
+`GET /api/copilot/health` → `capabilities.push`.
 
 ## Two shells, one app
 

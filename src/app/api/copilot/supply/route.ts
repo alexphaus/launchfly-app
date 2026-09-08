@@ -8,6 +8,15 @@ import { fail, json, profileIdOr401 } from '@/lib/copilot/http';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
+/**
+ * How long the work itself may take. maxDuration above is what Next allows, not
+ * what survives: the reverse proxy in front of this deployment gives up around
+ * 60s, and three Google Maps segments at 90s each plus a brief is minutes. The
+ * budget leaves room for loadHome and the response, and the run returns what it
+ * found instead of dying. Raise it only after raising the proxy's own timeout.
+ */
+const BUDGET_MS = Number(process.env.COPILOT_SUPPLY_BUDGET_MS) > 0 ? Number(process.env.COPILOT_SUPPLY_BUDGET_MS) : 40_000;
+
 /** "Find new matches": pull real supply, reconcile replies, re-brief. */
 export async function POST() {
   const auth = await profileIdOr401();
@@ -25,7 +34,7 @@ export async function POST() {
   const rl = await rateLimit(`copilot:supply:${auth.pid}`, 10, 86400);
   if (!rl.ok) return fail('You have refreshed matches 10 times today. Each run costs scraping credits; try again tomorrow.', 429);
   try {
-    const result = await runDaily(auth.pid, { reason: 'manual' });
+    const result = await runDaily(auth.pid, { reason: 'manual', deadline: Date.now() + BUDGET_MS });
     return json({ ok: true, result, home: await loadHome(auth.pid) });
   } catch (e) {
     console.error('[copilot] supply run failed', e);

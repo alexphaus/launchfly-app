@@ -29,7 +29,13 @@ export interface SupplyAdapter {
   billable: boolean;
   /** False when the adapter cannot run in this deployment (missing token etc.). */
   available(profile: Profile): boolean | Promise<boolean>;
-  discover(profile: Profile, opts: { limit: number }): Promise<SupplyCandidate[]>;
+  /**
+   * `deadline` is a wall-clock epoch-ms budget for the whole run. An adapter
+   * that can take minutes must stop starting new work past it and return what
+   * it already has. Nothing here is worth a 504: partial matches are useful,
+   * an error after 60 seconds is not.
+   */
+  discover(profile: Profile, opts: { limit: number; deadline?: number }): Promise<SupplyCandidate[]>;
 }
 
 export function normalizePhone(raw: string | null | undefined): string | null {

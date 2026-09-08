@@ -67,17 +67,30 @@ export function parseOnboarding(body: unknown): OnboardingInput {
 
 export async function completeOnboarding(input: OnboardingInput): Promise<string> {
   const db = copilotDb();
+  // Only the columns from the foundation migration go in the insert. Everything
+  // added later is applied afterwards, tolerantly, because in this repo code and
+  // schema deploy separately and always will: migrations are run by hand. A
+  // column that has not landed yet must cost the feature that needs it, never
+  // the account. This exact failure — PGRST204 on `offer` — left the live user
+  // unable to create a copilot at all, which is the worst possible way to find
+  // out that one file had not been pasted into the SQL editor.
   const { data: profile, error } = await db
     .from('copilot_profiles')
     .insert({
       name: input.name, email: input.email ?? null, headline: input.headline ?? null, location: input.location ?? null, timezone: input.timezone ?? 'UTC',
-      capacity: input.capacity, hunt_types: input.hunt_types, target_segments: input.target_segments, target_area: input.target_area ?? null, offer: input.offer,
+      capacity: input.capacity, hunt_types: input.hunt_types,
       onboarding_complete: true, last_seen_at: new Date().toISOString(),
     })
     .select('id')
     .single();
   if (error) throw error;
   const pid = profile.id as string;
+
+  await applyLaterColumns(pid, {
+    target_segments: input.target_segments,   // 20260904
+    target_area: input.target_area ?? null,   // 20260904
+    offer: input.offer,                       // 20260905
+  });
 
   await db.from('copilot_goals').insert({
     profile_id: pid, title: input.goal.title, metric: input.goal.metric ?? 'none', unit: input.goal.unit ?? null,
@@ -108,4 +121,22 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
     console.error('[copilot] first brief failed:', err);
   }
   return pid;
+}
+
+/**
+ * Write the columns that arrived after the foundation migration, one retry
+ * apart: the batch first, then field by field if it fails, so a single missing
+ * column does not take the others down with it. Never throws — the profile
+ * already exists by this point, and losing the targeting is recoverable in the
+ * app while losing the account is not.
+ */
+async function applyLaterColumns(profileId: string, fields: Record<string, unknown>): Promise<void> {
+  const db = copilotDb();
+  const { error } = await db.from('copilot_profiles').update(fields).eq('id', profileId);
+  if (!error) return;
+  console.error('[copilot] onboarding: later columns rejected, falling back field by field', error.message);
+  for (const [key, value] of Object.entries(fields)) {
+    const one = await db.from('copilot_profiles').update({ [key]: value }).eq('id', profileId);
+    if (one.error) console.error(`[copilot] onboarding: could not set ${key} — ${one.error.message}. Its migration is probably unapplied.`);
+  }
 }

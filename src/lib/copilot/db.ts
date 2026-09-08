@@ -49,6 +49,16 @@ export function describeDbError(e: unknown, fallback = 'Something went wrong.'):
     case '42703':
     case '42P01':
       return `The database is missing something this needs — ${msg || 'an unknown column or table'}. Apply the outstanding files in supabase/migrations and try again.`;
+    // PostgREST answers with its own codes before Postgres ever sees the query,
+    // and its message names the exact column — "Could not find the 'offer'
+    // column of 'copilot_profiles' in the schema cache". That message IS the
+    // diagnosis, so unlike an unknown code this one carries it through.
+    // It also fires when the column exists but PostgREST has not reloaded, so
+    // the reload is named too rather than sending someone to re-run SQL that
+    // has already run.
+    case 'PGRST204':
+    case 'PGRST205':
+      return `${msg || 'The database schema does not have something this needs'}. Apply the outstanding files in supabase/migrations; if they are already applied, run: NOTIFY pgrst, 'reload schema';`;
     case '23505':
       return 'That already exists. Sign in instead of creating a second copilot.';
     case '23502':

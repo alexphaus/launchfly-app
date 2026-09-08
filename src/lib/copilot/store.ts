@@ -431,6 +431,16 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     sources,
     contextCount: ctxCount,
     needsBrief: !insight || insight.for_date !== today,
+    // Configured to look, and nothing found. Deliberately not "has supply ever
+    // run": an account whose matches were all dismissed is in the same
+    // position as a new one, and a fresh look is the right answer for both.
+    // Spending credits without being asked is guarded where it should be —
+    // the route enforces the monthly allowance and a 10-a-day rate limit.
+    needsFirstSupply:
+      profile.target_segments.length > 0
+      && !!(profile.target_area || profile.location)
+      && metrics.pipeline.sourced === 0
+      && remaining(effectivePlan(profile).limits.matchesPerMonth, usage.matches) > 0,
     lastRun,
     metrics,
     supplyLastRun: supplyRun,

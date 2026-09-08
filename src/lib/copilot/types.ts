@@ -1,8 +1,9 @@
 // src/lib/copilot/types.ts
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
+import type { PackReply, PackSentExample } from './conversations';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
-import type { Diagnosis } from './diagnose';
+import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
 import type { PlanKey, PlanStatus } from './plans';
 
@@ -305,6 +306,12 @@ export interface HomeData {
   billing: BillingSummary;
   /** At most one lesson, and only when the diagnosis produced a stuck point. */
   lessons: GrowthItem[];
+  /**
+   * The one capability to work on, computed from the funnel, the demand read and
+   * the decision record. Replaces a section that asked a model for an article
+   * URL and therefore sat empty almost every day.
+   */
+  edge: GrowthEdge | null;
   sources: ContextSource[];
   contextCount: number;
   /** True when there is no brief for today yet; the client triggers one. */
@@ -349,8 +356,42 @@ export interface ContextPack {
   typeAffinity: Record<OpportunityType, number>;
   /** Sourced opportunities awaiting or refreshing a rank. The agent scores these; it does not invent them. */
   candidates: Candidate[];
+  /**
+   * What prospects actually wrote back, in their own words. The most valuable
+   * text this system holds and for months the only text it threw away:
+   * reconcileReplies matched inbound WhatsApp messages by phone and selected
+   * everything about them except what they said.
+   */
+  replies: PackReply[];
+  /**
+   * Openers that got a reply beside openers that did not, so "what works for
+   * me" is read off the ledger instead of guessed. Never one without the other.
+   */
+  sent: PackSentExample[];
+  /**
+   * Aggregate demand computed from this person's own live pool — the one
+   * signal in the product that nothing general can reconstruct. The agent
+   * wrote every draft blind to it until now.
+   */
+  demand: PackDemand[];
   /** Real numbers. The insight must cite at least one. */
   metrics: Metrics;
+}
+
+/**
+ * One want, as the agent sees it. Deliberately thinner than DemandTerm: the
+ * weekly arithmetic behind the trend is the app's business, not the model's.
+ *
+ * Every term here is already a GAP — wantsOf() drops anything the offer
+ * mentions — so the agent never has to work out which of these are new.
+ */
+export interface PackDemand {
+  term: string;
+  /** Businesses in their own matches carrying this want. */
+  businesses: number;
+  trend: 'new' | 'rising' | 'steady' | 'falling';
+  /** The segment it shows up in most, when one dominates. */
+  segment: string | null;
 }
 
 export interface BriefOpportunity {
@@ -398,8 +439,13 @@ export interface BriefOutput {
   lessons: Array<{ title: string; minutes?: number; note?: string; url?: string }>;
 }
 
+/** What the caller can afford to wait for a brief. The nightly cron reaches the
+ *  app on localhost and has minutes; every other caller is a tap sitting behind
+ *  a reverse proxy that gives up long before the model does. */
+export interface BriefRunOpts { timeoutMs?: number }
+
 export interface OpportunityAgent {
   readonly name: 'webhook' | 'llm' | 'starter';
   readonly model?: string;
-  generateBrief(pack: ContextPack): Promise<BriefOutput>;
+  generateBrief(pack: ContextPack, opts?: BriefRunOpts): Promise<BriefOutput>;
 }

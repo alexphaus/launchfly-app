@@ -4,6 +4,7 @@
 // so the user always gets a Today view.
 
 import { StarterAgent, getAgent } from './agent';
+import { budgetForReason } from './agent/llm';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
 import { metricValue, snapshotOf, starterDecision } from './decision';
@@ -24,14 +25,20 @@ export async function runBrief(profileId: string, opts: { reason?: string } = {}
   // which of its previous calls were ignored and which moved nothing.
   const graded = await gradeDecisions(profileId);
   const pack = await buildContextPack(profileId);
-  const summary = { reason: opts.reason ?? 'manual', goals: pack.goals.length, context: pack.context.length, capacity: pack.profile.capacity };
+  const reason = opts.reason ?? 'manual';
+  // How long the agent gets depends on who is waiting. The cron is not behind
+  // the proxy and can afford a real generation; a tap cannot.
+  const budget = budgetForReason(reason);
+  // budget_ms is recorded because the run row is usually the only evidence left:
+  // a timeout that does not say what it was bounded by reads like a rejection.
+  const summary = { reason, budget_ms: budget, goals: pack.goals.length, context: pack.context.length, capacity: pack.profile.capacity };
 
   let agent = getAgent();
   let runId = await startRun(profileId, agent, summary);
   let output: BriefOutput;
   let fellBack = false;
   try {
-    output = await agent.generateBrief(pack);
+    output = await agent.generateBrief(pack, { timeoutMs: budget });
     await finishRun(runId, 'ok', output);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

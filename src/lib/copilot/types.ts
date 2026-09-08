@@ -316,6 +316,17 @@ export interface HomeData {
   contextCount: number;
   /** True when there is no brief for today yet; the client triggers one. */
   needsBrief: boolean;
+  /**
+   * True when this account is configured to find businesses and has none. The
+   * client runs the first supply pass itself, because onboarding deliberately
+   * does not: scraping takes minutes and the onboarding request cannot hold
+   * the door open that long.
+   *
+   * Without this the first screen after signing up is four zeros and three
+   * empty boxes — a well-built shell around no data, which is what somebody
+   * being shown the product for the first time actually judges.
+   */
+  needsFirstSupply: boolean;
   lastRun: { status: string; agent: string; finished_at: string | null } | null;
   metrics: Metrics;
   supplyLastRun: string | null;

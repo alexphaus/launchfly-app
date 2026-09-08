@@ -77,13 +77,40 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     }
   }, [say]);
 
-  // First open of the day: build today's brief in the background.
+  const findMatches = useCallback(async (first = false) => {
+    setFinding(true);
+    try {
+      const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number; partial?: boolean } | null } }>('/supply');
+      setHome(r.home);
+      const supply = r.result?.supply && 'inserted' in r.result.supply ? r.result.supply : null;
+      const n = supply?.inserted ?? 0;
+      // A run can stop early on purpose: scraping every segment takes minutes
+      // and the request has to come back before the proxy gives up. Saying so
+      // is better than looking like there was nothing left to find.
+      say(supply?.partial
+        ? `${n} found so far — there was not time for every segment. Tap again for more.`
+        : first
+        ? (n ? `${n} business${n === 1 ? '' : 'es'} found. Openers are drafted below.` : 'Nothing found for those segments yet. Try widening the area.')
+        : n ? `${n} new real match${n === 1 ? '' : 'es'} found and ranked`
+        : 'No new matches. Try wider targeting.');
+    } catch (e) { say(e instanceof Error ? e.message : 'Could not find matches'); }
+    finally { setFinding(false); }
+  }, [say]);
+
+  // First open. A brand new account has nothing to look at, so the first thing
+  // the app does is go and find some — the supply route runs the brief too, so
+  // this replaces the daily brief rather than racing it. One or the other,
+  // never both, and only once per mount.
   useEffect(() => {
-    if (initial.needsBrief && !briefStarted.current) {
+    if (briefStarted.current) return;
+    if (initial.needsFirstSupply) {
+      briefStarted.current = true;
+      void findMatches(true);
+    } else if (initial.needsBrief) {
       briefStarted.current = true;
       void runBrief('daily');
     }
-  }, [initial.needsBrief, runBrief]);
+  }, [initial.needsFirstSupply, initial.needsBrief, findMatches, runBrief]);
 
   // Back from Stripe. The webhook that flips the plan and the redirect race each
   // other, so confirm the payment immediately and re-read once the webhook has
@@ -229,23 +256,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return true;
       } catch (e) { fail(e, 'Could not draft'); return false; }
     },
-    async findMatches() {
-      setFinding(true);
-      try {
-        const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number; partial?: boolean } | null } }>('/supply');
-        setHome(r.home);
-        const supply = r.result?.supply && 'inserted' in r.result.supply ? r.result.supply : null;
-        const n = supply?.inserted ?? 0;
-        // A run can stop early on purpose: scraping every segment takes minutes
-        // and the request has to come back before the proxy gives up. Saying so
-        // is better than looking like there was nothing left to find.
-        say(supply?.partial
-          ? `${n} found so far — there was not time for every segment. Tap again for more.`
-          : n ? `${n} new real match${n === 1 ? '' : 'es'} found and ranked`
-          : 'No new matches. Try wider targeting.');
-      } catch (e) { fail(e, 'Could not find matches'); }
-      finally { setFinding(false); }
-    },
+    findMatches,
     async saveFinance(f) {
       try { const r = await post<{ home: HomeData }>('/finance', f); setHome(r.home); closeSheet(); say('Runway updated'); return true; } catch (e) { fail(e, 'Could not save'); return false; }
     },

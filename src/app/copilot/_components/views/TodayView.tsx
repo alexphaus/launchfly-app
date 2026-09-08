@@ -40,6 +40,12 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
   // The row is the one that carries no new information, so it goes.
   const plan = home.decision && noOffer ? home.plan.filter((a) => a.title !== OFFER_TASK_TITLE) : home.plan;
   const visible = unfold ? queue : queue.slice(0, QUEUE_FOLD);
+  // Rendered in one of two slots, never both.
+  const call = home.decision ? <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} /> : null;
+  const callFirst = noOffer;
+  // A brand new account. Three separate empty boxes stacked up read as a broken
+  // app; one card reads as a new one.
+  const nothingYet = !home.decision && !home.insight && !queue.length && !plan.length && !home.nudges.length;
 
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
@@ -53,7 +59,11 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
     <>
       {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
 
-      {home.decision && <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} />}
+      {/* With a blank offer nothing can be drafted, so the call IS the screen
+          and leads. Otherwise the queue leads: the drafts are the only thing on
+          this page anyone can act on, and they used to start below the fold
+          behind a decision card and four metrics. */}
+      {callFirst && call}
 
       {/* Sent is the hero. The app has a supply surplus and a sending deficit, and
           the headline number should be on the side that needs to move. */}
@@ -83,7 +93,9 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </div>
       )}
 
-      {noOffer ? null : (
+      {nothingYet && <FirstRun home={home} actions={actions} finding={finding} />}
+
+      {noOffer || nothingYet ? null : (
         <>
           <div className="cp-section">
             <span className="lead">To send</span>
@@ -120,12 +132,14 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
             </>
           )}
         </div>
-      ) : !home.insight && !home.decision ? (
+      ) : !home.insight && !home.decision && !nothingYet ? (
         <div className="cp-empty" style={{ marginTop: 14 }}>
           <b>No brief yet</b>
           The copilot writes one read of your day, every day. {briefing ? 'Building it now.' : <button className="cp-textlink" onClick={() => actions.runBrief('manual')}>Build it now</button>}
         </div>
       ) : null}
+
+      {!callFirst && call}
 
       {(plan.length > 0 || home.planOverflow > 0) && (
         <>
@@ -152,6 +166,8 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </>
       )}
 
+      {nothingYet ? null : (
+        <>
       <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>
       {home.nudges.length ? (
         <>
@@ -171,6 +187,8 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </>
       ) : (
         <div className="cp-empty"><b>Nothing pressing</b>Nudges show up here when something is about to go cold or needs a decision.</div>
+      )}
+        </>
       )}
 
       <div className="cp-section"><span className="lead">Tell the copilot</span><span className="count">{home.contextCount} in context</span></div>
@@ -294,6 +312,62 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
       </div>
 
     </>
+  );
+}
+
+/**
+ * The only thing on screen when an account has nothing yet.
+ *
+ * What it replaces: four zeros, "No brief yet", "Nothing pressing" and an empty
+ * composer, all at once. That is a well-built shell around no data, and it is
+ * what somebody seeing the product for the first time actually judges. One card
+ * that says what is happening and offers the one action is the whole fix.
+ */
+function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions; finding: boolean }) {
+  const segments = home.profile.target_segments;
+  const where = home.profile.target_area || home.profile.location;
+  const what = segments.slice(0, 3).join(', ');
+
+  if (!segments.length || !where) {
+    return (
+      <div className="cp-card">
+        <div className="cp-eyebrow">Nothing here yet</div>
+        <p>Say which kinds of business you want, and where. The copilot goes and finds real ones, then drafts an opener for each.</p>
+        <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'targeting' })}>Choose who to look for</button>
+      </div>
+    );
+  }
+
+  if (finding) {
+    return (
+      <div className="cp-card">
+        <div className="cp-eyebrow">Finding businesses</div>
+        <p>Looking for {what} in {where}. The first run takes a minute — real listings, not a sample.</p>
+      </div>
+    );
+  }
+
+  // Found businesses but no brief. A supply run that hits its budget returns
+  // the matches and skips the brief on purpose, so this state is normal and
+  // saying "nothing found" here would be a lie about work the user just paid
+  // scraping credits for.
+  const found = home.metrics.pipeline.sourced;
+  if (found > 0) {
+    return (
+      <div className="cp-card">
+        <div className="cp-eyebrow">{found} found</div>
+        <p>{found} business{found === 1 ? '' : 'es'} matched in {where}. Nothing is drafted yet — the copilot writes the openers.</p>
+        <button className="cp-btn primary block cp-call-do" onClick={() => void actions.runBrief('manual')}>Draft the openers</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cp-card">
+      <div className="cp-eyebrow">Nothing here yet</div>
+      <p>No businesses found yet for {what} in {where}.</p>
+      <button className="cp-btn primary block cp-call-do" onClick={() => void actions.findMatches()}>Find businesses now</button>
+    </div>
   );
 }
 

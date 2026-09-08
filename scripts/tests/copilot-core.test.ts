@@ -1148,6 +1148,35 @@ async function agentLimits() {
 agentLimits().catch((e) => { console.error(e); process.exit(1); });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// A long run must come back with something
+// ─────────────────────────────────────────────────────────────────────────────
+import { googleMapsAdapter } from '../../src/lib/copilot/supply/google-maps';
+import type { Profile as SupplyProfile } from '../../src/lib/copilot/types';
+
+async function supplyBudget() {
+  // Three segments at up to 90s each, behind a proxy that gives up at 60. The
+  // adapter has to stop between segments rather than run the request off a
+  // cliff — a partial answer is useful, a 504 is not.
+  const profile = { target_segments: ['pest control', 'plumbing', 'renovation'], target_area: 'Cebu', location: 'Cebu', linked_business_id: null } as unknown as SupplyProfile;
+
+  // A deadline already in the past must not start a single scrape. Without the
+  // guard this would call Apify three times and take minutes.
+  const started = Date.now();
+  const none = await googleMapsAdapter.discover(profile, { limit: 30, deadline: Date.now() - 1 });
+  assert.deepEqual(none, [], 'an expired budget finds nothing');
+  assert.ok(Date.now() - started < 1_000, 'and returns immediately rather than scraping');
+
+  // Too little left to be worth starting is the same as none: a scrape that
+  // cannot finish still costs credits.
+  const tooLittle = await googleMapsAdapter.discover(profile, { limit: 30, deadline: Date.now() + 2_000 });
+  assert.deepEqual(tooLittle, [], 'a budget below the floor starts nothing');
+
+  console.log('copilot-core: supply-budget checks passed');
+}
+
+supplyBudget().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Something to get better at, every day there is data
 // ─────────────────────────────────────────────────────────────────────────────
 import { growthEdge } from '../../src/lib/copilot/diagnose';

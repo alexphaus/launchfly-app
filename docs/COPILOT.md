@@ -440,6 +440,34 @@ knobs stay out of the code; invalid JSON is logged and ignored. Note that the
 SDK speaks the **Responses API** (`input`, `max_output_tokens`), not Chat
 Completions — worth knowing when comparing against a raw `curl`.
 
+## Why long work returns partial instead of failing
+
+`maxDuration` is what Next allows, not what survives. The reverse proxy in front
+of this deployment gives up first — measure the exact ceiling with
+`/api/copilot/health?sleep=N` — so any route that legitimately needs longer
+cannot work synchronously however high `maxDuration` is set.
+
+"Find new matches" is the worst case: `runDaily` scrapes up to three Google Maps
+segments at up to 90s each, reconciles replies, then runs a brief — minutes of
+work behind a door that shuts in under a minute, which is why it returned
+**504**.
+
+So the run carries a wall-clock deadline instead:
+
+- `/api/copilot/supply` sets one `COPILOT_SUPPLY_BUDGET_MS` ahead (default 40s,
+  leaving room for `loadHome` and the response).
+- `runSupply` skips adapters once it passes, and flags `partial`.
+- The Maps adapter stops **between segments** and shortens the last scrape to
+  whatever is left, never starting one below `MIN_SEGMENT_MS`. Nothing is lost:
+  the upsert dedupes on `(profile, source, external_id)`, so the next run
+  continues where this one stopped.
+- `runDaily` skips the brief when the budget is gone — whoever tapped the button
+  wanted matches, and the next brief ranks them anyway.
+- The toast says so: *"12 found so far — there was not time for every segment.
+  Tap again for more."*
+
+Raise `COPILOT_SUPPLY_BUDGET_MS` only after raising the proxy's own timeout;
+otherwise it just moves where the request dies.
 ## What the agent gets to read
 
 `buildContextPack` is the only place "more data in" becomes "more context for

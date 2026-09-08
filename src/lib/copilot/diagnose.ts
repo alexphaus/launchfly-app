@@ -287,6 +287,109 @@ const BOTTLENECK_TOPIC: Record<FunnelStage['key'], string | undefined> = {
   won: 'closing and pricing small projects',
 };
 
+// ---------------------------------------------------------------------------
+// What to get better at
+// ---------------------------------------------------------------------------
+// "Worth learning" used to ask the agent for an article with a working URL,
+// which is the single thing a model is least able to supply: it either invents
+// the link or, told not to, returns nothing. Told not to, it returned nothing
+// almost every day, and the section sat empty on a product whose whole point is
+// compounding.
+//
+// The fix is not to loosen that rule. It is to stop asking the web for
+// something the ledger already knows. A capability gap read off your own funnel,
+// your own demand and your own decision record is the one version of "what to
+// work on" that no general model can produce for you — and it comes with an
+// experiment you can run this week instead of an article you will not read.
+
+/** The capability, named as something you do rather than a subject you study. */
+const CAPABILITY: Record<FunnelStage['key'], string> = {
+  matched: 'finding businesses worth writing to',
+  drafted: 'turning a match into a message worth sending',
+  // Not a skill, and saying otherwise would be flattery. It is the behaviour
+  // the numbers are actually stuck on.
+  sent: 'sending what you have already written',
+  replied: 'writing openers people answer',
+  meeting: 'turning a reply into a booked call',
+  won: 'closing and pricing small projects',
+};
+
+/** One bounded thing to try, small enough to finish this week. */
+const EXPERIMENT: Record<FunnelStage['key'], string> = {
+  matched: 'Narrow to one segment for a week. A smaller list you believe in beats a longer one you skim.',
+  drafted: 'Draft the top three today and notice which one you hesitate over. The hesitation is the targeting problem, not the writing.',
+  sent: 'Send five before you open anything else, and log what came back. Nothing above this line improves until something leaves the queue.',
+  replied: 'Change only the first line on the next ten. Keep the ask identical, so the comparison means something.',
+  meeting: 'Replace "worth a call?" with one named time on the next five replies.',
+  won: 'Put the price band in the first message on the next three, and see whether meetings drop or close faster.',
+};
+
+export interface GrowthEdge {
+  capability: string;
+  /** Evidence, from rows the user created. Every line carries a number. */
+  because: string[];
+  experiment: string;
+  source: 'decisions' | 'funnel' | 'demand';
+}
+
+/**
+ * The one thing to get better at, in priority order: what you have tried and
+ * failed at, then where the funnel leaks, then what the market keeps asking for
+ * that you cannot sell yet.
+ *
+ * Returns null only when there is genuinely nothing measured — a new account.
+ * That is a real empty state, not the permanent one it replaced.
+ */
+export function growthEdge(
+  d: Pick<Diagnosis, 'findings' | 'stages' | 'demand'>,
+  opts: { deadTopic?: { topic: string; count: number } | null } = {},
+): GrowthEdge | null {
+  // 1. Repeating something that does not work is the most expensive gap there
+  //    is, and only the decision record can see it.
+  if (opts.deadTopic) {
+    return {
+      capability: opts.deadTopic.topic,
+      because: [`You acted on ${opts.deadTopic.count} calls about ${opts.deadTopic.topic} and the number each one named did not move.`],
+      experiment: `Stop repeating it for a week. Take the next-best call instead and compare — doing the same thing harder is not the missing skill.`,
+      source: 'decisions',
+    };
+  }
+
+  // 2. Where the funnel actually leaks.
+  const bottleneck = d.findings.find((f) => f.kind === 'bottleneck');
+  const stage = bottleneck ? d.stages.find((s) => BOTTLENECK_HEADLINE_RE(s.label).test(bottleneck.headline)) : null;
+  if (stage) {
+    const prev = d.stages[d.stages.findIndex((s) => s.key === stage.key) - 1];
+    return {
+      capability: CAPABILITY[stage.key],
+      // Not the bottleneck headline again — that card is directly above this
+      // one. Count what is stuck rather than what got through: it is the same
+      // fact said from the side that needs the work.
+      because: [prev
+        ? `${prev.count - stage.count} of ${prev.count} stopped at ${prev.label.toLowerCase()}.`
+        : `${stage.count} at ${stage.label.toLowerCase()}.`],
+      experiment: EXPERIMENT[stage.key],
+      source: 'funnel',
+    };
+  }
+
+  // 3. Nothing leaking: the gap is what you cannot sell yet.
+  const top = d.demand[0];
+  if (top) {
+    return {
+      capability: `selling ${top.term}`,
+      because: [`${top.count} businesses in your matches want ${top.term} and your offer does not mention it.`],
+      experiment: `Spend two hours getting to where you can describe ${top.term} in one sentence a client would recognise, then add it to your offer and let the next drafts use it.`,
+      source: 'demand',
+    };
+  }
+
+  return null;
+}
+
+/** The bottleneck headline is built from stage labels, so match on the label. */
+const BOTTLENECK_HEADLINE_RE = (label: string) => new RegExp(`→ ${label} is where you lose most`);
+
 const STOPWORDS = new Set(['the', 'and', 'for', 'with', 'from', 'that', 'this', 'you', 'your', 'are', 'has', 'have', 'not', 'new', 'all', 'any', 'can', 'per', 'via', 'inc', 'ltd', 'llc', 'com', 'www', 'services', 'service', 'business', 'company', 'pain', 'signals', 'none', 'other', 'general']);
 
 const normTerm = (s: string) => s.toLowerCase().replace(/_/g, ' ').trim();

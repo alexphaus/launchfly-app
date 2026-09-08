@@ -68,10 +68,10 @@ check with:
 select kind, agent, status, finished_at from copilot_agent_runs order by started_at desc limit 10;
 ```
 
-That route also reads `process.env.CRON_SECRET`, while `.env.local` here defines
-`COPILOT_CRON_SECRET`. If production carries the same name, the endpoint fails
-closed with a 503 even once a scheduler exists. Check both before concluding the
-scheduler is broken.
+Set it up as a Coolify **Scheduled Task** running `node scripts/copilot-cron.mjs`
+on `0 21 * * *`. That executes inside the container, so it reaches the app on
+localhost and bypasses Traefik entirely — the proxy timeout does not apply to
+the cron. The route accepts either `CRON_SECRET` or `COPILOT_CRON_SECRET`.
 
 To find out what is actually missing rather than guessing, paste
 `scripts/sql/copilot-schema-check.sql` into the Supabase SQL editor: every row

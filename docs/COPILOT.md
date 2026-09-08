@@ -22,6 +22,42 @@ but none of the business logic. Everything is under:
 | Core | `src/lib/copilot/` |
 | Schema | `supabase/migrations/20260903_copilot_foundation.sql` … `20260909_copilot_decisions.sql` |
 
+## Which model writes the brief
+
+Already configurable; nothing needs adding. `resolveLlmConfig()` takes the first
+match:
+
+| Set | Endpoint | Model |
+| --- | --- | --- |
+| `COPILOT_AI_API_KEY` + `COPILOT_AI_BASE_URL` + `COPILOT_AI_MODEL` | whatever you point it at | whatever you name |
+| `OPENAI_API_KEY` alone | OpenAI | `gpt-4o-mini` |
+| `DEEPSEEK_API_KEY` alone | DeepSeek | `deepseek-chat` |
+
+**A deployment with only `OPENAI_API_KEY` set is running `gpt-4o-mini`** — the
+oldest, weakest option in that table, and the default nobody chose. Setting the
+three explicit variables costs a redeploy and no code.
+
+The prompt is ~1,850 tokens of system rules plus ~7,550 of context pack, for
+~9,400 in and ~2,000 out per brief, once per user per day. At solo scale the
+cost difference between any two frontier models is cents a month, so choose on
+reliability, not on price.
+
+Reliability here means one thing: does the reply survive `normalizeBrief` and
+obey the rules? A model that reasons well and wraps its JSON in prose is worth
+nothing — the run falls back to the starter and nobody is told. Measure it
+rather than guessing:
+
+```bash
+COPILOT_AI_API_KEY=sk-or-... COPILOT_AI_BASE_URL=https://openrouter.ai/api/v1 \
+  npm run bench:models -- z-ai/glm-5.3-flash openai/gpt-5.6-luna
+```
+
+It runs the real system prompt through the real normalizer twice per model —
+once normally, once with a blank offer — and scores what actually breaks. Two
+checks are disqualifying: **survives normalizeBrief**, and **blank offer:
+drafted nothing**. The second is invariant 1, and the reason this project has
+44 unsent drafts in its history.
+
 ## The call
 
 Every brief ends in one decision, not a list. The agent's output carries a
@@ -77,6 +113,34 @@ knows which of its previous calls were ignored, and the prompt forbids simply
 repeating a topic with that history. `DailyResult.brief.graded` reports the
 sweep, which is how you can tell from outside the app whether the record is
 being graded or merely accumulating.
+
+## What to get better at
+
+"Worth learning" asked the agent for an article with a working URL — the single
+thing a model is least able to supply. It either invents the link, which breaks
+invariant 2, or, told not to, returns nothing. Told not to, it returned nothing
+almost every day, and the section sat empty on a product whose whole point is
+compounding.
+
+The gate was not the problem; the supply was. `growthEdge()` computes the
+capability instead of fetching it, in priority order:
+
+1. **From your calls** — a topic in the decision record acted on three or more
+   times where the metric it named never moved. Repeating something that does
+   not work is the most expensive gap there is, and nothing but the record can
+   see it.
+2. **From your funnel** — the bottleneck stage, named as a capability. Every
+   stage has one now: `BOTTLENECK_TOPIC` had no entry for `drafted` or `sent`,
+   so the most common bottleneck in this product produced the emptiest answer.
+3. **From your matches** — the top demand term the offer does not cover.
+
+Each carries evidence citing a number from rows the user created, and one
+bounded experiment for the week rather than a reading list. `null` only for an
+account with nothing measured yet — a real empty state instead of a permanent
+one.
+
+A lesson with a real URL still renders, underneath, as a bonus. It is no longer
+the reason the section exists.
 
 ## Two shells, one app
 
@@ -270,6 +334,148 @@ messages in the user's own words. With no offer the template falls back to the h
 stays deliberately vague rather than inventing a business. Nothing in the copy assumes an
 industry, country, channel or company size.
 
+## Setting up the scheduled loop
+
+Nothing in this app wakes up on its own until this exists. No overnight supply,
+no brief waiting in the morning, no weekly Signals read, no push — every one is
+downstream of the cron, and the cron has never run.
+
+`vercel.json` is inert here (this is not a Vercel deploy), so the schedule has to
+come from Coolify. Its **Scheduled Tasks** run a command *inside the container*,
+which is the right place for it: the app is reached on localhost and Traefik is
+never involved, so the proxy timeout that turns a long brief into a 504 does not
+apply. The cron gets its full `maxDuration`.
+
+Coolify → the application → **Scheduled Tasks** → add:
+
+| Field | Value |
+| --- | --- |
+| Name | `copilot daily` |
+| Command | `node scripts/copilot-cron.mjs` |
+| Frequency | `0 21 * * *` |
+
+No arguments. It reads `CRON_SECRET` (or `COPILOT_CRON_SECRET` — the route
+accepts either, because insisting on the prefix is what kept this switched off)
+and `PORT` from the environment the container already has, summarises the run
+into one log line, and exits non-zero on failure so a broken schedule shows red
+rather than quietly succeeding.
+
+Check it without waiting for 21:00 — run it once from the container shell, then:
+
+```sql
+select kind, agent, status, finished_at from copilot_agent_runs
+ order by started_at desc limit 10;
+```
+
+Rows with `kind = 'daily_brief'` and a `finished_at` mean the loop is alive. On a
+Monday there should also be a `copilot_insights` row with `kind = 'weekly'`, and
+a notification.
+
+## When the brief 504s
+
+A reasoning model on this prompt can spend 6,000-11,000 tokens thinking before
+it answers. Observed on GLM-5.3-Flash through OpenRouter: generations of 75s,
+120s, 185s, 318s and 335s, every one finishing normally and every one billed.
+`/api/copilot/brief` allows 90s and the reverse proxy in front of it usually
+allows less (Coolify/Traefik commonly 60s), so the request dies first and the
+user sees a 504 having paid for a brief they never got.
+
+`LlmAgent` is therefore bounded: **one attempt**, aborted at
+`COPILOT_AI_TIMEOUT_MS` (default 30s).
+
+**Two budgets, because there are two callers.** `budgetForReason()` picks them:
+
+| reason | budget | env var | default |
+| --- | --- | --- | --- |
+| `cron` | the nightly run, started by `scripts/copilot-cron.mjs` against `127.0.0.1` | `COPILOT_AI_CRON_TIMEOUT_MS` | 120s |
+| anything else | a tap — `manual`, `offer`, `note` — sitting behind the proxy | `COPILOT_AI_TIMEOUT_MS` | 30s |
+
+The distinction is the whole point: **Traefik is not in the cron's path**, so
+the ceiling that forces 30s does not apply to it. Sharing one number cost every
+brief in production. `copilot_agent_runs` showed the cron healthy —
+`200 in 220.7s — 2/2 profiles ok` — while every `llm` row read
+`status = error`, `The operation was aborted due to timeout`, at exactly 30.0s
+from `started_at`. The model was answering normally; this file was hanging up on
+it. Every brief the user read for weeks was the starter fallback.
+
+Two things now make that legible from the row alone, because the row is usually
+all that is left: `input_summary.budget_ms` records what the run was bounded by,
+and the abort is re-thrown naming the budget and the variable that sets it
+rather than the SDK's bare "The operation was aborted due to timeout" — which
+reads exactly like an endpoint rejecting the request, and was read that way.
+
+Keep `COPILOT_AI_CRON_TIMEOUT_MS` under `/api/copilot/cron/daily`'s
+`maxDuration` (300s), remembering it is spent **once per profile** and that
+supply and reconcile run first.
+
+That default is deliberately conservative. 55s was tried first, against a guess
+that the proxy allowed 60, and it still 504'd — so the ceiling is lower than
+that and had never been measured. Measure it:
+
+```
+GET /api/copilot/health?sleep=10   → JSON
+GET /api/copilot/health?sleep=30   → JSON
+GET /api/copilot/health?sleep=45   → 504   ← the proxy's real limit is here
+```
+
+Then set `COPILOT_AI_TIMEOUT_MS` under it. This measurement bounds the
+interactive budget only; the cron's is bounded by `maxDuration`, not by the
+proxy. The failure modes are not symmetric:
+too low costs a starter brief and the client says so; too high costs a 504 with
+the generation billed and nothing shown. The abort raises, `runBrief` catches it,
+and the starter writes the brief instead — the fallback that already existed but
+could never fire while the call hung. Keep the timeout below both `maxDuration`
+and the proxy, so the starter still has room to run.
+
+Cutting a reasoning model off is a poor fix by itself, so two knobs make it fast
+enough to finish inside the window:
+
+```
+COPILOT_AI_EXTRA_BODY={"reasoning":{"effort":"low"},"provider":{"sort":"latency"}}
+COPILOT_AI_MAX_OUTPUT_TOKENS=6000
+```
+
+`COPILOT_AI_EXTRA_BODY` is merged into the request body so endpoint-specific
+knobs stay out of the code; invalid JSON is logged and ignored. Note that the
+SDK speaks the **Responses API** (`input`, `max_output_tokens`), not Chat
+Completions — worth knowing when comparing against a raw `curl`.
+
+## What the agent gets to read
+
+`buildContextPack` is the only place "more data in" becomes "more context for
+the agent". Three of its fields carry text, and all three were sitting in the
+database for months before anything read them.
+
+| field | source | why it is not something a model can know |
+| --- | --- | --- |
+| `replies` | `copilot_outcomes.note`, written by `reconcileReplies` | what a real prospect wrote back to a message this person actually sent |
+| `sent` | `copilot_executions.body` joined to reply outcomes | which openers got an answer and which were ignored |
+| `demand` | `demandTrend()` over the user's own sourced matches | wants counted across their live pool, already filtered to gaps in the offer |
+
+**Replies were the expensive omission.** `reconcileReplies` matched inbound
+WhatsApp messages by phone and selected `phone, created_at` — so the system knew
+*that* someone replied and never once knew *what they said*. The body now rides
+along on the same match: it is only ever read for a phone this profile itself
+sent to, after its own `sent_at`, which is what keeps one user's inbox out of
+another's pack.
+
+**Both halves or neither.** `selectSentExamples` returns replied *and* ignored
+openers, capped separately (`MAX_SENT_PER_BUCKET`). A model shown only the ones
+that worked concludes that everything works. Silence counts only after
+`NO_REPLY_AFTER_DAYS` (3) — a message sent yesterday and unanswered is pending,
+not a result, the same rule `gradeDecisions` applies to a call.
+
+**Budget.** The pack is serialised whole into the prompt (`userPrompt`), so
+every field costs tokens on a model that already needs two minutes. Worst case
+these three add ~5.6KB (~1,400 tokens) to a ~9KB pack — negligible for latency,
+which is dominated by 6-11k *reasoning* tokens, but the caps in
+`conversations.ts` are why it stays that way. Raise one and it is the metrics
+the decision has to cite that get pushed out.
+
+Adding a field is not enough on its own: `SYSTEM_PROMPT` has a section per
+field, and a field the prompt never names is a field the model ignores. A test
+asserts those sections stay.
+
 ## External supply agent
 
 Supply can be outsourced without touching this app — an n8n workflow, or a small service
@@ -342,6 +548,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET | `/api/copilot/auth/callback?token=` | consume the link, set the cookie |
 | POST/DELETE | `/api/copilot/push/subscribe` | register / remove a Web Push subscription |
 | DELETE | `/api/copilot/session` | forget this device |
+| GET | `/api/copilot/health` | what this deployment actually has: missing env vars by name, unapplied migrations by file (session or cron bearer) |
 | GET | `/api/copilot/cron/daily` | scheduled loop (Bearer `CRON_SECRET`, fails closed) |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).

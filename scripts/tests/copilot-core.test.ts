@@ -1054,6 +1054,15 @@ async function signin() {
   assert.match(describeDbError({ code: '23505' }), /Sign in instead/);
   assert.doesNotMatch(describeDbError({ code: '23505' }), /migration/, 'a duplicate row is not a migration problem');
   assert.match(describeDbError({ code: '42501' }), /service key/);
+
+  // PostgREST answers before Postgres does, and its message names the column.
+  // Dropping it left the live failure reading "(database error PGRST204)" —
+  // a code with the diagnosis stripped out of it.
+  const pgrst = describeDbError({ code: 'PGRST204', message: "Could not find the 'offer' column of 'copilot_profiles' in the schema cache" });
+  assert.match(pgrst, /Could not find the 'offer' column/, 'the column name is the whole diagnosis');
+  assert.match(pgrst, /supabase\/migrations/);
+  assert.match(pgrst, /NOTIFY pgrst, 'reload schema'/, 'the column may exist and the cache be stale');
+  assert.match(describeDbError({ code: 'PGRST205', message: "Could not find the table 'public.copilot_decisions'" }), /copilot_decisions/);
   // An unknown code still carries the code, because that is the part worth
   // pasting into a search. It must not carry the raw message.
   assert.equal(describeDbError({ code: 'XX000', message: 'internal detail' }, 'Could not create your copilot.'), 'Could not create your copilot. (database error XX000)');

@@ -80,11 +80,19 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
   const findMatches = useCallback(async (first = false) => {
     setFinding(true);
     try {
-      const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number } | null } }>('/supply');
+      const r = await post<{ home: HomeData; result: { supply: { inserted?: number; found?: number; partial?: boolean } | null } }>('/supply');
       setHome(r.home);
-      const n = r.result?.supply && 'inserted' in r.result.supply ? r.result.supply.inserted ?? 0 : 0;
-      if (first) say(n ? `${n} business${n === 1 ? '' : 'es'} found. Openers are drafted below.` : 'Nothing found for those segments yet. Try widening the area.');
-      else say(n ? `${n} new real match${n === 1 ? '' : 'es'} found and ranked` : 'No new matches. Try wider targeting.');
+      const supply = r.result?.supply && 'inserted' in r.result.supply ? r.result.supply : null;
+      const n = supply?.inserted ?? 0;
+      // A run can stop early on purpose: scraping every segment takes minutes
+      // and the request has to come back before the proxy gives up. Saying so
+      // is better than looking like there was nothing left to find.
+      say(supply?.partial
+        ? `${n} found so far — there was not time for every segment. Tap again for more.`
+        : first
+        ? (n ? `${n} business${n === 1 ? '' : 'es'} found. Openers are drafted below.` : 'Nothing found for those segments yet. Try widening the area.')
+        : n ? `${n} new real match${n === 1 ? '' : 'es'} found and ranked`
+        : 'No new matches. Try wider targeting.');
     } catch (e) { say(e instanceof Error ? e.message : 'Could not find matches'); }
     finally { setFinding(false); }
   }, [say]);

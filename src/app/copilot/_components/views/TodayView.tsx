@@ -338,17 +338,35 @@ function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions
     );
   }
 
+  if (finding) {
+    return (
+      <div className="cp-card">
+        <div className="cp-eyebrow">Finding businesses</div>
+        <p>Looking for {what} in {where}. The first run takes a minute — real listings, not a sample.</p>
+      </div>
+    );
+  }
+
+  // Found businesses but no brief. A supply run that hits its budget returns
+  // the matches and skips the brief on purpose, so this state is normal and
+  // saying "nothing found" here would be a lie about work the user just paid
+  // scraping credits for.
+  const found = home.metrics.pipeline.sourced;
+  if (found > 0) {
+    return (
+      <div className="cp-card">
+        <div className="cp-eyebrow">{found} found</div>
+        <p>{found} business{found === 1 ? '' : 'es'} matched in {where}. Nothing is drafted yet — the copilot writes the openers.</p>
+        <button className="cp-btn primary block cp-call-do" onClick={() => void actions.runBrief('manual')}>Draft the openers</button>
+      </div>
+    );
+  }
+
   return (
     <div className="cp-card">
-      <div className="cp-eyebrow">{finding ? 'Finding businesses' : 'Nothing here yet'}</div>
-      <p>
-        {finding
-          ? `Looking for ${what} in ${where}. The first run takes a minute — real listings, not a sample.`
-          : `No businesses found yet for ${what} in ${where}.`}
-      </p>
-      {!finding && (
-        <button className="cp-btn primary block cp-call-do" onClick={() => void actions.findMatches()}>Find businesses now</button>
-      )}
+      <div className="cp-eyebrow">Nothing here yet</div>
+      <p>No businesses found yet for {what} in {where}.</p>
+      <button className="cp-btn primary block cp-call-do" onClick={() => void actions.findMatches()}>Find businesses now</button>
     </div>
   );
 }

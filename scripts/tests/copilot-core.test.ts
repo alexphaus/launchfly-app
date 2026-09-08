@@ -1054,6 +1054,15 @@ async function signin() {
   assert.match(describeDbError({ code: '23505' }), /Sign in instead/);
   assert.doesNotMatch(describeDbError({ code: '23505' }), /migration/, 'a duplicate row is not a migration problem');
   assert.match(describeDbError({ code: '42501' }), /service key/);
+
+  // PostgREST answers before Postgres does, and its message names the column.
+  // Dropping it left the live failure reading "(database error PGRST204)" —
+  // a code with the diagnosis stripped out of it.
+  const pgrst = describeDbError({ code: 'PGRST204', message: "Could not find the 'offer' column of 'copilot_profiles' in the schema cache" });
+  assert.match(pgrst, /Could not find the 'offer' column/, 'the column name is the whole diagnosis');
+  assert.match(pgrst, /supabase\/migrations/);
+  assert.match(pgrst, /NOTIFY pgrst, 'reload schema'/, 'the column may exist and the cache be stale');
+  assert.match(describeDbError({ code: 'PGRST205', message: "Could not find the table 'public.copilot_decisions'" }), /copilot_decisions/);
   // An unknown code still carries the code, because that is the part worth
   // pasting into a search. It must not carry the raw message.
   assert.equal(describeDbError({ code: 'XX000', message: 'internal detail' }, 'Could not create your copilot.'), 'Could not create your copilot. (database error XX000)');
@@ -1137,6 +1146,35 @@ async function agentLimits() {
 }
 
 agentLimits().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A long run must come back with something
+// ─────────────────────────────────────────────────────────────────────────────
+import { googleMapsAdapter } from '../../src/lib/copilot/supply/google-maps';
+import type { Profile as SupplyProfile } from '../../src/lib/copilot/types';
+
+async function supplyBudget() {
+  // Three segments at up to 90s each, behind a proxy that gives up at 60. The
+  // adapter has to stop between segments rather than run the request off a
+  // cliff — a partial answer is useful, a 504 is not.
+  const profile = { target_segments: ['pest control', 'plumbing', 'renovation'], target_area: 'Cebu', location: 'Cebu', linked_business_id: null } as unknown as SupplyProfile;
+
+  // A deadline already in the past must not start a single scrape. Without the
+  // guard this would call Apify three times and take minutes.
+  const started = Date.now();
+  const none = await googleMapsAdapter.discover(profile, { limit: 30, deadline: Date.now() - 1 });
+  assert.deepEqual(none, [], 'an expired budget finds nothing');
+  assert.ok(Date.now() - started < 1_000, 'and returns immediately rather than scraping');
+
+  // Too little left to be worth starting is the same as none: a scrape that
+  // cannot finish still costs credits.
+  const tooLittle = await googleMapsAdapter.discover(profile, { limit: 30, deadline: Date.now() + 2_000 });
+  assert.deepEqual(tooLittle, [], 'a budget below the floor starts nothing');
+
+  console.log('copilot-core: supply-budget checks passed');
+}
+
+supplyBudget().catch((e) => { console.error(e); process.exit(1); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Something to get better at, every day there is data

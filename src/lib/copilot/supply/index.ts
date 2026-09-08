@@ -18,12 +18,14 @@ export interface SupplyResult {
   runId: string;
   found: number;
   inserted: number;
+  /** True when the wall-clock budget ran out before every adapter had a turn. */
+  partial?: boolean;
   perAdapter: Record<string, { found: number; inserted: number; skipped?: string; error?: string }>;
   /** Monthly match allowance left after this run, and what it was capped at. */
   quota: { limit: number; used: number; remaining: number; exhausted: boolean };
 }
 
-export async function runSupply(profileId: string, opts: { limit?: number; only?: string[]; reason?: string } = {}): Promise<SupplyResult> {
+export async function runSupply(profileId: string, opts: { limit?: number; only?: string[]; reason?: string; deadline?: number } = {}): Promise<SupplyResult> {
   const db = copilotDb();
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('profile not found');
@@ -55,13 +57,20 @@ export async function runSupply(profileId: string, opts: { limit?: number; only?
 
   for (const adapter of ADAPTERS) {
     if (opts.only && !opts.only.includes(adapter.key)) continue;
+    // Out of time: say so rather than starting work that will be thrown away
+    // when the proxy hangs up.
+    if (opts.deadline && Date.now() > opts.deadline) {
+      result.partial = true;
+      result.perAdapter[adapter.key] = { found: 0, inserted: 0, skipped: 'out of time this run' };
+      continue;
+    }
     const limit = adapter.billable ? Math.min(asked, allowance - billableInserted) : asked;
     if (limit <= 0) { result.perAdapter[adapter.key] = { found: 0, inserted: 0, skipped: 'monthly match allowance used up' }; continue; }
     const entry = { found: 0, inserted: 0 } as SupplyResult['perAdapter'][string];
     result.perAdapter[adapter.key] = entry;
     try {
       if (!(await adapter.available(profile))) { entry.skipped = 'not configured for this profile'; continue; }
-      const candidates = await adapter.discover({ ...profile, target_segments: profile.target_segments.slice(0, plan.segments) }, { limit });
+      const candidates = await adapter.discover({ ...profile, target_segments: profile.target_segments.slice(0, plan.segments) }, { limit, deadline: opts.deadline });
       entry.found = candidates.length;
       result.found += candidates.length;
       if (!candidates.length) continue;

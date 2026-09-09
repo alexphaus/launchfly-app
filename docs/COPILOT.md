@@ -495,6 +495,37 @@ So the run carries a wall-clock deadline instead:
 
 Raise `COPILOT_SUPPLY_BUDGET_MS` only after raising the proxy's own timeout;
 otherwise it just moves where the request dies.
+## The triage stack
+
+One unjudged match at a time: **Draft it** or **Not for me**, by swipe or by
+button. It lives on Pipeline and owns the `not_drafted` pile, which is no
+longer also listed below it.
+
+**Why a deck here and nowhere else.** A stack works when both answers cost the
+same flick. That is true of exactly one judgement in this app — "is this
+business worth messaging at all". It is emphatically not true of the send queue
+or Today's call, where yes costs ten minutes and no costs a thumb; put those
+behind a swipe and the cheap side wins every session, and you end up with a
+cleared deck and nothing sent. Today's call is worse still: a deck of calls is
+"a list of five good things", which is the thing the decision layer exists to
+replace.
+
+**What a swipe is allowed to teach.** A swipe is a *preference*; a reply is the
+*truth*. `segmentKeepRate` turns the history into a per-segment keep rate and
+`orderTriage` uses it to decide what comes up first — and that is the entire
+blast radius. It never touches the decision record, Signals, or what counts as
+an outcome. Invariant 5 is the same rule for the same reason. `MIN_TRIAGE_SAMPLE`
+(5) keeps a rate from being one person's mood, the same floor `MIN_DEMAND`
+applies to demand terms.
+
+Every gesture has a button beside it — a deck answerable only by dragging is
+unusable one-handed or with assistive tech. Both answers are recorded: a keep
+rate built only from keeps is not a rate.
+
+**The metric that decides whether this stays: sends per session, not swipes per
+session.** If swiping goes up and sending does not, it made the app feel better
+and changed nothing, and it should be reverted.
+
 ## Moves and Jobs
 
 A **Move** is a finished piece of work with something concrete attached. A

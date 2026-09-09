@@ -1439,3 +1439,57 @@ async function movesAndJobs() {
 }
 
 movesAndJobs().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A swipe orders the pile. It never decides what worked.
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  MIN_TRIAGE_SAMPLE, NEUTRAL_KEEP_RATE, canTriage, orderTriage, segmentKeepRate,
+  type TriageCard, type TriageEvent,
+} from '../../src/lib/copilot/triage';
+
+async function triage() {
+  const card = (id: string, segment: string | null, score: number): TriageCard =>
+    ({ id, title: `Business ${id}`, segment, reason: 'r', score, contact: { whatsapp: true, email: false }, url: null });
+  const ev = (segment: string, action: string, n: number): TriageEvent[] =>
+    Array.from({ length: n }, () => ({ event_type: 'triage_answered', payload: { segment, action } }));
+
+  // 1. A rate needs a sample. Two swipes reordering the whole pile is noise
+  //    dressed as learning — the same floor MIN_DEMAND applies in diagnose.ts.
+  assert.equal(segmentKeepRate(ev('dentist', 'draft', MIN_TRIAGE_SAMPLE - 1)).size, 0);
+  const rates = segmentKeepRate([...ev('dentist', 'draft', 5), ...ev('spa', 'skip', 5), ...ev('spa', 'draft', 5)]);
+  assert.equal(rates.get('dentist'), 1);
+  assert.equal(rates.get('spa'), 0.5, 'both answers count, or it is not a rate');
+
+  // 2. Only triage events, and only well-formed ones.
+  assert.equal(segmentKeepRate([...ev('vet', 'draft', 9), { event_type: 'note_added', payload: { segment: 'vet', action: 'draft' } }]).get('vet'), 1);
+  assert.equal(segmentKeepRate(ev('', 'draft', 9)).size, 0, 'no segment, nothing to learn');
+  assert.equal(segmentKeepRate(ev('vet', 'shrug', 9)).size, 0);
+  assert.equal(segmentKeepRate([{ event_type: 'triage_answered', payload: null }]).size, 0);
+  // Case and padding are the same segment, or the rate splits across spellings.
+  assert.equal(segmentKeepRate([...ev(' Dentist ', 'draft', 3), ...ev('dentist', 'draft', 2)]).get('dentist'), 1);
+
+  // 3. The learned rate leads; the deterministic score breaks ties. A segment
+  //    with no history is neutral, never penalised.
+  const ordered = orderTriage(
+    [card('a', 'spa', 90), card('b', 'dentist', 10), card('c', null, 80)],
+    new Map([['dentist', 1], ['spa', 0]]),
+  );
+  assert.deepEqual(ordered.map((c) => c.id), ['b', 'c', 'a'], 'kept segment first, unknown before rejected');
+  assert.deepEqual(
+    orderTriage([card('a', 'x', 10), card('b', 'x', 99)], new Map()).map((c) => c.id),
+    ['b', 'a'], 'with no history it is pure score');
+  assert.equal(orderTriage([card('a', 'x', 1)], new Map()).length, 1);
+  assert.equal(orderTriage(Array.from({ length: 50 }, (_, i) => card(`c${i}`, null, i)), new Map()).length, 20);
+  assert.ok(NEUTRAL_KEEP_RATE > 0 && NEUTRAL_KEEP_RATE < 1);
+
+  // 4. A card you cannot contact is a swipe that teaches nothing, because
+  //    "draft it" has nowhere to go.
+  assert.equal(canTriage({ contact: { whatsapp: true, email: false } }), true);
+  assert.equal(canTriage({ contact: { whatsapp: false, email: true } }), true);
+  assert.equal(canTriage({ contact: { whatsapp: false, email: false } }), false);
+
+  console.log('copilot-core: triage checks passed');
+}
+
+triage().catch((e) => { console.error(e); process.exit(1); });

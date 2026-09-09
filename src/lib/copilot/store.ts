@@ -9,6 +9,7 @@ import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, sna
 import { diagnose, growthEdge, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
+import { availableJobs } from './jobs';
 import { stageOf } from './pipeline';
 import { canTriage, orderTriage, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { Move } from './types';
@@ -122,15 +123,18 @@ export async function loadTriage(profileId: string, rows: PipelineRow[]): Promis
  * its migration is applied by hand, and an empty Moves section is a far better
  * failure than a blank Today.
  */
-export async function loadMoves(profileId: string, limit = 8): Promise<Move[]> {
+export async function loadMoves(profileId: string, limit = 8): Promise<{ moves: Move[]; tableMissing: boolean }> {
   const { data, error } = await copilotDb()
     .from('copilot_moves')
     .select('id, job, kind, headline, why, artifact, cost_label, status, created_at')
     .eq('profile_id', profileId).eq('status', 'open')
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) return [];
-  return (data ?? []) as Move[];
+  // Still degrades to an empty list rather than a blank Today — but says so,
+  // because the first build swallowed this and an unapplied migration was
+  // indistinguishable from a quiet day.
+  if (error) return { moves: [], tableMissing: true };
+  return { moves: (data ?? []) as Move[], tableMissing: false };
 }
 
 export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {
@@ -403,7 +407,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, moves] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -426,6 +430,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved', 'acted']).order('score', { ascending: false }).limit(200).then((r) => (r.data ?? []) as Opportunity[]),
     loadDecisions(profileId),
     loadMoves(profileId),
+    availableJobs(profile),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -494,8 +499,14 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     edge,
     sources,
     contextCount: ctxCount,
-    moves,
     triage,
+    moves: movesRead.moves,
+    // Only ever a reason for an EMPTY list. A move on screen answers the
+    // question by existing.
+    movesBlocked: movesRead.moves.length ? null
+      : movesRead.tableMissing ? 'migration'
+      : jobKeys.length === 0 ? 'no_sensor'
+      : null,
     needsBrief: !insight || insight.for_date !== today,
     // Configured to look, and nothing found. Deliberately not "has supply ever
     // run": an account whose matches were all dismissed is in the same

@@ -1441,6 +1441,8 @@ async function movesAndJobs() {
 movesAndJobs().catch((e) => { console.error(e); process.exit(1); });
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
 // A swipe orders the pile. It never decides what worked.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
@@ -1493,3 +1495,36 @@ async function triage() {
 }
 
 triage().catch((e) => { console.error(e); process.exit(1); });
+// Nothing to do and nothing plugged in are different answers
+// ─────────────────────────────────────────────────────────────────────────────
+import { availableJobs, JOBS } from '../../src/lib/copilot/jobs';
+import { clientDeliveryJob } from '../../src/lib/copilot/jobs/client-delivery';
+import type { Profile as JobProfile } from '../../src/lib/copilot/types';
+
+async function jobSensors() {
+  const profile = (over: Record<string, unknown> = {}) =>
+    ({ id: 'p1', name: 'Alex', timezone: 'Asia/Manila', linked_business_id: 'biz-1', ...over }) as unknown as JobProfile;
+
+  // The sensor, not the result. A profile with no linked business cannot produce
+  // a delivery move and must say so — reporting an empty list instead is what
+  // made a working build look broken.
+  assert.deepEqual(await availableJobs(profile()), ['client_delivery']);
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), []);
+
+  // A job whose availability throws is unavailable, never fatal: one broken
+  // sensor must not take the whole screen down with it.
+  const exploding = { key: 'boom', label: 'Boom', available() { throw new Error('no'); }, run: async () => [] };
+  JOBS.push(exploding);
+  try {
+    assert.deepEqual(await availableJobs(profile()), ['client_delivery']);
+  } finally {
+    JOBS.splice(JOBS.indexOf(exploding), 1);
+  }
+
+  assert.equal(clientDeliveryJob.key, 'client_delivery');
+  assert.equal(JOBS.includes(clientDeliveryJob), true, 'a job not in the registry never runs');
+
+  console.log('copilot-core: job-sensor checks passed');
+}
+
+jobSensors().catch((e) => { console.error(e); process.exit(1); });

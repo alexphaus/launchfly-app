@@ -99,7 +99,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
       {/* Finished work from every job, not just outbound. This sits above the
           send queue because it is the answer to the thing that made the old
           screen unusable: one action type, and not the one you wanted. */}
-      {home.moves.length > 0 && (
+      {home.moves.length > 0 ? (
         <>
           <div className="cp-section">
             <span className="lead">Ready for you</span>
@@ -107,7 +107,29 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
           </div>
           {home.moves.map((m) => <MoveCard key={m.id} move={m} actions={actions} />)}
         </>
-      )}
+      ) : home.movesBlocked ? (
+        // Silence and "not wired up" looked identical here, so a working build
+        // read as a broken one. An empty day still renders nothing at all —
+        // this only speaks when something is actually missing.
+        <div className="cp-empty" style={{ marginBottom: 14 }}>
+          {home.movesBlocked === 'migration' ? (
+            <>
+              <b>Moves are not switched on yet</b>
+              {/* Filename only, and no <code>: the full path is 44 unbreakable
+                  characters, which pushed the whole page wider than the phone
+                  and clipped the metrics strip. */}
+              The copilot_moves table is missing. Run the migration
+              20260910_copilot_moves.sql.
+            </>
+          ) : (
+            <>
+              <b>No sensors connected</b>
+              Moves come from your own data — a sale, a reply, a booking. Link a business to this
+              profile and the first one appears after the next run.
+            </>
+          )}
+        </div>
+      ) : null}
 
       {/* The queue section disappears entirely when it is empty and something
           else is already waiting: a header with nothing under it is the same

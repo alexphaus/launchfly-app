@@ -327,6 +327,12 @@ export interface HomeData {
    * make with a thumb — see triage.ts for why it is not the send queue.
    */
   triage: TriageCard[];
+  /**
+   * Why the Moves list is empty, when it is — never set while a move is on
+   * screen. 'migration' means copilot_moves is not there yet; 'no_sensor' means
+   * no job can see anything for this profile. Both used to render as silence.
+   */
+  movesBlocked: 'migration' | 'no_sensor' | null;
   /** True when there is no brief for today yet; the client triggers one. */
   needsBrief: boolean;
   /**

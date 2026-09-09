@@ -9,9 +9,24 @@ import { copilotDb, todayIso } from '../db';
 import { selectMoves, type MoveDraft } from '../moves';
 import { getProfile, logEvent } from '../store';
 import { clientDeliveryJob } from './client-delivery';
+import type { Profile } from '../types';
 import type { Job, JobContext } from './types';
 
 export const JOBS: Job[] = [clientDeliveryJob];
+
+/**
+ * Which jobs can see anything for this profile. Separated from running them so
+ * the UI can tell "nothing to do" apart from "nothing is plugged in" — those
+ * looked identical on the screen, which is how the first Moves build appeared
+ * broken when it was working exactly as written.
+ */
+export async function availableJobs(profile: Profile, now = new Date()): Promise<string[]> {
+  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now };
+  const checked = await Promise.all(JOBS.map(async (j) => {
+    try { return (await j.available(ctx)) ? j.key : null; } catch { return null; }
+  }));
+  return checked.filter((k): k is string => !!k);
+}
 
 export interface JobsResult {
   ran: number;

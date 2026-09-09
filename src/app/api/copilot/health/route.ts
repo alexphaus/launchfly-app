@@ -30,6 +30,7 @@ const PROBES: Array<{ table: string; column: string; migration: string }> = [
   { table: 'copilot_executions', column: 'cancel_reason', migration: '20260908_copilot_signals.sql' },
   { table: 'copilot_insights', column: 'kind', migration: '20260908_copilot_signals.sql' },
   { table: 'copilot_decisions', column: 'headline', migration: '20260909_copilot_decisions.sql' },
+  { table: 'copilot_moves', column: 'artifact', migration: '20260910_copilot_moves.sql' },
 ];
 
 /**

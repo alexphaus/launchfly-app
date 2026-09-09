@@ -213,6 +213,14 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return false;
       }
     },
+    async answerMove(id, status) {
+      try {
+        const r = await post<{ home: HomeData }>(`/moves/${id}`, { status });
+        setHome(r.home);
+        say(status === 'done' ? 'Done. Recorded.' : 'Not this one. Recorded.');
+        return true;
+      } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
+    },
     async markSent(id, overrides) {
       try {
         const r = await post<{ home: HomeData }>(`/actions/${id}/sent`, overrides ?? {});

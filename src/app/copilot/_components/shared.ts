@@ -60,6 +60,8 @@ export interface Actions {
   dropSegment(segment: string): Promise<boolean>;
   /** What you did about today's call. "Ignored" is never sent — it is inferred. */
   answerCall(response: 'did' | 'rejected' | 'wrong'): Promise<boolean>;
+  /** A Move is finished work: say it is done, or that it is not for you. */
+  answerMove(id: string, status: 'done' | 'dismissed'): Promise<boolean>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
 }

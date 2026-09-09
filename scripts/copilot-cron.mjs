@@ -38,7 +38,8 @@ try {
   // glance, and the useful question is "did anything actually happen".
   const runs = Array.isArray(body.results) ? body.results : [];
   const ok = runs.filter((r) => r.ok).length;
-  console.log(`copilot-cron: ${res.status} in ${took}s — ${ok}/${runs.length} profiles ok${body.skipped ? `, ${body.skipped} skipped` : ''}`);
+  const moves = runs.reduce((n, r) => n + (r.moves ?? 0), 0);
+  console.log(`copilot-cron: ${res.status} in ${took}s — ${ok}/${runs.length} profiles ok${moves ? `, ${moves} new moves` : ''}${body.skipped ? `, ${body.skipped} skipped` : ''}`);
   for (const r of runs.filter((r) => !r.ok)) console.error(`  failed ${r.id}: ${r.error ?? 'unknown'}`);
   if (runs.length && ok === 0) process.exit(1);
 } catch (e) {

@@ -221,6 +221,14 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
+    async triage(id, action) {
+      try {
+        const r = await post<{ home: HomeData }>(`/triage/${id}`, { action });
+        setHome(r.home);
+        if (action === 'draft') say('Drafted. It is in the send queue.');
+        return true;
+      } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
+    },
     async markSent(id, overrides) {
       try {
         const r = await post<{ home: HomeData }>(`/actions/${id}/sent`, overrides ?? {});

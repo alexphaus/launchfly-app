@@ -11,6 +11,7 @@ import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecu
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
 import { stageOf } from './pipeline';
+import { canTriage, orderTriage, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { Move } from './types';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
@@ -80,6 +81,37 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
     db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
   ]);
   return { opportunities, executions, outcomes };
+}
+
+/**
+ * The unjudged pile, ordered by what this user actually keeps.
+ *
+ * Reads the swipe history rather than inferring from status: a dismissed
+ * opportunity could have been dismissed from anywhere, and only the triage
+ * event knows it was this decision.
+ */
+export async function loadTriage(profileId: string, rows: PipelineRow[]): Promise<TriageCard[]> {
+  const unjudged = rows.filter((r) => r.stage === 'not_drafted');
+  if (!unjudged.length) return [];
+
+  const { data } = await copilotDb()
+    .from('copilot_events')
+    .select('event_type, payload')
+    .eq('profile_id', profileId).eq('event_type', 'triage_answered')
+    .order('created_at', { ascending: false })
+    .limit(400);
+
+  const cards: TriageCard[] = unjudged.map(({ opportunity: o }) => ({
+    id: o.id,
+    title: o.title,
+    segment: segmentOf({ id: o.id, status: o.status, source: o.source, source_kind: o.source_kind, data: o.data, reason: o.reason, title: o.title }, []),
+    reason: o.reason ?? '',
+    score: o.score ?? 0,
+    contact: { whatsapp: !!o.contact?.whatsapp, email: !!o.contact?.email },
+    url: o.url ?? null,
+  })).filter(canTriage);
+
+  return orderTriage(cards, segmentKeepRate((data ?? []) as TriageEvent[]));
 }
 
 /**
@@ -414,6 +446,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     const execution = latestExecByOpp[o.id] ?? null;
     return { opportunity, execution, stage: stageOf(opportunity, execution) };
   });
+  // Needs the staged rows, so it cannot ride in the Promise.all above.
+  const triage = await loadTriage(profileId, pipeline);
+
   // Anything in the send queue is rendered there, not in the plan too.
   const queueIds = new Set(queue.map((q) => q.id));
   const planWithExec = planRows.filter((a) => !queueIds.has(a.id)).map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
@@ -464,6 +499,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     edge,
     sources,
     contextCount: ctxCount,
+    triage,
     moves: movesRead.moves,
     // Only ever a reason for an EMPTY list. A move on screen answers the
     // question by existing.

@@ -3,12 +3,15 @@
 // untouched matches anywhere — a pile you have not looked at is not a pipeline.
 import { useEffect, useState } from 'react';
 import { STAGE_LABEL, groupPipeline, type PipelineStage } from '@/lib/copilot/pipeline';
+import TriageStack from '../TriageStack';
 import type { HomeData, PipelineRow } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, relTime, sourceLabel } from '../format';
 import type { Actions } from '../shared';
 
 /** Stages folded by default: the long tail that has not been worked yet. */
-const FOLDED: PipelineStage[] = ['not_drafted'];
+/* not_drafted is no longer folded here — it is the triage stack above, and the
+   same pile rendered twice is how Today and Pipeline ended up competing. */
+const FOLDED: PipelineStage[] = [];
 
 export default function PipelineView({ home, actions, finding }: { home: HomeData; actions: Actions; finding: boolean }) {
   const [mounted, setMounted] = useState(false);
@@ -39,7 +42,9 @@ export default function PipelineView({ home, actions, finding }: { home: HomeDat
         </div>
       )}
 
-      {groups.map(({ stage, rows }) => {
+      <TriageStack cards={home.triage} actions={actions} />
+
+      {groups.filter((g) => g.stage !== 'not_drafted').map(({ stage, rows }) => {
         const folded = FOLDED.includes(stage) && !open[stage];
         return (
           <div key={stage}>

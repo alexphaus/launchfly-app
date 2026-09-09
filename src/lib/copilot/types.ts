@@ -3,6 +3,7 @@
 
 import type { PackReply, PackSentExample } from './conversations';
 import type { MoveArtifact, MoveKind } from './moves';
+import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
@@ -320,6 +321,12 @@ export interface HomeData {
    * The queue below is one kind of move; these are the other seven.
    */
   moves: Move[];
+  /**
+   * Matches nobody has judged yet, ordered by what this user keeps drafting.
+   * One decision at a time on the only judgement in this app cheap enough to
+   * make with a thumb — see triage.ts for why it is not the send queue.
+   */
+  triage: TriageCard[];
   /**
    * Why the Moves list is empty, when it is — never set while a move is on
    * screen. 'migration' means copilot_moves is not there yet; 'no_sensor' means

@@ -1356,3 +1356,86 @@ async function conversations() {
 }
 
 conversations().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A move is finished work, or it is not a move
+// ─────────────────────────────────────────────────────────────────────────────
+import { MOVE_KINDS, HEADLINE_MAX, isDeliverable, moveKey, normalizeMove, selectMoves, type MoveDraft } from '../../src/lib/copilot/moves';
+import { daysSince, deliveryMessage, deliveryMove, firstName, moneyLabel, shortDate, type SaleRow } from '../../src/lib/copilot/jobs/client-delivery';
+
+async function movesAndJobs() {
+  const ok = (over: Partial<MoveDraft> = {}): MoveDraft => ({
+    job: 'client_delivery', kind: 'build', external_id: 'sale:1',
+    headline: 'Maria paid PHP 4,500 — send them the setup steps',
+    why: ['Paid on 8 Sep, PHP 4,500.'],
+    artifact: { kind: 'message', label: 'Open in email', value: 'Hi Maria — thanks for your order.', href: 'mailto:m@x.com' },
+    ...over,
+  });
+
+  // 1. The floor. Advice with no artifact is what a chat window gives away for
+  //    free; it must never reach the queue.
+  assert.equal(isDeliverable(ok()), true);
+  assert.equal(isDeliverable(ok({ artifact: { kind: 'message', label: 'Send', value: '   ' } })), false, 'an empty artifact is advice');
+  assert.equal(isDeliverable(ok({ why: [] })), false, 'a move must cite something');
+  assert.equal(isDeliverable(ok({ why: ['  '] })), false);
+  assert.equal(isDeliverable(ok({ headline: '' })), false);
+  assert.equal(isDeliverable(ok({ external_id: '' })), false, 'without an id it cannot dedupe');
+  assert.equal(isDeliverable(ok({ kind: 'vibes' as never })), false);
+  // A "link" move whose link is missing is a text move pretending otherwise.
+  assert.equal(isDeliverable(ok({ artifact: { kind: 'link', label: 'Open', value: 'A listing', href: null } })), false);
+
+  // 2. Trimming, and the batch dedupe that stops a nightly rerun doubling up.
+  const long = normalizeMove(ok({ headline: 'x'.repeat(500), why: ['a', 'b', 'c', 'd'] }));
+  assert.equal(long.headline.length, HEADLINE_MAX);
+  assert.equal(long.why.length, 3);
+  const batch = selectMoves([ok(), ok({ headline: 'Fresher read of the same sale' }), ok({ external_id: 'sale:2' }), ok({ why: [] })]);
+  assert.equal(batch.length, 2, 'deduped by (job, external_id); undeliverable dropped');
+  assert.equal(batch[0].headline, 'Fresher read of the same sale', 'the later read wins');
+  assert.equal(moveKey('client_delivery', 'sale:1'), moveKey(batch[0].job, batch[0].external_id));
+  assert.ok(MOVE_KINDS.includes('earn') && MOVE_KINDS.includes('avoid'));
+
+  // 3. The first non-outbound job. No model: the message is a template, so it
+  //    cannot invent a purchase that did not happen.
+  const now = new Date('2026-09-09T00:00:00Z');
+  const sale: SaleRow = {
+    id: 's1', product_id: 'p1', amount: 4500, currency: 'php',
+    customer_email: 'maria@example.com', customer_name: 'Maria Santos', created_at: '2026-09-06T02:00:00Z',
+  };
+  const profile = { name: 'Alex Phaus', timezone: 'Asia/Manila' };
+  const move = deliveryMove(profile, sale, now);
+
+  assert.equal(move.kind, 'build');
+  assert.equal(move.external_id, 'sale:s1');
+  assert.match(move.headline, /^Maria paid PHP 4,500/);
+  assert.match(move.why[0], /Paid on 6 Sep/);
+  assert.match(move.why[1], /2 days ago/, 'floored, not rounded: 2.9 days is not 3');
+  assert.equal(move.artifact.kind, 'message');
+  assert.match(move.artifact.href!, /^mailto:maria@example\.com\?/, 'opens in their own mail app');
+  assert.match(move.artifact.value, /Hi Maria/);
+  assert.match(move.artifact.value, /It's Alex/, 'signed by them, not by the app');
+  assert.equal(isDeliverable(move), true);
+
+  // No email is not a failure: the message is still the work, it just has to be
+  // copied rather than opened.
+  const noEmail = deliveryMove(profile, { ...sale, customer_email: null }, now);
+  assert.equal(noEmail.artifact.href, null);
+  assert.equal(isDeliverable(noEmail), true);
+
+  // Placeholder names from the manual-sale form must not be greeted by name.
+  assert.equal(firstName('Manual'), '');
+  assert.equal(firstName('Unknown'), '');
+  assert.equal(firstName(null), '');
+  assert.match(deliveryMessage(profile, { ...sale, customer_name: 'Manual' }), /^Hi — thanks/);
+
+  assert.equal(moneyLabel(4500, 'php'), 'PHP 4,500');
+  assert.equal(moneyLabel(null, 'php'), '', 'no amount is no claim about money');
+  assert.equal(daysSince('2026-09-09T06:00:00Z', now), 0, 'a sale in the future is not negative days');
+  // Month abbreviation varies by ICU version ('Sep' vs 'Sept'), so match the
+  // part that is ours: the day, and that a bad timezone renders instead of throwing.
+  assert.match(shortDate('2026-09-06T02:00:00Z', 'Asia/Manila'), /^6 Sep/);
+  assert.match(shortDate('2026-09-06T02:00:00Z', 'Not/AZone'), /^6 Sep/, 'a bad timezone falls back rather than throwing');
+
+  console.log('copilot-core: moves-and-jobs checks passed');
+}
+
+movesAndJobs().catch((e) => { console.error(e); process.exit(1); });

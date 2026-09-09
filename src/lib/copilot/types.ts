@@ -2,6 +2,7 @@
 // Shared types for the /copilot vertical. Kept independent from the rest of Launchfly.
 
 import type { PackReply, PackSentExample } from './conversations';
+import type { MoveArtifact, MoveKind } from './moves';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
@@ -314,6 +315,11 @@ export interface HomeData {
   edge: GrowthEdge | null;
   sources: ContextSource[];
   contextCount: number;
+  /**
+   * Finished work waiting on a yes or no, from every Job — not just outbound.
+   * The queue below is one kind of move; these are the other seven.
+   */
+  moves: Move[];
   /** True when there is no brief for today yet; the client triggers one. */
   needsBrief: boolean;
   /**
@@ -459,4 +465,17 @@ export interface OpportunityAgent {
   readonly name: 'webhook' | 'llm' | 'starter';
   readonly model?: string;
   generateBrief(pack: ContextPack, opts?: BriefRunOpts): Promise<BriefOutput>;
+}
+
+/** One finished piece of work, as the client renders it. */
+export interface Move {
+  id: string;
+  job: string;
+  kind: MoveKind;
+  headline: string;
+  why: string[];
+  artifact: MoveArtifact;
+  cost_label: string | null;
+  status: 'open' | 'done' | 'dismissed';
+  created_at: string;
 }

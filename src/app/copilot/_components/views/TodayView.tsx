@@ -6,7 +6,8 @@ import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/
 import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
-import type { Execution, HomeData, QueueItem } from '@/lib/copilot/types';
+import { KIND_LABEL } from '@/lib/copilot/moves';
+import type { Execution, HomeData, Move, QueueItem } from '@/lib/copilot/types';
 import { money } from '../format';
 import type { Actions } from '../shared';
 
@@ -45,7 +46,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
   const callFirst = noOffer;
   // A brand new account. Three separate empty boxes stacked up read as a broken
   // app; one card reads as a new one.
-  const nothingYet = !home.decision && !home.insight && !queue.length && !plan.length && !home.nudges.length;
+  const nothingYet = !home.decision && !home.insight && !queue.length && !plan.length && !home.nudges.length && !home.moves.length;
 
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
@@ -95,7 +96,23 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
 
       {nothingYet && <FirstRun home={home} actions={actions} finding={finding} />}
 
-      {noOffer || nothingYet ? null : (
+      {/* Finished work from every job, not just outbound. This sits above the
+          send queue because it is the answer to the thing that made the old
+          screen unusable: one action type, and not the one you wanted. */}
+      {home.moves.length > 0 && (
+        <>
+          <div className="cp-section">
+            <span className="lead">Ready for you</span>
+            <span className="count">{home.moves.length}</span>
+          </div>
+          {home.moves.map((m) => <MoveCard key={m.id} move={m} actions={actions} />)}
+        </>
+      )}
+
+      {/* The queue section disappears entirely when it is empty and something
+          else is already waiting: a header with nothing under it is the same
+          noise as an empty box, just quieter about it. */}
+      {noOffer || nothingYet || (!queue.length && home.moves.length > 0) ? null : (
         <>
           <div className="cp-section">
             <span className="lead">To send</span>
@@ -168,6 +185,8 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
 
       {nothingYet ? null : (
         <>
+      {home.nudges.length > 0 && (
+        <>
       <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>
       {home.nudges.length ? (
         <>
@@ -185,8 +204,8 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
           </button>
         )}
         </>
-      ) : (
-        <div className="cp-empty"><b>Nothing pressing</b>Nudges show up here when something is about to go cold or needs a decision.</div>
+      ) : null}
+        </>
       )}
         </>
       )}
@@ -367,6 +386,51 @@ function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions
       <div className="cp-eyebrow">Nothing here yet</div>
       <p>No businesses found yet for {what} in {where}.</p>
       <button className="cp-btn primary block cp-call-do" onClick={() => void actions.findMatches()}>Find businesses now</button>
+    </div>
+  );
+}
+
+/**
+ * One finished thing, with the thing attached.
+ *
+ * The artifact button is the whole point: a row that says "you should contact
+ * them" is advice, and advice is what a chat window already gives away. A row
+ * carrying the drafted message, opened in the user's own mail app, is work that
+ * was done while they slept.
+ */
+function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
+  const [busy, setBusy] = useState(false);
+  const [shown, setShown] = useState(false);
+  const a = move.artifact;
+  const answer = async (status: 'done' | 'dismissed') => {
+    setBusy(true);
+    try { await actions.answerMove(move.id, status); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="cp-card">
+      <div className="cp-call-top">
+        <div className="cp-eyebrow">{KIND_LABEL[move.kind]}</div>
+        {move.cost_label && <span className="cp-chip">{move.cost_label}</span>}
+      </div>
+      <h2 className="cp-call-head">{move.headline}</h2>
+
+      {move.why.length > 0 && (
+        <ul className="cp-because">{move.why.map((w, i) => <li key={i}>{w}</li>)}</ul>
+      )}
+
+      {a.href
+        ? <a className="cp-btn primary block cp-call-do" href={a.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{a.label}</a>
+        : <button className="cp-btn primary block cp-call-do" onClick={() => setShown((v) => !v)}>{shown ? 'Hide it' : a.label}</button>}
+
+      {/* A message with nowhere to open still has to be readable, or the work
+          is done and unreachable. */}
+      {(shown || a.kind === 'text') && <div className="cp-reasoning">{a.value}</div>}
+
+      <div className="cp-btn-row">
+        <button className="cp-btn" disabled={busy} onClick={() => answer('done')}>Did it</button>
+        <button className="cp-btn" disabled={busy} onClick={() => answer('dismissed')}>Not this one</button>
+      </div>
     </div>
   );
 }

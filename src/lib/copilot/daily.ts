@@ -4,6 +4,7 @@
 // failing scraper never blocks the brief.
 
 import { runBrief, type BriefResult } from './brief';
+import { runJobs, type JobsResult } from './jobs';
 import { reconcileReplies } from './outcomes';
 import { runSupply, type SupplyResult } from './supply';
 import { runWeeklySignals } from './weekly';
@@ -11,13 +12,15 @@ import { runWeeklySignals } from './weekly';
 export interface DailyResult {
   supply: SupplyResult | { error: string } | null;
   reconcile: { checked: number; matched: number } | { error: string } | null;
+  /** Every non-outbound job: what each found and what was new. */
+  jobs: JobsResult | { error: string } | null;
   brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed'> & { skipped?: string };
   /** Monday only, cron only: the weekly Signals read. */
   weekly: { wrote: boolean; reason?: string } | { error: string } | null;
 }
 
 export async function runDaily(profileId: string, opts: { reason: string; supply?: boolean; reconcile?: boolean; deadline?: number } ): Promise<DailyResult> {
-  const out: DailyResult = { supply: null, reconcile: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 }, weekly: null };
+  const out: DailyResult = { supply: null, reconcile: null, jobs: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 }, weekly: null };
   if (opts.supply !== false) {
     try { out.supply = await runSupply(profileId, { reason: opts.reason, deadline: opts.deadline }); }
     catch (e) { out.supply = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] supply failed', e); }
@@ -26,6 +29,11 @@ export async function runDaily(profileId: string, opts: { reason: string; supply
     try { out.reconcile = await reconcileReplies(profileId); }
     catch (e) { out.reconcile = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] reconcile failed', e); }
   }
+  // Jobs before the brief: they are cheap, they need no model, and what they
+  // produce is the part of the screen that is not outbound.
+  try { out.jobs = await runJobs(profileId, { deadline: opts.deadline }); }
+  catch (e) { out.jobs = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] jobs failed', e); }
+
   // The brief is the slowest step and the least urgent one here: whoever tapped
   // "Find new matches" wants matches, and the next brief will rank them anyway.
   // Skipping it beats spending the remaining budget and returning nothing.

@@ -39,14 +39,16 @@ export async function GET(request: NextRequest) {
   if (error) return fail(error.message, 500);
 
   const startedAt = Date.now();
-  const results: Array<{ id: string; ok: boolean; agent?: string; error?: string }> = [];
+  const results: Array<{ id: string; ok: boolean; agent?: string; moves?: number; error?: string }> = [];
   let skipped = 0;
 
   for (const p of profiles ?? []) {
     if (Date.now() - startedAt > RUN_BUDGET_MS) { skipped += 1; continue; }
     try {
       const r = await runDaily(p.id, { reason: 'cron' });
-      results.push({ id: p.id, ok: true, agent: r.brief.agent });
+      // moves is in the summary because it is the number that says whether the
+      // non-outbound half of the loop did anything last night.
+      results.push({ id: p.id, ok: true, agent: r.brief.agent, moves: r.jobs && 'written' in r.jobs ? r.jobs.written : 0 });
     } catch (e) {
       results.push({ id: p.id, ok: false, error: e instanceof Error ? e.message : String(e) });
     }

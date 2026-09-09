@@ -495,6 +495,51 @@ So the run carries a wall-clock deadline instead:
 
 Raise `COPILOT_SUPPLY_BUDGET_MS` only after raising the proxy's own timeout;
 otherwise it just moves where the request dies.
+## Moves and Jobs
+
+A **Move** is a finished piece of work with something concrete attached. A
+**Job** is what produces one.
+
+This exists because the app could make exactly one kind of action — a WhatsApp
+opener — and after weeks its own author had sent zero of them. Not a discipline
+problem: the only move on offer was not one he wanted to make. `MOVE_KINDS` is
+`earn | spend | build | fix | learn | meet | decide | avoid`, and outbound is
+one of eight.
+
+**The load-bearing rule is the artifact.** `isDeliverable()` in `moves.ts`
+drops any draft without one, because a row saying "you should contact them" is
+advice, and advice is the one thing a chat window already gives away. A row
+carrying the drafted message, the link or the file is work that was done. Same
+reasoning as a lesson with no URL not rendering.
+
+A Job is `SupplyAdapter` widened: `available()` says whether the sensor is
+connected, `run()` does the work and returns drafts. Register it in
+`jobs/index.ts`. `runJobs` upserts on `(profile_id, job, external_id)` with
+`ignoreDuplicates`, so a nightly rerun over the same source row produces no
+second card — and a Move already answered stays answered.
+
+### client_delivery — the first non-outbound job
+
+Somebody paid; nothing happened since. It reads Launchfly's own `sales` table,
+which lives in the same Supabase project the copilot already connects to, so it
+needed **no new integration** — the sensor was always there. That is the shape
+later jobs should copy: a real event in data the user already owns.
+
+It uses **no model**. The message is a template, so it is deterministic, free,
+under test, and cannot invent a purchase that did not happen. Two details that
+came out of looking at it in a browser rather than reading the JSX:
+
+- `greetingName()` addresses three-or-more-word names whole. First-naming
+  "Cebu Pest Pros" produced "Hi Cebu", which reads as a mistake to the one
+  person who matters.
+- It is deliberately **not** gated by `offerIsEmpty`. Invariant 1 exists
+  because an opener to a stranger written from a blank offer describes a
+  business the user never described; this message is grounded in a purchase
+  that actually happened.
+
+The cron reports `moves` per profile, and `copilot-cron.mjs` sums it into the
+one log line — the number that says whether the non-outbound half did anything.
+
 ## What the agent gets to read
 
 `buildContextPack` is the only place "more data in" becomes "more context for

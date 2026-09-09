@@ -10,6 +10,7 @@ import { diagnose, growthEdge, segmentOf, selectLesson, type DiagnoseInput } fro
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { stageOf } from './pipeline';
+import type { Move } from './types';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
@@ -78,6 +79,33 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
     db.from('copilot_outcomes').select('kind, opportunity_id').eq('profile_id', profileId).then((r) => (r.data ?? []) as DiagnoseInput['outcomes']),
   ]);
   return { opportunities, executions, outcomes };
+}
+
+/**
+ * Finished work waiting on a yes or no. Open only — a Move that was done or
+ * dismissed stays in the table as the record and leaves the screen, the same
+ * way an answered decision does.
+ *
+ * Degrades to an empty list when the table is not there yet: this ships before
+ * its migration is applied by hand, and an empty Moves section is a far better
+ * failure than a blank Today.
+ */
+export async function loadMoves(profileId: string, limit = 8): Promise<Move[]> {
+  const { data, error } = await copilotDb()
+    .from('copilot_moves')
+    .select('id, job, kind, headline, why, artifact, cost_label, status, created_at')
+    .eq('profile_id', profileId).eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []) as Move[];
+}
+
+export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {
+  await copilotDb().from('copilot_moves')
+    .update({ status, acted_at: new Date().toISOString() })
+    .eq('id', id).eq('profile_id', profileId);
+  await logEvent(profileId, 'move_answered', { move_id: id, status });
 }
 
 /**
@@ -343,7 +371,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, moves] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -365,6 +393,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     // ones are gone; everything else has a place on the board.
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved', 'acted']).order('score', { ascending: false }).limit(200).then((r) => (r.data ?? []) as Opportunity[]),
     loadDecisions(profileId),
+    loadMoves(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -430,6 +459,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     edge,
     sources,
     contextCount: ctxCount,
+    moves,
     needsBrief: !insight || insight.for_date !== today,
     // Configured to look, and nothing found. Deliberately not "has supply ever
     // run": an account whose matches were all dismissed is in the same

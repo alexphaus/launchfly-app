@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
-import { OFFER_TASK_TITLE, addTermToOffer, offerIsEmpty } from '@/lib/copilot/offer';
+import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
@@ -11,7 +11,7 @@ import YouView from './views/YouView';
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
     case 'you': return <div className="cp-sheet-embed"><YouView home={home} actions={actions} briefing={briefing} /></div>;
-    case 'demand': return <DemandSheet home={home} term={sheet.term} actions={actions} />;
+    case 'opening': return <OpeningSheet home={home} term={sheet.term} actions={actions} />;
     case 'capacity': return <CapacitySheet current={home.profile.capacity} onPick={actions.setCapacity} />;
     case 'action': return <ActionSheet home={home} id={sheet.id} actions={actions} />;
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
@@ -261,12 +261,18 @@ function WonSheet({ home, oppId, actions }: { home: HomeData; oppId: string; act
 /* ─── Signals ────────────────────────────────────────────────────────────── */
 
 /**
- * One demand term, and the two honest things to do about it: put it in the
- * offer, or stop matching the segments that keep asking for it. Dropping a
- * segment hides its businesses, so it asks twice.
+ * One opening, and the two honest things to do about it: name it in what you
+ * send, or stop matching the segments where it shows up. Dropping a segment
+ * hides its businesses, so it asks twice.
+ *
+ * What is deliberately NOT here any more: "add it to what you sell". The term
+ * is a condition a scraper saw at the prospect — "no website", "few reviews" —
+ * so appending it to `sells` described a business the user does not run.
+ * addOpeningToOffer puts it in `problem`, which is the field an opener leads
+ * with and the reason the waiting drafts get rewritten.
  */
-function DemandSheet({ home, term, actions }: { home: HomeData; term: string; actions: Actions }) {
-  const found = home.diagnosis.demand.find((x) => x.term === term);
+function OpeningSheet({ home, term, actions }: { home: HomeData; term: string; actions: Actions }) {
+  const found = home.diagnosis.openings.find((x) => x.term === term);
   const snap = useRef(found);
   if (found) snap.current = found;
   const t = snap.current;
@@ -275,7 +281,7 @@ function DemandSheet({ home, term, actions }: { home: HomeData; term: string; ac
   if (!t) return <p className="desc">Gone.</p>;
   const offer = home.profile.offer ?? {};
   const noOffer = offerIsEmpty(offer);
-  const already = (offer.sells ?? '').toLowerCase().includes(term.toLowerCase());
+  const already = (offer.problem ?? '').toLowerCase().includes(term.toLowerCase());
   const run = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
   const movement = t.trend === 'new' ? `${t.thisWeek} of them found this week, none before`
     : t.trend === 'rising' ? `${t.thisWeek} found this week against about ${t.prevWeeklyAvg} a week before`
@@ -284,11 +290,12 @@ function DemandSheet({ home, term, actions }: { home: HomeData; term: string; ac
   return (
     <>
       <div className="meta">
-        <span className="cp-chip ai">Market demand</span>
+        <span className="cp-chip ai">An opening</span>
         <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>
       </div>
       <h3 style={{ textTransform: 'capitalize' }}>{term}</h3>
-      <p className="desc">{t.count} real {t.count === 1 ? 'business' : 'businesses'} matched to you carry this — {movement}. Your offer does not mention it.</p>
+      <p className="desc">{t.count} real {t.count === 1 ? 'business' : 'businesses'} matched to you have this in common — {movement}. Nothing you send mentions it.</p>
+      <p className="cp-help">Read off their listings. Nobody asked for it — it is what you could sell against.</p>
 
       {t.segments.length > 0 && (
         <>
@@ -297,18 +304,20 @@ function DemandSheet({ home, term, actions }: { home: HomeData; term: string; ac
         </>
       )}
 
-      <div className="cp-subhead">Sell it</div>
-      <button className="cp-btn primary block" disabled={busy || already || noOffer} onClick={() => run(() => actions.saveOffer(addTermToOffer(offer, term)))}>
-        {already ? 'Already in your offer' : 'Add it to what you sell'}
+      <div className="cp-subhead">Name it</div>
+      <button className="cp-btn primary block" disabled={busy || already || noOffer} onClick={() => run(() => actions.saveOffer(addOpeningToOffer(offer, term)))}>
+        {already ? 'Already in your openers' : 'Add it to the problem you solve'}
       </button>
       <p className="cp-help">
-        {noOffer ? 'Set your offer first — there is nothing to add to yet.' : 'Appends to what you sell. Every waiting draft is rewritten to mention it, and the brief rebuilds.'}
+        {noOffer
+          ? 'Set your offer first — an opening is only worth naming next to what you sell.'
+          : 'Goes into the problem your offer says it fixes, not into what you sell. Every waiting draft is rewritten to lead with it, and the brief rebuilds.'}
       </p>
       {noOffer && <button className="cp-btn block" style={{ marginTop: 8 }} onClick={() => actions.openSheet({ kind: 'offer' })}>Set your offer</button>}
 
       {t.segments.length > 0 && (
         <>
-          <div className="cp-subhead">Or stop matching where it keeps coming up</div>
+          <div className="cp-subhead">Or stop matching where it shows up</div>
           {t.segments.map((s) => (
             confirmSeg === s.segment ? (
               <div key={s.segment} className="cp-btn-row" style={{ marginTop: 0, marginBottom: 8 }}>

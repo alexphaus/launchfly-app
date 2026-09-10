@@ -17,12 +17,16 @@ real screen rather than to a generic phone.
 | `Map.dc.html` | Every current section, and where it lands |
 
 What it argues, in short: `To send` renders on both Today and Pipeline with
-different counts, "send 10 drafts" appears three times on one screen, and
-Signals' "What they keep asking for" is rendering `pain_signals` — flags the
-scraper sets *about* each prospect (`no_website`, `few_reviews`, `low_rating`).
-Those are openings to sell against, not demand. That last one is a data bug, not
-a layout one, and it also feeds `growthEdge`, the weekly write and the agent's
-context pack.
+different counts, and "send 10 drafts" appears three times on one screen.
+
+It also argued that Signals' "What they keep asking for" was rendering
+`pain_signals` — flags the scraper sets *about* each prospect (`no_website`,
+`few_reviews`, `low_rating`) — which are openings to sell against, not demand.
+**That part is now fixed in the app**, not just in the mockup: the concept is
+`openings` end to end, the term goes into `offer.problem` instead of
+`offer.sells`, and `growthEdge` no longer returns "selling no website". See
+"Openings are not demand" in `docs/COPILOT.md`. `Working.dc.html` shows the
+renamed section, which is what shipped.
 
 To edit: change a `.dc.html`, re-run `seed-canvas.mjs` over all of them, and
 republish to the same artifact URL.

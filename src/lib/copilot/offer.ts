@@ -15,6 +15,8 @@ export const OFFER_TASK_DETAIL = 'Two lines: what you sell and the problem it so
 
 /** Longest `sells` we store. Raised from 120 so "Add to offer" has room to append. */
 export const SELLS_MAX = 240;
+/** Longest `problem` we store. Same reason: openings append to it. */
+export const PROBLEM_MAX = 240;
 
 const norm = (s?: string | null) => (s ?? '').trim().toLowerCase();
 
@@ -34,18 +36,26 @@ export function offerChangedMaterially(prev: Offer | null | undefined, next: Off
 }
 
 /**
- * Append a demand term to what the user sells, without duplicating something
- * already there and without blowing the column cap. Returns the offer unchanged
- * when the term is already present or would not fit.
+ * Append an opening to the PROBLEM the offer says it solves.
+ *
+ * Deliberately not `sells`, which is where this used to append. The terms it is
+ * called with are conditions a scraper observed about a prospect, so appending
+ * one to what the user sells produced "WhatsApp booking automations, no
+ * website" — an offer describing a business nobody runs. What they sell is
+ * unchanged; what they now say they fix is not.
+ *
+ * `problem` is a material field for offerChangedMaterially, so waiting drafts
+ * are rewritten from it — which is the whole point: the opening belongs in the
+ * first line of the next opener.
  */
-export function addTermToOffer(offer: Offer | null | undefined, term: string, max = SELLS_MAX): Offer {
+export function addOpeningToOffer(offer: Offer | null | undefined, term: string, max = PROBLEM_MAX): Offer {
   const base = offer ?? {};
   const t = term.trim();
   if (!t) return base;
-  const current = (base.sells ?? '').trim();
+  const current = (base.problem ?? '').trim();
   const parts = current.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.some((p) => p.toLowerCase() === t.toLowerCase())) return base;
   const next = current ? `${current}, ${t}` : t;
   if (next.length > max) return base;
-  return { ...base, sells: next };
+  return { ...base, problem: next };
 }

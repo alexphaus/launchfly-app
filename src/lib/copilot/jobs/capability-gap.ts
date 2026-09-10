@@ -1,7 +1,7 @@
 // src/lib/copilot/jobs/capability-gap.ts
 // The one thing to get better at, and the one thing to stop doing.
 //
-// growthEdge() already works this out from the funnel, the demand read and the
+// growthEdge() already works this out from the funnel, the openings read and the
 // decision record, and Signals renders it in a card at the bottom of a long
 // scroll. This job is the same finding delivered as a Move, with somewhere to
 // go attached — because "get better at writing openers" is advice, and advice

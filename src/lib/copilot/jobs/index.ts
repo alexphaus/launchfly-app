@@ -10,7 +10,7 @@ import { selectMoves, type MoveDraft } from '../moves';
 import { getProfile, logEvent } from '../store';
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
-import { demandGapJob } from './demand-gap';
+import { openingGapJob } from './opening-gap';
 import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
 import { runwayGuardJob } from './runway-guard';
@@ -27,7 +27,7 @@ import type { Job, JobContext } from './types';
  * earn / build   from the sales table: money already collected, and money left
  *                on the table by silence after it
  * decide / avoid / learn
- *                from the funnel, the demand read and the decision record —
+ *                from the funnel, the openings read and the decision record —
  *                measured here, never asked of a model
  * anything       from an external workflow, because searching for a flight,
  *                quoting three suppliers or fixing an n8n node is not work a
@@ -38,7 +38,7 @@ export const JOBS: Job[] = [
   clientDeliveryJob,
   repeatCustomerJob,
   runwayGuardJob,
-  demandGapJob,
+  openingGapJob,
   capabilityGapJob,
   remoteJob,
 ];

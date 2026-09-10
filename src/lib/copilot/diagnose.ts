@@ -14,8 +14,8 @@ import type { Execution, Offer, Opportunity, Outcome, OutcomeKind } from './type
 
 /** Minimum sends before a channel/source comparison is allowed to claim anything. */
 export const MIN_SAMPLE = 5;
-/** How many matches must mention a term before it counts as market demand. */
-export const MIN_DEMAND = 3;
+/** How many matches must share a condition before it is an opening and not a coincidence. */
+export const MIN_OPENING = 3;
 
 export interface FunnelStage {
   key: 'matched' | 'drafted' | 'sent' | 'replied' | 'meeting' | 'won';
@@ -29,7 +29,7 @@ export interface FunnelStage {
 }
 
 export interface Finding {
-  kind: 'bottleneck' | 'channel' | 'source' | 'demand' | 'outside' | 'insufficient';
+  kind: 'bottleneck' | 'channel' | 'source' | 'opening' | 'outside' | 'insufficient';
   /** One sentence, always citing the numbers behind it. */
   headline: string;
   detail: string;
@@ -56,9 +56,9 @@ export interface Diagnosis {
    * measurement in the app nothing else can make, so it gets its own field
    * rather than living only inside a finding.
    */
-  demand: DemandTerm[];
-  /** The same demand read, grouped by the segment the businesses belong to. */
-  segments: SegmentDemand[];
+  openings: Opening[];
+  /** The same read, grouped by the segment the businesses belong to. */
+  segments: SegmentOpenings[];
   /** True when nothing can honestly be concluded yet. */
   thin: boolean;
 }
@@ -66,9 +66,9 @@ export interface Diagnosis {
 /** Below this many in a week, a movement is noise and the label stays 'steady'. */
 export const MIN_WEEKLY = 2;
 
-export type DemandTrend = 'new' | 'rising' | 'steady' | 'falling';
+export type OpeningTrend = 'new' | 'rising' | 'steady' | 'falling';
 
-export interface DemandTerm {
+export interface Opening {
   term: string;
   /** Businesses (all time) whose listing carries this want. */
   count: number;
@@ -76,16 +76,16 @@ export interface DemandTerm {
   thisWeek: number;
   /** Mean per week over the previous four ISO weeks. */
   prevWeeklyAvg: number;
-  trend: DemandTrend;
+  trend: OpeningTrend;
   /** Where it shows up, most first. */
   segments: Array<{ segment: string; count: number }>;
 }
 
-export interface SegmentDemand {
+export interface SegmentOpenings {
   segment: string;
   businesses: number;
-  /** What the businesses in this segment keep wanting, most first. */
-  wants: Array<{ term: string; count: number }>;
+  /** What the businesses in this segment have in common, most first. */
+  openings: Array<{ term: string; count: number }>;
 }
 
 export interface DiagnoseInput {
@@ -93,7 +93,7 @@ export interface DiagnoseInput {
   executions: Array<Pick<Execution, 'approval_state' | 'channel' | 'opportunity_id'>>;
   outcomes: Array<Pick<Outcome, 'kind' | 'opportunity_id'>>;
   offer: Offer;
-  /** The user's own segments: a grouping key, never counted as demand. */
+  /** The user's own segments: a grouping key, never counted as openings. */
   targetSegments?: string[];
   now?: Date;
 }
@@ -197,18 +197,18 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     });
   }
 
-  // --- Demand the offer does not cover: terms recurring across real matches.
-  const demand = demandTrend(opportunities, offer, { now, targetSegments });
-  const segments = segmentDemand(opportunities, offer, targetSegments);
-  if (demand.length) {
-    const top = demand[0];
+  // --- Openings the offer does not name: conditions recurring across real matches.
+  const openings = openingTrend(opportunities, offer, { now, targetSegments });
+  const segments = segmentOpenings(opportunities, offer, targetSegments);
+  if (openings.length) {
+    const top = openings[0];
     findings.push({
-      kind: 'demand',
-      headline: `"${top.term}" appears in ${top.count} of your matches and is not in your offer.`,
-      detail: demand.length > 1
-        ? `Also recurring: ${demand.slice(1, 4).map((d) => `${d.term} (${d.count})`).join(', ')}. These are what the market in front of you keeps asking for.`
-        : 'That is what the market in front of you keeps asking for.',
-      action: `Either add it to your offer, or stop matching on segments that need it.`,
+      kind: 'opening',
+      headline: `${top.count} of your matches have "${top.term}" in common, and nothing you send names it.`,
+      detail: openings.length > 1
+        ? `Also common: ${openings.slice(1, 4).map((d) => `${d.term} (${d.count})`).join(', ')}. Conditions their listings show — not requests anyone made.`
+        : 'A condition their listings show — not a request anyone made.',
+      action: `Name it in the first line of your opener, or stop matching the segments where it shows up.`,
       topic: top.term,
     });
   }
@@ -236,7 +236,7 @@ export function diagnose(input: DiagnoseInput): Diagnosis {
     findings.push({ kind: 'insufficient', headline: blocker.headline, detail: 'Everything on this tab is computed from what you actually sent and what came back. Nothing here is estimated.', action: blocker.action });
   }
 
-  return { stages, bottleneck, findings, thin, outsideFunnel, demand, segments };
+  return { stages, bottleneck, findings, thin, outsideFunnel, openings, segments };
 }
 
 /**
@@ -329,7 +329,7 @@ export interface GrowthEdge {
   /** Evidence, from rows the user created. Every line carries a number. */
   because: string[];
   experiment: string;
-  source: 'decisions' | 'funnel' | 'demand';
+  source: 'decisions' | 'funnel' | 'openings';
 }
 
 /**
@@ -341,7 +341,7 @@ export interface GrowthEdge {
  * That is a real empty state, not the permanent one it replaced.
  */
 export function growthEdge(
-  d: Pick<Diagnosis, 'findings' | 'stages' | 'demand'>,
+  d: Pick<Diagnosis, 'findings' | 'stages' | 'openings'>,
   opts: { deadTopic?: { topic: string; count: number } | null } = {},
 ): GrowthEdge | null {
   // 1. Repeating something that does not work is the most expensive gap there
@@ -373,14 +373,16 @@ export function growthEdge(
     };
   }
 
-  // 3. Nothing leaking: the gap is what you cannot sell yet.
-  const top = d.demand[0];
+  // 3. Nothing leaking: the gap is the opening your openers never name.
+  //    Deliberately NOT "selling <term>": these terms are conditions a scraper
+  //    observed, so that phrasing rendered as "selling no website".
+  const top = d.openings[0];
   if (top) {
     return {
-      capability: `selling ${top.term}`,
-      because: [`${top.count} businesses in your matches want ${top.term} and your offer does not mention it.`],
-      experiment: `Spend two hours getting to where you can describe ${top.term} in one sentence a client would recognise, then add it to your offer and let the next drafts use it.`,
-      source: 'demand',
+      capability: `naming the "${top.term}" problem in your first line`,
+      because: [`${top.count} of your matches have ${top.term} in common and nothing you send mentions it.`],
+      experiment: `Put it in the opening line of the next ten. Keep the ask identical, so the comparison means something.`,
+      source: 'openings',
     };
   }
 
@@ -415,7 +417,7 @@ function weekKeyOffset(now: Date, n: number): string {
 /**
  * Which of the user's segments a business belongs to. Its own segment field
  * first, then service type, then a target segment mentioned in its category.
- * A grouping key — never counted as demand, because it is what the user chose.
+ * A grouping key — never counted as openings, because it is what the user chose.
  */
 export function segmentOf(o: DiagnoseInput['opportunities'][number], targetSegments: string[]): string | null {
   const d = (o.data ?? {}) as Record<string, unknown>;
@@ -429,11 +431,21 @@ export function segmentOf(o: DiagnoseInput['opportunities'][number], targetSegme
 }
 
 /**
- * What a business wants, from its tags and pain signals only. Segment, service
- * type and category are excluded: "pest control" appearing on twenty pest
+ * What is weak, manual or already being paid for at this business, read from its
+ * tags and pain signals only.
+ *
+ * These are OPENINGS, not demand, and the distinction is load-bearing. Every
+ * term here was written by a scraper ABOUT the prospect — `no_website`,
+ * `few_reviews`, `low_rating`, `running facebook ads` — and nobody asked for a
+ * single one of them. Read as demand, "no website" becomes something to add to
+ * what you sell, which is nonsense; read as an opening it is the sentence your
+ * first line is missing. Rendered under the heading "what they keep asking for"
+ * for months, which is how a real measurement became unreadable.
+ *
+ * Segment, service type and category are excluded: "pest control" appearing on twenty pest
  * control businesses is targeting, not the market asking for pest control.
  */
-export function wantsOf(o: DiagnoseInput['opportunities'][number], offer: Offer, targetSegments: string[] = []): Set<string> {
+export function openingsOf(o: DiagnoseInput['opportunities'][number], offer: Offer, targetSegments: string[] = []): Set<string> {
   const offerText = [offer.sells, offer.for_who, offer.problem].filter(Boolean).join(' ').toLowerCase();
   const segs = new Set(targetSegments.map(normTerm));
   const d = (o.data ?? {}) as Record<string, unknown>;
@@ -446,7 +458,7 @@ export function wantsOf(o: DiagnoseInput['opportunities'][number], offer: Offer,
       const t = normTerm(raw);
       if (t.length < 3 || STOPWORDS.has(t)) continue;
       if (offerText.includes(t)) continue;             // already part of what they sell
-      if (segs.has(t)) continue;                       // their own targeting, not demand
+      if (segs.has(t)) continue;                       // their own targeting, not an opening
       out.add(t);
     }
   }
@@ -456,16 +468,16 @@ export function wantsOf(o: DiagnoseInput['opportunities'][number], offer: Offer,
 /**
  * Terms recurring across real matches that the offer never mentions, with how
  * they moved: what was found this ISO week against the mean of the previous
- * four. Thresholds: MIN_DEMAND on the all-time count (weekly volume on a
+ * four. Thresholds: MIN_OPENING on the all-time count (weekly volume on a
  * 25-match plan is too small to gate on), MIN_WEEKLY before a movement earns a
  * label. `created_at` is when the match was FOUND, not when the market changed,
  * so copy that reads this should say "in matches found this week".
  */
-export function demandTrend(
+export function openingTrend(
   opportunities: DiagnoseInput['opportunities'],
   offer: Offer,
   opts: { now?: Date; targetSegments?: string[]; weeks?: number } = {},
-): DemandTerm[] {
+): Opening[] {
   const now = opts.now ?? new Date();
   const targetSegments = opts.targetSegments ?? [];
   const weeks = opts.weeks ?? 4;
@@ -478,10 +490,10 @@ export function demandTrend(
   const bySeg = new Map<string, Map<string, number>>();
 
   for (const o of opportunities) {
-    if (o.source_kind !== 'sourced') continue;        // only real matches carry real demand
+    if (o.source_kind !== 'sourced') continue;        // only real listings carry a real opening
     const week = o.created_at ? isoWeekKey(new Date(o.created_at)) : null;
     const seg = segmentOf(o, targetSegments);
-    for (const t of wantsOf(o, offer, targetSegments)) {
+    for (const t of openingsOf(o, offer, targetSegments)) {
       total.set(t, (total.get(t) ?? 0) + 1);
       if (week === thisKey) thisWeek.set(t, (thisWeek.get(t) ?? 0) + 1);
       else if (week && prevKeys.has(week)) prev.set(t, (prev.get(t) ?? 0) + 1);
@@ -500,11 +512,11 @@ export function demandTrend(
   const looked = [...thisWeek.values()].some((n) => n > 0);
 
   return [...total.entries()]
-    .filter(([, c]) => c >= MIN_DEMAND)
+    .filter(([, c]) => c >= MIN_OPENING)
     .map(([term, count]) => {
       const tw = thisWeek.get(term) ?? 0;
       const avg = Math.round(((prev.get(term) ?? 0) / weeks) * 100) / 100;
-      const trend: DemandTrend = !looked ? 'steady'
+      const trend: OpeningTrend = !looked ? 'steady'
         : tw >= MIN_WEEKLY && avg === 0 ? 'new'
         : tw >= MIN_WEEKLY && tw >= 1.5 * avg ? 'rising'
         : avg >= MIN_WEEKLY && tw <= 0.5 * avg ? 'falling'
@@ -518,35 +530,35 @@ export function demandTrend(
     .slice(0, 5);
 }
 
-/** The demand read turned around: per segment, what its businesses keep wanting. */
-export function segmentDemand(
+/** The same read turned around: per segment, what its businesses have in common. */
+export function segmentOpenings(
   opportunities: DiagnoseInput['opportunities'],
   offer: Offer,
   targetSegments: string[] = [],
-): SegmentDemand[] {
-  const groups = new Map<string, { businesses: number; wants: Map<string, number> }>();
+): SegmentOpenings[] {
+  const groups = new Map<string, { businesses: number; openings: Map<string, number> }>();
   for (const o of opportunities) {
     if (o.source_kind !== 'sourced') continue;
     const seg = segmentOf(o, targetSegments);
     if (!seg) continue;
-    const g = groups.get(seg) ?? { businesses: 0, wants: new Map<string, number>() };
+    const g = groups.get(seg) ?? { businesses: 0, openings: new Map<string, number>() };
     g.businesses += 1;
-    for (const t of wantsOf(o, offer, targetSegments)) g.wants.set(t, (g.wants.get(t) ?? 0) + 1);
+    for (const t of openingsOf(o, offer, targetSegments)) g.openings.set(t, (g.openings.get(t) ?? 0) + 1);
     groups.set(seg, g);
   }
   return [...groups.entries()]
     .map(([segment, g]) => ({
       segment,
       businesses: g.businesses,
-      wants: [...g.wants.entries()].map(([term, count]) => ({ term, count })).sort((a, b) => b.count - a.count).slice(0, 4),
+      openings: [...g.openings.entries()].map(([term, count]) => ({ term, count })).sort((a, b) => b.count - a.count).slice(0, 4),
     }))
     .sort((a, b) => b.businesses - a.businesses);
 }
 
-/** Terms recurring across real matches that the offer never mentions. All-time shape; see demandTrend. */
-export function demandGap(
+/** Terms recurring across real matches that the offer never mentions. All-time shape; see openingTrend. */
+export function openingGap(
   opportunities: DiagnoseInput['opportunities'],
   offer: Offer,
 ): Array<{ term: string; count: number }> {
-  return demandTrend(opportunities, offer).map(({ term, count }) => ({ term, count }));
+  return openingTrend(opportunities, offer).map(({ term, count }) => ({ term, count }));
 }

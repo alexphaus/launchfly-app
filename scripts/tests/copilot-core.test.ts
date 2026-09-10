@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { AI_REVIEW_MINUTES, MAX_PLAN_ITEMS, computeTypeAffinity, rankOpportunities, scoreOpportunity, selectPlan } from '../../src/lib/copilot/ranking';
 import { extractJson, normalizeBrief } from '../../src/lib/copilot/agent/schema';
 import { StarterAgent } from '../../src/lib/copilot/agent/starter';
-import { OFFER_TASK_TITLE, SELLS_MAX, addTermToOffer, offerChangedMaterially, offerIsEmpty } from '../../src/lib/copilot/offer';
+import { OFFER_TASK_TITLE, PROBLEM_MAX, SELLS_MAX, addOpeningToOffer, offerChangedMaterially, offerIsEmpty } from '../../src/lib/copilot/offer';
 import type { ContextPack } from '../../src/lib/copilot/types';
 
 process.env.COPILOT_SESSION_SECRET ||= 'test-secret';
@@ -351,7 +351,7 @@ async function multiUser() {
 multiUser().catch((e) => { console.error(e); process.exit(1); });
 
 // ─── Measured growth: diagnosis instead of invented skill levels ────────────
-import { MIN_SAMPLE, MIN_WEEKLY, demandGap, demandTrend, diagnose, isoWeekKey, segmentDemand, segmentOf, selectLesson } from '../../src/lib/copilot/diagnose';
+import { MIN_SAMPLE, MIN_WEEKLY, openingGap, openingTrend, diagnose, isoWeekKey, segmentOpenings, segmentOf, selectLesson } from '../../src/lib/copilot/diagnose';
 
 async function growth() {
   const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown>; created_at: string }> = {}) =>
@@ -428,25 +428,31 @@ async function growth() {
     opp('t4', { data: { pain_signals: ['no_website'] } }),
     opp('t5', { source_kind: 'inferred', data: { tags: ['voice ai', 'voice ai', 'voice ai'] } }),  // inferred ignored
   ];
-  const gap = demandGap(withTags, { sells: 'brand identity systems' });
+  const gap = openingGap(withTags, { sells: 'brand identity systems' });
   assert.equal(gap[0].term, 'voice ai');
   assert.equal(gap[0].count, 3, 'counted once per opportunity, inferred rows excluded');
-  assert.ok(!gap.some((g) => g.term === 'no website'), 'below MIN_DEMAND');
+  assert.ok(!gap.some((g) => g.term === 'no website'), 'below MIN_OPENING');
   // A term already in the offer is not a gap.
-  assert.equal(demandGap(withTags, { sells: 'voice ai intake systems' }).some((g) => g.term === 'voice ai'), false);
+  assert.equal(openingGap(withTags, { sells: 'voice ai intake systems' }).some((g) => g.term === 'voice ai'), false);
 
-  const demandDiag = diagnose({ opportunities: withTags, executions: [], outcomes: [], offer: { sells: 'brand identity' } });
-  const df = demandDiag.findings.find((f) => f.kind === 'demand')!;
-  assert.match(df.headline, /"voice ai" appears in 3 of your matches and is not in your offer/);
+  const openingDiag = diagnose({ opportunities: withTags, executions: [], outcomes: [], offer: { sells: 'brand identity' } });
+  const df = openingDiag.findings.find((f) => f.kind === 'opening')!;
+  assert.match(df.headline, /3 of your matches have "voice ai" in common, and nothing you send names it/);
   assert.equal(df.topic, 'voice ai');
   // With one term the detail must not just restate the headline.
   assert.doesNotMatch(df.detail, /^voice ai \(3\)/, 'single term is not echoed back');
-  assert.match(df.detail, /That is what the market/);
+  // An opening is a condition observed at the prospect. Nothing in this finding
+  // may claim anyone asked for it — that framing is the bug this read had for
+  // months, and it is the one thing a rewrite could quietly put back.
+  assert.match(df.detail, /not a request anyone made/);
+  for (const text of [df.headline, df.detail, df.action ?? '']) {
+    assert.doesNotMatch(text, /asking for|asked for|wants|demand/i, `no demand language: ${text}`);
+  }
   const twoTerms = diagnose({ opportunities: [...withTags, opp('t6', { data: { tags: ['seo', 'voice ai'] } }), opp('t7', { data: { tags: ['seo'] } }), opp('t8', { data: { tags: ['seo'] } })], executions: [], outcomes: [], offer: { sells: 'brand identity' } });
-  assert.match(twoTerms.findings.find((f) => f.kind === 'demand')!.detail, /Also recurring: seo \(3\)/, 'extra terms listed only when they exist');
+  assert.match(twoTerms.findings.find((f) => f.kind === 'opening')!.detail, /Also common: seo \(3\)/, 'extra terms listed only when they exist');
 
   // 6. Every rate shown is real: no finding may contain an uncomputed number.
-  for (const d of [none, big, fair, src, demandDiag]) {
+  for (const d of [none, big, fair, src, openingDiag]) {
     for (const s of d.stages) {
       assert.ok(s.rate === null || (s.rate >= 0 && s.rate <= 1), 'rates are fractions or null, never invented');
     }
@@ -500,13 +506,13 @@ async function growth() {
   const deadEnd = { kind: 'lesson', url: null };          // written before a url was required
   const skill = { kind: 'skill', url: null };             // replaced by the diagnosis; never rendered
 
-  // demandDiag carries a demand finding with a topic, so a lesson is allowed.
-  assert.ok(demandDiag.findings.some((f) => f.topic), 'the fixture really does name a stuck point');
-  assert.deepEqual(selectLesson([live], demandDiag), [live], 'a real lesson shows when something is stuck');
-  assert.deepEqual(selectLesson([deadEnd], demandDiag), [], 'a lesson with nothing to open is never shown');
-  assert.deepEqual(selectLesson([deadEnd, live], demandDiag), [live], 'the dead row does not consume the single slot');
-  assert.deepEqual(selectLesson([skill, live], demandDiag), [live], 'skills are not lessons');
-  assert.equal(selectLesson([live, live], demandDiag).length, 1, 'at most one');
+  // openingDiag carries a demand finding with a topic, so a lesson is allowed.
+  assert.ok(openingDiag.findings.some((f) => f.topic), 'the fixture really does name a stuck point');
+  assert.deepEqual(selectLesson([live], openingDiag), [live], 'a real lesson shows when something is stuck');
+  assert.deepEqual(selectLesson([deadEnd], openingDiag), [], 'a lesson with nothing to open is never shown');
+  assert.deepEqual(selectLesson([deadEnd, live], openingDiag), [live], 'the dead row does not consume the single slot');
+  assert.deepEqual(selectLesson([skill, live], openingDiag), [live], 'skills are not lessons');
+  assert.equal(selectLesson([live, live], openingDiag).length, 1, 'at most one');
 
   // Nothing stuck: the honest answer is no lesson at all, not a stale one.
   assert.equal(none.findings.some((f) => f.topic), false);
@@ -540,18 +546,18 @@ async function growth() {
     tagged('off', 'landing pages', thisWk),
   ];
   trendOpps[trendOpps.length - 3] = { ...trendOpps[trendOpps.length - 3], source_kind: 'inferred' as const };
-  const tr = demandTrend(trendOpps, { sells: 'landing pages' }, { now, targetSegments: ['pest control'] });
+  const tr = openingTrend(trendOpps, { sells: 'landing pages' }, { now, targetSegments: ['pest control'] });
   const by = Object.fromEntries(tr.map((t) => [t.term, t]));
   assert.equal(by['voice ai'].trend, 'new'); assert.equal(by['voice ai'].count, 3, 'the inferred row did not count');
   assert.equal(by['facebook ads'].trend, 'rising'); assert.equal(by['facebook ads'].thisWeek, 4); assert.equal(by['facebook ads'].prevWeeklyAvg, 1);
   assert.equal(by['renovation'].trend, 'steady', `one a week is below MIN_WEEKLY=${MIN_WEEKLY} on both sides`);
   assert.equal(by['no website'].trend, 'falling'); assert.equal(by['no website'].thisWeek, 0); assert.equal(by['no website'].prevWeeklyAvg, 3);
-  assert.equal(by['landing pages'], undefined, 'a term already in the offer is not demand');
-  assert.equal(by['pest control'], undefined, 'a target segment is targeting, not demand');
+  assert.equal(by['landing pages'], undefined, 'a term already in the offer is not openings');
+  assert.equal(by['pest control'], undefined, 'a target segment is targeting, not openings');
   assert.ok(tr.length <= 5, 'top five only');
   assert.equal(tr[0].term, 'no website', 'sorted by all-time count first');
   // The old shape still works for callers that only want counts.
-  assert.deepEqual(demandGap(trendOpps, { sells: 'landing pages' }).map((g) => g.term), tr.map((t) => t.term));
+  assert.deepEqual(openingGap(trendOpps, { sells: 'landing pages' }).map((g) => g.term), tr.map((t) => t.term));
 
   // 12. Per-segment: segment, then service_type, then a target segment named in category.
   const seg = [
@@ -566,16 +572,16 @@ async function growth() {
   assert.equal(segmentOf(seg[2], []), 'staycation');
   assert.equal(segmentOf(seg[3], ['plumbing']), 'plumbing', 'a target segment found inside the category');
   assert.equal(segmentOf(seg[4], ['plumbing']), null);
-  const sd = segmentDemand(seg, { sells: 'landing pages' }, ['plumbing']);
+  const sd = segmentOpenings(seg, { sells: 'landing pages' }, ['plumbing']);
   assert.deepEqual(sd.map((s) => s.segment), ['pest control', 'staycation', 'plumbing'], 'most businesses first; inferred and ungrouped rows excluded');
   assert.equal(sd[0].businesses, 2);
-  assert.deepEqual(sd[0].wants[0], { term: 'facebook ads', count: 2 });
-  assert.ok(!sd[0].wants.some((w) => w.term === 'pest control'), 'a segment never wants itself');
+  assert.deepEqual(sd[0].openings[0], { term: 'facebook ads', count: 2 });
+  assert.ok(!sd[0].openings.some((w) => w.term === 'pest control'), 'a segment is never its own opening');
   // And a term's own segment list points back the same way.
-  assert.deepEqual(demandTrend(seg, { sells: 'landing pages' }, { now, targetSegments: ['plumbing'] }).find((t) => t.term === 'facebook ads')!.segments[0], { segment: 'pest control', count: 2 });
+  assert.deepEqual(openingTrend(seg, { sells: 'landing pages' }, { now, targetSegments: ['plumbing'] }).find((t) => t.term === 'facebook ads')!.segments[0], { segment: 'pest control', count: 2 });
 
-  // 13. The lesson gate still sees the demand finding with its topic.
-  assert.ok(diagnose({ opportunities: trendOpps, executions: [], outcomes: [], offer: { sells: 'landing pages' }, now }).findings.some((f) => f.kind === 'demand' && f.topic));
+  // 13. The lesson gate still sees the opening finding with its topic.
+  assert.ok(diagnose({ opportunities: trendOpps, executions: [], outcomes: [], offer: { sells: 'landing pages' }, now }).findings.some((f) => f.kind === 'opening' && f.topic));
 
   console.log('copilot-core: measured-growth checks passed');
 }
@@ -689,15 +695,23 @@ async function sending() {
   assert.equal(offerChangedMaterially({}, { sells: 'x' }), true, 'first ever offer is material');
   assert.equal(offerChangedMaterially(undefined, {}), false, 'blank to blank is nothing');
 
-  // 3. Adding a demand term to what you sell: appended, deduped, capped.
-  assert.equal(addTermToOffer({ sells: 'Booking flows' }, 'facebook ads').sells, 'Booking flows, facebook ads');
-  assert.equal(addTermToOffer({}, 'facebook ads').sells, 'facebook ads', 'first term stands alone');
-  assert.equal(addTermToOffer({ sells: 'Booking flows, facebook ads' }, 'Facebook Ads').sells, 'Booking flows, facebook ads', 'case-insensitive dedupe');
-  assert.equal(addTermToOffer({ sells: 'x' }, '   ').sells, 'x', 'blank term is a no-op');
-  const long = { sells: 'a'.repeat(SELLS_MAX - 5) };
-  assert.equal(addTermToOffer(long, 'facebook ads').sells, long.sells, 'never overflows the column');
-  const untouched = { sells: 'x', problem: 'p' };
-  assert.deepEqual(addTermToOffer(untouched, 'y'), { sells: 'x, y', problem: 'p' }, 'other fields survive');
+  // 3. Adding an opening: appended, deduped, capped — and only ever to `problem`.
+  //
+  //    The terms are conditions a scraper observed at the prospect. This used to
+  //    append them to `sells`, which turned "WhatsApp automations" into
+  //    "WhatsApp automations, no website" — an offer describing a business the
+  //    user does not run. What they sell is not this function's to touch.
+  assert.equal(addOpeningToOffer({ problem: 'ads with no page' }, 'facebook ads').problem, 'ads with no page, facebook ads');
+  assert.equal(addOpeningToOffer({}, 'facebook ads').problem, 'facebook ads', 'first term stands alone');
+  assert.equal(addOpeningToOffer({ problem: 'ads, facebook ads' }, 'Facebook Ads').problem, 'ads, facebook ads', 'case-insensitive dedupe');
+  assert.equal(addOpeningToOffer({ problem: 'x' }, '   ').problem, 'x', 'blank term is a no-op');
+  const long = { problem: 'a'.repeat(PROBLEM_MAX - 5) };
+  assert.equal(addOpeningToOffer(long, 'facebook ads').problem, long.problem, 'never overflows the column');
+  const untouched = { sells: 'landing pages', problem: 'p' };
+  assert.deepEqual(addOpeningToOffer(untouched, 'no website'), { sells: 'landing pages', problem: 'p, no website' }, 'what they sell is never touched');
+  assert.equal(addOpeningToOffer({ sells: 'landing pages' }, 'no website').sells, 'landing pages', 'not even when problem is blank');
+  // A material change, so the waiting drafts are rewritten to lead with it.
+  assert.equal(offerChangedMaterially({ sells: 'x' }, addOpeningToOffer({ sells: 'x' }, 'no website')), true);
 
   console.log('copilot-core: offer-gate checks passed');
 }
@@ -758,21 +772,26 @@ async function weekly() {
   const term = (t: string, count: number, trend: 'new' | 'rising' | 'steady' | 'falling', seg: string, thisWeek = 2) =>
     ({ term: t, count, thisWeek, prevWeeklyAvg: 1, trend, segments: [{ segment: seg, count }] });
   const d = {
-    demand: [term('facebook ads', 40, 'rising', 'pest control'), term('renovation', 36, 'steady', 'staycation'), term('whatsapp for sales', 30, 'new', 'plumbing'), term('extra', 5, 'steady', 'x')],
+    openings: [term('facebook ads', 40, 'rising', 'pest control'), term('renovation', 36, 'steady', 'staycation'), term('whatsapp for sales', 30, 'new', 'plumbing'), term('extra', 5, 'steady', 'x')],
     segments: [{ segment: 'pest control', businesses: 18, wants: [] }, { segment: 'staycation', businesses: 12, wants: [] }],
   };
   const w = composeWeekly(d, { sent: 4, replies: 1 })!;
-  assert.match(w.push.title, /^3 things 30 businesses in your segments keep asking for$/);
+  assert.match(w.push.title, /^3 things 30 businesses in your segments have in common$/);
+  // The weekly read goes out as a push. It is the widest-reach copy in the app,
+  // so it is the last place that should call an observed condition a request.
+  assert.doesNotMatch(w.push.title, /asking for|wants|demand/i);
+  assert.match(w.body, /not requests anyone made/);
+  assert.doesNotMatch(w.body, /add one to what you sell/i, 'an opening never goes into what you sell');
   assert.match(w.body, /1\. facebook ads \(40, mostly pest control — rising\)/);
   assert.match(w.body, /3\. whatsapp for sales \(30, mostly plumbing — new this week\)/);
   assert.doesNotMatch(w.body, /extra/, 'only the top three');
   assert.match(w.body, /You sent 4 and got 1 reply/);
   assert.equal(w.push.body, 'facebook ads · renovation · whatsapp for sales');
   assert.match(composeWeekly(d, { sent: 0, replies: 0 })!.body, /Nothing has gone out yet/);
-  assert.match(composeWeekly({ demand: d.demand.slice(0, 1), segments: d.segments }, { sent: 0, replies: 0 })!.push.title, /^1 thing 30 businesses/);
+  assert.match(composeWeekly({ openings: d.openings.slice(0, 1), segments: d.segments }, { sent: 0, replies: 0 })!.push.title, /^1 thing 30 businesses/);
 
   // 3. Nothing recurring means no read — not "0 things".
-  assert.equal(composeWeekly({ demand: [], segments: d.segments }, { sent: 4, replies: 1 }), null);
+  assert.equal(composeWeekly({ openings: [], segments: d.segments }, { sent: 4, replies: 1 }), null);
   assert.equal(typeof WEEKLY_EYEBROW, 'string');
 
   console.log('copilot-core: weekly-signals checks passed');
@@ -1188,12 +1207,12 @@ async function edge() {
     { key: 'sent' as const, label: 'Sent', count: 0, rate: 0 },
   ];
   const bottleneck = (label: string) => ({ kind: 'bottleneck' as const, headline: `Drafted → ${label} is where you lose most: 0 of 33 (0%).`, detail: '' });
-  const demand = [{ term: 'running facebook ads', count: 40, thisWeek: 0, prevWeeklyAvg: 3, trend: 'steady' as const, segments: [] }];
+  const openings = [{ term: 'running facebook ads', count: 40, thisWeek: 0, prevWeeklyAvg: 3, trend: 'steady' as const, segments: [] }];
 
   // 1. The live account's exact state. The old gate produced nothing here,
   //    because BOTTLENECK_TOPIC had no entry for 'sent' — the most common
   //    bottleneck in this product got the emptiest answer.
-  const stuck = growthEdge({ findings: [bottleneck('Sent')], stages, demand });
+  const stuck = growthEdge({ findings: [bottleneck('Sent')], stages, openings });
   assert.equal(stuck?.source, 'funnel');
   assert.match(stuck!.capability, /sending what you have already written/);
   assert.ok(stuck!.because.some((b) => /\d/.test(b)), 'evidence cites a number');
@@ -1205,20 +1224,26 @@ async function edge() {
 
   // 2. Repeating something that does not work outranks the funnel: only the
   //    decision record can see it, and it is the more expensive gap.
-  const dead = growthEdge({ findings: [bottleneck('Sent')], stages, demand }, { deadTopic: { topic: 'lead volume', count: 4 } });
+  const dead = growthEdge({ findings: [bottleneck('Sent')], stages, openings }, { deadTopic: { topic: 'lead volume', count: 4 } });
   assert.equal(dead?.source, 'decisions');
   assert.match(dead!.capability, /lead volume/);
   assert.match(dead!.because[0], /4 calls about lead volume/);
   assert.match(dead!.experiment, /Stop repeating it/);
 
-  // 3. Nothing leaking: the gap is what the market wants and you cannot sell.
-  const gap = growthEdge({ findings: [], stages, demand });
-  assert.equal(gap?.source, 'demand');
-  assert.match(gap!.capability, /selling running facebook ads/);
-  assert.match(gap!.because[0], /40 businesses/);
+  // 3. Nothing leaking: the gap is the opening your openers never name.
+  //    Never "selling <term>" — these terms are conditions a scraper observed,
+  //    so that phrasing rendered as "selling running facebook ads".
+  const gap = growthEdge({ findings: [], stages, openings });
+  assert.equal(gap?.source, 'openings');
+  assert.match(gap!.capability, /naming the "running facebook ads" problem/);
+  assert.doesNotMatch(gap!.capability, /^selling /);
+  assert.match(gap!.because[0], /40 of your matches have running facebook ads in common/);
+  for (const line of [gap!.capability, gap!.experiment, ...gap!.because]) {
+    assert.doesNotMatch(line, /asking for|asked for|\bwants\b/i, `no demand language: ${line}`);
+  }
 
   // 4. A brand-new account is the only real empty state.
-  assert.equal(growthEdge({ findings: [], stages: [], demand: [] }), null);
+  assert.equal(growthEdge({ findings: [], stages: [], openings: [] }), null);
 
   // 5. Every stage names a capability and an experiment — no stage may fall
   //    through to silence the way 'sent' used to.
@@ -1229,7 +1254,7 @@ async function edge() {
       { key: 'meeting' as const, label: 'Meeting', count: 1, rate: 0.5 },
       { key: 'won' as const, label: 'Won', count: 1, rate: 1 },
     ];
-    const e = growthEdge({ findings: [bottleneck(label)], stages: all, demand });
+    const e = growthEdge({ findings: [bottleneck(label)], stages: all, openings });
     assert.ok(e, `${label} must produce an edge`);
     assert.ok(e!.capability.length > 3 && e!.experiment.length > 20, `${label} needs a real capability and experiment`);
   }
@@ -1348,9 +1373,14 @@ async function conversations() {
 
   // 4. A field the agent is never told about is a field it ignores. These three
   //    were in the database for months and reached nothing.
-  for (const section of ['REPLIES:', 'SENT:', 'DEMAND:']) {
+  for (const section of ['REPLIES:', 'SENT:', 'OPENINGS:']) {
     assert.ok(PROMPT.includes(section), `${section} must stay in the system prompt`);
   }
+  // The pack's openings are conditions a scraper saw at the prospect. A model
+  // told they are demand writes "clients are asking for no website" into a real
+  // stranger's inbox, so the prompt has to forbid it in as many words.
+  assert.match(PROMPT, /NOBODY ASKED FOR ANY OF THEM/);
+  assert.match(PROMPT, /never suggest adding one to what they sell/);
 
   console.log('copilot-core: conversation checks passed');
 }
@@ -1457,7 +1487,7 @@ async function triage() {
     Array.from({ length: n }, () => ({ event_type: 'triage_answered', payload: { segment, action } }));
 
   // 1. A rate needs a sample. Two swipes reordering the whole pile is noise
-  //    dressed as learning — the same floor MIN_DEMAND applies in diagnose.ts.
+  //    dressed as learning — the same floor MIN_OPENING applies in diagnose.ts.
   assert.equal(segmentKeepRate(ev('dentist', 'draft', MIN_TRIAGE_SAMPLE - 1)).size, 0);
   const rates = segmentKeepRate([...ev('dentist', 'draft', 5), ...ev('spa', 'skip', 5), ...ev('spa', 'draft', 5)]);
   assert.equal(rates.get('dentist'), 1);
@@ -1519,8 +1549,8 @@ async function jobSensors() {
   assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['capability_gap']);
 
   // Each sensor is independent: turning one on must not turn another on.
-  assert.ok((await availableJobs(profile({ linked_business_id: null, target_segments: ['dentists'] }))).includes('demand_gap'));
-  assert.ok(!(await availableJobs(profile())).includes('demand_gap'), 'no targeting, nothing to read a demand out of');
+  assert.ok((await availableJobs(profile({ linked_business_id: null, target_segments: ['dentists'] }))).includes('opening_gap'));
+  assert.ok(!(await availableJobs(profile())).includes('opening_gap'), 'no targeting, nothing to read an opening out of');
   assert.ok((await availableJobs(profile({ finance: { cash: 9000, monthly_burn: 3000 } }))).includes('runway_guard'));
   assert.ok(!(await availableJobs(profile({ finance: { cash: 9000 } }))).includes('runway_guard'), 'cash without burn is not a runway');
   assert.ok(!(await availableJobs(profile())).includes('remote'), 'the external seam is off until it is configured');
@@ -1548,7 +1578,7 @@ async function jobSensors() {
   // rather than left to whoever edits index.ts next.
   const kinds = new Set(JOBS.map((j) => j.key));
   assert.equal(kinds.size, JOBS.length, 'two jobs sharing a key would collide on every write');
-  for (const key of ['client_delivery', 'repeat_customer', 'runway_guard', 'demand_gap', 'capability_gap', 'remote']) {
+  for (const key of ['client_delivery', 'repeat_customer', 'runway_guard', 'opening_gap', 'capability_gap', 'remote']) {
     assert.ok(kinds.has(key), `${key} is registered`);
   }
 
@@ -1561,40 +1591,57 @@ jobSensors().catch((e) => { console.error(e); process.exit(1); });
 // Six kinds of leverage, and none of them allowed to be advice
 // ─────────────────────────────────────────────────────────────────────────────
 import { KIND_ORDER, MOVE_KINDS, isDeliverable, orderMoves } from '../../src/lib/copilot/moves';
-import { MIN_GAP_BUSINESSES, demandGapMove } from '../../src/lib/copilot/jobs/demand-gap';
+import { MIN_GAP_BUSINESSES, openingMove } from '../../src/lib/copilot/jobs/opening-gap';
+import { addOpeningToOffer } from '../../src/lib/copilot/offer';
 import { capabilityMove, tutorialSearch } from '../../src/lib/copilot/jobs/capability-gap';
 import { RUNWAY_ALERT_MONTHS, coverPlan, hasFinance, runwayMove } from '../../src/lib/copilot/jobs/runway-guard';
 import { DORMANT_MIN_DAYS, dormantSales, repeatMessage, repeatMove } from '../../src/lib/copilot/jobs/repeat-customer';
 import { normalizeRemoteMove, profileForRemote } from '../../src/lib/copilot/jobs/remote';
 import { memoSense } from '../../src/lib/copilot/jobs/sense';
-import type { DemandTerm, GrowthEdge } from '../../src/lib/copilot/diagnose';
+import type { Opening, GrowthEdge } from '../../src/lib/copilot/diagnose';
 import type { SaleRow } from '../../src/lib/copilot/jobs/client-delivery';
 import type { Metrics } from '../../src/lib/copilot/types';
 
 async function leverage() {
   const now = new Date('2026-09-09T02:00:00Z');
-  const term = (over: Partial<DemandTerm> = {}): DemandTerm =>
+  const term = (over: Partial<Opening> = {}): Opening =>
     ({ term: 'online booking', count: 7, thisWeek: 2, prevWeeklyAvg: 1, trend: 'rising', segments: [{ segment: 'spas', count: 5 }], ...over });
 
-  // --- demand gap: the measurement Signals draws as a chart, delivered as a decision
+  // --- opening gap: an observed condition, and where the line is allowed to go
   {
-    const m = demandGapMove({ offer: { sells: 'WhatsApp automations' } }, term());
-    assert.ok(m, 'a gap with a line to add is a Move');
+    const offer = { sells: 'WhatsApp automations', problem: 'enquiries arrive after hours' };
+    const m = openingMove({ offer }, term());
+    assert.ok(m, 'an opening with a line to add is a Move');
     assert.equal(m.kind, 'decide');
-    assert.equal(m.external_id, 'gap:online booking', 'once per term, ever — a gap still open tomorrow is the same gap');
+    assert.equal(m.external_id, 'opening:online booking', 'once per term, ever — an opening still open tomorrow is the same one');
     assert.ok(m.why[0].includes('7'), 'the evidence cites the count, not an adjective');
-    assert.ok(m.artifact.value.includes('WhatsApp automations, online booking'), 'the edit arrives written');
+    assert.ok(m.artifact.value.includes('enquiries arrive after hours, online booking'), 'the edit arrives written');
     assert.ok(m.artifact.value.includes('spas'), 'and names the segment to drop if the answer is no');
     assert.ok(isDeliverable(m));
 
-    // Already sold: there is no line to add, so there is no decision to make.
-    assert.equal(demandGapMove({ offer: { sells: 'online booking' } }, term()), null);
+    // THE BUG THIS JOB SHIPPED WITH. The terms are conditions a scraper saw at
+    // the prospect — "no website", "running facebook ads". Appending one to
+    // what the user SELLS describes a business nobody runs, so the line is only
+    // ever allowed into `problem`.
+    const written = addOpeningToOffer(offer, 'no website');
+    assert.equal(written.sells, 'WhatsApp automations', 'what they sell is never touched');
+    assert.equal(written.problem, 'enquiries arrive after hours, no website');
+    const scraped = openingMove({ offer }, term({ term: 'no website' }))!;
+    assert.ok(!scraped.artifact.value.includes('WhatsApp automations, no website'), 'never appended to sells');
+    assert.match(scraped.artifact.value, /What you sell does not change/);
+    assert.match(scraped.artifact.value, /nobody asked for no website/i);
+    for (const line of [scraped.headline, ...scraped.why]) {
+      assert.doesNotMatch(line, /asking for|asked for|\bwant\b|\bwants\b/i, `no demand language: ${line}`);
+    }
+
+    // Already named: there is no line to add, so there is no decision to make.
+    assert.equal(openingMove({ offer: { ...offer, problem: 'online booking' } }, term()), null);
     // A term that will not fit the column leaves the offer unchanged, and an
     // unchanged offer is not an artifact.
-    assert.equal(demandGapMove({ offer: { sells: 'x'.repeat(238) } }, term()), null);
-    // A blank offer still works: the term becomes the whole offer.
-    assert.equal(demandGapMove({ offer: {} }, term())?.artifact.value.startsWith('online booking'), true);
-    assert.ok(MIN_GAP_BUSINESSES >= 3, 'two businesses is a coincidence, not a market');
+    assert.equal(openingMove({ offer: { ...offer, problem: 'x'.repeat(238) } }, term()), null);
+    // A blank problem still works: the term becomes the whole problem line.
+    assert.equal(openingMove({ offer: { sells: 'x' } }, term())?.artifact.value.startsWith('online booking'), true);
+    assert.ok(MIN_GAP_BUSINESSES >= 3, 'two businesses is a coincidence, not a pattern');
   }
 
   // --- capability gap: one input, two opposite instructions

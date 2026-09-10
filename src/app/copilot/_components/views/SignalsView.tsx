@@ -5,7 +5,7 @@
 // data the tab says so rather than filling the space.
 
 import { MIN_REVIEW, VERDICT_LABEL, decisionReview, movedBy, verdictOf } from '@/lib/copilot/decision';
-import type { DemandTrend, Finding, FunnelStage } from '@/lib/copilot/diagnose';
+import type { OpeningTrend, Finding, FunnelStage } from '@/lib/copilot/diagnose';
 import type { HomeData } from '@/lib/copilot/types';
 import { shortDay } from '../format';
 import type { Actions } from '../shared';
@@ -14,12 +14,12 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
   bottleneck: 'Where you lose most',
   channel: 'Channel',
   source: 'Source',
-  demand: 'Market demand',
+  opening: 'Where the opening is',
   outside: 'Logged outside the app',
   insufficient: 'Not enough data yet',
 };
 
-export const TREND_LABEL: Record<DemandTrend, string> = { new: 'New this week', rising: 'Rising', steady: 'Steady', falling: 'Fading' };
+export const TREND_LABEL: Record<OpeningTrend, string> = { new: 'New this week', rising: 'Rising', steady: 'Steady', falling: 'Fading' };
 
 export default function SignalsView({ home, actions }: { home: HomeData; actions: Actions }) {
   const d = home.diagnosis;
@@ -27,8 +27,8 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
   const lesson = home.lessons[0];
   const edge = home.edge;
   const sourced = home.metrics.pipeline.sourced;
-  // The demand section IS the demand finding, so the card would repeat it.
-  const findings = d.findings.filter((f) => f.kind !== 'demand');
+  // The openings section IS the opening finding, so the card would repeat it.
+  const findings = d.findings.filter((f) => f.kind !== 'opening');
   const offerSet = !!home.profile.offer?.sells;
   // The record of calls this app made. Not advice — the ledger read back.
   const log = home.decisionLog;
@@ -43,19 +43,19 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
         </div>
       )}
 
-      <div className="cp-section"><span className="lead">What they keep asking for</span><span className="count">{sourced ? `across ${sourced} real matches` : 'no real matches yet'}</span></div>
-      {d.demand.length ? (
+      <div className="cp-section"><span className="lead">Where the opening is</span><span className="count">{sourced ? `across ${sourced} real matches` : 'no real matches yet'}</span></div>
+      {d.openings.length ? (
         <>
           <div className="cp-list">
-            {d.demand.map((t) => (
-              <button key={t.term} className="cp-drow" onClick={() => actions.openSheet({ kind: 'demand', term: t.term })}>
+            {d.openings.map((t) => (
+              <button key={t.term} className="cp-drow" onClick={() => actions.openSheet({ kind: 'opening', term: t.term })}>
                 <div className="cp-dmain">
                   <div className="t">{t.term}</div>
                   {/* "Steady" is the default, and a chip on every row that reads
                       the same is decoration. Only a move earns one. */}
                   {t.trend !== 'steady' && <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>}
                 </div>
-                <div className="cp-dbar"><div className="cp-dfill" style={{ width: `${Math.round((t.count / d.demand[0].count) * 100)}%` }} /></div>
+                <div className="cp-dbar"><div className="cp-dfill" style={{ width: `${Math.round((t.count / d.openings[0].count) * 100)}%` }} /></div>
                 <div className="cp-dsub">
                   {t.count} {t.count === 1 ? 'business' : 'businesses'}
                   {t.thisWeek > 0 && ` · ${t.thisWeek} found this week`}
@@ -65,14 +65,15 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
             ))}
           </div>
           <div className="cp-note">
-            Recurring in your matches and missing from your offer. Tap one to add it, or to stop matching the segments that want it.
-            {!offerSet && ' Set your offer first and these become the gap between it and the market.'}
+            What your matches have in common that nothing you send names — read off their listings, not asked for by anyone.
+            Tap one to put it in your openers, or to stop matching the segments where it shows up.
+            {!offerSet && ' Set your offer first; an opening is only worth naming next to what you sell.'}
           </div>
         </>
       ) : (
         <div className="cp-empty">
-          <b>Nothing recurring yet</b>
-          Demand shows once several real matches share a need your offer does not cover. It is measured, never guessed — so an empty list means the market has not repeated itself yet, not that there is nothing to learn.
+          <b>Nothing in common yet</b>
+          An opening appears once several real matches share a weakness your offer does not already name. It is counted off their listings, never guessed — so an empty list means your matches have nothing in common yet, not that there is nothing to learn.
         </div>
       )}
 
@@ -87,14 +88,14 @@ export default function SignalsView({ home, actions }: { home: HomeData; actions
                   <span className="cp-dsub">{s.businesses} {s.businesses === 1 ? 'business' : 'businesses'}</span>
                 </div>
                 <div className="cp-wants">
-                  {s.wants.length
-                    ? s.wants.map((w, i) => <span key={w.term}>{i > 0 && ' · '}<b>{w.count}</b> {w.term}</span>)
-                    : <span>nothing recurring your offer does not already cover</span>}
+                  {s.openings.length
+                    ? s.openings.map((w: { term: string; count: number }, i: number) => <span key={w.term}>{i > 0 && ' · '}<b>{w.count}</b> {w.term}</span>)
+                    : <span>nothing in common that your offer does not already name</span>}
                 </div>
               </div>
             ))}
           </div>
-          <div className="cp-note">A segment that keeps wanting what you do not sell is a gap in the offer, or the wrong segment.</div>
+          <div className="cp-note">A segment whose businesses all share a weakness you never mention is an opening you are wasting, or the wrong segment.</div>
         </>
       )}
 

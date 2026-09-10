@@ -149,23 +149,23 @@ export async function setMoveStatus(profileId: string, id: string, status: 'done
 }
 
 /**
- * What the market keeps asking for, read straight from the user's own matches.
+ * What the user's own matches have in common, read straight off their listings.
  *
- * Narrower than loadDiagnosisRows on purpose: demand only ever looks at sourced
- * rows, and only needs the columns wantsOf/segmentOf read. Capped because the
+ * Narrower than loadDiagnosisRows on purpose: openings only ever look at sourced
+ * rows, and only need the columns openingsOf/segmentOf read. Capped because the
  * pack build is on the brief's critical path — newest first, so the weekly
  * trend is always whole and only the far tail of the all-time count is lost.
  */
-const MAX_DEMAND_ROWS = 500;
+const MAX_OPENING_ROWS = 500;
 
-export async function loadDemandRows(profileId: string): Promise<DiagnoseInput['opportunities']> {
+export async function loadOpeningRows(profileId: string): Promise<DiagnoseInput['opportunities']> {
   const { data } = await copilotDb()
     .from('copilot_opportunities')
     .select('id, status, source, source_kind, data, reason, title, created_at')
     .eq('profile_id', profileId)
     .eq('source_kind', 'sourced')
     .order('created_at', { ascending: false })
-    .limit(MAX_DEMAND_ROWS);
+    .limit(MAX_OPENING_ROWS);
   return (data ?? []) as DiagnoseInput['opportunities'];
 }
 

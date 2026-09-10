@@ -132,7 +132,7 @@ capability instead of fetching it, in priority order:
 2. **From your funnel** — the bottleneck stage, named as a capability. Every
    stage has one now: `BOTTLENECK_TOPIC` had no entry for `drafted` or `sent`,
    so the most common bottleneck in this product produced the emptiest answer.
-3. **From your matches** — the top demand term the offer does not cover.
+3. **From your matches** — the top opening the offer does not name.
 
 Each carries evidence citing a number from rows the user created, and one
 bounded experiment for the week rather than a reading list. `null` only for an
@@ -338,8 +338,8 @@ which the read must cite. Replies trigger a push.
 "skill level 0-100" as a progress bar, which reads as measurement and was not.
 `diagnose.ts` replaces it with arithmetic over real rows: a funnel
 (matched → drafted → sent → replied → meeting → won) with the worst-converting
-step highlighted, a channel comparison, a source comparison, and a demand gap —
-terms recurring across real matches that the offer never mentions. Three rules
+step highlighted, a channel comparison, a source comparison, and an openings read —
+conditions recurring across real matches that the offer never names. Three rules
 it obeys: never show a number that was not computed; never compare without
 `MIN_SAMPLE` (5) on both sides; when nothing can be concluded, say which step is
 blocking instead of filling space. The agent now returns an empty `skills` array
@@ -517,8 +517,8 @@ replace.
 `orderTriage` uses it to decide what comes up first — and that is the entire
 blast radius. It never touches the decision record, Signals, or what counts as
 an outcome. Invariant 5 is the same rule for the same reason. `MIN_TRIAGE_SAMPLE`
-(5) keeps a rate from being one person's mood, the same floor `MIN_DEMAND`
-applies to demand terms.
+(5) keeps a rate from being one person's mood, the same floor `MIN_OPENING`
+applies to openings.
 
 Every gesture has a button beside it — a deck answerable only by dragging is
 unusable one-handed or with assistive tech. Both answers are recorded: a keep
@@ -564,7 +564,7 @@ whatever the landing page says.
 | `client_delivery` | `build` | linked `sales` table | no |
 | `repeat_customer` | `earn` | linked `sales` table | no |
 | `runway_guard` | `decide` | `finance.cash` + `monthly_burn` | no |
-| `demand_gap` | `decide` | `target_segments` | no |
+| `opening_gap` | `decide` | `target_segments` | no |
 | `capability_gap` | `learn` / `avoid` | onboarding complete | no |
 | `remote` | any of the eight | `COPILOT_JOBS_URL` | remote's business |
 
@@ -580,8 +580,8 @@ otherwise.
 
 ### ctx.sense() — reading what the app already worked out
 
-`demand_gap`, `capability_gap` and `runway_guard` say things like "seven of
-your own matches asked for this". That number comes from `JobSense`
+`opening_gap`, `capability_gap` and `runway_guard` say things like "seven of
+your own matches have this in common". That number comes from `JobSense`
 (`jobs/sense.ts`): the same `diagnose()` / `growthEdge()` / `loadMetrics()`
 pass `loadHome` uses, so a Move and the Signals tab can never disagree about
 what the funnel says.
@@ -632,7 +632,30 @@ database for months before anything read them.
 | --- | --- | --- |
 | `replies` | `copilot_outcomes.note`, written by `reconcileReplies` | what a real prospect wrote back to a message this person actually sent |
 | `sent` | `copilot_executions.body` joined to reply outcomes | which openers got an answer and which were ignored |
-| `demand` | `demandTrend()` over the user's own sourced matches | wants counted across their live pool, already filtered to gaps in the offer |
+| `openings` | `openingTrend()` over the user's own sourced matches | conditions counted across their live pool, already filtered to what the offer does not name |
+
+**Openings are not demand, and the difference is load-bearing.**
+`openingsOf()` reads two arrays off a matched listing: `tags` and
+`pain_signals`. Both are written by a scraper ABOUT the prospect —
+`no_website`, `few_reviews`, `low_rating`, `running facebook ads`. Nobody asked
+for any of them.
+
+For months this was computed correctly and labelled backwards: Signals headed
+it "What they keep asking for", the sheet offered "Add it to what you sell", and
+`growthEdge` returned `selling no website`. The measurement was real and the
+frame around it was false, which is worse than not having it — the tab was
+unreadable and the offer edit produced a business nobody runs.
+
+The rule now, enforced in three places: the term goes into `offer.problem`
+(what you fix), never `offer.sells` (what you sell) — `addOpeningToOffer` is
+the only writer and it targets `problem`; the prompt tells the model in as many
+words that nobody asked for these and that it must never write "clients are
+asking for X"; and tests assert no demand language survives in the finding, the
+edge, the weekly push or the Move.
+
+An opening's real use is the FIRST LINE of a draft. "You are running ads into a
+WhatsApp nobody answers after six" is why a stranger keeps reading; "clients are
+asking for no website" is why they stop.
 
 **Replies were the expensive omission.** `reconcileReplies` matched inbound
 WhatsApp messages by phone and selected `phone, created_at` — so the system knew
@@ -747,7 +770,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/copilot/onboard` | profile + goal + targeting + context, cookie, first supply, first brief |
-| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis (demand with weekly trend and per-segment read), latest weekly Signals insight, metrics |
+| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis (openings with weekly trend and per-segment read), latest weekly Signals insight, metrics |
 | POST | `/api/copilot/brief` | run the agent now |
 | POST | `/api/copilot/supply` | find new matches: supply → reconcile → brief |
 | POST | `/api/copilot/capacity` | `{ capacity }` |

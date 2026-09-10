@@ -309,7 +309,7 @@ export interface HomeData {
   /** At most one lesson, and only when the diagnosis produced a stuck point. */
   lessons: GrowthItem[];
   /**
-   * The one capability to work on, computed from the funnel, the demand read and
+   * The one capability to work on, computed from the funnel, the openings read and
    * the decision record. Replaces a section that asked a model for an article
    * URL and therefore sat empty almost every day.
    */
@@ -399,25 +399,28 @@ export interface ContextPack {
    */
   sent: PackSentExample[];
   /**
-   * Aggregate demand computed from this person's own live pool — the one
-   * signal in the product that nothing general can reconstruct. The agent
-   * wrote every draft blind to it until now.
+   * What this person's own live pool has in common — the one signal in the
+   * product that nothing general can reconstruct. The agent wrote every draft
+   * blind to it until now.
    */
-  demand: PackDemand[];
+  openings: PackOpening[];
   /** Real numbers. The insight must cite at least one. */
   metrics: Metrics;
 }
 
 /**
- * One want, as the agent sees it. Deliberately thinner than DemandTerm: the
+ * One opening, as the agent sees it. Deliberately thinner than Opening: the
  * weekly arithmetic behind the trend is the app's business, not the model's.
  *
- * Every term here is already a GAP — wantsOf() drops anything the offer
- * mentions — so the agent never has to work out which of these are new.
+ * An OPENING, not a want. Each term was written by a scraper about the
+ * prospect — a missing website, thin reviews, ad spend landing in a hand-typed
+ * inbox — so it is a weakness to sell against, never something anyone asked to
+ * buy. Every term here is already a GAP: openingsOf() drops anything the offer
+ * already names, so the agent never has to work out which of these are new.
  */
-export interface PackDemand {
+export interface PackOpening {
   term: string;
-  /** Businesses in their own matches carrying this want. */
+  /** Businesses in their own matches whose listing shows this. */
   businesses: number;
   trend: 'new' | 'rising' | 'steady' | 'falling';
   /** The segment it shows up in most, when one dominates. */

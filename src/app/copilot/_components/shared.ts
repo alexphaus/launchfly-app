@@ -16,7 +16,7 @@ export type SheetState =
   | { kind: 'won'; oppId: string }
   | { kind: 'offer' }
   | { kind: 'you' }
-  | { kind: 'demand'; term: string };
+  | { kind: 'opening'; term: string };
 
 export interface OutcomeInput {
   opportunity_id?: string;

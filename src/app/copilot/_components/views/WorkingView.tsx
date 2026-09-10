@@ -15,6 +15,7 @@
 
 import { MIN_REVIEW, VERDICT_LABEL, decisionReview, movedBy, verdictOf } from '@/lib/copilot/decision';
 import type { OpeningTrend, Finding, FunnelStage } from '@/lib/copilot/diagnose';
+import { useState } from 'react';
 import type { HomeData } from '@/lib/copilot/types';
 import type { PipelineStage } from '@/lib/copilot/pipeline';
 import { money, shortDay } from '../format';
@@ -28,6 +29,10 @@ const KIND_LABEL: Record<Finding['kind'], string> = {
   outside: 'Logged outside the app',
   insufficient: 'Not enough data yet',
 };
+
+/** Below these the queue is not yet the reason nothing is happening. */
+export const FIND_GATE_DRAFTS = 10;
+export const FIND_GATE_DAYS = 3;
 
 export const TREND_LABEL: Record<OpeningTrend, string> = { new: 'New this week', rising: 'Rising', steady: 'Steady', falling: 'Fading' };
 
@@ -44,6 +49,13 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
   const d = home.diagnosis;
   const m = home.metrics;
   const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
+  const [confirmFind, setConfirmFind] = useState(false);
+  // The oldest unsent draft, in days. The number that says whether searching for
+  // more is reasonable or is the thing you do instead of sending.
+  const oldestWaited = home.queue.length
+    ? Math.max(...home.queue.map((q) => Math.floor((Date.now() - new Date(q.execution.created_at).getTime()) / 86_400_000)))
+    : 0;
+  const gate = home.queue.length >= FIND_GATE_DRAFTS && oldestWaited >= FIND_GATE_DAYS;
   const max = Math.max(...d.stages.map((s) => s.count), 1);
   const lesson = home.lessons[0];
   const edge = home.edge;
@@ -77,10 +89,26 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
       <div className="cp-section">
         <span className="lead">Your funnel</span>
         <span className="count">tap to open</span>
-        <button className="link" disabled={finding || home.billing.matches.remaining === 0} onClick={() => actions.findMatches()} style={{ marginLeft: 10 }}>
-          {finding ? 'Finding…' : home.billing.matches.remaining === 0 ? 'None left' : 'Find new'}
+        {/* Not a block — a block on your own data gets routed around and earns
+            nothing but resentment. One tap states the trade-off the app has been
+            making in `instead_of` for weeks; the second proceeds anyway. Gated
+            on how long the oldest has waited rather than the count, because 41
+            fresh drafts and 41 eleven-day-old ones are different situations. */}
+        <button
+          className="link" disabled={finding || home.billing.matches.remaining === 0} style={{ marginLeft: 10 }}
+          onClick={() => (gate && !confirmFind ? setConfirmFind(true) : actions.findMatches())}
+        >
+          {finding ? 'Finding…'
+            : home.billing.matches.remaining === 0 ? 'None left'
+            : confirmFind ? 'Find anyway' : 'Find new'}
         </button>
       </div>
+      {confirmFind && (
+        <div className="cp-note" style={{ marginTop: -4, marginBottom: 8 }}>
+          {home.queue.length} drafts are already written and the oldest has waited {oldestWaited} days. More matches will not make them go out.
+          {' '}<button className="cp-textlink" onClick={() => { setConfirmFind(false); actions.openSheet({ kind: 'queue' }); }}>Open the queue instead</button>
+        </div>
+      )}
       <div className="cp-card">
         {d.stages.map((s) => (
           <Stage

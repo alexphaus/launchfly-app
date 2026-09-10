@@ -676,6 +676,45 @@ system catches an ordering bug.
 Both callers now go through **`runJobsThenBrief`** in `daily.ts`, so the two
 orders cannot drift apart again. Anything new that produces a brief must use it.
 
+### A no that is heard
+
+`refusalsByTopic` counts recent `rejected` and `ignored` responses per topic, and
+`scoreMove` multiplies by `REFUSAL_DECAY ** n`. Past `MAX_REFUSALS` a job is
+barred from leading — it stays in the stack, because the work is still real, it
+just cannot be the Call again — and the winner's evidence says so once.
+
+This fact existed and was consumed by nothing. Signals could say "you ignored 2
+of your last 4 calls" while the Call was re-proposed unchanged the next morning
+for the fifth day running. Reading a refusal and then repeating the request is
+the behaviour of a notification, not of somebody working with you.
+
+### Novelty is a supply problem, not a layout one
+
+Everything the app produced was derived from data it already had. The only thing
+that ever arrived from outside was `reconcileReplies`, which reads replies to
+messages the app itself sent — so inbound was gated on outbound, and outbound was
+the thing not happening. Nine sends in thirty days meant the state at nine in the
+morning was the state at nine at night.
+
+Two openings now exist:
+
+- **`POST /api/copilot/moves/inbound`** — an n8n workflow, an agent with browser
+  access or a person can post finished work in. Bearer `COPILOT_INBOUND_SECRET`,
+  addressed by `email` or `profile_id`, normalised by the same
+  `normalizeRemoteMove` the pull adapter uses and written by the same
+  `writeMoves`. Untrusted by construction; a bad workflow can put nothing on the
+  screen.
+- **`lastCronRun`** — the nightly job's own last finish, distinct from a run the
+  user triggered by opening the app. With no cron there are no overnight Moves,
+  no push and no graded decisions, so every morning is identical because the user
+  is computing it by looking. A scheduled task nobody set up looks exactly like a
+  quiet week, so Now says it out loud and `/api/copilot/health` reports
+  `loop.nightlyRuns` over thirty days.
+
+`health.loop` is the whole funnel in four numbers — produced → called → answered
+→ landed — counted from events that were already being logged. It measures
+finished work rather than taps, because taps would flatter it.
+
 ### Goals
 
 `JobSense` carries `goals`. It did not, and that was the widest gap between this

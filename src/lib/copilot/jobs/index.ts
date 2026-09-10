@@ -54,6 +54,36 @@ export const JOBS: Job[] = [
 ];
 
 /**
+ * Persist a batch of Moves. Shared by the nightly jobs and by the inbound
+ * endpoint an external workflow posts to, so a Move that arrives from n8n is
+ * stored, deduped and capped exactly like one this app produced itself.
+ *
+ * Dedupe is on (profile, job, external_id) with ignoreDuplicates, so a job that
+ * reruns over the same source row writes nothing — and a Move the user already
+ * marked done or dismissed stays that way, which ignoring the conflict is what
+ * guarantees.
+ */
+export async function writeMoves(profileId: string, drafts: MoveDraft[], today: string): Promise<number> {
+  if (!drafts.length) return 0;
+  const rows = drafts.map((d) => ({
+    profile_id: profileId, job: d.job, kind: d.kind, external_id: d.external_id,
+    headline: d.headline, why: d.why, artifact: d.artifact,
+    cost_label: d.cost_label ?? null, for_date: today, stake: d.stake ?? null,
+  }));
+  const write = (rs: Array<Record<string, unknown>>) => copilotDb()
+    .from('copilot_moves')
+    .upsert(rs, { onConflict: 'profile_id,job,external_id', ignoreDuplicates: true })
+    .select('id');
+  let { data, error } = await write(rows);
+  // `stake` ships in 20260911_copilot_arbitration.sql. Until it is applied a
+  // Move without one is still a Move — it just cannot win the Call on evidence,
+  // only on its kind prior. Losing the row entirely would be worse.
+  if (error) ({ data, error } = await write(rows.map(({ stake: _s, ...rest }) => rest)));
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
+/**
  * Which jobs can see anything for this profile. Separated from running them so
  * the UI can tell "nothing to do" apart from "nothing is plugged in" — those
  * looked identical on the screen, which is how the first Moves build appeared
@@ -105,22 +135,7 @@ export async function runJobs(profileId: string, opts: { now?: Date; deadline?: 
       out.produced += drafts.length;
       if (!drafts.length) continue;
 
-      const rows = drafts.map((d) => ({
-        profile_id: profileId, job: d.job, kind: d.kind, external_id: d.external_id,
-        headline: d.headline, why: d.why, artifact: d.artifact,
-        cost_label: d.cost_label ?? null, for_date: ctx.today, stake: d.stake ?? null,
-      }));
-      const write = (rs: Array<Record<string, unknown>>) => copilotDb()
-        .from('copilot_moves')
-        .upsert(rs, { onConflict: 'profile_id,job,external_id', ignoreDuplicates: true })
-        .select('id');
-      let { data, error } = await write(rows);
-      // `stake` ships in 20260911_copilot_arbitration.sql. Until it is applied a
-      // Move without one is still a Move — it just cannot win the Call on
-      // evidence, only on its kind prior. Losing the row entirely would be worse.
-      if (error) ({ data, error } = await write(rows.map(({ stake: _s, ...rest }) => rest)));
-      if (error) throw error;
-      entry.written = data?.length ?? 0;
+      entry.written = await writeMoves(profileId, drafts, ctx.today);
       out.written += entry.written;
     } catch (e) {
       entry.error = e instanceof Error ? e.message : String(e);

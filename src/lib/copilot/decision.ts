@@ -209,6 +209,32 @@ function runOf(decisions: Array<Pick<Decision, 'topic' | 'response' | 'verify'>>
 }
 
 /** The reflection engine, such as it is: not advice, just the record read back. */
+/** How far back refusals count. Older than this and the situation has moved on. */
+export const REFUSAL_WINDOW = 10;
+
+/**
+ * How many times each topic was refused recently.
+ *
+ * "Refused" is a no you actually gave — `rejected` — or one the sweep inferred
+ * from a call you left pending until the next arrived — `ignored`. Both mean the
+ * same thing to a copilot: it asked, and nothing happened.
+ *
+ * This existed as a fact and was consumed by nothing. The ledger could say "you
+ * ignored 2 of your last 4 calls" on the Signals tab while the Call itself was
+ * re-proposed the next morning, unchanged, for the fifth day running. Reading a
+ * refusal and then repeating the request is the behaviour of a notification, not
+ * of somebody working with you.
+ */
+export function refusalsByTopic(decisions: Array<Pick<Decision, 'topic' | 'response'>>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const d of decisions.slice(0, REFUSAL_WINDOW)) {
+    if (!d.topic) continue;
+    if (d.response !== 'rejected' && d.response !== 'ignored') continue;
+    out[d.topic] = (out[d.topic] ?? 0) + 1;
+  }
+  return out;
+}
+
 export function decisionReview(decisions: Array<Pick<Decision, 'topic' | 'response' | 'verify'>>): DecisionReview {
   const verdicts = decisions.map(verdictOf);
   const count = (v: DecisionVerdict) => verdicts.filter((x) => x === v).length;

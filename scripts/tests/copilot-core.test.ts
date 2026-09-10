@@ -1503,20 +1503,39 @@ import type { Profile as JobProfile } from '../../src/lib/copilot/types';
 
 async function jobSensors() {
   const profile = (over: Record<string, unknown> = {}) =>
-    ({ id: 'p1', name: 'Alex', timezone: 'Asia/Manila', linked_business_id: 'biz-1', ...over }) as unknown as JobProfile;
+    ({
+      id: 'p1', name: 'Alex', timezone: 'Asia/Manila', linked_business_id: 'biz-1',
+      target_segments: [], finance: {}, offer: {}, onboarding_complete: true, ...over,
+    }) as unknown as JobProfile;
 
-  // The sensor, not the result. A profile with no linked business cannot produce
-  // a delivery move and must say so — reporting an empty list instead is what
-  // made a working build look broken.
-  assert.deepEqual(await availableJobs(profile()), ['client_delivery']);
-  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), []);
+  // The sensor, not the result. Each job reports on the input it needs, and a
+  // profile missing that input must say so — reporting an empty list instead is
+  // what made a working build look broken.
+  //
+  // capability_gap is always available: every account has a funnel from the
+  // moment it has a match, and growthEdge returning null is a quiet day rather
+  // than a missing sensor.
+  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'capability_gap']);
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['capability_gap']);
+
+  // Each sensor is independent: turning one on must not turn another on.
+  assert.ok((await availableJobs(profile({ linked_business_id: null, target_segments: ['dentists'] }))).includes('demand_gap'));
+  assert.ok(!(await availableJobs(profile())).includes('demand_gap'), 'no targeting, nothing to read a demand out of');
+  assert.ok((await availableJobs(profile({ finance: { cash: 9000, monthly_burn: 3000 } }))).includes('runway_guard'));
+  assert.ok(!(await availableJobs(profile({ finance: { cash: 9000 } }))).includes('runway_guard'), 'cash without burn is not a runway');
+  assert.ok(!(await availableJobs(profile())).includes('remote'), 'the external seam is off until it is configured');
+
+  // A profile with nothing set up reports NO sensors, so Today can still tell
+  // "nothing is plugged in" apart from "a quiet day". One always-available job
+  // would have collapsed those two back into one answer.
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null, onboarding_complete: false })), []);
 
   // A job whose availability throws is unavailable, never fatal: one broken
   // sensor must not take the whole screen down with it.
   const exploding = { key: 'boom', label: 'Boom', available() { throw new Error('no'); }, run: async () => [] };
   JOBS.push(exploding);
   try {
-    assert.deepEqual(await availableJobs(profile()), ['client_delivery']);
+    assert.ok(!(await availableJobs(profile())).includes('boom'));
   } finally {
     JOBS.splice(JOBS.indexOf(exploding), 1);
   }
@@ -1524,7 +1543,217 @@ async function jobSensors() {
   assert.equal(clientDeliveryJob.key, 'client_delivery');
   assert.equal(JOBS.includes(clientDeliveryJob), true, 'a job not in the registry never runs');
 
+  // The registry is the product. One entry means one kind of action, which is
+  // the state this whole spine exists to escape — so the shape of it is asserted
+  // rather than left to whoever edits index.ts next.
+  const kinds = new Set(JOBS.map((j) => j.key));
+  assert.equal(kinds.size, JOBS.length, 'two jobs sharing a key would collide on every write');
+  for (const key of ['client_delivery', 'repeat_customer', 'runway_guard', 'demand_gap', 'capability_gap', 'remote']) {
+    assert.ok(kinds.has(key), `${key} is registered`);
+  }
+
   console.log('copilot-core: job-sensor checks passed');
 }
 
 jobSensors().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Six kinds of leverage, and none of them allowed to be advice
+// ─────────────────────────────────────────────────────────────────────────────
+import { KIND_ORDER, MOVE_KINDS, isDeliverable, orderMoves } from '../../src/lib/copilot/moves';
+import { MIN_GAP_BUSINESSES, demandGapMove } from '../../src/lib/copilot/jobs/demand-gap';
+import { capabilityMove, tutorialSearch } from '../../src/lib/copilot/jobs/capability-gap';
+import { RUNWAY_ALERT_MONTHS, coverPlan, hasFinance, runwayMove } from '../../src/lib/copilot/jobs/runway-guard';
+import { DORMANT_MIN_DAYS, dormantSales, repeatMessage, repeatMove } from '../../src/lib/copilot/jobs/repeat-customer';
+import { normalizeRemoteMove, profileForRemote } from '../../src/lib/copilot/jobs/remote';
+import { memoSense } from '../../src/lib/copilot/jobs/sense';
+import type { DemandTerm, GrowthEdge } from '../../src/lib/copilot/diagnose';
+import type { SaleRow } from '../../src/lib/copilot/jobs/client-delivery';
+import type { Metrics } from '../../src/lib/copilot/types';
+
+async function leverage() {
+  const now = new Date('2026-09-09T02:00:00Z');
+  const term = (over: Partial<DemandTerm> = {}): DemandTerm =>
+    ({ term: 'online booking', count: 7, thisWeek: 2, prevWeeklyAvg: 1, trend: 'rising', segments: [{ segment: 'spas', count: 5 }], ...over });
+
+  // --- demand gap: the measurement Signals draws as a chart, delivered as a decision
+  {
+    const m = demandGapMove({ offer: { sells: 'WhatsApp automations' } }, term());
+    assert.ok(m, 'a gap with a line to add is a Move');
+    assert.equal(m.kind, 'decide');
+    assert.equal(m.external_id, 'gap:online booking', 'once per term, ever — a gap still open tomorrow is the same gap');
+    assert.ok(m.why[0].includes('7'), 'the evidence cites the count, not an adjective');
+    assert.ok(m.artifact.value.includes('WhatsApp automations, online booking'), 'the edit arrives written');
+    assert.ok(m.artifact.value.includes('spas'), 'and names the segment to drop if the answer is no');
+    assert.ok(isDeliverable(m));
+
+    // Already sold: there is no line to add, so there is no decision to make.
+    assert.equal(demandGapMove({ offer: { sells: 'online booking' } }, term()), null);
+    // A term that will not fit the column leaves the offer unchanged, and an
+    // unchanged offer is not an artifact.
+    assert.equal(demandGapMove({ offer: { sells: 'x'.repeat(238) } }, term()), null);
+    // A blank offer still works: the term becomes the whole offer.
+    assert.equal(demandGapMove({ offer: {} }, term())?.artifact.value.startsWith('online booking'), true);
+    assert.ok(MIN_GAP_BUSINESSES >= 3, 'two businesses is a coincidence, not a market');
+  }
+
+  // --- capability gap: one input, two opposite instructions
+  {
+    const edge = (over: Partial<GrowthEdge> = {}): GrowthEdge =>
+      ({ capability: 'writing openers people answer', because: ['31 of 40 stopped at sent.'], experiment: 'Change only the first line on the next ten.', source: 'funnel', ...over });
+
+    const learn = capabilityMove(edge());
+    assert.equal(learn.kind, 'learn');
+    assert.equal(learn.artifact.kind, 'link');
+    assert.ok(learn.artifact.href?.startsWith('https://www.youtube.com/results?search_query='), 'somewhere to actually go');
+    assert.ok(learn.artifact.value.includes('first line'), 'the experiment is the content; the link is only the shelf');
+    assert.ok(isDeliverable(learn));
+
+    // A topic the decision record says has never worked is the opposite advice,
+    // and must not arrive dressed as encouragement.
+    const stop = capabilityMove(edge({ source: 'decisions', capability: 'discounting' }));
+    assert.equal(stop.kind, 'avoid');
+    assert.equal(stop.artifact.kind, 'text');
+    assert.ok(stop.headline.toLowerCase().startsWith('stop'));
+    assert.notEqual(stop.external_id, learn.external_id, 'stop and learn never collide on one key');
+    assert.ok(isDeliverable(stop));
+
+    assert.ok(tutorialSearch('ai voice intake').includes('ai%20voice%20intake'));
+  }
+
+  // --- runway: arithmetic only, and silence when there is nothing to project from
+  {
+    const metrics = (over: Partial<Metrics> = {}): Metrics =>
+      ({ window_days: 30, sent: 60, replies: 6, reply_rate: 0.1, meetings: 2, won: 2, won_amount: 4000, lost: 0,
+         awaiting_approval: 0, pipeline: { new: 0, saved: 0, sourced: 0, inferred: 0 }, runway_months: null, ...over }) as Metrics;
+
+    assert.equal(hasFinance({ cash: 9000, monthly_burn: 3000 }), true);
+    assert.equal(hasFinance({ cash: 9000, monthly_burn: 0 }), false, 'no burn is not a runway, it is a divide by zero');
+    assert.equal(hasFinance({}), false);
+
+    const tight = runwayMove({ finance: { cash: 6000, monthly_burn: 3000, currency: 'usd' } }, metrics(), '2026-09');
+    assert.ok(tight, 'two months of runway is a decision');
+    assert.equal(tight.kind, 'decide');
+    assert.equal(tight.external_id, 'runway:2026-09', 'once a month: daily is noise, never is a surprise');
+    assert.ok(tight.artifact.value.includes('USD 2,000'), 'the average deal is computed, not guessed');
+    assert.ok(tight.artifact.value.includes('2 of those a month'));
+    assert.ok(isDeliverable(tight));
+
+    // Comfortable runway is a number to glance at, not a decision to make.
+    assert.equal(runwayMove({ finance: { cash: 100_000, monthly_burn: 3000 } }, metrics(), '2026-09'), null);
+    assert.equal(runwayMove({ finance: {} }, metrics(), '2026-09'), null);
+    assert.ok(RUNWAY_ALERT_MONTHS >= 1);
+
+    // Nothing closed: there is no deal size, so the honest answer is to say so
+    // rather than invent the three clients that would fix it.
+    const blind = coverPlan(metrics({ won: 0, won_amount: 0 }), 3000, 'usd');
+    assert.ok(blind.includes('no deal size'), blind);
+    assert.ok(!/\d+ of those/.test(blind), 'no projection without a rate to project from');
+  }
+
+  // --- repeat customer: the half of the funnel every supply adapter is blind to
+  {
+    const sale = (over: Partial<SaleRow> = {}): SaleRow =>
+      ({ id: 's1', product_id: null, amount: 500, currency: 'usd', customer_email: 'maria@spa.ph',
+         customer_name: 'Maria Santos', created_at: '2026-06-01T00:00:00Z', ...over });
+
+    // One customer, three purchases, one Move — three identical reconnects is
+    // how you lose the account you were trying to keep.
+    const grouped = dormantSales([
+      sale({ id: 'a', created_at: '2026-03-01T00:00:00Z' }),
+      sale({ id: 'b', created_at: '2026-06-01T00:00:00Z' }),
+      sale({ id: 'c', created_at: '2026-04-01T00:00:00Z' }),
+    ], now);
+    assert.equal(grouped.length, 1);
+    assert.equal(grouped[0].id, 'b', 'the most recent purchase is the one the silence is measured from');
+
+    // Still being served is not dormant.
+    assert.equal(dormantSales([sale({ created_at: '2026-09-05T00:00:00Z' })], now).length, 0);
+    // A sale with nobody attached cannot be reconnected with.
+    assert.equal(dormantSales([sale({ customer_email: null, customer_name: null })], now).length, 0);
+    // Different customers stay different.
+    assert.equal(dormantSales([sale({ id: 'a' }), sale({ id: 'b', customer_email: 'jo@x.com' })], now).length, 2);
+    assert.ok(DORMANT_MIN_DAYS >= 7);
+
+    const m = repeatMove({ name: 'Alex Phaus', timezone: 'Asia/Manila' }, sale(), now);
+    assert.equal(m.kind, 'earn');
+    assert.equal(m.artifact.kind, 'message');
+    assert.ok(m.artifact.href?.startsWith('mailto:maria@spa.ph'), 'the work is done, so it opens where it is sent');
+    assert.ok(m.headline.includes('Maria'));
+    assert.ok(isDeliverable(m));
+
+    const body = repeatMessage({ name: 'Alex Phaus' }, sale(), now);
+    assert.ok(body.startsWith('Hi Maria — it’s Alex.') || body.startsWith("Hi Maria — it's Alex."), body);
+    // It knows they bought and that it went quiet. It claims nothing about what
+    // the work did, because this job cannot see that.
+    assert.ok(!/great results|loved|worked well/i.test(body), 'no claim the sales table cannot support');
+
+    // No contact on file still has to be readable, or the work is unreachable.
+    const noEmail = repeatMove({ name: 'Alex', timezone: 'UTC' }, sale({ customer_email: null }), now);
+    assert.equal(noEmail.artifact.href, null);
+    assert.ok(isDeliverable(noEmail), 'a message with nowhere to open is still a message');
+  }
+
+  // --- the external seam: untrusted by construction
+  {
+    const good = { id: 'mbp-14', kind: 'spend', headline: 'MacBook Pro 14 M4, ₱82,000 — below your ceiling',
+                   why: ['You said you wanted one under ₱90,000.'],
+                   artifact: { kind: 'link', label: 'View the listing', value: 'Seller has 4.9 over 300 sales.', href: 'https://example.com/x' } };
+    const m = normalizeRemoteMove(good, 'n8n');
+    assert.ok(m);
+    assert.equal(m.kind, 'spend');
+    assert.equal(m.job, 'remote');
+    assert.equal(m.external_id, 'n8n:mbp-14', 'namespaced, so two workflows cannot collide on "1"');
+    assert.ok(isDeliverable(m));
+    assert.equal(normalizeRemoteMove(good)?.external_id, 'mbp-14', 'unnamespaced when no source is declared');
+
+    // Everything the quality floor exists to stop.
+    assert.equal(normalizeRemoteMove({ ...good, id: undefined }), null, 'no stable id doubles up every night');
+    assert.equal(normalizeRemoteMove({ ...good, kind: 'vibes' }), null, '"some kind of move" is not a move');
+    assert.equal(normalizeRemoteMove({ ...good, why: [] }), null, 'a Move that cites nothing is a guess');
+    assert.equal(normalizeRemoteMove({ ...good, artifact: { kind: 'link', label: 'Go' } }), null, 'no artifact, no Move');
+    assert.equal(normalizeRemoteMove({ ...good, artifact: { ...good.artifact, href: undefined } }), null, 'a link Move with no link');
+    assert.equal(normalizeRemoteMove('a string'), null);
+    assert.equal(normalizeRemoteMove(null), null);
+
+    // An artifact kind the remote forgot is inferred from whether it can be opened.
+    assert.equal(normalizeRemoteMove({ ...good, artifact: { label: 'Read it', value: 'a finding' } })?.artifact.kind, 'text');
+    // A single why is accepted as one line rather than dropped.
+    assert.deepEqual(normalizeRemoteMove({ ...good, why: 'just the one reason' })?.why, ['just the one reason']);
+
+    // What leaves the deployment carries no identity.
+    const sent = profileForRemote({ id: 'p1', email: 'a@b.c', name: 'Alex', stripe_customer_id: 'cus_1', offer: {} } as never);
+    assert.ok(!('email' in sent) && !('id' in sent) && !('stripe_customer_id' in sent), Object.keys(sent).join(','));
+  }
+
+  // --- ordering: with six producers, "whichever finished last" is not an order
+  {
+    const mv = (kind: string, created_at: string, id: string) => ({ kind, created_at, id }) as never;
+    const ordered = orderMoves([
+      mv('learn', '2026-09-09T09:00:00Z', 'l'),
+      mv('earn', '2026-09-01T09:00:00Z', 'e'),
+      mv('decide', '2026-09-08T09:00:00Z', 'd'),
+    ] as never[]);
+    assert.deepEqual(ordered.map((m: { id: string }) => m.id), ['e', 'd', 'l'], 'money first, whatever was written last');
+    // Recency only ever breaks a tie inside one kind.
+    const two = orderMoves([mv('earn', '2026-09-01T00:00:00Z', 'old'), mv('earn', '2026-09-08T00:00:00Z', 'new')] as never[]);
+    assert.deepEqual(two.map((m: { id: string }) => m.id), ['new', 'old']);
+    assert.equal(orderMoves(Array.from({ length: 30 }, (_, i) => mv('earn', '2026-09-01T00:00:00Z', `x${i}`)) as never[]).length, 8);
+    // Every kind the constraint allows has a place on the screen, or a job could
+    // write a row that renders in an undefined position.
+    for (const k of MOVE_KINDS) assert.equal(typeof KIND_ORDER[k], 'number', k);
+  }
+
+  // --- sense: one read per run, however many jobs ask
+  {
+    let reads = 0;
+    const sense = memoSense({ id: 'p1' } as never, now, async () => { reads += 1; return { diagnosis: {}, edge: null, metrics: {} } as never; });
+    await Promise.all([sense(), sense(), sense()]);
+    await sense();
+    assert.equal(reads, 1, 'six jobs asking for the funnel must not be six passes over it');
+  }
+
+  console.log('copilot-core: leverage checks passed');
+}
+
+leverage().catch((e) => { console.error(e); process.exit(1); });

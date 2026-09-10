@@ -1,0 +1,108 @@
+// src/lib/copilot/jobs/runway-guard.ts
+// How long the money lasts, and what would have to be true to change it.
+//
+// Runway is already on the header as "runway 5 mo" — a number, once, with
+// nothing attached. A number is a fact; this is the decision that follows from
+// it, and it only appears when the fact is bad enough to be a decision.
+//
+// The arithmetic is the whole artifact. It uses no model on purpose: a copilot
+// that hallucinates a revenue target is worse than one that stays quiet, and
+// every input here is something the user typed or something the ledger counted.
+
+import { computeRunwayMonths } from '../metrics';
+import type { MoveDraft } from '../moves';
+import type { Finance, Metrics, Profile } from '../types';
+import type { Job, JobContext } from './types';
+
+/** Above this, runway is a number to glance at rather than a decision to make. */
+export const RUNWAY_ALERT_MONTHS = 4;
+
+export function hasFinance(f: Finance | null | undefined): boolean {
+  return !!f && Number.isFinite(f.cash) && Number.isFinite(f.monthly_burn) && (f.monthly_burn ?? 0) > 0;
+}
+
+export function money(amount: number, currency?: string | null): string {
+  return `${(currency || 'USD').toUpperCase()} ${Math.round(amount).toLocaleString('en-US')}`;
+}
+
+/**
+ * What the ledger can and cannot say about closing the gap.
+ *
+ * With no win in the window there is no deal size and no conversion rate, so
+ * there is nothing to project from — and saying "you need 3 clients" from zero
+ * data would be the exact invention this file exists to avoid.
+ */
+export function coverPlan(m: Metrics, burn: number, currency?: string | null): string {
+  if (m.won < 1 || m.won_amount <= 0) {
+    return `Nothing has closed in the last ${m.window_days} days, so there is no deal size to work back from. The first number to get is one win — until then any revenue target here would be made up.`;
+  }
+  const avg = m.won_amount / m.won;
+  const deals = Math.ceil(burn / avg);
+  const perDeal = m.sent > 0 ? Math.ceil(m.sent / m.won) : null;
+  return [
+    `Your ${m.won} win${m.won === 1 ? '' : 's'} in the last ${m.window_days} days averaged ${money(avg, currency)}.`,
+    `Covering ${money(burn, currency)} a month takes ${deals} of those a month.`,
+    perDeal ? `At your rate that is about ${deals * perDeal} sends a month — you have sent ${m.sent} in ${m.window_days} days.` : null,
+  ].filter(Boolean).join(' ');
+}
+
+/** One month, one decision. Pure, so the arithmetic is under test. */
+export function runwayMove(profile: Pick<Profile, 'finance'>, m: Metrics, month: string): MoveDraft | null {
+  const f = profile.finance;
+  if (!hasFinance(f)) return null;
+  const months = computeRunwayMonths(f);
+  if (months == null || months > RUNWAY_ALERT_MONTHS) return null;
+
+  const burn = f.monthly_burn as number;
+  const cash = f.cash as number;
+  const cur = f.currency;
+  return {
+    job: runwayGuardJob.key,
+    kind: 'decide',
+    // Once a month. A standing money problem restated every morning is noise;
+    // restated never is how it arrives as a surprise.
+    external_id: `runway:${month}`,
+    headline: months <= 1
+      ? `Under a month of runway — decide what changes this week`
+      : `${months} months of runway — decide now, not at two`,
+    why: [
+      `${money(cash, cur)} against ${money(burn, cur)} a month.`,
+      coverPlan(m, burn, cur),
+      // The point of naming it early: at one month the only lever left is the
+      // one nobody wants, and it takes longer than a month to work.
+      'Cutting burn works immediately and revenue does not, so the order of those two is the decision.',
+    ],
+    artifact: {
+      kind: 'text',
+      label: 'Show the arithmetic',
+      value: [
+        `Cash ${money(cash, cur)}`,
+        `Burn ${money(burn, cur)} a month`,
+        `Runway ${months} month${months === 1 ? '' : 's'}`,
+        '',
+        coverPlan(m, burn, cur),
+        '',
+        'Three levers, in the order they take effect: cut burn (this week), raise the price on work already sold (this month), win new work (next month at the earliest). Pick one and tell the copilot which — it is the number the next brief reads back.',
+      ].join('\n'),
+    },
+    cost_label: '15 min',
+  };
+}
+
+export const runwayGuardJob: Job = {
+  key: 'runway_guard',
+  label: 'Runway',
+
+  // The sensor is the two numbers the user typed. Without them runway is not
+  // unknown-but-fine, it is unknown — and guessing it from Stripe volume would
+  // be a different, worse number wearing the same label.
+  available(ctx: JobContext) {
+    return hasFinance(ctx.profile.finance);
+  },
+
+  async run(ctx: JobContext): Promise<MoveDraft[]> {
+    const { metrics } = await ctx.sense();
+    const move = runwayMove(ctx.profile, metrics, ctx.today.slice(0, 7));
+    return move ? [move] : [];
+  },
+};

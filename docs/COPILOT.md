@@ -237,6 +237,8 @@ COPILOT_AGENT_URL=https://...       # external vertical agent (contract below)
 COPILOT_AGENT_SECRET=...
 COPILOT_SUPPLY_URL=https://...      # external supply service (contract below)
 COPILOT_SUPPLY_SECRET=...
+COPILOT_JOBS_URL=https://...        # external Move producer — any of the eight kinds
+COPILOT_JOBS_SECRET=...
 #  or
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
@@ -549,6 +551,55 @@ connected, `run()` does the work and returns drafts. Register it in
 `ignoreDuplicates`, so a nightly rerun over the same source row produces no
 second card — and a Move already answered stays answered.
 
+`available()` is contractually **cheap** — profile and environment only. It is
+asked for every job on every home load, and it must never call `ctx.sense()`.
+
+### The registry
+
+The registry is the product. A list with one entry is that action's tool,
+whatever the landing page says.
+
+| Job | Kind | Sensor | Model? |
+|---|---|---|---|
+| `client_delivery` | `build` | linked `sales` table | no |
+| `repeat_customer` | `earn` | linked `sales` table | no |
+| `runway_guard` | `decide` | `finance.cash` + `monthly_burn` | no |
+| `demand_gap` | `decide` | `target_segments` | no |
+| `capability_gap` | `learn` / `avoid` | onboarding complete | no |
+| `remote` | any of the eight | `COPILOT_JOBS_URL` | remote's business |
+
+Not one of them calls a model. Every line of evidence is a number the app
+counted or a value the user typed, which is the only reason a Move can cite
+something and be believed.
+
+`spend`, `meet` and `fix` have no built-in job on purpose. Finding the laptop
+you wanted at a price, quoting three suppliers, or fixing the n8n node that is
+dropping enquiries needs a searcher, a browser or a builder — not a request
+handler. Those arrive through `remote`, below, and the app does not pretend
+otherwise.
+
+### ctx.sense() — reading what the app already worked out
+
+`demand_gap`, `capability_gap` and `runway_guard` say things like "seven of
+your own matches asked for this". That number comes from `JobSense`
+(`jobs/sense.ts`): the same `diagnose()` / `growthEdge()` / `loadMetrics()`
+pass `loadHome` uses, so a Move and the Signals tab can never disagree about
+what the funnel says.
+
+It is lazy and memoised per run — six jobs asking still costs one pass, and
+jobs with their own sensor never pay for it.
+
+### Ordering
+
+`orderMoves()` in `moves.ts` decides what leads the screen: `earn`, `build`,
+`fix`, `decide`, `avoid`, `spend`, `meet`, `learn`, newest first within a kind.
+This is deliberately not the declaration order of `MOVE_KINDS`, which is the
+shape of the check constraint. With one job the ordering was academic; with
+six, `created_at` alone means whichever job finished last leads, so a reconnect
+worth real money sits under a tutorial link written a second later.
+`loadMoves` reads four screens' worth and lets this pick, so re-ordering never
+needs a migration.
+
 ### client_delivery — the first non-outbound job
 
 Somebody paid; nothing happened since. It reads Launchfly's own `sales` table,
@@ -636,6 +687,45 @@ Return facts, not adjectives — the agent scores and words them.
 
 > Building the supply service itself — the contract, a runnable mock, and an
 > importable n8n workflow — is covered in **[COPILOT_SUPPLY_AGENT.md](./COPILOT_SUPPLY_AGENT.md)**.
+
+## External jobs — any kind of Move, produced elsewhere
+
+The same seam as external supply, one level up. Supply asks "which businesses
+should I message"; this asks "what is worth doing", and the answer can be any
+of the eight kinds. Set `COPILOT_JOBS_URL` (and optionally
+`COPILOT_JOBS_SECRET`) and the `remote` job calls it on the nightly run:
+
+```
+POST $COPILOT_JOBS_URL            Authorization: Bearer $COPILOT_JOBS_SECRET
+{ "kind": "moves", "today": "2026-09-09",
+  "profile": { name, headline, offer, location, timezone, capacity,
+               target_segments, target_area, hunt_types } }
+
+-> { "source": "n8n",                              // optional; namespaces the ids
+     "moves": [ {
+       "external_id": "mbp-14-listing-882",        // required — this is how dedupe works
+       "kind": "spend",                            // required — one of the eight
+       "headline": "MacBook Pro 14 M4, ₱82,000 — below the ceiling you set",
+       "why": ["You said under ₱90,000.", "Seller 4.9 over 300 sales."],
+       "artifact": { "kind": "link|message|text",
+                     "label": "View the listing",
+                     "value": "what was found, or the drafted message",
+                     "href": "https://…" },        // required when kind is link
+       "cost_label": "₱82,000"
+     } ] }
+```
+
+The payload that leaves the deployment carries **no identity** — no id, no
+email, no phone, no billing (`profileForRemote`).
+
+Nothing coming back is trusted. `normalizeRemoteMove` drops anything without a
+stable id, a known kind, at least one `why` line, or an artifact with content —
+then `isDeliverable` applies the same floor again. A bad workflow can put
+nothing on the screen; it cannot crash the run and it cannot write advice.
+
+This is where the examples that need a searcher live: the laptop you wanted at
+a price, three suppliers quoted, the person worth an hour, the n8n node that is
+dropping enquiries, the page put up for the new offer.
 
 ## External agent contract
 

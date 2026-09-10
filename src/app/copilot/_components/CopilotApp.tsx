@@ -335,15 +335,18 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
   };
 
-  // Sending first. The old line led with "107 new matches" — celebrating the side
-  // of the funnel that was never the problem.
+  // What is waiting, across every kind of work — not just drafts. "12 to send"
+  // was an accurate line about a product nobody wanted to open: it described the
+  // one action the app could produce rather than the reason to look at it.
+  //
   // Once the call carries the instruction, repeating it here is the fourth time
   // the same sentence appears above the fold. The header goes back to being the
   // status line it was built to be.
-  const headline = offerIsEmpty(home.profile.offer) && !home.decision
+  const ready = home.moves.length + home.queue.length;
+  const headline = offerIsEmpty(home.profile.offer) && !home.decision && !home.moves.length
     ? 'Set your offer to start sending'
     : [
-        `${home.queue.length} to send`,
+        ready ? `${ready} ready for you` : 'nothing waiting',
         `${home.metrics.replies} replied`,
         home.metrics.runway_months != null ? `runway ${home.metrics.runway_months} mo` : null,
       ].filter(Boolean).join(' · ');

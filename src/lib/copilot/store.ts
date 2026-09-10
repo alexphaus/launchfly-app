@@ -10,6 +10,7 @@ import { diagnose, growthEdge, segmentOf, selectLesson, type DiagnoseInput } fro
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
+import { orderMoves } from './moves';
 import { stageOf } from './pipeline';
 import { canTriage, orderTriage, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { Move } from './types';
@@ -129,12 +130,15 @@ export async function loadMoves(profileId: string, limit = 8): Promise<{ moves: 
     .select('id, job, kind, headline, why, artifact, cost_label, status, created_at')
     .eq('profile_id', profileId).eq('status', 'open')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    // Read wider than the screen, then let orderMoves pick: cutting to `limit`
+    // in SQL would drop an earn written on Monday in favour of a learn written
+    // last night, before anything had a chance to rank them.
+    .limit(limit * 4);
   // Still degrades to an empty list rather than a blank Today — but says so,
   // because the first build swallowed this and an unapplied migration was
   // indistinguishable from a quiet day.
   if (error) return { moves: [], tableMissing: true };
-  return { moves: (data ?? []) as Move[], tableMissing: false };
+  return { moves: orderMoves((data ?? []) as Move[], limit), tableMissing: false };
 }
 
 export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {

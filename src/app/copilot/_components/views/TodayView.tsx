@@ -37,6 +37,9 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
   const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
   const noOffer = offerIsEmpty(home.profile.offer);
   const queue = home.queue;
+  // Everything waiting on a yes: work from every job, plus the drafts. One
+  // number, because "what is waiting for me" is one question.
+  const ready = home.moves.length + queue.length;
   // With a blank offer the call, its button and this row all say the same thing.
   // The row is the one that carries no new information, so it goes.
   const plan = home.decision && noOffer ? home.plan.filter((a) => a.title !== OFFER_TASK_TITLE) : home.plan;
@@ -66,15 +69,21 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
           behind a decision card and four metrics. */}
       {callFirst && call}
 
-      {/* Sent is the hero. The app has a supply surplus and a sending deficit, and
-          the headline number should be on the side that needs to move. */}
+      {/* Ready is the hero, and it counts every kind of finished work — not just
+          drafts. When the only thing this strip could count was sends, the top of
+          the app told you every morning that it was an outreach tool, which is
+          the one thing it must not be: an opener is one of eight kinds of move,
+          and for most people it is not the one they came to make. */}
       <div className="cp-metrics" aria-label="Your numbers">
-        <div className={`cp-stat hero ${m.sent ? 'hot' : ''}`}><div className="v">{m.sent}</div><div className="l">Sent</div></div>
-        <div className="cp-stat"><div className="v">{queue.length}</div><div className="l">To send</div></div>
+        <div className={`cp-stat hero ${ready ? 'hot' : ''}`}><div className="v">{ready}</div><div className="l">Ready</div></div>
+        <div className="cp-stat"><div className="v">{m.sent}</div><div className="l">Sent</div></div>
         <div className={`cp-stat ${m.replies ? 'hot' : ''}`}><div className="v">{m.replies}</div><div className="l">Replies</div></div>
         <div className={`cp-stat ${m.won ? 'hot' : ''}`}><div className="v">{m.won_amount ? money(m.won_amount, currency) : m.won}</div><div className="l">Won</div></div>
       </div>
-      <div className="cp-metrics-note">Last {m.window_days} days · real numbers from what you actually sent</div>
+      <div className="cp-metrics-note">
+        {ready ? `${home.moves.length} finished overnight, ${queue.length} drafted · ` : ''}
+        last {m.window_days} days, counted from what you actually did
+      </div>
 
       {b.matches.remaining === 0 && (
         <div className="cp-card cp-wall">
@@ -102,7 +111,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
       {home.moves.length > 0 ? (
         <>
           <div className="cp-section">
-            <span className="lead">Ready for you</span>
+            <span className="lead">Done while you slept</span>
             <span className="count">{home.moves.length}</span>
           </div>
           {home.moves.map((m) => <MoveCard key={m.id} move={m} actions={actions} />)}
@@ -124,8 +133,9 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
           ) : (
             <>
               <b>No sensors connected</b>
-              Moves come from your own data — a sale, a reply, a booking. Link a business to this
-              profile and the first one appears after the next run.
+              Moves are found overnight from things the copilot can see: a sale, your runway,
+              what your matches keep asking for. Finish setting up and the first ones appear
+              after the next run.
             </>
           )}
         </div>

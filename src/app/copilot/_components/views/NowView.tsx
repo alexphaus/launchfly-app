@@ -1,6 +1,17 @@
 'use client';
-// Today is a send queue. Everything else on this screen exists to get a message
-// out of the door or to record what came back.
+// Now: what to do, and nothing else.
+//
+// What this screen used to be: a metrics strip, an unmigrated-moves notice, a
+// forty-row send queue, a "drafts waiting" chip, the call, seven "also today"
+// rows and a "next actions" list — seven sections, in which "send 10 drafts"
+// appeared three separate times and the same forty drafts were also rendered on
+// the Pipeline tab with a different count.
+//
+// The rule now is one instruction, one place. The call leads and carries the
+// work. Under it: finished work from the jobs, the one judgement cheap enough to
+// make with a thumb, the queue as a single row, and everything else folded. The
+// numbers moved to Working, which is the tab for asking whether any of it is
+// landing.
 import { useState } from 'react';
 import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
 import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
@@ -9,12 +20,11 @@ import { useShell } from '../shell';
 import { KIND_LABEL } from '@/lib/copilot/moves';
 import type { Execution, HomeData, Move, QueueItem } from '@/lib/copilot/types';
 import { money } from '../format';
+import TriageStack from '../TriageStack';
 import type { Actions } from '../shared';
 
-/** How many queue rows show before the fold. A queue is a queue; it is not capped, only folded. */
-const QUEUE_FOLD = 5;
-/** Six reminders under a decision is a list, not a next action. */
-const NUDGE_FOLD = 3;
+/** Anything past this is folded. A plan you can finish beats a list you cannot. */
+const ALSO_FOLD = 3;
 
 function execChip(e: Execution | null | undefined): { cls: string; label: string } | null {
   if (!e) return null;
@@ -24,32 +34,40 @@ function execChip(e: Execution | null | undefined): { cls: string; label: string
   return { cls: 'send', label: 'Ready to send' };
 }
 
-export default function TodayView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
+/** Oldest first — eleven days waiting is the number that makes somebody send. */
+function oldestWait(queue: QueueItem[]): number {
+  if (!queue.length) return 0;
+  const oldest = [...queue].sort((a, b) => a.execution.created_at.localeCompare(b.execution.created_at))[0];
+  return Math.max(0, Math.floor((Date.now() - new Date(oldest.execution.created_at).getTime()) / 86_400_000));
+}
+
+export default function NowView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
   const shell = useShell();
   const [showWhy, setShowWhy] = useState(false);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
-  const [unfold, setUnfold] = useState(false);
-  const [moreNudges, setMoreNudges] = useState(false);
-  const urgent = home.nudges.filter((n) => n.urgency === 'urgent').length;
-  const m = home.metrics;
+  const [moreAlso, setMoreAlso] = useState(false);
   const b = home.billing;
-  const currency = home.goals.find((g) => g.metric === 'currency')?.unit || '$';
   const noOffer = offerIsEmpty(home.profile.offer);
   const queue = home.queue;
-  // Everything waiting on a yes: work from every job, plus the drafts. One
-  // number, because "what is waiting for me" is one question.
-  const ready = home.moves.length + queue.length;
   // With a blank offer the call, its button and this row all say the same thing.
   // The row is the one that carries no new information, so it goes.
   const plan = home.decision && noOffer ? home.plan.filter((a) => a.title !== OFFER_TASK_TITLE) : home.plan;
-  const visible = unfold ? queue : queue.slice(0, QUEUE_FOLD);
-  // Rendered in one of two slots, never both.
+  // One folded list, not two sections. "Also today" and "Next actions" were
+  // different queries rendering the same kind of row, one above the other.
+  const alsoToday = [...plan.filter((a) => a.status === 'open'), ...home.nudges];
+  const alsoDone = plan.filter((a) => a.status === 'done');
+  const visibleAlso = moreAlso ? alsoToday : alsoToday.slice(0, ALSO_FOLD);
+  // The call leads, always. It used to sit below forty queue rows unless the
+  // offer was blank, which put the one decision on the screen out of sight.
   const call = home.decision ? <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} /> : null;
-  const callFirst = noOffer;
+  // When the queue itself won the day there is no separate queue row: that is
+  // the same instruction twice, which is the whole thing this screen fixes.
+  const queueIsCall = home.callMove?.job === 'send_queue';
+  const waited = oldestWait(queue);
   // A brand new account. Three separate empty boxes stacked up read as a broken
   // app; one card reads as a new one.
-  const nothingYet = !home.decision && !home.insight && !queue.length && !plan.length && !home.nudges.length && !home.moves.length;
+  const nothingYet = !home.decision && !home.insight && !queue.length && !alsoToday.length && !home.moves.length;
 
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
@@ -63,27 +81,7 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
     <>
       {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
 
-      {/* With a blank offer nothing can be drafted, so the call IS the screen
-          and leads. Otherwise the queue leads: the drafts are the only thing on
-          this page anyone can act on, and they used to start below the fold
-          behind a decision card and four metrics. */}
-      {callFirst && call}
-
-      {/* Ready is the hero, and it counts every kind of finished work — not just
-          drafts. When the only thing this strip could count was sends, the top of
-          the app told you every morning that it was an outreach tool, which is
-          the one thing it must not be: an opener is one of eight kinds of move,
-          and for most people it is not the one they came to make. */}
-      <div className="cp-metrics" aria-label="Your numbers">
-        <div className={`cp-stat hero ${ready ? 'hot' : ''}`}><div className="v">{ready}</div><div className="l">Ready</div></div>
-        <div className="cp-stat"><div className="v">{m.sent}</div><div className="l">Sent</div></div>
-        <div className={`cp-stat ${m.replies ? 'hot' : ''}`}><div className="v">{m.replies}</div><div className="l">Replies</div></div>
-        <div className={`cp-stat ${m.won ? 'hot' : ''}`}><div className="v">{m.won_amount ? money(m.won_amount, currency) : m.won}</div><div className="l">Won</div></div>
-      </div>
-      <div className="cp-metrics-note">
-        {ready ? `${home.moves.length} finished overnight, ${queue.length} drafted · ` : ''}
-        last {m.window_days} days, counted from what you actually did
-      </div>
+      {call}
 
       {b.matches.remaining === 0 && (
         <div className="cp-card cp-wall">
@@ -105,9 +103,24 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
 
       {nothingYet && <FirstRun home={home} actions={actions} finding={finding} />}
 
-      {/* Finished work from every job, not just outbound. This sits above the
-          send queue because it is the answer to the thing that made the old
-          screen unusable: one action type, and not the one you wanted. */}
+      {/* The read only appears here when there is no call to carry it. With a
+          call it lives inside that card, and the full read is on Working. */}
+      {home.insight && !home.decision && !nothingYet && (
+        <div className="cp-card cp-insight">
+          <div className="cp-eyebrow">{home.insight.eyebrow}</div>
+          <p>{home.insight.body}</p>
+          {home.insight.reasoning && (
+            <>
+              <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the reasoning' : 'See the reasoning →'}</button>
+              {showWhy && <div className="cp-reasoning">{home.insight.reasoning}</div>}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Finished work from every job. The one promoted to the call is not in
+          here — loadHome takes it out, because rendering it twice is exactly the
+          duplication this screen exists to remove. */}
       {home.moves.length > 0 ? (
         <>
           <div className="cp-section">
@@ -124,9 +137,6 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
           {home.movesBlocked === 'migration' ? (
             <>
               <b>Moves are not switched on yet</b>
-              {/* Filename only, and no <code>: the full path is 44 unbreakable
-                  characters, which pushed the whole page wider than the phone
-                  and clipped the metrics strip. */}
               The copilot_moves table is missing. Run the migration
               20260910_copilot_moves.sql.
             </>
@@ -141,104 +151,64 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
         </div>
       ) : null}
 
-      {/* The queue section disappears entirely when it is empty and something
-          else is already waiting: a header with nothing under it is the same
-          noise as an empty box, just quieter about it. */}
-      {noOffer || nothingYet || (!queue.length && home.moves.length > 0) ? null : (
+      {/* The triage deck, which used to be a section on a tab of its own. It is
+          one judgement, answerable with a thumb, so it is one card. */}
+      {home.triage.length > 0 && (
         <>
           <div className="cp-section">
-            <span className="lead">To send</span>
-            <span className="count">{queue.length ? `${queue.length} waiting` : 'clear'}</span>
+            <span className="lead">Worth messaging?</span>
+            <span className="count">{home.triage.length} to judge</span>
           </div>
-          {queue.length ? (
-            <>
-              <div className="cp-list">
-                {visible.map((q) => <QueueRow key={q.id} q={q} home={home} actions={actions} />)}
-              </div>
-              {queue.length > QUEUE_FOLD && (
-                <button className="cp-textlink cp-fold" onClick={() => setUnfold((v) => !v)}>
-                  {unfold ? 'Show fewer' : `Show ${queue.length - QUEUE_FOLD} more`}
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="cp-empty"><b>Queue is clear.</b>Every match with a contact has been messaged. Find new ones on Pipeline, or log what came back.</div>
-          )}
+          <TriageStack cards={home.triage} actions={actions} />
         </>
       )}
 
-      {/* The read is the reasoning behind the call, so when there is a call it
-          lives inside that card. Two AI-written paragraphs stacked at the top of
-          Today was the single heaviest thing on this screen. */}
-      {home.insight && !home.decision ? (
-        <div className="cp-card cp-insight">
-          <div className="cp-eyebrow">{home.insight.eyebrow}</div>
-          <p>{home.insight.body}</p>
-          {home.insight.reasoning && (
-            <>
-              <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the reasoning' : 'See the reasoning →'}</button>
-              {showWhy && <div className="cp-reasoning">{home.insight.reasoning}</div>}
-            </>
-          )}
+      {/* The queue, as one row. It was forty rows here and forty-two on
+          Pipeline, from two different reads, and 45 of 54 drafts were never
+          sent — a list of forty-five is a decision about forty-five things. */}
+      {!noOffer && !queueIsCall && queue.length > 0 && (
+        <div className="cp-card">
+          <div className="cp-call-top">
+            <div className="cp-eyebrow">To send</div>
+            {waited > 0 && <span className="cp-chip">{waited}d oldest</span>}
+          </div>
+          <h2 className="cp-call-head">{queue.length} draft{queue.length === 1 ? '' : 's'} written and not sent</h2>
+          <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'queue' })}>
+            Open the queue
+          </button>
         </div>
-      ) : !home.insight && !home.decision && !nothingYet ? (
-        <div className="cp-empty" style={{ marginTop: 14 }}>
-          <b>No brief yet</b>
-          The copilot writes one read of your day, every day. {briefing ? 'Building it now.' : <button className="cp-textlink" onClick={() => actions.runBrief('manual')}>Build it now</button>}
-        </div>
-      ) : null}
+      )}
 
-      {!callFirst && call}
-
-      {(plan.length > 0 || home.planOverflow > 0) && (
+      {/* Everything else, folded. Two sections of the same kind of row became
+          one, and the count says what is behind the fold rather than hiding it. */}
+      {alsoToday.length > 0 && (
         <>
           <div className="cp-section">
             <span className="lead">Also today</span>
-            {home.planOverflow > 0 && <span className="count">{plan.filter((a) => a.status === 'open').length} of {plan.filter((a) => a.status === 'open').length + home.planOverflow}</span>}
+            <span className="count">{alsoToday.length + home.planOverflow}</span>
           </div>
           <div className="cp-list">
-            {plan.map((a) => {
-              const ec = a.status !== 'done' ? execChip(a.execution) : null;
+            {visibleAlso.map((a) => {
+              const ec = execChip(a.execution);
               return (
-                <button key={a.id} className={`cp-row ${a.status === 'done' ? 'done' : ''}`} onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
-                  <span className={`cp-chip ${a.status === 'done' ? 'done' : ec ? ec.cls : a.owner}`}>{a.status === 'done' ? 'Done' : ec ? ec.label : a.owner === 'ai' ? 'AI drafted' : 'Needs you'}</span>
-                  <span className="txt">{a.minutes && a.owner === 'you' && a.status !== 'done' ? `${a.minutes} min — ` : ''}{a.title}</span>
+                <button key={a.id} className="cp-row" onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
+                  <span className={`cp-chip ${ec ? ec.cls : a.owner}`}>{ec ? ec.label : a.owner === 'ai' ? 'AI drafted' : 'Needs you'}</span>
+                  <span className="txt">{a.minutes && a.owner === 'you' ? `${a.minutes} min — ` : ''}{a.title}</span>
                 </button>
               );
             })}
           </div>
-          {home.planOverflow > 0 && (
+          {alsoToday.length > ALSO_FOLD && (
+            <button className="cp-textlink cp-fold" onClick={() => setMoreAlso((v) => !v)}>
+              {moreAlso ? 'Show fewer' : `Show ${alsoToday.length - ALSO_FOLD} more`}
+            </button>
+          )}
+          {(alsoDone.length > 0 || home.planOverflow > 0) && (
             <div className="cp-note" style={{ marginTop: 8 }}>
-              {home.planOverflow} more behind these. A plan you can finish beats a list you cannot.
+              {alsoDone.length > 0 && `${alsoDone.length} done today. `}
+              {home.planOverflow > 0 && `${home.planOverflow} more behind these.`}
             </div>
           )}
-        </>
-      )}
-
-      {nothingYet ? null : (
-        <>
-      {home.nudges.length > 0 && (
-        <>
-      <div className="cp-section"><span className="lead">Next actions</span>{urgent > 0 && <span className="count">{urgent} urgent</span>}</div>
-      {home.nudges.length ? (
-        <>
-        <div className="cp-list">
-          {(moreNudges ? home.nudges : home.nudges.slice(0, NUDGE_FOLD)).map((n) => (
-            <button key={n.id} className={`cp-nrow ${n.urgency}`} onClick={() => actions.openSheet({ kind: 'action', id: n.id })}>
-              <div className="cp-ndot" />
-              <div><div className="t">{n.title}</div>{n.due_label && <div className="s">{n.due_label}</div>}</div>
-            </button>
-          ))}
-        </div>
-        {home.nudges.length > NUDGE_FOLD && (
-          <button className="cp-textlink cp-fold" onClick={() => setMoreNudges((v) => !v)}>
-            {moreNudges ? 'Show fewer' : `Show ${home.nudges.length - NUDGE_FOLD} more`}
-          </button>
-        )}
-        </>
-      ) : null}
-        </>
-      )}
         </>
       )}
 

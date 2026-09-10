@@ -5,13 +5,16 @@ import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
-import { TREND_LABEL } from './views/SignalsView';
+import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
+import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
     case 'you': return <div className="cp-sheet-embed"><YouView home={home} actions={actions} briefing={briefing} /></div>;
     case 'opening': return <OpeningSheet home={home} term={sheet.term} actions={actions} />;
+    case 'queue': return <QueueSheet home={home} actions={actions} />;
+    case 'stage': return <StageSheet home={home} stage={sheet.stage} actions={actions} />;
     case 'capacity': return <CapacitySheet current={home.profile.capacity} onPick={actions.setCapacity} />;
     case 'action': return <ActionSheet home={home} id={sheet.id} actions={actions} />;
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
@@ -546,3 +549,140 @@ function ResetSheet({ actions }: { actions: Actions }) {
 }
 
 export type { Opportunity };
+
+/* ─── The queue, one draft at a time ─────────────────────────────────────── */
+
+/**
+ * Why this is not a list.
+ *
+ * It was a list: forty rows on Today, forty-two on Pipeline, and 45 of 54 drafts
+ * were never sent. A list of forty-five is a decision about forty-five things,
+ * and the reliable answer to a decision that size is to close the app. This is a
+ * decision about one, ten times — with the message visible, because approving
+ * text you cannot see is not approval.
+ *
+ * Oldest first. Eleven days waiting is the number that makes somebody send, and
+ * it is the recipient closest to having forgotten the problem they had.
+ */
+function QueueSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const [i, setI] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const ordered = [...home.queue].sort((a, b) => a.execution.created_at.localeCompare(b.execution.created_at));
+  const q = ordered[i];
+  const sentToday = home.metrics.sent;
+
+  if (!ordered.length) {
+    return (
+      <>
+        <h3>Queue is clear</h3>
+        <p className="desc">Every match with a contact has been written to. Find new ones from the funnel on Working, or log what came back.</p>
+        <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Back</button></div>
+      </>
+    );
+  }
+  if (!q) {
+    return (
+      <>
+        <h3>That is the last one</h3>
+        <p className="desc">Nothing else is waiting. {sentToday} sent in the last {home.metrics.window_days} days.</p>
+        <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Done</button></div>
+      </>
+    );
+  }
+
+  const e = q.execution;
+  const apiSend = home.channels[e.channel];
+  const label = e.channel === 'whatsapp' ? 'WhatsApp' : 'email';
+  const who = q.opp?.title || q.title.replace(/^Opener to /, '').replace(/, ready to review$/, '');
+  const waited = Math.max(0, Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86_400_000));
+  const next = () => setI((n) => n + 1);
+  const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); next(); } finally { setBusy(false); } };
+
+  return (
+    <>
+      <div className="meta">
+        <span className="cp-chip send">{i + 1} of {ordered.length}</span>
+        {waited > 0 && <span className="cp-chip">{waited} day{waited === 1 ? '' : 's'} waiting</span>}
+      </div>
+      <h3>{who}</h3>
+      <p className="desc">{[q.opp?.segment, q.opp?.name, `over ${label}`].filter(Boolean).join(' · ')}</p>
+
+      <div className="cp-draft">
+        <div className="cp-draft-label">The message</div>
+        {e.subject && <div style={{ fontWeight: 600, marginBottom: 6 }}>{e.subject}</div>}
+        <div style={{ whiteSpace: 'pre-wrap' }}>{e.body}</div>
+      </div>
+      <button className="cp-textlink" style={{ marginTop: 10 }} onClick={() => actions.openSheet({ kind: 'action', id: q.id })}>
+        Edit this message
+      </button>
+
+      {apiSend
+        ? <button className="cp-btn primary block" style={{ marginTop: 14 }} disabled={busy} onClick={() => act(() => actions.sendAction(q.id))}>{busy ? 'Sending…' : `Send on ${label}`}</button>
+        : <a className="cp-btn primary block" style={{ marginTop: 14, textDecoration: 'none' }} href={e.deep_link ?? '#'} target="_blank" rel="noreferrer">Open in {label}</a>}
+
+      <div className="cp-btn-row">
+        {/* Manual dispatch: they sent it from their own app, this only records it. */}
+        {!apiSend && <button className="cp-btn" disabled={busy} onClick={() => act(() => actions.markSent(q.id))}>I sent it</button>}
+        <button className="cp-btn" disabled={busy} onClick={next}>Skip for now</button>
+        <button className="cp-btn" disabled={busy} onClick={() => act(() => actions.cancelDraft(q.id))}>Not for me</button>
+      </div>
+      <p className="cp-help">One at a time. Skipping keeps it in the queue; &ldquo;not for me&rdquo; retires the draft.</p>
+    </>
+  );
+}
+
+/* ─── One funnel stage, opened ───────────────────────────────────────────── */
+
+/**
+ * Where the Pipeline tab went. A funnel bar you cannot open is a picture; this
+ * is the same count with the businesses behind it, oldest first — the order that
+ * says which one is closest to going cold.
+ */
+function StageSheet({ home, stage, actions }: { home: HomeData; stage: PipelineStage; actions: Actions }) {
+  const rows = home.pipeline
+    .filter((r) => r.stage === stage)
+    .sort((a, b) => (a.execution?.created_at ?? a.opportunity.created_at).localeCompare(b.execution?.created_at ?? b.opportunity.created_at));
+
+  return (
+    <>
+      <div className="meta"><span className="cp-chip send">{rows.length}</span></div>
+      <h3>{STAGE_LABEL[stage]}</h3>
+      <p className="desc">
+        {stage === 'to_send' ? 'Written and never sent. The oldest is the one whose recipient is closest to having moved on.'
+          : stage === 'not_drafted' ? 'Matched, nothing written yet. Judge them on Now.'
+          : 'Oldest first.'}
+      </p>
+
+      {stage === 'to_send' && rows.length > 0 && (
+        <button className="cp-btn primary block" style={{ marginBottom: 12 }} onClick={() => actions.openSheet({ kind: 'queue' })}>
+          Work through them, one at a time
+        </button>
+      )}
+
+      {rows.length === 0
+        ? <p className="desc">Nothing at this stage yet.</p>
+        : (
+          <div className="cp-list" style={{ marginLeft: 0, marginRight: 0 }}>
+            {rows.slice(0, 40).map((r) => {
+              const d = (r.opportunity.data ?? {}) as Record<string, unknown>;
+              const segment = [d.segment, d.service_type, d.category].find((v) => typeof v === 'string' && (v as string).trim()) as string | undefined;
+              const since = r.execution?.created_at ?? r.opportunity.created_at;
+              const days = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000));
+              return (
+                <button key={r.opportunity.id} className="cp-prow" onClick={() => actions.openSheet({ kind: 'opp', id: r.opportunity.id })}>
+                  <div className="cp-pmain">
+                    <div className="t">{r.opportunity.title}</div>
+                    <div className="s">{[segment, r.opportunity.last_outcome ? OUTCOME_LABEL[r.opportunity.last_outcome].toLowerCase() : null].filter(Boolean).join(' · ')}</div>
+                  </div>
+                  <span className="cp-score">{days === 0 ? 'today' : `${days}d`}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      {rows.length > 40 && <div className="cp-note" style={{ paddingLeft: 0 }}>Showing the 40 oldest of {rows.length}.</div>}
+
+      <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Back</button></div>
+    </>
+  );
+}

@@ -172,7 +172,7 @@ notify anyone about — see **When the brief 504s** and the deploy notes in
 ## Two shells, one app
 
 `/copilot` and `/lifeos` are the same application. Same session cookie (`path:
-'/'`), same database, same components, same three tabs — `src/app/lifeos/`
+'/'`), same database, same components, same two tabs — `src/app/lifeos/`
 contains only a layout and four thin pages, all of which render the entries in
 `src/app/copilot/_components/`. The single difference is `data-theme="soft"` on
 `.cp-root`, plus Sora in place of Archivo:
@@ -201,6 +201,36 @@ hrefs on the client, `toShell()` to narrow the value a client sends before it is
 concatenated into a Stripe `success_url`. One thing still lands on `/copilot`
 whichever shell asked for it — the emailed magic link, whose target is fixed
 when the token is written.
+
+## Two tabs
+
+Two questions, two tabs: **Now** (what do I do) and **Working?** (is it working).
+
+Pipeline was the third and every part of it already existed somewhere else. Its
+send queue was Today's send queue read a second way — the two rendered from
+different queries and disagreed on screen, 40 against 42. Its triage deck is one
+card on Now. Its stage groups are what the funnel on Working now opens into.
+
+**The funnel is the navigation.** Every bar is a button into the businesses at
+that stage, oldest first (`StageSheet`), which is what stops it being a picture
+you look at once. `STAGE_OF_FUNNEL` maps the two vocabularies in one place.
+
+**The queue is one draft at a time** (`QueueSheet`), not a list. It was a list —
+forty rows on Today, forty-two on Pipeline — and 45 of 54 drafts were never sent.
+A list of forty-five is a decision about forty-five things, and the reliable
+answer to a decision that size is to close the app. The message is on screen,
+because approving text you cannot see is not approval.
+
+**What Now dropped:** the metrics strip (moved to Working — above the day's one
+decision it said "this is an outreach tool" every morning), the forty-row queue,
+the "drafts waiting" chip, and the separate "Next actions" list, which is now
+folded into "Also today" with the plan. Two nudges went with them: the starter's
+"N drafts waiting for approval" and "runway is N months" both restated a card
+that now carries the same fact plus the way to act on it.
+
+Old deep links still work: `TAB_ALIAS` maps `today`/`pipeline` → `now` and
+`signals` → `working`, so an installed shell and the weekly push keep landing
+somewhere sensible.
 
 ## The loop
 
@@ -256,7 +286,7 @@ COPILOT_VAPID_PUBLIC_KEY / COPILOT_VAPID_PRIVATE_KEY / COPILOT_VAPID_SUBJECT   #
 # Cron
 CRON_SECRET=...                     # REQUIRED for /api/copilot/cron/daily — it fails closed without one
 #   On the profile's Monday the cron also writes the weekly Signals read (copilot_insights.kind='weekly')
-#   and pushes it, deep-linking to /copilot?tab=signals. Idempotent per ISO week.
+#   and pushes it, deep-linking to /copilot?tab=working. Idempotent per ISO week.
 COPILOT_CRON_BATCH=25               # profiles per run
 COPILOT_CRON_BUDGET_MS=240000       # stop starting new profiles past this point
 
@@ -821,7 +851,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/copilot/onboard` | profile + goal + targeting + context, cookie, first supply, first brief |
-| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis (openings with weekly trend and per-segment read), latest weekly Signals insight, metrics |
+| GET | `/api/copilot/home` | everything for both tabs and the You sheet: send queue, pipeline, diagnosis (openings with weekly trend and per-segment read), latest weekly Signals insight, metrics |
 | POST | `/api/copilot/brief` | run the agent now |
 | POST | `/api/copilot/supply` | find new matches: supply → reconcile → brief |
 | POST | `/api/copilot/capacity` | `{ capacity }` |

@@ -1,7 +1,18 @@
+import type { PipelineStage } from '@/lib/copilot/pipeline';
 import type { ActionStatus, Capacity, Channel, Goal, GrowthItem, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
-/** Three tabs. You is a sheet behind the header avatar, not a destination. */
-export type Tab = 'today' | 'pipeline' | 'signals';
+/**
+ * Two tabs, because there are two questions: what do I do, and is it working.
+ *
+ * Pipeline was the third and it was three things, all of which already existed
+ * somewhere else. Its send queue was Today's send queue read a second way (40
+ * on one tab, 42 on the other). Its triage deck is one card on Now. Its stage
+ * groups are what the funnel on Working now opens into — the funnel stops being
+ * decoration and becomes the navigation.
+ *
+ * You is a sheet behind the header avatar, not a destination.
+ */
+export type Tab = 'now' | 'working';
 
 export type SheetState =
   | { kind: 'capacity' }
@@ -16,7 +27,11 @@ export type SheetState =
   | { kind: 'won'; oppId: string }
   | { kind: 'offer' }
   | { kind: 'you' }
-  | { kind: 'opening'; term: string };
+  | { kind: 'opening'; term: string }
+  /** The send queue, one draft at a time. See QueueSheet for why it is not a list. */
+  | { kind: 'queue' }
+  /** One funnel stage, opened: the businesses actually in it. */
+  | { kind: 'stage'; stage: PipelineStage };
 
 export interface OutcomeInput {
   opportunity_id?: string;

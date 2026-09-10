@@ -74,6 +74,6 @@ export async function runWeeklySignals(profileId: string, opts: { now?: Date; fo
   await db.from('copilot_insights').insert({
     profile_id: profileId, kind: 'weekly', for_date: todayIso(profile.timezone), eyebrow: WEEKLY_EYEBROW, body: composed.body, reasoning: null,
   });
-  await sendPush(profileId, { ...composed.push, url: '/copilot?tab=signals', tag: `weekly-${week}` });
+  await sendPush(profileId, { ...composed.push, url: '/copilot?tab=working', tag: `weekly-${week}` });
   return { wrote: true };
 }

@@ -22,16 +22,15 @@
           font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: center; }
     .sec { display: flex; justify-content: space-between; align-items: center;
            font-size: 11.5px; font-weight: 700; color: #7B8094; letter-spacing: .06em;
-           text-transform: uppercase; padding: 18px 24px 10px; }
-    .sec .ct { font-weight: 500; text-transform: none; letter-spacing: 0; color: #AEB2C2; font-size: 11.5px; }
+           text-transform: uppercase; padding: 20px 24px 12px; }
+    .sec .ct { font-weight: 500; text-transform: none; letter-spacing: 0; color: #AEB2C2; }
     .card { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07);
-            margin: 0 22px 4px; padding: 20px 22px; }
-    .read { margin-top: 4px; }
-    .read .eb { font-size: 11px; font-weight: 700; color: #4F63D2; letter-spacing: .06em; text-transform: uppercase; }
+            margin: 0 22px; padding: 20px 22px; }
+    .eb { font-size: 11px; font-weight: 700; color: #4F63D2; letter-spacing: .06em; text-transform: uppercase; }
     .read p { font-size: 15px; line-height: 1.6; margin: 9px 0 0; }
     .read p b { font-weight: 700; }
-    .stg { margin-bottom: 13px; cursor: pointer; }
-    .stg:last-of-type { margin-bottom: 4px; }
+    .stg { padding: 5px 0; margin-bottom: 6px; cursor: pointer; }
+    .stg:last-of-type { margin-bottom: 0; }
     .stgt { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 5px; }
     .stgl { font-size: 13.5px; font-weight: 700; }
     .stgc { font-size: 15px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
@@ -41,15 +40,13 @@
     .drop .stgl, .drop .stgr { color: #4F63D2; }
     .drop .stgf { background: #4F63D2; }
     .out .stgf { background: repeating-linear-gradient(45deg, #AEB2C2 0 4px, transparent 4px 8px); }
-    .out .stgr { color: #AEB2C2; font-size: 11px; }
+    .out .stgr { color: #AEB2C2; }
     .cv { width: 13px; height: 13px; stroke: #AEB2C2; fill: none; stroke-width: 2.2; flex-shrink: 0; }
     .help { margin-top: 12px; padding-top: 12px; border-top: 1px solid #F1F2F7;
             font-size: 11.5px; line-height: 1.55; color: #AEB2C2; font-weight: 500; }
-    .calls { background: rgba(79,99,210,.08); border-radius: 24px; margin: 0 22px 4px; padding: 18px 22px; }
-    .calls p { margin: 0; font-size: 13.5px; line-height: 1.55; font-weight: 600; }
-    .calls span { display: block; margin-top: 6px; font-size: 12px; font-weight: 500; color: #7B8094; }
     .op { display: flex; align-items: baseline; gap: 12px; padding: 11px 0; border-bottom: 1px solid #F1F2F7; }
-    .op:last-child { border-bottom: 0; padding-bottom: 0; }
+    .op:first-child { padding-top: 0; }
+    .op:last-child { border-bottom: 0; }
     .op .n { font-size: 16px; font-weight: 700; color: #4F63D2; min-width: 26px; }
     .op .t { font-size: 13px; line-height: 1.45; }
     .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; pointer-events: none;
@@ -75,7 +72,7 @@
 
   <div class="card read">
     <span class="eb">The read</span>
-    <p>Nothing is wrong upstream. You matched 202 and wrote 54 &mdash; then <b>45 of those never left</b>. Sending is the whole problem, and it has been for four days.</p>
+    <p>Nothing is wrong upstream. You wrote 54 and <b>45 never left</b>. You have had the same call four days running and made it once.</p>
   </div>
 
   <div class="sec"><span>Your funnel</span><span class="ct">tap a stage to see them</span></div>
@@ -104,13 +101,7 @@
       <div class="stgt"><span class="stgl">Won</span><span class="stgc">1<span class="stgr">17%</span><svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
       <div class="stgk"><div class="stgf" style="width: 0.6%;"></div></div>
     </div>
-    <p class="help">6 meetings came from work you sent some other way, so every rate below Sent reads lower than reality.</p>
-  </div>
-
-  <div class="sec"><span>Your calls</span><span class="ct">last 4</span></div>
-  <div class="calls">
-    <p>You have been told to send the drafts four days running.</p>
-    <span>You did it once, said no once, and ignored it twice. A call nobody makes is not a call.</span>
+    <p class="help">Six meetings came from work you sent some other way, so Won reads against those rather than against your two replies.</p>
   </div>
 
   <div class="sec"><span>Where the opening is</span><span class="ct">across 86 matches</span></div>

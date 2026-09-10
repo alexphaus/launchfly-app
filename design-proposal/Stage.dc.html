@@ -15,21 +15,25 @@
           background: #EEF1F7; color: #1A1D29; font-family: Sora, system-ui, sans-serif;
           line-height: 1.5; -webkit-font-smoothing: antialiased; }
     a { color: #4F63D2; } a:hover { color: #3A4CB8; }
-    .hd { padding: 16px 20px 4px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .hd h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; margin: 0; display: flex; align-items: center; gap: 10px; }
+    .hd { padding: 16px 20px 2px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .ttl { display: flex; align-items: center; gap: 4px; }
+    .back { width: 44px; height: 44px; margin-left: -12px; border: 0; background: none; border-radius: 999px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .hd h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; margin: 0; }
     .hd .n { font-size: 19px; font-weight: 700; color: #4F63D2; }
-    .lede { padding: 0 20px 14px 50px; font-size: 12.5px; font-weight: 500; color: #7B8094; line-height: 1.5; }
+    .lede { padding: 0 22px 14px 34px; font-size: 12.5px; font-weight: 500; color: #7B8094; line-height: 1.5; }
     .btn { border: 0; border-radius: 999px; background: #fff; color: #1A1D29; box-shadow: 0 4px 14px rgba(31,41,68,.05);
            font-family: inherit; font-weight: 600; font-size: 12.5px; padding: 13px 17px; min-height: 44px; cursor: pointer; }
     .btn.pri { background: #4F63D2; color: #fff; box-shadow: 0 6px 16px rgba(79,99,210,.28); }
-    .btn.blk { display: block; width: calc(100% - 44px); margin: 0 22px 6px; padding: 16px; font-size: 13.5px; text-align: center; }
+    .btn.blk { display: block; width: calc(100% - 44px); margin: 0 22px; padding: 15px; font-size: 13px; text-align: center; }
     .sec { display: flex; justify-content: space-between; align-items: center;
            font-size: 11.5px; font-weight: 700; color: #7B8094; letter-spacing: .06em;
-           text-transform: uppercase; padding: 20px 24px 10px; }
+           text-transform: uppercase; padding: 20px 24px 12px; }
     .sec .ct { font-weight: 500; text-transform: none; letter-spacing: 0; color: #AEB2C2; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 22px 4px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 22px; }
     .cp { border-radius: 999px; background: #fff; box-shadow: 0 4px 14px rgba(31,41,68,.05);
-          font-size: 11.5px; font-weight: 600; color: #7B8094; padding: 9px 14px; white-space: nowrap; }
+          font-size: 11.5px; font-weight: 600; color: #7B8094; padding: 13px 16px; min-height: 44px;
+          display: flex; align-items: center; gap: 5px; white-space: nowrap; }
     .cp.on { background: #4F63D2; color: #fff; box-shadow: 0 6px 16px rgba(79,99,210,.28); }
     .cp b { color: #1A1D29; font-weight: 700; } .cp.on b { color: #fff; }
     .list { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07); margin: 0 22px; overflow: hidden; }
@@ -40,30 +44,32 @@
     .it .sg { font-size: 11px; font-weight: 500; color: #AEB2C2; margin-top: 2px; }
     .age { font-size: 11.5px; font-weight: 600; color: #7B8094; white-space: nowrap; }
     .age.old { color: #A85F2E; }
-    .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; pointer-events: none;
+    .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; pointer-events: none;
             background: linear-gradient(to bottom, rgba(238,241,247,0) 0%, #EEF1F7 62%); }
   </style>
 </helmet>
 
 <div class="ph">
   <div class="hd">
-    <h1>
-      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#1A1D29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
-      Drafted
-    </h1>
+    <div class="ttl">
+      <button class="back" aria-label="Back">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1A1D29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1>Drafted</h1>
+    </div>
     <span class="n">54</span>
   </div>
-  <p class="lede">Written and never sent. The oldest has been waiting eleven days.</p>
+  <p class="lede">Nine of them went out. The other <b>45</b> are still sitting here, and the oldest has been waiting eleven days.</p>
 
   <button class="btn pri blk">Work through them &mdash; 10 today</button>
 
-  <div class="sec"><span>By segment</span><span class="ct">tap to filter</span></div>
+  <div class="sec"><span>The 45 still waiting</span><span class="ct">tap to filter</span></div>
   <div class="chips">
-    <span class="cp on"><b>54</b> All</span>
-    <span class="cp"><b>22</b> Renovation</span>
+    <span class="cp on"><b>45</b> All</span>
+    <span class="cp"><b>19</b> Renovation</span>
     <span class="cp"><b>11</b> Staycation</span>
-    <span class="cp"><b>9</b> Pest control</span>
-    <span class="cp"><b>8</b> Plumbing</span>
+    <span class="cp"><b>8</b> Pest control</span>
+    <span class="cp"><b>7</b> Plumbing</span>
   </div>
 
   <div class="sec"><span>Longest waiting first</span></div>
@@ -91,14 +97,6 @@
     <div class="it">
       <div><div class="nm">Staycation by Norj</div><div class="sg">Staycation &amp; resorts &middot; WhatsApp</div></div>
       <span class="age">2 days</span>
-    </div>
-    <div class="it">
-      <div><div class="nm">Rumah Anak Johor</div><div class="sg">Renovation &middot; WhatsApp</div></div>
-      <span class="age">1 day</span>
-    </div>
-    <div class="it">
-      <div><div class="nm">Maid For You</div><div class="sg">Renovation &middot; WhatsApp</div></div>
-      <span class="age">today</span>
     </div>
   </div>
 

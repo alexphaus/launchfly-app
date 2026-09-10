@@ -24,7 +24,7 @@
           font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: center; }
     .card { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07);
             margin: 0 22px 16px; padding: 20px 22px; }
-    .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 26px; }
     .eb { font-size: 11px; font-weight: 700; color: #4F63D2; letter-spacing: .06em; text-transform: uppercase; }
     .chip { border-radius: 999px; font-size: 10.5px; font-weight: 700; padding: 5px 11px;
             background: #F1F2F7; color: #7B8094; white-space: nowrap; }
@@ -35,8 +35,6 @@
     ul.bc li::before { content: ''; position: absolute; left: 0; top: 7px; width: 6px; height: 6px;
                        border-radius: 50%; background: #4F63D2; }
     ul.bc li b { color: #1A1D29; font-weight: 600; }
-    .inst { font-size: 12.5px; line-height: 1.5; color: #7B8094; padding-top: 10px; border-top: 1px solid #F1F2F7; }
-    .inst b { display: block; font-size: 11.5px; font-weight: 600; color: #7B8094; margin-bottom: 3px; }
     .btn { border: 0; border-radius: 999px; background: #fff; color: #1A1D29; box-shadow: 0 4px 14px rgba(31,41,68,.05);
            font-family: inherit; font-weight: 600; font-size: 12.5px; padding: 13px 17px; min-height: 44px; cursor: pointer; }
     .btn.pri { background: #4F63D2; color: #fff; box-shadow: 0 6px 16px rgba(79,99,210,.28); }
@@ -59,7 +57,7 @@
   <div class="hd">
     <div>
       <h1>Good morning, Alex</h1>
-      <p>3 ready &middot; runway 3.4 mo</p>
+      <p>3 waiting on you</p>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
       <div class="cap">
@@ -75,16 +73,12 @@
       <span class="eb">Today&rsquo;s call</span>
       <span class="chip warn">4th day</span>
     </div>
-    <h2 class="hh">Send 10 of the 43 drafts. Start with Staycation by Norj.</h2>
+    <h2 class="hh">Send 10 drafts before you look at anything else.</h2>
     <ul class="bc">
-      <li><b>45 of 54</b> drafts never left. Sending is your only stage under 20%.</li>
-      <li>Same call four days running. You have made it <b>once</b>.</li>
+      <li><b>45 of 54</b> drafts never left.</li>
+      <li>Fourth day running. Done once.</li>
     </ul>
-    <div class="inst">
-      <b>Instead of</b>
-      Finding new matches. You have 1,986 left and 43 already written.
-    </div>
-    <button class="btn pri blk" style="margin: 14px 0 10px;">Open the queue &mdash; 43 waiting</button>
+    <button class="btn pri blk" style="margin-bottom: 10px;">Open the queue &mdash; 45 waiting</button>
     <div class="row">
       <button class="btn">I did it</button>
       <button class="btn">Not doing it</button>
@@ -97,10 +91,9 @@
       <span class="eb">Earn</span>
       <span class="chip">5 min</span>
     </div>
-    <h2 class="hh">Maria Santos paid USD 500 and has not heard from you in 96 days</h2>
+    <h2 class="hh">Maria Santos paid USD 500, then silence for 96 days</h2>
     <ul class="bc">
-      <li>Last paid <b>1 Jun</b>, USD 500. Nothing recorded since.</li>
-      <li>Every match in your pipeline is a stranger. This one is not.</li>
+      <li>Last paid <b>1 Jun</b>. Nothing recorded since.</li>
     </ul>
     <button class="btn pri blk" style="margin-bottom: 10px;">Open in email</button>
     <div class="row">

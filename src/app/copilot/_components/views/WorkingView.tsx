@@ -105,9 +105,11 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
               <button key={t.term} className="cp-drow" onClick={() => actions.openSheet({ kind: 'opening', term: t.term })}>
                 <div className="cp-dmain">
                   <div className="t">{t.term}</div>
-                  {/* "Steady" is the default, and a chip on every row that reads
-                      the same is decoration. Only a move earns one. */}
-                  {t.trend !== 'steady' && <span className={`cp-chip trend ${t.trend}`}>{TREND_LABEL[t.trend]}</span>}
+                  {/* No trend chip. These are conditions a scraper observed at a
+                      prospect, so "Fading" only ever meant that fewer of this
+                      week's scrapes carried it — which reads as market
+                      intelligence and is not. The count and "found this week"
+                      below say the same thing without the claim. */}
                 </div>
                 <div className="cp-dbar"><div className="cp-dfill" style={{ width: `${Math.round((t.count / d.openings[0].count) * 100)}%` }} /></div>
                 <div className="cp-dsub">

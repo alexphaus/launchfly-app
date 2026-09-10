@@ -57,20 +57,13 @@ export class StarterAgent implements OpportunityAgent {
         opportunity_ref: top.id, channel,
       });
     }
-    plan.push({
-      owner: 'you',
-      title: goal?.target_value != null && Number(goal.current_value ?? 0) === 0 && m.won === 0
-        ? `Log where you stand today on "${goal.title}" so progress is real`
-        : m.sent > 0 && m.replies === 0
-          ? 'Write one sentence on why the last 5 recipients might have ignored you'
-          : 'Write down the last 3 people who paid you, and why they did',
-      detail: 'Highest-signal context for matching. Add it as a note on Today.',
-      minutes: 10,
-    });
+    // Two reflection tasks used to live here — "write down the last 3 people who
+    // paid you", "add one constraint I should respect". They were generated every
+    // day whatever was happening, never completed, and filled "Also today" with
+    // homework while the Moves underneath carried actual work. A plan item now
+    // has to be something only the user can do and the app actually needs.
     if (!pack.profile.target_segments.length) {
-      plan.push({ owner: 'you', title: 'Set who you sell to and where, so real matches can be found', detail: 'You tab → Targeting. Two fields.', minutes: 2 });
-    } else {
-      plan.push({ owner: 'you', title: 'Add one constraint I should respect (time, location, money, energy)', detail: 'Constraints change what counts as a good opportunity.', minutes: pack.profile.capacity === 'low' ? 5 : 15 });
+      plan.push({ owner: 'you', title: 'Set who you sell to and where, so real matches can be found', detail: 'Your avatar → Targeting. Two fields.', minutes: 2 });
     }
 
     // Two nudges were removed here rather than rewritten, because both had

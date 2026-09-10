@@ -450,6 +450,14 @@ export async function gradeDecisions(profileId: string, opts: { now?: Date } = {
   return out;
 }
 
+/**
+ * A nudge is a reminder about a particular day. Nothing ever closed one, so an
+ * open row stayed on screen forever: "45 drafted messages are waiting for your
+ * approval" was still in Also today days after that nudge stopped being written
+ * at all, sitting directly under the card that already said it.
+ */
+const NUDGE_STALE_DAYS = 3;
+
 export async function loadHome(profileId: string): Promise<HomeData | null> {
   const db = copilotDb();
   const profile = await getProfile(profileId);
@@ -460,7 +468,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
-    db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'nudge').eq('status', 'open').order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as Action[]),
+    db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'nudge').eq('status', 'open').gte('for_date', addDays(today, -NUDGE_STALE_DAYS)).order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as Action[]),
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).in('status', ['new', 'saved']).order('created_at', { ascending: false }).limit(60).then((r) => ((r.data ?? []) as (Opportunity & { expires_at: string | null })[]).filter((o) => !o.expires_at || new Date(o.expires_at) > new Date()).slice(0, 40)),
     db.from('copilot_growth_items').select('*').eq('profile_id', profileId).eq('status', 'active').order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as GrowthItem[]),
     ensureSources(profileId),

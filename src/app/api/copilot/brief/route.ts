@@ -1,5 +1,4 @@
-import { runBrief } from '@/lib/copilot/brief';
-import { runJobs } from '@/lib/copilot/jobs';
+import { runJobsThenBrief } from '@/lib/copilot/daily';
 import { limitsFor } from '@/lib/copilot/plans';
 import { getProfile, loadHome } from '@/lib/copilot/store';
 import { rateLimit } from '@/lib/copilot/limits';
@@ -8,7 +7,7 @@ import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 export const runtime = 'nodejs';
 export const maxDuration = 90;
 
-/** Jobs ride along after the brief; they must not be what makes this 504. */
+/** Jobs run first and must not be what makes this 504. See runJobsThenBrief. */
 const JOBS_BUDGET_MS = 8_000;
 
 export async function POST(req: Request) {
@@ -22,17 +21,18 @@ export async function POST(req: Request) {
   if (!rl.ok) return fail(`That is your ${perDay} brief${perDay === 1 ? '' : 's'} for today. A higher plan rebuilds it more often.`, 429);
   const body = await readJson(req);
   try {
-    const result = await runBrief(auth.pid, { reason: typeof body.reason === 'string' ? body.reason : 'manual' });
-    // The button says "Run agent", so it runs the agent — all of it. Jobs used
-    // to fire only from the cron and "Find new matches", which meant the button
-    // most people reach for produced no Moves and looked broken.
-    //
-    // Bounded and swallowed: this is behind the proxy, and a job failing must
-    // never cost the brief that already succeeded.
-    try { await runJobs(auth.pid, { deadline: Date.now() + JOBS_BUDGET_MS }); }
-    catch (e) { console.error('[copilot] jobs after brief failed', e); }
+    // The button says "Run agent", so it runs the agent — all of it, in the one
+    // order that works. This route used to run the brief and then the jobs,
+    // which meant the Call was picked before today's Moves existed and
+    // arbitration could never fire. Jobs are bounded and their failure is
+    // swallowed inside runJobsThenBrief; the brief is what may 502.
+    const ran = await runJobsThenBrief(auth.pid, {
+      reason: typeof body.reason === 'string' ? body.reason : 'manual',
+      jobsDeadline: Date.now() + JOBS_BUDGET_MS,
+    });
+    if (!ran.brief) return fail('The agent could not produce a brief right now.', 502);
     const home = await loadHome(auth.pid);
-    return json({ ok: true, agent: result.agent, fellBack: result.fellBack, home });
+    return json({ ok: true, agent: ran.brief.agent, fellBack: ran.brief.fellBack, home });
   } catch (e) {
     console.error('[copilot] brief failed', e);
     return fail('The agent could not produce a brief right now.', 502);

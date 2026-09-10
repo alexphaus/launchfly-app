@@ -10,6 +10,7 @@ import { selectMoves, type MoveDraft } from '../moves';
 import { getProfile, logEvent } from '../store';
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
+import { goalGapJob } from './goal-gap';
 import { openingGapJob } from './opening-gap';
 import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
@@ -30,6 +31,9 @@ import type { Job, JobContext } from './types';
  *                construction rather than by winning
  * earn / build   from the sales table: money already collected, and money left
  *                on the table by silence after it
+ * decide         the gap between a goal the user set and the rate that is
+ *                actually closing it — the first thing here that reads what
+ *                they said they were trying to do
  * decide / avoid / learn
  *                from the funnel, the openings read and the decision record —
  *                measured here, never asked of a model
@@ -43,6 +47,7 @@ export const JOBS: Job[] = [
   clientDeliveryJob,
   repeatCustomerJob,
   runwayGuardJob,
+  goalGapJob,
   openingGapJob,
   capabilityGapJob,
   remoteJob,

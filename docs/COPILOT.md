@@ -592,6 +592,7 @@ whatever the landing page says.
 | Job | Kind | Sensor | Model? |
 |---|---|---|---|
 | `send_queue` | `earn` | a non-blank offer | no |
+| `goal_gap` | `decide` | onboarding complete | no |
 | `client_delivery` | `build` | linked `sales` table | no |
 | `repeat_customer` | `earn` | linked `sales` table | no |
 | `runway_guard` | `decide` | `finance.cash` + `monthly_burn` | no |
@@ -658,6 +659,43 @@ stake, it is a promise** — that is the bar for adding one.
 `METRIC_GOOD_DIRECTION` exists because good is not always up: "clear the queue"
 succeeds when the number falls, and `verdictOf` graded that as `no_movement`
 until it was told otherwise.
+
+### Jobs before the brief. Always.
+
+`runBrief` picks the Call by arbitrating over the OPEN Moves. If the jobs that
+write today's Moves run afterwards, the Call is decided from yesterday's
+leftovers — and on a morning when those were all answered, from nothing, which
+falls through to `starterDecision`, every branch of which is outreach.
+
+That shipped. `/api/copilot/brief` — the "Run agent" button — ran the brief and
+then the jobs, so arbitration was merged, live, and could never fire: the app
+went on saying "send the 45 drafts already written" for a fifth morning while the
+Move that should have won sat in the list underneath it. Nothing in the type
+system catches an ordering bug.
+
+Both callers now go through **`runJobsThenBrief`** in `daily.ts`, so the two
+orders cannot drift apart again. Anything new that produces a brief must use it.
+
+### Goals
+
+`JobSense` carries `goals`. It did not, and that was the widest gap between this
+product and what it claims to be: the brief could see them (`ContextPack.goals`)
+and the decision layer could not, so an account whose owner had written "Get a
+job — urgent money" and "MacBook Air, $1,000" into it could not produce or rank
+one thing that referenced either.
+
+`goal_gap` speaks about the highest-priority goal the ledger can actually
+measure: a currency goal with a target. It compares the gap to the rate of
+logged wins and says whether the second closes the first before the date the
+user set. **It stays silent on the others** — "Monetize App — 0 of 10 users" and
+"Get a job" are real goals with no meter behind them, and a projection with no
+meter is the invention every other job here refuses to make. They are waiting on
+a sensor, not on wording.
+
+There is deliberately **no goal-alignment multiplier** in `scoreMove`. A goal
+that is behind produces its own Move and competes on the same four factors as
+everything else; a vague "this feels goal-shaped" bonus on unrelated Moves would
+be exactly the invented precision this file keeps arguing against.
 
 ### ctx.sense() — reading what the app already worked out
 

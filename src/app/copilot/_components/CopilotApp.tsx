@@ -347,11 +347,14 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
   // Once the call carries the instruction, repeating it here is the fourth time
   // the same sentence appears above the fold. The header goes back to being the
   // status line it was built to be.
-  const ready = home.moves.length + home.queue.length;
+  // Finished work only. Counting the send queue here read "45 ready for you" on
+  // a morning when 45 was the number of things NOT done — outreach back at the
+  // top of the screen, above the one decision, wearing the word "ready".
+  const ready = home.moves.length;
   const headline = offerIsEmpty(home.profile.offer) && !home.decision && !home.moves.length
     ? 'Set your offer to start sending'
     : [
-        ready ? `${ready} ready for you` : 'nothing waiting',
+        ready ? `${ready} more ready` : 'one call today',
         `${home.metrics.replies} replied`,
         home.metrics.runway_months != null ? `runway ${home.metrics.runway_months} mo` : null,
       ].filter(Boolean).join(' · ');

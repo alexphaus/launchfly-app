@@ -7,6 +7,7 @@ import { StarterAgent, getAgent } from './agent';
 import { budgetForReason } from './agent/llm';
 import { buildContextPack } from './context';
 import { copilotDb } from './db';
+import { promoteCall } from './call';
 import { metricValue, snapshotOf, starterDecision } from './decision';
 import { createDraftExecution, openDraftForOpportunity } from './execution';
 import { OFFER_TASK_DETAIL, OFFER_TASK_TITLE, offerIsEmpty } from './offer';
@@ -94,9 +95,22 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     offerEmpty: blankOffer,
     hasSegments: profile.target_segments.length > 0,
   });
-  const useFloor = blankOffer || !out.decision;
-  out.decision = useFloor ? floor.decision : out.decision;
-  out.dont = useFloor ? floor.dont : out.dont;
+  // The ladder is in call.ts. Short version: a blank offer forces the offer
+  // call; otherwise the winning Move takes it, because it is grounded in a real
+  // row and carries an artifact where prose does not; otherwise the agent's;
+  // otherwise the starter's floor.
+  const promoted = blankOffer ? null : await promoteCall(profile, pack.metrics).catch((e) => {
+    // Arbitration failing must not cost the whole brief. Falling through to the
+    // written call is exactly the behaviour that existed before it.
+    console.error('[copilot/brief] promoteCall failed', e);
+    return null;
+  });
+  const useFloor = blankOffer || (!promoted && !out.decision);
+  out.decision = blankOffer ? floor.decision : promoted ? promoted.draft : (out.decision ?? floor.decision);
+  // A promoted Move brings its own trade-off (the runner-up) and its own
+  // artifact, so a separate "not today" line beside it is a second opinion
+  // nobody asked for.
+  out.dont = promoted ? null : useFloor ? floor.dont : out.dont;
   if (out.decision) {
     await saveDecision(pid, {
       forDate: today, runId, draft: out.decision, dont: out.dont,

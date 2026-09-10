@@ -124,21 +124,42 @@ export async function loadTriage(profileId: string, rows: PipelineRow[]): Promis
  * its migration is applied by hand, and an empty Moves section is a far better
  * failure than a blank Today.
  */
+const MOVE_COLS = 'id, job, kind, headline, why, artifact, cost_label, status, created_at';
+const MOVE_COLS_V2 = `${MOVE_COLS}, stake`;
+
 export async function loadMoves(profileId: string, limit = 8): Promise<{ moves: Move[]; tableMissing: boolean }> {
-  const { data, error } = await copilotDb()
+  const read = (cols: string) => copilotDb()
     .from('copilot_moves')
-    .select('id, job, kind, headline, why, artifact, cost_label, status, created_at')
+    .select(cols)
     .eq('profile_id', profileId).eq('status', 'open')
     .order('created_at', { ascending: false })
     // Read wider than the screen, then let orderMoves pick: cutting to `limit`
     // in SQL would drop an earn written on Monday in favour of a learn written
     // last night, before anything had a chance to rank them.
     .limit(limit * 4);
+  let { data, error } = await read(MOVE_COLS_V2);
+  // `stake` ships in a migration this code does not wait for; without it a Move
+  // still renders and still ranks, on its kind prior alone.
+  if (error) ({ data, error } = await read(MOVE_COLS));
   // Still degrades to an empty list rather than a blank Today — but says so,
   // because the first build swallowed this and an unapplied migration was
   // indistinguishable from a quiet day.
   if (error) return { moves: [], tableMissing: true };
-  return { moves: orderMoves((data ?? []) as Move[], limit), tableMissing: false };
+  return { moves: orderMoves((data ?? []) as unknown as Move[], limit), tableMissing: false };
+}
+
+/**
+ * One Move by id, for the case where the promoted call is not in the screen's
+ * top slice. Rare — the winner is usually near the top of orderMoves too — but a
+ * Call rendering without its artifact is the exact failure this whole change is
+ * meant to end.
+ */
+export async function loadMoveById(profileId: string, id: string): Promise<Move | null> {
+  const read = (cols: string) => copilotDb().from('copilot_moves').select(cols)
+    .eq('profile_id', profileId).eq('id', id).maybeSingle();
+  let { data, error } = await read(MOVE_COLS_V2);
+  if (error) ({ data, error } = await read(MOVE_COLS));
+  return error || !data ? null : (data as unknown as Move);
 }
 
 export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {
@@ -149,23 +170,23 @@ export async function setMoveStatus(profileId: string, id: string, status: 'done
 }
 
 /**
- * What the market keeps asking for, read straight from the user's own matches.
+ * What the user's own matches have in common, read straight off their listings.
  *
- * Narrower than loadDiagnosisRows on purpose: demand only ever looks at sourced
- * rows, and only needs the columns wantsOf/segmentOf read. Capped because the
+ * Narrower than loadDiagnosisRows on purpose: openings only ever look at sourced
+ * rows, and only need the columns openingsOf/segmentOf read. Capped because the
  * pack build is on the brief's critical path — newest first, so the weekly
  * trend is always whole and only the far tail of the all-time count is lost.
  */
-const MAX_DEMAND_ROWS = 500;
+const MAX_OPENING_ROWS = 500;
 
-export async function loadDemandRows(profileId: string): Promise<DiagnoseInput['opportunities']> {
+export async function loadOpeningRows(profileId: string): Promise<DiagnoseInput['opportunities']> {
   const { data } = await copilotDb()
     .from('copilot_opportunities')
     .select('id, status, source, source_kind, data, reason, title, created_at')
     .eq('profile_id', profileId)
     .eq('source_kind', 'sourced')
     .order('created_at', { ascending: false })
-    .limit(MAX_DEMAND_ROWS);
+    .limit(MAX_OPENING_ROWS);
   return (data ?? []) as DiagnoseInput['opportunities'];
 }
 
@@ -241,6 +262,10 @@ async function latestInsight(profileId: string, kind: 'daily' | 'weekly'): Promi
 // is read-mostly; the sweep that grades old calls lives in daily.ts.
 
 const DECISION_COLS = 'id, for_date, headline, because, instead_of, confidence, missing, topic, dont_title, dont_why, changed, snapshot, response, verify_metric, verify_baseline, verify_after, verified_at';
+/** With the promoted-Move link. Arrives in 20260911_copilot_arbitration.sql, so
+ *  every read and write of it falls back to DECISION_COLS on an unmigrated
+ *  database rather than losing the call entirely. */
+const DECISION_COLS_V2 = `${DECISION_COLS}, source_move_id`;
 
 interface DecisionRow {
   id: string; for_date: string; headline: string; because: unknown; instead_of: string | null;
@@ -248,6 +273,7 @@ interface DecisionRow {
   dont_title: string | null; dont_why: string | null; changed: unknown; snapshot: unknown;
   response: string; verify_metric: string | null; verify_baseline: number | string | null;
   verify_after: number | string | null; verified_at: string | null;
+  source_move_id?: string | null;
 }
 
 const asNum = (v: unknown): number => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -259,6 +285,7 @@ function toDecision(r: DecisionRow): Decision {
     headline: r.headline,
     because: Array.isArray(r.because) ? (r.because as unknown[]).filter((b): b is string => typeof b === 'string') : [],
     instead_of: r.instead_of,
+    source_move_id: r.source_move_id ?? null,
     confidence: r.confidence === 'low' ? 'low' : 'high',
     missing: r.missing,
     topic: r.topic,
@@ -278,13 +305,18 @@ function toDecision(r: DecisionRow): Decision {
 
 /** Newest first. Powers today's card and the record on Signals from one read. */
 export async function loadDecisions(profileId: string, limit = 10): Promise<Decision[]> {
-  const { data, error } = await copilotDb()
-    .from('copilot_decisions').select(DECISION_COLS)
+  const read = (cols: string) => copilotDb()
+    .from('copilot_decisions').select(cols)
     .eq('profile_id', profileId).order('for_date', { ascending: false }).limit(limit);
-  // The table arrives in a later migration than the code that reads it, so a
-  // missing table degrades to "no calls yet" instead of a blank Today.
+  let { data, error } = await read(DECISION_COLS_V2);
+  // source_move_id ships in a migration this code does not wait for. Losing the
+  // whole call because one column is missing would be a worse bug than the one
+  // arbitration fixes, so drop it and read the rest.
+  if (error) ({ data, error } = await read(DECISION_COLS));
+  // The table itself arrives in a later migration than the code that reads it,
+  // so a missing table degrades to "no calls yet" instead of a blank Today.
   if (error) return [];
-  return ((data ?? []) as DecisionRow[]).map(toDecision);
+  return ((data ?? []) as unknown as DecisionRow[]).map(toDecision);
 }
 
 /** The snapshot the NEXT brief diffs against: the most recent call before today. */
@@ -312,7 +344,7 @@ export interface SaveDecisionInput {
 /** One call per day: a re-run of the brief replaces today's rather than stacking. */
 export async function saveDecision(profileId: string, input: SaveDecisionInput): Promise<void> {
   const d = input.draft;
-  const { error } = await copilotDb().from('copilot_decisions').upsert({
+  const row: Record<string, unknown> = {
     profile_id: profileId,
     for_date: input.forDate,
     agent_run_id: input.runId,
@@ -328,7 +360,17 @@ export async function saveDecision(profileId: string, input: SaveDecisionInput):
     snapshot: input.snapshot,
     verify_metric: d.verify_metric ?? 'none',
     verify_baseline: input.baseline,
-  }, { onConflict: 'profile_id,for_date' });
+    source_move_id: d.source_move_id ?? null,
+  };
+  const write = (r: Record<string, unknown>) =>
+    copilotDb().from('copilot_decisions').upsert(r, { onConflict: 'profile_id,for_date' });
+  let { error } = await write(row);
+  if (error) {
+    // Same reason as the read: on a database without the column, a call written
+    // without its Move link beats no call at all.
+    const { source_move_id: _dropped, ...rest } = row;
+    ({ error } = await write(rest));
+  }
   if (error) console.error('[copilot] saveDecision failed', error.message);
 }
 
@@ -339,14 +381,17 @@ export async function saveDecision(profileId: string, input: SaveDecisionInput):
  * produces a flattering record rather than a true one.
  */
 export async function respondToDecision(profileId: string, forDate: string, response: Exclude<DecisionResponse, 'pending' | 'ignored'>): Promise<Decision | null> {
-  const { data, error } = await copilotDb()
+  const write = (cols: string) => copilotDb()
     .from('copilot_decisions')
     .update({ response, responded_at: new Date().toISOString() })
     .eq('profile_id', profileId).eq('for_date', forDate)
-    .select(DECISION_COLS).maybeSingle();
+    .select(cols).maybeSingle();
+  let { data, error } = await write(DECISION_COLS_V2);
+  // A tap on "I did it" must record even where source_move_id does not exist yet.
+  if (error) ({ data, error } = await write(DECISION_COLS));
   if (error || !data) return null;
   await logEvent(profileId, 'decision_response', { for_date: forDate, response });
-  return toDecision(data as DecisionRow);
+  return toDecision(data as unknown as DecisionRow);
 }
 
 export interface DecisionSweep { ignored: number; verified: number }
@@ -465,6 +510,16 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
 
   const opportunities = rankOpportunities(oppsWithOutcome, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
 
+  // The call, and the Move it was promoted from. The promoted Move is rendered
+  // as the call, so it must not also appear in the stack below it — that is the
+  // same instruction twice, which is the thing this whole redesign is against.
+  const decision = decisionLog.find((d) => d.for_date === today) ?? null;
+  const promotedId = decision?.source_move_id ?? null;
+  const callMove = promotedId
+    ? movesRead.moves.find((m) => m.id === promotedId) ?? await loadMoveById(profileId, promotedId)
+    : null;
+  const stackMoves = promotedId ? movesRead.moves.filter((m) => m.id !== promotedId) : movesRead.moves;
+
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
   const lessons = selectLesson(growth, diagnosis);
   // The record is what makes "you keep doing this and it does not work"
@@ -476,7 +531,8 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     goals,
     insight,
     // Today's call leads the screen; the rest of the log is the record on Signals.
-    decision: decisionLog.find((d) => d.for_date === today) ?? null,
+    decision,
+    callMove,
     decisionLog,
     plan: shortlist,
     planOverflow,
@@ -504,9 +560,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     sources,
     contextCount: ctxCount,
     triage,
-    moves: movesRead.moves,
+    moves: stackMoves,
     // Only ever a reason for an EMPTY list. A move on screen answers the
-    // question by existing.
+    // question by existing — including one promoted to the call.
     movesBlocked: movesRead.moves.length ? null
       : movesRead.tableMissing ? 'migration'
       : jobKeys.length === 0 ? 'no_sensor'

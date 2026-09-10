@@ -2,8 +2,10 @@
 // The installed app: header, three tabs, bottom sheet, toast. Holds all client
 // state and talks to /api/copilot. Optimistic where it is safe to be.
 //
-// Three tabs, not four. Today is the send queue, Pipeline is the real
-// businesses, Signals is what the market keeps asking for. "You" was settings
+// Two tabs, because there are two questions: what do I do, and is it working.
+// Pipeline was the third and every part of it already existed somewhere else —
+// its queue was Today's queue counted again, its deck is one card on Now, and
+// its stage groups are what the funnel on Working opens into. "You" was settings
 // with goals bolted on, so it lives behind the header avatar.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -11,14 +13,13 @@ import { offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type GrowthItem, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
-import { IconPipeline, IconSignals, IconToday } from './icons';
+import { IconNow, IconWorking } from './icons';
 import Sheet from './Sheet';
 import { useShell } from './shell';
 import SheetContent from './SheetContent';
 import type { Actions, OutcomeInput, SheetState, Tab } from './shared';
-import PipelineView from './views/PipelineView';
-import SignalsView from './views/SignalsView';
-import TodayView from './views/TodayView';
+import WorkingView from './views/WorkingView';
+import NowView from './views/NowView';
 
 /** The sheet body stays mounted while it slides out, so each target needs its own
  * identity or one goal's form state would be saved onto the next goal opened. */
@@ -27,12 +28,15 @@ function sheetKey(s: SheetState): string {
   return `${s.kind}:${id}`;
 }
 
-const TABS: Tab[] = ['today', 'pipeline', 'signals'];
+const TABS: Tab[] = ['now', 'working'];
+const TAB_LABEL: Record<Tab, string> = { now: 'Now', working: 'Working?' };
+/** The weekly push and older installed shells still deep-link the old names. */
+const TAB_ALIAS: Record<string, Tab> = { today: 'now', pipeline: 'now', signals: 'working', now: 'now', working: 'working' };
 
 export default function CopilotApp({ initial }: { initial: HomeData }) {
   const shell = useShell();
   const [home, setHome] = useState<HomeData>(initial);
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('now');
   // Sheets stack: Goal opened from You returns to You on close. The last one
   // shown stays mounted while the sheet slides out, so the content does not
   // blank mid-animation.
@@ -121,7 +125,8 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     const upgraded = params.get('upgraded');
     // The weekly push deep-links to a tab.
     const wanted = params.get('tab');
-    if (wanted && (TABS as string[]).includes(wanted)) setTab(wanted as Tab);
+    const resolved = wanted ? TAB_ALIAS[wanted] : undefined;
+    if (resolved) setTab(resolved);
     if (!upgraded && !wanted) return;
     window.history.replaceState({}, '', window.location.pathname);
     if (!upgraded) return;
@@ -263,7 +268,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       try {
         const r = await post<{ home: HomeData; actionId: string; execution: unknown | null; existing?: boolean }>(`/opportunities/${oppId}/draft`, { channel });
         setHome(r.home);
-        setTab('today');
+        setTab('now');
         // The draft replaces whatever sheet asked for it; closing it should
         // land on Today, not back on the business.
         setStack([{ kind: 'action', id: r.actionId }]);
@@ -369,16 +374,15 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       </header>
 
       <main className="cp-content" ref={mainRef}>
-        {tab === 'today' && <TodayView home={home} actions={actions} briefing={briefing} finding={finding} />}
-        {tab === 'pipeline' && <PipelineView home={home} actions={actions} finding={finding} />}
-        {tab === 'signals' && <SignalsView home={home} actions={actions} />}
+        {tab === 'now' && <NowView home={home} actions={actions} briefing={briefing} finding={finding} />}
+        {tab === 'working' && <WorkingView home={home} actions={actions} finding={finding} />}
       </main>
 
       <nav className="cp-nav" aria-label="Sections">
         {TABS.map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-            {t === 'today' ? <IconToday /> : t === 'pipeline' ? <IconPipeline /> : <IconSignals />}
-            {t === 'today' ? 'Today' : t === 'pipeline' ? 'Pipeline' : 'Signals'}
+            {t === 'now' ? <IconNow /> : <IconWorking />}
+            {TAB_LABEL[t]}
           </button>
         ))}
       </nav>

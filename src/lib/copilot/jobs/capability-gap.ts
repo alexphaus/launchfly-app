@@ -1,7 +1,7 @@
 // src/lib/copilot/jobs/capability-gap.ts
 // The one thing to get better at, and the one thing to stop doing.
 //
-// growthEdge() already works this out from the funnel, the demand read and the
+// growthEdge() already works this out from the funnel, the openings read and the
 // decision record, and Signals renders it in a card at the bottom of a long
 // scroll. This job is the same finding delivered as a Move, with somewhere to
 // go attached — because "get better at writing openers" is advice, and advice
@@ -54,6 +54,11 @@ export function capabilityMove(edge: GrowthEdge): MoveDraft {
           href: tutorialSearch(edge.capability),
         },
     cost_label: stop ? null : '2 h',
+    stake: stop
+      // Stopping something is not measured by a number going up. What it buys is
+      // the week you were about to spend, which nothing in Metrics counts.
+      ? { metric: 'none', direction: 'up', by: 0, withinDays: 7 }
+      : { metric: 'replies', direction: 'up', by: 1, withinDays: 14 },
   };
 }
 

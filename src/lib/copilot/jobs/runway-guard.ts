@@ -16,6 +16,8 @@ import type { Job, JobContext } from './types';
 
 /** Above this, runway is a number to glance at rather than a decision to make. */
 export const RUNWAY_ALERT_MONTHS = 4;
+/** Below this there is no decision left to make, only a consequence to absorb. */
+export const RUNWAY_DECISION_LINE = 2;
 
 export function hasFinance(f: Finance | null | undefined): boolean {
   return !!f && Number.isFinite(f.cash) && Number.isFinite(f.monthly_burn) && (f.monthly_burn ?? 0) > 0;
@@ -86,6 +88,14 @@ export function runwayMove(profile: Pick<Profile, 'finance'>, m: Metrics, month:
       ].join('\n'),
     },
     cost_label: '15 min',
+    stake: {
+      metric: 'runway_months', direction: 'up', by: 1,
+      // Not months of runway left — days until the last month in which you still
+      // have a choice. Below the alert line every remaining option is the one
+      // nobody wants, so the urgency is how soon you stop being able to pick.
+      withinDays: Math.max(1, Math.round((months - RUNWAY_DECISION_LINE) * 30)),
+      value: burn,
+    },
   };
 }
 

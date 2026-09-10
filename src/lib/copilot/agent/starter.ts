@@ -73,10 +73,16 @@ export class StarterAgent implements OpportunityAgent {
       plan.push({ owner: 'you', title: 'Add one constraint I should respect (time, location, money, energy)', detail: 'Constraints change what counts as a good opportunity.', minutes: pack.profile.capacity === 'low' ? 5 : 15 });
     }
 
+    // Two nudges were removed here rather than rewritten, because both had
+    // become the same instruction said a second time:
+    //   - "N drafted messages are waiting for your approval" is the To send card
+    //     on Now, which carries the count and the way in.
+    //   - "Runway is N months" is the runway_guard Move, which carries the
+    //     arithmetic and what to do about it.
+    // A nudge that restates a card is how the old Today ended up saying "send 10
+    // drafts" three times on one screen.
     const nudges: BriefOutput['nudges'] = [];
-    if (m.awaiting_approval > 0) nudges.push({ title: `${m.awaiting_approval} drafted message${m.awaiting_approval === 1 ? ' is' : 's are'} waiting for your approval. Nothing goes out until you tap send.`, urgency: 'urgent', due_label: 'Today' });
-    if (m.runway_months != null && m.runway_months < 4) nudges.push({ title: `Runway is ${m.runway_months} months. Favour fast-close work over big builds until it passes 6.`, urgency: 'urgent', due_label: 'Finance' });
-    if (!pack.candidates.length) nudges.push({ title: 'No real matches in the pipeline. Tap "Find new matches" or add targeting in the You tab.', urgency: 'normal', due_label: 'Today' });
+    if (!pack.candidates.length) nudges.push({ title: 'No real matches in the pipeline. Open the funnel on Working to find new ones, or set targeting under your avatar.', urgency: 'normal', due_label: 'Today' });
     if (m.sent > 0 && m.replies === 0 && m.sent >= 5) nudges.push({ title: `${m.sent} sent, zero replies. Follow-ups are drafted automatically on day 3; approve them.`, urgency: 'normal', due_label: 'Outreach' });
 
     // The call is a ladder over the same numbers the insight cites, so the

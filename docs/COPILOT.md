@@ -132,7 +132,7 @@ capability instead of fetching it, in priority order:
 2. **From your funnel** — the bottleneck stage, named as a capability. Every
    stage has one now: `BOTTLENECK_TOPIC` had no entry for `drafted` or `sent`,
    so the most common bottleneck in this product produced the emptiest answer.
-3. **From your matches** — the top demand term the offer does not cover.
+3. **From your matches** — the top opening the offer does not name.
 
 Each carries evidence citing a number from rows the user created, and one
 bounded experiment for the week rather than a reading list. `null` only for an
@@ -172,7 +172,7 @@ notify anyone about — see **When the brief 504s** and the deploy notes in
 ## Two shells, one app
 
 `/copilot` and `/lifeos` are the same application. Same session cookie (`path:
-'/'`), same database, same components, same three tabs — `src/app/lifeos/`
+'/'`), same database, same components, same two tabs — `src/app/lifeos/`
 contains only a layout and four thin pages, all of which render the entries in
 `src/app/copilot/_components/`. The single difference is `data-theme="soft"` on
 `.cp-root`, plus Sora in place of Archivo:
@@ -201,6 +201,36 @@ hrefs on the client, `toShell()` to narrow the value a client sends before it is
 concatenated into a Stripe `success_url`. One thing still lands on `/copilot`
 whichever shell asked for it — the emailed magic link, whose target is fixed
 when the token is written.
+
+## Two tabs
+
+Two questions, two tabs: **Now** (what do I do) and **Working?** (is it working).
+
+Pipeline was the third and every part of it already existed somewhere else. Its
+send queue was Today's send queue read a second way — the two rendered from
+different queries and disagreed on screen, 40 against 42. Its triage deck is one
+card on Now. Its stage groups are what the funnel on Working now opens into.
+
+**The funnel is the navigation.** Every bar is a button into the businesses at
+that stage, oldest first (`StageSheet`), which is what stops it being a picture
+you look at once. `STAGE_OF_FUNNEL` maps the two vocabularies in one place.
+
+**The queue is one draft at a time** (`QueueSheet`), not a list. It was a list —
+forty rows on Today, forty-two on Pipeline — and 45 of 54 drafts were never sent.
+A list of forty-five is a decision about forty-five things, and the reliable
+answer to a decision that size is to close the app. The message is on screen,
+because approving text you cannot see is not approval.
+
+**What Now dropped:** the metrics strip (moved to Working — above the day's one
+decision it said "this is an outreach tool" every morning), the forty-row queue,
+the "drafts waiting" chip, and the separate "Next actions" list, which is now
+folded into "Also today" with the plan. Two nudges went with them: the starter's
+"N drafts waiting for approval" and "runway is N months" both restated a card
+that now carries the same fact plus the way to act on it.
+
+Old deep links still work: `TAB_ALIAS` maps `today`/`pipeline` → `now` and
+`signals` → `working`, so an installed shell and the weekly push keep landing
+somewhere sensible.
 
 ## The loop
 
@@ -256,7 +286,7 @@ COPILOT_VAPID_PUBLIC_KEY / COPILOT_VAPID_PRIVATE_KEY / COPILOT_VAPID_SUBJECT   #
 # Cron
 CRON_SECRET=...                     # REQUIRED for /api/copilot/cron/daily — it fails closed without one
 #   On the profile's Monday the cron also writes the weekly Signals read (copilot_insights.kind='weekly')
-#   and pushes it, deep-linking to /copilot?tab=signals. Idempotent per ISO week.
+#   and pushes it, deep-linking to /copilot?tab=working. Idempotent per ISO week.
 COPILOT_CRON_BATCH=25               # profiles per run
 COPILOT_CRON_BUDGET_MS=240000       # stop starting new profiles past this point
 
@@ -338,8 +368,8 @@ which the read must cite. Replies trigger a push.
 "skill level 0-100" as a progress bar, which reads as measurement and was not.
 `diagnose.ts` replaces it with arithmetic over real rows: a funnel
 (matched → drafted → sent → replied → meeting → won) with the worst-converting
-step highlighted, a channel comparison, a source comparison, and a demand gap —
-terms recurring across real matches that the offer never mentions. Three rules
+step highlighted, a channel comparison, a source comparison, and an openings read —
+conditions recurring across real matches that the offer never names. Three rules
 it obeys: never show a number that was not computed; never compare without
 `MIN_SAMPLE` (5) on both sides; when nothing can be concluded, say which step is
 blocking instead of filling space. The agent now returns an empty `skills` array
@@ -517,8 +547,8 @@ replace.
 `orderTriage` uses it to decide what comes up first — and that is the entire
 blast radius. It never touches the decision record, Signals, or what counts as
 an outcome. Invariant 5 is the same rule for the same reason. `MIN_TRIAGE_SAMPLE`
-(5) keeps a rate from being one person's mood, the same floor `MIN_DEMAND`
-applies to demand terms.
+(5) keeps a rate from being one person's mood, the same floor `MIN_OPENING`
+applies to openings.
 
 Every gesture has a button beside it — a deck answerable only by dragging is
 unusable one-handed or with assistive tech. Both answers are recorded: a keep
@@ -561,10 +591,11 @@ whatever the landing page says.
 
 | Job | Kind | Sensor | Model? |
 |---|---|---|---|
+| `send_queue` | `earn` | a non-blank offer | no |
 | `client_delivery` | `build` | linked `sales` table | no |
 | `repeat_customer` | `earn` | linked `sales` table | no |
 | `runway_guard` | `decide` | `finance.cash` + `monthly_burn` | no |
-| `demand_gap` | `decide` | `target_segments` | no |
+| `opening_gap` | `decide` | `target_segments` | no |
 | `capability_gap` | `learn` / `avoid` | onboarding complete | no |
 | `remote` | any of the eight | `COPILOT_JOBS_URL` | remote's business |
 
@@ -578,10 +609,60 @@ dropping enquiries needs a searcher, a browser or a builder — not a request
 handler. Those arrive through `remote`, below, and the app does not pretend
 otherwise.
 
+### The Call is picked, not written
+
+For months there were two production paths that never met: the brief wrote a
+`Decision`, the jobs wrote `Move`s, and `loadHome` put the Decision on top
+whatever it said. Since `starterDecision` has seven branches and all seven are
+outreach branches, the Call was "send the drafts" on a morning when somebody who
+paid three months ago was still waiting to hear from anyone. Not a ranking bug —
+there was no ranking.
+
+Now every Move declares a **stake** (`stake.ts`) and the Call is simply the Move
+that wins. Outreach is `send_queue`, a Job like any other, and has to earn the
+top of the screen the same way a runway decision does.
+
+The ladder, in `call.ts`:
+
+1. A blank offer forces the offer call (invariant 1 outranks everything here).
+2. The winning Move, when one clears `CALL_FLOOR` — it is grounded in a real row
+   and carries an artifact, which prose does not.
+3. Whatever the agent wrote.
+4. `starterDecision`'s ladder, so Today always leads with one move.
+
+`scoreMove` is four bounded factors, each explainable in a sentence: the **kind
+prior** (used only when nothing better is known, and derived from `KIND_ORDER` so
+there is one opinion about kinds in the codebase), **money** against monthly burn
+(capped, so a named number always outranks a guess but never runs away with the
+day), **urgency** from the stake's `withinDays`, and **fit** against the capacity
+the user set. The absolute number means nothing; only the order does.
+
+Two consequences worth knowing:
+
+- **`instead_of` stopped being a sentence somebody wrote.** It is the runner-up,
+  named. The app can only claim it chose this over something if there was
+  something.
+- **The Call carries the work.** A `Decision` has no artifact of its own, which
+  is why its button used to say "open the queue" rather than being the queue.
+  `source_move_id` links the two; `isDeliverable` guarantees the Move has one.
+  Answering the Call closes the Move, so it never reappears in the stack below.
+
+`BUSINESS_METRICS` is the vocabulary a call may stake itself on. It was the
+outbound funnel and nothing else, so a runway call could only pick `'none'` —
+ungradeable, therefore never learned from, therefore the decision record could
+only ever teach the app about sending. `queue` and `runway_months` are the first
+two that are not funnel metrics, and both are there because `metricValue` can
+read them back out of `Metrics` today. **A metric nobody can read back is not a
+stake, it is a promise** — that is the bar for adding one.
+
+`METRIC_GOOD_DIRECTION` exists because good is not always up: "clear the queue"
+succeeds when the number falls, and `verdictOf` graded that as `no_movement`
+until it was told otherwise.
+
 ### ctx.sense() — reading what the app already worked out
 
-`demand_gap`, `capability_gap` and `runway_guard` say things like "seven of
-your own matches asked for this". That number comes from `JobSense`
+`opening_gap`, `capability_gap` and `runway_guard` say things like "seven of
+your own matches have this in common". That number comes from `JobSense`
 (`jobs/sense.ts`): the same `diagnose()` / `growthEdge()` / `loadMetrics()`
 pass `loadHome` uses, so a Move and the Signals tab can never disagree about
 what the funnel says.
@@ -632,7 +713,30 @@ database for months before anything read them.
 | --- | --- | --- |
 | `replies` | `copilot_outcomes.note`, written by `reconcileReplies` | what a real prospect wrote back to a message this person actually sent |
 | `sent` | `copilot_executions.body` joined to reply outcomes | which openers got an answer and which were ignored |
-| `demand` | `demandTrend()` over the user's own sourced matches | wants counted across their live pool, already filtered to gaps in the offer |
+| `openings` | `openingTrend()` over the user's own sourced matches | conditions counted across their live pool, already filtered to what the offer does not name |
+
+**Openings are not demand, and the difference is load-bearing.**
+`openingsOf()` reads two arrays off a matched listing: `tags` and
+`pain_signals`. Both are written by a scraper ABOUT the prospect —
+`no_website`, `few_reviews`, `low_rating`, `running facebook ads`. Nobody asked
+for any of them.
+
+For months this was computed correctly and labelled backwards: Signals headed
+it "What they keep asking for", the sheet offered "Add it to what you sell", and
+`growthEdge` returned `selling no website`. The measurement was real and the
+frame around it was false, which is worse than not having it — the tab was
+unreadable and the offer edit produced a business nobody runs.
+
+The rule now, enforced in three places: the term goes into `offer.problem`
+(what you fix), never `offer.sells` (what you sell) — `addOpeningToOffer` is
+the only writer and it targets `problem`; the prompt tells the model in as many
+words that nobody asked for these and that it must never write "clients are
+asking for X"; and tests assert no demand language survives in the finding, the
+edge, the weekly push or the Move.
+
+An opening's real use is the FIRST LINE of a draft. "You are running ads into a
+WhatsApp nobody answers after six" is why a stranger keeps reading; "clients are
+asking for no website" is why they stop.
 
 **Replies were the expensive omission.** `reconcileReplies` matched inbound
 WhatsApp messages by phone and selected `phone, created_at` — so the system knew
@@ -747,7 +851,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/copilot/onboard` | profile + goal + targeting + context, cookie, first supply, first brief |
-| GET | `/api/copilot/home` | everything for the three tabs and the You sheet: send queue, pipeline, diagnosis (demand with weekly trend and per-segment read), latest weekly Signals insight, metrics |
+| GET | `/api/copilot/home` | everything for both tabs and the You sheet: send queue, pipeline, diagnosis (openings with weekly trend and per-segment read), latest weekly Signals insight, metrics |
 | POST | `/api/copilot/brief` | run the agent now |
 | POST | `/api/copilot/supply` | find new matches: supply → reconcile → brief |
 | POST | `/api/copilot/capacity` | `{ capacity }` |

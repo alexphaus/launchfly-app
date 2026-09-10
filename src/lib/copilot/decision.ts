@@ -6,14 +6,22 @@
 // Grading is against the ledger, never against the model's opinion of itself —
 // that is the whole point of keeping the record.
 
+import { BUSINESS_METRICS, METRIC_GOOD_DIRECTION, type BusinessMetric } from './stake';
 import type { Metrics } from './types';
 
 export type DecisionResponse = 'pending' | 'did' | 'rejected' | 'ignored' | 'wrong';
 export type DecisionConfidence = 'high' | 'low';
 /** The one number a decision expects to move. 'none' is honest for calls that
  *  change nothing measurable this week (setting targeting, writing a note). */
-export type DecisionMetric = 'sent' | 'replies' | 'meetings' | 'won' | 'won_amount' | 'none';
-export const DECISION_METRICS: readonly DecisionMetric[] = ['sent', 'replies', 'meetings', 'won', 'won_amount', 'none'];
+/**
+ * What a call may stake itself on. Widened to the whole business in stake.ts:
+ * for months this list was the outbound funnel and nothing else, so a runway
+ * call or a delivery call could only ever pick 'none' — ungradeable, therefore
+ * never learned from, therefore the decision record could only ever teach the
+ * app about sending.
+ */
+export type DecisionMetric = BusinessMetric;
+export const DECISION_METRICS: readonly DecisionMetric[] = BUSINESS_METRICS;
 export const DECISION_RESPONSES: readonly DecisionResponse[] = ['pending', 'did', 'rejected', 'ignored', 'wrong'];
 
 /** Long enough for a reply to arrive, short enough to still be about this call. */
@@ -34,6 +42,8 @@ export interface DecisionDraft {
   missing?: string;
   topic?: string;
   verify_metric?: DecisionMetric;
+  /** Set when this draft was promoted from a Move rather than written. */
+  source_move_id?: string | null;
 }
 
 export interface DontDraft { title: string; why: string }
@@ -51,6 +61,13 @@ export interface Decision {
   changed: Change[];
   response: DecisionResponse;
   verify: { metric: DecisionMetric; baseline: number; after: number | null; verifiedAt: string | null };
+  /**
+   * The Move this call was promoted from, when arbitration picked one. It is
+   * what lets the Call carry finished work instead of a sentence: a Decision has
+   * no artifact of its own, which is why its button used to say "open the queue"
+   * rather than being the queue.
+   */
+  source_move_id: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +95,8 @@ export function snapshotOf(m: Metrics): DecisionSnapshot {
 
 export function metricValue(m: Metrics, k: DecisionMetric): number {
   switch (k) {
+    case 'queue': return m.awaiting_approval;
+    case 'runway_months': return m.runway_months ?? 0;
     case 'sent': return m.sent;
     case 'replies': return m.replies;
     case 'meetings': return m.meetings;
@@ -148,7 +167,11 @@ export function verdictOf(d: Pick<Decision, 'response' | 'verify'>): DecisionVer
   if (d.verify.metric === 'none') return 'done';
   const moved = movedBy(d);
   if (moved == null) return 'measuring';
-  return moved > 0 ? 'worked' : 'no_movement';
+  // Good is not always up: the whole point of "clear the queue" is a smaller
+  // number. Grading that as no_movement is how a working call looked like a
+  // failed one.
+  const better = METRIC_GOOD_DIRECTION[d.verify.metric] === 'down' ? moved < 0 : moved > 0;
+  return better ? 'worked' : 'no_movement';
 }
 
 export interface DecisionReview {

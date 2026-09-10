@@ -1,6 +1,6 @@
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 import { todayIso } from '@/lib/copilot/db';
-import { getProfile, loadHome, respondToDecision } from '@/lib/copilot/store';
+import { getProfile, loadHome, respondToDecision, setMoveStatus } from '@/lib/copilot/store';
 
 export const runtime = 'nodejs';
 
@@ -25,5 +25,13 @@ export async function POST(req: Request) {
   if (!profile) return fail('Not found', 404);
   const decision = await respondToDecision(auth.pid, todayIso(profile.timezone), response);
   if (!decision) return fail('No call recorded for today yet', 404);
+
+  // A promoted call and the Move it came from are one thing on the screen, so
+  // they are one thing to answer. Leaving the Move open would put it back in
+  // the stack the moment the call was answered — the same work offered twice,
+  // which is what promoting it was meant to stop.
+  if (decision.source_move_id) {
+    await setMoveStatus(auth.pid, decision.source_move_id, response === 'did' ? 'done' : 'dismissed');
+  }
   return json({ ok: true, decision, home: await loadHome(auth.pid) });
 }

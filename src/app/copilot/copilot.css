@@ -261,6 +261,11 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 
 /* ─── Measured growth ───────────────────────────────────────────────────── */
 .cp-stage { margin-bottom: 12px; }
+/* The bar is the way into the businesses at that stage, so it is a button now.
+   Reset what a button brings with it; everything else below still applies. */
+.cp-stage.tappable { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; }
+.cp-stage-go { width: 13px; height: 13px; stroke: var(--dim); flex-shrink: 0; }
+.cp-stage.drop .cp-stage-go { stroke: var(--blue); }
 .cp-stage:last-of-type { margin-bottom: 2px; }
 .cp-stage-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; gap: 10px; }
 .cp-stage-label { font-size: 13.5px; font-weight: 700; }
@@ -591,6 +596,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-stage.outside .cp-stage-track { border: 0; }
 .cp-root[data-theme="soft"] .cp-stage.outside .cp-stage-fill { background: repeating-linear-gradient(45deg, var(--dim) 0 4px, transparent 4px 8px); }
 .cp-root[data-theme="soft"] .cp-stage.outside .cp-stage-rate { text-transform: none; font-size: 11px; letter-spacing: 0; }
+.cp-root[data-theme="soft"] .cp-stage.tappable:active { opacity: 0.7; }
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
 .cp-root[data-theme="soft"] .cp-btn { border: 0; border-radius: 999px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12.5px; padding: 11px 17px; }

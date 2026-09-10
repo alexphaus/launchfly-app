@@ -9,16 +9,16 @@
 
 import { copilotDb, todayIso } from './db';
 import { changesSince, movedBy, snapshotOf } from './decision';
-import { demandTrend } from './diagnose';
+import { openingTrend } from './diagnose';
 import { loadMetrics } from './outcomes';
-import { getProfile, loadConversations, loadDecisions, loadDemandRows, previousSnapshot, typeAffinityFor } from './store';
-import type { Action, Candidate, ContextItem, ContextPack, ContextSource, Goal, Opportunity, PackDemand } from './types';
+import { getProfile, loadConversations, loadDecisions, loadOpeningRows, previousSnapshot, typeAffinityFor } from './store';
+import type { Action, Candidate, ContextItem, ContextPack, ContextSource, Goal, Opportunity, PackOpening } from './types';
 
 const MAX_CONTEXT_ITEMS = 60;
 const MAX_CANDIDATES = 25;
-/** Top wants only. demandTrend already applies the MIN_DEMAND floor that keeps
- *  one scrape's noise out; this is purely a prompt budget. */
-const MAX_DEMAND_TERMS = 6;
+/** Top openings only. openingTrend already applies the MIN_OPENING floor that
+ *  keeps one scrape's noise out; this is purely a prompt budget. */
+const MAX_OPENING_TERMS = 6;
 
 export async function buildContextPack(profileId: string): Promise<ContextPack> {
   const db = copilotDb();
@@ -26,7 +26,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   if (!profile) throw new Error('profile not found');
 
   const today = todayIso(profile.timezone);
-  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, demandRows] = await Promise.all([
+  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows] = await Promise.all([
     db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_context_items').select('source, kind, content, created_at, weight').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(MAX_CONTEXT_ITEMS).then((r) => (r.data ?? []) as ContextItem[]),
     db.from('copilot_context_sources').select('source_key, status, last_synced_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as ContextSource[]),
@@ -42,7 +42,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     previousSnapshot(profileId, today),
     loadDecisions(profileId, 8),
     loadConversations(profileId),
-    loadDemandRows(profileId),
+    loadOpeningRows(profileId),
   ]);
 
   const pick = (s: Opportunity['status']) => opps.filter((o) => o.status === s).map((o) => ({ type: o.type, title: o.title }));
@@ -57,8 +57,8 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   // live pool keeps asking for. It has driven the Signals tab since Phase 2 and
   // the agent has never seen it, so every draft was written blind to the market
   // it was being sent into.
-  const demand: PackDemand[] = demandTrend(demandRows, profile.offer, { targetSegments: profile.target_segments })
-    .slice(0, MAX_DEMAND_TERMS)
+  const openings: PackOpening[] = openingTrend(openingRows, profile.offer, { targetSegments: profile.target_segments })
+    .slice(0, MAX_OPENING_TERMS)
     .map((d) => ({ term: d.term, businesses: d.count, trend: d.trend, segment: d.segments[0]?.segment ?? null }));
 
   return {
@@ -90,7 +90,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     candidates,
     replies: conversations.replies,
     sent: conversations.sent,
-    demand,
+    openings,
     metrics,
   };
 }

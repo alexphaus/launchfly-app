@@ -10,10 +10,11 @@ import { selectMoves, type MoveDraft } from '../moves';
 import { getProfile, logEvent } from '../store';
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
-import { demandGapJob } from './demand-gap';
+import { openingGapJob } from './opening-gap';
 import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
 import { runwayGuardJob } from './runway-guard';
+import { sendQueueJob } from './send-queue';
 import { memoSense } from './sense';
 import type { Profile } from '../types';
 import type { Job, JobContext } from './types';
@@ -24,10 +25,13 @@ import type { Job, JobContext } from './types';
  * WhatsApp opener — and an app with one action type is that action's tool, not
  * a copilot, whatever the landing page says.
  *
+ * earn           the send queue, which is a Job like any other now. For as long
+ *                as the brief owned the Call, outreach led the screen by
+ *                construction rather than by winning
  * earn / build   from the sales table: money already collected, and money left
  *                on the table by silence after it
  * decide / avoid / learn
- *                from the funnel, the demand read and the decision record —
+ *                from the funnel, the openings read and the decision record —
  *                measured here, never asked of a model
  * anything       from an external workflow, because searching for a flight,
  *                quoting three suppliers or fixing an n8n node is not work a
@@ -35,10 +39,11 @@ import type { Job, JobContext } from './types';
  *                get a Move nobody can act on
  */
 export const JOBS: Job[] = [
+  sendQueueJob,
   clientDeliveryJob,
   repeatCustomerJob,
   runwayGuardJob,
-  demandGapJob,
+  openingGapJob,
   capabilityGapJob,
   remoteJob,
 ];
@@ -98,12 +103,17 @@ export async function runJobs(profileId: string, opts: { now?: Date; deadline?: 
       const rows = drafts.map((d) => ({
         profile_id: profileId, job: d.job, kind: d.kind, external_id: d.external_id,
         headline: d.headline, why: d.why, artifact: d.artifact,
-        cost_label: d.cost_label ?? null, for_date: ctx.today,
+        cost_label: d.cost_label ?? null, for_date: ctx.today, stake: d.stake ?? null,
       }));
-      const { data, error } = await copilotDb()
+      const write = (rs: Array<Record<string, unknown>>) => copilotDb()
         .from('copilot_moves')
-        .upsert(rows, { onConflict: 'profile_id,job,external_id', ignoreDuplicates: true })
+        .upsert(rs, { onConflict: 'profile_id,job,external_id', ignoreDuplicates: true })
         .select('id');
+      let { data, error } = await write(rows);
+      // `stake` ships in 20260911_copilot_arbitration.sql. Until it is applied a
+      // Move without one is still a Move — it just cannot win the Call on
+      // evidence, only on its kind prior. Losing the row entirely would be worse.
+      if (error) ({ data, error } = await write(rows.map(({ stake: _s, ...rest }) => rest)));
       if (error) throw error;
       entry.written = data?.length ?? 0;
       out.written += entry.written;

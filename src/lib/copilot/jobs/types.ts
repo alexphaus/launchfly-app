@@ -9,7 +9,7 @@
 
 import type { Diagnosis, GrowthEdge } from '../diagnose';
 import type { MoveDraft } from '../moves';
-import type { Metrics, Profile } from '../types';
+import type { Goal, Metrics, Profile } from '../types';
 
 /**
  * What the app has already worked out about this profile.
@@ -21,6 +21,13 @@ import type { Metrics, Profile } from '../types';
  * sounds like it does.
  */
 export interface JobSense {
+  /**
+   * What the user said they are trying to do. The brief has always seen these
+   * (ContextPack.goals) and the decision layer never did, so an app whose owner
+   * had written "Get a job — urgent money" and "MacBook Air, $1,000" into it
+   * could not produce or rank a single thing that referenced either.
+   */
+  goals: Goal[];
   diagnosis: Diagnosis;
   /** The one capability the funnel says is missing, or null on a new account. */
   edge: GrowthEdge | null;

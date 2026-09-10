@@ -133,7 +133,14 @@ const base = { created_at: now.toISOString(), score: 0 };
   assert.equal(empty.opportunities.length, 0, 'starter never invents opportunities');
   assert.equal(empty.rankings.length, 0);
   assert.ok(!empty.plan.some((p) => p.owner === 'ai'), 'no draft without a reachable candidate');
-  assert.ok(empty.plan.some((p) => /where you stand/.test(p.title)), 'asks for current value when target set and current is 0');
+  // The starter used to add a reflection task here every single day — "log where
+  // you stand", "write down the last 3 people who paid you", "add one constraint
+  // I should respect". Generated whatever was happening, never completed, and
+  // they filled "Also today" with homework while the Moves below carried real
+  // work. A plan item now has to be something only the user can do AND that the
+  // app is actually blocked on.
+  assert.ok(!empty.plan.some((p) => /where you stand|last 3 people|one constraint/.test(p.title)), 'no daily homework');
+  assert.ok(empty.plan.every((p) => p.owner === 'you'), 'what is left is only what the app cannot do itself');
   assert.ok(empty.nudges.some((n) => /No real matches/.test(n.title)), 'nudges point at supply when there is none');
 
   // With a reachable real candidate: ranks it and drafts a send-ready opener bound to it.
@@ -1545,8 +1552,12 @@ async function jobSensors() {
   // capability_gap is always available: every account has a funnel from the
   // moment it has a match, and growthEdge returning null is a quiet day rather
   // than a missing sensor.
-  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'capability_gap']);
-  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['capability_gap']);
+  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'goal_gap', 'capability_gap']);
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['goal_gap', 'capability_gap']);
+  // Outreach is a Job and reports its own sensor like any other: a blank offer
+  // cannot have produced drafts, so there is no queue to send.
+  assert.ok(!(await availableJobs(profile())).includes('send_queue'), 'nothing to send from a blank offer');
+  assert.ok((await availableJobs(profile({ offer: { sells: 'automations' } }))).includes('send_queue'));
 
   // Each sensor is independent: turning one on must not turn another on.
   assert.ok((await availableJobs(profile({ linked_business_id: null, target_segments: ['dentists'] }))).includes('opening_gap'));
@@ -1578,7 +1589,7 @@ async function jobSensors() {
   // rather than left to whoever edits index.ts next.
   const kinds = new Set(JOBS.map((j) => j.key));
   assert.equal(kinds.size, JOBS.length, 'two jobs sharing a key would collide on every write');
-  for (const key of ['client_delivery', 'repeat_customer', 'runway_guard', 'opening_gap', 'capability_gap', 'remote']) {
+  for (const key of ['send_queue', 'client_delivery', 'repeat_customer', 'runway_guard', 'goal_gap', 'opening_gap', 'capability_gap', 'remote']) {
     assert.ok(kinds.has(key), `${key} is registered`);
   }
 
@@ -1931,3 +1942,82 @@ async function arbitration() {
 }
 
 arbitration().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// What the user said they were trying to do
+// ─────────────────────────────────────────────────────────────────────────────
+import { MAX_PROJECTED_MONTHS, goalMove, measurable, monthlyRate, pickGoal } from '../../src/lib/copilot/jobs/goal-gap';
+import { MIN_CREDIBLE_DEAL_SHARE, coverPlan as cover, money as gmoney } from '../../src/lib/copilot/jobs/runway-guard';
+import type { Goal as GoalRow } from '../../src/lib/copilot/types';
+
+async function goalsAndArithmetic() {
+  const met = (over: Record<string, unknown> = {}) =>
+    ({ window_days: 30, sent: 9, replies: 2, reply_rate: 0.22, meetings: 6, won: 1, won_amount: 4000,
+       lost: 0, awaiting_approval: 45, pipeline: { new: 0, saved: 0, sourced: 0, inferred: 0 }, runway_months: 3.4, ...over }) as never;
+  const goal = (over: Partial<GoalRow> = {}): GoalRow =>
+    ({ id: 'g1', profile_id: 'p1', title: 'Emergency', metric: 'currency', unit: '$',
+       target_value: 15000, current_value: 1200, horizon_days: 90, priority: 1, status: 'active', note: null, ...over });
+
+  // 1. Only a goal with a meter behind it can be measured. "Monetize App — 0 of
+  //    10 users" and "Get a job" are real goals this job must stay silent about,
+  //    because nothing in Metrics counts users or offers and a projection with
+  //    no meter is the invention every other job here refuses to make.
+  assert.equal(measurable(goal()), true);
+  assert.equal(measurable(goal({ metric: 'number', unit: 'users', target_value: 10, current_value: 0 })), false);
+  assert.equal(measurable(goal({ target_value: null })), false, 'no target, nothing to be short of');
+  assert.equal(measurable(goal({ current_value: 15000 })), false, 'already there');
+  assert.equal(goalMove(goal({ metric: 'number' }), met(), '2026-09'), null);
+
+  // 2. The user's own priority order decides which one speaks. Not a ranking
+  //    this file invents on their behalf.
+  assert.equal(pickGoal([goal({ id: 'b', priority: 3 }), goal({ id: 'a', priority: 1 })])?.id, 'a');
+  assert.equal(pickGoal([goal({ metric: 'number' })]), null);
+  assert.equal(pickGoal([]), null);
+
+  // 3. The rate is read off logged wins, never assumed.
+  assert.equal(monthlyRate(met({ won_amount: 3000, window_days: 30 })), 3000);
+  assert.equal(monthlyRate(met({ won_amount: 0 })), null, 'nothing closed is not a rate of zero to divide by');
+
+  // 4. The arithmetic, and the sentence it produces.
+  const m = goalMove(goal(), met({ won_amount: 1000 }), '2026-09')!;
+  assert.equal(m.kind, 'decide');
+  assert.equal(m.external_id, 'goal:g1:2026-09', 'once a month per goal');
+  assert.match(m.headline, /Emergency is at \$1,200 of \$15,000/);
+  assert.match(m.headline, /14 months away, not 90 days/, 'the date the user set is the one it is measured against');
+  assert.ok(m.artifact.value.includes('gap $13,800'));
+  assert.equal(m.stake?.withinDays, 90, 'the stake inherits the horizon, so urgency is theirs not ours');
+  assert.equal(m.stake?.value, 13800);
+  assert.ok(isDeliverable(m));
+
+  // Nothing closing says so, rather than dividing by zero into a number.
+  const dead = goalMove(goal(), met({ won: 0, won_amount: 0 }), '2026-09')!;
+  assert.match(dead.headline, /nothing is closing it/);
+  assert.match(dead.why[1], /not closing it at all|not closing at all/);
+  assert.ok(!/NaN|Infinity/.test(JSON.stringify(dead)), 'no goal ever renders a NaN');
+  assert.ok(MAX_PROJECTED_MONTHS >= 12);
+
+  // 5. THE $1 WIN. The live account had one recorded win worth $1 against a
+  //    $350 burn, and coverPlan did what it was told: "covering $350 a month
+  //    takes 350 of those a month. At your rate that is about 3,150 sends a
+  //    month." Every number correct, the sentence worthless.
+  const junk = cover(met({ won: 1, won_amount: 1, sent: 9 }), 350, '$');
+  assert.ok(!/350 of those/.test(junk), junk);
+  assert.ok(!/3,?150 sends/.test(junk), junk);
+  assert.match(junk, /too small against/);
+  // A real deal still projects.
+  const real = cover(met({ won: 2, won_amount: 4000, sent: 60 }), 3000, 'usd');
+  assert.match(real, /USD 2,000/);
+  assert.match(real, /2 of those a month/);
+  assert.ok(MIN_CREDIBLE_DEAL_SHARE > 0 && MIN_CREDIBLE_DEAL_SHARE < 1);
+
+  // 6. A symbol currency gets no space. Somebody whose finance row said "$" was
+  //    reading "$ 1,200".
+  assert.equal(gmoney(1200, '$'), '$1,200');
+  assert.equal(gmoney(1200, 'usd'), 'USD 1,200');
+  assert.equal(gmoney(1200, null), 'USD 1,200');
+  assert.equal(gmoney(1200, '₱'), '₱1,200');
+
+  console.log('copilot-core: goals-and-arithmetic checks passed');
+}
+
+goalsAndArithmetic().catch((e) => { console.error(e); process.exit(1); });

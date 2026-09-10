@@ -23,9 +23,28 @@ export function hasFinance(f: Finance | null | undefined): boolean {
   return !!f && Number.isFinite(f.cash) && Number.isFinite(f.monthly_burn) && (f.monthly_burn ?? 0) > 0;
 }
 
+/**
+ * A symbol currency gets no space; a three-letter code does. Somebody whose
+ * finance row says "$" was reading "$ 1,200".
+ */
 export function money(amount: number, currency?: string | null): string {
-  return `${(currency || 'USD').toUpperCase()} ${Math.round(amount).toLocaleString('en-US')}`;
+  const raw = (currency || 'USD').trim();
+  const cur = /^[A-Za-z]{3}$/.test(raw) ? raw.toUpperCase() : raw;
+  const n = Math.round(amount).toLocaleString('en-US');
+  return /^[A-Za-z]{3}$/.test(cur) ? `${cur} ${n}` : `${cur}${n}`;
 }
+
+/**
+ * Below this share of a month's burn, a "win" is a test row, a refund or a
+ * rounding error — not a deal size to plan from.
+ *
+ * The floor exists because the live account had exactly one recorded win worth
+ * $1 against a $350 burn, and the arithmetic below did what it was told:
+ * "covering $350 a month takes 350 of those a month. At your rate that is about
+ * 3,150 sends a month." Every number in that sentence was correct and the
+ * sentence was worthless, which is a more expensive kind of wrong than silence.
+ */
+export const MIN_CREDIBLE_DEAL_SHARE = 0.05;
 
 /**
  * What the ledger can and cannot say about closing the gap.
@@ -39,6 +58,11 @@ export function coverPlan(m: Metrics, burn: number, currency?: string | null): s
     return `Nothing has closed in the last ${m.window_days} days, so there is no deal size to work back from. The first number to get is one win — until then any revenue target here would be made up.`;
   }
   const avg = m.won_amount / m.won;
+  // A win too small to matter against the burn cannot carry a projection, and
+  // projecting from it anyway produces a confidently absurd number.
+  if (avg < burn * MIN_CREDIBLE_DEAL_SHARE) {
+    return `The ${m.won === 1 ? 'one win' : `${m.won} wins`} logged in the last ${m.window_days} days ${m.won === 1 ? 'is' : 'average'} ${money(avg, currency)}, which is too small against ${money(burn, currency)} a month to work back from — a test row or a refund would look the same. Log a real one and this becomes arithmetic instead of a guess.`;
+  }
   const deals = Math.ceil(burn / avg);
   const perDeal = m.sent > 0 ? Math.ceil(m.sent / m.won) : null;
   return [

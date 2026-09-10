@@ -19,6 +19,50 @@ export interface DailyResult {
   weekly: { wrote: boolean; reason?: string } | { error: string } | null;
 }
 
+export interface JobsThenBrief {
+  jobs: JobsResult | { error: string };
+  /** Null only when the run was out of budget before the brief could start. */
+  brief: BriefResult | null;
+  skipped?: string;
+}
+
+/**
+ * Jobs, then the brief. In that order, always — and it is not a preference.
+ *
+ * runBrief picks the day's Call by arbitrating over the OPEN Moves (call.ts).
+ * If the jobs that write today's Moves run AFTERWARDS, the Call is decided from
+ * yesterday's leftovers; on a morning when those were all answered, from nothing
+ * at all — and nothing falls through to starterDecision, every branch of which
+ * is an outreach branch.
+ *
+ * That is exactly what shipped. `/api/copilot/brief` — the button most people
+ * reach for — called runBrief first and runJobs after, so arbitration was live,
+ * merged, and could never fire: the app went on saying "send the 45 drafts
+ * already written" for a fifth morning while the Move that should have won sat
+ * in the list underneath it.
+ *
+ * Both callers go through here now, so the two orders cannot drift apart again.
+ */
+export async function runJobsThenBrief(
+  profileId: string,
+  opts: { reason: string; deadline?: number; jobsDeadline?: number },
+): Promise<JobsThenBrief> {
+  let jobs: JobsResult | { error: string };
+  try {
+    jobs = await runJobs(profileId, { deadline: opts.jobsDeadline ?? opts.deadline });
+  } catch (e) {
+    jobs = { error: e instanceof Error ? e.message : String(e) };
+    console.error('[copilot/daily] jobs failed', e);
+  }
+
+  // The brief is the slowest step. Out of budget, hand back what the jobs found
+  // rather than spend the rest of it and return nothing.
+  if (opts.deadline && Date.now() > opts.deadline) {
+    return { jobs, brief: null, skipped: 'no time left this run; the next brief will rank what was found' };
+  }
+  return { jobs, brief: await runBrief(profileId, { reason: opts.reason }) };
+}
+
 export async function runDaily(profileId: string, opts: { reason: string; supply?: boolean; reconcile?: boolean; deadline?: number } ): Promise<DailyResult> {
   const out: DailyResult = { supply: null, reconcile: null, jobs: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 }, weekly: null };
   if (opts.supply !== false) {
@@ -29,22 +73,16 @@ export async function runDaily(profileId: string, opts: { reason: string; supply
     try { out.reconcile = await reconcileReplies(profileId); }
     catch (e) { out.reconcile = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] reconcile failed', e); }
   }
-  // Jobs before the brief: they are cheap, they need no model, and what they
-  // produce is the part of the screen that is not outbound.
-  try { out.jobs = await runJobs(profileId, { deadline: opts.deadline }); }
-  catch (e) { out.jobs = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] jobs failed', e); }
-
-  // The brief is the slowest step and the least urgent one here: whoever tapped
-  // "Find new matches" wants matches, and the next brief will rank them anyway.
-  // Skipping it beats spending the remaining budget and returning nothing.
-  if (opts.deadline && Date.now() > opts.deadline) {
-    out.brief = { ...out.brief, skipped: 'no time left this run; the next brief will rank what was found' };
+  // Jobs before the brief — see runJobsThenBrief for why that order is load-bearing.
+  const ran = await runJobsThenBrief(profileId, { reason: opts.reason, deadline: opts.deadline });
+  out.jobs = ran.jobs;
+  if (!ran.brief) {
+    out.brief = { ...out.brief, skipped: ran.skipped };
     return out;
   }
-  const brief = await runBrief(profileId, { reason: opts.reason });
   // Surfaced in the cron report: it is how you can tell from outside whether
   // the record is actually being graded, or just accumulating.
-  out.brief = { agent: brief.agent, fellBack: brief.fellBack, graded: brief.graded, pushed: brief.pushed };
+  out.brief = { agent: ran.brief.agent, fellBack: ran.brief.fellBack, graded: ran.brief.graded, pushed: ran.brief.pushed };
   // The weekly read rides the cron, not the "Find new matches" tap: it decides
   // for itself whether it is Monday in the profile's timezone.
   if (opts.reason === 'cron') {

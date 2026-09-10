@@ -152,16 +152,11 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
       ) : null}
 
       {/* The triage deck, which used to be a section on a tab of its own. It is
-          one judgement, answerable with a thumb, so it is one card. */}
-      {home.triage.length > 0 && (
-        <>
-          <div className="cp-section">
-            <span className="lead">Worth messaging?</span>
-            <span className="count">{home.triage.length} to judge</span>
-          </div>
-          <TriageStack cards={home.triage} actions={actions} />
-        </>
-      )}
+          one judgement, answerable with a thumb, so it is one card. TriageStack
+          carries its own section header and returns null when empty — adding a
+          second header here rendered "Worth messaging? · 20 to judge" twice, one
+          directly above the other. */}
+      <TriageStack cards={home.triage} actions={actions} />
 
       {/* The queue, as one row. It was forty rows here and forty-two on
           Pipeline, from two different reads, and 45 of 54 drafts were never
@@ -257,16 +252,6 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
 
   return (
     <>
-      {decision.changed.length > 0 && (
-        <div className="cp-changed" aria-label="What changed since the last brief">
-          {decision.changed.map((c) => (
-            <span key={c.what} className="cp-change">
-              <b>{c.what}</b> {c.from} <span className="arrow">→</span> {c.to}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="cp-card cp-call">
         <div className="cp-call-top">
           {/* When a Move won the day, the kind is the honest label: it is what
@@ -296,14 +281,14 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
             work. A Decision has no artifact of its own, which is why this used
             to be a sentence with three verdict buttons under it and nothing to
             actually do. */}
-        {move && (
-          <>
-            {move.artifact.href
-              ? <a className="cp-btn primary block cp-call-do" href={move.artifact.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{move.artifact.label}</a>
-              : <button className="cp-btn primary block cp-call-do" onClick={() => setShowArtifact((v) => !v)}>{showArtifact ? 'Hide it' : move.artifact.label}</button>}
-            {(showArtifact || move.artifact.kind === 'text') && <div className="cp-reasoning">{move.artifact.value}</div>}
-          </>
-        )}
+        {move && (move.artifact.kind === 'text'
+          ? <div className="cp-reasoning" style={{ marginTop: 4 }}>{move.artifact.value}</div>
+          : move.artifact.href
+          ? <a className="cp-btn primary block cp-call-do" href={move.artifact.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{move.artifact.label}</a>
+          : <>
+              <button className="cp-btn primary block cp-call-do" onClick={() => setShowArtifact((v) => !v)}>{showArtifact ? 'Hide it' : move.artifact.label}</button>
+              {showArtifact && <div className="cp-reasoning">{move.artifact.value}</div>}
+            </>)}
 
         {/* The call is only a call if you can act on it here. With a blank offer
             the server guarantees this IS the offer call, so the button that used
@@ -441,13 +426,20 @@ function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
         <ul className="cp-because">{move.why.map((w, i) => <li key={i}>{w}</li>)}</ul>
       )}
 
-      {a.href
+      {/* A `text` artifact IS the content — a finding with nowhere to go — so it
+          is always on screen and needs no button. Giving it one produced a
+          control that toggled nothing and then read "Hide it" while the text
+          stayed exactly where it was. */}
+      {a.kind === 'text'
+        ? <div className="cp-reasoning" style={{ marginTop: 4 }}>{a.value}</div>
+        : a.href
         ? <a className="cp-btn primary block cp-call-do" href={a.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{a.label}</a>
-        : <button className="cp-btn primary block cp-call-do" onClick={() => setShown((v) => !v)}>{shown ? 'Hide it' : a.label}</button>}
-
-      {/* A message with nowhere to open still has to be readable, or the work
-          is done and unreachable. */}
-      {(shown || a.kind === 'text') && <div className="cp-reasoning">{a.value}</div>}
+        : <>
+            <button className="cp-btn primary block cp-call-do" onClick={() => setShown((v) => !v)}>{shown ? 'Hide it' : a.label}</button>
+            {/* A message with nowhere to open still has to be readable, or the
+                work is done and unreachable. */}
+            {shown && <div className="cp-reasoning">{a.value}</div>}
+          </>}
 
       <div className="cp-btn-row">
         <button className="cp-btn" disabled={busy} onClick={() => answer('done')}>Did it</button>

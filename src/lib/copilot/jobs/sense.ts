@@ -8,20 +8,24 @@
 import { decisionReview } from '../decision';
 import { diagnose, growthEdge } from '../diagnose';
 import { loadMetrics } from '../outcomes';
+import { copilotDb } from '../db';
 import { loadDecisions, loadDiagnosisRows } from '../store';
-import type { Profile } from '../types';
+import type { Goal, Profile } from '../types';
 import type { JobSense } from './types';
 
 export async function senseFor(profile: Profile, now = new Date()): Promise<JobSense> {
-  const [rows, decisions, metrics] = await Promise.all([
+  const [rows, decisions, metrics, goals] = await Promise.all([
     loadDiagnosisRows(profile.id),
     loadDecisions(profile.id),
     loadMetrics(profile.id, profile),
+    copilotDb().from('copilot_goals').select('*')
+      .eq('profile_id', profile.id).eq('status', 'active').order('priority')
+      .then((r) => (r.data ?? []) as Goal[]),
   ]);
   const diagnosis = diagnose({ ...rows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now });
   // Same two inputs loadHome uses, so a Move and the Signals tab can never
   // disagree about what the funnel says.
-  return { diagnosis, edge: growthEdge(diagnosis, { deadTopic: decisionReview(decisions).deadTopic }), metrics };
+  return { goals, diagnosis, edge: growthEdge(diagnosis, { deadTopic: decisionReview(decisions).deadTopic }), metrics };
 }
 
 /**

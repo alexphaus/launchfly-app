@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; }
+    .ph, .ph * { box-sizing: border-box; }
+    .ph { width: 390px; height: 844px; position: relative; overflow: hidden;
+          background: #EEF1F7; color: #1A1D29; font-family: Sora, system-ui, sans-serif;
+          line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: #4F63D2; } a:hover { color: #3A4CB8; }
+    .hd { padding: 16px 20px 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .hd h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.15; margin: 0; }
+    .hd p { font-size: 12.5px; font-weight: 500; color: #7B8094; margin: 4px 0 0; }
+    .cap { background: #fff; color: #4F63D2; border-radius: 999px; box-shadow: 0 4px 14px rgba(31,41,68,.05);
+           font-weight: 600; font-size: 11.5px; padding: 9px 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .av { width: 36px; height: 36px; border-radius: 50%; background: rgba(79,99,210,.08); color: #4F63D2;
+          font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: center; }
+    .card { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07);
+            margin: 0 22px 16px; padding: 20px 22px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 26px; }
+    .eb { font-size: 11px; font-weight: 700; color: #4F63D2; letter-spacing: .06em; text-transform: uppercase; }
+    .chip { border-radius: 999px; font-size: 10.5px; font-weight: 700; padding: 5px 11px;
+            background: #F1F2F7; color: #7B8094; white-space: nowrap; }
+    .chip.warn { background: rgba(194,112,61,.1); color: #A85F2E; }
+    h2.hh { font-size: 19px; font-weight: 700; line-height: 1.25; letter-spacing: -0.2px; margin: 8px 0 12px; }
+    ul.bc { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    ul.bc li { position: relative; padding-left: 15px; font-size: 12.5px; line-height: 1.5; color: #7B8094; }
+    ul.bc li::before { content: ''; position: absolute; left: 0; top: 7px; width: 6px; height: 6px;
+                       border-radius: 50%; background: #4F63D2; }
+    ul.bc li b { color: #1A1D29; font-weight: 600; }
+    .btn { border: 0; border-radius: 999px; background: #fff; color: #1A1D29; box-shadow: 0 4px 14px rgba(31,41,68,.05);
+           font-family: inherit; font-weight: 600; font-size: 12.5px; padding: 13px 17px; min-height: 44px; cursor: pointer; }
+    .btn.pri { background: #4F63D2; color: #fff; box-shadow: 0 6px 16px rgba(79,99,210,.28); }
+    .btn.blk { display: block; width: 100%; padding: 15px; font-size: 13px; text-align: center; }
+    .row { display: flex; gap: 8px; }
+    .row .btn { flex: 1; padding: 13px 8px; font-size: 11.5px; }
+    .nav { position: absolute; left: 20px; right: 20px; bottom: 18px; background: #fff; border-radius: 999px;
+           padding: 11px 10px; display: flex; justify-content: space-around; box-shadow: 0 14px 34px rgba(20,25,45,.16); }
+    .nav .it { display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 999px;
+               padding: 6px 20px; font-size: 10.5px; font-weight: 600; color: #AEB2C2; min-height: 44px; justify-content: center; }
+    .nav .it.on { color: #4F63D2; background: rgba(79,99,210,.08); font-weight: 700; }
+    .nav .it svg { width: 19px; height: 19px; stroke: #AEB2C2; fill: none; stroke-width: 1.9; }
+    .nav .it.on svg { stroke: #4F63D2; }
+    .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; pointer-events: none;
+            background: linear-gradient(to bottom, rgba(238,241,247,0) 0%, #EEF1F7 62%); }
+  </style>
+</helmet>
+
+<div class="ph">
+  <div class="hd">
+    <div>
+      <h1>Good morning, Alex</h1>
+      <p>3 waiting on you</p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div class="cap">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#4F63D2" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+        <span>Moderate</span>
+      </div>
+      <div class="av">A</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <span class="eb">Today&rsquo;s call</span>
+      <span class="chip warn">4th day</span>
+    </div>
+    <h2 class="hh">Send 10 drafts before you look at anything else.</h2>
+    <ul class="bc">
+      <li><b>45 of 54</b> drafts never left.</li>
+      <li>Fourth day running. Done once.</li>
+    </ul>
+    <button class="btn pri blk" style="margin-bottom: 10px;">Open the queue &mdash; 45 waiting</button>
+    <div class="row">
+      <button class="btn">I did it</button>
+      <button class="btn">Not doing it</button>
+      <button class="btn">Wrong call</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <span class="eb">Earn</span>
+      <span class="chip">5 min</span>
+    </div>
+    <h2 class="hh">Maria Santos paid USD 500, then silence for 96 days</h2>
+    <ul class="bc">
+      <li>Last paid <b>1 Jun</b>. Nothing recorded since.</li>
+    </ul>
+    <button class="btn pri blk" style="margin-bottom: 10px;">Open in email</button>
+    <div class="row">
+      <button class="btn">Did it</button>
+      <button class="btn">Not this one</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <span class="eb">Decide</span>
+      <span class="chip">15 min</span>
+    </div>
+    <h2 class="hh" style="margin-bottom: 0;">3.4 months of runway &mdash; decide now, not at two</h2>
+  </div>
+
+  <div class="fade"></div>
+
+  <div class="nav">
+    <div class="it on">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/></svg>
+      <span>Now</span>
+    </div>
+    <div class="it">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3.5L21 5"/><path d="M3 21h18"/></svg>
+      <span>Working?</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

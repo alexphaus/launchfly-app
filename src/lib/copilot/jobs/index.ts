@@ -8,11 +8,40 @@
 import { copilotDb, todayIso } from '../db';
 import { selectMoves, type MoveDraft } from '../moves';
 import { getProfile, logEvent } from '../store';
+import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
+import { demandGapJob } from './demand-gap';
+import { remoteJob } from './remote';
+import { repeatCustomerJob } from './repeat-customer';
+import { runwayGuardJob } from './runway-guard';
+import { memoSense } from './sense';
 import type { Profile } from '../types';
 import type { Job, JobContext } from './types';
 
-export const JOBS: Job[] = [clientDeliveryJob];
+/**
+ * Every kind of leverage the app can produce, in the order they are worth
+ * having. This list is the product: for months it held exactly one entry — a
+ * WhatsApp opener — and an app with one action type is that action's tool, not
+ * a copilot, whatever the landing page says.
+ *
+ * earn / build   from the sales table: money already collected, and money left
+ *                on the table by silence after it
+ * decide / avoid / learn
+ *                from the funnel, the demand read and the decision record —
+ *                measured here, never asked of a model
+ * anything       from an external workflow, because searching for a flight,
+ *                quoting three suppliers or fixing an n8n node is not work a
+ *                request handler can do, and pretending otherwise is how you
+ *                get a Move nobody can act on
+ */
+export const JOBS: Job[] = [
+  clientDeliveryJob,
+  repeatCustomerJob,
+  runwayGuardJob,
+  demandGapJob,
+  capabilityGapJob,
+  remoteJob,
+];
 
 /**
  * Which jobs can see anything for this profile. Separated from running them so
@@ -21,7 +50,10 @@ export const JOBS: Job[] = [clientDeliveryJob];
  * broken when it was working exactly as written.
  */
 export async function availableJobs(profile: Profile, now = new Date()): Promise<string[]> {
-  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now };
+  // available() is contractually cheap and must not call sense(), so the
+  // accessor here is real but never exercised — it exists to satisfy the type,
+  // not to be paid for on every home load.
+  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now, sense: memoSense(profile, now) };
   const checked = await Promise.all(JOBS.map(async (j) => {
     try { return (await j.available(ctx)) ? j.key : null; } catch { return null; }
   }));
@@ -47,7 +79,8 @@ export async function runJobs(profileId: string, opts: { now?: Date; deadline?: 
   if (!profile) throw new Error('profile not found');
 
   const now = opts.now ?? new Date();
-  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now, deadline: opts.deadline };
+  // One sense read for the whole run, however many jobs ask for it.
+  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now, deadline: opts.deadline, sense: memoSense(profile, now) };
 
   for (const job of JOBS) {
     const entry = { produced: 0, written: 0 } as JobsResult['perJob'][string];

@@ -89,6 +89,41 @@ export function normalizeMove(d: MoveDraft): MoveDraft {
   };
 }
 
+/**
+ * What leads the screen when several jobs deliver at once.
+ *
+ * Deliberately NOT the declaration order of MOVE_KINDS, which is the shape of
+ * the database check constraint. This is the order a person should meet them in
+ * on a phone, at eight in the morning, with time for two:
+ *
+ *   earn    money coming in
+ *   build   money already collected and not yet delivered — the most expensive
+ *           kind of quiet there is
+ *   fix     something broken is charging you rent every day it stays broken
+ *   decide  the calls that change what everything below them is worth
+ *   avoid   the same, said from the side that saves the week
+ *   spend   money going out; real leverage, but it can wait until tonight
+ *   meet    compounding, slowly
+ *   learn   compounding, slowest, and the easiest thing to hide inside all day
+ */
+export const KIND_ORDER: Record<MoveKind, number> = {
+  earn: 0, build: 1, fix: 2, decide: 3, avoid: 4, spend: 5, meet: 6, learn: 7,
+};
+
+/**
+ * The Moves the screen actually shows, newest first within each kind.
+ *
+ * With one job this was academic. With six, an ordering left to `created_at`
+ * means whichever job happened to finish last leads — so a reconnect worth real
+ * money can sit under a tutorial link because the tutorial was written a second
+ * later. Pure, and applied at read time, so re-ordering never needs a migration.
+ */
+export function orderMoves<T extends { kind: MoveKind; created_at: string }>(moves: T[], max = 8): T[] {
+  return [...moves]
+    .sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || b.created_at.localeCompare(a.created_at))
+    .slice(0, max);
+}
+
 /** Dedupe key, matching the unique index. A job that reruns must not double up. */
 export function moveKey(job: string, externalId: string): string {
   return `${job} ${externalId}`;

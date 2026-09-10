@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; }
+    .mp, .mp * { box-sizing: border-box; }
+    .mp { width: 1120px; height: 1010px; background: #EEF1F7; color: #1A1D29;
+          font-family: Sora, system-ui, sans-serif; line-height: 1.5; padding: 30px 38px;
+          -webkit-font-smoothing: antialiased; }
+    a { color: #4F63D2; } a:hover { color: #3A4CB8; }
+    h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.4px; margin: 0 0 4px; }
+    .sub { font-size: 13.5px; font-weight: 500; color: #7B8094; margin: 0 0 22px; }
+    .band { font-size: 11.5px; font-weight: 700; color: #7B8094; letter-spacing: .06em;
+            text-transform: uppercase; margin: 0 0 12px; display: flex; align-items: center; gap: 12px; }
+    .band i { flex: 1; height: 1px; background: #DEE3ED; display: block; }
+    .band .q { text-transform: none; letter-spacing: 0; font-weight: 500; color: #AEB2C2; }
+    .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .col { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07); padding: 18px 18px 16px; }
+    .col.prop { box-shadow: 0 10px 28px rgba(79,99,210,.16); }
+    .ch { display: flex; justify-content: space-between; align-items: baseline;
+          font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+    .ch .cnt { font-size: 11.5px; font-weight: 500; color: #AEB2C2; }
+    .r { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+         padding: 7px 10px; border-radius: 10px; background: #F1F2F7; margin-bottom: 6px;
+         font-size: 12px; font-weight: 500; }
+    .r:last-child { margin-bottom: 0; }
+    .r .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .r.gone .lbl { color: #AEB2C2; text-decoration: line-through; }
+    .r.dup { background: rgba(194,112,61,.1); }
+    .r.bad { background: rgba(194,112,61,.22); }
+    .r.new { background: rgba(79,99,210,.08); font-weight: 600; }
+    .t { font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+         border-radius: 999px; padding: 3px 8px; white-space: nowrap; flex-shrink: 0; }
+    .t.dup { background: rgba(194,112,61,.2); color: #A85F2E; }
+    .t.cut { background: #E4E7EF; color: #8A8FA0; }
+    .t.fix { background: rgba(79,99,210,.14); color: #4F63D2; }
+    .t.wrong { background: #A85F2E; color: #fff; }
+    .arrow { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 20px 0 18px; }
+    .arrow .ln { flex: 1; height: 1px; background: #C6CBDA; }
+    .arrow .pill { background: #1A1D29; color: #fff; border-radius: 999px; padding: 9px 20px;
+                   font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .foot { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+    .f { background: #fff; border-radius: 24px; box-shadow: 0 4px 14px rgba(31,41,68,.05); padding: 14px 16px; }
+    .f .k { font-size: 20px; font-weight: 700; color: #4F63D2; letter-spacing: -0.4px; }
+    .f .v { font-size: 11.5px; font-weight: 500; color: #7B8094; margin-top: 3px; line-height: 1.45; }
+    .lg { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 18px; font-size: 11px; font-weight: 500; color: #7B8094; }
+    .lg span { display: flex; align-items: center; gap: 7px; }
+    .sw { width: 14px; height: 14px; border-radius: 4px; display: block; flex-shrink: 0; }
+    .sw.d { background: rgba(194,112,61,.1); border: 1px solid rgba(194,112,61,.35); }
+    .sw.b { background: rgba(194,112,61,.22); border: 1px solid rgba(194,112,61,.55); }
+    .sw.c { background: #F1F2F7; border: 1px solid #DEE3ED; }
+    .sw.n { background: rgba(79,99,210,.08); border: 1px solid rgba(79,99,210,.35); }
+  </style>
+</helmet>
+
+<div class="mp">
+  <h1>Where every section goes</h1>
+  <p class="sub">Seventeen sections across three tabs. Four of them repeat an instruction the call already carries, and one is labelled as the opposite of what it holds.</p>
+
+  <div class="band"><span>Today &middot; Pipeline &middot; Signals</span><i></i><span class="q">v2.7.1, as shipped</span></div>
+  <div class="cols">
+    <div class="col">
+      <div class="ch"><span>Today</span><span class="cnt">7 sections</span></div>
+      <div class="r gone"><span class="lbl">Metrics strip &times; 4</span><span class="t cut">cut</span></div>
+      <div class="r gone"><span class="lbl">&ldquo;No sensors connected&rdquo;</span><span class="t cut">cut</span></div>
+      <div class="r dup"><span class="lbl">To send &mdash; 40 rows</span><span class="t dup">repeat</span></div>
+      <div class="r gone"><span class="lbl">Drafts waiting 40 &rarr; 43</span><span class="t cut">cut</span></div>
+      <div class="r"><span class="lbl">Today&rsquo;s call</span><span class="t fix">the original</span></div>
+      <div class="r dup"><span class="lbl">Also today &mdash; &ldquo;Send 10 drafts&rdquo;</span><span class="t dup">repeat</span></div>
+      <div class="r dup"><span class="lbl">Next actions &mdash; &ldquo;Send 10 drafts&rdquo;</span><span class="t dup">repeat</span></div>
+    </div>
+    <div class="col">
+      <div class="ch"><span>Pipeline</span><span class="cnt">5 sections</span></div>
+      <div class="r"><span class="lbl">Find new &middot; 1,986 left</span><span class="t fix">to You</span></div>
+      <div class="r"><span class="lbl">Worth messaging? &mdash; 20 to judge</span><span class="t fix">to Now</span></div>
+      <div class="r dup"><span class="lbl">To send &mdash; 42 rows</span><span class="t dup">repeat</span></div>
+      <div class="r"><span class="lbl">Sent / Replied / Meeting / Won</span><span class="t fix">to the funnel</span></div>
+      <div class="r gone"><span class="lbl">Inferred ideas</span><span class="t cut">cut</span></div>
+    </div>
+    <div class="col">
+      <div class="ch"><span>Signals</span><span class="cnt">5 sections</span></div>
+      <div class="r bad"><span class="lbl">What they keep asking for</span><span class="t wrong">mislabelled</span></div>
+      <div class="r"><span class="lbl">By segment</span><span class="t fix">to the stage view</span></div>
+      <div class="r"><span class="lbl">Your calls</span></div>
+      <div class="r"><span class="lbl">Your funnel</span></div>
+      <div class="r"><span class="lbl">Lose most / Outside / Get better at</span><span class="t fix">merge</span></div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <span class="ln"></span>
+    <span class="pill">One instruction, one place. One question per tab.</span>
+    <span class="ln"></span>
+  </div>
+
+  <div class="band"><span>Now &middot; Working?</span><i></i><span class="q">proposed</span></div>
+  <div class="cols2">
+    <div class="col prop">
+      <div class="ch"><span>Now &mdash; what do I do?</span><span class="cnt">3 sections</span></div>
+      <div class="r new"><span class="lbl">The call &mdash; carries the queue button</span><span class="t fix">absorbs 3 repeats</span></div>
+      <div class="r new"><span class="lbl">Moves, one card each, by kind</span></div>
+      <div class="r new"><span class="lbl">Worth messaging? &mdash; one card</span><span class="t fix">from Pipeline</span></div>
+      <div class="r" style="background: transparent; padding-left: 0; color: #AEB2C2;">
+        <span class="lbl">The 45 drafts live behind the call&rsquo;s button, one at a time.</span>
+      </div>
+    </div>
+    <div class="col prop">
+      <div class="ch"><span>Working? &mdash; is it working?</span><span class="cnt">4 sections</span></div>
+      <div class="r new"><span class="lbl">The read &mdash; one paragraph</span><span class="t fix">merged 4</span></div>
+      <div class="r new"><span class="lbl">The funnel &mdash; each stage opens its list</span><span class="t fix">is the pipeline</span></div>
+      <div class="r new"><span class="lbl">Where the opening is</span><span class="t fix">relabelled</span></div>
+      <div class="r new"><span class="lbl">Your calls</span><span class="t fix">below the fold</span></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="f"><div class="k">17 &rarr; 7</div><div class="v">sections across the app</div></div>
+    <div class="f"><div class="k">3 &rarr; 1</div><div class="v">places that say &ldquo;send 10 drafts&rdquo;</div></div>
+    <div class="f"><div class="k">2 &rarr; 0</div><div class="v">lists called &ldquo;To send&rdquo;</div></div>
+    <div class="f"><div class="k">1 bug</div><div class="v">a demand read that measures openings</div></div>
+  </div>
+
+  <div class="lg">
+    <span><i class="sw d"></i>repeats an instruction that is already elsewhere</span>
+    <span><i class="sw b"></i>says the opposite of what it holds</span>
+    <span><i class="sw c"></i>struck through: deleted</span>
+    <span><i class="sw n"></i>proposed &mdash; kept, merged or moved</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

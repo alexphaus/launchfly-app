@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; }
+    .ph, .ph * { box-sizing: border-box; }
+    .ph { width: 390px; height: 844px; position: relative; overflow: hidden;
+          background: #EEF1F7; color: #1A1D29; font-family: Sora, system-ui, sans-serif;
+          line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: #4F63D2; } a:hover { color: #3A4CB8; }
+    .hd { padding: 16px 20px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .ttl { display: flex; align-items: center; gap: 4px; }
+    .back { width: 44px; height: 44px; margin-left: -12px; border: 0; background: none; border-radius: 999px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .hd h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; margin: 0; }
+    .of { font-size: 12.5px; font-weight: 600; color: #7B8094; white-space: nowrap; }
+    .track { height: 6px; border-radius: 999px; background: #F1F2F7; margin: 0 22px 16px; overflow: hidden; }
+    .track i { display: block; height: 100%; width: 10%; border-radius: 999px; background: #4F63D2; }
+    .card { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07);
+            margin: 0 22px 16px; padding: 20px 22px; }
+    .eb { font-size: 11px; font-weight: 700; color: #4F63D2; letter-spacing: .06em; text-transform: uppercase; }
+    h2.hh { font-size: 19px; font-weight: 700; line-height: 1.25; letter-spacing: -0.2px; margin: 8px 0 4px; }
+    .sub { font-size: 11.5px; font-weight: 500; color: #7B8094; margin: 0 0 14px; }
+    .msg { background: #F1F2F7; border-radius: 18px; padding: 15px 16px; font-size: 13px; line-height: 1.62; }
+    .msg p { margin: 0 0 10px; } .msg p:last-child { margin: 0; }
+    .editrow { display: flex; justify-content: flex-end; margin-top: 6px; }
+    .edit { min-height: 44px; display: flex; align-items: center; padding: 0 4px; border: 0; background: none;
+            font-family: inherit; font-size: 12px; font-weight: 600; color: #4F63D2; cursor: pointer; }
+    .btn { border: 0; border-radius: 999px; background: #fff; color: #1A1D29; box-shadow: 0 4px 14px rgba(31,41,68,.05);
+           font-family: inherit; font-weight: 600; font-size: 12.5px; padding: 13px 17px; min-height: 44px; cursor: pointer; }
+    .btn.pri { background: #4F63D2; color: #fff; box-shadow: 0 6px 16px rgba(79,99,210,.28); }
+    .btn.blk { display: flex; align-items: center; justify-content: center; gap: 8px;
+               width: calc(100% - 44px); margin: 0 22px 10px; padding: 15px; font-size: 13px; }
+    .row { display: flex; gap: 8px; margin: 0 22px; }
+    .row .btn { flex: 1; }
+    .sec { display: flex; justify-content: space-between; align-items: center;
+           font-size: 11.5px; font-weight: 700; color: #7B8094; letter-spacing: .06em;
+           text-transform: uppercase; padding: 20px 24px 12px; }
+    .list { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07); margin: 0 22px; overflow: hidden; }
+    .it { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          padding: 13px 20px; border-bottom: 1px solid #F1F2F7; }
+    .it:last-child { border-bottom: 0; }
+    .it .nm { font-size: 13px; font-weight: 600; }
+    .it .sg { font-size: 11px; font-weight: 500; color: #AEB2C2; margin-top: 1px; }
+    .age { font-size: 11.5px; font-weight: 600; color: #A85F2E; white-space: nowrap; }
+    .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; pointer-events: none;
+            background: linear-gradient(to bottom, rgba(238,241,247,0) 0%, #EEF1F7 62%); }
+  </style>
+</helmet>
+
+<div class="ph">
+  <div class="hd">
+    <div class="ttl">
+      <button class="back" aria-label="Back">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1A1D29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1>Send queue</h1>
+    </div>
+    <span class="of">1 of 10 today</span>
+  </div>
+  <div class="track"><i></i></div>
+
+  <div class="card">
+    <span class="eb">Waiting 11 days &middot; the oldest</span>
+    <h2 class="hh">B Cleaning Service Solution</h2>
+    <p class="sub">Renovation &middot; Makati &middot; 4.1&#9733; from 22 reviews</p>
+    <div class="msg">
+      <p>Hi &mdash; saw enquiries for B Cleaning come in on WhatsApp and get answered by hand.</p>
+      <p>I build flows that reply after hours and hold the slot, so nothing sits overnight. Around USD 400&ndash;1,500.</p>
+      <p>Worth ten minutes this week?</p>
+    </div>
+    <div class="editrow"><button class="edit">Edit this message</button></div>
+  </div>
+
+  <button class="btn pri blk">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 3 10.5l7 3 3 7L21 3Z"/></svg>
+    Send on WhatsApp
+  </button>
+  <div class="row">
+    <button class="btn">Skip for now</button>
+    <button class="btn">Not for me</button>
+  </div>
+
+  <div class="sec"><span>Next up</span><span style="font-weight: 500; text-transform: none; letter-spacing: 0; color: #AEB2C2;">oldest first</span></div>
+  <div class="list">
+    <div class="it">
+      <div><div class="nm">Ben.ryz I studio</div><div class="sg">Renovation &middot; WhatsApp</div></div>
+      <span class="age">11 days</span>
+    </div>
+    <div class="it">
+      <div><div class="nm">WLEA Design &amp; Build</div><div class="sg">Renovation &middot; WhatsApp</div></div>
+      <span class="age">9 days</span>
+    </div>
+    <div class="it">
+      <div><div class="nm">Yakal Anay Pest Control</div><div class="sg">Pest control &middot; email</div></div>
+      <span class="age">8 days</span>
+    </div>
+  </div>
+
+  <div class="fade"></div>
+</div>
+</x-dc>
+</body>
+</html>

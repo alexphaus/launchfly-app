@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; }
+    .ph, .ph * { box-sizing: border-box; }
+    .ph { width: 390px; height: 844px; position: relative; overflow: hidden;
+          background: #EEF1F7; color: #1A1D29; font-family: Sora, system-ui, sans-serif;
+          line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: #4F63D2; } a:hover { color: #3A4CB8; }
+    .hd { padding: 16px 20px 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .hd h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.15; margin: 0; }
+    .hd p { font-size: 12.5px; font-weight: 500; color: #7B8094; margin: 4px 0 0; }
+    .av { width: 36px; height: 36px; border-radius: 50%; background: rgba(79,99,210,.08); color: #4F63D2;
+          font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: center; }
+    .sec { display: flex; justify-content: space-between; align-items: center;
+           font-size: 11.5px; font-weight: 700; color: #7B8094; letter-spacing: .06em;
+           text-transform: uppercase; padding: 20px 24px 12px; }
+    .sec .ct { font-weight: 500; text-transform: none; letter-spacing: 0; color: #AEB2C2; }
+    .card { background: #fff; border-radius: 24px; box-shadow: 0 10px 28px rgba(31,41,68,.07);
+            margin: 0 22px; padding: 20px 22px; }
+    .eb { font-size: 11px; font-weight: 700; color: #4F63D2; letter-spacing: .06em; text-transform: uppercase; }
+    .read p { font-size: 15px; line-height: 1.6; margin: 9px 0 0; }
+    .read p b { font-weight: 700; }
+    .stg { padding: 5px 0; margin-bottom: 6px; cursor: pointer; }
+    .stg:last-of-type { margin-bottom: 0; }
+    .stgt { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 5px; }
+    .stgl { font-size: 13.5px; font-weight: 700; }
+    .stgc { font-size: 15px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+    .stgr { font-size: 11px; font-weight: 700; color: #7B8094; }
+    .stgk { height: 8px; border-radius: 999px; background: #F1F2F7; overflow: hidden; }
+    .stgf { height: 100%; border-radius: 999px; background: #C6CBDA; }
+    .drop .stgl, .drop .stgr { color: #4F63D2; }
+    .drop .stgf { background: #4F63D2; }
+    .out .stgf { background: repeating-linear-gradient(45deg, #AEB2C2 0 4px, transparent 4px 8px); }
+    .out .stgr { color: #AEB2C2; }
+    .cv { width: 13px; height: 13px; stroke: #AEB2C2; fill: none; stroke-width: 2.2; flex-shrink: 0; }
+    .help { margin-top: 12px; padding-top: 12px; border-top: 1px solid #F1F2F7;
+            font-size: 11.5px; line-height: 1.55; color: #AEB2C2; font-weight: 500; }
+    .op { display: flex; align-items: baseline; gap: 12px; padding: 11px 0; border-bottom: 1px solid #F1F2F7; }
+    .op:first-child { padding-top: 0; }
+    .op:last-child { border-bottom: 0; }
+    .op .n { font-size: 16px; font-weight: 700; color: #4F63D2; min-width: 26px; }
+    .op .t { font-size: 13px; line-height: 1.45; }
+    .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; pointer-events: none;
+            background: linear-gradient(to bottom, rgba(238,241,247,0) 0%, #EEF1F7 62%); }
+    .nav { position: absolute; left: 20px; right: 20px; bottom: 18px; background: #fff; border-radius: 999px;
+           padding: 11px 10px; display: flex; justify-content: space-around; box-shadow: 0 14px 34px rgba(20,25,45,.16); }
+    .nav .it { display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 999px;
+               padding: 6px 20px; font-size: 10.5px; font-weight: 600; color: #AEB2C2; min-height: 44px; justify-content: center; }
+    .nav .it.on { color: #4F63D2; background: rgba(79,99,210,.08); font-weight: 700; }
+    .nav .it svg { width: 19px; height: 19px; stroke: #AEB2C2; fill: none; stroke-width: 1.9; }
+    .nav .it.on svg { stroke: #4F63D2; }
+  </style>
+</helmet>
+
+<div class="ph">
+  <div class="hd">
+    <div>
+      <h1>Is it working?</h1>
+      <p>202 matched &middot; 9 sent &middot; 1 won</p>
+    </div>
+    <div class="av">A</div>
+  </div>
+
+  <div class="card read">
+    <span class="eb">The read</span>
+    <p>Nothing is wrong upstream. You wrote 54 and <b>45 never left</b>. You have had the same call four days running and made it once.</p>
+  </div>
+
+  <div class="sec"><span>Your funnel</span><span class="ct">tap a stage to see them</span></div>
+  <div class="card">
+    <div class="stg">
+      <div class="stgt"><span class="stgl">Matched</span><span class="stgc">202<svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+      <div class="stgk"><div class="stgf" style="width: 100%;"></div></div>
+    </div>
+    <div class="stg">
+      <div class="stgt"><span class="stgl">Drafted</span><span class="stgc">54<span class="stgr">27%</span><svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+      <div class="stgk"><div class="stgf" style="width: 27%;"></div></div>
+    </div>
+    <div class="stg drop">
+      <div class="stgt"><span class="stgl">Sent</span><span class="stgc">9<span class="stgr">17%</span><svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" style="stroke: #4F63D2;"><path d="M9 5l7 7-7 7"/></svg></span></div>
+      <div class="stgk"><div class="stgf" style="width: 4.5%;"></div></div>
+    </div>
+    <div class="stg">
+      <div class="stgt"><span class="stgl">Replied</span><span class="stgc">2<span class="stgr">22%</span><svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+      <div class="stgk"><div class="stgf" style="width: 1%;"></div></div>
+    </div>
+    <div class="stg out">
+      <div class="stgt"><span class="stgl">Meeting</span><span class="stgc">6<span class="stgr">outside</span><svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+      <div class="stgk"><div class="stgf" style="width: 3%;"></div></div>
+    </div>
+    <div class="stg">
+      <div class="stgt"><span class="stgl">Won</span><span class="stgc">1<span class="stgr">17%</span><svg class="cv" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></div>
+      <div class="stgk"><div class="stgf" style="width: 0.6%;"></div></div>
+    </div>
+    <p class="help">Six meetings came from work you sent some other way, so Won reads against those rather than against your two replies.</p>
+  </div>
+
+  <div class="sec"><span>Where the opening is</span><span class="ct">across 86 matches</span></div>
+  <div class="card">
+    <div class="op"><span class="n">40</span><span class="t">run Facebook ads into a WhatsApp number answered by hand</span></div>
+    <div class="op"><span class="n">16</span><span class="t">have almost no reviews</span></div>
+  </div>
+
+  <div class="fade"></div>
+
+  <div class="nav">
+    <div class="it">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v10h12V10"/></svg>
+      <span>Now</span>
+    </div>
+    <div class="it on">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3.5L21 5"/><path d="M3 21h18"/></svg>
+      <span>Working?</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

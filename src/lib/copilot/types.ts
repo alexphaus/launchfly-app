@@ -355,6 +355,17 @@ export interface HomeData {
    */
   needsFirstSupply: boolean;
   lastRun: { status: string; agent: string; finished_at: string | null } | null;
+  /**
+   * When the NIGHTLY run last finished, as opposed to a run the user triggered
+   * by opening the app. Null means it has never fired.
+   *
+   * This is the difference between a copilot and a report you generate by
+   * looking at it: with no cron there are no overnight Moves, no push, and no
+   * graded decisions, so every morning is identical because the user is the one
+   * computing it. It was invisible — a scheduled task nobody had set up looks
+   * exactly like a quiet week — so the app now says so.
+   */
+  lastCronRun: string | null;
   metrics: Metrics;
   supplyLastRun: string | null;
   account: { email: string | null; verified: boolean };

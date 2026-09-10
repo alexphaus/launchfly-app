@@ -12,14 +12,14 @@
 // make with a thumb, the queue as a single row, and everything else folded. The
 // numbers moved to Working, which is the tab for asking whether any of it is
 // landing.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
 import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
 import { KIND_LABEL } from '@/lib/copilot/moves';
 import type { Execution, HomeData, Move, QueueItem } from '@/lib/copilot/types';
-import { money } from '../format';
+import { money, relTime } from '../format';
 import TriageStack from '../TriageStack';
 import type { Actions } from '../shared';
 
@@ -43,9 +43,13 @@ function oldestWait(queue: QueueItem[]): number {
 
 export default function NowView({ home, actions, briefing, finding }: { home: HomeData; actions: Actions; briefing: boolean; finding: boolean }) {
   const shell = useShell();
+  // Relative times differ between server and client render; wait for mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [showWhy, setShowWhy] = useState(false);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
+  const [tellOpen, setTellOpen] = useState(false);
   const [moreAlso, setMoreAlso] = useState(false);
   const b = home.billing;
   const noOffer = offerIsEmpty(home.profile.offer);
@@ -65,6 +69,9 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
   // the same instruction twice, which is the whole thing this screen fixes.
   const queueIsCall = home.callMove?.job === 'send_queue';
   const waited = oldestWait(queue);
+  // 36 hours: long enough that one missed night is not an alarm, short enough
+  // that a scheduled task which never fires cannot hide.
+  const nightlyStale = !home.lastCronRun || Date.now() - new Date(home.lastCronRun).getTime() > 36 * 3_600_000;
   // A brand new account. Three separate empty boxes stacked up read as a broken
   // app; one card reads as a new one.
   const nothingYet = !home.decision && !home.insight && !queue.length && !alsoToday.length && !home.moves.length;
@@ -73,7 +80,7 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
     if (!note.trim()) return;
     setSending(true);
     const saved = await actions.addNote(note.trim(), regenerate);
-    if (saved) setNote('');
+    if (saved) { setNote(''); setTellOpen(false); }
     setSending(false);
   };
 
@@ -81,7 +88,45 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
     <>
       {(briefing || finding) && <div className="cp-banner"><span className="dot" />{finding ? 'Finding real matches' : 'Building today’s brief'}</div>}
 
+      {/* With no nightly run there are no overnight Moves, no push and no graded
+          decisions — every morning is identical because you are the one
+          computing it by opening the app. A scheduled task nobody set up looks
+          exactly like a quiet week, so it is said out loud. */}
+      {nightlyStale && (
+        <div className="cp-empty" style={{ marginBottom: 14 }}>
+          <b>Nothing is running overnight</b>
+          {home.lastCronRun
+            ? `The nightly job last finished ${mounted ? relTime(home.lastCronRun) : '…'}. Until it runs again, this screen only changes when you open it.`
+            : 'The nightly job has never run, so nothing is found while you are away and no morning nudge is sent. Everything here was computed the moment you opened the app.'}
+        </div>
+      )}
+
       {call}
+
+      {/* Promoted from the footer, where it was the last thing on a long scroll.
+          This is the only way anything the scrapers cannot see gets into the
+          system — a reply that came by phone, a burn that dropped, a job
+          interview, three clients complaining about the same part of the offer.
+          Everything else on this screen is derived from data the app already
+          had, which is why it repeats itself. */}
+      {tellOpen ? (
+        <div className="cp-composer">
+          <textarea
+            autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
+            placeholder="Maria replied. Burn is down to 200. Three people asked about the same thing. I have an interview Thursday…"
+          />
+          <div className="bar">
+            <span className="hint">Changes tomorrow&rsquo;s call.</span>
+            <button className="cp-btn" disabled={sending} onClick={() => { setTellOpen(false); setNote(''); }}>Cancel</button>
+            <button className="cp-btn primary" disabled={sending || briefing || !note.trim()} onClick={() => submit(true)}>Add &amp; re-plan</button>
+          </div>
+        </div>
+      ) : (
+        <button className="cp-tell" onClick={() => setTellOpen(true)}>
+          <span className="t">Tell the copilot what changed</span>
+          <span className="s">{home.contextCount} in context · changes tomorrow&rsquo;s call</span>
+        </button>
+      )}
 
       {b.matches.remaining === 0 && (
         <div className="cp-card cp-wall">
@@ -207,15 +252,6 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         </>
       )}
 
-      <div className="cp-section"><span className="lead">Tell the copilot</span><span className="count">{home.contextCount} in context</span></div>
-      <div className="cp-composer">
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="What changed? A win, a number, a constraint, a person, a lead that went cold…" maxLength={2000} />
-        <div className="bar">
-          <span className="hint">Lands in your context. Sharpens the next brief.</span>
-          <button className="cp-btn" disabled={sending || !note.trim()} onClick={() => submit(false)}>Add</button>
-          <button className="cp-btn primary" disabled={sending || briefing || !note.trim()} onClick={() => submit(true)}>Add &amp; re-plan</button>
-        </div>
-      </div>
     </>
   );
 }
@@ -243,6 +279,29 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
   const verdict = verdictOf(decision);
   const moved = movedBy(decision);
   const answered = decision.response !== 'pending';
+
+  // Once it is answered it is a receipt, not a decision. Leaving the full card
+  // at the top meant "Not doing it" left you looking at the thing you had just
+  // declined, with the next move below the fold.
+  if (answered) {
+    return (
+      <div className="cp-card cp-answered">
+        <div className="cp-call-top">
+          <div className="cp-eyebrow">Today&rsquo;s call</div>
+          <span className={`cp-chip verdict ${verdict}`}>{VERDICT_LABEL[verdict]}</span>
+        </div>
+        <p className="cp-answered-head">{decision.headline}</p>
+        <p className="cp-answered-note">
+          {verdict === 'measuring' && decision.verify.metric !== 'none'
+            ? `Reading ${decision.verify.metric.replace('_', ' ')} back in a few days. It was ${decision.verify.baseline} when you decided.`
+            : verdict === 'worked' ? `${decision.verify.metric.replace('_', ' ')} moved by ${moved}.`
+            : verdict === 'no_movement' ? `${decision.verify.metric.replace('_', ' ')} did not move.`
+            : verdict === 'wrong' ? 'Recorded. It will not make this call the same way again.'
+            : 'Recorded. Turn the same call down enough times and it stops being offered.'}
+        </p>
+      </div>
+    );
+  }
 
   const answer = async (r: 'did' | 'rejected' | 'wrong') => {
     setBusy(true);

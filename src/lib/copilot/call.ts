@@ -15,10 +15,11 @@
 // "send the drafts" led every morning because starterDecision has no other kind
 // of branch. A Move could not win because nothing was comparing them.
 
+import { refusalsByTopic } from './decision';
 import { arbitrate, costMinutesOf, type ScoreCtx } from './stake';
 import { CAPACITY_META, type Metrics, type Move, type Profile } from './types';
 import type { DecisionDraft } from './decision';
-import { loadMoves } from './store';
+import { loadDecisions, loadMoves } from './store';
 
 /** How many open Moves arbitration considers. Past this it is not a shortlist. */
 export const ARBITRATE_POOL = 24;
@@ -32,8 +33,20 @@ export interface PromotedCall {
 
 /** What a Move looks like to the scorer. Kept here so store.ts stays about rows. */
 export function scorable(m: Move) {
-  return { id: m.id, kind: m.kind, stake: m.stake ?? null, costMinutes: costMinutesOf(m.cost_label) };
+  return { id: m.id, kind: m.kind, job: m.job, stake: m.stake ?? null, costMinutes: costMinutesOf(m.cost_label) };
 }
+
+/** Job key → the sentence a person would use for it. */
+export const JOB_PHRASE: Record<string, string> = {
+  send_queue: 'sending the drafts',
+  client_delivery: 'chasing delivery',
+  repeat_customer: 'reconnecting with past customers',
+  runway_guard: 'the runway question',
+  goal_gap: 'the goal you set',
+  opening_gap: 'changing the offer',
+  capability_gap: 'the thing to get better at',
+};
+export const phraseFor = (job: string) => JOB_PHRASE[job] ?? job.replace(/_/g, ' ');
 
 /**
  * Turn the winning Move into the day's call.
@@ -42,10 +55,15 @@ export function scorable(m: Move) {
  * named. That is the honest version: the app can only claim it chose this over
  * something if there was something.
  */
-export function draftFrom(win: Move, runnerUp: Move | null): DecisionDraft {
+export function draftFrom(win: Move, runnerUp: Move | null, stoodDown: string[] = []): DecisionDraft {
+  // Standing down is said once, as evidence for why today's call is not the
+  // usual one. Saying nothing is indistinguishable from having forgotten, which
+  // is what the app did for five mornings while the ledger recorded every no.
+  const stand = stoodDown.filter((j) => j !== win.job).slice(0, 1)
+    .map((j) => `You have turned down ${phraseFor(j)} enough times that it is no longer the call. It is still on the list.`);
   return {
     headline: win.headline,
-    because: win.why,
+    because: [...win.why, ...stand],
     instead_of: runnerUp ? runnerUp.headline : undefined,
     // A Move that named a number is a claim; one riding its kind prior is a
     // guess about a category, and the card says so rather than sounding equally
@@ -57,10 +75,14 @@ export function draftFrom(win: Move, runnerUp: Move | null): DecisionDraft {
   };
 }
 
-export function scoreCtxFor(profile: Pick<Profile, 'capacity' | 'finance'>): ScoreCtx {
+export function scoreCtxFor(
+  profile: Pick<Profile, 'capacity' | 'finance'>,
+  refused: Record<string, number> = {},
+): ScoreCtx {
   return {
     monthlyBurn: profile.finance?.monthly_burn ?? null,
     capacityMinutes: CAPACITY_META[profile.capacity].minutes,
+    refused,
   };
 }
 
@@ -73,15 +95,19 @@ export async function promoteCall(
   profile: Pick<Profile, 'id' | 'capacity' | 'finance'>,
   _metrics: Metrics,
 ): Promise<PromotedCall | null> {
-  const { moves } = await loadMoves(profile.id, ARBITRATE_POOL);
+  const [{ moves }, decisions] = await Promise.all([
+    loadMoves(profile.id, ARBITRATE_POOL),
+    loadDecisions(profile.id),
+  ]);
   if (!moves.length) return null;
 
   const byId = new Map(moves.map((m) => [m.id, m]));
-  const { call, insteadOf } = arbitrate(moves.map(scorable), scoreCtxFor(profile));
+  const ctx = scoreCtxFor(profile, refusalsByTopic(decisions));
+  const { call, insteadOf, stoodDown } = arbitrate(moves.map(scorable), ctx);
   if (!call) return null;
 
   const win = byId.get(call.id);
   if (!win) return null;
   const runnerUp = insteadOf ? byId.get(insteadOf.id) ?? null : null;
-  return { draft: draftFrom(win, runnerUp), move: win, insteadOf: runnerUp };
+  return { draft: draftFrom(win, runnerUp, stoodDown), move: win, insteadOf: runnerUp };
 }

@@ -2021,3 +2021,77 @@ async function goalsAndArithmetic() {
 }
 
 goalsAndArithmetic().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A no that is heard
+// ─────────────────────────────────────────────────────────────────────────────
+import { MAX_REFUSALS, REFUSAL_DECAY } from '../../src/lib/copilot/stake';
+import { REFUSAL_WINDOW, refusalsByTopic } from '../../src/lib/copilot/decision';
+import { draftFrom as promoteDraft, phraseFor } from '../../src/lib/copilot/call';
+import type { Move as MoveR } from '../../src/lib/copilot/types';
+
+async function refusals() {
+  const ctx = { monthlyBurn: 3000, capacityMinutes: 60 };
+  const mv = (id: string, job: string, kind = 'earn') => ({ id, job, kind, stake: null, costMinutes: 30 }) as never;
+  const dec = (topic: string | null, response: string) => ({ topic, response }) as never;
+
+  // 1. A refusal is a no you gave, or one the sweep inferred from a call you
+  //    left pending until the next arrived. Both mean the app asked and nothing
+  //    happened. Nothing else counts — a call you DID is not a refusal.
+  const r = refusalsByTopic([
+    dec('send_queue', 'rejected'), dec('send_queue', 'ignored'), dec('send_queue', 'did'),
+    dec('runway_guard', 'ignored'), dec(null, 'rejected'), dec('goal_gap', 'pending'),
+  ]);
+  assert.equal(r.send_queue, 2, 'rejected and ignored count; did does not');
+  assert.equal(r.runway_guard, 1);
+  assert.equal(r.goal_gap, undefined, 'still open is not yet a no');
+  assert.equal(Object.keys(r).length, 2, 'a call with no topic teaches nothing');
+
+  // The window is bounded: a no from months ago is not a standing objection.
+  const old = Array.from({ length: REFUSAL_WINDOW + 5 }, () => dec('send_queue', 'rejected'));
+  assert.equal(refusalsByTopic(old).send_queue, REFUSAL_WINDOW);
+
+  // 2. THE FIFTH MORNING. Same two Moves, same day, the only difference being
+  //    that the user has already said no to one of them twice.
+  const queue = mv('q', 'send_queue');
+  const goal = mv('g', 'goal_gap', 'decide');
+  assert.equal(arbitrate([queue, goal], ctx).call?.id, 'q', 'with no history the earn leads');
+  const heard = arbitrate([queue, goal], { ...ctx, refused: { send_queue: 2 } });
+  assert.equal(heard.call?.id, 'g', 'two refusals and the other one leads');
+  assert.ok(REFUSAL_DECAY > 0 && REFUSAL_DECAY < 1);
+
+  // 3. Past MAX_REFUSALS it is barred from leading — but it stays on the list,
+  //    because the work is still real. Barred is not deleted.
+  const done = arbitrate([queue, goal], { ...ctx, refused: { send_queue: MAX_REFUSALS } });
+  assert.equal(done.call?.id, 'g');
+  assert.deepEqual(done.stoodDown, ['send_queue']);
+  assert.ok(done.rest.some((m) => m.id === 'q'), 'still available, just not the call');
+
+  // Even alone it cannot lead: a refused call is not made valid by having no
+  // competition.
+  const only = arbitrate([queue], { ...ctx, refused: { send_queue: MAX_REFUSALS } });
+  assert.equal(only.call, null);
+  assert.deepEqual(only.stoodDown, ['send_queue']);
+
+  // 4. Standing down is said once, in the winner's own evidence. Saying nothing
+  //    is indistinguishable from having forgotten, which is what the app did for
+  //    five mornings while the ledger recorded every no.
+  const row = (over: Partial<MoveR> = {}): MoveR => ({
+    id: 'g', job: 'goal_gap', kind: 'decide', headline: 'Emergency is 14 months away',
+    why: ['$13,800 to go.'], artifact: { kind: 'text', label: 'Show it', value: 'x' },
+    cost_label: '10 min', status: 'open', created_at: '2026-09-11T00:00:00Z', stake: null, ...over,
+  });
+  const d = promoteDraft(row(), null, ['send_queue']);
+  assert.equal(d.because.length, 2);
+  assert.match(d.because[1], /turned down sending the drafts/);
+  assert.match(d.because[1], /still on the list/, 'stood down, not deleted');
+  // The winner never stands itself down.
+  assert.deepEqual(promoteDraft(row({ job: 'send_queue' }), null, ['send_queue']).because, ['$13,800 to go.']);
+  assert.deepEqual(promoteDraft(row(), null, []).because, ['$13,800 to go.']);
+  // Every job the registry can promote has a phrase a person would use.
+  for (const j of JOBS) assert.ok(phraseFor(j.key).length > 0 && !phraseFor(j.key).includes('_'), j.key);
+
+  console.log('copilot-core: refusal checks passed');
+}
+
+refusals().catch((e) => { console.error(e); process.exit(1); });

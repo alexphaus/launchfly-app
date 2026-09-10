@@ -86,11 +86,28 @@ export const URGENCY_HORIZON_DAYS = 30;
 /** Below this nothing is promoted and the day falls back to the written call. */
 export const CALL_FLOOR = 0.35;
 
+/** Each refusal multiplies a topic's score by this. Three of them puts almost
+ *  anything under CALL_FLOOR, which is the point. */
+export const REFUSAL_DECAY = 0.55;
+/**
+ * Refused this often and it is barred from leading entirely.
+ *
+ * Lives here rather than in decision.ts because decision.ts already imports this
+ * module for BUSINESS_METRICS at module-init time; importing back would close a
+ * runtime cycle and leave whichever loaded second reading undefined.
+ */
+export const MAX_REFUSALS = 3;
+
 export interface ScoreCtx {
   /** What the business spends a month. The scale money is judged against. */
   monthlyBurn?: number | null;
   /** Minutes the user says they have today. */
   capacityMinutes: number;
+  /**
+   * Topic → how many times it was recently refused, from refusalsByTopic. A
+   * Move's topic is its job key, which is what draftFrom writes onto the call.
+   */
+  refused?: Record<string, number>;
 }
 
 export interface Scorable {
@@ -98,6 +115,8 @@ export interface Scorable {
   stake?: Stake | null;
   /** Parsed from cost_label. Unknown costs are assumed to be half an hour. */
   costMinutes?: number | null;
+  /** Which job produced it. Matched against the refusal record. */
+  job?: string | null;
 }
 
 export const DEFAULT_COST_MINUTES = 30;
@@ -125,6 +144,12 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  *   money    what it moves, against what the business spends a month
  *   urgency  how soon the thing it is about stops being fixable
  *   fit      whether it fits in the time the user says they have
+ *   refusal  how many times this exact topic has already been turned down
+ *
+ * The last one is the only one that reads the user rather than the world, and it
+ * is the one that stops "send the drafts" being the call on a fifth consecutive
+ * morning. Refusing something three times is information; ignoring it is what
+ * the app was doing.
  */
 export function scoreMove(m: Scorable, ctx: ScoreCtx): number {
   const prior = kindPrior(m.kind);
@@ -144,7 +169,10 @@ export function scoreMove(m: Scorable, ctx: ScoreCtx): number {
   // name the best of it rather than go blank.
   const fit = cost <= ctx.capacityMinutes ? 1 : 0.5;
 
-  return prior * money * urgency * fit;
+  const refusals = (m.job && ctx.refused?.[m.job]) || 0;
+  const refusal = REFUSAL_DECAY ** refusals;
+
+  return prior * money * urgency * fit * refusal;
 }
 
 export interface Arbitrated<T> {
@@ -154,6 +182,13 @@ export interface Arbitrated<T> {
   insteadOf: T | null;
   /** Everything else, best first. The call is not in here. */
   rest: T[];
+  /**
+   * Jobs barred from the Call because they have been refused MAX_REFUSALS times.
+   * They stay in `rest` — the work is still real and still available — they just
+   * cannot lead again. Said out loud once, because standing down quietly is
+   * indistinguishable from forgetting.
+   */
+  stoodDown: string[];
 }
 
 /**
@@ -172,7 +207,13 @@ export function arbitrate<T extends Scorable & { id: string }>(
     .sort((a, b) => (b.score - a.score) || (KIND_ORDER[a.m.kind] - KIND_ORDER[b.m.kind]) || a.m.id.localeCompare(b.m.id))
     .map((x) => x.m);
 
-  const top = ranked[0];
-  if (!top || scoreMove(top, ctx) < floor) return { call: null, insteadOf: null, rest: ranked };
-  return { call: top, insteadOf: ranked[1] ?? null, rest: ranked.slice(1) };
+  // Barred from leading, not from existing. A job refused this many times has
+  // been answered; asking again is the app not listening.
+  const barred = (m: T) => !!m.job && (ctx.refused?.[m.job] ?? 0) >= MAX_REFUSALS;
+  const stoodDown = [...new Set(ranked.filter(barred).map((m) => m.job as string))];
+  const eligible = ranked.filter((m) => !barred(m));
+
+  const top = eligible[0];
+  if (!top || scoreMove(top, ctx) < floor) return { call: null, insteadOf: null, rest: ranked, stoodDown };
+  return { call: top, insteadOf: eligible[1] ?? null, rest: ranked.filter((m) => m.id !== top.id), stoodDown };
 }

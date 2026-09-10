@@ -464,7 +464,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -475,6 +475,14 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_context_items').select('id', { count: 'exact', head: true }).eq('profile_id', profileId).then((r) => r.count ?? 0),
     typeAffinityFor(profileId),
     db.from('copilot_agent_runs').select('status, agent, finished_at').eq('profile_id', profileId).eq('kind', 'daily_brief').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data as HomeData['lastRun']) ?? null),
+    // Nightly runs only. brief.ts records the reason on every run, so this is
+    // the one honest answer to "is anything happening while I am not looking".
+    db.from('copilot_agent_runs').select('finished_at')
+      .eq('profile_id', profileId).eq('kind', 'daily_brief')
+      .filter('input_summary->>reason', 'eq', 'cron')
+      .not('finished_at', 'is', null)
+      .order('finished_at', { ascending: false }).limit(1).maybeSingle()
+      .then((r) => (r.data?.finished_at as string | null) ?? null),
     loadMetrics(profileId, profile),
     db.from('copilot_agent_runs').select('finished_at').eq('profile_id', profileId).eq('kind', 'supply').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data?.finished_at as string | null) ?? null),
     hasSubscription(profileId),
@@ -587,6 +595,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
       && metrics.pipeline.sourced === 0
       && remaining(effectivePlan(profile).limits.matchesPerMonth, usage.matches) > 0,
     lastRun,
+    lastCronRun,
     metrics,
     supplyLastRun: supplyRun,
     account: { email: profile.email, verified: !!profile.email_verified_at },

@@ -72,6 +72,11 @@ export function openingMove(profile: Pick<Profile, 'offer'>, term: Opening): Mov
       value: `${problem}\n\nThat is the problem your offer says it fixes, with "${term.term}" added. Paste it into Offer and every waiting draft is rewritten to lead with it.\n\nWhat you sell does not change — nobody asked for ${term.term}, it is the weakness you would be selling against.\n\nThe other answer is just as real: if you do not want to sell against ${term.term}, stop matching ${where ? where.segment : 'the segments it comes from — they are on Signals, by segment'}.`,
     },
     cost_label: '5 min',
+    stake: {
+      // A named opening changes the first line of every draft after it, so what
+      // it should move is replies — not sends, which it does not touch.
+      metric: 'replies', direction: 'up', by: 1, withinDays: 14,
+    },
   };
 }
 

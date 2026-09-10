@@ -272,6 +272,9 @@ export default function TodayView({ home, actions, briefing, finding }: { home: 
 function CallCard({ decision, home, actions, noOffer }: { decision: Decision; home: HomeData; actions: Actions; noOffer: boolean }) {
   const [busy, setBusy] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
+  const [showArtifact, setShowArtifact] = useState(false);
+  // Present when arbitration promoted a Move rather than the brief writing one.
+  const move = home.callMove;
   const verdict = verdictOf(decision);
   const moved = movedBy(decision);
   const answered = decision.response !== 'pending';
@@ -296,8 +299,12 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
 
       <div className="cp-card cp-call">
         <div className="cp-call-top">
-          <div className="cp-eyebrow">Today’s call</div>
-          {decision.confidence === 'low' && <span className="cp-chip unsure">Not sure</span>}
+          {/* When a Move won the day, the kind is the honest label: it is what
+              stops every morning reading "Today's call — send the drafts". */}
+          <div className="cp-eyebrow">{move ? `Today’s call · ${KIND_LABEL[move.kind]}` : 'Today’s call'}</div>
+          {move?.cost_label
+            ? <span className="cp-chip">{move.cost_label}</span>
+            : decision.confidence === 'low' && <span className="cp-chip unsure">Not sure</span>}
         </div>
         <h2 className="cp-call-head">{decision.headline}</h2>
 
@@ -313,6 +320,19 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
 
         {decision.missing && (
           <div className="cp-missing"><b>What would change this</b> {decision.missing}</div>
+        )}
+
+        {/* The whole point of promoting a Move: the call arrives carrying the
+            work. A Decision has no artifact of its own, which is why this used
+            to be a sentence with three verdict buttons under it and nothing to
+            actually do. */}
+        {move && (
+          <>
+            {move.artifact.href
+              ? <a className="cp-btn primary block cp-call-do" href={move.artifact.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{move.artifact.label}</a>
+              : <button className="cp-btn primary block cp-call-do" onClick={() => setShowArtifact((v) => !v)}>{showArtifact ? 'Hide it' : move.artifact.label}</button>}
+            {(showArtifact || move.artifact.kind === 'text') && <div className="cp-reasoning">{move.artifact.value}</div>}
+          </>
         )}
 
         {/* The call is only a call if you can act on it here. With a blank offer

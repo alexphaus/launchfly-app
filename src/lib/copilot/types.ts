@@ -3,6 +3,7 @@
 
 import type { PackReply, PackSentExample } from './conversations';
 import type { MoveArtifact, MoveKind } from './moves';
+import type { Stake } from './stake';
 import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
@@ -322,6 +323,13 @@ export interface HomeData {
    */
   moves: Move[];
   /**
+   * The Move today's call was promoted from, when arbitration picked one. It is
+   * NOT in `moves` — it is rendered as the call, and rendering it twice is the
+   * duplication this redesign exists to remove. Null when the call was written
+   * rather than promoted.
+   */
+  callMove: Move | null;
+  /**
    * Matches nobody has judged yet, ordered by what this user keeps drafting.
    * One decision at a time on the only judgement in this app cheap enough to
    * make with a thumb — see triage.ts for why it is not the send queue.
@@ -494,4 +502,6 @@ export interface Move {
   cost_label: string | null;
   status: 'open' | 'done' | 'dismissed';
   created_at: string;
+  /** What it claims it will move. Null on rows written before arbitration. */
+  stake?: Stake | null;
 }

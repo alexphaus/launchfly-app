@@ -120,6 +120,17 @@ export function deliveryMove(profile: Pick<Profile, 'name' | 'timezone'>, sale: 
       href: email ? deepLink({ channel: 'email', recipient: email, subject: 'Getting you set up', body }) : null,
     },
     cost_label: '10 min',
+    stake: {
+      // Nothing in Metrics counts deliveries yet, and staking this on won_amount
+      // would be a lie: the money is already collected. 'none' is the honest
+      // metric — the value and the deadline still rank it, they just cannot
+      // grade it. Widening BUSINESS_METRICS is how that changes.
+      metric: 'none', direction: 'up', by: 0,
+      // Two days after a payment is where "getting set up" turns into "did they
+      // forget about me".
+      withinDays: Math.max(1, 2 - days),
+      value: sale.amount ?? undefined,
+    },
   };
 }
 

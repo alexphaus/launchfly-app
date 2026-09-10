@@ -94,6 +94,13 @@ export function repeatMove(profile: Pick<Profile, 'name' | 'timezone'>, sale: Sa
       href: email ? deepLink({ channel: 'email', recipient: email, subject: 'Checking in', body }) : null,
     },
     cost_label: '5 min',
+    stake: {
+      metric: 'won_amount', direction: 'up', by: sale.amount ?? 0,
+      // The longer the silence the less this is worth, so the window closes as
+      // it ages rather than staying politely open forever.
+      withinDays: Math.max(3, DORMANT_MAX_DAYS - days),
+      value: sale.amount ?? undefined,
+    },
   };
 }
 

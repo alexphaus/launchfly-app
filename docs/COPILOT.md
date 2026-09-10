@@ -561,6 +561,7 @@ whatever the landing page says.
 
 | Job | Kind | Sensor | Model? |
 |---|---|---|---|
+| `send_queue` | `earn` | a non-blank offer | no |
 | `client_delivery` | `build` | linked `sales` table | no |
 | `repeat_customer` | `earn` | linked `sales` table | no |
 | `runway_guard` | `decide` | `finance.cash` + `monthly_burn` | no |
@@ -577,6 +578,56 @@ you wanted at a price, quoting three suppliers, or fixing the n8n node that is
 dropping enquiries needs a searcher, a browser or a builder — not a request
 handler. Those arrive through `remote`, below, and the app does not pretend
 otherwise.
+
+### The Call is picked, not written
+
+For months there were two production paths that never met: the brief wrote a
+`Decision`, the jobs wrote `Move`s, and `loadHome` put the Decision on top
+whatever it said. Since `starterDecision` has seven branches and all seven are
+outreach branches, the Call was "send the drafts" on a morning when somebody who
+paid three months ago was still waiting to hear from anyone. Not a ranking bug —
+there was no ranking.
+
+Now every Move declares a **stake** (`stake.ts`) and the Call is simply the Move
+that wins. Outreach is `send_queue`, a Job like any other, and has to earn the
+top of the screen the same way a runway decision does.
+
+The ladder, in `call.ts`:
+
+1. A blank offer forces the offer call (invariant 1 outranks everything here).
+2. The winning Move, when one clears `CALL_FLOOR` — it is grounded in a real row
+   and carries an artifact, which prose does not.
+3. Whatever the agent wrote.
+4. `starterDecision`'s ladder, so Today always leads with one move.
+
+`scoreMove` is four bounded factors, each explainable in a sentence: the **kind
+prior** (used only when nothing better is known, and derived from `KIND_ORDER` so
+there is one opinion about kinds in the codebase), **money** against monthly burn
+(capped, so a named number always outranks a guess but never runs away with the
+day), **urgency** from the stake's `withinDays`, and **fit** against the capacity
+the user set. The absolute number means nothing; only the order does.
+
+Two consequences worth knowing:
+
+- **`instead_of` stopped being a sentence somebody wrote.** It is the runner-up,
+  named. The app can only claim it chose this over something if there was
+  something.
+- **The Call carries the work.** A `Decision` has no artifact of its own, which
+  is why its button used to say "open the queue" rather than being the queue.
+  `source_move_id` links the two; `isDeliverable` guarantees the Move has one.
+  Answering the Call closes the Move, so it never reappears in the stack below.
+
+`BUSINESS_METRICS` is the vocabulary a call may stake itself on. It was the
+outbound funnel and nothing else, so a runway call could only pick `'none'` —
+ungradeable, therefore never learned from, therefore the decision record could
+only ever teach the app about sending. `queue` and `runway_months` are the first
+two that are not funnel metrics, and both are there because `metricValue` can
+read them back out of `Metrics` today. **A metric nobody can read back is not a
+stake, it is a promise** — that is the bar for adding one.
+
+`METRIC_GOOD_DIRECTION` exists because good is not always up: "clear the queue"
+succeeds when the number falls, and `verdictOf` graded that as `no_movement`
+until it was told otherwise.
 
 ### ctx.sense() — reading what the app already worked out
 

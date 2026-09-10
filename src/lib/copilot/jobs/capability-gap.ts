@@ -54,6 +54,11 @@ export function capabilityMove(edge: GrowthEdge): MoveDraft {
           href: tutorialSearch(edge.capability),
         },
     cost_label: stop ? null : '2 h',
+    stake: stop
+      // Stopping something is not measured by a number going up. What it buys is
+      // the week you were about to spend, which nothing in Metrics counts.
+      ? { metric: 'none', direction: 'up', by: 0, withinDays: 7 }
+      : { metric: 'replies', direction: 'up', by: 1, withinDays: 14 },
   };
 }
 

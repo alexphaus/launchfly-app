@@ -9,6 +9,8 @@
 // only move on offer was not one he wanted to make. A Move is any move: earn,
 // spend, build, fix, learn, meet, decide, avoid.
 
+import type { Stake } from './stake';
+
 /** What a Move asks of you. Ordered by how directly it moves money. */
 export const MOVE_KINDS = ['earn', 'spend', 'build', 'fix', 'learn', 'meet', 'decide', 'avoid'] as const;
 export type MoveKind = (typeof MOVE_KINDS)[number];
@@ -47,6 +49,14 @@ export interface MoveDraft {
   why: string[];
   artifact: MoveArtifact;
   cost_label?: string | null;
+  /**
+   * What this Move claims it will move, and by when. Optional: a job that
+   * genuinely cannot say is better off silent than inventing a number, and the
+   * kind prior in stake.ts carries it. But a Move with no stake can still be
+   * ranked and can still win the Call — it just brings less evidence to the
+   * argument than one that named a number.
+   */
+  stake?: Stake | null;
 }
 
 export const HEADLINE_MAX = 160;
@@ -86,6 +96,7 @@ export function normalizeMove(d: MoveDraft): MoveDraft {
       href: d.artifact.href ?? null,
     },
     cost_label: d.cost_label?.trim().slice(0, 40) || null,
+    stake: d.stake ?? null,
   };
 }
 

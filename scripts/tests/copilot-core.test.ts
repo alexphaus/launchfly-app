@@ -1804,3 +1804,130 @@ async function leverage() {
 }
 
 leverage().catch((e) => { console.error(e); process.exit(1); });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Call is picked, not written
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  BUSINESS_METRICS, CALL_FLOOR, DEFAULT_COST_MINUTES, METRIC_GOOD_DIRECTION, MIN_COST_MINUTES,
+  arbitrate, costMinutesOf, kindPrior, scoreMove, type Stake,
+} from '../../src/lib/copilot/stake';
+import { draftFrom, scorable } from '../../src/lib/copilot/call';
+import { sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
+import { metricValue as mv, verdictOf as vo } from '../../src/lib/copilot/decision';
+import type { Move as MoveRow } from '../../src/lib/copilot/types';
+
+async function arbitration() {
+  const ctx = { monthlyBurn: 3000, capacityMinutes: 60 };
+  const m = (id: string, kind: string, stake?: Partial<Stake> | null, costMinutes?: number) =>
+    ({ id, kind, stake: stake ? { metric: 'none', direction: 'up', by: 1, withinDays: 30, ...stake } : null, costMinutes }) as never;
+
+  // 1. The vocabulary is no longer the outbound funnel. Every metric a call can
+  //    stake itself on has to be readable back out of Metrics, or it is a
+  //    promise rather than a stake.
+  const metrics = { sent: 9, replies: 2, meetings: 6, won: 1, won_amount: 4000, awaiting_approval: 45, runway_months: 3.4 } as never;
+  for (const k of BUSINESS_METRICS) {
+    if (k === 'none') continue;
+    assert.equal(typeof mv(metrics, k), 'number', `${k} must be readable from Metrics`);
+  }
+  assert.equal(mv(metrics, 'queue'), 45);
+  assert.equal(mv(metrics, 'runway_months'), 3.4);
+  assert.ok(BUSINESS_METRICS.includes('runway_months'), 'the funnel is not the whole business');
+
+  // 2. Good is not always up. "Clear the queue" succeeds when the number falls,
+  //    and grading that as no_movement is how a working call looked like a
+  //    failed one.
+  const graded = (metric: string, baseline: number, after: number) =>
+    vo({ response: 'did', verify: { metric, baseline, after, verifiedAt: 'x' } } as never);
+  assert.equal(graded('queue', 45, 35), 'worked', 'a smaller queue is progress');
+  assert.equal(graded('queue', 45, 50), 'no_movement');
+  assert.equal(graded('replies', 2, 5), 'worked');
+  assert.equal(graded('replies', 5, 2), 'no_movement');
+  assert.equal(graded('runway_months', 2, 4), 'worked', 'more runway is progress');
+  assert.equal(graded('none', 0, 0), 'done', 'an ungradeable call is done, never "worked"');
+  for (const k of BUSINESS_METRICS) assert.ok(METRIC_GOOD_DIRECTION[k], `${k} must declare a good direction`);
+
+  // 3. Cost comes off the label the job already writes.
+  assert.equal(costMinutesOf('20 min'), 20);
+  assert.equal(costMinutesOf('2 h'), 120);
+  assert.equal(costMinutesOf('1.5 hours'), 90);
+  assert.equal(costMinutesOf('₱18,000'), null, 'a price is not a duration');
+  assert.equal(costMinutesOf(null), null);
+  assert.ok(MIN_COST_MINUTES > 0 && DEFAULT_COST_MINUTES >= MIN_COST_MINUTES);
+
+  // 4. THE POINT OF ALL OF THIS. A customer who paid and went quiet outranks the
+  //    send queue on the day it should. Before arbitration this was impossible —
+  //    not mis-ranked, impossible: the brief wrote the call and the jobs wrote
+  //    moves on paths that never met, so "send the drafts" led by construction.
+  const queue = m('q', 'earn', { metric: 'queue', direction: 'down', by: 10, withinDays: 1, value: 400 }, 30);
+  const dormant = m('d', 'earn', { metric: 'won_amount', by: 500, withinDays: 3, value: 500 }, 5);
+  const won = arbitrate([queue, dormant], ctx);
+  assert.equal(won.call?.id, 'd', 'a five-minute reconnect worth 500 beats half an hour of sending');
+  assert.equal(won.insteadOf?.id, 'q', 'and the trade-off is named, not invented');
+  assert.deepEqual(won.rest.map((x) => x.id), ['q'], 'the winner is never also in the stack');
+
+  // But it does not always win: a queue that is worth more still takes the day.
+  const richQueue = m('q', 'earn', { metric: 'queue', direction: 'down', by: 10, withinDays: 1, value: 6000 }, 30);
+  assert.equal(arbitrate([richQueue, dormant], ctx).call?.id, 'q', 'outreach wins when outreach is worth more');
+
+  // 5. Each factor is bounded, so no single input runs away with the day.
+  const huge = m('h', 'learn', { withinDays: 30, value: 10_000_000 }, 30);
+  const modest = m('s', 'earn', { withinDays: 1, value: 500 }, 15);
+  assert.equal(arbitrate([huge, modest], ctx).call?.id, 's', 'money is capped; urgency and kind still count');
+  assert.ok(scoreMove(m('x', 'earn', { withinDays: 0 }), ctx) <= scoreMove(m('x', 'earn', { withinDays: 1 }), ctx) * 1.01,
+    'a zero-day deadline cannot divide by zero its way to the top');
+
+  // 6. A move that does not fit today is penalised, not hidden — a day with only
+  //    long work should still name the best of it.
+  const long = m('l', 'earn', { withinDays: 1, value: 900 }, 240);
+  assert.ok(scoreMove(long, ctx) < scoreMove(m('l2', 'earn', { withinDays: 1, value: 900 }, 30), ctx));
+  assert.equal(arbitrate([long], ctx).call?.id, 'l', 'still the call when it is the only one');
+
+  // 7. A named number always outranks a guess about a category.
+  assert.ok(kindPrior('earn') > kindPrior('learn'), 'the prior is still an opinion about kinds');
+  assert.ok(scoreMove(m('a', 'learn', { withinDays: 1, value: 2000 }), ctx) > scoreMove(m('b', 'earn', null), ctx),
+    'evidence beats prior');
+
+  // 8. A quiet day promotes nothing and falls through to the written call.
+  assert.equal(arbitrate([], ctx).call, null);
+  assert.equal(arbitrate([m('w', 'learn', null, 240)], ctx, 99).call, null, 'nothing clears an impossible floor');
+  assert.ok(CALL_FLOOR > 0, 'a floor of zero promotes the best of a bad list');
+
+  // 9. Deterministic. A call that reshuffles on reload is not a decision.
+  const pool = [m('c', 'earn', { withinDays: 5, value: 100 }), m('a', 'earn', { withinDays: 5, value: 100 }), m('b', 'earn', { withinDays: 5, value: 100 })];
+  assert.deepEqual(arbitrate(pool, ctx).rest.map((x) => x.id), arbitrate([...pool].reverse(), ctx).rest.map((x) => x.id));
+  assert.equal(arbitrate(pool, ctx).call?.id, 'a', 'ties break on id, not on load order');
+
+  // 10. The promoted draft carries the Move's evidence, its metric and its id —
+  //     and instead_of stops being a sentence somebody wrote.
+  const row = (over: Partial<MoveRow> = {}): MoveRow => ({
+    id: 'mv1', job: 'repeat_customer', kind: 'earn', headline: 'Maria paid 96 days ago',
+    why: ['Last paid 1 Jun.'], artifact: { kind: 'message', label: 'Open in email', value: 'Hi Maria', href: 'mailto:m@x.y' },
+    cost_label: '5 min', status: 'open', created_at: '2026-09-10T00:00:00Z',
+    stake: { metric: 'won_amount', direction: 'up', by: 500, withinDays: 3, value: 500 }, ...over,
+  });
+  const runnerUp = row({ id: 'mv2', job: 'send_queue', headline: '45 drafts waiting' });
+  const draft = draftFrom(row(), runnerUp);
+  assert.equal(draft.headline, 'Maria paid 96 days ago');
+  assert.deepEqual(draft.because, ['Last paid 1 Jun.']);
+  assert.equal(draft.instead_of, '45 drafts waiting', 'the trade-off is the runner-up, named');
+  assert.equal(draft.verify_metric, 'won_amount', 'the call is graded on what the Move staked');
+  assert.equal(draft.source_move_id, 'mv1', 'without this the call cannot carry the artifact');
+  assert.equal(draft.confidence, 'high');
+  // A Move riding its kind prior says so rather than sounding equally sure.
+  assert.equal(draftFrom(row({ stake: null }), null).confidence, 'low');
+  assert.equal(draftFrom(row({ stake: null }), null).verify_metric, 'none');
+  assert.equal(draftFrom(row(), null).instead_of, undefined, 'nothing to be instead of, so nothing claimed');
+  // The scorer reads cost off the label rather than being told twice.
+  assert.equal(scorable(row()).costMinutes, 5);
+
+  // 11. Outreach is a Job now. That is the whole change: it has to win.
+  assert.equal(sendQueueJob.key, 'send_queue');
+  assert.equal(JOBS.includes(sendQueueJob), true, 'a job not in the registry never runs');
+  assert.equal(await sendQueueJob.available({ profile: { offer: {} } } as never), false, 'nothing to send from a blank offer');
+  assert.equal(await sendQueueJob.available({ profile: { offer: { sells: 'automations' } } } as never), true);
+
+  console.log('copilot-core: arbitration checks passed');
+}
+
+arbitration().catch((e) => { console.error(e); process.exit(1); });

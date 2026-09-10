@@ -1,0 +1,16 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",    "x": 0,    "y": 0,    "w": 390,  "h": 844, "title": "Now" },
+    { "file": "Queue.dc.html",   "x": 510,  "y": 0,    "w": 390,  "h": 844, "title": "The queue, opened" },
+    { "file": "Working.dc.html", "x": 1020, "y": 0,    "w": 390,  "h": 844, "title": "Working?" },
+    { "file": "Stage.dc.html",   "x": 1530, "y": 0,    "w": 390,  "h": 844, "title": "Drafted — a funnel stage, opened" },
+    { "file": "Map.dc.html",     "x": 0,    "y": 1160, "w": 1120, "h": 880, "title": "Where every section goes" }
+  ],
+  "annotations": [
+    { "id": "n-now",     "x": 0,    "y": 890, "w": 390, "text": "The call carries the queue button.\n\nWhen today's call IS \"send the drafts\", there is no separate drafts section — that is how three copies of one instruction became one card. Every other card is a different kind of move: earn, decide, build, fix." },
+    { "id": "n-queue",   "x": 510,  "y": 890, "w": 390, "text": "One draft at a time, message visible.\n\nA list of 43 is a decision about 43 things, which is why 45 of 54 never left. This is a decision about one, ten times." },
+    { "id": "n-working", "x": 1020, "y": 890, "w": 390, "text": "Every bar opens the businesses at that stage.\n\nThat is where the Pipeline tab went — the funnel stops being decoration and becomes the navigation.\n\n\"Where the opening is\" is the old \"What they keep asking for\", renamed to what it actually measures." },
+    { "id": "n-stage",   "x": 1530, "y": 890, "w": 390, "text": "Sorted by how long each has waited, not by a score that reads 100% for everything.\n\nEleven days is the number that makes you send." }
+  ],
+  "launch": { "view": "canvas" }
+}

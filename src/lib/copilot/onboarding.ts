@@ -4,9 +4,10 @@
 
 import { copilotDb } from './db';
 import { runBrief } from './brief';
-import { addContextItem, ensureSources, logEvent } from './store';
+import { addContextItem, ensureSources, logEvent, saveWatchSource } from './store';
 import { runSupply } from './supply';
-import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type Offer, type OpportunityType } from './types';
+import { normalizeSourceUrl, type WatchIntent } from './watch/catalogue';
+import { CAPACITY_META, OPPORTUNITY_TYPES, type Capacity, type GoalMetric, type Offer } from './types';
 
 export interface OnboardingInput {
   name: string;
@@ -19,9 +20,18 @@ export interface OnboardingInput {
   timezone?: string;
   goal: { title: string; metric?: GoalMetric; unit?: string; target_value?: number; current_value?: number; horizon_days?: number };
   capacity: Capacity;
-  hunt_types: OpportunityType[];
   notes?: string;
+  /**
+   * What the goal turned out to be about. Decides which half of screen three
+   * they saw, and which starter feeds were offered.
+   */
+  intent?: WatchIntent;
+  /** Sources to watch from the first night, chosen on screen three. */
+  watch: Array<{ url: string; label?: string; intent?: string }>;
 }
+
+/** More than this at signup and the first nightly run is mostly model calls. */
+export const MAX_ONBOARDING_SOURCES = 6;
 
 const s = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : undefined);
@@ -35,7 +45,12 @@ export function parseOnboarding(body: unknown): OnboardingInput {
   if (!goalTitle) throw new Error('Tell me one goal');
   const capacity = (Object.keys(CAPACITY_META) as Capacity[]).includes(b.capacity as Capacity) ? (b.capacity as Capacity) : 'moderate';
   const metric = (['currency', 'number', 'percent', 'none'] as GoalMetric[]).includes(g.metric as GoalMetric) ? (g.metric as GoalMetric) : 'none';
-  const hunt = Array.isArray(b.hunt_types) ? (b.hunt_types as unknown[]).filter((t): t is OpportunityType => OPPORTUNITY_TYPES.includes(t as OpportunityType)) : [];
+  const watch: OnboardingInput['watch'] = [];
+  for (const raw of (Array.isArray(b.watch) ? b.watch : []).slice(0, MAX_ONBOARDING_SOURCES)) {
+    const w = (raw ?? {}) as Record<string, unknown>;
+    const url = s(w.url, 600);
+    if (url) watch.push({ url, label: s(w.label, 80) || undefined, intent: s(w.intent, 200) || undefined });
+  }
   const rawSegments = Array.isArray(b.target_segments) ? (b.target_segments as unknown[]).map((x) => s(x, 40)) : s(b.target_segments, 240).split(',');
   const target_segments = [...new Set(rawSegments.map((x) => x.trim()).filter(Boolean))].slice(0, 8);
   const email = s(b.email, 120).toLowerCase();
@@ -60,8 +75,9 @@ export function parseOnboarding(body: unknown): OnboardingInput {
     timezone: s(b.timezone, 60) || 'UTC',
     goal: { title: goalTitle, metric, unit: s(g.unit, 12) || undefined, target_value: n(g.target_value), current_value: n(g.current_value), horizon_days: n(g.horizon_days) ?? 90 },
     capacity,
-    hunt_types: hunt.length ? hunt : [...OPPORTUNITY_TYPES],
     notes: s(b.notes, 1000) || undefined,
+    intent: (['work', 'clients', 'sell', 'build'] as WatchIntent[]).includes(b.intent as WatchIntent) ? (b.intent as WatchIntent) : undefined,
+    watch,
   };
 }
 
@@ -78,7 +94,11 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
     .from('copilot_profiles')
     .insert({
       name: input.name, email: input.email ?? null, headline: input.headline ?? null, location: input.location ?? null, timezone: input.timezone ?? 'UTC',
-      capacity: input.capacity, hunt_types: input.hunt_types,
+      // Still a column ranking reads, but no longer a question: five types that
+      // all mean "somebody to message" is not a choice worth a screen when the
+      // goal already said what this person is doing. Default to all and let
+      // outcome affinity do the narrowing it was always better at.
+      capacity: input.capacity, hunt_types: [...OPPORTUNITY_TYPES],
       onboarding_complete: true, last_seen_at: new Date().toISOString(),
     })
     .select('id')
@@ -100,7 +120,6 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
   const facts: Array<{ kind: string; content: string; weight?: number }> = [];
   if (input.headline) facts.push({ kind: 'fact', content: `What I do: ${input.headline}`, weight: 1.5 });
   if (input.location) facts.push({ kind: 'fact', content: `Based in ${input.location}` });
-  facts.push({ kind: 'preference', content: `Hunting for: ${input.hunt_types.join(', ')}` });
   if (input.target_segments.length) facts.push({ kind: 'preference', content: `Sells to: ${input.target_segments.join(', ')}${input.target_area ? ` in ${input.target_area}` : ''}`, weight: 1.5 });
   const offerLine = [input.offer.sells && `I sell ${input.offer.sells}`, input.offer.for_who && `to ${input.offer.for_who}`, input.offer.problem && `— the problem it solves: ${input.offer.problem}`].filter(Boolean).join(' ');
   if (offerLine) facts.push({ kind: 'fact', content: offerLine, weight: 1.6 });
@@ -108,7 +127,8 @@ export async function completeOnboarding(input: OnboardingInput): Promise<string
   for (const f of facts) await addContextItem(pid, { source: 'onboarding', ...f });
 
   await ensureSources(pid);
-  await logEvent(pid, 'onboarding_complete', { capacity: input.capacity, hunt_types: input.hunt_types });
+  await seedWatchSources(pid, input.watch);
+  await logEvent(pid, 'onboarding_complete', { capacity: input.capacity, intent: input.intent ?? null, sources: input.watch.length });
 
   // Supply that costs nothing per run, so the first brief has real candidates to
   // rank. Google Maps is excluded here: it spends scraping credits and belongs
@@ -138,5 +158,31 @@ async function applyLaterColumns(profileId: string, fields: Record<string, unkno
   for (const [key, value] of Object.entries(fields)) {
     const one = await db.from('copilot_profiles').update({ [key]: value }).eq('id', profileId);
     if (one.error) console.error(`[copilot] onboarding: could not set ${key} — ${one.error.message}. Its migration is probably unapplied.`);
+  }
+}
+
+/**
+ * Create the sources chosen on screen three.
+ *
+ * Normalised through the same function the Sources sheet uses, so "r/forhire"
+ * becomes a feed URL in exactly one place. Never throws: the table arrives in a
+ * migration run by hand, and an account that cannot be created because one SQL
+ * file has not been pasted in yet is the worst failure this flow has — it has
+ * happened once already, on `offer`.
+ *
+ * The sources are not READ here. Fetching and judging four feeds is four HTTP
+ * requests and four model calls inside a POST somebody is waiting on, behind a
+ * proxy whose real ceiling nobody has measured. They are read on the first
+ * nightly run, and screen three says so rather than implying otherwise.
+ */
+async function seedWatchSources(profileId: string, watch: OnboardingInput['watch']): Promise<void> {
+  for (const w of watch) {
+    try {
+      const norm = normalizeSourceUrl(w.url);
+      if (!norm || norm.kind !== 'feed') continue;
+      await saveWatchSource(profileId, { url: norm.url, label: w.label || norm.label, intent: w.intent, kind: 'feed' });
+    } catch (err) {
+      console.error(`[copilot] onboarding: could not watch ${w.url} —`, err instanceof Error ? err.message : err);
+    }
   }
 }

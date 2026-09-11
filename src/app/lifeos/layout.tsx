@@ -13,7 +13,7 @@ const sora = Sora({ subsets: ['latin'], weight: ['400', '600', '700'], variable:
 
 export const metadata: Metadata = {
   title: { absolute: 'Life OS' },
-  description: 'Real businesses that fit what you sell, an opener drafted for each, and what the market in front of you keeps asking for.',
+  description: 'One thing to do each morning, with the work already done, and the honest number on whether it was the right call.',
   manifest: '/lifeos/manifest.webmanifest',
   icons: { icon: '/lifeos/icon-192.png', apple: '/lifeos/apple-touch-icon.png' },
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Life OS' },

@@ -5,7 +5,7 @@ export function GET() {
   const manifest = {
     name: 'Copilot',
     short_name: 'Copilot',
-    description: 'Your opportunity engine. Daily leverage plan, ranked matches, and the skills that unlock more of them.',
+    description: 'One thing to do each morning, with the work already done, and the honest number on whether it was the right call.',
     id: '/copilot',
     start_url: '/copilot',
     scope: '/copilot',

@@ -196,3 +196,43 @@ export function startersFor(intent: WatchIntent, seed?: { term?: string | null }
     ? { ...s, url: `${s.url}${encodeURIComponent(`"${term}"`)}`, label: `${s.label}: ${term}` }
     : s));
 }
+
+/**
+ * Which intent a goal sounds like.
+ *
+ * Onboarding used to ask everybody the same question — what do you sell, and
+ * where are your local customers — and then scrape Google Maps. For somebody
+ * whose goal is "get a job, urgent money" every one of those is the wrong
+ * question, and the screen they landed on was empty because nothing they had
+ * told it could produce anything.
+ *
+ * So the goal picks the shape of the rest of onboarding. Keyword matching, not a
+ * model: this runs while the user is typing, it has to be instant, and being
+ * wrong costs one tap on a chip that is right there. A model call here would be
+ * slower, cost money, and still be overridable — so it would buy nothing.
+ *
+ * Ties and misses fall back on whether they have said they sell something, which
+ * is the one other thing known at this point in the flow.
+ */
+const INTENT_WORDS: Record<WatchIntent, RegExp[]> = {
+  work: [/\bjobs?\b/i, /\bhir(e|ing)\b/i, /\bemploy/i, /\bsalar/i, /\brole\b/i, /\bposition\b/i, /\bcontract/i, /\bgigs?\b/i, /\bfreelanc/i, /\bsubcontract/i, /\bwork\b/i, /\bpaid\b/i],
+  clients: [/\bclients?\b/i, /\bcustomers?\b/i, /\bagency\b/i, /\bretainer/i, /\bleads?\b/i, /\bbookings?\b/i, /\blocal\b/i, /\bservices?\b/i],
+  sell: [/\bproducts?\b/i, /\bapp\b/i, /\bsaas\b/i, /\blaunch/i, /\busers?\b/i, /\bsubscri/i, /\bmrr\b/i, /\bmonetize|monetise/i, /\bsell\b/i],
+  build: [/\blearn/i, /\bskill/i, /\bstudy/i, /\bcourse\b/i, /\bbuild\b/i, /\bship\b/i, /\bimprove\b/i],
+};
+
+export function inferIntent(text: string, opts: { hasOffer?: boolean } = {}): WatchIntent {
+  const t = (text || '').trim();
+  let best: WatchIntent | null = null;
+  let bestScore = 0;
+  // Declaration order breaks ties, and it puts earning first on purpose: a goal
+  // mentioning both a job and a product is more urgently about the money.
+  for (const key of ['work', 'clients', 'sell', 'build'] as WatchIntent[]) {
+    const score = INTENT_WORDS[key].filter((re) => re.test(t)).length;
+    if (score > bestScore) { best = key; bestScore = score; }
+  }
+  return best ?? (opts.hasOffer ? 'clients' : 'work');
+}
+
+/** The intents that imply having something to sell, and therefore an offer to write. */
+export const SELLING_INTENTS: WatchIntent[] = ['clients', 'sell'];

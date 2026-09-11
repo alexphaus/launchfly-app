@@ -7,7 +7,7 @@ export function GET() {
   const manifest = {
     name: 'Life OS',
     short_name: 'Life OS',
-    description: 'Real businesses that fit what you sell, an opener drafted for each, and what the market keeps asking for.',
+    description: 'One thing to do each morning, with the work already done, and the honest number on whether it was the right call.',
     id: '/lifeos',
     start_url: '/lifeos',
     scope: '/lifeos',

@@ -2281,3 +2281,99 @@ async function watching() {
 }
 
 watching().catch((e) => { console.error(e); process.exit(1); });
+
+// --- the deck, widened and gated
+//
+// The live app showed "20 to judge" directly above "41 drafts written and not
+// sent": the top of the funnel asking for more input while forty-one outputs sat
+// unsent. And answering a Move was a dead write — logged on every done and every
+// dismissed, read by nothing, while the watcher guessed nightly with no feedback.
+import { QUEUE_GATE_DAYS, QUEUE_GATE_DRAFTS, canTriage, oldestWaitDays, queueIsBacked, triageLabels } from '../../src/lib/copilot/triage';
+import { KEEP_HIGH, KEEP_LOW, MIN_MOVE_SAMPLE, keepSummary, moveKeepRate } from '../../src/lib/copilot/moves';
+import { briefText as watchBriefText, watchBrief as buildWatchBrief } from '../../src/lib/copilot/watch/judge';
+import type { MoveAnswerEvent } from '../../src/lib/copilot/moves';
+
+async function deck() {
+  // 1. THE GATE. Both conditions, never either: ten drafted this morning is a
+  //    good morning; ten drafted three days ago and still sitting is avoidance.
+  assert.equal(queueIsBacked(41, 2), false, 'deep but fresh is not backed up');
+  assert.equal(queueIsBacked(4, 30), false, 'stale but shallow is not backed up');
+  assert.equal(queueIsBacked(QUEUE_GATE_DRAFTS, QUEUE_GATE_DAYS), true, 'exactly at the gate counts');
+  assert.equal(queueIsBacked(41, 3), true, 'the screenshot that started this');
+  assert.equal(queueIsBacked(0, 0), false);
+
+  const now = new Date('2026-09-11T08:00:00Z');
+  assert.equal(oldestWaitDays([], now), 0, 'no queue is not an old queue');
+  assert.equal(oldestWaitDays(['2026-09-09T08:00:00Z', '2026-09-10T08:00:00Z'], now), 2, 'oldest wins');
+  // A draft written in the future (clock skew between the browser and the row)
+  // must not read as a negative wait and quietly disable the gate.
+  assert.equal(oldestWaitDays(['2026-09-20T08:00:00Z'], now), 0);
+
+  // 2. A WATCHED-FEED CARD HAS NO CONTACT AND IS STILL ACTIONABLE. Requiring a
+  //    phone number is what would have silently dropped every one of them.
+  const withUrl = { source: 'move' as const, url: 'https://reddit.com/x', contact: { whatsapp: false, email: false } };
+  assert.equal(canTriage(withUrl), true, 'the artifact is the destination');
+  assert.equal(canTriage({ ...withUrl, url: null }), false, 'nowhere to go is not a card');
+  // A business is unchanged: no contact, no card, because "Draft it" would have
+  // nowhere to send and the swipe would teach nothing.
+  assert.equal(canTriage({ source: 'opportunity', url: 'https://x', contact: { whatsapp: false, email: false } }), false);
+  assert.equal(canTriage({ source: 'opportunity', url: null, contact: { whatsapp: true, email: false } }), true);
+
+  // The buttons are not the same question for both sources. "Draft it" on a
+  // Reddit post has nobody to draft to.
+  assert.equal(triageLabels('opportunity').yes, 'Draft it');
+  assert.equal(triageLabels('move').yes, 'Keep it');
+  assert.equal(triageLabels('move').no, triageLabels('opportunity').no);
+
+  // 3. ANSWERING A MOVE NOW TEACHES. It logged move_id and status only, which is
+  //    why nothing could read it: an id cannot tell you they bin every tutorial.
+  const ev = (job: string, kind: string, status: string): MoveAnswerEvent =>
+    ({ event_type: 'move_answered', payload: { job, kind, status } });
+  const history: MoveAnswerEvent[] = [
+    ...Array.from({ length: 5 }, () => ev('watch', 'earn', 'done')),
+    ...Array.from({ length: 5 }, () => ev('watch', 'learn', 'dismissed')),
+    ...Array.from({ length: 2 }, () => ev('watch', 'spend', 'done')),   // under the floor
+    { event_type: 'moves_written', payload: { written: 3 } },           // not an answer
+    { event_type: 'move_answered', payload: null },                     // malformed
+    { event_type: 'move_answered', payload: { job: 'watch', kind: 'nonsense', status: 'done' } },
+  ];
+  const rates = moveKeepRate(history);
+  assert.equal(rates.byKind.get('earn'), 1);
+  assert.equal(rates.byKind.get('learn'), 0);
+  assert.equal(rates.byKind.get('spend'), undefined, `under ${MIN_MOVE_SAMPLE} answers is a bad morning, not a preference`);
+  assert.equal(rates.byKind.has('decide'), false, 'never answered, so no opinion');
+  // 13 answers carry a valid job: 5 earn done, 5 learn dismissed, 2 spend done,
+  // and the unrecognised-kind one, which is still a real answer about the job
+  // even though its kind is dropped from the kind tally.
+  assert.equal(rates.byJob.get('watch'), 8 / 13, 'jobs tally across kinds, including kinds this build does not know');
+  assert.equal(moveKeepRate([]).byKind.size, 0, 'no history is no opinion, not a bad one');
+
+  const summary = keepSummary(rates);
+  assert.deepEqual(summary.kept, ['earn']);
+  assert.deepEqual(summary.binned, ['learn']);
+  assert.ok(KEEP_HIGH > KEEP_LOW);
+
+  // 4. AND THE JUDGE IS TOLD. This is the loop the watcher had none of — it
+  //    picked three of twenty-five every night and never learned whether any
+  //    were wanted.
+  const profile = { headline: 'builds automations', location: 'Palawan', target_area: null, offer: { sells: 'booking automations' }, capacity: 'moderate' as const };
+  const args = { profile, goals: [], metrics: { runway_months: 3.4 }, capacityMinutes: 60 };
+  const taught = watchBriefText(buildWatchBrief({ ...args, keeps: rates }));
+  assert.match(taught, /WHAT THEY ACT ON/);
+  assert.match(taught, /follow through on earn/);
+  assert.match(taught, /bin learn/);
+
+  // With no history the heading is absent entirely rather than present and
+  // empty — a prompt carrying "WHAT THEY ACT ON:" with nothing after it invites
+  // the model to fill the gap itself.
+  const cold = watchBriefText(buildWatchBrief(args));
+  assert.doesNotMatch(cold, /WHAT THEY ACT ON/);
+  assert.doesNotMatch(watchBriefText(buildWatchBrief({ ...args, keeps: moveKeepRate([]) })), /WHAT THEY ACT ON/);
+  // The rest of the brief is unchanged by any of this.
+  assert.match(cold, /WHO THEY ARE/);
+  assert.match(cold, /3\.4 months of runway/);
+
+  console.log('copilot-core: deck checks passed');
+}
+
+deck().catch((e) => { console.error(e); process.exit(1); });

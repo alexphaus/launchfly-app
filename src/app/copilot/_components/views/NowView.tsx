@@ -201,7 +201,7 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
           carries its own section header and returns null when empty — adding a
           second header here rendered "Worth messaging? · 20 to judge" twice, one
           directly above the other. */}
-      <TriageStack cards={home.triage} actions={actions} />
+      <TriageStack cards={home.triage} held={home.triageHeld} actions={actions} />
 
       {/* The queue, as one row. It was forty rows here and forty-two on
           Pipeline, from two different reads, and 45 of 54 drafts were never

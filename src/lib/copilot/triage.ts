@@ -16,8 +16,48 @@
 // from; it never touches the decision record, Signals, or what counts as an
 // outcome. Invariant 5 is the same rule for the same reason.
 
+/**
+ * Below these the queue is not yet the reason nothing is happening.
+ *
+ * Lived in WorkingView.tsx and guarded exactly one button — "find new matches" —
+ * while the deck, whose every "Draft it" adds to the same queue, had no gate at
+ * all. The live app showed "20 to judge" directly above "41 drafts written and
+ * not sent": the top of the funnel asking for more input while forty-one outputs
+ * sat unsent. One rule, in the pure module both surfaces can import.
+ */
+export const QUEUE_GATE_DRAFTS = 10;
+export const QUEUE_GATE_DAYS = 3;
+
+/**
+ * Is the queue deep enough, and stale enough, that adding to it is avoidance?
+ *
+ * Both conditions, not either. Ten drafts written this morning is a good
+ * morning; ten written three days ago and still sitting there is the thing the
+ * whole app exists to stop.
+ */
+export function queueIsBacked(count: number, oldestDays: number): boolean {
+  return count >= QUEUE_GATE_DRAFTS && oldestDays >= QUEUE_GATE_DAYS;
+}
+
+/** The oldest unsent draft in days, from whatever rows the caller has. */
+export function oldestWaitDays(created: string[], now: Date): number {
+  if (!created.length) return 0;
+  return Math.max(...created.map((c) => Math.floor((now.getTime() - new Date(c).getTime()) / 86_400_000)), 0);
+}
+
+/**
+ * Where a card came from, because the deck is no longer only about businesses.
+ *
+ * 'opportunity' is a scraped business with a contact: yes drafts an opener.
+ * 'move'        is something a watched feed turned up that you would approach —
+ *               a gig, a subcontract brief, a person. Yes keeps it; the artifact
+ *               is already attached, so there is nothing to draft.
+ */
+export type TriageSource = 'opportunity' | 'move';
+
 export interface TriageCard {
   id: string;
+  source: TriageSource;
   title: string;
   /** Grouping key — what the learning is per. */
   segment: string | null;
@@ -88,6 +128,21 @@ export function orderTriage(cards: TriageCard[], rates: Map<string, number>, max
  * no email means "draft it" has nowhere to go, and asking someone to judge a
  * business they cannot contact is asking for a swipe that teaches nothing.
  */
-export function canTriage(c: Pick<TriageCard, 'contact'>): boolean {
+export function canTriage(c: Pick<TriageCard, 'contact' | 'source' | 'url'>): boolean {
+  // A watched-feed card carries its own destination, so there is nothing to
+  // draft and nothing to have a phone number for. Requiring a contact here is
+  // what would have silently dropped every one of them.
+  if (c.source === 'move') return !!c.url;
   return c.contact.whatsapp || c.contact.email;
+}
+
+/**
+ * What the two buttons say. They are not the same question for both sources and
+ * pretending otherwise is how "Draft it" ends up on a Reddit post with nobody to
+ * draft to.
+ */
+export function triageLabels(source: TriageSource): { yes: string; no: string } {
+  return source === 'move'
+    ? { yes: 'Keep it', no: 'Not for me' }
+    : { yes: 'Draft it', no: 'Not for me' };
 }

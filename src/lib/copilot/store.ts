@@ -13,7 +13,7 @@ import { availableJobs } from './jobs';
 import { orderMoves } from './moves';
 import { stageOf } from './pipeline';
 import { canTriage, orderTriage, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
-import type { Move } from './types';
+import type { Move, WatchSource } from './types';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
@@ -464,7 +464,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -496,6 +496,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadDecisions(profileId),
     loadMoves(profileId),
     availableJobs(profile),
+    loadWatchSources(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -574,6 +575,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     lessons,
     edge,
     sources,
+    watchSources,
     contextCount: ctxCount,
     triage,
     moves: stackMoves,
@@ -732,4 +734,94 @@ export async function setSendMode(profileId: string, mode: SendMode, emailFrom?:
   if (emailFrom !== undefined) patch.email_from = emailFrom?.trim() || null;
   await copilotDb().from('copilot_profiles').update(patch).eq('id', profileId);
   await logEvent(profileId, 'send_mode_set', { mode });
+}
+
+// — watch sources —
+// Where this profile looks. Rows rather than an ADAPTERS array, because the
+// three compiled-in adapters all answered the same question and only one
+// person's world asks it. See supabase/migrations/20260912_copilot_watch.sql.
+
+const SOURCE_COLS = 'id, kind, url, label, intent, every_hours, status, seen_ids, last_checked_at, last_error, created_at';
+
+/**
+ * Every source on file, newest first. Returns an empty list on any error — the
+ * table ships in a migration applied by hand, so until somebody runs it the
+ * Sources sheet must read as "none added yet" rather than take Today down.
+ */
+export async function loadWatchSources(profileId: string): Promise<WatchSource[]> {
+  const { data, error } = await copilotDb().from('copilot_sources').select(SOURCE_COLS)
+    .eq('profile_id', profileId).order('created_at', { ascending: false }).limit(30);
+  if (error) return [];
+  return (data ?? []) as unknown as WatchSource[];
+}
+
+/** How many a profile may watch. Every source is a model call a night. */
+export const MAX_WATCH_SOURCES = 12;
+
+/**
+ * Add or edit one source. Upserts on (profile_id, url), so pasting the same feed
+ * twice edits the first rather than paying for it twice a night.
+ */
+export async function saveWatchSource(profileId: string, patch: {
+  id?: string; url?: string; label?: string; intent?: string | null;
+  kind?: WatchSource['kind']; every_hours?: number; status?: WatchSource['status'];
+}): Promise<WatchSource | null> {
+  if (patch.id) {
+    const row: Record<string, unknown> = {};
+    if (patch.label !== undefined) row.label = patch.label.slice(0, 80);
+    if (patch.intent !== undefined) row.intent = patch.intent?.slice(0, 200) || null;
+    if (patch.status !== undefined) row.status = patch.status;
+    if (patch.every_hours !== undefined) row.every_hours = patch.every_hours;
+    // Re-enabling a source clears the error with it: leaving the old message on
+    // a card the user just fixed reads as "still broken".
+    if (patch.status === 'active') row.last_error = null;
+    const { data, error } = await copilotDb().from('copilot_sources').update(row)
+      .eq('profile_id', profileId).eq('id', patch.id).select(SOURCE_COLS).maybeSingle();
+    if (error) throw error;
+    return (data as unknown as WatchSource) ?? null;
+  }
+
+  if (!patch.url) return null;
+  const existing = await loadWatchSources(profileId);
+  if (existing.length >= MAX_WATCH_SOURCES && !existing.some((s) => s.url === patch.url)) {
+    throw new Error(`You can watch ${MAX_WATCH_SOURCES} sources. Remove one first.`);
+  }
+  const { data, error } = await copilotDb().from('copilot_sources').upsert({
+    profile_id: profileId,
+    url: patch.url.slice(0, 600),
+    label: (patch.label || patch.url).slice(0, 80),
+    intent: patch.intent?.slice(0, 200) || null,
+    kind: patch.kind ?? 'feed',
+    every_hours: patch.every_hours ?? 24,
+    status: 'active',
+    last_error: null,
+  }, { onConflict: 'profile_id,url' }).select(SOURCE_COLS).maybeSingle();
+  if (error) throw error;
+  await logEvent(profileId, 'watch_source_added', { url: patch.url, kind: patch.kind ?? 'feed' });
+  return (data as unknown as WatchSource) ?? null;
+}
+
+export async function deleteWatchSource(profileId: string, id: string): Promise<void> {
+  await copilotDb().from('copilot_sources').delete().eq('profile_id', profileId).eq('id', id);
+}
+
+/**
+ * Record a check. Always called, including on failure — a source that errors
+ * must still have its clock moved or it is retried on every run forever.
+ */
+export async function markWatchSourceChecked(
+  profileId: string,
+  id: string,
+  patch: { seen_ids?: string[]; error?: string | null },
+): Promise<void> {
+  // A failure records the message and nothing else. Setting status='error' here
+  // was the first version and it was wrong: dueSources only reads active
+  // sources, so one 502 from Reddit on one night disabled that feed forever and
+  // the only way back was Pause then Resume. A dead feed costs one fetch a night
+  // — no model call, since the judge only runs when there are items — and a feed
+  // that is down today usually is not tomorrow. The card says what went wrong;
+  // pausing it is the user's call to make.
+  const row: Record<string, unknown> = { last_checked_at: new Date().toISOString(), last_error: patch.error ?? null };
+  if (patch.seen_ids) row.seen_ids = patch.seen_ids;
+  await copilotDb().from('copilot_sources').update(row).eq('profile_id', profileId).eq('id', id);
 }

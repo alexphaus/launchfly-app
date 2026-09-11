@@ -49,6 +49,14 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
         <div className="sub">{p.target_area || p.location ? `In ${p.target_area || p.location}` : 'No area set'} · searched on Google Maps and matched against your prospect pipeline</div>
       </button>
 
+      <div className="cp-section"><span className="lead">What you watch</span><span className="count">{home.watchSources.length ? `${home.watchSources.length} source${home.watchSources.length === 1 ? '' : 's'}` : 'nothing yet'}</span></div>
+      <button className="cp-card cp-goal" onClick={() => actions.openSheet({ kind: 'watchlist' })}>
+        <div className="top"><span className="name">{home.watchSources.length ? home.watchSources.slice(0, 3).map((s) => s.label).join(', ') : 'Nothing is being watched'}</span><span className="pct">{home.watchSources.length ? 'Edit' : 'Add'}</span></div>
+        <div className="sub">{home.watchSources.length
+          ? `Read every night. ${home.watchSources.filter((s) => s.last_error).length ? `${home.watchSources.filter((s) => s.last_error).length} failing.` : 'Anything worth your morning arrives as a move.'}`
+          : 'Everything else here is worked out from your own rows. This is the only part that goes outside and looks.'}</div>
+      </button>
+
       <div className="cp-section"><span className="lead">Context</span></div>
       <div className="cp-list">
         <div className="cp-ctx"><div><div className="l">Runway</div><div className="s">{m.runway_months != null ? `${m.runway_months} months · ${money(p.finance?.cash ?? 0, currency)} cash, ${money(p.finance?.monthly_burn ?? 0, currency)}/mo burn` : 'Two numbers. Shapes what counts as a good match.'}</div></div>

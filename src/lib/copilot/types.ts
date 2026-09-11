@@ -4,6 +4,7 @@
 import type { PackReply, PackSentExample } from './conversations';
 import type { MoveArtifact, MoveKind } from './moves';
 import type { Stake } from './stake';
+import type { WatchSourceKind } from './watch/catalogue';
 import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
@@ -316,6 +317,12 @@ export interface HomeData {
    */
   edge: GrowthEdge | null;
   sources: ContextSource[];
+  /**
+   * The feeds this person watches. Empty when the migration has not been run —
+   * the Sources sheet reads that as "none added yet", which is the same screen a
+   * new account sees and the correct one for both.
+   */
+  watchSources: WatchSource[];
   contextCount: number;
   /**
    * Finished work waiting on a yes or no, from every Job — not just outbound.
@@ -515,4 +522,27 @@ export interface Move {
   created_at: string;
   /** What it claims it will move. Null on rows written before arbitration. */
   stake?: Stake | null;
+}
+
+/**
+ * One place this profile watches. The supply list is rows now, not an ADAPTERS
+ * array: three adapters compiled into the build all answered "which local
+ * business should I message", which is one person's world. A feed URL somebody
+ * pasted answers whatever question they are actually asking.
+ */
+export interface WatchSource {
+  id: string;
+  /** Only 'feed' is implemented. See watch/catalogue.ts for why the others exist. */
+  kind: WatchSourceKind;
+  url: string;
+  label: string;
+  /** Why they added it, in their words. The judge is told, so it can rule out. */
+  intent: string | null;
+  every_hours: number;
+  status: 'active' | 'paused' | 'error';
+  /** The last few hundred item ids, so dedupe works on feeds with no dates. */
+  seen_ids: string[];
+  last_checked_at: string | null;
+  last_error: string | null;
+  created_at: string;
 }

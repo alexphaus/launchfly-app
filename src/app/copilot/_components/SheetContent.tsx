@@ -6,6 +6,7 @@ import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, t
 import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
 import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
+import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 
@@ -26,6 +27,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'account': return <AccountSheet home={home} actions={actions} />;
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;
     case 'offer': return <OfferSheet home={home} actions={actions} />;
+    case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
   }
 }
 
@@ -683,6 +685,113 @@ function StageSheet({ home, stage, actions }: { home: HomeData; stage: PipelineS
       {rows.length > 40 && <div className="cp-note" style={{ paddingLeft: 0 }}>Showing the 40 oldest of {rows.length}.</div>}
 
       <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Back</button></div>
+    </>
+  );
+}
+
+/* ─── Sources: where this person's supply comes from ─── */
+
+/**
+ * The list of places to look, as rows the user owns.
+ *
+ * This sheet exists because the alternative was a constant in a TypeScript file.
+ * Supply was three compiled-in adapters — Hunter, Google Maps, one webhook — and
+ * every one of them answered "which local business should I message". Hand the
+ * app to somebody whose top goal is a job and there was nothing for it to look
+ * at, and no way for them to say so. A URL and a reason is the whole interface.
+ */
+function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const [url, setUrl] = useState('');
+  const [why, setWhy] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const sources = home.watchSources;
+  // Seeded by what they already told the app they sell, so the search feeds
+  // arrive with their own words in them rather than a placeholder.
+  const term = home.profile.offer?.sells || home.profile.target_segments[0] || null;
+  const [intent, setIntent] = useState<WatchIntent>(sources.length ? 'work' : (home.profile.offer?.sells ? 'clients' : 'work'));
+
+  const add = async (u: string, label?: string, reason?: string) => {
+    if (!u.trim() || busy) return;
+    setBusy(true); setError(null);
+    const r = await actions.addWatchSource({ url: u.trim(), label, intent: reason || why.trim() || undefined });
+    setBusy(false);
+    if (r.ok) { setUrl(''); setWhy(''); } else setError(r.error ?? 'Could not add that');
+  };
+
+  return (
+    <>
+      <h3>What you watch</h3>
+      <p className="desc">
+        Every night these get read and anything worth your morning becomes a move, with the link attached.
+        Everything else on this app is worked out from your own rows — this is the only part that goes outside and looks.
+      </p>
+
+      <div className="cp-field">
+        <label className="cp-label">Add a feed, or a subreddit</label>
+        <div className="cp-input-row">
+          <input className="cp-input sm" value={url} autoCapitalize="off" autoCorrect="off" spellCheck={false}
+            onChange={(e) => { setUrl(e.target.value); setError(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') void add(url); }}
+            placeholder="r/forhire" />
+          <button className="cp-btn dark" disabled={busy || !url.trim()} onClick={() => void add(url)}>{busy ? 'Adding…' : 'Add'}</button>
+        </div>
+      </div>
+      <div className="cp-field">
+        <label className="cp-label">Why you want it watched — optional</label>
+        <input className="cp-input sm" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="n8n and automation contracts, remote only" />
+      </div>
+      {error && <div className="cp-note">{error}</div>}
+
+      {sources.length > 0 && (
+        <>
+          <div className="cp-section"><span className="lead">Watching</span><span className="count">{sources.length}</span></div>
+          {sources.map((s) => {
+            const broken = !!s.last_error || s.kind !== 'feed';
+            return (
+              <div key={s.id} className="cp-src">
+                <div className="ct">{s.label}</div>
+                <div className={`cs ${broken ? 'bad' : ''}`}>
+                  {s.last_error ? `Last read failed — ${s.last_error}. It gets tried again tonight.`
+                    : s.kind !== 'feed' ? 'Saved, but only feeds are read. Try adding /feed or /rss to the end of the URL.'
+                    : s.status === 'paused' ? 'Paused. It stays on the list.'
+                    : s.last_checked_at ? `Last read ${relTime(s.last_checked_at)}`
+                    : 'Not read yet — the first pass runs tonight'}
+                </div>
+                {s.intent && <div className="cs">{s.intent}</div>}
+                <div className="acts">
+                  {s.status !== 'paused'
+                    ? <button className="cp-connect ghost" onClick={() => void actions.setWatchSourceStatus(s.id, 'paused')}>Pause</button>
+                    : <button className="cp-connect" onClick={() => void actions.setWatchSourceStatus(s.id, 'active')}>Resume</button>}
+                  <button className="cp-connect ghost" onClick={() => void actions.removeWatchSource(s.id)}>Remove</button>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      <div className="cp-section"><span className="lead">{sources.length ? 'Add another' : 'Or start from one of these'}</span></div>
+      <div className="cp-btn-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+        {WATCH_INTENTS.map((i) => (
+          <button key={i.key} className={`cp-chip ${intent === i.key ? 'ai' : 'you'}`} onClick={() => setIntent(i.key)}>{i.label}</button>
+        ))}
+      </div>
+      <p className="desc" style={{ marginTop: 10 }}>{WATCH_INTENTS.find((i) => i.key === intent)?.blurb}</p>
+      {startersFor(intent, { term }).map((sug) => {
+        const already = sources.some((s) => s.url === sug.url);
+        return (
+          <button key={sug.url} className="cp-option" disabled={busy || already} onClick={() => void add(sug.url, sug.label, sug.intent)}>
+            <div><div className="ct">{sug.label}</div><div className="cs">{already ? 'Already watching' : sug.intent}</div></div>
+          </button>
+        );
+      })}
+
+      <div className="cp-note">
+        Reddit, Hacker News, most job boards, Google Alerts, YouTube channels and Substacks all publish a feed with no
+        key and no account. Paste the page you already read; it gets turned into one where that is possible.
+        {home.watchSources.length === 0 ? ' Nothing here yet means nothing arrives from outside, and the call falls back to work you already had.' : ''}
+      </div>
     </>
   );
 }

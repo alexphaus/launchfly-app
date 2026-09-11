@@ -2095,3 +2095,231 @@ async function refusals() {
 }
 
 refusals().catch((e) => { console.error(e); process.exit(1); });
+
+// --- watching the outside world
+//
+// The supply list was three adapters compiled into the build, all of them
+// pointed at local businesses to message. Everything here exists so that the
+// list is rows instead — and so that a stranger's feed cannot put a number on
+// somebody's morning screen that nobody wrote down.
+import { MAX_ITEMS_PER_SOURCE, SEEN_WINDOW, decodeEntities, parseFeed, stripTags, trimSeen, unseenItems } from '../../src/lib/copilot/watch/feed';
+import { MAX_PICKS_PER_SOURCE, STALE_WITHIN_DAYS, movesFromVerdicts, parseVerdicts, valueFromItem, watchBrief, withinDaysFor } from '../../src/lib/copilot/watch/judge';
+import { WATCH_INTENTS, normalizeSourceUrl, startersFor } from '../../src/lib/copilot/watch/catalogue';
+import { dueSources } from '../../src/lib/copilot/jobs/watcher';
+import { isDeliverable } from '../../src/lib/copilot/moves';
+import { CALL_FLOOR, scoreMove } from '../../src/lib/copilot/stake';
+import type { FeedItem } from '../../src/lib/copilot/watch/feed';
+import type { Goal, WatchSource } from '../../src/lib/copilot/types';
+
+async function watching() {
+  const now = new Date('2026-09-11T08:00:00Z');
+
+  // 1. THE THREE DIALECTS. Whatever a feed is written in, the judge sees the
+  //    same three fields — an id it can dedupe on, a title, and prose.
+  const rss = `<rss><channel><item><title>[Hiring] n8n dev, $45/hr</title>
+    <link>https://reddit.com/r/forhire/x1</link><guid isPermaLink="false">t3_x1</guid>
+    <pubDate>Wed, 10 Sep 2026 09:00:00 +0000</pubDate><dc:creator>u/someone</dc:creator>
+    <content:encoded><![CDATA[<p>Wiring a WhatsApp intake &amp; booking flow.</p>]]></content:encoded>
+    </item></channel></rss>`;
+  const [r0] = parseFeed(rss);
+  assert.equal(r0.id, 't3_x1', 'guid beats the link as the dedupe key');
+  assert.equal(r0.publishedAt, '2026-09-10T09:00:00.000Z', 'RFC 822 read');
+  // CDATA markup stripped, its escaped ampersand decoded — and in that order.
+  assert.equal(r0.text, 'Wiring a WhatsApp intake & booking flow.');
+
+  const atom = `<feed><entry><id>tag:hn,2026:41</id><title>Show HN: a thing</title>
+    <link rel="self" href="https://hnrss.org/show"/>
+    <link rel="alternate" href="https://news.ycombinator.com/item?id=41"/>
+    <updated>2026-09-09T12:00:00Z</updated>
+    <summary type="html">&lt;p&gt;Points: 120&lt;/p&gt;</summary></entry></feed>`;
+  const [a0] = parseFeed(atom);
+  // An Atom entry carries several links and only one of them is the human page.
+  assert.equal(a0.url, 'https://news.ycombinator.com/item?id=41');
+  // Escaped HTML is the opposite problem from CDATA and the same code handles both.
+  assert.equal(a0.text, 'Points: 120');
+
+  const [j0] = parseFeed(JSON.stringify({ items: [{ id: 'a1', title: 'Subcontract', url: 'https://x.dev/a1', content_text: '£1,200 fixed', date_published: '2026-09-11T08:00:00Z' }] }));
+  assert.equal(j0.id, 'a1');
+  assert.equal(j0.text, '£1,200 fixed');
+
+  // A page that is not a feed yields nothing. It must never throw: one bad
+  // source would otherwise take the whole nightly loop with it.
+  assert.equal(parseFeed('<html><body>not a feed</body></html>').length, 0);
+  assert.equal(parseFeed('').length, 0);
+  assert.equal(parseFeed('{"broken":').length, 0);
+  assert.equal(decodeEntities('a &amp; b &#39;c&#39; &mdash;'), "a & b 'c' —");
+  assert.equal(stripTags('<script>bad()</script>ok'), 'ok');
+
+  // 2. DEDUPE IS ON IDS, NOT DATES. Half the feeds worth watching publish no
+  //    dates at all, and a cut on last_checked_at shows nothing for those
+  //    forever — which looks exactly like a working watcher and a quiet week.
+  const undated: FeedItem[] = [
+    { id: 'i1', title: 'One', url: 'https://x/1', text: '', publishedAt: null, author: null },
+    { id: 'i2', title: 'Two', url: 'https://x/2', text: '', publishedAt: null, author: null },
+  ];
+  assert.equal(unseenItems(undated, [], { now }).length, 2, 'no dates is not a reason to show nothing');
+  assert.deepEqual(unseenItems(undated, ['i1'], { now }).map((i) => i.id), ['i2']);
+
+  // maxAgeDays only ever applies to items that HAVE a date: on the first night
+  // a source's whole backlog is unseen, and judging a two-year-old post is a
+  // model call spent on something that is gone.
+  const old = { ...undated[0], id: 'i3', publishedAt: '2024-01-01T00:00:00Z' };
+  assert.equal(unseenItems([old], [], { now, maxAgeDays: 21 }).length, 0);
+  assert.equal(unseenItems([old], [], { now }).length, 1, 'no cutoff, no cut');
+  // Dated items lead; undated ones are kept but sort last.
+  const mixed = unseenItems([undated[0], { ...undated[1], publishedAt: '2026-09-10T00:00:00Z' }], [], { now });
+  assert.deepEqual(mixed.map((i) => i.id), ['i2', 'i1']);
+  assert.ok(unseenItems(Array.from({ length: 80 }, (_, i) => ({ ...undated[0], id: `n${i}` })), [], { now }).length <= MAX_ITEMS_PER_SOURCE);
+
+  // The memory is bounded, and it drops the OLDEST ids — the ones furthest down
+  // a feed that only grows at the top, so least likely to come back.
+  assert.deepEqual(trimSeen(['a', 'b', 'c'], ['c', 'd'], 3), ['b', 'c', 'd']);
+  assert.equal(trimSeen(Array.from({ length: SEEN_WINDOW + 50 }, (_, i) => `x${i}`), ['new']).length, SEEN_WINDOW);
+
+  // 3. WHAT SOMEBODY TYPES, AS SOMETHING FETCHABLE. Nobody types a feed URL.
+  for (const typed of ['r/forhire', '/r/forhire', 'reddit.com/r/forhire', 'https://www.reddit.com/r/forhire/']) {
+    const n = normalizeSourceUrl(typed);
+    assert.equal(n?.url, 'https://www.reddit.com/r/forhire/new/.rss', typed);
+    assert.equal(n?.label, 'r/forhire');
+    assert.equal(n?.kind, 'feed');
+  }
+  assert.equal(normalizeSourceUrl('https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv')?.url,
+    'https://www.youtube.com/feeds/videos.xml?channel_id=UCabcdefghijklmnopqrstuv');
+  // A @handle URL does not contain the channel id and there is no way to resolve
+  // one without fetching the page. Rejecting it beats saving a URL that fails
+  // silently every night at three in the morning.
+  assert.equal(normalizeSourceUrl('https://www.youtube.com/@somebody'), null);
+  assert.equal(normalizeSourceUrl('https://hnrss.org/newest?q=n8n')?.kind, 'feed');
+  assert.equal(normalizeSourceUrl('weworkremotely.com/remote-jobs.rss')?.kind, 'feed');
+  // An unknown host is accepted, and told the truth about itself.
+  const page = normalizeSourceUrl('example.com/blog');
+  assert.equal(page?.kind, 'page');
+  assert.match(page!.note!, /does not look like a feed/);
+  assert.equal(normalizeSourceUrl('   '), null);
+  // Every starter in the catalogue survives its own normaliser, so nothing the
+  // sheet offers can be a URL the watcher then refuses to read.
+  for (const def of WATCH_INTENTS) {
+    for (const s of def.starters) {
+      // Not merely parseable — a FEED. The watcher only reads feeds, so a
+      // starter that normalises to a 'page' is a card somebody can tap that
+      // will never produce anything, which is worse than no card at all.
+      assert.equal(normalizeSourceUrl(s.url)?.kind, 'feed', `${def.key}: ${s.url}`);
+      assert.equal(s.kind, 'feed', `${def.key}: ${s.url}`);
+      assert.ok(s.intent.length > 0, s.url);
+    }
+  }
+  // A search starter takes the user's own words rather than a placeholder.
+  assert.ok(startersFor('clients', { term: 'n8n' }).some((s) => s.url.includes('n8n')));
+
+  // 4. THE ONE NUMBER THE MODEL IS NOT TRUSTED WITH.
+  //
+  //    "The user's numbers are never invented" is an invariant of this codebase,
+  //    and value feeds straight into scoreMove's money factor — a hallucinated
+  //    $5,000 on a post that mentions no budget would buy the top of the screen.
+  const gig: FeedItem = { id: 'g1', title: 'Need an n8n dev, $45/hr', url: 'https://r/g1', text: 'Budget around 1,200 for the build.', publishedAt: '2026-09-11T06:00:00Z', author: null };
+  assert.equal(valueFromItem(1200, gig), 1200, 'written down, separators and all');
+  assert.equal(valueFromItem(45, gig), 45);
+  assert.equal(valueFromItem(5000, gig), null, 'nobody wrote 5000 anywhere');
+  assert.equal(valueFromItem(0, gig), null);
+
+  // 5. PICKS ARE MATCHED BACK AGAINST WHAT WAS SHOWN. A pick whose id is not one
+  //    of the items is a plausible opportunity nobody posted; there is no safe
+  //    way to render it, so it is dropped rather than repaired.
+  const items = [gig, { ...gig, id: 'g2', title: 'Unrelated', text: '' }];
+  const picks = parseVerdicts({ picks: [
+    { id: 'g1', kind: 'earn', headline: 'Reply to the n8n contract', why: ['They want exactly the intake flow you build.'], value: 1200, cost_label: '15 min' },
+    { id: 'ghost', kind: 'earn', headline: 'Invented', why: ['nope'] },
+    { id: 'g2', kind: 'learn', headline: 'No evidence', why: [] },
+    { id: 'g1', kind: 'earn', headline: 'Same item twice', why: ['dup'] },
+  ] }, items);
+  assert.equal(picks.length, 1, 'the ghost, the uncited and the duplicate all drop');
+  assert.equal(picks[0].value, 1200);
+  assert.equal(parseVerdicts({ picks: [] }, items).length, 0, 'an empty list is a valid answer, and the common one');
+  assert.equal(parseVerdicts('not json at all', items).length, 0);
+  // A model that answers with the index it was shown is not punished for it.
+  assert.equal(parseVerdicts({ picks: [{ index: 2, kind: 'learn', headline: 'By index', why: ['ok'] }] }, items)[0].id, 'g2');
+  assert.ok(parseVerdicts({ picks: Array.from({ length: 9 }, (_, i) => ({ id: items[i % 2].id, headline: `h${i}`, why: ['w'] })) }, items).length <= MAX_PICKS_PER_SOURCE);
+
+  // Urgency is read off the posting date when the item names no deadline —
+  // never invented. Both inputs are things somebody wrote down.
+  assert.equal(withinDaysFor(null, gig, now), 3, 'posted this morning');
+  assert.equal(withinDaysFor(null, { ...gig, publishedAt: '2026-08-01T00:00:00Z' }, now), STALE_WITHIN_DAYS);
+  assert.equal(withinDaysFor(null, { ...gig, publishedAt: null }, now), STALE_WITHIN_DAYS);
+  assert.equal(withinDaysFor(999, gig, now), 30, 'clamped');
+
+  // 6. THE OUTPUT IS A MOVE, NOT AN OPPORTUNITY. That is the point of the whole
+  //    change: all five OpportunityTypes are somebody to message, so a tutorial
+  //    or a flight price had to arrive as a business with a contact or not at
+  //    all. A Move has eight kinds and carries the thing itself.
+  const source = { id: 'src1', label: 'r/forhire', url: 'https://www.reddit.com/r/forhire/new/.rss', intent: 'contract work' };
+  const [move] = movesFromVerdicts(picks, items, source, now);
+  assert.ok(isDeliverable(move), 'clears the same floor every other job clears');
+  assert.equal(move.job, 'watch');
+  assert.equal(move.artifact.kind, 'link');
+  assert.equal(move.artifact.href, 'https://r/g1');
+  assert.equal(move.external_id, 'src1:g1', 'namespaced, so two feeds carrying one crosspost are one Move');
+  assert.match(move.why[move.why.length - 1], /From r\/forhire/, 'the reader can see where it came from');
+
+  // An item with no link is still worth reading; it just cannot pretend to have
+  // a destination.
+  const [textMove] = movesFromVerdicts(
+    parseVerdicts({ picks: [{ id: 'n1', kind: 'learn', headline: 'Read it', why: ['relevant'] }] }, [{ ...gig, id: 'n1', url: null }]),
+    [{ ...gig, id: 'n1', url: null }], source, now,
+  );
+  assert.equal(textMove.artifact.kind, 'text');
+  assert.ok(isDeliverable(textMove));
+
+  // 7. AND IT CAN ACTUALLY WIN THE DAY. The number that started all of this was
+  //    45 drafts written and never sent; the queue could only ever lose to
+  //    something that arrived from outside, and nothing could.
+  const ctx = { monthlyBurn: 350, capacityMinutes: 60 };
+  const fresh = scoreMove({ kind: move.kind, stake: move.stake, costMinutes: 15, job: 'watch' }, ctx);
+  const queue = scoreMove({ kind: 'earn', stake: { metric: 'queue', direction: 'down', by: 10, withinDays: 1 }, costMinutes: 30, job: 'send_queue' }, ctx);
+  assert.ok(fresh > CALL_FLOOR, 'a paid gig found this morning clears the floor');
+  assert.ok(fresh > scoreMove({ kind: 'learn', stake: null, costMinutes: 30, job: 'watch' }, ctx), 'and outranks a tutorial');
+  // It does not beat a same-day queue outright — that would just be a new
+  // hardcoded winner. It beats one the user has already turned down twice.
+  assert.ok(fresh > scoreMove({ kind: 'earn', stake: { metric: 'queue', direction: 'down', by: 10, withinDays: 1 }, costMinutes: 30, job: 'send_queue' }, { ...ctx, refused: { send_queue: 2 } }));
+  assert.ok(queue > 0);
+
+  // 8. WHICH SOURCES ARE DUE. Only feeds, only active ones, oldest check first
+  //    so nothing starves behind a busy feed.
+  const src = (over: Partial<WatchSource>): WatchSource => ({
+    id: 'a', kind: 'feed', url: 'https://x/f', label: 'x', intent: null, every_hours: 24,
+    status: 'active', seen_ids: [], last_checked_at: null, last_error: null,
+    created_at: '2026-09-01T00:00:00Z', ...over,
+  });
+  const due = dueSources([
+    src({ id: 'never' }),
+    src({ id: 'stale', last_checked_at: '2026-09-09T08:00:00Z' }),
+    src({ id: 'justnow', last_checked_at: '2026-09-11T07:00:00Z' }),
+    src({ id: 'paused', status: 'paused' }),
+    src({ id: 'page', kind: 'page' }),
+  ], now);
+  assert.deepEqual(due.map((s) => s.id), ['never', 'stale']);
+  // A 24h source checked at 21:00:05 must not wait a whole extra day and then
+  // drift later every night until it skips one entirely.
+  assert.equal(dueSources([src({ id: 'edge', last_checked_at: '2026-09-10T08:02:00Z' })], now).length, 1);
+  assert.ok(dueSources(Array.from({ length: 20 }, (_, i) => src({ id: `s${i}` })), now).length <= 6);
+
+  // 9. THE BRIEF IS THE USER'S OWN ROWS. Nothing here asks a model what the user
+  //    wants — that distinction is the difference between a watcher and a feed
+  //    reader, and it is why a goal with no meter still reaches the prompt.
+  const goals = [
+    { id: 'g', profile_id: 'p', title: 'Get a job', metric: 'none', unit: null, target_value: null, current_value: null, horizon_days: 90, priority: 0, status: 'active', note: 'urgent money' },
+    { id: 'e', profile_id: 'p', title: 'Emergency fund', metric: 'currency', unit: '$', target_value: 15000, current_value: 1200, horizon_days: null, priority: 1, status: 'active', note: null },
+  ] as Goal[];
+  const brief = watchBrief({
+    profile: { headline: 'builds WhatsApp automations', location: 'Palawan', target_area: null, offer: { sells: 'booking automations', for_who: 'resorts' }, capacity: 'moderate' },
+    goals, metrics: { runway_months: 3.4 }, capacityMinutes: 60,
+  });
+  assert.match(brief.who, /booking automations/);
+  assert.match(brief.goals[0], /urgent money/, 'a goal with no meter is still the most important line here');
+  assert.match(brief.goals[1], /\$1,200 of \$15,000/);
+  assert.ok(brief.constraints.some((c) => /Palawan/.test(c)));
+  assert.ok(brief.constraints.some((c) => /3\.4 months/.test(c)), 'runway is what makes unpaid work expensive');
+
+  console.log('copilot-core: watch checks passed');
+}
+
+watching().catch((e) => { console.error(e); process.exit(1); });

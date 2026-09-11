@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { offerIsEmpty } from '@/lib/copilot/offer';
-import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type GrowthItem, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
+import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
 import { IconNow, IconWorking } from './icons';
@@ -30,7 +30,7 @@ function sheetKey(s: SheetState): string {
 
 const TABS: Tab[] = ['now', 'working'];
 const TAB_LABEL: Record<Tab, string> = { now: 'Now', working: 'Working?' };
-/** The weekly push and older installed shells still deep-link the old names. */
+/** Older installed shells and already-delivered pushes deep-link the old names. */
 const TAB_ALIAS: Record<string, Tab> = { today: 'now', pipeline: 'now', signals: 'working', now: 'now', working: 'working' };
 
 export default function CopilotApp({ initial }: { initial: HomeData }) {
@@ -123,7 +123,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const upgraded = params.get('upgraded');
-    // The weekly push deep-links to a tab.
+    // A push can deep-link to a tab.
     const wanted = params.get('tab');
     const resolved = wanted ? TAB_ALIAS[wanted] : undefined;
     if (resolved) setTab(resolved);
@@ -159,10 +159,6 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       } finally {
         setBriefing(false);
       }
-    },
-    async setGrowthStatus(id: string, status: GrowthItem['status']) {
-      setHome((h) => ({ ...h, lessons: status === 'active' ? h.lessons : h.lessons.filter((g) => g.id !== id) }));
-      try { await post(`/growth/${id}`, { status }); } catch (e) { fail(e, 'Could not update'); void refresh(); }
     },
     async setOppStatus(id: string, status: OpportunityStatus) {
       setHome((h) => ({
@@ -239,6 +235,18 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       } catch (e) {
         const error = e instanceof Error ? e.message : 'Could not add that';
         return { ok: false, error };
+      }
+    },
+    async deleteAccount(confirm) {
+      try {
+        await del('/account', { body: JSON.stringify({ confirm }) });
+        // Straight to the front door. Re-rendering the app against a profile
+        // that no longer exists would 401 every request and read as a crash at
+        // the exact moment somebody needs to see that it worked.
+        window.location.href = shell;
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not delete the account' };
       }
     },
     async removeWatchSource(id) {

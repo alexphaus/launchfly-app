@@ -22,9 +22,10 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { extractJson } from '../agent/schema';
 import { cronTimeoutMs, extraBody, maxOutputTokens, resolveLlmConfig } from '../agent/llm';
 import { MAX_ITEMS_PER_SOURCE, parseFeed, trimSeen, unseenItems } from '../watch/feed';
+import { moveKeepRate } from '../moves';
 import { JUDGE_SYSTEM, judgePrompt, movesFromVerdicts, parseVerdicts, watchBrief } from '../watch/judge';
 import { CAPACITY_META, type WatchSource } from '../types';
-import { loadWatchSources, markWatchSourceChecked } from '../store';
+import { loadMoveAnswers, loadWatchSources, markWatchSourceChecked } from '../store';
 import type { MoveDraft } from '../moves';
 import type { Job, JobContext } from './types';
 
@@ -124,11 +125,17 @@ export const watcherJob: Job = {
     if (!sources.length) return [];
 
     const { goals, metrics } = await ctx.sense();
+    // One read for the whole run, and the only thing in this brief that is about
+    // the app's own history rather than the user's rows. Without it this judge
+    // picked three items out of twenty-five every night and never learned
+    // whether any of them were wanted.
+    const keeps = moveKeepRate(await loadMoveAnswers(ctx.profile.id));
     const brief = watchBrief({
       profile: ctx.profile,
       goals,
       metrics,
       capacityMinutes: CAPACITY_META[ctx.profile.capacity].minutes,
+      keeps,
     });
 
     const out: MoveDraft[] = [];

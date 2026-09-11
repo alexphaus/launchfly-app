@@ -15,7 +15,7 @@
 // their area, their runway. Nothing here asks a model what the user wants. That
 // distinction is the whole difference between a watcher and a feed reader.
 
-import { MOVE_KINDS, type MoveDraft, type MoveKind } from '../moves';
+import { MOVE_KINDS, type KeepRates, type MoveDraft, type MoveKind, keepSummary } from '../moves';
 import type { Stake } from '../stake';
 import type { FeedItem } from './feed';
 import type { Goal, Metrics, Offer, Profile } from '../types';
@@ -51,6 +51,17 @@ export interface WatchBrief {
   goals: string[];
   /** Area, time today, runway. What makes an item actionable or not. */
   constraints: string[];
+  /**
+   * What they have actually acted on, read off answered Moves. Empty until
+   * MIN_MOVE_SAMPLE of a kind have been answered, because a rate computed from
+   * one dismissal is a bad morning, not a preference.
+   *
+   * The only line here that is about the app's own history rather than the
+   * user's rows, and it is the feedback this judge had none of: it picked three
+   * items out of twenty-five every night and never once found out whether any
+   * of them were wanted.
+   */
+  acts?: { kept: MoveKind[]; binned: MoveKind[] };
 }
 
 const money = (n: number, unit?: string | null) => `${unit || '$'}${Math.round(n).toLocaleString('en-US')}`;
@@ -60,6 +71,7 @@ export function watchBrief(input: {
   goals: Goal[];
   metrics: Pick<Metrics, 'runway_months'>;
   capacityMinutes: number;
+  keeps?: KeepRates;
 }): WatchBrief {
   const offer: Offer = input.profile.offer ?? {};
   const who = [offer.sells, offer.for_who && `for ${offer.for_who}`, offer.price_band]
@@ -85,7 +97,13 @@ export function watchBrief(input: {
       : 'No runway on file',
   ];
 
-  return { who, goals, constraints };
+  const acts = input.keeps ? keepSummary(input.keeps) : null;
+  return {
+    who, goals, constraints,
+    // Omitted entirely when neither list has anything to say, so the prompt
+    // never carries a heading with nothing under it.
+    ...(acts && (acts.kept.length || acts.binned.length) ? { acts } : {}),
+  };
 }
 
 export function briefText(b: WatchBrief): string {
@@ -93,7 +111,16 @@ export function briefText(b: WatchBrief): string {
     `WHO THEY ARE: ${b.who}`,
     b.goals.length ? `WHAT THEY ARE TRYING TO DO:\n${b.goals.map((g) => `- ${g}`).join('\n')}` : 'WHAT THEY ARE TRYING TO DO: nothing written down yet',
     `CONSTRAINTS:\n${b.constraints.map((c) => `- ${c}`).join('\n')}`,
-  ].join('\n\n');
+    // Stated as behaviour rather than as an instruction, because it is evidence
+    // about this person and the model should weigh it against the item in front
+    // of it — a binned kind that is unmistakably the right answer today still is.
+    b.acts
+      ? `WHAT THEY ACT ON: ${[
+          b.acts.kept.length ? `they follow through on ${b.acts.kept.join(', ')}` : null,
+          b.acts.binned.length ? `they bin ${b.acts.binned.join(', ')} almost every time` : null,
+        ].filter(Boolean).join('; ')}.`
+      : null,
+  ].filter((l) => l !== null).join('\n\n');
 }
 
 export const JUDGE_SYSTEM = [

@@ -10,10 +10,11 @@ import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose'
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
-import { orderMoves } from './moves';
+import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
-import { canTriage, orderTriage, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
+import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { Move, WatchSource } from './types';
+import type { MoveKind } from './moves';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
@@ -91,9 +92,13 @@ export async function loadDiagnosisRows(profileId: string): Promise<Pick<Diagnos
  * opportunity could have been dismissed from anywhere, and only the triage
  * event knows it was this decision.
  */
-export async function loadTriage(profileId: string, rows: PipelineRow[]): Promise<TriageCard[]> {
+export async function loadTriage(
+  profileId: string,
+  rows: PipelineRow[],
+  watched: Move[] = [],
+): Promise<TriageCard[]> {
   const unjudged = rows.filter((r) => r.stage === 'not_drafted');
-  if (!unjudged.length) return [];
+  if (!unjudged.length && !watched.length) return [];
 
   const { data } = await copilotDb()
     .from('copilot_events')
@@ -102,17 +107,59 @@ export async function loadTriage(profileId: string, rows: PipelineRow[]): Promis
     .order('created_at', { ascending: false })
     .limit(400);
 
-  const cards: TriageCard[] = unjudged.map(({ opportunity: o }) => ({
+  const fromOpportunities: TriageCard[] = unjudged.map(({ opportunity: o }) => ({
     id: o.id,
+    source: 'opportunity' as const,
     title: o.title,
     segment: segmentOf({ id: o.id, status: o.status, source: o.source, source_kind: o.source_kind, data: o.data, reason: o.reason, title: o.title }, []),
     reason: o.reason ?? '',
     score: o.score ?? 0,
     contact: { whatsapp: !!o.contact?.whatsapp, email: !!o.contact?.email },
     url: o.url ?? null,
-  })).filter(canTriage);
+  }));
 
+  // Approach-shaped finds from watched feeds. They are candidates, not finished
+  // work: a gig post is something you might reply to, which is the same shape of
+  // judgement as "is this business worth messaging" and belongs in the same
+  // deck. Everything else the watcher finds — a tutorial, a price, a competitive
+  // read — stays in Moves, because "yes" there does not mean "approach them".
+  const fromWatch: TriageCard[] = watched.map((m) => ({
+    id: m.id,
+    source: 'move' as const,
+    title: m.headline,
+    // The segment is the kind, so the keep-rate learns "they keep earn, they bin
+    // meet" in the same tally that learns which business segments survive.
+    segment: m.kind,
+    reason: m.why[0] ?? '',
+    // No deterministic score exists for these; the judge already ranked them by
+    // choosing them at all. Neutral, so ordering falls to the learned rate.
+    score: 0,
+    contact: { whatsapp: false, email: false },
+    url: m.artifact?.href ?? null,
+  }));
+
+  const cards = [...fromOpportunities, ...fromWatch].filter(canTriage);
   return orderTriage(cards, segmentKeepRate((data ?? []) as TriageEvent[]));
+}
+
+/** Which Move kinds are a question about approaching somebody. See loadTriage. */
+export const APPROACH_KINDS: MoveKind[] = ['earn', 'meet'];
+
+/**
+ * Split the watcher's open Moves into the ones the deck should ask about and the
+ * ones the Moves list should render. Pure split, one source of truth, so nothing
+ * can appear in both places — which was the entire risk of widening the deck.
+ */
+export function splitApproachMoves(moves: Move[]): { deck: Move[]; list: Move[] } {
+  const deck: Move[] = [];
+  const list: Move[] = [];
+  for (const m of moves) {
+    // Only from a watched feed: a send_queue earn is finished work with a draft
+    // attached, and asking "worth approaching?" about a message already written
+    // for a business already chosen is a question nobody needs.
+    (m.job === 'watch' && APPROACH_KINDS.includes(m.kind) && m.artifact?.href ? deck : list).push(m);
+  }
+  return { deck, list };
 }
 
 /**
@@ -163,10 +210,32 @@ export async function loadMoveById(profileId: string, id: string): Promise<Move 
 }
 
 export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {
-  await copilotDb().from('copilot_moves')
+  // Read job and kind back so the event can be learned from. The first version
+  // logged only the id and the status, which made move_answered a write nothing
+  // could ever read — see moveKeepRate. An id alone cannot tell you that this
+  // person follows through on earn and bins learn every time.
+  const { data } = await copilotDb().from('copilot_moves')
     .update({ status, acted_at: new Date().toISOString() })
-    .eq('id', id).eq('profile_id', profileId);
-  await logEvent(profileId, 'move_answered', { move_id: id, status });
+    .eq('id', id).eq('profile_id', profileId)
+    .select('job, kind').maybeSingle();
+  const row = (data ?? {}) as { job?: string; kind?: string };
+  await logEvent(profileId, 'move_answered', { move_id: id, status, job: row.job ?? null, kind: row.kind ?? null });
+}
+
+/**
+ * Answered Moves, for the keep-rate. Read wide and recent: the rate is about
+ * what this person does lately, and a year-old dismissal of a job they no longer
+ * have should not still be shaping tonight's picks.
+ */
+export async function loadMoveAnswers(profileId: string, limit = 200): Promise<MoveAnswerEvent[]> {
+  const { data, error } = await copilotDb()
+    .from('copilot_events')
+    .select('event_type, payload')
+    .eq('profile_id', profileId).eq('event_type', 'move_answered')
+    .order('created_at', { ascending: false }).limit(limit);
+  // No events table reachable is the same as no history: no opinion, not a
+  // wrong one. The judge simply gets a brief without the line.
+  return error ? [] : ((data ?? []) as MoveAnswerEvent[]);
 }
 
 /**
@@ -512,8 +581,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     const execution = latestExecByOpp[o.id] ?? null;
     return { opportunity, execution, stage: stageOf(opportunity, execution) };
   });
-  // Needs the staged rows, so it cannot ride in the Promise.all above.
-  const triage = await loadTriage(profileId, pipeline);
+
 
   // Anything in the send queue is rendered there, not in the plan too.
   const queueIds = new Set(queue.map((q) => q.id));
@@ -535,7 +603,23 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const callMove = promotedId
     ? movesRead.moves.find((m) => m.id === promotedId) ?? await loadMoveById(profileId, promotedId)
     : null;
-  const stackMoves = promotedId ? movesRead.moves.filter((m) => m.id !== promotedId) : movesRead.moves;
+  const openMoves = promotedId ? movesRead.moves.filter((m) => m.id !== promotedId) : movesRead.moves;
+  // The deck and the Moves list are fed from one split, so a gig post asked
+  // about in the deck can never also be sitting in the list underneath it.
+  const { deck: deckMoves, list: stackMoves } = splitApproachMoves(openMoves);
+
+  // Needs the staged rows and the split, so it cannot ride in the Promise.all.
+  const triage = await loadTriage(profileId, pipeline, deckMoves);
+  // Every "Draft it" in the deck adds to the send queue. With forty-one drafts
+  // already written and the oldest two days old, asking for more input at the
+  // top of the funnel is the avoidance this whole app exists to interrupt — so
+  // the deck is held, and says so, rather than quietly serving another twenty.
+  // The same rule already gated "find new matches"; it just lived in a view file
+  // and guarded one button. Watched-feed cards are exempt: keeping one costs
+  // nothing and writes no draft.
+  const queueBacked = queueIsBacked(queue.length, oldestWaitDays(queue.map((q) => q.execution.created_at), new Date()));
+  const triageHeld = queueBacked && triage.some((c) => c.source === 'opportunity');
+  const shownTriage = triageHeld ? triage.filter((c) => c.source === 'move') : triage;
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
   // The record is what makes "you keep doing this and it does not work"
@@ -574,7 +658,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     sources,
     watchSources,
     contextCount: ctxCount,
-    triage,
+    triage: shownTriage,
+    /** Why the deck is not asking about businesses today. Null when it is. */
+    triageHeld: triageHeld ? ('queue' as const) : null,
     moves: stackMoves,
     // Only ever a reason for an EMPTY list. A move on screen answers the
     // question by existing — including one promoted to the call.

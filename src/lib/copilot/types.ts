@@ -329,6 +329,13 @@ export interface HomeData {
    */
   triage: TriageCard[];
   /**
+   * Why the deck is not asking about businesses today. 'queue' means the send
+   * queue is deep and stale enough that writing more drafts is avoidance —
+   * watched-feed cards still show, because keeping one costs nothing. Null when
+   * the deck is live.
+   */
+  triageHeld: 'queue' | null;
+  /**
    * Why the Moves list is empty, when it is — never set while a move is on
    * screen. 'migration' means copilot_moves is not there yet; 'no_sensor' means
    * no job can see anything for this profile. Both used to render as silence.

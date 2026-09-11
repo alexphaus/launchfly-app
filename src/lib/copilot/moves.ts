@@ -153,3 +153,95 @@ export function selectMoves(drafts: MoveDraft[], max = 12): MoveDraft[] {
   }
   return [...byKey.values()].slice(0, max);
 }
+
+/* ─── What the user actually acts on ─────────────────────────────────────── */
+
+/**
+ * Answering a Move was a dead write.
+ *
+ * `setMoveStatus` logged `move_answered` on every done and every dismissed, and
+ * nothing in the app ever read it — only the health endpoint counted the rows.
+ * Meanwhile the watcher makes a subjective call about a stranger's feed every
+ * night, three picks out of twenty-five, and had no way of finding out whether
+ * any of them were wanted. The one working preference loop in this app was
+ * wired to scraped businesses, which already have a deterministic score.
+ *
+ * So this is the triage keep-rate, applied to the surface that needs it more.
+ * Same shape, same floor, same bounded claim: it changes what the judge is TOLD
+ * about this person, never what counts as a result. A dismissal is a preference.
+ * A reply is the truth. Invariant 5, one level up.
+ */
+export interface MoveAnswerEvent {
+  event_type: string;
+  payload: Record<string, unknown> | null;
+}
+
+/**
+ * Below this a rate is one bad morning, not a preference. Lower than triage's
+ * five because a Move costs a judgement rather than a flick — four of them is
+ * already more deliberation than twenty swipes.
+ */
+export const MIN_MOVE_SAMPLE = 4;
+
+/** Kept this often or more and it is worth more of them. */
+export const KEEP_HIGH = 0.6;
+/** Kept this rarely and the judge should stop spending picks on it. */
+export const KEEP_LOW = 0.34;
+
+export interface KeepRates {
+  /** job key → share marked done rather than dismissed. */
+  byJob: Map<string, number>;
+  byKind: Map<MoveKind, number>;
+}
+
+export function moveKeepRate(events: MoveAnswerEvent[]): KeepRates {
+  const jobs = new Map<string, { kept: number; total: number }>();
+  const kinds = new Map<MoveKind, { kept: number; total: number }>();
+
+  for (const e of events) {
+    if (e.event_type !== 'move_answered') continue;
+    const status = e.payload?.status;
+    if (status !== 'done' && status !== 'dismissed') continue;
+    const job = typeof e.payload?.job === 'string' ? e.payload.job.trim() : '';
+    const kind = e.payload?.kind;
+
+    if (job) {
+      const t = jobs.get(job) ?? { kept: 0, total: 0 };
+      t.total += 1;
+      if (status === 'done') t.kept += 1;
+      jobs.set(job, t);
+    }
+    if (typeof kind === 'string' && MOVE_KINDS.includes(kind as MoveKind)) {
+      const k = kind as MoveKind;
+      const t = kinds.get(k) ?? { kept: 0, total: 0 };
+      t.total += 1;
+      if (status === 'done') t.kept += 1;
+      kinds.set(k, t);
+    }
+  }
+
+  const settle = <K>(tally: Map<K, { kept: number; total: number }>) => {
+    const out = new Map<K, number>();
+    for (const [key, t] of tally) if (t.total >= MIN_MOVE_SAMPLE) out.set(key, t.kept / t.total);
+    return out;
+  };
+  return { byJob: settle(jobs), byKind: settle(kinds) };
+}
+
+/**
+ * The kinds worth saying out loud to a model, in its own vocabulary.
+ *
+ * Only kinds, not jobs: a job key is this codebase's word for a sensor and means
+ * nothing to a judge reading a feed. "They act on earn, they bin learn" is a
+ * sentence that changes what gets picked tonight.
+ */
+export function keepSummary(rates: KeepRates): { kept: MoveKind[]; binned: MoveKind[] } {
+  const kept: MoveKind[] = [];
+  const binned: MoveKind[] = [];
+  for (const [kind, rate] of rates.byKind) {
+    if (rate >= KEEP_HIGH) kept.push(kind);
+    else if (rate <= KEEP_LOW) binned.push(kind);
+  }
+  const order = (a: MoveKind, b: MoveKind) => KIND_ORDER[a] - KIND_ORDER[b];
+  return { kept: kept.sort(order), binned: binned.sort(order) };
+}

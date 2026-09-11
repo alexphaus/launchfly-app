@@ -468,26 +468,55 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
    needs a calm-theme counterpart and the deck cannot drift between shells. */
 /* Clipped: a card mid-flight extends past the card's own margins, which grew
    the page wider than the phone during a drag. The deck is where cards leave. */
-.cp-root .cp-stack { position: relative; margin-top: 10px; padding: 4px 0 8px; overflow: hidden; }
-/* Sits in the deck, not on the card, so it stays put while the card moves —
-   the version pinned to the card header rode off-screen with it. */
+/* Clipped: a card mid-flight extends past the card's own margins, which grew
+   the page wider than the phone during a drag. The deck is where cards leave.
+   Padded at the bottom for the peek cards, which now sit further down than the
+   6px they used to — at that offset the pile read as one card with a hairline
+   under it rather than as a stack. */
+.cp-root .cp-stack { position: relative; margin-top: 12px; padding: 2px 0 28px; overflow: hidden; }
+
+/* The top card. Given real vertical presence on purpose: this is the one thing
+   on the screen being asked a question, and at its old height it sat lower than
+   the queue card below it and read as less important than a row. */
+.cp-root .cp-stack-top {
+  position: relative; z-index: 2; touch-action: pan-y; user-select: none; cursor: grab;
+  min-height: 232px; display: flex; flex-direction: column;
+}
+.cp-root .cp-stack-top:active { cursor: grabbing; }
+/* Pushes the meta and the buttons to the bottom edge however short the reason
+   is, so two cards in a row do not put their buttons in different places. */
+.cp-root .cp-stack-body { flex: 1; }
+
+/* The pile behind. --surface/--ink/--muted are declared in BOTH shells, so it
+   inherits the calm palette on /lifeos without a second rule — but the BORDER
+   did not: an ink border under a calm, borderless, shadowed card rendered as
+   two dark brackets poking out from under it, which is what made the deck look
+   broken on /lifeos. The calm block below replaces it with the same shadow the
+   real cards use. */
+.cp-root .cp-stack-back {
+  position: absolute; left: 20px; right: 20px; top: 0; bottom: 28px; z-index: 1;
+  border-radius: 12px; border: 2.5px solid var(--ink); background: var(--surface); opacity: .45;
+  /* From the top, so the only thing moving the bottom edge is translateY. */
+  transform-origin: top center;
+}
+
+/* Rides on the card rather than the deck, so it leaves with the answer it
+   names. Coloured by direction: the eye should know which way it is going
+   before it reads the word. */
 .cp-root .cp-stack-intent {
-  position: absolute; z-index: 3; top: 12px; left: 50%; transform: translateX(-50%);
-  font-family: var(--display); font-size: 11px; font-weight: 800; text-transform: uppercase;
-  letter-spacing: .04em; color: #fff; background: var(--ink); padding: 4px 10px; border-radius: 5px;
+  position: absolute; z-index: 3; top: 14px; right: 16px;
+  font-family: var(--display); font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .04em; color: #fff; background: var(--ink); padding: 5px 11px; border-radius: 5px;
   pointer-events: none;
 }
-.cp-root .cp-stack-top { position: relative; z-index: 2; touch-action: pan-y; user-select: none; cursor: grab; }
-.cp-root .cp-stack-top:active { cursor: grabbing; }
-/* --surface/--ink/--muted are declared in BOTH shells, so the pile inherits the
-   calm palette on /lifeos without a second rule. --line and --card exist only
-   in the soft block and would have rendered this invisible on /copilot. */
-.cp-root .cp-stack-back {
-  position: absolute; left: 20px; right: 20px; top: 0; bottom: 0; z-index: 1;
-  border-radius: 12px; border: 2.5px solid var(--ink); background: var(--surface); opacity: .45;
-}
+.cp-root .cp-stack-top.intent-draft .cp-stack-intent { background: var(--blue); }
+
 .cp-root .cp-stack-reason { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
-.cp-root .cp-stack-meta { margin-top: 10px; font-size: 12px; color: var(--dim); }
+.cp-root .cp-stack-meta { margin-top: 14px; font-size: 12px; color: var(--dim); }
+/* Inside the card, full width, equal weight. Neither answer is the default —
+   that is the whole premise of a deck. */
+.cp-root .cp-stack-acts { display: flex; gap: 9px; margin-top: 14px; }
+.cp-root .cp-stack-acts .cp-btn { flex: 1; margin: 0; }
 
 /* A watched source: a name, what it did last, and two things you can do to it.
    Deliberately not .cp-ctx — that row puts its buttons in a fixed right-hand
@@ -754,3 +783,13 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-legal h1, .cp-root[data-theme="soft"] .cp-legal h2 { font-weight: 700; letter-spacing: 0; }
 .cp-root[data-theme="soft"] .cp-legal p, .cp-root[data-theme="soft"] .cp-legal li { font-weight: 400; }
 .cp-root[data-theme="soft"] .cp-legal-foot { border-top: 1px solid var(--line); }
+
+/* The pile, calm. The ink border above is what made the deck look broken here:
+   two dark brackets under a borderless card. Shadow and inset instead, so the
+   cards behind read as paper under paper. */
+.cp-root[data-theme="soft"] .cp-stack-back {
+  border: 0; border-radius: 24px; box-shadow: var(--shadow-sm); opacity: .85;
+  left: 20px; right: 20px;
+}
+.cp-root[data-theme="soft"] .cp-stack-intent { border-radius: 999px; text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 11px; }
+.cp-root[data-theme="soft"] .cp-stack-top { min-height: 248px; }

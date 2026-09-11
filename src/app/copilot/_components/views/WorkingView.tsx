@@ -57,7 +57,6 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
     : 0;
   const gate = home.queue.length >= FIND_GATE_DRAFTS && oldestWaited >= FIND_GATE_DAYS;
   const max = Math.max(...d.stages.map((s) => s.count), 1);
-  const lesson = home.lessons[0];
   const edge = home.edge;
   const sourced = home.metrics.pipeline.sourced;
   // The openings section IS the opening finding, so the card would repeat it.
@@ -69,13 +68,6 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
 
   return (
     <>
-      {home.weekly && (
-        <div className="cp-card cp-insight" style={{ marginTop: 14 }}>
-          <div className="cp-eyebrow">{home.weekly.eyebrow}</div>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{home.weekly.body}</p>
-        </div>
-      )}
-
       {/* Moved off Today. Here they are an answer to "is it working"; there they
           were a headline about sending, every morning, above the one decision. */}
       <div className="cp-metrics" aria-label="Your numbers">
@@ -251,17 +243,6 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
             </ul>
             <div className="cp-edge-try"><b>Try this week</b> {edge.experiment}</div>
           </div>
-          {lesson && (
-            <div className="cp-card" style={{ padding: 0 }}>
-              <button className="cp-learn" onClick={() => actions.openSheet({ kind: 'lesson', id: lesson.id })}>
-                <div className="cp-lnum">01</div>
-                <div style={{ flex: 1 }}>
-                  <div className="cp-lt">{lesson.title}{lesson.minutes ? `, ${lesson.minutes} min` : ''}</div>
-                  {lesson.note && <div className="cp-ls">{lesson.note}</div>}
-                </div>
-              </button>
-            </div>
-          )}
         </>
       ) : (
         !d.thin && <div className="cp-note" style={{ marginTop: 14 }}>Nothing measured yet. Send something and this fills in.</div>

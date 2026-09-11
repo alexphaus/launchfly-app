@@ -7,7 +7,6 @@ import { runBrief, type BriefResult } from './brief';
 import { runJobs, type JobsResult } from './jobs';
 import { reconcileReplies } from './outcomes';
 import { runSupply, type SupplyResult } from './supply';
-import { runWeeklySignals } from './weekly';
 
 export interface DailyResult {
   supply: SupplyResult | { error: string } | null;
@@ -15,8 +14,6 @@ export interface DailyResult {
   /** Every non-outbound job: what each found and what was new. */
   jobs: JobsResult | { error: string } | null;
   brief: Pick<BriefResult, 'agent' | 'fellBack' | 'graded' | 'pushed'> & { skipped?: string };
-  /** Monday only, cron only: the weekly Signals read. */
-  weekly: { wrote: boolean; reason?: string } | { error: string } | null;
 }
 
 export interface JobsThenBrief {
@@ -64,7 +61,7 @@ export async function runJobsThenBrief(
 }
 
 export async function runDaily(profileId: string, opts: { reason: string; supply?: boolean; reconcile?: boolean; deadline?: number } ): Promise<DailyResult> {
-  const out: DailyResult = { supply: null, reconcile: null, jobs: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 }, weekly: null };
+  const out: DailyResult = { supply: null, reconcile: null, jobs: null, brief: { agent: 'starter', fellBack: false, graded: { ignored: 0, verified: 0 }, pushed: 0 } };
   if (opts.supply !== false) {
     try { out.supply = await runSupply(profileId, { reason: opts.reason, deadline: opts.deadline }); }
     catch (e) { out.supply = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] supply failed', e); }
@@ -83,11 +80,5 @@ export async function runDaily(profileId: string, opts: { reason: string; supply
   // Surfaced in the cron report: it is how you can tell from outside whether
   // the record is actually being graded, or just accumulating.
   out.brief = { agent: ran.brief.agent, fellBack: ran.brief.fellBack, graded: ran.brief.graded, pushed: ran.brief.pushed };
-  // The weekly read rides the cron, not the "Find new matches" tap: it decides
-  // for itself whether it is Monday in the profile's timezone.
-  if (opts.reason === 'cron') {
-    try { out.weekly = await runWeeklySignals(profileId); }
-    catch (e) { out.weekly = { error: e instanceof Error ? e.message : String(e) }; console.error('[copilot/daily] weekly failed', e); }
-  }
   return out;
 }

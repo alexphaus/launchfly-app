@@ -95,21 +95,28 @@ const base = { created_at: now.toISOString(), score: 0 };
 
 // --- schema normalisation
 {
-  const raw = extractJson('Here you go:\n```json\n{"insight":{"body":"Do X.","reasoning":"Because Y"},"plan":[{"owner":"robot","title":"T","minutes":"20"}],"nudges":[{"title":"N","urgency":"loud"}],"opportunities":[{"type":"clients","title":"O","reason":"R","fit_score":150},{"title":""}],"skills":[{"title":"S","level":-5}],"lessons":[{"title":"L","minutes":12,"url":"https://example.com/l"},{"title":"No url — dropped","minutes":5}]}\n```');
+  const raw = extractJson('Here you go:\n```json\n{"insight":{"body":"Do X.","reasoning":"Because Y"},"plan":[{"owner":"robot","title":"T","minutes":"20"}],"nudges":[{"title":"N","urgency":"loud"}],"opportunities":[{"type":"client","title":"O","reason":"R","fit_score":150}],"skills":[{"title":"S","level":90}],"lessons":[{"title":"L","url":"https://example.com/l"}]}\n```');
   const b = normalizeBrief(raw);
   assert.equal(b.plan[0].owner, 'you', 'unknown owner falls back to you');
   assert.equal(b.plan[0].minutes, 20, 'numeric strings coerce');
   assert.equal(b.nudges[0].urgency, 'normal');
-  assert.equal(b.opportunities.length, 1, 'untitled opportunities dropped');
-  assert.equal(b.opportunities[0].type, 'signal', 'unknown type falls back to signal');
-  assert.equal(b.opportunities[0].fit_score, 100, 'fit clamps to 100');
-  assert.equal(b.opportunities[0].source, 'inferred');
-  assert.deepEqual(b.skills, [], 'skill levels are computed now, so the agent may not invent any');
   assert.throws(() => normalizeBrief({}), /insight/);
-  assert.equal(b.lessons.length, 1, 'a lesson without a real url is dropped');
-  assert.equal(b.lessons[0].url, 'https://example.com/l');
-  const many = normalizeBrief({ insight: { body: 'x' }, opportunities: Array.from({ length: 20 }, (_, i) => ({ type: 'client', title: `t${i}`, reason: 'r', fit_score: 50 })) });
-  assert.equal(many.opportunities.length, 8, 'opportunities capped');
+
+  // Three fields the agent may still SEND and the app no longer reads. A model
+  // pointed at an older prompt, a cached one, or a webhook written against the
+  // previous contract must not be able to put anything on the screen through
+  // them — so the normalizer drops them on the floor rather than passing them
+  // through for a later layer to ignore.
+  //
+  // They were cut for one reason each: `opportunities` were up to eight matches
+  // the MODEL invented, rendered beside real scraped businesses; `skills` were
+  // already sliced to zero while the prompt still asked for them; `lessons`
+  // needed a working URL, which is the single thing a model is least able to
+  // supply. The computed edge replaced the last one and reads off the funnel.
+  const leaked = b as unknown as Record<string, unknown>;
+  for (const gone of ['opportunities', 'skills', 'lessons']) {
+    assert.equal(leaked[gone], undefined, `${gone} must not survive normalizeBrief`);
+  }
 }
 
 // --- starter agent
@@ -130,7 +137,9 @@ const base = { created_at: now.toISOString(), score: 0 };
   assert.match(empty.insight.body, /Alex/);
   assert.match(empty.insight.body, /\$2,000/);
   assert.match(empty.insight.body, /nothing has gone out yet/);
-  assert.equal(empty.opportunities.length, 0, 'starter never invents opportunities');
+  // The starter could never invent opportunities and now there is nowhere for it
+  // to put one if it tried: BriefOutput does not carry the field any more.
+  assert.equal((empty as unknown as Record<string, unknown>).opportunities, undefined);
   assert.equal(empty.rankings.length, 0);
   assert.ok(!empty.plan.some((p) => p.owner === 'ai'), 'no draft without a reachable candidate');
   // The starter used to add a reflection task here every single day — "log where
@@ -358,7 +367,7 @@ async function multiUser() {
 multiUser().catch((e) => { console.error(e); process.exit(1); });
 
 // ─── Measured growth: diagnosis instead of invented skill levels ────────────
-import { MIN_SAMPLE, MIN_WEEKLY, openingGap, openingTrend, diagnose, isoWeekKey, segmentOpenings, segmentOf, selectLesson } from '../../src/lib/copilot/diagnose';
+import { MIN_SAMPLE, MIN_WEEKLY, openingGap, openingTrend, diagnose, isoWeekKey, segmentOpenings, segmentOf } from '../../src/lib/copilot/diagnose';
 
 async function growth() {
   const opp = (id: string, over: Partial<{ source: string; source_kind: 'sourced' | 'inferred'; data: Record<string, unknown>; created_at: string }> = {}) =>
@@ -508,22 +517,12 @@ async function growth() {
   assert.match(alone.findings[0].headline, /1 match has an outcome/, 'singular reads as English');
   assert.equal(alone.thin, true, 'an explanation of why the funnel looks odd is not a finding about the work');
 
-  // 9. "Worth learning — because of the above" is enforced, not assumed.
-  const live = { kind: 'lesson', url: 'https://example.com/x' };
-  const deadEnd = { kind: 'lesson', url: null };          // written before a url was required
-  const skill = { kind: 'skill', url: null };             // replaced by the diagnosis; never rendered
-
-  // openingDiag carries a demand finding with a topic, so a lesson is allowed.
-  assert.ok(openingDiag.findings.some((f) => f.topic), 'the fixture really does name a stuck point');
-  assert.deepEqual(selectLesson([live], openingDiag), [live], 'a real lesson shows when something is stuck');
-  assert.deepEqual(selectLesson([deadEnd], openingDiag), [], 'a lesson with nothing to open is never shown');
-  assert.deepEqual(selectLesson([deadEnd, live], openingDiag), [live], 'the dead row does not consume the single slot');
-  assert.deepEqual(selectLesson([skill, live], openingDiag), [live], 'skills are not lessons');
-  assert.equal(selectLesson([live, live], openingDiag).length, 1, 'at most one');
-
-  // Nothing stuck: the honest answer is no lesson at all, not a stale one.
-  assert.equal(none.findings.some((f) => f.topic), false);
-  assert.deepEqual(selectLesson([live], none), [], 'no stuck point, no lesson — whatever is stored');
+  // 9. The stuck point itself, which is what the edge is computed from. The
+  //    model-written lesson that used to hang off it is gone — it needed a real
+  //    URL and almost never had one — but the finding it depended on is real and
+  //    still has to name a topic or the edge has nothing to be about.
+  assert.ok(openingDiag.findings.some((f) => f.topic), 'a stuck point names what it is about');
+  assert.equal(none.findings.some((f) => f.topic), false, 'nothing stuck names nothing');
 
   // 10. ISO weeks. Monday-based; the week with the year's first Thursday is W01.
   assert.equal(isoWeekKey(new Date('2026-01-01T12:00:00Z')), '2026-W01');
@@ -764,47 +763,6 @@ async function pipeline() {
 
 pipeline().catch((e) => { console.error(e); process.exit(1); });
 
-// ─── The weekly Signals read ────────────────────────────────────────────────
-import { WEEKLY_EYEBROW, composeWeekly, weekdayIn } from '../../src/lib/copilot/weekly';
-
-async function weekly() {
-  // 1. Monday is the profile's Monday. 6 Sep 2026 20:00Z is Sunday in London and already Monday in Manila.
-  const sunEveUtc = new Date('2026-09-06T20:00:00Z');
-  assert.equal(weekdayIn('Asia/Manila', sunEveUtc), 1, 'Monday in Manila');
-  assert.equal(weekdayIn('UTC', sunEveUtc), 7, 'still Sunday in UTC');
-  assert.equal(weekdayIn('Europe/Lisbon', new Date('2026-09-07T09:00:00Z')), 1);
-  assert.equal(weekdayIn('Not/AZone', sunEveUtc), 7, 'a bad timezone falls back to UTC rather than throwing');
-
-  // 2. The read names the top three with where they show up and how they moved.
-  const term = (t: string, count: number, trend: 'new' | 'rising' | 'steady' | 'falling', seg: string, thisWeek = 2) =>
-    ({ term: t, count, thisWeek, prevWeeklyAvg: 1, trend, segments: [{ segment: seg, count }] });
-  const d = {
-    openings: [term('facebook ads', 40, 'rising', 'pest control'), term('renovation', 36, 'steady', 'staycation'), term('whatsapp for sales', 30, 'new', 'plumbing'), term('extra', 5, 'steady', 'x')],
-    segments: [{ segment: 'pest control', businesses: 18, wants: [] }, { segment: 'staycation', businesses: 12, wants: [] }],
-  };
-  const w = composeWeekly(d, { sent: 4, replies: 1 })!;
-  assert.match(w.push.title, /^3 things 30 businesses in your segments have in common$/);
-  // The weekly read goes out as a push. It is the widest-reach copy in the app,
-  // so it is the last place that should call an observed condition a request.
-  assert.doesNotMatch(w.push.title, /asking for|wants|demand/i);
-  assert.match(w.body, /not requests anyone made/);
-  assert.doesNotMatch(w.body, /add one to what you sell/i, 'an opening never goes into what you sell');
-  assert.match(w.body, /1\. facebook ads \(40, mostly pest control — rising\)/);
-  assert.match(w.body, /3\. whatsapp for sales \(30, mostly plumbing — new this week\)/);
-  assert.doesNotMatch(w.body, /extra/, 'only the top three');
-  assert.match(w.body, /You sent 4 and got 1 reply/);
-  assert.equal(w.push.body, 'facebook ads · renovation · whatsapp for sales');
-  assert.match(composeWeekly(d, { sent: 0, replies: 0 })!.body, /Nothing has gone out yet/);
-  assert.match(composeWeekly({ openings: d.openings.slice(0, 1), segments: d.segments }, { sent: 0, replies: 0 })!.push.title, /^1 thing 30 businesses/);
-
-  // 3. Nothing recurring means no read — not "0 things".
-  assert.equal(composeWeekly({ openings: [], segments: d.segments }, { sent: 4, replies: 1 }), null);
-  assert.equal(typeof WEEKLY_EYEBROW, 'string');
-
-  console.log('copilot-core: weekly-signals checks passed');
-}
-
-weekly().catch((e) => { console.error(e); process.exit(1); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Two shells, one app

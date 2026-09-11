@@ -88,7 +88,7 @@ export class StarterAgent implements OpportunityAgent {
     return {
       decision, dont,
       insight: { body, reasoning: `Starter brief: computed from ${m.sent} sends, ${m.replies} replies, ${pack.candidates.length} real candidates and your onboarding answers. No model was called.` },
-      rankings, plan, nudges, opportunities: [], skills: [], lessons: [],
+      rankings, plan, nudges,
     };
   }
 }

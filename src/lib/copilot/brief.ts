@@ -78,7 +78,8 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   const norm = (s: string) => s.trim().toLowerCase();
 
   // Insight: one per day.
-  // Only the daily row is replaced; the weekly Signals read lives beside it.
+  // Only today's daily row is replaced. Older rows, including the weekly reads
+  // written before that surface was cut, are left alone rather than swept.
   await db.from('copilot_insights').delete().eq('profile_id', pid).eq('for_date', today).eq('kind', 'daily');
   await db.from('copilot_insights').insert({ profile_id: pid, kind: 'daily', for_date: today, body: out.insight.body, reasoning: out.insight.reasoning ?? null, agent_run_id: runId });
 
@@ -189,44 +190,6 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     await db.from('copilot_actions').insert(freshNudges.map((n) => ({
       profile_id: pid, kind: 'nudge', owner: 'you', title: n.title, urgency: n.urgency, due_label: n.due_label ?? null, for_date: today, agent_run_id: runId,
     })));
-  }
-
-  // Opportunities: add new ones, never re-suggest a title the user already saw.
-  if (out.opportunities.length) {
-    const { data: existing } = await db.from('copilot_opportunities').select('title').eq('profile_id', pid);
-    const seen = new Set((existing ?? []).map((r: { title: string }) => norm(r.title)));
-    const now = new Date();
-    const rows = out.opportunities
-      .filter((o) => !seen.has(norm(o.title)))
-      .map((o) => {
-        const created_at = now.toISOString();
-        const score = scoreOpportunity(
-          { type: o.type, effort: o.effort ?? 'medium', fit_score: o.fit_score, created_at, source_kind: 'inferred' },
-          { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: pack.typeAffinity, now },
-        );
-        return {
-          profile_id: pid, type: o.type, title: o.title, reason: o.reason, value_label: o.value_label ?? null,
-          value_amount: o.value_amount ?? null, currency: o.currency ?? null, effort: o.effort ?? 'medium',
-          fit_score: o.fit_score, score, source: o.source ?? 'inferred', source_kind: 'inferred', contact: {}, url: o.url ?? null, agent_run_id: runId,
-          expires_at: new Date(now.getTime() + 14 * 86_400_000).toISOString(),
-        };
-      });
-    if (rows.length) await db.from('copilot_opportunities').insert(rows);
-  }
-
-  // Skills: upsert by title. Lessons: add if not already active.
-  if (out.skills.length || out.lessons.length) {
-    const { data: growth } = await db.from('copilot_growth_items').select('id, kind, title, status').eq('profile_id', pid);
-    const byKey = new Map((growth ?? []).map((g: { id: string; kind: string; title: string; status: string }) => [`${g.kind}:${norm(g.title)}`, g]));
-    for (const s of out.skills) {
-      const hit = byKey.get(`skill:${norm(s.title)}`);
-      if (hit) await db.from('copilot_growth_items').update({ level: s.level, note: s.note ?? null, cta: s.cta ?? null, status: 'active', agent_run_id: runId }).eq('id', hit.id);
-      else await db.from('copilot_growth_items').insert({ profile_id: pid, kind: 'skill', title: s.title, level: s.level, note: s.note ?? null, cta: s.cta ?? null, agent_run_id: runId });
-    }
-    const newLessons = out.lessons.filter((l) => !byKey.has(`lesson:${norm(l.title)}`));
-    if (newLessons.length) {
-      await db.from('copilot_growth_items').insert(newLessons.map((l) => ({ profile_id: pid, kind: 'lesson', title: l.title, minutes: l.minutes ?? null, note: l.note ?? null, url: l.url ?? null, agent_run_id: runId })));
-    }
   }
 
   return notifyBrief(profile, out, reason, today);

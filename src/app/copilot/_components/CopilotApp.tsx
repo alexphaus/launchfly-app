@@ -226,6 +226,35 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
+    async addWatchSource(input) {
+      try {
+        const r = await post<{ home: HomeData; note?: string | null }>('/watch/sources', input);
+        setHome(r.home);
+        // The note is what the normaliser DID — "added .rss", "turned the
+        // channel into its video feed". Swallowing it means the saved URL and
+        // the typed one silently differ, which is how somebody ends up
+        // reporting a source that "does not work" against a URL they never saw.
+        say(r.note ?? 'Watching it. Anything new gets read tonight.');
+        return { ok: true, note: r.note ?? null };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Could not add that';
+        return { ok: false, error };
+      }
+    },
+    async removeWatchSource(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/watch/sources?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+        say('Removed.');
+      } catch (e) { fail(e, 'Could not remove'); void refresh(); }
+    },
+    async setWatchSourceStatus(id, status) {
+      try {
+        const r = await post<{ home: HomeData }>('/watch/sources', { id, status });
+        setHome(r.home);
+        say(status === 'paused' ? 'Paused. It stays on the list.' : 'Back on. It gets read tonight.');
+      } catch (e) { fail(e, 'Could not update'); void refresh(); }
+    },
     async triage(id, action) {
       try {
         const r = await post<{ home: HomeData }>(`/triage/${id}`, { action });

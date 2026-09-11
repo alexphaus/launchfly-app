@@ -31,7 +31,9 @@ export type SheetState =
   /** The send queue, one draft at a time. See QueueSheet for why it is not a list. */
   | { kind: 'queue' }
   /** One funnel stage, opened: the businesses actually in it. */
-  | { kind: 'stage'; stage: PipelineStage };
+  | { kind: 'stage'; stage: PipelineStage }
+  /** The feeds this person watches. Where supply comes from is theirs to set. */
+  | { kind: 'watchlist' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -77,6 +79,15 @@ export interface Actions {
   answerCall(response: 'did' | 'rejected' | 'wrong'): Promise<boolean>;
   /** One triage card: draft an opener for it, or dismiss it. */
   triage(id: string, action: 'draft' | 'skip'): Promise<boolean>;
+  /**
+   * Add a place to watch. Takes whatever the user typed — "r/forhire", a
+   * YouTube channel, a feed URL — and normalises it server-side. Resolves the
+   * note the normaliser wrote, or the error, so the sheet can say what it did.
+   */
+  addWatchSource(input: { url: string; label?: string; intent?: string }): Promise<{ ok: boolean; note?: string | null; error?: string }>;
+  removeWatchSource(id: string): Promise<void>;
+  /** Pause a noisy source without losing it, or re-enable one that errored. */
+  setWatchSourceStatus(id: string, status: 'active' | 'paused'): Promise<void>;
   /** A Move is finished work: say it is done, or that it is not for you. */
   answerMove(id: string, status: 'done' | 'dismissed'): Promise<boolean>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;

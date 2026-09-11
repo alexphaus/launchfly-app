@@ -16,6 +16,7 @@ import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
 import { runwayGuardJob } from './runway-guard';
 import { sendQueueJob } from './send-queue';
+import { watcherJob } from './watcher';
 import { memoSense } from './sense';
 import type { Profile } from '../types';
 import type { Job, JobContext } from './types';
@@ -37,6 +38,11 @@ import type { Job, JobContext } from './types';
  * decide / avoid / learn
  *                from the funnel, the openings read and the decision record —
  *                measured here, never asked of a model
+ * anything       from the feeds this person chose to watch — the first source
+ *                of work in here that comes from outside the account at all,
+ *                and the only reason today's Call can be something other than
+ *                the queue. Everything above it is computed from rows the user
+ *                already had; a closed system can only ever re-rank itself
  * anything       from an external workflow, because searching for a flight,
  *                quoting three suppliers or fixing an n8n node is not work a
  *                request handler can do, and pretending otherwise is how you
@@ -50,6 +56,7 @@ export const JOBS: Job[] = [
   goalGapJob,
   openingGapJob,
   capabilityGapJob,
+  watcherJob,
   remoteJob,
 ];
 

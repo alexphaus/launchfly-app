@@ -48,7 +48,7 @@ function CapacitySheet({ current, onPick }: { current: Capacity; onPick: (c: Cap
 /* ─── Actions: plan items and nudges, with approve-and-send when a draft exists ─── */
 
 function ActionSheet({ home, id, actions }: { home: HomeData; id: string; actions: Actions }) {
-  const found = home.plan.find((x) => x.id === id) ?? home.queue.find((x) => x.id === id) ?? home.nudges.find((x) => x.id === id);
+  const found = home.plan.find((x) => x.id === id) ?? home.queue.find((x) => x.id === id);
   const snap = useRef(found);
   if (found) snap.current = found;
   const a = snap.current;

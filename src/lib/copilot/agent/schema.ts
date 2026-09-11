@@ -5,7 +5,7 @@
 import { DECISION_METRICS, type DecisionConfidence, type DecisionDraft, type DecisionMetric, type DontDraft } from '../decision';
 import { OPPORTUNITY_TYPES, type BriefOutput, type Channel, type ContextPack, type Effort, type OpportunityType, type Urgency } from '../types';
 
-export const LIMITS = { plan: 5, nudges: 6, rankings: 40, because: 3 } as const;
+export const LIMITS = { rankings: 40, because: 3 } as const;
 
 export const SYSTEM_PROMPT = `You are a personal opportunity copilot. You work for one person and you know them only through the context pack you are given.
 
@@ -21,13 +21,11 @@ Your job every day:
    Learn from recentDecisions: a topic that appears there repeatedly with response "ignored" must not simply be repeated — either name what is standing in the way, or make a different call. A topic that was done and moved nothing is not worth recommending again.
 2. DONT: one thing explicitly not worth doing today, and why in one line. Usually the thing they would otherwise default to. Null only when nothing plausible competes for the same hour.
 3. INSIGHT: the read behind the decision (2-4 sentences). Specific to their goals and context. Never generic advice.
-4. PLAN: today's leverage plan, 2-5 items. Each item is either owner "ai" (something you can draft right now; put the draft in ai_draft, ready to review) or owner "you" (needs their time; give minutes). Respect their capacity: deep = 2h+, moderate = ~1h, low = 30 min light admin.
-5. NUDGES: 1-5 next actions with urgency (urgent | normal | info) and a short due_label ("Due today", "Overdue", "Finance", "This week").
 RANKINGS: the pack contains "candidates" — REAL, sourced opportunities (actual businesses, listings, people) found by the system. For each candidate return {id, fit_score 0-100, reason}. The reason must say why THIS candidate fits THIS person's goals, skills and constraints, in one or two sentences. Never invent candidates; never change their ids. Candidates with scored=false must be ranked; re-rank scored ones only when context changed.
 
 CHANGED: the pack contains "changed" — what actually moved since the last brief, computed from the ledger. If anything is there, the decision must take account of it; a runway that fell or a reply that arrived outranks whatever you were going to say.
 
-METRICS: the pack contains "metrics" — real numbers from what was actually sent, replied, won and lost. Your DECISION's because lines and your INSIGHT must both cite at least one of them (sent, replies, reply rate, won amount, runway, pipeline size). If nothing has been sent yet, say so and make the plan about starting.
+METRICS: the pack contains "metrics" — real numbers from what was actually sent, replied, won and lost. Your DECISION's because lines and your INSIGHT must both cite at least one of them (sent, replies, reply rate, won amount, runway, pipeline size). If nothing has been sent yet, say so and make the decision about starting.
 
 REPLIES: the pack contains "replies" — what real prospects wrote back, in their own words, matched to messages this person actually sent. This is evidence, not colour. Use it to name the objection that keeps coming up, and quote at most one short phrase from it when it makes a because line checkable. Never invent a reply, never attribute words to a business that is not in this list, and never treat an absence of replies as a reply.
 
@@ -35,10 +33,7 @@ SENT: the pack contains "sent" — openers this person sent, each marked replied
 
 OPENINGS: the pack contains "openings" — conditions counted across this person's own matched businesses, and every term in it is already something their offer does NOT name. These are things a scraper observed ABOUT each prospect: a missing website, thin reviews, a low rating, ad spend landing in a hand-answered inbox. NOBODY ASKED FOR ANY OF THEM. Never treat a term here as something the market wants to buy, never suggest adding one to what they sell, and never write "clients are asking for X" — it would be false. What an opening is good for is the FIRST LINE of a draft: naming the weakness you can see is why a stranger keeps reading. This is counted off real listings, so it outranks anything you infer about the market. Prefer the openings that match the candidate's own segment.
 
-VOICE: the pack contains profile.offer — what this person sells, who for, the problem it solves, their price band and one proof link. Every message you draft must be in THEIR terms, using their words for what they do. Never describe a business they did not describe. If profile.offer.sells is empty, do NOT propose any plan item with ai_draft, opportunity_ref or channel — a message written from nothing is not theirs and will not be sent. Instead include one owner "you" item titled exactly "Set your offer so drafts are written in your words" (3 minutes), and say in the insight that nothing can be drafted until they say what they sell. Do not assume an industry, a country, a channel or a company size that the pack does not state.
-
-EXECUTION: a plan item with owner "ai" may target a candidate by setting opportunity_ref to the candidate id and channel to "whatsapp" or "email" (only when that candidate's contact shows that channel = "yes"). Put the full message in ai_draft. The system turns it into a send-ready draft the user approves with one tap. Prefer this over generic advice: one real drafted message beats three suggestions.
-
+VOICE: the pack contains profile.offer — what this person sells, who for, the problem it solves, their price band and one proof link. Every message you draft must be in THEIR terms, using their words for what they do. Never describe a business they did not describe. If profile.offer.sells is empty, say in the insight that nothing can be drafted until they say what they sell, and make the decision about filling it in. Do not assume an industry, a country, a channel or a company size that the pack does not state.
 
 Style: concrete, short, no fluff, second person. Use their currency when they gave one.
 
@@ -47,9 +42,7 @@ Return ONLY a JSON object with this exact shape (no markdown):
   "decision": { "headline": string, "because": [string], "instead_of": string, "confidence": "high" | "low", "missing": string | null, "topic": string, "verify_metric": "sent" | "replies" | "meetings" | "won" | "won_amount" | "none" },
   "dont": { "title": string, "why": string } | null,
   "insight": { "body": string, "reasoning": string },
-  "rankings": [{ "id": string, "fit_score": number, "reason": string }],
-  "plan": [{ "owner": "ai" | "you", "title": string, "detail": string, "ai_draft": string | null, "minutes": number, "opportunity_ref": string | null, "channel": "whatsapp" | "email" | null }],
-  "nudges": [{ "title": string, "urgency": "urgent" | "normal" | "info", "due_label": string }]
+  "rankings": [{ "id": string, "fit_score": number, "reason": string }]
 }`;
 
 export function userPrompt(pack: ContextPack): string {
@@ -79,27 +72,11 @@ export function normalizeBrief(raw: unknown): BriefOutput {
   const body = str(insight.body, 900) ?? str(r.insight, 900) ?? '';
   if (!body) throw new Error('agent output missing insight.body');
 
-  const plan = arr(r.plan).map(obj).map((p) => ({
-    owner: oneOf(p.owner, ['ai', 'you'] as const, 'you'),
-    title: str(p.title, 200),
-    detail: str(p.detail, 400),
-    ai_draft: str(p.ai_draft, 2000),
-    minutes: num(p.minutes),
-    opportunity_ref: str(p.opportunity_ref, 80),
-    channel: typeof p.channel === 'string' && (['whatsapp', 'email'] as const).includes(p.channel as Channel) ? (p.channel as Channel) : undefined,
-  })).filter((p): p is typeof p & { title: string } => !!p.title).slice(0, LIMITS.plan);
-
   const rankings = arr(r.rankings).map(obj).map((k) => ({
     id: str(k.id, 80),
     fit_score: clamp100(k.fit_score, 50),
     reason: str(k.reason, 400) ?? '',
   })).filter((k): k is typeof k & { id: string } => !!k.id).slice(0, LIMITS.rankings);
-
-  const nudges = arr(r.nudges).map(obj).map((n) => ({
-    title: str(n.title, 240),
-    urgency: oneOf<Urgency>(n.urgency, ['urgent', 'normal', 'info'], 'normal'),
-    due_label: str(n.due_label, 40),
-  })).filter((n): n is typeof n & { title: string } => !!n.title).slice(0, LIMITS.nudges);
 
   // A decision without a headline is not a decision; the starter's floor is
   // better than a card that says nothing, so this returns null and the caller
@@ -126,5 +103,12 @@ export function normalizeBrief(raw: unknown): BriefOutput {
   const dontTitle = str(dn.title, 160);
   const dont: DontDraft | null = dontTitle ? { title: dontTitle, why: str(dn.why, 240) ?? '' } : null;
 
-  return { decision, dont, insight: { body, reasoning: str(insight.reasoning, 1500) }, rankings, plan, nudges };
+  // plan and nudges are DROPPED rather than passed through. They were asked for
+  // in the same response that wrote the Call, over the same context, so the model
+  // said the same thing three ways by construction — the live screen carried four
+  // rows of "approve and send N drafts" above a queue card saying it a fifth
+  // time, with the numbers disagreeing because they came from different runs.
+  // Dropping the fields means a model pointed at a cached or older prompt cannot
+  // put anything on screen through a field the app stopped reading.
+  return { decision, dont, insight: { body, reasoning: str(insight.reasoning, 1500) }, rankings };
 }

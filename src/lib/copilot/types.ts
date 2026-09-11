@@ -4,6 +4,7 @@
 import type { PackReply, PackSentExample } from './conversations';
 import type { MoveArtifact, MoveKind } from './moves';
 import type { Stake } from './stake';
+import type { MotionRow } from './motion';
 import type { WatchSourceKind } from './watch/catalogue';
 import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
@@ -280,12 +281,15 @@ export interface HomeData {
   /** The recent record of calls, newest first. Read back on Signals. */
   decisionLog: Decision[];
   plan: Action[];
-  nudges: Action[];
+  /**
+   * What is already running: sent and waiting, a call being read back, what the
+   * sources turned up. The only part of Today that is not an instruction.
+   * Replaces `nudges` and the plan shortlist — see motion.ts.
+   */
+  motion: MotionRow[];
   opportunities: Opportunity[];
   /** Computed from real rows. Replaces the old invented skill levels. */
   diagnosis: Diagnosis;
-  /** Open plan items that did not fit today's shortlist. They are not lost — they queue. */
-  planOverflow: number;
   /**
    * Every draft still waiting to be sent, whatever day it was written. Built
    * from executions, not from today's plan — a draft from Tuesday that nobody
@@ -471,10 +475,22 @@ export interface BriefOutput {
   dont: DontDraft | null;
   /** Scores for candidates in the pack. Unknown ids are ignored. */
   rankings: Array<{ id: string; fit_score: number; reason: string }>;
-  plan: BriefAction[];
-  nudges: BriefNudge[];
 }
-// Three fields were removed from here rather than left empty.
+// Five fields were removed from here rather than left empty.
+//
+// `plan` and `nudges` went last. They were asked for in the same response that
+// wrote the Call, over the same context, and so restated it: the live screen
+// carried "approve and send 15 drafts", "approve and send 15 drafts today",
+// "approve and send 10 drafts today" and "send 10 drafts today" as four rows,
+// above a queue card saying it a fifth time — the 15 and the 10 disagreeing
+// because they came from different runs and nothing reconciled them. It was also
+// the last surface in the app not held to the artifact rule: imperatives with
+// nothing attached, which is the definition of advice.
+//
+// Drafting moves entirely to the deliberate paths — the deck's "Draft it" and
+// the draft button on a business — which are now gated on the send queue. A
+// model writing five openers a night into a queue nobody empties is how a queue
+// gets to forty-one.
 //
 // `skills` was already dead — the limit was zero, so the model's answer was
 // sliced to nothing while the prompt still asked for it and brief.ts still

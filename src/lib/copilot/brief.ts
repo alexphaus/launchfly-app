@@ -9,8 +9,7 @@ import { buildContextPack } from './context';
 import { copilotDb } from './db';
 import { promoteCall } from './call';
 import { metricValue, snapshotOf, starterDecision } from './decision';
-import { createDraftExecution, openDraftForOpportunity } from './execution';
-import { OFFER_TASK_DETAIL, OFFER_TASK_TITLE, offerIsEmpty } from './offer';
+import { offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
 import { getProfile, gradeDecisions, saveDecision } from './store';
@@ -75,7 +74,6 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   const db = copilotDb();
   const pid = profile.id;
   const today = pack.today;
-  const norm = (s: string) => s.trim().toLowerCase();
 
   // Insight: one per day.
   // Only today's daily row is replaced. Older rows, including the weekly reads
@@ -135,62 +133,19 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
     }).eq('id', r.id).eq('profile_id', pid);
   }
 
-  // Today's plan: replace what the AGENT generated and is still open. Keep what
-  // the user finished and anything the system scheduled (day-3 follow-ups have
-  // no agent_run_id and must survive the daily purge).
-  await db.from('copilot_actions').delete()
-    .eq('profile_id', pid).eq('kind', 'plan').eq('for_date', today).eq('status', 'open').not('agent_run_id', 'is', null);
-
-  // Server-side rule, whatever the agent proposed: no draft is written from an
-  // empty offer. The message would be a stranger's template, and the account
-  // this was built for proved nobody sends those. The plan carries one task
-  // instead — set the offer — and every draft is written the moment it is.
-  if (blankOffer) {
-    out.plan = out.plan.filter((p) => !(p.owner === 'ai' && p.ai_draft && p.channel && p.opportunity_ref));
-    const norm2 = (s: string) => s.trim().toLowerCase();
-    if (!out.plan.some((p) => norm2(p.title) === norm2(OFFER_TASK_TITLE))) {
-      out.plan.unshift({ owner: 'you', title: OFFER_TASK_TITLE, detail: OFFER_TASK_DETAIL, minutes: 3 });
-    }
-  }
-
-  if (out.plan.length) {
-    const rows = out.plan.map((p) => ({
-      profile_id: pid, kind: 'plan', owner: p.owner, title: p.title, detail: p.detail ?? null, ai_draft: p.ai_draft ?? null,
-      minutes: p.minutes ?? null, for_date: today, agent_run_id: runId,
-      opportunity_id: p.opportunity_ref && candidateIds.has(p.opportunity_ref) ? p.opportunity_ref : null,
-    }));
-    const { data: inserted } = await db.from('copilot_actions').insert(rows).select('id, title, opportunity_id');
-    // AI drafts that target a real candidate on a channel become send-ready executions.
-    for (const p of out.plan) {
-      if (p.owner !== 'ai' || !p.ai_draft || !p.channel || !p.opportunity_ref || !candidateIds.has(p.opportunity_ref)) continue;
-      const row = (inserted ?? []).find((r: { title: string; opportunity_id: string | null }) => r.title === p.title && r.opportunity_id === p.opportunity_ref);
-      if (!row) continue;
-      try {
-        // Never queue a second message to someone who already has one waiting.
-        if (await openDraftForOpportunity(pid, p.opportunity_ref)) continue;
-        await createDraftExecution(pid, { actionId: row.id, opportunityId: p.opportunity_ref, channel: p.channel, body: p.ai_draft });
-      } catch (e) { console.error('[copilot] draft execution failed', e); }
-    }
-  }
-
-  // Nudges: routine ones are regenerated freely so they never pile up, but an
-  // URGENT nudge the user has not acted on is never dropped just because this
-  // run failed to repeat it — that is real work quietly disappearing.
-  const { data: urgentOpen } = await db
-    .from('copilot_actions')
-    .select('title')
-    .eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open').eq('urgency', 'urgent');
-  const carried = new Set((urgentOpen ?? []).map((n: { title: string }) => norm(n.title)));
-
-  await db.from('copilot_actions').delete()
-    .eq('profile_id', pid).eq('kind', 'nudge').eq('status', 'open').neq('urgency', 'urgent').not('agent_run_id', 'is', null);
-
-  const freshNudges = out.nudges.filter((n) => !carried.has(norm(n.title)));
-  if (freshNudges.length) {
-    await db.from('copilot_actions').insert(freshNudges.map((n) => ({
-      profile_id: pid, kind: 'nudge', owner: 'you', title: n.title, urgency: n.urgency, due_label: n.due_label ?? null, for_date: today, agent_run_id: runId,
-    })));
-  }
+  // The agent no longer writes plan items or nudges, so there is nothing here to
+  // purge, insert or carry. Both were asked for in the same response that wrote
+  // the Call, over the same context, and restated it — see BriefOutput.
+  //
+  // The one real capability that went with them is the agent auto-drafting an
+  // opener into the queue. That is deliberate, not collateral: a model writing
+  // five openers a night into a queue nobody empties is how a queue reaches
+  // forty-one. Drafting is now only ever deliberate — the deck's "Draft it" and
+  // the draft button on a business — and both are gated on the send queue.
+  //
+  // copilot_actions and kind='plan' stay: draftOpener writes one per opener and
+  // createDraftExecution in execution.ts links to it, so the table is load-bearing
+  // for every draft in the queue. Only the model's rows are gone.
 
   return notifyBrief(profile, out, reason, today);
 }
@@ -219,14 +174,15 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
 /** What today's notification should say, or null for silence. Pure, so the
  *  rules above are testable without a database or a push service. */
 export function notifyPayload(
-  out: { decision: { headline: string } | null; nudges: Array<{ title: string; urgency: string }> },
+  out: { decision: { headline: string } | null },
   reason: string,
 ): { title: string; body: string } | null {
   if (reason !== 'cron') return null;
-  if (out.decision) return { title: 'Today’s call', body: out.decision.headline };
-  const urgent = out.nudges.filter((n) => n.urgency === 'urgent');
-  if (!urgent.length) return null;
-  return { title: urgent.length === 1 ? 'Needs you today' : `${urgent.length} things need you today`, body: urgent[0].title };
+  // The call, or silence. The urgent-nudge fallback went with the nudges: it
+  // fired when the run produced no decision, which is exactly the morning there
+  // is nothing worth a notification — and it pushed a restatement of a card the
+  // user would see anyway the moment they opened the app.
+  return out.decision ? { title: 'Today’s call', body: out.decision.headline } : null;
 }
 
 async function notifyBrief(profile: Profile, out: BriefOutput, reason: string, today: string): Promise<number> {

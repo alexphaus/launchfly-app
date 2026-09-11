@@ -3,6 +3,13 @@
 import type { Metadata } from 'next';
 import LegalDoc from '../../copilot/_components/LegalDoc';
 
+// Rendered per request, like every other page in this app. Prerendering these
+// at build time bought nothing — the content is static but the operator name and
+// contact address come from env, so a static page bakes them in and needs a
+// rebuild to change one — and it added prerender work to the build stage that
+// runs out of memory on the deploy box.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: { absolute: 'Life OS — Privacy' },
   description: 'What this app holds about you, who else sees it, and how to delete all of it.',

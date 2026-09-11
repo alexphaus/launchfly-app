@@ -27,6 +27,18 @@ const nextConfig: NextConfig = {
   // Experimental features for better performance
   experimental: {
     optimizePackageImports: ['@supabase/supabase-js', 'lucide-react'],
+    // Page-data collection forks one worker per CPU and each one loads this
+    // app's whole module graph. Measured on this tree: peak RSS across the build
+    // is ~2.34 GB at five workers and ~2.26 GB at two, and the heaviest worker
+    // needs more than 1 GB of V8 heap (a 1024 MB cap OOMs, 1536 MB passes).
+    //
+    // So capping workers is worth about 86 MB — real, but nowhere near the whole
+    // story. The build simply needs ~2.3 GB, and on a box that does not have it
+    // the kernel takes the process at this exact stage: exit 255, no error text,
+    // which is the same signature nixpacks.toml already warns about. Kept
+    // because 86 MB of headroom costs about a minute of build time, not because
+    // it makes a 2 GB box sufficient. It does not.
+    cpus: 2,
     // turbo: {}, // Use turbo for Turbopack configuration if needed
   },
   

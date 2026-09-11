@@ -16,6 +16,7 @@ import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
 import { runwayGuardJob } from './runway-guard';
 import { sendQueueJob } from './send-queue';
+import { silenceJob } from './silence';
 import { watcherJob } from './watcher';
 import { memoSense } from './sense';
 import type { Profile } from '../types';
@@ -35,6 +36,10 @@ import type { Job, JobContext } from './types';
  * decide         the gap between a goal the user set and the rate that is
  *                actually closing it — the first thing here that reads what
  *                they said they were trying to do
+ * decide         the openers that got nothing back, with the messages attached.
+ *                It was a row in "Also today" saying "note why the 3 sent
+ *                openers got silence" — an instruction about three messages the
+ *                app was already holding
  * decide / avoid / learn
  *                from the funnel, the openings read and the decision record —
  *                measured here, never asked of a model
@@ -54,6 +59,7 @@ export const JOBS: Job[] = [
   repeatCustomerJob,
   runwayGuardJob,
   goalGapJob,
+  silenceJob,
   openingGapJob,
   capabilityGapJob,
   watcherJob,

@@ -3,7 +3,7 @@
 // has already been authenticated by the session cookie.
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
-import { selectReplies, selectSentExamples, type PackReply, type PackSentExample } from './conversations';
+import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, trimMessage, type PackReply, type PackSentExample } from './conversations';
 import { addDays, copilotDb, todayIso } from './db';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
@@ -13,6 +13,7 @@ import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
 import { inMotion } from './motion';
+import type { SentMessage } from './silence';
 import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
@@ -938,4 +939,56 @@ export async function deleteAccount(profileId: string): Promise<void> {
   }
   const { error } = await db.from('copilot_profiles').delete().eq('id', profileId);
   if (error) throw error;
+}
+
+/**
+ * What was sent, whether it was answered, and who it went to.
+ *
+ * Close to loadConversations but not the same read, and deliberately so: that
+ * one feeds a prompt and is capped at three per bucket to protect a token
+ * budget. This one feeds a Move that prints the messages, so it needs the true
+ * silent COUNT — "3 of the 3 I am showing you" and "3 of 19" are different
+ * sentences — and it needs the business name, because whether an opener used it
+ * is the most checkable difference between one that worked and one that did not.
+ */
+export async function loadSilence(profileId: string, now = new Date()): Promise<SentMessage[]> {
+  const db = copilotDb();
+  const { data: rows, error } = await db.from('copilot_executions')
+    .select('id, body, sent_at, opportunity_id')
+    .eq('profile_id', profileId).eq('approval_state', 'sent')
+    .order('sent_at', { ascending: false }).limit(60);
+  if (error || !rows?.length) return [];
+  const sent = rows as Array<{ id: string; body: string | null; sent_at: string | null; opportunity_id: string | null }>;
+
+  const oppIds = [...new Set(sent.map((r) => r.opportunity_id).filter((id): id is string => !!id))];
+  const [titles, repliedIds] = await Promise.all([
+    (async () => {
+      const map = new Map<string, string>();
+      if (!oppIds.length) return map;
+      const { data } = await db.from('copilot_opportunities').select('id, title, contact').in('id', oppIds);
+      for (const o of (data ?? []) as Array<{ id: string; title: string; contact: Opportunity['contact'] }>) {
+        map.set(o.id, o.contact?.name || o.title);
+      }
+      return map;
+    })(),
+    (async () => {
+      const { data } = await db.from('copilot_outcomes').select('execution_id')
+        .eq('profile_id', profileId).eq('kind', 'reply').in('execution_id', sent.map((r) => r.id));
+      return new Set(((data ?? []) as Array<{ execution_id: string | null }>).map((r) => r.execution_id).filter((id): id is string => !!id));
+    })(),
+  ]);
+
+  // Silence is only silence after NO_REPLY_AFTER_DAYS, the same wait
+  // gradeDecisions uses: a message sent yesterday and not yet answered is not
+  // evidence of anything, and counting it would make every busy week look broken.
+  const silenceBefore = now.getTime() - NO_REPLY_AFTER_DAYS * 86_400_000;
+  return sent
+    .filter((r): r is typeof r & { sent_at: string } => !!r.sent_at && !!r.body?.trim())
+    .filter((r) => repliedIds.has(r.id) || new Date(r.sent_at).getTime() < silenceBefore)
+    .map((r) => ({
+      text: trimMessage(r.body, SENT_TEXT_MAX),
+      business: r.opportunity_id ? titles.get(r.opportunity_id) ?? null : null,
+      sentAt: r.sent_at,
+      replied: repliedIds.has(r.id),
+    }));
 }

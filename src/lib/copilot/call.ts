@@ -46,6 +46,7 @@ export const JOB_PHRASE: Record<string, string> = {
   opening_gap: 'changing the offer',
   capability_gap: 'the thing to get better at',
   watch: 'what your feeds turned up',
+  silence: 'reading the openers that got no reply',
 };
 export const phraseFor = (job: string) => JOB_PHRASE[job] ?? job.replace(/_/g, ' ');
 

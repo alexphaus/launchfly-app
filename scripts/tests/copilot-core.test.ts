@@ -1520,9 +1520,13 @@ async function jobSensors() {
   //
   // capability_gap is always available: every account has a funnel from the
   // moment it has a match, and growthEdge returning null is a quiet day rather
-  // than a missing sensor.
-  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'goal_gap', 'capability_gap']);
-  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['goal_gap', 'capability_gap']);
+  // than a missing sensor. silence is the same shape — an account that has sent
+  // nothing has no silence, and that is a quiet day, not an unplugged sensor.
+  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'goal_gap', 'silence', 'capability_gap']);
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['goal_gap', 'silence', 'capability_gap']);
+  // Both gate on onboarding, so a half-created profile reports no sensors at all
+  // rather than two that always answer.
+  assert.ok(!(await availableJobs(profile({ onboarding_complete: false }))).includes('silence'));
   // Outreach is a Job and reports its own sensor like any other: a blank offer
   // cannot have produced drafts, so there is no queue to send.
   assert.ok(!(await availableJobs(profile())).includes('send_queue'), 'nothing to send from a blank offer');
@@ -2469,3 +2473,99 @@ async function motion() {
 }
 
 motion().catch((e) => { console.error(e); process.exit(1); });
+
+// --- the openers that got nothing back
+//
+// "Note why the 3 sent openers got silence" was a row in the old "Also today"
+// list: a real instruction with nothing under it, telling somebody to go and
+// think about three messages the app was already holding. This is that row
+// rebuilt to the standard everything else is held to — and the thing it must
+// never do is say WHY somebody did not reply.
+import { MAX_SHOWN, MIN_PER_SIDE, MIN_SILENT, readSilence, silenceArtifact, traitsOf } from '../../src/lib/copilot/silence';
+import type { SentMessage } from '../../src/lib/copilot/silence';
+
+async function silence() {
+  const msg = (over: Partial<SentMessage>): SentMessage =>
+    ({ text: 'Hi there, I build automations.', business: 'Sea Nymph Resort', sentAt: '2026-09-01T09:00:00Z', replied: false, ...over });
+
+  // 1. TRAITS ARE FACTS, NOT OPINIONS. Each one is checkable against the text
+  //    printed under it — "41 words" is a fact, "too long" is a judgement.
+  const t = traitsOf(msg({ text: 'Hi Sea Nymph Resort, saw you have no booking link. Worth a look? https://x.dev' }));
+  assert.equal(t.asks, true);
+  assert.equal(t.namesThem, true, 'the business name appears in the text');
+  assert.equal(t.hasLink, true);
+  assert.equal(t.words, 14);
+  const bare = traitsOf(msg({ text: 'Hi there, I build automations for resorts.' }));
+  assert.equal(bare.asks, false);
+  assert.equal(bare.namesThem, false, 'a generic opening names nobody');
+  assert.equal(bare.hasLink, false);
+  // A business whose name is a regex metacharacter must not blow up the match.
+  assert.doesNotThrow(() => traitsOf(msg({ business: 'A+ (Plumbing) [Ltd]', text: 'Hi A+' })));
+  assert.equal(traitsOf(msg({ business: null, text: 'Hi' })).namesThem, false, 'no name on file is not a match');
+  // Two-letter names are skipped rather than matching half the alphabet.
+  assert.equal(traitsOf(msg({ business: 'Jo', text: 'Joinery is my job' })).namesThem, false);
+  assert.equal(traitsOf(msg({ text: '   ' })).words, 0, 'blank is zero words, never NaN');
+
+  // 2. UNDER THE FLOOR, NO CLAIM. Three answered and three silent is the least
+  //    that separates a habit from a coincidence — the same rule the agent
+  //    prompt already states for this exact comparison.
+  const answered = Array.from({ length: 3 }, (_, i) =>
+    msg({ replied: true, text: `Hi Sea Nymph Resort, noticed something specific. Worth ten minutes?`, sentAt: `2026-09-0${i + 1}T09:00:00Z` }));
+  const ignored = Array.from({ length: 4 }, (_, i) =>
+    msg({ replied: false, text: 'Hi there, I build WhatsApp automations for resorts and would love to work together.', sentAt: `2026-09-0${i + 1}T09:00:00Z` }));
+
+  const thin = readSilence([...answered.slice(0, 2), ...ignored]);
+  assert.equal(thin.comparable, false, `${MIN_PER_SIDE - 1} answered is not enough to compare`);
+  assert.deepEqual(thin.differences, [], 'and nothing is claimed from it');
+  assert.equal(thin.silent.length, 4);
+
+  // 3. WITH BOTH SIDES, ONLY DIFFERENCES THAT ARE ACTUALLY THERE.
+  const full = readSilence([...answered, ...ignored]);
+  assert.equal(full.comparable, true);
+  assert.ok(full.differences.some((d) => /end with a question/.test(d)), 'a real divergence is named');
+  assert.ok(full.differences.some((d) => /name the business/.test(d)));
+  // Neither group has a link, so nothing is said about links. Printing a trait
+  // both sides share is how a "pattern" gets read into noise.
+  assert.ok(!full.differences.some((d) => /link/.test(d)), 'a trait both sides share is not a difference');
+
+  // Same habit on both sides produces no finding at all, however many messages.
+  const same = readSilence([
+    ...Array.from({ length: 3 }, () => msg({ replied: true, text: 'Hi Sea Nymph Resort, worth a chat?' })),
+    ...Array.from({ length: 3 }, () => msg({ replied: false, text: 'Hi Sea Nymph Resort, worth a chat?' })),
+  ]);
+  assert.deepEqual(same.differences, [], 'identical messages differ in nothing');
+
+  // 4. NOTHING EVER ANSWERED — the live account's actual state. There is no
+  //    version that worked, and saying so is the honest answer rather than
+  //    inventing a rule from one side.
+  const never = readSilence(ignored);
+  assert.equal(never.replied.length, 0);
+  assert.equal(never.comparable, false);
+  const neverArt = silenceArtifact(never);
+  assert.match(neverArt, /no version that worked/);
+  assert.doesNotMatch(neverArt, /ANSWERED/, 'no empty "answered" heading over nothing');
+
+  // 5. THE ARTIFACT IS THE MESSAGES. This is the whole point: the old row told
+  //    somebody to go and think about messages it was already holding.
+  const art = silenceArtifact(full);
+  assert.match(art, /GOT NOTHING BACK \(4\)/, 'the true count, not the number shown');
+  assert.match(art, /ANSWERED \(3\)/);
+  assert.match(art, /Hi there, I build WhatsApp automations/, 'the message text itself is in the artifact');
+  assert.match(art, /words · /, 'with the checkable facts above it');
+  assert.match(art, /WHAT DIFFERS/);
+  // Capped: more than three a side is a transcript, not a pattern.
+  const many = readSilence(Array.from({ length: 12 }, (_, i) => msg({ text: `Message number ${i}`, replied: false })));
+  assert.equal((silenceArtifact(many).match(/Message number/g) ?? []).length, MAX_SHOWN);
+  assert.match(silenceArtifact(many), /GOT NOTHING BACK \(12\)/, 'the count is still the truth');
+
+  // 6. IT NEVER SAYS WHY. Nothing here knows why a stranger did not reply, and a
+  //    confident sentence about it is exactly the invention invariant 2 stops.
+  for (const text of [art, neverArt, ...full.differences]) {
+    assert.doesNotMatch(text, /because they|they were not interested|they did not care|too pushy|spam/i);
+  }
+  assert.ok(MIN_SILENT >= 3, 'a card about two messages is homework');
+
+  console.log('copilot-core: silence checks passed');
+}
+
+silence().catch((e) => { console.error(e); process.exit(1); });

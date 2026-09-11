@@ -9,6 +9,7 @@ import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
 import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
+import { useShell } from './shell';
 
 export default function SheetContent({ sheet, home, actions, briefing = false }: { sheet: SheetState; home: HomeData; actions: Actions; briefing?: boolean }) {
   switch (sheet.kind) {
@@ -19,7 +20,6 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'capacity': return <CapacitySheet current={home.profile.capacity} onPick={actions.setCapacity} />;
     case 'action': return <ActionSheet home={home} id={sheet.id} actions={actions} />;
     case 'opp': return <OppSheet home={home} id={sheet.id} actions={actions} />;
-    case 'lesson': return <LessonSheet home={home} id={sheet.id} actions={actions} />;
     case 'goal': return <GoalSheet goal={home.goals.find((g) => g.id === sheet.id)} actions={actions} />;
     case 'reset': return <ResetSheet actions={actions} />;
     case 'finance': return <FinanceSheet home={home} actions={actions} />;
@@ -344,35 +344,6 @@ function OpeningSheet({ home, term, actions }: { home: HomeData; term: string; a
 
 /* ─── Growth ─────────────────────────────────────────────────────────────── */
 
-function LessonSheet({ home, id, actions }: { home: HomeData; id: string; actions: Actions }) {
-  const l = home.lessons.find((x) => x.id === id);
-  const [busy, setBusy] = useState(false);
-  if (!l) return <p className="desc">Gone.</p>;
-  const done = async () => {
-    setBusy(true);
-    try {
-      const saved = await actions.addNote(`Completed lesson: ${l.title}`, false);
-      if (!saved) return;
-      await actions.setGrowthStatus(l.id, 'done');
-      actions.closeSheet();
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <div className="meta">{l.minutes ? <span className="cp-chip you">{l.minutes} min</span> : null}<span className="cp-chip ai">Worth learning</span></div>
-      <h3>{l.title}</h3>
-      {l.note && <p className="desc">{l.note}</p>}
-      {l.url && <a className="cp-btn dark block" href={l.url} target="_blank" rel="noreferrer">Open</a>}
-      <div className="cp-btn-row">
-        <button className="cp-btn primary" disabled={busy} onClick={done}>I learned this</button>
-        <button className="cp-btn" onClick={actions.closeSheet}>Later</button>
-      </div>
-    </>
-  );
-}
-
 /* ─── Goals ─────────────────────────────────────────────────────────────── */
 
 const METRICS: Array<{ v: GoalMetric; l: string }> = [{ v: 'currency', l: 'Money' }, { v: 'number', l: 'Count' }, { v: 'percent', l: 'Percent' }, { v: 'none', l: 'Just a goal' }];
@@ -477,6 +448,11 @@ function AccountSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirm, setConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
+  const shell = useShell();
   const send = async () => {
     setState('sending'); setError(null);
     const r = await actions.requestLoginLink(email.trim());
@@ -502,6 +478,39 @@ function AccountSheet({ home, actions }: { home: HomeData; actions: Actions }) {
         <span>{home.push.publicKey ? 'Urgent nudges and replies, as they happen' : 'Push is not configured on this server yet'}</span>
         <button className={`cp-toggle ${home.push.enabled ? 'on' : ''}`} disabled={pushBusy || !home.push.publicKey} onClick={togglePush}>{home.push.enabled ? 'On' : 'Off'}</button>
       </div>
+      <div className="cp-subhead">The small print</div>
+      <p className="desc" style={{ marginBottom: 10 }}>
+        <a href={`${shell}/privacy`}>What this holds about you</a> · <a href={`${shell}/terms`}>Terms of use</a>
+      </p>
+
+      <div className="cp-subhead">Delete everything</div>
+      <p className="desc">
+        Removes your profile and every goal, match, drafted message, outcome, decision and watched
+        source with it. Immediately, and not recoverably. &ldquo;Forget device&rdquo; only signs this
+        device out; this is the other one.
+      </p>
+      {confirming ? (
+        <>
+          <div className="cp-field">
+            <label className="cp-label">Type DELETE to confirm</label>
+            <input className="cp-input sm" value={confirm} autoCapitalize="characters" autoCorrect="off"
+              spellCheck={false} onChange={(e) => { setConfirm(e.target.value); setDelError(null); }} placeholder="DELETE" />
+          </div>
+          {delError && <div className="cp-note">{delError}</div>}
+          <div className="cp-btn-row">
+            <button className="cp-btn dark" disabled={deleting || confirm.trim().toUpperCase() !== 'DELETE'}
+              onClick={async () => {
+                setDeleting(true);
+                const r = await actions.deleteAccount(confirm);
+                if (!r.ok) { setDeleting(false); setDelError(r.error ?? 'Could not delete the account'); }
+              }}>{deleting ? 'Deleting…' : 'Delete it all'}</button>
+            <button className="cp-btn" disabled={deleting} onClick={() => { setConfirming(false); setConfirm(''); setDelError(null); }}>Cancel</button>
+          </div>
+        </>
+      ) : (
+        <div className="cp-btn-row"><button className="cp-btn" onClick={() => setConfirming(true)}>Delete my account</button></div>
+      )}
+
       <div className="cp-btn-row"><button className="cp-btn" onClick={actions.closeSheet}>Done</button></div>
     </>
   );

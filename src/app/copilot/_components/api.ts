@@ -12,4 +12,5 @@ export async function api<T = Record<string, unknown>>(path: string, init: Reque
 
 export const post = <T = Record<string, unknown>>(path: string, body?: unknown) => api<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
 export const get = <T = Record<string, unknown>>(path: string) => api<T>(`${path}${path.includes('?') ? '&' : '?'}t=${Date.now()}`);
-export const del = <T = Record<string, unknown>>(path: string) => api<T>(path, { method: 'DELETE' });
+/** DELETE, optionally with a body — account deletion sends a typed confirmation. */
+export const del = <T = Record<string, unknown>>(path: string, init: RequestInit = {}) => api<T>(path, { ...init, method: 'DELETE' });

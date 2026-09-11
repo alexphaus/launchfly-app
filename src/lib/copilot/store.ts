@@ -6,7 +6,7 @@ import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
 import { selectReplies, selectSentExamples, type PackReply, type PackSentExample } from './conversations';
 import { addDays, copilotDb, todayIso } from './db';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
-import { diagnose, growthEdge, segmentOf, selectLesson, type DiagnoseInput } from './diagnose';
+import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
 import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
@@ -24,7 +24,7 @@ export { getProfile, logEvent, setActionStatus, touchProfile };
 import {
   SOURCE_KEYS,
   type Action, type Capacity, type ContextItem, type ContextSource, type EventRow, type Finance, type Goal,
-  type GrowthItem, type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type PipelineRow, type Profile, type SendMode, type SourceKey,
+  type HomeData, type Insight, type Offer, type Opportunity, type OpportunityType, type PipelineRow, type Profile, type SendMode, type SourceKey,
 } from './types';
 
 export async function addContextItem(profileId: string, item: { source: string; kind?: string; content: string; data?: Record<string, unknown>; weight?: number }) {
@@ -72,7 +72,7 @@ export async function ensureSources(profileId: string): Promise<ContextSource[]>
 /**
  * Rows for the diagnosis: every opportunity (not just open ones), every
  * execution and every outcome. The funnel is meaningless if acted-on rows are
- * filtered out of the top of it. Shared by the home read and the weekly brief.
+ * filtered out of the top of it. Shared by the home read and the brief.
  */
 export async function loadDiagnosisRows(profileId: string): Promise<Pick<DiagnoseInput, 'opportunities' | 'executions' | 'outcomes'>> {
   const db = copilotDb();
@@ -174,7 +174,7 @@ export async function setMoveStatus(profileId: string, id: string, status: 'done
  *
  * Narrower than loadDiagnosisRows on purpose: openings only ever look at sourced
  * rows, and only need the columns openingsOf/segmentOf read. Capped because the
- * pack build is on the brief's critical path — newest first, so the weekly
+ * pack build is on the brief's critical path — newest first, so the latest
  * trend is always whole and only the far tail of the all-time count is lost.
  */
 const MAX_OPENING_ROWS = 500;
@@ -250,6 +250,8 @@ async function latestInsight(profileId: string, kind: 'daily' | 'weekly'): Promi
   const q = () => db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning, kind').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1);
   const r = await q().eq('kind', kind).maybeSingle();
   if (!r.error) return (r.data as Insight | null) ?? null;
+  // 'weekly' is only ever asked for by callers older than the cut; the read that
+  // wrote those rows is gone, so there is nothing current to return.
   if (kind === 'weekly') return null;
   const fallback = await db.from('copilot_insights').select('id, for_date, eyebrow, body, reasoning').eq('profile_id', profileId).order('for_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle();
   return (fallback.data as Insight | null) ?? null;
@@ -464,13 +466,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, growth, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, weekly, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
+  const [goals, insight, planRows, nudgeRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'nudge').eq('status', 'open').gte('for_date', addDays(today, -NUDGE_STALE_DAYS)).order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as Action[]),
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).in('status', ['new', 'saved']).order('created_at', { ascending: false }).limit(60).then((r) => ((r.data ?? []) as (Opportunity & { expires_at: string | null })[]).filter((o) => !o.expires_at || new Date(o.expires_at) > new Date()).slice(0, 40)),
-    db.from('copilot_growth_items').select('*').eq('profile_id', profileId).eq('status', 'active').order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as GrowthItem[]),
     ensureSources(profileId),
     db.from('copilot_context_items').select('id', { count: 'exact', head: true }).eq('profile_id', profileId).then((r) => r.count ?? 0),
     typeAffinityFor(profileId),
@@ -487,7 +488,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     db.from('copilot_agent_runs').select('finished_at').eq('profile_id', profileId).eq('kind', 'supply').order('started_at', { ascending: false }).limit(1).maybeSingle().then((r) => (r.data?.finished_at as string | null) ?? null),
     hasSubscription(profileId),
     loadDiagnosisRows(profileId),
-    latestInsight(profileId, 'weekly'),
     getUsage(profileId, periodKey(profile.timezone)),
     loadSendQueue(profileId),
     // The pipeline: real businesses only, whatever state they are in. Dismissed
@@ -538,7 +538,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const stackMoves = promotedId ? movesRead.moves.filter((m) => m.id !== promotedId) : movesRead.moves;
 
   const diagnosis = diagnose({ ...diagRows, offer: profile.offer ?? {}, targetSegments: profile.target_segments, now: new Date() });
-  const lessons = selectLesson(growth, diagnosis);
   // The record is what makes "you keep doing this and it does not work"
   // possible; nothing else in the app can see it.
   const edge = growthEdge(diagnosis, { deadTopic: decisionReview(decisionLog).deadTopic });
@@ -555,7 +554,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     planOverflow,
     queue,
     pipeline,
-    weekly,
     billing: {
       plan: isPlanKey(profile.plan) ? profile.plan : 'free',
       effective: effectivePlan(profile).key,
@@ -572,7 +570,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     nudges,
     opportunities,
     diagnosis,
-    lessons,
     edge,
     sources,
     watchSources,
@@ -617,20 +614,6 @@ export async function setOpportunityStatus(profileId: string, id: string, status
   if (!data) return null;
   const map: Record<string, string> = { saved: 'opportunity_saved', dismissed: 'opportunity_dismissed', acted: 'opportunity_acted', new: 'opportunity_reset' };
   await logEvent(profileId, map[status], { opportunity_id: id, type: data.type, title: data.title });
-  return data;
-}
-
-const GROWTH_EVENT: Record<GrowthItem['status'], string> = {
-  done: 'growth_done',
-  dismissed: 'growth_dismissed',
-  active: 'growth_reopened',
-};
-
-export async function setGrowthItemStatus(profileId: string, id: string, status: GrowthItem['status']) {
-  const db = copilotDb();
-  const { data } = await db.from('copilot_growth_items').update({ status }).eq('id', id).eq('profile_id', profileId).select('id, kind, title').maybeSingle();
-  if (!data) return null;
-  await logEvent(profileId, GROWTH_EVENT[status], { growth_item_id: id, kind: data.kind, title: data.title });
   return data;
 }
 
@@ -824,4 +807,33 @@ export async function markWatchSourceChecked(
   const row: Record<string, unknown> = { last_checked_at: new Date().toISOString(), last_error: patch.error ?? null };
   if (patch.seen_ids) row.seen_ids = patch.seen_ids;
   await copilotDb().from('copilot_sources').update(row).eq('profile_id', profileId).eq('id', id);
+}
+
+/**
+ * Delete the account and everything belonging to it.
+ *
+ * Every child table declares `on delete cascade` from copilot_profiles, so one
+ * delete takes goals, opportunities, executions, outcomes, decisions, moves,
+ * insights, context, push subscriptions and watched sources with it. That is
+ * checked by the migrations rather than restated here as a list that would rot.
+ *
+ * Two deliberate exceptions:
+ *
+ * - `copilot_billing_events` is `on delete set null`. Payment records have to
+ *   survive the account they belonged to; Stripe is the system of record and is
+ *   legally required to keep them. Nulling the link is what makes the row
+ *   unattributable from this side while leaving the ledger intact.
+ * - Login tokens are ALSO deleted by email, not just by the cascade. A token
+ *   issued before a profile was linked carries a null profile_id, so the
+ *   cascade misses it — and a live sign-in link outliving the account it was
+ *   for is the one thing deletion absolutely cannot leave behind.
+ */
+export async function deleteAccount(profileId: string): Promise<void> {
+  const db = copilotDb();
+  const profile = await getProfile(profileId);
+  if (profile?.email) {
+    await db.from('copilot_login_tokens').delete().ilike('email', profile.email);
+  }
+  const { error } = await db.from('copilot_profiles').delete().eq('id', profileId);
+  if (error) throw error;
 }

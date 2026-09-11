@@ -222,20 +222,10 @@ export interface Insight {
   eyebrow: string;
   body: string;
   reasoning: string | null;
-  /** 'daily' is the brief; 'weekly' is the Signals read. Absent on rows older than the column. */
+  /** Always 'daily' now. The weekly Signals read was a second insight nobody
+   *  read, on a Monday cron branch that never fired. Kept on the row because the
+   *  column exists and old rows carry it. */
   kind?: 'daily' | 'weekly';
-}
-
-export interface GrowthItem {
-  id: string;
-  kind: 'skill' | 'lesson';
-  title: string;
-  level: number | null;
-  minutes: number | null;
-  note: string | null;
-  cta: string | null;
-  url: string | null;
-  status: 'active' | 'done' | 'dismissed';
 }
 
 export type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse };
@@ -304,12 +294,8 @@ export interface HomeData {
   queue: QueueItem[];
   /** Sourced businesses only — the ones with a contact — grouped by stage on the Pipeline tab. */
   pipeline: PipelineRow[];
-  /** The latest weekly Signals read, when one has been written. */
-  weekly: Insight | null;
   /** Current plan and what is left of this month's metered allowance. */
   billing: BillingSummary;
-  /** At most one lesson, and only when the diagnosis produced a stuck point. */
-  lessons: GrowthItem[];
   /**
    * The one capability to work on, computed from the funnel, the openings read and
    * the decision record. Replaces a section that asked a model for an article
@@ -453,19 +439,6 @@ export interface PackOpening {
   segment: string | null;
 }
 
-export interface BriefOpportunity {
-  type: OpportunityType;
-  title: string;
-  reason: string;
-  value_label?: string;
-  value_amount?: number;
-  currency?: string;
-  effort?: Effort;
-  fit_score: number;
-  source?: string;
-  url?: string;
-}
-
 export interface BriefAction {
   owner: ActionOwner;
   title: string;
@@ -493,10 +466,23 @@ export interface BriefOutput {
   rankings: Array<{ id: string; fit_score: number; reason: string }>;
   plan: BriefAction[];
   nudges: BriefNudge[];
-  opportunities: BriefOpportunity[];
-  skills: Array<{ title: string; level: number; note?: string; cta?: string }>;
-  lessons: Array<{ title: string; minutes?: number; note?: string; url?: string }>;
 }
+// Three fields were removed from here rather than left empty.
+//
+// `skills` was already dead — the limit was zero, so the model's answer was
+// sliced to nothing while the prompt still asked for it and brief.ts still
+// carried a full upsert that could never fire.
+//
+// `opportunities` was up to eight matches the MODEL invented, capped at score 70
+// and rendered beside real scraped businesses behind an "Inferred" badge. A
+// guess sitting next to a listing is the thing invariant 3 exists to prevent,
+// and a badge is not a defence — the row is still on the screen, still ranked,
+// still costing prompt tokens to produce.
+//
+// `lessons` was one article a day, and only with a working URL. A URL is the
+// single thing a language model is least able to supply, so it was almost always
+// empty; when it was not, nobody could tell whether the link was real. The
+// computed GrowthEdge ("get better at") stays — that one is read off the funnel.
 
 /** What the caller can afford to wait for a brief. The nightly cron reaches the
  *  app on localhost and has minutes; every other caller is a tap sitting behind

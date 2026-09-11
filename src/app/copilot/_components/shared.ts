@@ -1,5 +1,5 @@
 import type { PipelineStage } from '@/lib/copilot/pipeline';
-import type { ActionStatus, Capacity, Channel, Goal, GrowthItem, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
+import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
  * Two tabs, because there are two questions: what do I do, and is it working.
@@ -18,7 +18,6 @@ export type SheetState =
   | { kind: 'capacity' }
   | { kind: 'action'; id: string }
   | { kind: 'opp'; id: string }
-  | { kind: 'lesson'; id: string }
   | { kind: 'goal'; id?: string }
   | { kind: 'reset' }
   | { kind: 'finance' }
@@ -55,7 +54,6 @@ export interface Actions {
   addNote(content: string, regenerate: boolean): Promise<boolean>;
   setOppStatus(id: string, status: OpportunityStatus): Promise<void>;
   setActionStatus(id: string, status: ActionStatus): Promise<void>;
-  setGrowthStatus(id: string, status: GrowthItem['status']): Promise<void>;
   requestSource(key: SourceKey): Promise<void>;
   /** Send the user to Stripe's hosted billing portal. */
   openBilling(): Promise<void>;
@@ -86,6 +84,11 @@ export interface Actions {
    */
   addWatchSource(input: { url: string; label?: string; intent?: string }): Promise<{ ok: boolean; note?: string | null; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
+  /**
+   * Delete the account and every row belonging to it. Not recoverable, and not
+   * the same thing as resetDevice, which only clears the cookie.
+   */
+  deleteAccount(confirm: string): Promise<{ ok: boolean; error?: string }>;
   /** Pause a noisy source without losing it, or re-enable one that errored. */
   setWatchSourceStatus(id: string, status: 'active' | 'paused'): Promise<void>;
   /** A Move is finished work: say it is done, or that it is not for you. */

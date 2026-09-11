@@ -24,7 +24,6 @@ import TriageStack from '../TriageStack';
 import type { Actions } from '../shared';
 
 /** Anything past this is folded. A plan you can finish beats a list you cannot. */
-const ALSO_FOLD = 3;
 
 function execChip(e: Execution | null | undefined): { cls: string; label: string } | null {
   if (!e) return null;
@@ -50,18 +49,12 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [tellOpen, setTellOpen] = useState(false);
-  const [moreAlso, setMoreAlso] = useState(false);
   const b = home.billing;
   const noOffer = offerIsEmpty(home.profile.offer);
   const queue = home.queue;
   // With a blank offer the call, its button and this row all say the same thing.
   // The row is the one that carries no new information, so it goes.
   const plan = home.decision && noOffer ? home.plan.filter((a) => a.title !== OFFER_TASK_TITLE) : home.plan;
-  // One folded list, not two sections. "Also today" and "Next actions" were
-  // different queries rendering the same kind of row, one above the other.
-  const alsoToday = [...plan.filter((a) => a.status === 'open'), ...home.nudges];
-  const alsoDone = plan.filter((a) => a.status === 'done');
-  const visibleAlso = moreAlso ? alsoToday : alsoToday.slice(0, ALSO_FOLD);
   // The call leads, always. It used to sit below forty queue rows unless the
   // offer was blank, which put the one decision on the screen out of sight.
   const call = home.decision ? <CallCard decision={home.decision} home={home} actions={actions} noOffer={noOffer} /> : null;
@@ -74,7 +67,7 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
   const nightlyStale = !home.lastCronRun || Date.now() - new Date(home.lastCronRun).getTime() > 36 * 3_600_000;
   // A brand new account. Three separate empty boxes stacked up read as a broken
   // app; one card reads as a new one.
-  const nothingYet = !home.decision && !home.insight && !queue.length && !alsoToday.length && !home.moves.length;
+  const nothingYet = !home.decision && !home.insight && !queue.length && !home.motion.length && !home.moves.length;
 
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
@@ -219,36 +212,32 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         </div>
       )}
 
-      {/* Everything else, folded. Two sections of the same kind of row became
-          one, and the count says what is behind the fold rather than hiding it. */}
-      {alsoToday.length > 0 && (
+      {/* What is already running. Every other section on this screen is an ask —
+          the call, the composer, the moves, the deck, the queue — and none of
+          them answered the question a person actually has at nine at night.
+
+          It replaces "Also today", which rendered the model's plan and nudges:
+          asked for in the same response that wrote the call, over the same
+          context, so it restated it by construction. The live screen carried four
+          rows of "approve and send N drafts" above a queue card saying it a fifth
+          time, with the numbers disagreeing. Nothing here is written by a model. */}
+      {home.motion.length > 0 && (
         <>
           <div className="cp-section">
-            <span className="lead">Also today</span>
-            <span className="count">{alsoToday.length + home.planOverflow}</span>
+            <span className="lead">In motion</span>
+            <span className="count">nothing to do here</span>
           </div>
           <div className="cp-list">
-            {visibleAlso.map((a) => {
-              const ec = execChip(a.execution);
-              return (
-                <button key={a.id} className="cp-row" onClick={() => actions.openSheet({ kind: 'action', id: a.id })}>
-                  <span className={`cp-chip ${ec ? ec.cls : a.owner}`}>{ec ? ec.label : a.owner === 'ai' ? 'AI drafted' : 'Needs you'}</span>
-                  <span className="txt">{a.minutes && a.owner === 'you' ? `${a.minutes} min — ` : ''}{a.title}</span>
-                </button>
-              );
-            })}
+            {home.motion.map((m) => (
+              <div key={m.kind} className="cp-motion">
+                <span className={`cp-motion-dot ${m.kind}`} />
+                <div>
+                  <div className="l">{m.label}</div>
+                  <div className="s">{m.detail}</div>
+                </div>
+              </div>
+            ))}
           </div>
-          {alsoToday.length > ALSO_FOLD && (
-            <button className="cp-textlink cp-fold" onClick={() => setMoreAlso((v) => !v)}>
-              {moreAlso ? 'Show fewer' : `Show ${alsoToday.length - ALSO_FOLD} more`}
-            </button>
-          )}
-          {(alsoDone.length > 0 || home.planOverflow > 0) && (
-            <div className="cp-note" style={{ marginTop: 8 }}>
-              {alsoDone.length > 0 && `${alsoDone.length} done today. `}
-              {home.planOverflow > 0 && `${home.planOverflow} more behind these.`}
-            </div>
-          )}
         </>
       )}
 

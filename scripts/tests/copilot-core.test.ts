@@ -97,9 +97,6 @@ const base = { created_at: now.toISOString(), score: 0 };
 {
   const raw = extractJson('Here you go:\n```json\n{"insight":{"body":"Do X.","reasoning":"Because Y"},"plan":[{"owner":"robot","title":"T","minutes":"20"}],"nudges":[{"title":"N","urgency":"loud"}],"opportunities":[{"type":"client","title":"O","reason":"R","fit_score":150}],"skills":[{"title":"S","level":90}],"lessons":[{"title":"L","url":"https://example.com/l"}]}\n```');
   const b = normalizeBrief(raw);
-  assert.equal(b.plan[0].owner, 'you', 'unknown owner falls back to you');
-  assert.equal(b.plan[0].minutes, 20, 'numeric strings coerce');
-  assert.equal(b.nudges[0].urgency, 'normal');
   assert.throws(() => normalizeBrief({}), /insight/);
 
   // Three fields the agent may still SEND and the app no longer reads. A model
@@ -113,8 +110,14 @@ const base = { created_at: now.toISOString(), score: 0 };
   // already sliced to zero while the prompt still asked for them; `lessons`
   // needed a working URL, which is the single thing a model is least able to
   // supply. The computed edge replaced the last one and reads off the funnel.
+  //
+  // `plan` and `nudges` went for a different reason: they were asked for in the
+  // same response that wrote the Call, over the same context, so they restated
+  // it. The live screen carried four rows of "approve and send N drafts" above a
+  // queue card saying it a fifth time, the numbers disagreeing because they came
+  // from different runs.
   const leaked = b as unknown as Record<string, unknown>;
-  for (const gone of ['opportunities', 'skills', 'lessons']) {
+  for (const gone of ['opportunities', 'skills', 'lessons', 'plan', 'nudges']) {
     assert.equal(leaked[gone], undefined, `${gone} must not survive normalizeBrief`);
   }
 }
@@ -141,32 +144,32 @@ const base = { created_at: now.toISOString(), score: 0 };
   // to put one if it tried: BriefOutput does not carry the field any more.
   assert.equal((empty as unknown as Record<string, unknown>).opportunities, undefined);
   assert.equal(empty.rankings.length, 0);
-  assert.ok(!empty.plan.some((p) => p.owner === 'ai'), 'no draft without a reachable candidate');
-  // The starter used to add a reflection task here every single day — "log where
-  // you stand", "write down the last 3 people who paid you", "add one constraint
-  // I should respect". Generated whatever was happening, never completed, and
-  // they filled "Also today" with homework while the Moves below carried real
-  // work. A plan item now has to be something only the user can do AND that the
-  // app is actually blocked on.
-  assert.ok(!empty.plan.some((p) => /where you stand|last 3 people|one constraint/.test(p.title)), 'no daily homework');
-  assert.ok(empty.plan.every((p) => p.owner === 'you'), 'what is left is only what the app cannot do itself');
-  assert.ok(empty.nudges.some((n) => /No real matches/.test(n.title)), 'nudges point at supply when there is none');
+  // The starter can no longer produce a plan item or a nudge at all — the fields
+  // are gone from BriefOutput. That is a stronger version of invariant 1 than
+  // the gate it replaces: there is nowhere to put a draft written from nothing,
+  // rather than a rule saying not to. The homework tasks this used to guard
+  // against ("log where you stand", "write down the last 3 people who paid you")
+  // cannot be generated either.
+  const emptyLeak = empty as unknown as Record<string, unknown>;
+  assert.equal(emptyLeak.plan, undefined, 'the starter has nowhere to put a plan item');
+  assert.equal(emptyLeak.nudges, undefined, 'and nowhere to put a nudge');
 
   // With a reachable real candidate: ranks it and drafts a send-ready opener bound to it.
   const withCandidate: ContextPack = { ...basePack, candidates: [{ id: 'c1', type: 'client', title: 'Sea Nymph Resort', summary: 'Resort in Palawan. Pain: no website.', source: 'google_maps', url: null, contact: { name: 'Maria', whatsapp: 'yes' }, fit_score: 70, scored: false }] };
   const drafted = await new StarterAgent().generateBrief(withCandidate);
   assert.deepEqual(drafted.rankings.map((r) => r.id), ['c1'], 'ranks the candidate');
-  const ai = drafted.plan.find((p) => p.owner === 'ai');
-  assert.ok(ai && ai.ai_draft && ai.opportunity_ref === 'c1' && ai.channel === 'whatsapp', 'drafts a WhatsApp opener bound to the candidate');
-  assert.match(ai!.ai_draft!, /Hi Maria, Alex here/);
+  // It ranks, and that is all. Auto-drafting an opener the moment a candidate
+  // appears is how a send queue reaches forty-one; the candidate now goes to the
+  // deck, where "Draft it" is a decision somebody made and the queue gate
+  // applies. openerTemplate is still covered above, on the path that uses it.
+  assert.equal((drafted as unknown as Record<string, unknown>).plan, undefined);
   assert.match(drafted.insight.body, /1 real match/);
 
   // Same reachable candidate, blank offer: nothing is drafted. The live account
   // had 44 openers written from nothing and sent none of them.
   const blank: ContextPack = { ...withCandidate, profile: { ...withCandidate.profile, offer: {} } };
   const gated = await new StarterAgent().generateBrief(blank);
-  assert.ok(!gated.plan.some((p) => p.owner === 'ai'), 'no opener is drafted from an empty offer');
-  assert.equal(gated.plan[0].title, OFFER_TASK_TITLE, 'the plan leads with setting the offer');
+  assert.equal((gated as unknown as Record<string, unknown>).plan, undefined, 'nothing is drafted from an empty offer');
   assert.match(gated.insight.body, /until you say what you sell/, 'the insight says why nothing is drafted');
   assert.deepEqual(gated.rankings.map((r) => r.id), ['c1'], 'ranking still happens — only drafting waits');
 }
@@ -266,16 +269,22 @@ async function closedLoop() {
   const fu = followUpTemplate('Maria', 'Alex', 'email');
   assert.match(fu, /Hi Maria,/); assert.match(fu, /Alex$/);
 
-  // Normaliser: rankings and execution refs survive, junk does not.
+  // Normaliser: rankings survive and are clamped, junk does not.
+  //
+  // This used to assert that a plan item carrying ai_draft + opportunity_ref +
+  // channel survived, because that was how the agent auto-drafted an opener into
+  // the queue. That path is gone on purpose: a model writing five openers a night
+  // into a queue nobody empties is how a queue reaches forty-one. Drafting is now
+  // only ever deliberate — the deck's "Draft it" and the draft button — and both
+  // are gated on the send queue.
   const b = normalizeBrief({
     insight: { body: 'x' },
     rankings: [{ id: 'abc', fit_score: 130, reason: 'r' }, { fit_score: 50 }, { id: 'def', fit_score: '42' }],
-    plan: [{ owner: 'ai', title: 'Opener', ai_draft: 'hi', opportunity_ref: 'abc', channel: 'whatsapp' }, { owner: 'ai', title: 'Bad channel', ai_draft: 'hi', opportunity_ref: 'abc', channel: 'carrier pigeon' }],
+    plan: [{ owner: 'ai', title: 'Opener', ai_draft: 'hi', opportunity_ref: 'abc', channel: 'whatsapp' }],
   });
   assert.equal(b.rankings.length, 2, 'ranking without id dropped');
   assert.equal(b.rankings[0].fit_score, 100); assert.equal(b.rankings[1].fit_score, 42);
-  assert.equal(b.plan[0].channel, 'whatsapp'); assert.equal(b.plan[0].opportunity_ref, 'abc');
-  assert.equal(b.plan[1].channel, undefined, 'unknown channel dropped');
+  assert.equal((b as unknown as Record<string, unknown>).plan, undefined, 'a drafted plan item can no longer reach the queue through the brief');
 
   console.log('copilot-core: closed-loop checks passed');
 }
@@ -1236,31 +1245,33 @@ import { notifyPayload } from '../../src/lib/copilot/brief';
 
 async function notifications() {
   const call = { headline: 'Send the 7 drafts already written before finding anything new.', because: [], verify_metric: 'sent' as const };
-  const urgent = [{ title: 'Follow up with Briones and MAPECON', urgency: 'urgent' as const, due_label: 'Overdue' }];
 
   // 1. Only the cron notifies. A brief also runs when the app is opened, and a
   //    notification to somebody already looking at the screen is noise — that
   //    is most of why push has never been seen.
   for (const reason of ['manual', 'daily', 'onboarding', 'offer', 'supply']) {
-    assert.equal(notifyPayload({ decision: call, nudges: urgent }, reason), null, `${reason} must not notify`);
+    assert.equal(notifyPayload({ decision: call }, reason), null, `${reason} must not notify`);
   }
 
-  // 2. The call is what gets carried. A count of nudges is not a reason to pick
-  //    up a phone; one move is.
-  const p = notifyPayload({ decision: call, nudges: urgent }, 'cron');
+  // 2. The call is what gets carried. One move is a reason to pick up a phone.
+  const p = notifyPayload({ decision: call }, 'cron');
   assert.equal(p?.title, 'Today’s call');
   assert.equal(p?.body, call.headline);
 
-  // 3. No decision: fall back to the urgent nudge rather than staying silent.
-  const fallback = notifyPayload({ decision: null, nudges: urgent }, 'cron');
-  assert.equal(fallback?.title, 'Needs you today');
-  assert.match(fallback!.body, /Briones/);
-  assert.equal(notifyPayload({ decision: null, nudges: [urgent[0], { ...urgent[0], title: 'Second thing' }] }, 'cron')?.title, '2 things need you today');
+  // 3. No call is silence.
+  //
+  //    This used to fall back to an urgent nudge, and the fallback was worse than
+  //    nothing twice over: it fired on exactly the morning the run produced no
+  //    decision — which is the morning there is least worth interrupting anyone
+  //    for — and what it pushed was a sentence restating a card they would see
+  //    the moment they opened the app. The nudges themselves are gone; see
+  //    BriefOutput for why.
+  assert.equal(notifyPayload({ decision: null }, 'cron'), null);
 
-  // 4. Nothing to say is silence, not an empty notification.
-  assert.equal(notifyPayload({ decision: null, nudges: [] }, 'cron'), null);
-  assert.equal(notifyPayload({ decision: null, nudges: [{ title: 'Not urgent', urgency: 'normal' as const }] }, 'cron'), null,
-    'a non-urgent nudge is not worth interrupting anyone for');
+  // A model that still sends nudges cannot notify through them either: the
+  // normalizer drops the field long before this, and the signature no longer
+  // reads it.
+  assert.equal(notifyPayload({ decision: null } as { decision: null }, 'cron'), null);
 
   console.log('copilot-core: notification checks passed');
 }
@@ -2377,3 +2388,84 @@ async function deck() {
 }
 
 deck().catch((e) => { console.error(e); process.exit(1); });
+
+// --- what is already running
+//
+// "Also today" rendered the model's plan[] and nudges[], asked for in the same
+// response that wrote the Call, over the same context. The live screen carried
+// "approve and send 15 drafts", "approve and send 15 drafts today", "approve and
+// send 10 drafts today" and "send 10 drafts today" as four rows above a queue
+// card saying it a fifth time — the 15 and the 10 disagreeing because they came
+// from different runs. This is what took its place: state, not instructions.
+import { MAX_NAMES, RECENT_CHECK_HOURS, inMotion, nameList } from '../../src/lib/copilot/motion';
+import { VERIFY_AFTER_DAYS as VERIFY_DAYS } from '../../src/lib/copilot/decision';
+
+async function motion() {
+  const now = new Date('2026-09-11T20:00:00Z');
+  const base = { sent: [], call: null, sources: [], finds: 0, now };
+
+  // 1. A QUIET ACCOUNT SAYS NOTHING. A heading over "nothing yet" is exactly the
+  //    filler this change removes, so the section is not rendered at all.
+  assert.deepEqual(inMotion(base), []);
+
+  // 2. SENT AND WAITING, off real executions.
+  const sent = inMotion({ ...base, sent: [
+    { name: 'Norj', sentAt: '2026-09-06T09:00:00Z' },
+    { name: 'Andrea', sentAt: '2026-09-10T09:00:00Z' },
+    { name: 'MAPECON', sentAt: '2026-09-10T10:00:00Z' },
+  ] })[0];
+  assert.equal(sent.kind, 'sent');
+  assert.equal(sent.label, '3 sent, waiting');
+  assert.match(sent.detail, /oldest 5 days/, 'the oldest is the number that matters, not the newest');
+  assert.match(sent.detail, /Norj, Andrea \+1/);
+  // All today reads as "all today" rather than "oldest 0 days".
+  assert.match(inMotion({ ...base, sent: [{ name: 'Solo', sentAt: '2026-09-11T08:00:00Z' }] })[0].detail, /all today/);
+  assert.equal(nameList([]), '');
+  assert.equal(nameList(['A']), 'A');
+  assert.equal(nameList(['A', 'B', 'C', 'D']), `A, B +2`);
+  assert.ok(MAX_NAMES >= 1);
+
+  // 3. THE CALL BEING READ BACK. This is the decision record made visible on the
+  //    screen where the call was made, instead of only on the tab nobody opens.
+  const verifying = inMotion({ ...base, call: { headline: 'Send the 15 drafts', metric: 'sent', answeredAt: '2026-09-10' } })[0];
+  assert.equal(verifying.kind, 'verifying');
+  assert.equal(verifying.label, 'Send the 15 drafts');
+  assert.match(verifying.detail, /you did it/);
+  assert.match(verifying.detail, new RegExp(`reads back on sent in ${VERIFY_DAYS - 1} days`));
+  // Past the window it is being read back now, never a negative countdown.
+  const due = inMotion({ ...base, call: { headline: 'h', metric: 'replies', answeredAt: '2026-09-01' } })[0];
+  assert.match(due.detail, /being read back now/);
+  assert.doesNotMatch(due.detail, /-\d/);
+
+  // 4. WHAT THE SOURCES TURNED UP — including nothing, which is the common and
+  //    correct answer and the thing that stops a quiet night reading as a bug.
+  const fresh = '2026-09-11T03:00:00Z';
+  const quiet = inMotion({ ...base, sources: [{ label: 'r/forhire', lastCheckedAt: fresh }], finds: 0 })[0];
+  assert.equal(quiet.kind, 'watched');
+  assert.equal(quiet.label, '1 source read');
+  assert.match(quiet.detail, /nothing worth your morning/);
+  const found = inMotion({ ...base, sources: [{ label: 'r/forhire', lastCheckedAt: fresh }], finds: 2 })[0];
+  assert.match(found.detail, /2 worth keeping/);
+  // A source never checked, or checked long ago, is not "last night".
+  assert.deepEqual(inMotion({ ...base, sources: [{ label: 'x', lastCheckedAt: null }], finds: 1 }), []);
+  assert.deepEqual(inMotion({ ...base, sources: [{ label: 'x', lastCheckedAt: '2026-09-01T03:00:00Z' }], finds: 1 }), []);
+  // Clock skew: a check stamped in the future must not count as recent either.
+  assert.deepEqual(inMotion({ ...base, sources: [{ label: 'x', lastCheckedAt: '2026-09-20T03:00:00Z' }], finds: 1 }), []);
+  assert.ok(RECENT_CHECK_HOURS >= 24, 'one missed hour must not hide last night');
+
+  // 5. AT MOST THREE, in a fixed order — sent, then the call, then the sources.
+  //    A section that reorders itself between loads is not a receipt.
+  const all = inMotion({
+    ...base,
+    sent: [{ name: 'Norj', sentAt: '2026-09-09T09:00:00Z' }],
+    call: { headline: 'Send the 15 drafts', metric: 'sent', answeredAt: '2026-09-10' },
+    sources: [{ label: 'r/forhire', lastCheckedAt: fresh }],
+    finds: 1,
+  });
+  assert.deepEqual(all.map((r) => r.kind), ['sent', 'verifying', 'watched']);
+  assert.ok(all.every((r) => r.label && r.detail), 'every row carries evidence, never a bare heading');
+
+  console.log('copilot-core: motion checks passed');
+}
+
+motion().catch((e) => { console.error(e); process.exit(1); });

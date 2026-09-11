@@ -37,46 +37,13 @@ export class StarterAgent implements OpportunityAgent {
 
     const supplyLine = noOffer && pack.candidates.length
       ? `There are ${pack.candidates.length} real matches ranked below, but nothing can be drafted until you say what you sell — set your offer and every one gets an opener in your words.`
-      : pack.candidates.length ? `There are ${pack.candidates.length} real matches ranked below; the first message is drafted and waits for your approval.`
+      : pack.candidates.length ? `There are ${pack.candidates.length} real matches ranked below; the deck asks about them one at a time.`
       : 'No real matches yet. Add who you sell to and where in the You tab, then tap "Find new matches".';
 
     const body = m.sent > 0
-      ? `${firstName}, the numbers: ${describeMetrics(m, currency)}. ${goalLine} ${m.reply_rate != null && m.reply_rate < 0.1 && m.sent >= 10 ? 'Under 10% replies means the opener, not the volume, is the problem. Change the angle before sending more.' : noOffer ? 'Your offer is empty, so nothing new is drafted until you set it.' : m.pipeline.sourced > 0 ? `You have ${m.pipeline.sourced} real matches waiting; today's plan drafts the best one.` : 'Run "Find new matches" so there is something real to send to.'} Capacity is ${cap.label.toLowerCase()}, so the plan fits in about ${cap.minutes} minutes.`
+      ? `${firstName}, the numbers: ${describeMetrics(m, currency)}. ${goalLine} ${m.reply_rate != null && m.reply_rate < 0.1 && m.sent >= 10 ? 'Under 10% replies means the opener, not the volume, is the problem. Change the angle before sending more.' : noOffer ? 'Your offer is empty, so nothing new is drafted until you set it.' : m.pipeline.sourced > 0 ? `You have ${m.pipeline.sourced} real matches waiting; the deck asks about the best one first.` : 'Run "Find new matches" so there is something real to send to.'} Capacity is ${cap.label.toLowerCase()}, so today's call is sized for about ${cap.minutes} minutes.`
       : `${firstName}, nothing has gone out yet. ${goalLine} ${supplyLine} I know ${knows} thing${knows === 1 ? '' : 's'} about you so far; every note sharpens the next brief.`;
 
-    const plan: BriefOutput['plan'] = [];
-    if (noOffer) {
-      plan.push({ owner: 'you', title: OFFER_TASK_TITLE, detail: OFFER_TASK_DETAIL, minutes: 3 });
-    } else if (top) {
-      const channel = top.contact.whatsapp ? 'whatsapp' as const : 'email' as const;
-      plan.push({
-        owner: 'ai', minutes: 3,
-        title: `Opener to ${top.contact.name || top.title}, ready to review`,
-        detail: `Highest-ranked real match with a reachable contact. Edit, then approve to send on ${channel}.`,
-        ai_draft: openerTemplate(pack.profile, top, channel),
-        opportunity_ref: top.id, channel,
-      });
-    }
-    // Two reflection tasks used to live here — "write down the last 3 people who
-    // paid you", "add one constraint I should respect". They were generated every
-    // day whatever was happening, never completed, and filled "Also today" with
-    // homework while the Moves underneath carried actual work. A plan item now
-    // has to be something only the user can do and the app actually needs.
-    if (!pack.profile.target_segments.length) {
-      plan.push({ owner: 'you', title: 'Set who you sell to and where, so real matches can be found', detail: 'Your avatar → Targeting. Two fields.', minutes: 2 });
-    }
-
-    // Two nudges were removed here rather than rewritten, because both had
-    // become the same instruction said a second time:
-    //   - "N drafted messages are waiting for your approval" is the To send card
-    //     on Now, which carries the count and the way in.
-    //   - "Runway is N months" is the runway_guard Move, which carries the
-    //     arithmetic and what to do about it.
-    // A nudge that restates a card is how the old Today ended up saying "send 10
-    // drafts" three times on one screen.
-    const nudges: BriefOutput['nudges'] = [];
-    if (!pack.candidates.length) nudges.push({ title: 'No real matches in the pipeline. Open the funnel on Working to find new ones, or set targeting under your avatar.', urgency: 'normal', due_label: 'Today' });
-    if (m.sent > 0 && m.replies === 0 && m.sent >= 5) nudges.push({ title: `${m.sent} sent, zero replies. Follow-ups are drafted automatically on day 3; approve them.`, urgency: 'normal', due_label: 'Outreach' });
 
     // The call is a ladder over the same numbers the insight cites, so the
     // floor is never a blank card: a deterministic decision beats no decision.
@@ -88,7 +55,7 @@ export class StarterAgent implements OpportunityAgent {
     return {
       decision, dont,
       insight: { body, reasoning: `Starter brief: computed from ${m.sent} sends, ${m.replies} replies, ${pack.candidates.length} real candidates and your onboarding answers. No model was called.` },
-      rankings, plan, nudges,
+      rankings,
     };
   }
 }

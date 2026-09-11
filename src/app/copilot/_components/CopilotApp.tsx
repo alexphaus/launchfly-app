@@ -178,7 +178,6 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         ...h,
         plan: h.plan.map((a) => (a.id === id ? { ...a, status } : a)).filter((a) => a.status !== 'dismissed'),
         queue: h.queue.filter((q) => q.id !== id || status === 'open'),
-        nudges: h.nudges.filter((a) => a.id !== id || status === 'open'),
       }));
       closeSheet();
       try { await post(`/actions/${id}`, { status }); } catch (e) { fail(e, 'Could not update'); void refresh(); }

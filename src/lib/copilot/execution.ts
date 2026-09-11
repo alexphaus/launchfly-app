@@ -329,7 +329,7 @@ export async function cancelExecution(profileId: string, executionId: string) {
   await copilotDb().from('copilot_executions').update({ approval_state: 'cancelled' }).eq('id', executionId).eq('profile_id', profileId).in('approval_state', ['needs_approval', 'approved', 'failed']);
 }
 
-/** After a send: a nudge in 3 days and a drafted follow-up the user can approve then. */
+/** After a send: a follow-up drafted for day 3, waiting in the queue. */
 async function scheduleFollowUp(profile: Profile, exec: Execution) {
   if (!exec.opportunity_id) return;
   if (!limitsFor(profile).followUps) return;   // paid feature; the send itself still happens
@@ -340,11 +340,10 @@ async function scheduleFollowUp(profile: Profile, exec: Execution) {
   const followDate = addDays(todayIso(profile.timezone), 3);
   const firstName = profile.name.split(' ')[0];
 
-  await db.from('copilot_actions').insert({
-    profile_id: profile.id, kind: 'nudge', owner: 'you', urgency: 'normal', due_label: 'Follow up',
-    title: `No reply from ${name} yet? A short follow-up on day 3 doubles response rates.`,
-    opportunity_id: opp.id, for_date: followDate,
-  });
+  // The drafted follow-up below IS the nudge. A row saying "no reply from X yet?"
+  // alongside a ready-to-send follow-up to X is the same duplication the model's
+  // nudges had: a sentence about work, next to the work. The draft goes to the
+  // queue, and the queue is the screen for it.
   const { data: action } = await db.from('copilot_actions').insert({
     profile_id: profile.id, kind: 'plan', owner: 'ai', minutes: 3, for_date: followDate, opportunity_id: opp.id,
     title: `${FOLLOW_UP_TITLE_PREFIX}${name}, ready to review`,

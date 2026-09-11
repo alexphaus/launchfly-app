@@ -12,6 +12,7 @@ import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
+import { inMotion } from './motion';
 import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
@@ -535,11 +536,10 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, nudgeRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
-    db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'nudge').eq('status', 'open').gte('for_date', addDays(today, -NUDGE_STALE_DAYS)).order('created_at', { ascending: false }).limit(12).then((r) => (r.data ?? []) as Action[]),
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).in('status', ['new', 'saved']).order('created_at', { ascending: false }).limit(60).then((r) => ((r.data ?? []) as (Opportunity & { expires_at: string | null })[]).filter((o) => !o.expires_at || new Date(o.expires_at) > new Date()).slice(0, 40)),
     ensureSources(profileId),
     db.from('copilot_context_items').select('id', { count: 'exact', head: true }).eq('profile_id', profileId).then((r) => r.count ?? 0),
@@ -587,11 +587,28 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const queueIds = new Set(queue.map((q) => q.id));
   const planWithExec = planRows.filter((a) => !queueIds.has(a.id)).map((a) => ({ ...a, execution: execMap[a.id] ?? null }));
   const shortlist = selectPlan(planWithExec, profile.capacity);
-  const planOverflow = planWithExec.filter((a) => a.status === 'open' && !shortlist.includes(a)).length;
   const oppsWithOutcome = oppRows.map((o) => ({ ...o, last_outcome: outcomeMap[o.id] ?? null }));
 
-  const URGENCY_ORDER = { urgent: 0, normal: 1, info: 2 } as const;
-  const nudges = [...nudgeRows].sort((a, b) => URGENCY_ORDER[a.urgency] - URGENCY_ORDER[b.urgency]).slice(0, 6);
+  // What is already running. Every row is computed from rows the user created:
+  // executions actually sent, the call they said they did, and when each watched
+  // source was last read. Nothing here is asked of a model — which is also why it
+  // replaces "Also today" rather than joining it.
+  const nowTs = new Date();
+  const sentWaiting = pipeline
+    .filter((r) => r.stage === 'sent' && r.execution?.sent_at)
+    .map((r) => ({ name: r.opportunity.contact?.name || r.opportunity.title, sentAt: r.execution!.sent_at! }));
+  // Only a call the user SAID they did, and only before its metric is read back.
+  // A refused call is not in motion, and a verified one belongs to the record.
+  const liveCall = decisionLog.find((d) => d.response === 'did' && d.verify.after == null && !d.verify.verifiedAt) ?? null;
+  const motion = inMotion({
+    sent: sentWaiting,
+    call: liveCall ? { headline: liveCall.headline, metric: liveCall.verify.metric, answeredAt: liveCall.for_date } : null,
+    sources: watchSources.map((w) => ({ label: w.label, lastCheckedAt: w.last_checked_at })),
+    // Moves from last night's watcher run, still open — what the sources found
+    // and the user has not answered yet.
+    finds: movesRead.moves.filter((m) => m.job === 'watch').length,
+    now: nowTs,
+  });
 
   const opportunities = rankOpportunities(oppsWithOutcome, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
 
@@ -635,7 +652,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     callMove,
     decisionLog,
     plan: shortlist,
-    planOverflow,
     queue,
     pipeline,
     billing: {
@@ -651,7 +667,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
       },
       checkoutReady: billingConfigured(),
     },
-    nudges,
+    motion,
     opportunities,
     diagnosis,
     edge,

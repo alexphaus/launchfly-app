@@ -248,6 +248,16 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not delete the account' };
       }
     },
+    async readSourcesNow() {
+      try {
+        const r = await post<{ home: HomeData; found: number }>('/watch/run', {});
+        setHome(r.home);
+        say(r.found > 0
+          ? `${r.found} worth keeping. ${r.found === 1 ? 'It is' : 'They are'} on Today.`
+          : 'Read. Nothing in them worth your morning — tap again for the next two.');
+        return { ok: true, found: r.found };
+      } catch (e) { fail(e, 'Could not read your sources'); return { ok: false }; }
+    },
     async removeWatchSource(id) {
       try {
         const r = await del<{ home: HomeData }>(`/watch/sources?id=${encodeURIComponent(id)}`);

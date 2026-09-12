@@ -42,10 +42,14 @@ export const MAX_FEED_BYTES = 2_000_000;
 export const MAX_ITEM_AGE_DAYS = 21;
 
 /** Which sources are due, oldest check first so nothing starves behind a busy feed. */
-export function dueSources(sources: WatchSource[], now: Date, max = MAX_SOURCES_PER_RUN): WatchSource[] {
+export function dueSources(sources: WatchSource[], now: Date, max = MAX_SOURCES_PER_RUN, force = false): WatchSource[] {
   return sources
     .filter((s) => s.status === 'active' && s.kind === 'feed')
+    // `force` is somebody tapping "Read them now". every_hours exists to stop
+    // the nightly run spending a model call on a feed that has not moved; it has
+    // no business telling a person who is looking at the screen to wait.
     .filter((s) => {
+      if (force) return true;
       if (!s.last_checked_at) return true;
       const since = now.getTime() - Date.parse(s.last_checked_at);
       // A little slack, or a 24h source checked at 21:00:05 waits until tomorrow
@@ -121,7 +125,7 @@ export const watcherJob: Job = {
   },
 
   async run(ctx: JobContext): Promise<MoveDraft[]> {
-    const sources = dueSources(await loadWatchSources(ctx.profile.id), ctx.now);
+    const sources = dueSources(await loadWatchSources(ctx.profile.id), ctx.now, ctx.maxSources ?? MAX_SOURCES_PER_RUN, ctx.force ?? false);
     if (!sources.length) return [];
 
     const { goals, metrics } = await ctx.sense();

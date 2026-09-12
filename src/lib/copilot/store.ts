@@ -3,7 +3,7 @@
 // has already been authenticated by the session cookie.
 
 import { getProfile, logEvent, setActionStatus, touchProfile } from './base';
-import { selectReplies, selectSentExamples, type PackReply, type PackSentExample } from './conversations';
+import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, trimMessage, type PackReply, type PackSentExample } from './conversations';
 import { addDays, copilotDb, todayIso } from './db';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
@@ -13,8 +13,9 @@ import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
 import { inMotion } from './motion';
+import type { SentMessage } from './silence';
 import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
-import type { Move, WatchSource } from './types';
+import type { JobsRunSummary, Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
@@ -536,7 +537,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -566,6 +567,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadMoves(profileId),
     availableJobs(profile),
     loadWatchSources(profileId),
+    loadLastJobsRun(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -683,7 +685,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     movesBlocked: movesRead.moves.length ? null
       : movesRead.tableMissing ? 'migration'
       : jobKeys.length === 0 ? 'no_sensor'
+      // Sensors are connected and a run has happened: the list is empty because
+      // nothing new was found, which is a report rather than the silence it used
+      // to render. Still null before the first run, when there is nothing to say.
+      : jobsRun ? 'quiet'
       : null,
+    jobsRun,
     needsBrief: !insight || insight.for_date !== today,
     // Configured to look, and nothing found. Deliberately not "has supply ever
     // run": an account whose matches were all dismissed is in the same
@@ -938,4 +945,81 @@ export async function deleteAccount(profileId: string): Promise<void> {
   }
   const { error } = await db.from('copilot_profiles').delete().eq('id', profileId);
   if (error) throw error;
+}
+
+/**
+ * What was sent, whether it was answered, and who it went to.
+ *
+ * Close to loadConversations but not the same read, and deliberately so: that
+ * one feeds a prompt and is capped at three per bucket to protect a token
+ * budget. This one feeds a Move that prints the messages, so it needs the true
+ * silent COUNT — "3 of the 3 I am showing you" and "3 of 19" are different
+ * sentences — and it needs the business name, because whether an opener used it
+ * is the most checkable difference between one that worked and one that did not.
+ */
+export async function loadSilence(profileId: string, now = new Date()): Promise<SentMessage[]> {
+  const db = copilotDb();
+  const { data: rows, error } = await db.from('copilot_executions')
+    .select('id, body, sent_at, opportunity_id')
+    .eq('profile_id', profileId).eq('approval_state', 'sent')
+    .order('sent_at', { ascending: false }).limit(60);
+  if (error || !rows?.length) return [];
+  const sent = rows as Array<{ id: string; body: string | null; sent_at: string | null; opportunity_id: string | null }>;
+
+  const oppIds = [...new Set(sent.map((r) => r.opportunity_id).filter((id): id is string => !!id))];
+  const [titles, repliedIds] = await Promise.all([
+    (async () => {
+      const map = new Map<string, string>();
+      if (!oppIds.length) return map;
+      const { data } = await db.from('copilot_opportunities').select('id, title, contact').in('id', oppIds);
+      for (const o of (data ?? []) as Array<{ id: string; title: string; contact: Opportunity['contact'] }>) {
+        map.set(o.id, o.contact?.name || o.title);
+      }
+      return map;
+    })(),
+    (async () => {
+      const { data } = await db.from('copilot_outcomes').select('execution_id')
+        .eq('profile_id', profileId).eq('kind', 'reply').in('execution_id', sent.map((r) => r.id));
+      return new Set(((data ?? []) as Array<{ execution_id: string | null }>).map((r) => r.execution_id).filter((id): id is string => !!id));
+    })(),
+  ]);
+
+  // Silence is only silence after NO_REPLY_AFTER_DAYS, the same wait
+  // gradeDecisions uses: a message sent yesterday and not yet answered is not
+  // evidence of anything, and counting it would make every busy week look broken.
+  const silenceBefore = now.getTime() - NO_REPLY_AFTER_DAYS * 86_400_000;
+  return sent
+    .filter((r): r is typeof r & { sent_at: string } => !!r.sent_at && !!r.body?.trim())
+    .filter((r) => repliedIds.has(r.id) || new Date(r.sent_at).getTime() < silenceBefore)
+    .map((r) => ({
+      text: trimMessage(r.body, SENT_TEXT_MAX),
+      business: r.opportunity_id ? titles.get(r.opportunity_id) ?? null : null,
+      sentAt: r.sent_at,
+      replied: repliedIds.has(r.id),
+    }));
+}
+
+/**
+ * What the last jobs run actually did, for the empty state.
+ *
+ * Written on every run by runJobs, productive or not. Nothing here is load
+ * bearing — a missing or unreadable row degrades to no summary and the screen
+ * falls back to saying less, never to saying something wrong.
+ */
+export async function loadLastJobsRun(profileId: string): Promise<JobsRunSummary | null> {
+  const { data, error } = await copilotDb()
+    .from('copilot_events')
+    .select('payload, created_at')
+    .eq('profile_id', profileId).eq('event_type', 'jobs_ran')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (error || !data?.payload) return null;
+  const pl = data.payload as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    at: data.created_at as string,
+    ran: n(pl.ran),
+    produced: n(pl.produced),
+    written: n(pl.written),
+    quiet: Array.isArray(pl.quiet) ? (pl.quiet as unknown[]).filter((k): k is string => typeof k === 'string') : [],
+  };
 }

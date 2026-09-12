@@ -14,6 +14,7 @@
 
 import type { GrowthEdge } from '../diagnose';
 import type { MoveDraft } from '../moves';
+import { isoWeekKey } from '../diagnose';
 import type { Job, JobContext } from './types';
 
 /**
@@ -27,14 +28,17 @@ export function tutorialSearch(capability: string): string {
 }
 
 /** One edge becomes one Move. Pure, so both branches are under test. */
-export function capabilityMove(edge: GrowthEdge): MoveDraft {
+export function capabilityMove(edge: GrowthEdge, week: string): MoveDraft {
   // A dead topic is the expensive one: repeating something that has already
   // failed costs the weeks you spend on it plus the call you did not take.
   const stop = edge.source === 'decisions';
   return {
     job: capabilityGapJob.key,
     kind: stop ? 'avoid' : 'learn',
-    external_id: `${stop ? 'stop' : 'edge'}:${edge.capability.toLowerCase()}`,
+    // Keyed by week as well as capability: the same gap next week is a new
+    // card, because it is still the gap. Binned twice running and runJobs
+    // stops offering it.
+    external_id: `${stop ? 'stop' : 'edge'}:${edge.capability.toLowerCase()}:${week}`,
     headline: stop
       ? `Stop taking calls about ${edge.capability} — the number has never moved`
       : `Get better at ${edge.capability}`,
@@ -65,6 +69,7 @@ export function capabilityMove(edge: GrowthEdge): MoveDraft {
 export const capabilityGapJob: Job = {
   key: 'capability_gap',
   label: 'What to get better at',
+  standing: true,
 
   // The sensor is the funnel itself, which exists from the moment onboarding
   // does — there is nothing to connect. Gated on onboarding rather than hardwired
@@ -77,6 +82,6 @@ export const capabilityGapJob: Job = {
 
   async run(ctx: JobContext): Promise<MoveDraft[]> {
     const { edge } = await ctx.sense();
-    return edge ? [capabilityMove(edge)] : [];
+    return edge ? [capabilityMove(edge, isoWeekKey(ctx.now))] : [];
   },
 };

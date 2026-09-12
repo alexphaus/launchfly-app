@@ -172,7 +172,14 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         // read as a broken one. An empty day still renders nothing at all —
         // this only speaks when something is actually missing.
         <div className="cp-empty" style={{ marginBottom: 14 }}>
-          {home.movesBlocked === 'migration' ? (
+          {home.movesBlocked === 'quiet' ? (
+            <>
+              <b>Nothing new last night</b>
+              {home.jobsRun
+                ? `${home.jobsRun.ran} sensor${home.jobsRun.ran === 1 ? '' : 's'} looked${home.jobsRun.produced > home.jobsRun.written ? `, and what they found you have already answered` : ''}. ${home.watchSources.length ? 'Your sources are the part that brings in something from outside — a quiet one is worth replacing.' : 'Nothing is being watched yet, so nothing can arrive from outside.'}`
+                : 'The sensors looked and found nothing new.'}
+            </>
+          ) : home.movesBlocked === 'migration' ? (
             <>
               <b>Moves are not switched on yet</b>
               The copilot_moves table is missing. Run the migration

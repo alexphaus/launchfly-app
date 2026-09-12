@@ -1520,9 +1520,13 @@ async function jobSensors() {
   //
   // capability_gap is always available: every account has a funnel from the
   // moment it has a match, and growthEdge returning null is a quiet day rather
-  // than a missing sensor.
-  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'goal_gap', 'capability_gap']);
-  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['goal_gap', 'capability_gap']);
+  // than a missing sensor. silence is the same shape — an account that has sent
+  // nothing has no silence, and that is a quiet day, not an unplugged sensor.
+  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'goal_gap', 'silence', 'capability_gap']);
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['goal_gap', 'silence', 'capability_gap']);
+  // Both gate on onboarding, so a half-created profile reports no sensors at all
+  // rather than two that always answer.
+  assert.ok(!(await availableJobs(profile({ onboarding_complete: false }))).includes('silence'));
   // Outreach is a Job and reports its own sensor like any other: a blank offer
   // cannot have produced drafts, so there is no queue to send.
   assert.ok(!(await availableJobs(profile())).includes('send_queue'), 'nothing to send from a blank offer');
@@ -1590,10 +1594,15 @@ async function leverage() {
   // --- opening gap: an observed condition, and where the line is allowed to go
   {
     const offer = { sells: 'WhatsApp automations', problem: 'enquiries arrive after hours' };
-    const m = openingMove({ offer }, term());
+    const m = openingMove({ offer }, term(), '2026-W37');
     assert.ok(m, 'an opening with a line to add is a Move');
     assert.equal(m.kind, 'decide');
-    assert.equal(m.external_id, 'opening:online booking', 'once per term, ever — an opening still open tomorrow is the same one');
+    // Keyed by week, not once ever. The old key meant the single most valuable
+    // finding in the app was shown one morning and never again — two or three
+    // nights in, the only job still producing daily was the send queue, and
+    // Moves rendered empty for weeks.
+    assert.equal(m.external_id, 'opening:online booking:2026-W37');
+    assert.notEqual(openingMove({ offer }, term(), '2026-W38')!.external_id, m.external_id, 'still open next week is a new card');
     assert.ok(m.why[0].includes('7'), 'the evidence cites the count, not an adjective');
     assert.ok(m.artifact.value.includes('enquiries arrive after hours, online booking'), 'the edit arrives written');
     assert.ok(m.artifact.value.includes('spas'), 'and names the segment to drop if the answer is no');
@@ -2469,3 +2478,182 @@ async function motion() {
 }
 
 motion().catch((e) => { console.error(e); process.exit(1); });
+
+// --- the openers that got nothing back
+//
+// "Note why the 3 sent openers got silence" was a row in the old "Also today"
+// list: a real instruction with nothing under it, telling somebody to go and
+// think about three messages the app was already holding. This is that row
+// rebuilt to the standard everything else is held to — and the thing it must
+// never do is say WHY somebody did not reply.
+import { MAX_SHOWN, MIN_PER_SIDE, MIN_SILENT, readSilence, silenceArtifact, traitsOf } from '../../src/lib/copilot/silence';
+import type { SentMessage } from '../../src/lib/copilot/silence';
+
+async function silence() {
+  const msg = (over: Partial<SentMessage>): SentMessage =>
+    ({ text: 'Hi there, I build automations.', business: 'Sea Nymph Resort', sentAt: '2026-09-01T09:00:00Z', replied: false, ...over });
+
+  // 1. TRAITS ARE FACTS, NOT OPINIONS. Each one is checkable against the text
+  //    printed under it — "41 words" is a fact, "too long" is a judgement.
+  const t = traitsOf(msg({ text: 'Hi Sea Nymph Resort, saw you have no booking link. Worth a look? https://x.dev' }));
+  assert.equal(t.asks, true);
+  assert.equal(t.namesThem, true, 'the business name appears in the text');
+  assert.equal(t.hasLink, true);
+  assert.equal(t.words, 14);
+  const bare = traitsOf(msg({ text: 'Hi there, I build automations for resorts.' }));
+  assert.equal(bare.asks, false);
+  assert.equal(bare.namesThem, false, 'a generic opening names nobody');
+  assert.equal(bare.hasLink, false);
+  // A business whose name is a regex metacharacter must not blow up the match.
+  assert.doesNotThrow(() => traitsOf(msg({ business: 'A+ (Plumbing) [Ltd]', text: 'Hi A+' })));
+  assert.equal(traitsOf(msg({ business: null, text: 'Hi' })).namesThem, false, 'no name on file is not a match');
+  // Two-letter names are skipped rather than matching half the alphabet.
+  assert.equal(traitsOf(msg({ business: 'Jo', text: 'Joinery is my job' })).namesThem, false);
+  assert.equal(traitsOf(msg({ text: '   ' })).words, 0, 'blank is zero words, never NaN');
+
+  // 2. UNDER THE FLOOR, NO CLAIM. Three answered and three silent is the least
+  //    that separates a habit from a coincidence — the same rule the agent
+  //    prompt already states for this exact comparison.
+  const answered = Array.from({ length: 3 }, (_, i) =>
+    msg({ replied: true, text: `Hi Sea Nymph Resort, noticed something specific. Worth ten minutes?`, sentAt: `2026-09-0${i + 1}T09:00:00Z` }));
+  const ignored = Array.from({ length: 4 }, (_, i) =>
+    msg({ replied: false, text: 'Hi there, I build WhatsApp automations for resorts and would love to work together.', sentAt: `2026-09-0${i + 1}T09:00:00Z` }));
+
+  const thin = readSilence([...answered.slice(0, 2), ...ignored]);
+  assert.equal(thin.comparable, false, `${MIN_PER_SIDE - 1} answered is not enough to compare`);
+  assert.deepEqual(thin.differences, [], 'and nothing is claimed from it');
+  assert.equal(thin.silent.length, 4);
+
+  // 3. WITH BOTH SIDES, ONLY DIFFERENCES THAT ARE ACTUALLY THERE.
+  const full = readSilence([...answered, ...ignored]);
+  assert.equal(full.comparable, true);
+  assert.ok(full.differences.some((d) => /end with a question/.test(d)), 'a real divergence is named');
+  assert.ok(full.differences.some((d) => /name the business/.test(d)));
+  // Neither group has a link, so nothing is said about links. Printing a trait
+  // both sides share is how a "pattern" gets read into noise.
+  assert.ok(!full.differences.some((d) => /link/.test(d)), 'a trait both sides share is not a difference');
+
+  // Same habit on both sides produces no finding at all, however many messages.
+  const same = readSilence([
+    ...Array.from({ length: 3 }, () => msg({ replied: true, text: 'Hi Sea Nymph Resort, worth a chat?' })),
+    ...Array.from({ length: 3 }, () => msg({ replied: false, text: 'Hi Sea Nymph Resort, worth a chat?' })),
+  ]);
+  assert.deepEqual(same.differences, [], 'identical messages differ in nothing');
+
+  // 4. NOTHING EVER ANSWERED — the live account's actual state. There is no
+  //    version that worked, and saying so is the honest answer rather than
+  //    inventing a rule from one side.
+  const never = readSilence(ignored);
+  assert.equal(never.replied.length, 0);
+  assert.equal(never.comparable, false);
+  const neverArt = silenceArtifact(never);
+  assert.match(neverArt, /no version that worked/);
+  assert.doesNotMatch(neverArt, /ANSWERED/, 'no empty "answered" heading over nothing');
+
+  // 5. THE ARTIFACT IS THE MESSAGES. This is the whole point: the old row told
+  //    somebody to go and think about messages it was already holding.
+  const art = silenceArtifact(full);
+  assert.match(art, /GOT NOTHING BACK \(4\)/, 'the true count, not the number shown');
+  assert.match(art, /ANSWERED \(3\)/);
+  assert.match(art, /Hi there, I build WhatsApp automations/, 'the message text itself is in the artifact');
+  assert.match(art, /words · /, 'with the checkable facts above it');
+  assert.match(art, /WHAT DIFFERS/);
+  // Capped: more than three a side is a transcript, not a pattern.
+  const many = readSilence(Array.from({ length: 12 }, (_, i) => msg({ text: `Message number ${i}`, replied: false })));
+  assert.equal((silenceArtifact(many).match(/Message number/g) ?? []).length, MAX_SHOWN);
+  assert.match(silenceArtifact(many), /GOT NOTHING BACK \(12\)/, 'the count is still the truth');
+
+  // 6. IT NEVER SAYS WHY. Nothing here knows why a stranger did not reply, and a
+  //    confident sentence about it is exactly the invention invariant 2 stops.
+  for (const text of [art, neverArt, ...full.differences]) {
+    assert.doesNotMatch(text, /because they|they were not interested|they did not care|too pushy|spam/i);
+  }
+  assert.ok(MIN_SILENT >= 3, 'a card about two messages is homework');
+
+  console.log('copilot-core: silence checks passed');
+}
+
+silence().catch((e) => { console.error(e); process.exit(1); });
+
+// --- a quiet night is a report, not silence
+//
+// The cron ran, succeeded, took four minutes — and Moves rendered empty. Not a
+// bug in the cron: every standing-state job keyed itself once and never fired
+// again (`runway:${month}`, `edge:${capability}`, `opening:${term}`), so two or
+// three nights in the only daily producer left was the send queue, which is
+// already on the screen twice. And an empty list rendered nothing at all, so a
+// working build and a broken one were pixel-identical.
+import { MAX_RESTATE_DISMISSALS, dismissedStreak } from '../../src/lib/copilot/moves';
+import { runwayMove } from '../../src/lib/copilot/jobs/runway-guard';
+import { capabilityMove } from '../../src/lib/copilot/jobs/capability-gap';
+import { dueSources as due } from '../../src/lib/copilot/jobs/watcher';
+import { JOBS as ALL_JOBS } from '../../src/lib/copilot/jobs';
+import type { MoveAnswerEvent as AnswerEvent } from '../../src/lib/copilot/moves';
+import type { WatchSource as WSource } from '../../src/lib/copilot/types';
+
+async function refill() {
+  // 1. STANDING STATES COME BACK. The same gap next week is a new card, because
+  //    it is still the gap.
+  const finance = { cash: 1190, monthly_burn: 350, currency: '$' };
+  const m = { sent: 9, replies: 2, won: 1, won_amount: 400, window_days: 30, lost: 0, meetings: 6,
+    reply_rate: 0.22, awaiting_approval: 51, runway_months: 3.4,
+    pipeline: { new: 0, saved: 0, sourced: 71, inferred: 0 } };
+  const w37 = runwayMove({ finance }, m as never, '2026-W37');
+  const w38 = runwayMove({ finance }, m as never, '2026-W38');
+  assert.ok(w37 && w38);
+  assert.notEqual(w37.external_id, w38.external_id, 'a standing money problem restates weekly');
+  assert.match(w37.external_id, /^runway:2026-W37$/);
+
+  const edge = { capability: 'Naming the opening in the first line', because: ['x'], experiment: 'y', source: 'funnel' as const };
+  assert.notEqual(capabilityMove(edge, '2026-W37').external_id, capabilityMove(edge, '2026-W38').external_id);
+
+  // Every job that describes a standing state says so, and every one that does
+  // not is event-driven — the source row already decides when there is news.
+  const standing = ALL_JOBS.filter((j) => j.standing).map((j) => j.key).sort();
+  assert.deepEqual(standing, ['capability_gap', 'opening_gap', 'runway_guard']);
+  assert.ok(!ALL_JOBS.find((j) => j.key === 'send_queue')?.standing, 'a daily queue is not a standing state');
+  assert.ok(!ALL_JOBS.find((j) => j.key === 'watch')?.standing, 'a feed item is an event');
+
+  // 2. BUT NOT FOREVER. Binned twice running and it stops — restating something
+  //    already answered is the app not listening, the same failure REFUSAL_DECAY
+  //    stops one level up.
+  const ev = (job: string, status: string): AnswerEvent => ({ event_type: 'move_answered', payload: { job, status, kind: 'decide' } });
+  assert.equal(dismissedStreak([], 'runway_guard'), 0, 'no history is no streak');
+  assert.equal(dismissedStreak([ev('runway_guard', 'dismissed')], 'runway_guard'), 1);
+  assert.equal(dismissedStreak([ev('runway_guard', 'dismissed'), ev('runway_guard', 'dismissed')], 'runway_guard'), MAX_RESTATE_DISMISSALS);
+  // A 'done' ends it: acting on one and binning the next is not a pattern.
+  assert.equal(dismissedStreak([ev('runway_guard', 'done'), ev('runway_guard', 'dismissed')], 'runway_guard'), 0,
+    'newest first — a recent done clears the streak');
+  // Another job's dismissals are not this job's.
+  assert.equal(dismissedStreak([ev('opening_gap', 'dismissed'), ev('opening_gap', 'dismissed')], 'runway_guard'), 0);
+  // Events between them do not break the streak; a different status does.
+  assert.equal(dismissedStreak([ev('runway_guard', 'dismissed'), ev('watch', 'done'), ev('runway_guard', 'dismissed')], 'runway_guard'), 2);
+
+  // 3. "READ THEM NOW" IGNORES every_hours. That rule stops the nightly run
+  //    spending a model call on a feed that has not moved; it has no business
+  //    telling somebody looking at the screen to wait.
+  const now = new Date('2026-09-12T10:00:00Z');
+  const src = (o: Partial<WSource>): WSource => ({
+    id: 'a', kind: 'feed', url: 'https://x/f', label: 'x', intent: null, every_hours: 24,
+    status: 'active', seen_ids: [], last_checked_at: '2026-09-12T03:00:00Z', last_error: null,
+    created_at: '2026-09-01T00:00:00Z', ...o,
+  });
+  assert.equal(due([src({})], now).length, 0, 'read seven hours ago is not due on the nightly pass');
+  assert.equal(due([src({})], now, 6, true).length, 1, 'and is read anyway when somebody asks');
+  // force still respects what force is not for: a paused source stays paused,
+  // and a page is not a feed.
+  assert.equal(due([src({ status: 'paused' })], now, 6, true).length, 0);
+  assert.equal(due([src({ kind: 'page' })], now, 6, true).length, 0);
+  // Two per tap, oldest first, so tapping again walks the list instead of
+  // re-reading the same feed.
+  const many = due([
+    src({ id: 'c', last_checked_at: '2026-09-12T09:00:00Z' }),
+    src({ id: 'a', last_checked_at: '2026-09-10T03:00:00Z' }),
+    src({ id: 'b', last_checked_at: '2026-09-11T03:00:00Z' }),
+  ], now, 2, true);
+  assert.deepEqual(many.map((s) => s.id), ['a', 'b']);
+
+  console.log('copilot-core: refill checks passed');
+}
+
+refill().catch((e) => { console.error(e); process.exit(1); });

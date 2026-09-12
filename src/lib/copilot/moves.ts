@@ -245,3 +245,30 @@ export function keepSummary(rates: KeepRates): { kept: MoveKind[]; binned: MoveK
   const order = (a: MoveKind, b: MoveKind) => KIND_ORDER[a] - KIND_ORDER[b];
   return { kept: kept.sort(order), binned: binned.sort(order) };
 }
+
+/**
+ * How many of this job's most recent answers, in a row, were dismissals.
+ *
+ * A standing state — runway under the line, the top opening still unnamed — is
+ * true until it is fixed, so restating it weekly is right. Restating one the
+ * user has now binned twice running is the app not listening, which is the same
+ * failure REFUSAL_DECAY exists to stop one level up.
+ *
+ * A streak rather than a rate on purpose: a rate needs MIN_MOVE_SAMPLE answers
+ * before it has any opinion at all, and four weeks of a card somebody keeps
+ * throwing away is three weeks too many.
+ */
+export function dismissedStreak(events: MoveAnswerEvent[], job: string): number {
+  let streak = 0;
+  // Newest first, as loadMoveAnswers returns them.
+  for (const e of events) {
+    if (e.event_type !== 'move_answered') continue;
+    if (e.payload?.job !== job) continue;
+    if (e.payload?.status !== 'dismissed') break;   // a 'done' ends the streak
+    streak += 1;
+  }
+  return streak;
+}
+
+/** Binned this many times running and a standing state stops restating itself. */
+export const MAX_RESTATE_DISMISSALS = 2;

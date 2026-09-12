@@ -22,6 +22,7 @@ import type { Opening } from '../diagnose';
 import { addOpeningToOffer } from '../offer';
 import type { MoveDraft } from '../moves';
 import type { Offer, Profile } from '../types';
+import { isoWeekKey } from '../diagnose';
 import type { Job, JobContext } from './types';
 
 /**
@@ -48,7 +49,7 @@ const TREND_NOTE: Record<Opening['trend'], string> = {
  * there is no line to add and the Move would be a chart with advice attached —
  * which is what Signals is for.
  */
-export function openingMove(profile: Pick<Profile, 'offer'>, term: Opening): MoveDraft | null {
+export function openingMove(profile: Pick<Profile, 'offer'>, term: Opening, week: string): MoveDraft | null {
   const next: Offer = addOpeningToOffer(profile.offer, term.term);
   const problem = next.problem?.trim();
   if (!problem || problem === profile.offer?.problem?.trim()) return null;
@@ -58,7 +59,10 @@ export function openingMove(profile: Pick<Profile, 'offer'>, term: Opening): Mov
     job: openingGapJob.key,
     kind: 'decide',
     // Once per term, ever. An opening still open tomorrow is the same opening.
-    external_id: `opening:${term.term.toLowerCase()}`,
+    // Same term next week is a new card while the offer still does not name
+    // it. Once-ever meant the single most valuable finding in the app was
+    // shown one morning and never again.
+    external_id: `opening:${term.term.toLowerCase()}:${week}`,
     headline: `${term.count} of your matches have ${term.term} in common — nothing you send says so`,
     why: [
       `${term.count} ${term.count === 1 ? 'business' : 'businesses'} you matched show ${term.term} on their own listing. Your openers never mention it.`,
@@ -82,6 +86,7 @@ export function openingMove(profile: Pick<Profile, 'offer'>, term: Opening): Mov
 
 export const openingGapJob: Job = {
   key: 'opening_gap',
+  standing: true,
   label: 'What your matches have in common',
 
   // The sensor is targeting: without segments there are no matches to read an
@@ -94,9 +99,10 @@ export const openingGapJob: Job = {
 
   async run(ctx: JobContext): Promise<MoveDraft[]> {
     const { diagnosis } = await ctx.sense();
+    const week = isoWeekKey(ctx.now);
     return diagnosis.openings
       .filter((t) => t.count >= MIN_GAP_BUSINESSES)
-      .map((t) => openingMove(ctx.profile, t))
+      .map((t) => openingMove(ctx.profile, t, week))
       .filter((m): m is MoveDraft => !!m)
       .slice(0, MAX_GAP_MOVES);
   },

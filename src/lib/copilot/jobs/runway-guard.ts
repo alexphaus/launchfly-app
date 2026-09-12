@@ -12,6 +12,7 @@
 import { computeRunwayMonths } from '../metrics';
 import type { MoveDraft } from '../moves';
 import type { Finance, Metrics, Profile } from '../types';
+import { isoWeekKey } from '../diagnose';
 import type { Job, JobContext } from './types';
 
 /** Above this, runway is a number to glance at rather than a decision to make. */
@@ -72,8 +73,8 @@ export function coverPlan(m: Metrics, burn: number, currency?: string | null): s
   ].filter(Boolean).join(' ');
 }
 
-/** One month, one decision. Pure, so the arithmetic is under test. */
-export function runwayMove(profile: Pick<Profile, 'finance'>, m: Metrics, month: string): MoveDraft | null {
+/** One week, one decision. Pure, so the arithmetic is under test. */
+export function runwayMove(profile: Pick<Profile, 'finance'>, m: Metrics, week: string): MoveDraft | null {
   const f = profile.finance;
   if (!hasFinance(f)) return null;
   const months = computeRunwayMonths(f);
@@ -85,9 +86,11 @@ export function runwayMove(profile: Pick<Profile, 'finance'>, m: Metrics, month:
   return {
     job: runwayGuardJob.key,
     kind: 'decide',
-    // Once a month. A standing money problem restated every morning is noise;
+    // A standing money problem restated every morning is noise;
     // restated never is how it arrives as a surprise.
-    external_id: `runway:${month}`,
+    // Weekly, not monthly. Runway falling below the line is true every day
+    // until it is not, and a card that fires once in January is not a guard.
+    external_id: `runway:${week}`,
     headline: months <= 1
       ? `Under a month of runway — decide what changes this week`
       : `${months} months of runway — decide now, not at two`,
@@ -124,6 +127,7 @@ export function runwayMove(profile: Pick<Profile, 'finance'>, m: Metrics, month:
 }
 
 export const runwayGuardJob: Job = {
+  standing: true,
   key: 'runway_guard',
   label: 'Runway',
 
@@ -136,7 +140,7 @@ export const runwayGuardJob: Job = {
 
   async run(ctx: JobContext): Promise<MoveDraft[]> {
     const { metrics } = await ctx.sense();
-    const move = runwayMove(ctx.profile, metrics, ctx.today.slice(0, 7));
+    const move = runwayMove(ctx.profile, metrics, isoWeekKey(ctx.now));
     return move ? [move] : [];
   },
 };

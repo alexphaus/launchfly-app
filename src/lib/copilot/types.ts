@@ -5,6 +5,8 @@ import type { PackReply, PackSentExample } from './conversations';
 import type { MoveArtifact, MoveKind } from './moves';
 import type { Stake } from './stake';
 import type { MotionRow } from './motion';
+import type { CaptureAsk, OpenedDraft, UnresolvedReply } from './capture';
+import type { Forecast, Obligation } from './obligations';
 import type { WatchSourceKind } from './watch/catalogue';
 import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
@@ -287,6 +289,24 @@ export interface HomeData {
    * Replaces `nudges` and the plan shortlist — see motion.ts.
    */
   motion: MotionRow[];
+  /**
+   * The one thing the app saw and has not been told the end of — an opened
+   * message, or a reply with no ending. Null on a clean ledger, and then nothing
+   * is rendered. See capture.ts for why this matters more than it looks.
+   */
+  capture: CaptureAsk | null;
+  /** Drafts opened and not yet confirmed, for the batch answer. */
+  opened: OpenedDraft[];
+  /** Replies old enough to have an ending nobody recorded. */
+  unresolved: UnresolvedReply[];
+  /** Money owed either way, open rows only. */
+  obligations: Obligation[];
+  /**
+   * Runway as a forecast rather than a figure. Null without a burn on file.
+   * `changesTheAnswer` is false when the obligations decorate the number rather
+   * than move it, and the UI stays quiet then.
+   */
+  forecast: Forecast | null;
   opportunities: Opportunity[];
   /** Computed from real rows. Replaces the old invented skill levels. */
   diagnosis: Diagnosis;

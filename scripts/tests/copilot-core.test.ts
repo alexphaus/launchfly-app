@@ -1522,11 +1522,14 @@ async function jobSensors() {
   // moment it has a match, and growthEdge returning null is a quiet day rather
   // than a missing sensor. silence is the same shape — an account that has sent
   // nothing has no silence, and that is a quiet day, not an unplugged sensor.
-  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'goal_gap', 'silence', 'capability_gap']);
-  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['goal_gap', 'silence', 'capability_gap']);
+  // obligations joins them: the rows are typed, so there is nothing to connect,
+  // and whether any are open is a result rather than a sensor.
+  assert.deepEqual(await availableJobs(profile()), ['client_delivery', 'repeat_customer', 'obligations', 'goal_gap', 'silence', 'capability_gap']);
+  assert.deepEqual(await availableJobs(profile({ linked_business_id: null })), ['obligations', 'goal_gap', 'silence', 'capability_gap']);
   // Both gate on onboarding, so a half-created profile reports no sensors at all
   // rather than two that always answer.
   assert.ok(!(await availableJobs(profile({ onboarding_complete: false }))).includes('silence'));
+  assert.ok(!(await availableJobs(profile({ onboarding_complete: false }))).includes('obligations'));
   // Outreach is a Job and reports its own sensor like any other: a blank offer
   // cannot have produced drafts, so there is no queue to send.
   assert.ok(!(await availableJobs(profile())).includes('send_queue'), 'nothing to send from a blank offer');
@@ -2610,7 +2613,7 @@ async function refill() {
   // Every job that describes a standing state says so, and every one that does
   // not is event-driven — the source row already decides when there is news.
   const standing = ALL_JOBS.filter((j) => j.standing).map((j) => j.key).sort();
-  assert.deepEqual(standing, ['capability_gap', 'opening_gap', 'runway_guard']);
+  assert.deepEqual(standing, ['capability_gap', 'obligations', 'opening_gap', 'runway_guard']);
   assert.ok(!ALL_JOBS.find((j) => j.key === 'send_queue')?.standing, 'a daily queue is not a standing state');
   assert.ok(!ALL_JOBS.find((j) => j.key === 'watch')?.standing, 'a feed item is an event');
 
@@ -2708,7 +2711,7 @@ async function watcherReality() {
   //    each quoting a different count of the same pile — and restating standing
   //    states weekly would have done the same to runway and the opening gap.
   const supersedes = REGISTRY.filter((j) => j.supersedes || j.standing).map((j) => j.key).sort();
-  assert.deepEqual(supersedes, ['capability_gap', 'opening_gap', 'runway_guard', 'send_queue']);
+  assert.deepEqual(supersedes, ['capability_gap', 'obligations', 'opening_gap', 'runway_guard', 'send_queue']);
   // An event-driven job must NOT supersede: two different sales, two Moves.
   for (const key of ['client_delivery', 'repeat_customer', 'watch', 'silence', 'goal_gap']) {
     const j = REGISTRY.find((x) => x.key === key);
@@ -2719,3 +2722,108 @@ async function watcherReality() {
 }
 
 watcherReality().catch((e) => { console.error(e); process.exit(1); });
+
+// --- what the app saw, and money with a date on it
+//
+// Two holes in the ledger, both measured on the live account: 9 sent in 30 days
+// against 51 drafts, 2 replies and 6 MEETINGS — nine sends do not produce six
+// meetings — and won_amount = $1 against those same six. The app grades its own
+// calls against two numbers nobody is feeding it.
+import { MAX_CAPTURE_ROWS, OPENED_SETTLE_MINUTES, captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from '../../src/lib/copilot/capture';
+import { HORIZON_DAYS, daysUntil, dueSoon, forecast, overdueIn } from '../../src/lib/copilot/obligations';
+import { collectMove } from '../../src/lib/copilot/jobs/obligations';
+import { scoreMove as score } from '../../src/lib/copilot/stake';
+import type { Obligation } from '../../src/lib/copilot/obligations';
+
+async function ledger() {
+  const now = new Date('2026-09-12T12:00:00Z');
+
+  // 1. OPENING IS NOT SENDING. Nothing here converts one into the other — the
+  //    app observed a tap, not a message going out. It produces a question.
+  const draft = (o: Partial<{ id: string; who: string; openedAt: string; channel: string; sent: boolean }>) =>
+    ({ id: 'a', who: 'Norj', openedAt: '2026-09-12T09:00:00Z', channel: 'whatsapp', sent: false, ...o });
+  assert.equal(openedAwaitingAnswer([draft({})], now).length, 1);
+  assert.equal(openedAwaitingAnswer([draft({ sent: true })], now).length, 0, 'already confirmed is not asked about');
+  // Just opened: still being typed. Asking now is the nagging this replaces.
+  assert.equal(openedAwaitingAnswer([draft({ openedAt: '2026-09-12T11:58:00Z' })], now).length, 0);
+  assert.ok(OPENED_SETTLE_MINUTES >= 5);
+  // But it never ages out — a tap from last week is still a hole in the ledger.
+  assert.equal(openedAwaitingAnswer([draft({ openedAt: '2026-09-01T09:00:00Z' })], now).length, 1);
+  // Clock skew is not a message from tomorrow.
+  assert.equal(openedAwaitingAnswer([draft({ openedAt: '2026-09-20T09:00:00Z' })], now).length, 0);
+  // Oldest first, and bounded: one card, not a to-do list.
+  const many = openedAwaitingAnswer(
+    Array.from({ length: 12 }, (_, i) => draft({ id: `d${i}`, openedAt: `2026-09-0${(i % 9) + 1}T09:00:00Z` })), now);
+  assert.equal(many.length, MAX_CAPTURE_ROWS);
+  assert.ok(many[0].openedAt <= many[1].openedAt);
+
+  // 2. A REPLY WITH NO ENDING. won_amount = $1 against six meetings is the
+  //    outcome half of the same problem.
+  const rep = (o: Partial<{ opportunityId: string; who: string; repliedAt: string; resolved: boolean }>) =>
+    ({ opportunityId: 'o1', who: 'Andrea', repliedAt: '2026-09-01T09:00:00Z', resolved: false, ...o });
+  assert.equal(repliesAwaitingOutcome([rep({})], now).length, 1);
+  assert.equal(repliesAwaitingOutcome([rep({ resolved: true })], now).length, 0, 'a won or lost closes it');
+  assert.equal(repliesAwaitingOutcome([rep({ repliedAt: '2026-09-11T09:00:00Z' })], now).length, 0, 'yesterday is not stale');
+
+  // 3. SENDS LEAD. An unconfirmed send corrupts `sent`, which every other number
+  //    is computed against — including the reply rate that decides whether the
+  //    opener works. An unlogged outcome corrupts one goal.
+  const both = captureAsk({ opened: [draft({})], replies: [rep({})], sentInWindow: 9, windowDays: 30 });
+  assert.equal(both?.kind, 'opened');
+  assert.match(both!.because, /9 sent in 30 days/, 'and it says which number it is repairing');
+  assert.equal(captureAsk({ opened: [], replies: [rep({})], sentInWindow: 9, windowDays: 30 })?.kind, 'outcome');
+  // A clean ledger renders nothing. A standing "nothing to confirm" panel is the
+  // filler this codebase keeps deleting.
+  assert.equal(captureAsk({ opened: [], replies: [], sentInWindow: 9, windowDays: 30 }), null);
+  assert.match(captureAsk({ opened: [draft({}), draft({ id: 'b' })], replies: [], sentInWindow: 9, windowDays: 30 })!.headline, /2 messages/);
+
+  // 4. THE MONEY FACTOR FINALLY HAS AN INPUT.
+  //
+  //    This is the whole argument for the sensor, so it is checked rather than
+  //    asserted in prose: only three jobs could ever set stake.value, two from a
+  //    legacy sales table this product does not use — so on a real account the
+  //    factor sat at 1.0 on nearly every Move.
+  const ob = (o: Partial<Obligation>): Obligation => ({
+    id: 'ob1', direction: 'in', counterparty: 'Sea Nymph Resort', amount: 2000, currency: '$',
+    due_on: '2026-09-09', status: 'open', note: null, settled_at: null, created_at: '2026-09-01T00:00:00Z', ...o,
+  });
+  const ctx = { monthlyBurn: 350, capacityMinutes: 60 };
+  const collect = collectMove(ob({}), now);
+  assert.equal(collect.kind, 'earn');
+  assert.equal(collect.stake?.value, 2000, 'a real figure, typed by a person, reaching scoreMove');
+  assert.match(collect.headline, /3 days late/);
+
+  const collectScore = score({ kind: collect.kind, stake: collect.stake, costMinutes: 5, job: 'obligations' }, ctx);
+  const queueScore = score({ kind: 'earn', stake: { metric: 'queue', direction: 'down', by: 10, withinDays: 1 }, costMinutes: 30, job: 'send_queue' }, ctx);
+  assert.ok(collectScore > queueScore, 'an overdue invoice outranks a same-day send queue');
+  assert.ok(collectScore / queueScore >= 2, `and not narrowly: ${collectScore.toFixed(1)} against ${queueScore.toFixed(1)}`);
+
+  // 5. THE FORECAST. cash / burn assumes nothing is owed in either direction,
+  //    which is never true of somebody running on invoices.
+  assert.equal(daysUntil('2026-09-15', now), 3);
+  assert.equal(daysUntil('2026-09-09', now), -3);
+  assert.equal(daysUntil('not-a-date', now), Number.POSITIVE_INFINITY, 'a bad date is never due');
+  assert.deepEqual(overdueIn([ob({}), ob({ id: 'x', due_on: '2026-09-30' })], now).map((o) => o.id), ['ob1']);
+  assert.deepEqual(dueSoon([ob({ id: 'soon', due_on: '2026-09-20' }), ob({})], now).map((o) => o.id), ['soon']);
+  // Settled rows never rank, and never forecast.
+  assert.equal(overdueIn([ob({ status: 'settled' })], now).length, 0);
+
+  const f = forecast({ cash: 1190, monthlyBurn: 350 }, [ob({}), ob({ id: 'bill', direction: 'out', amount: 500, due_on: '2026-09-20' })], now);
+  assert.equal(f.incoming, 2000);
+  assert.equal(f.outgoing, 500);
+  assert.equal(f.net, 2690);
+  assert.equal(f.months, 3.4, 'cash alone, matching the header');
+  assert.equal(f.forecastMonths, 7.7);
+  assert.equal(f.changesTheAnswer, true, 'that is a different month, not a decorated number');
+  // No burn, no projection — never a guess.
+  assert.equal(forecast({ cash: 1190, monthlyBurn: null }, [], now).months, null);
+  // Never negative: "minus one month of runway" is not something anybody can act on.
+  assert.equal(forecast({ cash: 100, monthlyBurn: 350 }, [ob({ direction: 'out', amount: 5000, due_on: '2026-09-20' })], now).forecastMonths, 0);
+  // Outside the horizon it is not today's decision.
+  assert.equal(forecast({ cash: 1190, monthlyBurn: 350 }, [ob({ due_on: '2027-01-01' })], now).incoming, 0);
+  assert.ok(HORIZON_DAYS >= 30);
+
+  console.log('copilot-core: ledger checks passed');
+}
+
+ledger().catch((e) => { console.error(e); process.exit(1); });

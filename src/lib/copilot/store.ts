@@ -13,7 +13,11 @@ import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
 import { stageOf } from './pipeline';
 import { inMotion } from './motion';
+import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capture';
+import { forecast } from './obligations';
 import type { SentMessage } from './silence';
+import type { OpenedDraft, UnresolvedReply } from './capture';
+import type { Obligation, ObligationDirection, ObligationStatus } from './obligations';
 import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { JobsRunSummary, Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
@@ -537,7 +541,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -568,6 +572,9 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     availableJobs(profile),
     loadWatchSources(profileId),
     loadLastJobsRun(profileId),
+    loadOpenedDrafts(profileId),
+    loadUnresolvedReplies(profileId),
+    loadObligations(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -611,6 +618,20 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     finds: movesRead.moves.filter((m) => m.job === 'watch').length,
     now: nowTs,
   });
+
+  // What the app saw and was never told the end of. Sends lead over outcomes:
+  // an unconfirmed send corrupts `sent`, which every other number is computed
+  // against, including the reply rate that decides whether the opener works.
+  const opened = openedAwaitingAnswer(openedRows, nowTs);
+  const unresolved = repliesAwaitingOutcome(replyRows2, nowTs);
+  const capture = captureAsk({ opened, replies: unresolved, sentInWindow: metrics.sent, windowDays: metrics.window_days });
+
+  // Runway stops being a snapshot that assumes nothing is owed in either
+  // direction — which is never true of somebody running on invoices.
+  const fin = profile.finance ?? {};
+  const cashForecast = typeof fin.cash === 'number'
+    ? forecast({ cash: fin.cash, monthlyBurn: fin.monthly_burn ?? null }, obligationRows, nowTs)
+    : null;
 
   const opportunities = rankOpportunities(oppsWithOutcome, { capacity: profile.capacity, huntTypes: profile.hunt_types, typeAffinity: affinity });
 
@@ -670,6 +691,11 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
       checkoutReady: billingConfigured(),
     },
     motion,
+    capture,
+    opened,
+    unresolved,
+    obligations: obligationRows,
+    forecast: cashForecast,
     opportunities,
     diagnosis,
     edge,
@@ -1059,4 +1085,159 @@ export async function supersedeMoves(profileId: string, job: string, keep: strin
   // Never fatal: a failure here leaves a duplicate card on the screen, which is
   // the state this improves on rather than one it must guarantee.
   if (del.error) console.error(`[copilot/jobs] superseding ${job} failed:`, del.error.message);
+}
+
+// — capture: what the app saw, and what it was told —
+
+/**
+ * Record that a deep link was opened. Never sets `sent`.
+ *
+ * Opening is evidence, not proof, and the distinction is invariant 2: the app
+ * observed a tap, it did not observe a message going out. What it buys is the
+ * ability to ask one question about five messages instead of hoping for five
+ * separate confirmations.
+ */
+export async function markOpened(profileId: string, actionId: string): Promise<void> {
+  const { error } = await copilotDb().from('copilot_executions')
+    .update({ opened_at: new Date().toISOString() })
+    .eq('profile_id', profileId).eq('action_id', actionId)
+    .in('approval_state', ['needs_approval', 'approved', 'failed']);
+  // `opened_at` ships in 20260913_copilot_capture.sql. Until it is applied this
+  // is a no-op and the app behaves exactly as it did before — a missing column
+  // must never be the reason a tap fails.
+  if (error) console.error('[copilot] markOpened skipped:', error.message);
+}
+
+/** "That one did not go." Forgets the tap; the draft stays in the queue. */
+export async function clearOpened(profileId: string, actionId: string): Promise<void> {
+  const { error } = await copilotDb().from('copilot_executions')
+    .update({ opened_at: null })
+    .eq('profile_id', profileId).eq('action_id', actionId);
+  if (error) console.error('[copilot] clearOpened skipped:', error.message);
+}
+
+/** Drafts opened and not yet confirmed sent, with who they were for. */
+export async function loadOpenedDrafts(profileId: string): Promise<Array<OpenedDraft & { sent: boolean }>> {
+  const { data, error } = await copilotDb().from('copilot_executions')
+    .select('action_id, opened_at, channel, approval_state, opportunity_id')
+    .eq('profile_id', profileId).not('opened_at', 'is', null)
+    .order('opened_at', { ascending: true }).limit(40);
+  if (error || !data?.length) return [];
+  const rows = data as Array<{ action_id: string | null; opened_at: string; channel: string; approval_state: string; opportunity_id: string | null }>;
+
+  const oppIds = [...new Set(rows.map((r) => r.opportunity_id).filter((id): id is string => !!id))];
+  const titles = new Map<string, string>();
+  if (oppIds.length) {
+    const { data: opps } = await copilotDb().from('copilot_opportunities').select('id, title, contact').in('id', oppIds);
+    for (const o of (opps ?? []) as Array<{ id: string; title: string; contact: Opportunity['contact'] }>) {
+      titles.set(o.id, o.contact?.name || o.title);
+    }
+  }
+  return rows
+    .filter((r): r is typeof r & { action_id: string } => !!r.action_id)
+    .map((r) => ({
+      id: r.action_id,
+      who: (r.opportunity_id && titles.get(r.opportunity_id)) || 'someone',
+      openedAt: r.opened_at,
+      channel: r.channel,
+      sent: r.approval_state === 'sent',
+    }));
+}
+
+/** Replies with no won/lost recorded against the same business. */
+export async function loadUnresolvedReplies(profileId: string): Promise<Array<UnresolvedReply & { resolved: boolean }>> {
+  const db = copilotDb();
+  const { data, error } = await db.from('copilot_outcomes')
+    .select('kind, occurred_at, opportunity_id')
+    .eq('profile_id', profileId).in('kind', ['reply', 'meeting', 'proposal', 'won', 'lost'])
+    .order('occurred_at', { ascending: false }).limit(120);
+  if (error || !data?.length) return [];
+  const rows = data as Array<{ kind: string; occurred_at: string; opportunity_id: string | null }>;
+
+  // Terminal per business, not per outcome: a won recorded anywhere against this
+  // opportunity closes every earlier reply from it.
+  const closed = new Set(rows.filter((r) => r.kind === 'won' || r.kind === 'lost').map((r) => r.opportunity_id));
+  const first = new Map<string, string>();
+  for (const r of rows) {
+    if (!r.opportunity_id || r.kind === 'won' || r.kind === 'lost') continue;
+    // Rows arrive newest first, so the last write is the OLDEST reply, which is
+    // the one worth asking about.
+    first.set(r.opportunity_id, r.occurred_at);
+  }
+
+  const ids = [...first.keys()];
+  if (!ids.length) return [];
+  const { data: opps } = await db.from('copilot_opportunities').select('id, title, contact').in('id', ids);
+  const titles = new Map<string, string>();
+  for (const o of (opps ?? []) as Array<{ id: string; title: string; contact: Opportunity['contact'] }>) {
+    titles.set(o.id, o.contact?.name || o.title);
+  }
+  return ids.map((id) => ({
+    opportunityId: id,
+    who: titles.get(id) ?? 'a match',
+    repliedAt: first.get(id) as string,
+    resolved: closed.has(id),
+  }));
+}
+
+// — obligations —
+
+const OBLIGATION_COLS = 'id, direction, counterparty, amount, currency, due_on, status, note, settled_at, created_at';
+
+/** Open money, both directions. Empty on any error: the table is hand-migrated. */
+export async function loadObligations(profileId: string): Promise<Obligation[]> {
+  const { data, error } = await copilotDb().from('copilot_obligations')
+    .select(OBLIGATION_COLS)
+    .eq('profile_id', profileId).eq('status', 'open')
+    .order('due_on', { ascending: true }).limit(60);
+  if (error) return [];
+  return (data ?? []) as unknown as Obligation[];
+}
+
+/** Everything on file, settled included — the settled ones make a forecast credible. */
+export async function loadAllObligations(profileId: string): Promise<Obligation[]> {
+  const { data, error } = await copilotDb().from('copilot_obligations')
+    .select(OBLIGATION_COLS)
+    .eq('profile_id', profileId)
+    .order('due_on', { ascending: true }).limit(120);
+  if (error) return [];
+  return (data ?? []) as unknown as Obligation[];
+}
+
+export async function saveObligation(profileId: string, patch: {
+  id?: string; direction?: ObligationDirection; counterparty?: string; amount?: number;
+  currency?: string | null; due_on?: string; status?: ObligationStatus; note?: string | null;
+}): Promise<Obligation | null> {
+  const db = copilotDb();
+  if (patch.id) {
+    const row: Record<string, unknown> = {};
+    for (const k of ['direction', 'counterparty', 'amount', 'currency', 'due_on', 'status', 'note'] as const) {
+      if (patch[k] !== undefined) row[k] = patch[k];
+    }
+    // A settled row keeps its date: when it was paid is what makes the next
+    // forecast checkable rather than a story about the future.
+    if (patch.status === 'settled') row.settled_at = new Date().toISOString();
+    if (patch.status === 'open') row.settled_at = null;
+    const { data, error } = await db.from('copilot_obligations').update(row)
+      .eq('profile_id', profileId).eq('id', patch.id).select(OBLIGATION_COLS).maybeSingle();
+    if (error) throw error;
+    return (data as unknown as Obligation) ?? null;
+  }
+  if (!patch.counterparty || !patch.amount || !patch.due_on) return null;
+  const { data, error } = await db.from('copilot_obligations').insert({
+    profile_id: profileId,
+    direction: patch.direction ?? 'in',
+    counterparty: patch.counterparty.slice(0, 120),
+    amount: patch.amount,
+    currency: patch.currency ?? null,
+    due_on: patch.due_on,
+    note: patch.note?.slice(0, 300) ?? null,
+  }).select(OBLIGATION_COLS).maybeSingle();
+  if (error) throw error;
+  await logEvent(profileId, 'obligation_added', { direction: patch.direction ?? 'in', amount: patch.amount });
+  return (data as unknown as Obligation) ?? null;
+}
+
+export async function deleteObligation(profileId: string, id: string): Promise<void> {
+  await copilotDb().from('copilot_obligations').delete().eq('profile_id', profileId).eq('id', id);
 }

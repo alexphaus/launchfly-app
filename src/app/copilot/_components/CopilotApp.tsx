@@ -258,6 +258,46 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: true, found: r.found };
       } catch (e) { fail(e, 'Could not read your sources'); return { ok: false }; }
     },
+    markOpened(actionId) {
+      // sendBeacon, not fetch: this fires as the tab goes to the background to
+      // hand off to WhatsApp, and a normal request is cancelled at exactly that
+      // moment — which is how the tap went unrecorded in the first place.
+      const url = `/api/copilot/actions/${encodeURIComponent(actionId)}/opened`;
+      try {
+        if (navigator.sendBeacon?.(url, new Blob([], { type: 'application/json' }))) return;
+      } catch { /* fall through */ }
+      // keepalive is the same guarantee for browsers without sendBeacon.
+      void fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+    },
+    async confirmOpened(ids, sent) {
+      try {
+        // One request per draft, but one GESTURE — which is the whole point.
+        // The alternative was leaving the app and coming back N times.
+        for (const id of ids) {
+          if (sent) await post(`/actions/${id}/sent`, {});
+          else await del(`/actions/${id}/opened`).catch(() => {});
+        }
+        await refresh();
+        say(sent
+          ? `Logged. ${ids.length === 1 ? 'That one counts' : `All ${ids.length} count`} now.`
+          : 'Left them in the queue.');
+      } catch (e) { fail(e, 'Could not record that'); void refresh(); }
+    },
+    async saveObligation(patch) {
+      try {
+        const r = await post<{ home: HomeData }>('/obligations', patch);
+        setHome(r.home);
+        say(patch.status === 'settled' ? 'Settled. The forecast just moved.' : 'Saved.');
+        return true;
+      } catch (e) { fail(e, 'Could not save that'); return false; }
+    },
+    async removeObligation(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/obligations?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+        say('Removed.');
+      } catch (e) { fail(e, 'Could not remove'); void refresh(); }
+    },
     async removeWatchSource(id) {
       try {
         const r = await del<{ home: HomeData }>(`/watch/sources?id=${encodeURIComponent(id)}`);

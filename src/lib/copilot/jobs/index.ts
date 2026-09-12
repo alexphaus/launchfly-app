@@ -11,6 +11,7 @@ import { getProfile, loadMoveAnswers, logEvent, supersedeMoves } from '../store'
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
 import { goalGapJob } from './goal-gap';
+import { obligationsJob } from './obligations';
 import { openingGapJob } from './opening-gap';
 import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
@@ -36,6 +37,9 @@ import type { Job, JobContext } from './types';
  * decide         the gap between a goal the user set and the rate that is
  *                actually closing it — the first thing here that reads what
  *                they said they were trying to do
+ * earn / decide  money owed, either way — the first job here that can put a
+ *                real figure on stake.value, and so the first that can outrank
+ *                the send queue on evidence instead of on a kind prior
  * decide         the openers that got nothing back, with the messages attached.
  *                It was a row in "Also today" saying "note why the 3 sent
  *                openers got silence" — an instruction about three messages the
@@ -57,6 +61,7 @@ export const JOBS: Job[] = [
   sendQueueJob,
   clientDeliveryJob,
   repeatCustomerJob,
+  obligationsJob,
   runwayGuardJob,
   goalGapJob,
   silenceJob,

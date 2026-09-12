@@ -61,6 +61,17 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
       <div className="cp-list">
         <div className="cp-ctx"><div><div className="l">Runway</div><div className="s">{m.runway_months != null ? `${m.runway_months} months · ${money(p.finance?.cash ?? 0, currency)} cash, ${money(p.finance?.monthly_burn ?? 0, currency)}/mo burn` : 'Two numbers. Shapes what counts as a good match.'}</div></div>
           <button className={`cp-connect ${m.runway_months != null ? 'ghost' : ''}`} onClick={() => actions.openSheet({ kind: 'finance' })}>{m.runway_months != null ? 'Edit' : 'Set'}</button></div>
+        <div className="cp-ctx">
+          <div>
+            <div className="l">Money owed</div>
+            <div className="s">{home.obligations.length
+              ? `${home.obligations.length} open${home.forecast?.changesTheAnswer ? ` · runway ${home.forecast.months} mo on cash, ${home.forecast.forecastMonths} mo with what is owed` : ''}`
+              : 'Invoices and bills with dates. The only thing that can outrank the send queue on a number.'}</div>
+          </div>
+          <button className={`cp-connect ${home.obligations.length ? 'ghost' : ''}`} onClick={() => actions.openSheet({ kind: 'money' })}>
+            {home.obligations.length ? 'Edit' : 'Add'}
+          </button>
+        </div>
         {calendar && (
           <div className="cp-ctx"><div><div className="l">Calendar</div><div className="s">Sharpens focus-window and nudge timing</div></div>
             {calendar.status === 'connected' ? <span className="cp-connect blue">Connected</span>

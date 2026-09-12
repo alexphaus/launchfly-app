@@ -605,7 +605,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   const motion = inMotion({
     sent: sentWaiting,
     call: liveCall ? { headline: liveCall.headline, metric: liveCall.verify.metric, answeredAt: liveCall.for_date } : null,
-    sources: watchSources.map((w) => ({ label: w.label, lastCheckedAt: w.last_checked_at })),
+    sources: watchSources.map((w) => ({ label: w.label, lastCheckedAt: w.last_checked_at, error: w.last_error })),
     // Moves from last night's watcher run, still open — what the sources found
     // and the user has not answered yet.
     finds: movesRead.moves.filter((m) => m.job === 'watch').length,
@@ -1022,4 +1022,41 @@ export async function loadLastJobsRun(profileId: string): Promise<JobsRunSummary
     written: n(pl.written),
     quiet: Array.isArray(pl.quiet) ? (pl.quiet as unknown[]).filter((k): k is string => typeof k === 'string') : [],
   };
+}
+
+/**
+ * Drop this job's other OPEN Moves, keeping only the ones just written.
+ *
+ * See Job.supersedes. Open only — a Move the user marked done or dismissed is
+ * their record and is never touched. Delete rather than status change, because
+ * every status this table has is an answer the user gave, and a superseded card
+ * was never seen.
+ */
+export async function supersedeMoves(profileId: string, job: string, keep: string[]): Promise<void> {
+  if (!keep.length) return;
+  const db = copilotDb();
+  // Read the ids first, then delete by id.
+  //
+  // The obvious version is one statement with a `not in` filter, and it is the
+  // wrong shape for a DELETE: the exclusion list is a hand-built PostgREST
+  // string, and an external_id carrying a comma or a quote would change what the
+  // filter means rather than fail — on a delete, that removes the rows it was
+  // supposed to protect. Selecting first costs one round trip and cannot
+  // misfire, because the ids are compared here in TypeScript.
+  const { data, error } = await db.from('copilot_moves')
+    .select('id, external_id')
+    .eq('profile_id', profileId).eq('job', job).eq('status', 'open');
+  if (error || !data?.length) return;
+
+  const keeping = new Set(keep);
+  const stale = (data as Array<{ id: string; external_id: string }>)
+    .filter((r) => !keeping.has(r.external_id))
+    .map((r) => r.id);
+  if (!stale.length) return;
+
+  const del = await db.from('copilot_moves').delete()
+    .eq('profile_id', profileId).eq('status', 'open').in('id', stale);
+  // Never fatal: a failure here leaves a duplicate card on the screen, which is
+  // the state this improves on rather than one it must guarantee.
+  if (del.error) console.error(`[copilot/jobs] superseding ${job} failed:`, del.error.message);
 }

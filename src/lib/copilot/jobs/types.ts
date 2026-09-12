@@ -80,6 +80,21 @@ export interface Job {
    */
   standing?: boolean;
   /**
+   * Only the newest unanswered Move from this job is worth showing.
+   *
+   * "51 drafts written and not sent" is one statement about right now, not three
+   * — and the live account had exactly three open send_queue Moves, keyed
+   * `queue:2026-09-09`, `-10` and `-11`, stacked on the screen saying the same
+   * thing with different numbers. Restating a standing state weekly would have
+   * done the same thing to runway and the opening gap, so every `standing` job
+   * supersedes too.
+   *
+   * Superseded rows are DELETED, not dismissed: a dismissal is the user's answer
+   * and feeds dismissedStreak and the keep-rate, and counting a card nobody ever
+   * saw as one they turned down would teach the app something false.
+   */
+  supersedes?: boolean;
+  /**
    * False when this job cannot run for this profile — a missing sensor, an
    * unlinked business, a key this deployment does not have. A job that cannot
    * see anything must say so rather than return an empty list, because those

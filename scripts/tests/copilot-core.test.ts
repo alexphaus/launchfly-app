@@ -2657,3 +2657,65 @@ async function refill() {
 }
 
 refill().catch((e) => { console.error(e); process.exit(1); });
+
+// --- the watcher, as it actually behaved on a live account
+//
+// Eight sources, one read. r/forhire returned 25 items, its judge call spent the
+// rest of the run's budget, and every source after it recorded "the operation
+// was aborted due to timeout". Two Reddit feeds 429'd before that. The screen
+// said "8 sources read · nothing worth your morning", which was a lie in both
+// halves — and the judge, which I had assumed was too strict, had run once.
+import { SAME_HOST_GAP_MS, USER_AGENT } from '../../src/lib/copilot/jobs/watcher';
+import { inMotion as motionOf } from '../../src/lib/copilot/motion';
+import { JOBS as REGISTRY } from '../../src/lib/copilot/jobs';
+
+async function watcherReality() {
+  const now = new Date('2026-09-12T10:00:00Z');
+  const fresh = '2026-09-12T03:00:00Z';
+  const base = { sent: [], call: null, finds: 0, now };
+
+  // 1. A FAILED SOURCE IS NOT A READ ONE. markWatchSourceChecked stamps
+  //    last_checked_at on failure too — it must, or a dead feed is refetched
+  //    every run forever — so "checked" was counted as "read".
+  const mixed = motionOf({ ...base, sources: [
+    { label: 'r/forhire', lastCheckedAt: fresh, error: null },
+    { label: 'r/Entrepreneur', lastCheckedAt: fresh, error: '429 Too Many Requests' },
+    { label: 'r/SaaS', lastCheckedAt: fresh, error: 'The operation was aborted due to timeout' },
+  ] })[0];
+  assert.equal(mixed.label, '1 of 3 sources read');
+  assert.match(mixed.detail, /r\/Entrepreneur, r\/SaaS failed/);
+  assert.match(mixed.detail, /open Sources/, 'and points at the one screen that can fix it');
+
+  // All well: the count is plain and the finds lead.
+  const clean = motionOf({ ...base, finds: 2, sources: [
+    { label: 'r/forhire', lastCheckedAt: fresh, error: null },
+    { label: 'We Work Remotely', lastCheckedAt: fresh, error: null },
+  ] })[0];
+  assert.equal(clean.label, '2 sources read');
+  assert.match(clean.detail, /2 worth keeping/);
+  // Genuinely quiet still reads as quiet, not as broken.
+  assert.match(motionOf({ ...base, sources: [{ label: 'x', lastCheckedAt: fresh, error: null }] })[0].detail,
+    /nothing worth your morning/);
+  // An absent error field behaves like no error, for callers that do not set it.
+  assert.equal(motionOf({ ...base, sources: [{ label: 'x', lastCheckedAt: fresh }] })[0].label, '1 source read');
+
+  // 2. THE FETCHER IDENTIFIES ITSELF. Reddit 429s what it cannot attribute, and
+  //    "copilot-watch/1.0 (+feed reader)" was not enough on a live account.
+  assert.match(USER_AGENT, /^launchfly-copilot\/1\.0 \(\+https?:\/\/.+\)$/);
+  assert.ok(SAME_HOST_GAP_MS >= 1000, 'same host back to back is what earns a 429');
+
+  // 3. SUPERSEDING. Three open send_queue Moves were stacked on the live screen,
+  //    each quoting a different count of the same pile — and restating standing
+  //    states weekly would have done the same to runway and the opening gap.
+  const supersedes = REGISTRY.filter((j) => j.supersedes || j.standing).map((j) => j.key).sort();
+  assert.deepEqual(supersedes, ['capability_gap', 'opening_gap', 'runway_guard', 'send_queue']);
+  // An event-driven job must NOT supersede: two different sales, two Moves.
+  for (const key of ['client_delivery', 'repeat_customer', 'watch', 'silence', 'goal_gap']) {
+    const j = REGISTRY.find((x) => x.key === key);
+    assert.ok(j && !j.supersedes && !j.standing, `${key} is event-driven and keeps every Move it writes`);
+  }
+
+  console.log('copilot-core: watcher-reality checks passed');
+}
+
+watcherReality().catch((e) => { console.error(e); process.exit(1); });

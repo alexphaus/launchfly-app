@@ -30,6 +30,9 @@ export function daysWaiting(iso: string, now: Date): number {
 
 export const sendQueueJob: Job = {
   key: 'send_queue',
+  // One queue, one card. Three days of unanswered ones stacked up on the live
+  // account, each quoting a different count of the same pile.
+  supersedes: true,
   label: 'Drafts waiting to go out',
 
   // Cheap, as the contract requires: an account that cannot draft cannot have a

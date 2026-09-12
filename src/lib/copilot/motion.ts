@@ -60,8 +60,16 @@ export interface MotionInput {
    * already verified belongs to the record rather than to today.
    */
   call: { headline: string; metric: string; answeredAt: string } | null;
-  /** Sources with a recent check, and how many Moves came out of the run. */
-  sources: Array<{ label: string; lastCheckedAt: string | null }>;
+  /**
+   * Sources with a recent check. `error` is the last failure, and it is why this
+   * carries one: markWatchSourceChecked stamps last_checked_at on failure too —
+   * it has to, or a dead feed is retried on every run forever — so counting
+   * "checked" as "read" reported "8 sources read · nothing worth your morning"
+   * on a night when seven of them had 429'd or timed out and only one was
+   * actually read. A broken watcher that reports a quiet one is worse than a
+   * broken watcher.
+   */
+  sources: Array<{ label: string; lastCheckedAt: string | null; error?: string | null }>;
   finds: number;
   now: Date;
 }
@@ -108,15 +116,23 @@ export function inMotion(input: MotionInput): MotionRow[] {
     const hrs = (input.now.getTime() - new Date(s.lastCheckedAt).getTime()) / 3_600_000;
     return hrs >= 0 && hrs <= RECENT_CHECK_HOURS;
   });
+  const read = recent.filter((s) => !s.error);
+  const failed = recent.filter((s) => !!s.error);
   if (recent.length) {
     out.push({
       kind: 'watched',
-      label: `${recent.length} source${recent.length === 1 ? '' : 's'} read`,
-      // Zero finds is the honest and common answer, and saying it is what stops
-      // somebody assuming the watcher is broken on a quiet night.
-      detail: input.finds > 0
-        ? `${input.finds} worth keeping — ${nameList(recent.map((s) => s.label))}`
-        : `nothing worth your morning — ${nameList(recent.map((s) => s.label))}`,
+      label: failed.length
+        ? `${read.length} of ${recent.length} sources read`
+        : `${read.length} source${read.length === 1 ? '' : 's'} read`,
+      // Failures lead, because a failure is the only part of this row anybody
+      // can act on. Zero finds from sources that genuinely worked is the honest
+      // and common answer, and saying it is what stops somebody assuming the
+      // watcher is broken on a quiet night.
+      detail: failed.length
+        ? `${nameList(failed.map((s) => s.label))} failed — open Sources to see why`
+        : input.finds > 0
+        ? `${input.finds} worth keeping — ${nameList(read.map((s) => s.label))}`
+        : `nothing worth your morning — ${nameList(read.map((s) => s.label))}`,
     });
   }
 

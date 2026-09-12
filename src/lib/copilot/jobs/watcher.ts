@@ -21,7 +21,7 @@ import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { extractJson } from '../agent/schema';
 import { cronTimeoutMs, extraBody, maxOutputTokens, resolveLlmConfig } from '../agent/llm';
-import { MAX_ITEMS_PER_SOURCE, parseFeed, trimSeen, unseenItems } from '../watch/feed';
+import { MAX_ITEMS_PER_SOURCE, parseFeed, trimSeen, unseenItems, type FeedItem } from '../watch/feed';
 import { moveKeepRate } from '../moves';
 import { JUDGE_SYSTEM, judgePrompt, movesFromVerdicts, parseVerdicts, watchBrief } from '../watch/judge';
 import { CAPACITY_META, type WatchSource } from '../types';
@@ -29,6 +29,13 @@ import { loadMoveAnswers, loadWatchSources, markWatchSourceChecked } from '../st
 import type { MoveDraft } from '../moves';
 import type { Job, JobContext } from './types';
 
+/**
+ * Identifies the fetcher to the sites it reads. Reddit rejects a request it
+ * cannot attribute, and a contact URL is what its API rules ask for.
+ */
+export const USER_AGENT = `launchfly-copilot/1.0 (+${process.env.NEXT_PUBLIC_COPILOT_SITE_URL || 'https://launchfly.ai'})`;
+/** Same host, back to back, is what earns a 429. One second apart does not. */
+export const SAME_HOST_GAP_MS = 1_100;
 /** Bounded per run: each source costs a fetch and a generation. */
 export const MAX_SOURCES_PER_RUN = 6;
 /** A feed that has not answered in this long is not going to tonight. */
@@ -67,9 +74,11 @@ async function fetchFeed(url: string, budgetMs: number): Promise<string> {
     const res = await fetch(url, {
       signal: ctrl.signal,
       redirect: 'follow',
-      // Reddit and several job boards return 429 to the default fetch agent and
-      // a feed to anything that names itself. This is the whole fix.
-      headers: { 'user-agent': 'copilot-watch/1.0 (+feed reader)', accept: 'application/rss+xml, application/atom+xml, application/json, text/xml, */*' },
+      // Reddit 429s anything it cannot identify, and "copilot-watch/1.0 (+feed
+      // reader)" was not enough: five of eight sources came back 429 on a live
+      // account. It wants a product name and a contact URL, which is also the
+      // polite thing to send to somebody whose bandwidth you are spending.
+      headers: { 'user-agent': USER_AGENT, accept: 'application/rss+xml, application/atom+xml, application/json, text/xml, */*' },
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
     const body = await res.text();
@@ -142,29 +151,64 @@ export const watcherJob: Job = {
       keeps,
     });
 
+    // Fetch everything FIRST, then judge.
+    //
+    // The old loop was fetch, judge, fetch, judge. On a live account r/forhire
+    // came back with 25 items, its judge call spent the rest of the run's
+    // budget, and every source after it aborted its fetch — seven of eight
+    // sources recorded "the operation was aborted due to timeout" and the app
+    // reported "nothing worth your morning". Fetching is IO and costs nothing to
+    // overlap; the model call is the expensive serial part. Separating them is
+    // what stops one good source starving the others.
+    //
+    // Parallel ACROSS hosts, sequential WITHIN one: five simultaneous requests
+    // to reddit.com is how the 429s happened in the first place.
+    const byHost = new Map<string, WatchSource[]>();
+    for (const src of sources) {
+      let host = src.url;
+      try { host = new URL(src.url).hostname; } catch { /* keep the raw url as its own bucket */ }
+      byHost.set(host, [...(byHost.get(host) ?? []), src]);
+    }
+
+    const fetched: Array<{ source: WatchSource; items: FeedItem[] }> = [];
+    await Promise.all([...byHost.values()].map(async (group) => {
+      for (const [i, source] of group.entries()) {
+        const left = ctx.deadline ? ctx.deadline - Date.now() : FETCH_TIMEOUT_MS;
+        if (left < 2_000) break;
+        // Only between requests to the same host, and never before the first.
+        if (i > 0) await new Promise((r) => setTimeout(r, SAME_HOST_GAP_MS));
+        try {
+          const items = unseenItems(parseFeed(await fetchFeed(source.url, left)), source.seen_ids ?? [], {
+            now: ctx.now, maxAgeDays: MAX_ITEM_AGE_DAYS, max: MAX_ITEMS_PER_SOURCE,
+          });
+          fetched.push({ source, items });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          await markWatchSourceChecked(ctx.profile.id, source.id, { error: message.slice(0, 200) });
+          console.error(`[copilot/watch] ${source.url} failed:`, message);
+        }
+      }
+    }));
+
     const out: MoveDraft[] = [];
-    for (const source of sources) {
-      // Sequential and deadline-checked. Six feeds in parallel is six fetches
-      // and six generations at once against a budget the whole nightly run
-      // shares with every other profile.
+    // Most items first: with a bounded budget, the feed that actually moved is
+    // worth the model call before the one that produced two links.
+    for (const { source, items } of fetched.sort((a, b) => b.items.length - a.items.length)) {
+      if (!items.length) {
+        // Nothing new is the common case and a success. Recording the check is
+        // what stops a quiet feed being refetched every single run.
+        await markWatchSourceChecked(ctx.profile.id, source.id, { error: null });
+        continue;
+      }
+      // Out of budget: leave the source unmarked so its items are still unseen
+      // next time. Marking it read here would silently drop them forever.
       const left = ctx.deadline ? ctx.deadline - Date.now() : cronTimeoutMs();
       if (left < 5_000) break;
 
+      const ref = { id: source.id, label: source.label, url: source.url, intent: source.intent };
       try {
-        const items = unseenItems(parseFeed(await fetchFeed(source.url, left)), source.seen_ids ?? [], {
-          now: ctx.now, maxAgeDays: MAX_ITEM_AGE_DAYS, max: MAX_ITEMS_PER_SOURCE,
-        });
-        if (!items.length) {
-          // Nothing new is the common case and a success. Recording the check
-          // is what stops a quiet feed being refetched every single run.
-          await markWatchSourceChecked(ctx.profile.id, source.id, { error: null });
-          continue;
-        }
-
-        const ref = { id: source.id, label: source.label, url: source.url, intent: source.intent };
-        const raw = await judge(JUDGE_SYSTEM, judgePrompt(brief, ref, items), Math.min(cronTimeoutMs(), Math.max(0, (ctx.deadline ?? Infinity) - Date.now())));
+        const raw = await judge(JUDGE_SYSTEM, judgePrompt(brief, ref, items), Math.min(cronTimeoutMs(), left));
         out.push(...movesFromVerdicts(parseVerdicts(raw, items), items, ref, ctx.now));
-
         // Everything shown is marked seen, picked or not. A judged-and-rejected
         // item must never be paid for twice, which is most of what this saves.
         await markWatchSourceChecked(ctx.profile.id, source.id, {
@@ -172,13 +216,12 @@ export const watcherJob: Job = {
           error: null,
         });
       } catch (e) {
-        // One bad feed is one card saying so, never the run. The message is the
-        // user's, so it is written for them: "404" on its own explains nothing.
         const message = e instanceof Error ? e.message : String(e);
         await markWatchSourceChecked(ctx.profile.id, source.id, { error: message.slice(0, 200) });
-        console.error(`[copilot/watch] ${source.url} failed:`, message);
+        console.error(`[copilot/watch] judging ${source.url} failed:`, message);
       }
     }
+
     return out;
   },
 };

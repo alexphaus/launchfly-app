@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
 import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
-import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, relTime, sourceLabel } from './format';
+import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, money, relTime, sourceLabel } from './format';
 import type { Actions, SheetState } from './shared';
 import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
 import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
@@ -28,6 +28,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'won': return <WonSheet home={home} oppId={sheet.oppId} actions={actions} />;
     case 'offer': return <OfferSheet home={home} actions={actions} />;
     case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
+    case 'money': return <MoneySheet home={home} actions={actions} />;
   }
 }
 
@@ -629,7 +630,7 @@ function QueueSheet({ home, actions }: { home: HomeData; actions: Actions }) {
 
       {apiSend
         ? <button className="cp-btn primary block" style={{ marginTop: 14 }} disabled={busy} onClick={() => act(() => actions.sendAction(q.id))}>{busy ? 'Sending…' : `Send on ${label}`}</button>
-        : <a className="cp-btn primary block" style={{ marginTop: 14, textDecoration: 'none' }} href={e.deep_link ?? '#'} target="_blank" rel="noreferrer">Open in {label}</a>}
+        : <a className="cp-btn primary block" style={{ marginTop: 14, textDecoration: 'none' }} href={e.deep_link ?? '#'} target="_blank" rel="noreferrer" onClick={() => actions.markOpened(q.id)}>Open in {label}</a>}
 
       <div className="cp-btn-row">
         {/* Manual dispatch: they sent it from their own app, this only records it. */}
@@ -810,6 +811,98 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
         Reddit, Hacker News, most job boards, Google Alerts, YouTube channels and Substacks all publish a feed with no
         key and no account. Paste the page you already read; it gets turned into one where that is possible.
         {home.watchSources.length === 0 ? ' Nothing here yet means nothing arrives from outside, and the call falls back to work you already had.' : ''}
+      </div>
+    </>
+  );
+}
+
+/* ─── Money owed, either way ──────────────────────────────────────────────── */
+
+/**
+ * The sensor scoreMove's money factor was built for and never had.
+ *
+ * Only three jobs could ever set stake.value, two of them from a legacy sales
+ * table this product does not use — so on a real account the money factor sat at
+ * 1.0 on nearly every Move, and the day collapsed to outreach because nothing
+ * else brought a number to the argument. One row here changes that.
+ */
+function MoneySheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const [direction, setDirection] = useState<'in' | 'out'>('in');
+  const [counterparty, setCounterparty] = useState('');
+  const [amount, setAmount] = useState('');
+  const [due, setDue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const currency = home.profile.finance?.currency || '$';
+  const f = home.forecast;
+
+  const add = async () => {
+    const n = Number(amount);
+    if (!counterparty.trim()) return setError('Who is it with?');
+    if (!Number.isFinite(n) || n <= 0) return setError('How much?');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return setError('When is it due?');
+    setBusy(true); setError(null);
+    const ok = await actions.saveObligation({ direction, counterparty: counterparty.trim(), amount: n, due_on: due, currency });
+    setBusy(false);
+    if (ok) { setCounterparty(''); setAmount(''); setDue(''); } else setError('Could not save that');
+  };
+
+  return (
+    <>
+      <h3>Money owed, either way</h3>
+      <p className="desc">
+        Typed by hand — no bank, no parsing. One row per invoice or bill is what turns runway from a
+        figure into a forecast, and it is the only thing on this app that can outrank the send queue
+        on a number rather than on a hunch.
+      </p>
+
+      {f && f.months != null && (
+        <div className="cp-kv">
+          <span>Runway</span>
+          <b>{f.changesTheAnswer
+            ? `${f.months} mo on cash · ${f.forecastMonths} mo with what is owed`
+            : `${f.months} months`}</b>
+        </div>
+      )}
+
+      <div className="cp-btn-row" style={{ marginTop: 12 }}>
+        <button className={`cp-btn ${direction === 'in' ? 'primary' : ''}`} onClick={() => setDirection('in')}>Owed to me</button>
+        <button className={`cp-btn ${direction === 'out' ? 'primary' : ''}`} onClick={() => setDirection('out')}>I owe it</button>
+      </div>
+      <div className="cp-field"><label className="cp-label">{direction === 'in' ? 'Who owes you' : 'Who you owe'}</label>
+        <input className="cp-input sm" value={counterparty} onChange={(e) => { setCounterparty(e.target.value); setError(null); }} placeholder="Sea Nymph Resort" /></div>
+      <div className="cp-field"><label className="cp-label">Amount and due date</label>
+        <div className="cp-input-row">
+          <input className="cp-input sm" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2000" />
+          <input className="cp-input sm" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+        </div>
+      </div>
+      {error && <div className="cp-note">{error}</div>}
+      <div className="cp-btn-row">
+        <button className="cp-btn primary" disabled={busy} onClick={() => void add()}>{busy ? 'Saving…' : 'Add it'}</button>
+      </div>
+
+      {home.obligations.length > 0 && (
+        <>
+          <div className="cp-section"><span className="lead">Open</span><span className="count">{home.obligations.length}</span></div>
+          {home.obligations.map((o) => (
+            <div key={o.id} className="cp-src">
+              <div className="ct">{o.direction === 'in' ? '←' : '→'} {money(o.amount, o.currency || currency)} · {o.counterparty}</div>
+              <div className="cs">Due {o.due_on}{o.note ? ` · ${o.note}` : ''}</div>
+              <div className="acts">
+                <button className="cp-connect" onClick={() => void actions.saveObligation({ id: o.id, status: 'settled' })}>
+                  {o.direction === 'in' ? 'Paid' : 'Covered'}
+                </button>
+                <button className="cp-connect ghost" onClick={() => void actions.removeObligation(o.id)}>Remove</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      <div className="cp-note">
+        Settled rows are kept, not deleted — what actually landed and when is the part that makes the
+        next forecast worth believing.
       </div>
     </>
   );

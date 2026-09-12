@@ -196,6 +196,46 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         </div>
       ) : null}
 
+      {/* What the app saw and was never told the end of.
+          Placed directly under the call because it is the only thing on this
+          screen that repairs a number rather than spending one: `sent` is
+          upstream of the reply rate, the funnel, verdictOf and the whole starter
+          ladder, and it was collected by hoping somebody came back and pressed a
+          tertiary button. One gesture for N messages, not N round trips. */}
+      {home.capture && (
+        <div className="cp-card cp-capture">
+          <div className="cp-eyebrow">Confirm</div>
+          <h2 className="cp-call-head">{home.capture.headline}</h2>
+          <p className="cp-stack-reason">{home.capture.because}</p>
+          {home.capture.kind === 'opened' ? (
+            <>
+              <div className="cp-capture-list">
+                {home.opened.map((o) => <div key={o.id} className="cp-capture-row">{o.who}<span>{relTime(o.openedAt)}</span></div>)}
+              </div>
+              <div className="cp-btn-row">
+                <button className="cp-btn primary" onClick={() => void actions.confirmOpened(home.opened.map((o) => o.id), true)}>
+                  {home.opened.length === 1 ? 'It went' : 'They all went'}
+                </button>
+                <button className="cp-btn" onClick={() => void actions.confirmOpened(home.opened.map((o) => o.id), false)}>
+                  Not yet
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="cp-capture-list">
+                {home.unresolved.map((r) => (
+                  <button key={r.opportunityId} className="cp-capture-row tap" onClick={() => actions.openSheet({ kind: 'won', oppId: r.opportunityId })}>
+                    {r.who}<span>replied {relTime(r.repliedAt)}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="cp-note" style={{ margin: '8px 0 0' }}>Tap one to record where it got to. Won, lost, or still talking.</div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* The triage deck, which used to be a section on a tab of its own. It is
           one judgement, answerable with a thumb, so it is one card. TriageStack
           carries its own section header and returns null when empty — adding a
@@ -526,7 +566,7 @@ function QueueRow({ q, home, actions }: { q: QueueItem; home: HomeData; actions:
       <div className="cp-qacts">
         {apiSend
           ? <button className="cp-btn primary sm" disabled={busy} onClick={() => act(() => actions.sendAction(q.id))}>{busy ? '…' : 'Send'}</button>
-          : <a className="cp-btn primary sm" href={e.deep_link ?? '#'} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} title={`Open in ${label}`}>{label}</a>}
+          : <a className="cp-btn primary sm" href={e.deep_link ?? '#'} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} title={`Open in ${label}`} onClick={() => actions.markOpened(q.id)}>{label}</a>}
         <button className="cp-btn sm" disabled={busy} onClick={() => act(() => actions.markSent(q.id))}>I sent it</button>
       </div>
     </div>

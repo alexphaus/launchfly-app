@@ -7,10 +7,11 @@
 
 import { copilotDb, todayIso } from '../db';
 import { MAX_RESTATE_DISMISSALS, dismissedStreak, selectMoves, type MoveDraft } from '../moves';
-import { getProfile, loadMoveAnswers, logEvent } from '../store';
+import { getProfile, loadMoveAnswers, logEvent, supersedeMoves } from '../store';
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
 import { goalGapJob } from './goal-gap';
+import { obligationsJob } from './obligations';
 import { openingGapJob } from './opening-gap';
 import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
@@ -36,6 +37,9 @@ import type { Job, JobContext } from './types';
  * decide         the gap between a goal the user set and the rate that is
  *                actually closing it — the first thing here that reads what
  *                they said they were trying to do
+ * earn / decide  money owed, either way — the first job here that can put a
+ *                real figure on stake.value, and so the first that can outrank
+ *                the send queue on evidence instead of on a kind prior
  * decide         the openers that got nothing back, with the messages attached.
  *                It was a row in "Also today" saying "note why the 3 sent
  *                openers got silence" — an instruction about three messages the
@@ -57,6 +61,7 @@ export const JOBS: Job[] = [
   sendQueueJob,
   clientDeliveryJob,
   repeatCustomerJob,
+  obligationsJob,
   runwayGuardJob,
   goalGapJob,
   silenceJob,
@@ -170,6 +175,16 @@ export async function runJobs(
 
       entry.written = await writeMoves(profileId, drafts, ctx.today);
       out.written += entry.written;
+
+      // Keep only what was just written. A standing state restated weekly, or a
+      // queue counted daily, otherwise stacks one card per run saying the same
+      // thing with a different number — three of them were open on the live
+      // account. Deleted rather than dismissed: nobody answered these, and
+      // recording an answer they never gave would teach dismissedStreak and the
+      // keep-rate something false.
+      if ((job.supersedes || job.standing) && entry.written > 0) {
+        await supersedeMoves(profileId, job.key, drafts.map((d) => d.external_id));
+      }
     } catch (e) {
       entry.error = e instanceof Error ? e.message : String(e);
       console.error(`[copilot/jobs] ${job.key} failed:`, entry.error);

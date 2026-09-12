@@ -32,7 +32,9 @@ export type SheetState =
   /** One funnel stage, opened: the businesses actually in it. */
   | { kind: 'stage'; stage: PipelineStage }
   /** The feeds this person watches. Where supply comes from is theirs to set. */
-  | { kind: 'watchlist' };
+  | { kind: 'watchlist' }
+  /** Money owed, either way. The sensor the money factor was built for. */
+  | { kind: 'money' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -84,6 +86,15 @@ export interface Actions {
    */
   addWatchSource(input: { url: string; label?: string; intent?: string }): Promise<{ ok: boolean; note?: string | null; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
+  /**
+   * Record that a deep link was opened. Fire and forget, by beacon — the page is
+   * going to the background and there is no round trip to wait for.
+   */
+  markOpened(actionId: string): void;
+  /** Answer the batch question: these went, or they did not. */
+  confirmOpened(ids: string[], sent: boolean): Promise<void>;
+  saveObligation(patch: { id?: string; direction?: 'in' | 'out'; counterparty?: string; amount?: number; currency?: string | null; due_on?: string; status?: 'open' | 'settled' | 'written_off'; note?: string | null }): Promise<boolean>;
+  removeObligation(id: string): Promise<void>;
   /**
    * Read the watched sources now rather than at 21:00. One or two per tap —
    * see the route for why it cannot be all of them at once.

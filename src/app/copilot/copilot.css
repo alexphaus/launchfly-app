@@ -176,6 +176,10 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-option .ct { font-size: 13.5px; font-weight: 700; }
 .cp-option .cs { font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 600; }
 .cp-option.active .cs { color: #d5d6dd; }
+/* One real headline off a discovered feed. It is the evidence the card is
+   making a claim on, so it reads as a quotation and not as our own copy —
+   and it is clamped, because a feed title can be a paragraph. */
+.cp-option .cs.quote { font-style: italic; color: var(--ink); opacity: .75; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-draft { border: 2px solid var(--ink); border-radius: 10px; padding: 12px 13px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; background: var(--bg); margin-bottom: 10px; }
 .cp-draft-label { font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 
@@ -720,6 +724,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-option.active { background: var(--blue); color: #fff; box-shadow: var(--lift); }
 .cp-root[data-theme="soft"] .cp-option .cs { font-weight: 500; }
 .cp-root[data-theme="soft"] .cp-option.active .cs { color: #DDE2F7; }
+.cp-root[data-theme="soft"] .cp-option .cs.quote { opacity: .7; }
 .cp-root[data-theme="soft"] .cp-draft { border: 0; border-radius: 18px; background: var(--line); padding: 14px 16px; }
 .cp-root[data-theme="soft"] .cp-draft-label { text-transform: none; letter-spacing: 0; font-weight: 600; }
 /* The You view is embedded in the sheet, where the frame gutters do not apply. */

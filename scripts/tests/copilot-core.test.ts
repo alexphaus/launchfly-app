@@ -2827,3 +2827,219 @@ async function ledger() {
 }
 
 ledger().catch((e) => { console.error(e); process.exit(1); });
+
+// --- finding the feeds, and counting what they returned
+//
+// Two failures this guards against, and they are opposites. Discovery that
+// offers a URL nobody fetched is the app inventing supply — the thing
+// INFERRED_SCORE_CAP was written to stop, one layer further out. Discovery
+// without a yield read is a machine that adds sources faster than anyone can
+// prune them, and the user's only signal is a vague sense that the app got
+// noisy.
+import {
+  MAX_DISCOVERED, MAX_QUERIES, MAX_TRIES_PER_PAGE, MIN_VERIFY_ITEMS,
+  candidateFeeds, discoveredFrom, discoveryQueries, feedGuesses, feedLinksFromHtml,
+  hostOf, newCandidates, rankDiscovered, titleLabel,
+} from '../../src/lib/copilot/watch/discover';
+import { exaHits } from '../../src/lib/copilot/watch/exa';
+import { QUIET_AFTER_DAYS, pruneSuggestions, sourceIdOf, sourceYield, yieldLine } from '../../src/lib/copilot/watch/yield';
+import type { DiscoveryCandidate } from '../../src/lib/copilot/watch/discover';
+
+async function discovery() {
+  const profile = {
+    offer: { sells: 'WhatsApp booking automations', for_who: 'resorts', problem: 'enquiries go unanswered' },
+    hunt_types: ['client'] as const,
+    target_area: 'Cebu',
+    location: null,
+  };
+
+  // --- the queries
+  {
+    const qs = discoveryQueries({ ...profile, hunt_types: [...profile.hunt_types] });
+    assert.ok(qs.length > 0 && qs.length <= MAX_QUERIES, 'bounded: every query is money');
+    assert.ok(qs.some((q) => q.query.includes('WhatsApp booking automations')), 'built from the offer');
+    assert.ok(qs.some((q) => q.query.includes('Cebu')), 'target_area localises it');
+    // Invariant 1, one step further out: a search run from a blank offer returns
+    // whatever the engine free-associates, and that is not the user's world.
+    assert.deepEqual(discoveryQueries({ ...profile, offer: {}, hunt_types: [...profile.hunt_types] }), []);
+    assert.deepEqual(discoveryQueries({ ...profile, offer: { for_who: 'resorts' }, hunt_types: [...profile.hunt_types] }), []);
+    // hunt_types picks the shapes: signal wants newsletters, not job boards.
+    const signal = discoveryQueries({ ...profile, hunt_types: ['signal'] });
+    assert.ok(signal.every((q) => !q.query.includes('job board')), 'signal does not get marketplaces');
+    // Two hunt_types selecting the same shape is one search, not two.
+    const both = discoveryQueries({ ...profile, hunt_types: ['client', 'community'] });
+    assert.equal(new Set(both.map((q) => q.query)).size, both.length, 'no duplicate searches');
+  }
+
+  // --- autodiscovery off a page
+  {
+    const html = `<html><head>
+      <link rel="alternate" type="application/rss+xml" href="/feed.xml" title="RSS">
+      <link type="application/atom+xml" rel="alternate" href="https://other.test/atom">
+      <link rel="alternate" type="text/html" href="/print">
+      <link rel="stylesheet" href="/x.css">
+      <link rel='alternate' type='application/rss+xml' href='/tag/jobs/rss?a=1&amp;b=2'/>
+    </head></html>`;
+    const links = feedLinksFromHtml(html, 'https://site.test/blog');
+    assert.ok(links.includes('https://site.test/feed.xml'), 'relative href resolved against the page');
+    assert.ok(links.includes('https://other.test/atom'), 'attribute order does not matter');
+    assert.ok(links.some((l) => l.includes('a=1&b=2')), 'the href is entity-decoded');
+    assert.ok(!links.some((l) => l.includes('/print')), 'alternate but not a feed type');
+    assert.ok(!links.some((l) => l.includes('x.css')), 'a stylesheet is not a feed');
+  }
+
+  // --- candidates for one page
+  {
+    // A subreddit converts with no page fetch at all, which is most of what the
+    // community shapes return.
+    const reddit = candidateFeeds('https://www.reddit.com/r/forhire');
+    assert.equal(reddit[0], 'https://www.reddit.com/r/forhire/new/.rss', 'normalised first, no fetch needed');
+
+    const guesses = feedGuesses('https://site.test/blog/');
+    assert.equal(guesses[0], 'https://site.test/blog/feed', 'section-relative before the root feed');
+    assert.ok(guesses.includes('https://site.test/feed'));
+
+    const declared = candidateFeeds('https://site.test/blog', '<link rel="alternate" type="application/rss+xml" href="/real.xml">');
+    assert.equal(declared[0], 'https://site.test/real.xml', 'what the site declares beats what we guess');
+    assert.ok(declared.length <= MAX_TRIES_PER_PAGE, 'bounded: each try is a fetch');
+  }
+
+  // --- which hits are worth fetching
+  {
+    const seen = new Set(['reddit.com']);
+    const hits = [
+      { url: 'https://www.reddit.com/r/forhire', title: 'r/forhire' },
+      { url: 'https://boards.test/a', title: 'A' },
+      { url: 'https://boards.test/b', title: 'B' },
+      { url: 'https://other.test/c', title: 'C' },
+    ];
+    const got = newCandidates(hits, 'Where work is posted', seen);
+    assert.equal(got.length, 2, 'already watched is skipped, and one host answers once');
+    assert.deepEqual(got.map((c) => hostOf(c.page)), ['boards.test', 'other.test']);
+    assert.equal(got[0].intent, 'Where work is posted', 'the shape label becomes the source intent');
+  }
+
+  // --- only a feed that actually returned items is offered
+  {
+    const cand: DiscoveryCandidate = { page: 'https://site.test/jobs', title: 'Jobs', intent: 'Where work is posted' };
+    const items = (n: number) => Array.from({ length: n }, (_, i) => ({ title: `Item ${i}` }));
+
+    assert.equal(discoveredFrom(cand, 'https://site.test/feed', items(MIN_VERIFY_ITEMS - 1)), null,
+      'one or two items is a placeholder page, not a feed');
+    const ok = discoveredFrom(cand, 'https://site.test/feed', items(9));
+    assert.ok(ok && ok.items === 9);
+    assert.equal(ok!.sample, 'Item 0', 'the card carries one of the feed\'s own headlines');
+
+    // The name on the card. A host-derived slug reads as "Weworkremotely"; the
+    // page's own title, cut at the first separator, is the name a person uses.
+    assert.equal(titleLabel('We Work Remotely: Remote Jobs for Digital Nomads'), 'We Work Remotely');
+    assert.equal(titleLabel('Hacker News — new'), 'Hacker News');
+    assert.equal(titleLabel('r/forhire'), 'r/forhire');
+    assert.equal(titleLabel('https://site.test/x'), '', 'a bare url is not a name');
+    assert.equal(titleLabel('a'.repeat(60)), '', 'an unseparated paragraph is not a name either');
+    assert.equal(
+      discoveredFrom({ ...cand, title: 'We Work Remotely: Remote Jobs' }, 'https://weworkremotely.com/jobs.rss', items(5))!.label,
+      'We Work Remotely');
+    // But a shape the normaliser RECOGNISED keeps its own label: "r/forhire"
+    // beats whatever Reddit puts in a <title>.
+    assert.equal(
+      discoveredFrom({ ...cand, title: 'Reddit - Dive into anything' }, 'https://www.reddit.com/r/forhire', items(5))!.label,
+      'r/forhire');
+    // A feed whose newest item has no title cannot show evidence, so it is not
+    // offered — same rule as a lesson with no URL not being rendered.
+    assert.equal(discoveredFrom(cand, 'https://site.test/feed', [{ title: '  ' }, ...items(5)]), null);
+  }
+
+  // --- ranking
+  {
+    const mk = (url: string, items: number) => ({ url, label: url, intent: 'i', page: 'p', sample: 's', items });
+    const ranked = rankDiscovered([mk('https://a.test/f', 3), mk('https://a.test/f', 11), mk('https://b.test/f', 7)]);
+    assert.equal(ranked.length, 2, 'a site serving RSS and Atom is one source, not two');
+    assert.deepEqual(ranked.map((r) => r.items), [11, 7], 'livelier first');
+    assert.ok(rankDiscovered(Array.from({ length: 40 }, (_, i) => mk(`https://s${i}.test/f`, i))).length <= MAX_DISCOVERED);
+  }
+
+  // --- the Exa response, parsed
+  {
+    const hits = exaHits({
+      results: [
+        { url: 'https://ok.test/a', title: 'A', summary: 'a board', publishedDate: '2026-09-01T00:00:00Z' },
+        { url: 'not-a-url', title: 'B' },
+        { title: 'C' },
+        { url: 'https://ok.test/d' },
+      ],
+    });
+    assert.equal(hits.length, 2, 'anything without a fetchable url is dropped at the door');
+    assert.equal(hits[0].summary, 'a board');
+    assert.equal(hits[1].title, 'https://ok.test/d', 'a missing title falls back to the url, never to invention');
+    assert.deepEqual(exaHits({}), []);
+    assert.deepEqual(exaHits(null), []);
+  }
+
+  // --- attributing a Move back to its source
+  {
+    // movesFromVerdicts writes `${source.id}:${item.id}`, and a feed guid is
+    // very often a URL. Splitting on the last colon mis-attributes every Move
+    // from every feed that uses one, which is most of them.
+    assert.equal(sourceIdOf('src-1:https://site.test/post/9'), 'src-1');
+    assert.equal(sourceIdOf('src-1:plain-id'), 'src-1');
+    assert.equal(sourceIdOf('no-colon'), null);
+    assert.equal(sourceIdOf(':leading'), null);
+    assert.equal(sourceIdOf(null), null);
+  }
+
+  // --- the yield read
+  {
+    const now = new Date('2026-09-12T09:00:00Z');
+    const old = '2026-08-01T00:00:00Z';
+    const sources = [
+      { id: 'earning', created_at: old, last_checked_at: old },
+      { id: 'noisy', created_at: old, last_checked_at: old },
+      { id: 'quiet', created_at: old, last_checked_at: old },
+      { id: 'fresh', created_at: '2026-09-11T00:00:00Z', last_checked_at: null },
+    ];
+    const rows = [
+      ...Array.from({ length: 4 }, (_, i) => ({ external_id: `earning:i${i}`, status: 'done' })),
+      ...Array.from({ length: 5 }, (_, i) => ({ external_id: `noisy:i${i}`, status: 'dismissed' })),
+      { external_id: 'noisy:open', status: 'open' },
+      // A Move from a source since removed still happened, but there is no card
+      // left to put its record on.
+      { external_id: 'deleted-source:i0', status: 'done' },
+    ];
+    const y = sourceYield(rows, sources, now);
+
+    assert.equal(y.get('earning')!.verdict, 'earning');
+    assert.equal(y.get('earning')!.rate, 1);
+    assert.equal(y.get('noisy')!.verdict, 'noise');
+    assert.equal(y.get('noisy')!.dismissed, 5);
+    assert.equal(y.get('noisy')!.open, 1, 'unanswered Moves are counted but do not move the rate');
+    // A source that produced nothing is the interesting one, and a group-by over
+    // Moves alone would silently omit it.
+    assert.equal(y.get('quiet')!.verdict, 'quiet');
+    assert.equal(y.get('quiet')!.moves, 0);
+    assert.equal(y.get('fresh')!.verdict, 'new', 'added yesterday and never read has no record to judge');
+    assert.equal(y.size, 4, 'every source gets a row; a deleted one gets none');
+
+    // Below MIN_MOVE_SAMPLE there is no rate — one bad morning is not a preference.
+    const thin = sourceYield([{ external_id: 'earning:x', status: 'dismissed' }], [sources[0]], now);
+    assert.equal(thin.get('earning')!.rate, null);
+    assert.equal(thin.get('earning')!.verdict, 'unanswered');
+
+    // --- the line under the card
+    assert.equal(yieldLine(undefined), null, 'a payload written before this field must not blank the sheet');
+    assert.equal(yieldLine(y.get('quiet')), `Nothing in ${QUIET_AFTER_DAYS} days`);
+    assert.equal(yieldLine(y.get('earning')), '4 found · 4 kept');
+    assert.equal(yieldLine(y.get('noisy')), '6 found · 5 binned');
+    assert.equal(yieldLine(y.get('fresh')), null, 'nothing to say is said by saying nothing');
+
+    // --- what to suggest removing
+    const prune = pruneSuggestions(y.values());
+    assert.deepEqual(prune.map((p) => p.sourceId), ['noisy', 'quiet'],
+      'noise first: it costs a call a night AND a judgement every morning');
+    assert.ok(!prune.some((p) => p.sourceId === 'earning'));
+  }
+
+  console.log('copilot-core: discovery checks passed');
+}
+
+discovery().catch((e) => { console.error(e); process.exit(1); });

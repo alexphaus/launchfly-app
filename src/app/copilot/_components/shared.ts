@@ -1,4 +1,5 @@
 import type { PipelineStage } from '@/lib/copilot/pipeline';
+import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -85,6 +86,14 @@ export interface Actions {
    * note the normaliser wrote, or the error, so the sheet can say what it did.
    */
   addWatchSource(input: { url: string; label?: string; intent?: string }): Promise<{ ok: boolean; note?: string | null; error?: string }>;
+  /**
+   * Search for feeds that match the offer. Every result returned has already
+   * been fetched and parsed server-side, so `found` is a list of things that
+   * work, not a list of things that might.
+   */
+  discoverSources(): Promise<{ ok: boolean; found?: Discovered[]; searched?: string[]; checked?: number; note?: string | null; error?: string }>;
+  /** Add one discovered feed, by the URL that verified rather than the page. */
+  addDiscovered(d: Discovered): Promise<{ ok: boolean; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

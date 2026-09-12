@@ -12,6 +12,7 @@ import type { TriageCard } from './triage';
 import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, DecisionResponse } from './decision';
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
+import type { SourceYield } from './watch/yield';
 import type { PlanKey, PlanStatus } from './plans';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
@@ -333,6 +334,13 @@ export interface HomeData {
    * new account sees and the correct one for both.
    */
   watchSources: WatchSource[];
+  /**
+   * Per-source record, keyed by source id: how many Moves each feed produced and
+   * how many survived. Computed from copilot_moves, never stored — see
+   * watch/yield.ts. Empty until the watcher has written something, which is the
+   * honest state and the one every new account is in.
+   */
+  sourceYield: Record<string, SourceYield>;
   contextCount: number;
   /**
    * Finished work waiting on a yes or no, from every Job — not just outbound.
@@ -590,5 +598,11 @@ export interface WatchSource {
   seen_ids: string[];
   last_checked_at: string | null;
   last_error: string | null;
+  /**
+   * Where this row came from. Null on every source added before 20260915, and
+   * on any account where that migration has not been run — both read as 'user',
+   * which is what they are.
+   */
+  discovered_by: 'user' | 'catalogue' | 'exa' | null;
   created_at: string;
 }

@@ -67,7 +67,13 @@ export function dueSources(sources: WatchSource[], now: Date, max = MAX_SOURCES_
     .slice(0, max);
 }
 
-async function fetchFeed(url: string, budgetMs: number): Promise<string> {
+/**
+ * One feed body. Exported because discovery verifies a candidate the same way
+ * the nightly run reads a source — same user-agent, same timeout, same refusal
+ * of anything page-sized. A second fetcher with slightly different manners is
+ * how one of them ends up 429ed and nobody knows which.
+ */
+export async function fetchFeed(url: string, budgetMs: number): Promise<string> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), Math.min(FETCH_TIMEOUT_MS, budgetMs));
   try {

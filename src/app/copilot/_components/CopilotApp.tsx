@@ -18,6 +18,7 @@ import Sheet from './Sheet';
 import { useShell } from './shell';
 import SheetContent from './SheetContent';
 import type { Actions, OutcomeInput, SheetState, Tab } from './shared';
+import type { Discovered } from '@/lib/copilot/watch/discover';
 import WorkingView from './views/WorkingView';
 import NowView from './views/NowView';
 
@@ -234,6 +235,29 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
       } catch (e) {
         const error = e instanceof Error ? e.message : 'Could not add that';
         return { ok: false, error };
+      }
+    },
+    async discoverSources() {
+      try {
+        const r = await post<{ found: Discovered[]; searched: string[]; checked?: number; note?: string | null }>('/watch/discover', {});
+        // No say() here. The results ARE the feedback, and a toast over a list
+        // somebody is about to read is just something in the way.
+        return { ok: true, found: r.found, searched: r.searched, checked: r.checked, note: r.note ?? null };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not search for sources' };
+      }
+    },
+    async addDiscovered(d) {
+      try {
+        // Posted back to the discover route, not to /watch/sources: that one
+        // re-normalises, and d.url is already the feed that parsed. Running it
+        // through the normaliser again would rewrite a verified URL.
+        const r = await post<{ home: HomeData }>('/watch/discover', { url: d.url, label: d.label, intent: d.intent });
+        setHome(r.home);
+        say(`Watching ${d.label}. It gets read tonight.`);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not add that source' };
       }
     },
     async deleteAccount(confirm) {

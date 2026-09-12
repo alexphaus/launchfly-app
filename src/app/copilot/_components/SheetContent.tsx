@@ -7,6 +7,8 @@ import { OUTCOME_LABEL, TYPE_LABEL, maskPhone, money, relTime, sourceLabel } fro
 import type { Actions, SheetState } from './shared';
 import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
 import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
+import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
+import type { Discovered } from '@/lib/copilot/watch/discover';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 import { useShell } from './shell';
@@ -715,8 +717,28 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
   const [why, setWhy] = useState('');
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const [found, setFound] = useState<Discovered[] | null>(null);
+  const [findNote, setFindNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sources = home.watchSources;
+  const yields = home.sourceYield ?? {};
+  // Worst first, and only ever a suggestion — the app removes nothing somebody
+  // chose to watch. It earned an opinion by counting; that is the whole extent
+  // of the right.
+  const prune = pruneSuggestions(Object.values(yields));
+
+  const find = async () => {
+    setFinding(true); setError(null); setFindNote(null);
+    const r = await actions.discoverSources();
+    setFinding(false);
+    if (!r.ok) return setError(r.error ?? 'Could not search');
+    setFound(r.found ?? []);
+    setFindNote(r.note
+      ?? ((r.found?.length ?? 0) === 0 && r.checked
+        ? `Read ${r.checked} ${r.checked === 1 ? 'page' : 'pages'}, none of them publish a feed this can read.`
+        : null));
+  };
   // Seeded by what they already told the app they sell, so the search feeds
   // arrive with their own words in them rather than a placeholder.
   const term = home.profile.offer?.sells || home.profile.target_segments[0] || null;
@@ -738,8 +760,37 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
         Everything else on this app is worked out from your own rows — this is the only part that goes outside and looks.
       </p>
 
+      <div className="cp-section">
+        <span className="lead">Find them for me</span>
+        <button className="link" disabled={finding} onClick={() => void find()}>
+          {finding ? 'Looking…' : found ? 'Look again' : 'Search'}
+        </button>
+      </div>
+      <p className="desc" style={{ marginTop: -6 }}>
+        Built from what you sell and who for. Every result below was fetched and read before it got here — if it is
+        listed, it works, and the line under it is one of its own headlines.
+      </p>
+
+      {findNote && <div className="cp-note">{findNote}</div>}
+      {found?.map((d) => {
+        const already = sources.some((s) => s.url === d.url);
+        return (
+          <button key={d.url} className="cp-option" disabled={busy || already}
+            onClick={async () => { setBusy(true); await actions.addDiscovered(d); setBusy(false); }}>
+            <div>
+              <div className="ct">{d.label}</div>
+              <div className="cs">{already ? 'Already watching' : d.intent}</div>
+              {/* The newest item off the feed. Evidence rather than a pitch:
+                  somebody can tell in a second whether this is their world. */}
+              <div className="cs quote">“{d.sample}”</div>
+              <div className="cs">{d.items} recent {d.items === 1 ? 'item' : 'items'}</div>
+            </div>
+          </button>
+        );
+      })}
+
       <div className="cp-field">
-        <label className="cp-label">Add a feed, or a subreddit</label>
+        <label className="cp-label">Or add a feed yourself</label>
         <div className="cp-input-row">
           <input className="cp-input sm" value={url} autoCapitalize="off" autoCorrect="off" spellCheck={false}
             onChange={(e) => { setUrl(e.target.value); setError(null); }}
@@ -779,6 +830,12 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
                     : 'Not read yet — the first pass runs tonight'}
                 </div>
                 {s.intent && <div className="cs">{s.intent}</div>}
+                {/* Counts, never adjectives. "12 found · 1 kept · 9 binned"
+                    lets somebody decide; "low relevance" asks them to trust a
+                    word the app made up. */}
+                {yieldLine(yields[s.id]) && (
+                  <div className={`cs ${yields[s.id]?.verdict === 'noise' ? 'bad' : ''}`}>{yieldLine(yields[s.id])}</div>
+                )}
                 <div className="acts">
                   {s.status !== 'paused'
                     ? <button className="cp-connect ghost" onClick={() => void actions.setWatchSourceStatus(s.id, 'paused')}>Pause</button>
@@ -789,6 +846,15 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
             );
           })}
         </>
+      )}
+
+      {prune.length > 0 && (
+        <div className="cp-note">
+          {prune.length === 1 ? 'One source is not earning its place' : `${prune.length} sources are not earning their place`}
+          {' — '}
+          {prune.slice(0, 3).map((y) => sources.find((s) => s.id === y.sourceId)?.label).filter(Boolean).join(', ')}.
+          {' '}Every one costs a read and a judgement a night. Removing one is how the rest get more of both.
+        </div>
       )}
 
       <div className="cp-section"><span className="lead">{sources.length ? 'Add another' : 'Or start from one of these'}</span></div>

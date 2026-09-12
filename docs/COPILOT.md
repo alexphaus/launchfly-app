@@ -275,6 +275,13 @@ COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
 
 # Real supply
 APIFY_API_TOKEN=...                 # Google Maps adapter (same token Launchfly uses)
+EXA_API_KEY=...                     # source DISCOVERY only — /api/copilot/watch/discover
+#   Without it the Sources sheet still works; the "Find them for me" button says the
+#   deployment does not have it and the user adds feeds by hand, as before. Exa is
+#   never asked what to DO — only where to look. It returns pages, those are turned
+#   into feed URLs deterministically (the site's own <link rel="alternate">, or
+#   normalizeSourceUrl), and every candidate is fetched and parsed before the user is
+#   offered it. Nothing it returns can reach a Move. Same key Launchfly's agent uses.
 
 # Approve & send
 ULTRAMSG_INSTANCE_ID / ULTRAMSG_TOKEN     or   EVOLUTION_BASE_URL / EVOLUTION_API_KEY / EVOLUTION_INSTANCE

@@ -15,6 +15,7 @@ import { stageOf } from './pipeline';
 import { inMotion } from './motion';
 import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capture';
 import { forecast } from './obligations';
+import { sourceYield, type SourceYield, type WatchMoveRow } from './watch/yield';
 import type { SentMessage } from './silence';
 import type { OpenedDraft, UnresolvedReply } from './capture';
 import type { Obligation, ObligationDirection, ObligationStatus } from './obligations';
@@ -541,7 +542,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, watchMoveRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -575,6 +576,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadOpenedDrafts(profileId),
     loadUnresolvedReplies(profileId),
     loadObligations(profileId),
+    loadWatchMoveRows(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -701,6 +703,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     edge,
     sources,
     watchSources,
+    /**
+     * What each source has actually produced, keyed by source id. An object
+     * rather than a Map because this crosses the wire as JSON, and a Map
+     * serialises to `{}`.
+     */
+    sourceYield: Object.fromEntries(sourceYield(watchMoveRows, watchSources, nowTs)),
     contextCount: ctxCount,
     triage: shownTriage,
     /** Why the deck is not asking about businesses today. Null when it is. */
@@ -860,6 +868,9 @@ export async function setSendMode(profileId: string, mode: SendMode, emailFrom?:
 // person's world asks it. See supabase/migrations/20260912_copilot_watch.sql.
 
 const SOURCE_COLS = 'id, kind, url, label, intent, every_hours, status, seen_ids, last_checked_at, last_error, created_at';
+/** 20260915 adds discovered_by. Read separately so an unapplied migration costs
+ *  the provenance line and not the whole sheet. */
+const SOURCE_COLS_V2 = `${SOURCE_COLS}, discovered_by`;
 
 /**
  * Every source on file, newest first. Returns an empty list on any error — the
@@ -867,10 +878,31 @@ const SOURCE_COLS = 'id, kind, url, label, intent, every_hours, status, seen_ids
  * Sources sheet must read as "none added yet" rather than take Today down.
  */
 export async function loadWatchSources(profileId: string): Promise<WatchSource[]> {
-  const { data, error } = await copilotDb().from('copilot_sources').select(SOURCE_COLS)
+  const read = (cols: string) => copilotDb().from('copilot_sources').select(cols)
     .eq('profile_id', profileId).order('created_at', { ascending: false }).limit(30);
+  let { data, error } = await read(SOURCE_COLS_V2);
+  if (error) ({ data, error } = await read(SOURCE_COLS));
   if (error) return [];
   return (data ?? []) as unknown as WatchSource[];
+}
+
+/**
+ * Every watcher Move ever written, as the two columns yield needs.
+ *
+ * Read wide and unbounded where the keep-rate is capped at 200: that rate is
+ * about what somebody does lately, but a source's record is its whole life, and
+ * a feed that earned its place for three months should not read as noise
+ * because last fortnight was quiet. Watcher Moves are never deleted —
+ * supersedeMoves only touches open rows of supersedes:true jobs — so this is the
+ * complete history, and it is the reason no counter column exists.
+ */
+export async function loadWatchMoveRows(profileId: string): Promise<WatchMoveRow[]> {
+  const { data, error } = await copilotDb().from('copilot_moves')
+    .select('external_id, status')
+    .eq('profile_id', profileId).eq('job', 'watch').limit(2000);
+  // No moves table, or none yet: every source reads as 'new', which is true.
+  if (error) return [];
+  return (data ?? []) as unknown as WatchMoveRow[];
 }
 
 /** How many a profile may watch. Every source is a model call a night. */
@@ -883,6 +915,7 @@ export const MAX_WATCH_SOURCES = 12;
 export async function saveWatchSource(profileId: string, patch: {
   id?: string; url?: string; label?: string; intent?: string | null;
   kind?: WatchSource['kind']; every_hours?: number; status?: WatchSource['status'];
+  discovered_by?: WatchSource['discovered_by'];
 }): Promise<WatchSource | null> {
   if (patch.id) {
     const row: Record<string, unknown> = {};
@@ -904,7 +937,7 @@ export async function saveWatchSource(profileId: string, patch: {
   if (existing.length >= MAX_WATCH_SOURCES && !existing.some((s) => s.url === patch.url)) {
     throw new Error(`You can watch ${MAX_WATCH_SOURCES} sources. Remove one first.`);
   }
-  const { data, error } = await copilotDb().from('copilot_sources').upsert({
+  const row = {
     profile_id: profileId,
     url: patch.url.slice(0, 600),
     label: (patch.label || patch.url).slice(0, 80),
@@ -913,9 +946,15 @@ export async function saveWatchSource(profileId: string, patch: {
     every_hours: patch.every_hours ?? 24,
     status: 'active',
     last_error: null,
-  }, { onConflict: 'profile_id,url' }).select(SOURCE_COLS).maybeSingle();
+  };
+  const write = (extra: Record<string, unknown>, cols: string) => copilotDb().from('copilot_sources')
+    .upsert({ ...row, ...extra }, { onConflict: 'profile_id,url' }).select(cols).maybeSingle();
+  // Provenance is the nice-to-have and the source is the point: if 20260915 has
+  // not been run, adding a feed still has to work.
+  let { data, error } = await write({ discovered_by: patch.discovered_by ?? 'user' }, SOURCE_COLS_V2);
+  if (error) ({ data, error } = await write({}, SOURCE_COLS));
   if (error) throw error;
-  await logEvent(profileId, 'watch_source_added', { url: patch.url, kind: patch.kind ?? 'feed' });
+  await logEvent(profileId, 'watch_source_added', { url: patch.url, kind: patch.kind ?? 'feed', discovered_by: patch.discovered_by ?? 'user' });
   return (data as unknown as WatchSource) ?? null;
 }
 

@@ -85,6 +85,11 @@ export interface Actions {
   addWatchSource(input: { url: string; label?: string; intent?: string }): Promise<{ ok: boolean; note?: string | null; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
+   * Read the watched sources now rather than at 21:00. One or two per tap —
+   * see the route for why it cannot be all of them at once.
+   */
+  readSourcesNow(): Promise<{ ok: boolean; found?: number }>;
+  /**
    * Delete the account and every row belonging to it. Not recoverable, and not
    * the same thing as resetDevice, which only clears the cookie.
    */

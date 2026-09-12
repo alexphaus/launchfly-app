@@ -15,7 +15,7 @@ import { stageOf } from './pipeline';
 import { inMotion } from './motion';
 import type { SentMessage } from './silence';
 import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
-import type { Move, WatchSource } from './types';
+import type { JobsRunSummary, Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
 import { hasSubscription, vapidPublicKey } from './push';
@@ -537,7 +537,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -567,6 +567,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadMoves(profileId),
     availableJobs(profile),
     loadWatchSources(profileId),
+    loadLastJobsRun(profileId),
   ]);
 
   // Join send-ready drafts onto today's plan, the latest outcome onto each
@@ -684,7 +685,12 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     movesBlocked: movesRead.moves.length ? null
       : movesRead.tableMissing ? 'migration'
       : jobKeys.length === 0 ? 'no_sensor'
+      // Sensors are connected and a run has happened: the list is empty because
+      // nothing new was found, which is a report rather than the silence it used
+      // to render. Still null before the first run, when there is nothing to say.
+      : jobsRun ? 'quiet'
       : null,
+    jobsRun,
     needsBrief: !insight || insight.for_date !== today,
     // Configured to look, and nothing found. Deliberately not "has supply ever
     // run": an account whose matches were all dismissed is in the same
@@ -991,4 +997,29 @@ export async function loadSilence(profileId: string, now = new Date()): Promise<
       sentAt: r.sent_at,
       replied: repliedIds.has(r.id),
     }));
+}
+
+/**
+ * What the last jobs run actually did, for the empty state.
+ *
+ * Written on every run by runJobs, productive or not. Nothing here is load
+ * bearing — a missing or unreadable row degrades to no summary and the screen
+ * falls back to saying less, never to saying something wrong.
+ */
+export async function loadLastJobsRun(profileId: string): Promise<JobsRunSummary | null> {
+  const { data, error } = await copilotDb()
+    .from('copilot_events')
+    .select('payload, created_at')
+    .eq('profile_id', profileId).eq('event_type', 'jobs_ran')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (error || !data?.payload) return null;
+  const pl = data.payload as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    at: data.created_at as string,
+    ran: n(pl.ran),
+    produced: n(pl.produced),
+    written: n(pl.written),
+    quiet: Array.isArray(pl.quiet) ? (pl.quiet as unknown[]).filter((k): k is string => typeof k === 'string') : [],
+  };
 }

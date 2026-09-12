@@ -713,6 +713,7 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
   const [url, setUrl] = useState('');
   const [why, setWhy] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sources = home.watchSources;
   // Seeded by what they already told the app they sell, so the search feeds
@@ -754,7 +755,16 @@ function WatchlistSheet({ home, actions }: { home: HomeData; actions: Actions })
 
       {sources.length > 0 && (
         <>
-          <div className="cp-section"><span className="lead">Watching</span><span className="count">{sources.length}</span></div>
+          <div className="cp-section">
+            <span className="lead">Watching</span>
+            <button className="link" disabled={reading} onClick={async () => { setReading(true); await actions.readSourcesNow(); setReading(false); }}>
+              {reading ? 'Reading…' : 'Read them now'}
+            </button>
+          </div>
+          <p className="desc" style={{ marginTop: -6 }}>
+            Two at a time, oldest first — a fetch and a judgement each, which is as much as one tap can hold.
+            Tap again for the next two.
+          </p>
           {sources.map((s) => {
             const broken = !!s.last_error || s.kind !== 'feed';
             return (

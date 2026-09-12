@@ -344,7 +344,12 @@ export interface HomeData {
    * screen. 'migration' means copilot_moves is not there yet; 'no_sensor' means
    * no job can see anything for this profile. Both used to render as silence.
    */
-  movesBlocked: 'migration' | 'no_sensor' | null;
+  movesBlocked: 'migration' | 'no_sensor' | 'quiet' | null;
+  /**
+   * What the last jobs run did, so an empty Moves list can report rather than
+   * render nothing. Null before the first run, or if the read fails.
+   */
+  jobsRun: JobsRunSummary | null;
   /** True when there is no brief for today yet; the client triggers one. */
   needsBrief: boolean;
   /**
@@ -519,6 +524,18 @@ export interface OpportunityAgent {
 }
 
 /** One finished piece of work, as the client renders it. */
+/** One nightly jobs run, summarised for the screen. Written by runJobs. */
+export interface JobsRunSummary {
+  at: string;
+  /** Sensors that actually looked — available, and not skipped. */
+  ran: number;
+  produced: number;
+  /** New after dedupe. Produced-but-not-written means it was already answered. */
+  written: number;
+  /** Job keys that looked and found nothing. */
+  quiet: string[];
+}
+
 export interface Move {
   id: string;
   job: string;

@@ -6,8 +6,8 @@
 // message; this finds anything worth doing, of which messaging is one kind.
 
 import { copilotDb, todayIso } from '../db';
-import { selectMoves, type MoveDraft } from '../moves';
-import { getProfile, logEvent } from '../store';
+import { MAX_RESTATE_DISMISSALS, dismissedStreak, selectMoves, type MoveDraft } from '../moves';
+import { getProfile, loadMoveAnswers, logEvent } from '../store';
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
 import { goalGapJob } from './goal-gap';
@@ -126,21 +126,41 @@ export interface JobsResult {
  * already marked done or dismissed must stay that way, which ignoring the
  * conflict is exactly what guarantees.
  */
-export async function runJobs(profileId: string, opts: { now?: Date; deadline?: number } = {}): Promise<JobsResult> {
+export async function runJobs(
+  profileId: string,
+  opts: { now?: Date; deadline?: number; only?: string[]; force?: boolean; maxSources?: number } = {},
+): Promise<JobsResult> {
   const out: JobsResult = { ran: 0, produced: 0, written: 0, perJob: {} };
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('profile not found');
 
   const now = opts.now ?? new Date();
   // One sense read for the whole run, however many jobs ask for it.
-  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now, deadline: opts.deadline, sense: memoSense(profile, now) };
+  const ctx: JobContext = { profile, today: todayIso(profile.timezone), now, deadline: opts.deadline, sense: memoSense(profile, now), force: opts.force, maxSources: opts.maxSources };
 
-  for (const job of JOBS) {
+  // One read of the answer history, used only to stop a standing state the user
+  // keeps binning. Loaded here rather than in each job so there is one opinion
+  // about it and one query.
+  const answers = await loadMoveAnswers(profileId).catch(() => []);
+
+  // `only` narrows the run to named jobs — the on-demand source read is one
+  // job somebody asked for, not a nightly pass in miniature.
+  const jobs = opts.only?.length ? JOBS.filter((j) => opts.only!.includes(j.key)) : JOBS;
+
+  for (const job of jobs) {
     const entry = { produced: 0, written: 0 } as JobsResult['perJob'][string];
     out.perJob[job.key] = entry;
     try {
       if (opts.deadline && Date.now() > opts.deadline) { entry.skipped = 'no time left this run'; continue; }
       if (!(await job.available(ctx))) { entry.skipped = 'sensor not connected for this profile'; continue; }
+      // A standing state is true until it is fixed, so it restates weekly — but
+      // one binned twice running has been answered, and asking again is the app
+      // not listening. Event-driven jobs are never suppressed this way: a
+      // dismissed draft says nothing about tomorrow's different one.
+      if (job.standing && dismissedStreak(answers, job.key) >= MAX_RESTATE_DISMISSALS) {
+        entry.skipped = 'you have turned this down; it stays off until something changes';
+        continue;
+      }
       out.ran += 1;
 
       const drafts: MoveDraft[] = selectMoves(await job.run(ctx));
@@ -156,6 +176,18 @@ export async function runJobs(profileId: string, opts: { now?: Date; deadline?: 
     }
   }
 
+  // Logged on EVERY run, not only a productive one. An empty Moves list used to
+  // render nothing at all, so a night when nine sensors looked and found nothing
+  // was pixel-identical to a broken app — which is exactly how it was reported.
+  // loadLastJobsRun reads this back so the screen can say what happened.
+  await logEvent(profileId, 'jobs_ran', {
+    ran: out.ran,
+    produced: out.produced,
+    written: out.written,
+    // Only the keys, and only the ones that looked: a full perJob object is a
+    // debug dump, and this is read to write one sentence.
+    quiet: Object.entries(out.perJob).filter(([, v]) => !v.skipped && !v.produced).map(([k]) => k),
+  });
   if (out.written > 0) await logEvent(profileId, 'moves_written', { written: out.written, produced: out.produced });
   return out;
 }

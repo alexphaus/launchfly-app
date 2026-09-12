@@ -1594,10 +1594,15 @@ async function leverage() {
   // --- opening gap: an observed condition, and where the line is allowed to go
   {
     const offer = { sells: 'WhatsApp automations', problem: 'enquiries arrive after hours' };
-    const m = openingMove({ offer }, term());
+    const m = openingMove({ offer }, term(), '2026-W37');
     assert.ok(m, 'an opening with a line to add is a Move');
     assert.equal(m.kind, 'decide');
-    assert.equal(m.external_id, 'opening:online booking', 'once per term, ever — an opening still open tomorrow is the same one');
+    // Keyed by week, not once ever. The old key meant the single most valuable
+    // finding in the app was shown one morning and never again — two or three
+    // nights in, the only job still producing daily was the send queue, and
+    // Moves rendered empty for weeks.
+    assert.equal(m.external_id, 'opening:online booking:2026-W37');
+    assert.notEqual(openingMove({ offer }, term(), '2026-W38')!.external_id, m.external_id, 'still open next week is a new card');
     assert.ok(m.why[0].includes('7'), 'the evidence cites the count, not an adjective');
     assert.ok(m.artifact.value.includes('enquiries arrive after hours, online booking'), 'the edit arrives written');
     assert.ok(m.artifact.value.includes('spas'), 'and names the segment to drop if the answer is no');
@@ -2569,3 +2574,86 @@ async function silence() {
 }
 
 silence().catch((e) => { console.error(e); process.exit(1); });
+
+// --- a quiet night is a report, not silence
+//
+// The cron ran, succeeded, took four minutes — and Moves rendered empty. Not a
+// bug in the cron: every standing-state job keyed itself once and never fired
+// again (`runway:${month}`, `edge:${capability}`, `opening:${term}`), so two or
+// three nights in the only daily producer left was the send queue, which is
+// already on the screen twice. And an empty list rendered nothing at all, so a
+// working build and a broken one were pixel-identical.
+import { MAX_RESTATE_DISMISSALS, dismissedStreak } from '../../src/lib/copilot/moves';
+import { runwayMove } from '../../src/lib/copilot/jobs/runway-guard';
+import { capabilityMove } from '../../src/lib/copilot/jobs/capability-gap';
+import { dueSources as due } from '../../src/lib/copilot/jobs/watcher';
+import { JOBS as ALL_JOBS } from '../../src/lib/copilot/jobs';
+import type { MoveAnswerEvent as AnswerEvent } from '../../src/lib/copilot/moves';
+import type { WatchSource as WSource } from '../../src/lib/copilot/types';
+
+async function refill() {
+  // 1. STANDING STATES COME BACK. The same gap next week is a new card, because
+  //    it is still the gap.
+  const finance = { cash: 1190, monthly_burn: 350, currency: '$' };
+  const m = { sent: 9, replies: 2, won: 1, won_amount: 400, window_days: 30, lost: 0, meetings: 6,
+    reply_rate: 0.22, awaiting_approval: 51, runway_months: 3.4,
+    pipeline: { new: 0, saved: 0, sourced: 71, inferred: 0 } };
+  const w37 = runwayMove({ finance }, m as never, '2026-W37');
+  const w38 = runwayMove({ finance }, m as never, '2026-W38');
+  assert.ok(w37 && w38);
+  assert.notEqual(w37.external_id, w38.external_id, 'a standing money problem restates weekly');
+  assert.match(w37.external_id, /^runway:2026-W37$/);
+
+  const edge = { capability: 'Naming the opening in the first line', because: ['x'], experiment: 'y', source: 'funnel' as const };
+  assert.notEqual(capabilityMove(edge, '2026-W37').external_id, capabilityMove(edge, '2026-W38').external_id);
+
+  // Every job that describes a standing state says so, and every one that does
+  // not is event-driven — the source row already decides when there is news.
+  const standing = ALL_JOBS.filter((j) => j.standing).map((j) => j.key).sort();
+  assert.deepEqual(standing, ['capability_gap', 'opening_gap', 'runway_guard']);
+  assert.ok(!ALL_JOBS.find((j) => j.key === 'send_queue')?.standing, 'a daily queue is not a standing state');
+  assert.ok(!ALL_JOBS.find((j) => j.key === 'watch')?.standing, 'a feed item is an event');
+
+  // 2. BUT NOT FOREVER. Binned twice running and it stops — restating something
+  //    already answered is the app not listening, the same failure REFUSAL_DECAY
+  //    stops one level up.
+  const ev = (job: string, status: string): AnswerEvent => ({ event_type: 'move_answered', payload: { job, status, kind: 'decide' } });
+  assert.equal(dismissedStreak([], 'runway_guard'), 0, 'no history is no streak');
+  assert.equal(dismissedStreak([ev('runway_guard', 'dismissed')], 'runway_guard'), 1);
+  assert.equal(dismissedStreak([ev('runway_guard', 'dismissed'), ev('runway_guard', 'dismissed')], 'runway_guard'), MAX_RESTATE_DISMISSALS);
+  // A 'done' ends it: acting on one and binning the next is not a pattern.
+  assert.equal(dismissedStreak([ev('runway_guard', 'done'), ev('runway_guard', 'dismissed')], 'runway_guard'), 0,
+    'newest first — a recent done clears the streak');
+  // Another job's dismissals are not this job's.
+  assert.equal(dismissedStreak([ev('opening_gap', 'dismissed'), ev('opening_gap', 'dismissed')], 'runway_guard'), 0);
+  // Events between them do not break the streak; a different status does.
+  assert.equal(dismissedStreak([ev('runway_guard', 'dismissed'), ev('watch', 'done'), ev('runway_guard', 'dismissed')], 'runway_guard'), 2);
+
+  // 3. "READ THEM NOW" IGNORES every_hours. That rule stops the nightly run
+  //    spending a model call on a feed that has not moved; it has no business
+  //    telling somebody looking at the screen to wait.
+  const now = new Date('2026-09-12T10:00:00Z');
+  const src = (o: Partial<WSource>): WSource => ({
+    id: 'a', kind: 'feed', url: 'https://x/f', label: 'x', intent: null, every_hours: 24,
+    status: 'active', seen_ids: [], last_checked_at: '2026-09-12T03:00:00Z', last_error: null,
+    created_at: '2026-09-01T00:00:00Z', ...o,
+  });
+  assert.equal(due([src({})], now).length, 0, 'read seven hours ago is not due on the nightly pass');
+  assert.equal(due([src({})], now, 6, true).length, 1, 'and is read anyway when somebody asks');
+  // force still respects what force is not for: a paused source stays paused,
+  // and a page is not a feed.
+  assert.equal(due([src({ status: 'paused' })], now, 6, true).length, 0);
+  assert.equal(due([src({ kind: 'page' })], now, 6, true).length, 0);
+  // Two per tap, oldest first, so tapping again walks the list instead of
+  // re-reading the same feed.
+  const many = due([
+    src({ id: 'c', last_checked_at: '2026-09-12T09:00:00Z' }),
+    src({ id: 'a', last_checked_at: '2026-09-10T03:00:00Z' }),
+    src({ id: 'b', last_checked_at: '2026-09-11T03:00:00Z' }),
+  ], now, 2, true);
+  assert.deepEqual(many.map((s) => s.id), ['a', 'b']);
+
+  console.log('copilot-core: refill checks passed');
+}
+
+refill().catch((e) => { console.error(e); process.exit(1); });

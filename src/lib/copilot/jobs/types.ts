@@ -47,11 +47,38 @@ export interface JobContext {
    * table, an external workflow — never call it and never pay for it.
    */
   sense(): Promise<JobSense>;
+  /**
+   * Ignore per-source schedules. Set only by an on-demand run somebody asked
+   * for: the nightly pass respects every_hours so it does not spend a model call
+   * on a feed that has not moved, but a person looking at the screen and tapping
+   * "Read them now" is not who that rule is for.
+   */
+  force?: boolean;
+  /** Fewer sources than the nightly budget, when the caller has less time. */
+  maxSources?: number;
 }
 
 export interface Job {
   key: string;
   label: string;
+  /**
+   * This job describes a STANDING STATE rather than an event.
+   *
+   * Runway under the line, the top opening still unnamed, the capability the
+   * funnel says is missing — each is true until it is fixed, so its Move has to
+   * be allowed to come back. Without this every one of them keyed itself once
+   * and never fired again: `runway:${month}`, `edge:${capability}`,
+   * `opening:${term}`. Two or three nights in, the only job still producing
+   * anything daily was the send queue, which is the one thing already on the
+   * screen twice, and Moves rendered empty for weeks.
+   *
+   * Absent means event-driven — a sale, a feed item, a queue — where the source
+   * row already decides when there is something new to say.
+   *
+   * Restating is not unconditional: runJobs stops a standing state the user has
+   * binned MAX_RESTATE_DISMISSALS times running.
+   */
+  standing?: boolean;
   /**
    * False when this job cannot run for this profile — a missing sensor, an
    * unlinked business, a key this deployment does not have. A job that cannot

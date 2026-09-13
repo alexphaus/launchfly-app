@@ -42,6 +42,12 @@ export type YieldVerdict =
   | 'quiet'
   /** Producing Moves that nobody has answered yet. */
   | 'unanswered'
+  /**
+   * Answered enough to judge, and the answer is "some". Its own name because
+   * the first version folded this band into 'unanswered', so a feed the user
+   * kept half of was indistinguishable from one they had never seen.
+   */
+  | 'mixed'
   /** Answered often enough, and kept. */
   | 'earning'
   /** Answered often enough, and binned. */
@@ -110,7 +116,7 @@ export function sourceYield(rows: WatchMoveRow[], sources: YieldSource[], now: D
     const rate = answered >= MIN_MOVE_SAMPLE ? t.kept / answered : null;
 
     let verdict: YieldVerdict;
-    if (rate != null) verdict = rate >= KEEP_HIGH ? 'earning' : rate <= KEEP_LOW ? 'noise' : 'unanswered';
+    if (rate != null) verdict = rate >= KEEP_HIGH ? 'earning' : rate <= KEEP_LOW ? 'noise' : 'mixed';
     else if (t.moves > 0) verdict = 'unanswered';
     else if (source.last_checked_at && daysBetween(source.created_at, now) >= QUIET_AFTER_DAYS) verdict = 'quiet';
     else verdict = 'new';

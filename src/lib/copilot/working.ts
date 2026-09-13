@@ -110,6 +110,16 @@ export const EVIDENCE_MAX = 160;
 /** Per section. Past this it is a document, and a document nobody reads. */
 export const MAX_PER_SECTION = 8;
 /**
+ * Total characters the block may contribute to one prompt.
+ *
+ * Section and per-entry caps alone allow 6 x 8 x BODY_MAX, about 29,000
+ * characters — roughly 7k tokens. briefText puts this at the head of EVERY
+ * per-source judge prompt, and the watcher reads up to MAX_SOURCES_PER_RUN
+ * sources a night, so a fully written file would add something like 42k tokens
+ * of identical prefix per run to the most model-expensive job in the app.
+ */
+export const BRIEF_MAX = 4_000;
+/**
  * Rows a reading needs before it is worth stating. Four matches the Move
  * keep-rate's floor for the same reason: below it a pattern is one good week.
  */
@@ -218,22 +228,43 @@ export function observedFrom(diagnosis: Diagnosis, metrics: Metrics): ObservedDr
   return out;
 }
 
+export interface ObservedWrite {
+  /** New or changed readings the user has not settled. Written as 'proposed'. */
+  propose: ObservedDraft[];
+  /**
+   * Readings the user already confirmed, whose number has since moved. The body
+   * and evidence are refreshed; the status is not touched.
+   */
+  refresh: ObservedDraft[];
+}
+
 /**
- * Proposals worth writing: nothing the user already declined, nothing unchanged.
+ * Tonight's readings, split by what the user has already said about each.
  *
- * Both filters matter. Re-proposing a declined reading every night is the app
- * not listening, which is the failure REFUSAL_DECAY exists to stop one layer
- * up. Rewriting an unchanged row bumps updated_at and makes the sheet look like
- * something happened when nothing did.
+ * Three filters, and the middle one is a bug this originally had. Re-proposing a
+ * DECLINED reading is the app not listening — the failure REFUSAL_DECAY exists
+ * to stop one layer up. Rewriting an UNCHANGED row bumps updated_at and makes
+ * the sheet look like something happened when nothing did.
+ *
+ * And a LIVE reading whose number moved must be refreshed rather than
+ * re-proposed. The first version only skipped declined rows, so a confirmed
+ * "9 sent in the last 30 days, 2 replied" was demoted back to 'proposed' the
+ * moment the count reached 10 — which for a rolling window is most nights. It
+ * dropped out of workingBrief (live only) and reappeared under "It noticed",
+ * every morning, for the user to confirm again. What they confirmed was the
+ * READING, not the arithmetic in it; the number moving is the reading working.
  */
-export function newObserved(drafts: ObservedDraft[], existing: WorkingEntry[]): ObservedDraft[] {
+export function newObserved(drafts: ObservedDraft[], existing: WorkingEntry[]): ObservedWrite {
   const byKey = new Map(existing.filter((e) => e.observed_key).map((e) => [e.observed_key!, e]));
-  return drafts.filter((d) => {
+  const out: ObservedWrite = { propose: [], refresh: [] };
+  for (const d of drafts) {
     const prev = byKey.get(d.observed_key);
-    if (!prev) return true;
-    if (prev.status === 'declined') return false;
-    return prev.body !== d.body;
-  });
+    if (!prev) { out.propose.push(d); continue; }
+    if (prev.status === 'declined') continue;
+    if (prev.body === d.body) continue;
+    (prev.status === 'live' ? out.refresh : out.propose).push(d);
+  }
+  return out;
 }
 
 /* ─── What the prompts read ───────────────────────────────────────────────── */
@@ -250,17 +281,26 @@ export function newObserved(drafts: ObservedDraft[], existing: WorkingEntry[]): 
  * which is a count and which is a statement. Prose that hides where it came from
  * is how a guess gets treated as a fact two hops later.
  */
-export function workingBrief(entries: WorkingEntry[], maxPerSection = MAX_PER_SECTION): string {
+export function workingBrief(entries: WorkingEntry[], maxChars = BRIEF_MAX, maxPerSection = MAX_PER_SECTION): string {
   const live = entries.filter((e) => e.status === 'live');
   if (!live.length) return '';
 
   const lines: string[] = [];
+  let used = 0;
   for (const section of SECTIONS) {
     const rows = live.filter((e) => e.section === section).slice(0, maxPerSection);
     if (!rows.length) continue;
-    lines.push(`${SECTION[section].label}:`);
+    const head = `${SECTION[section].label}:`;
+    if (used + head.length > maxChars) break;
+    lines.push(head);
+    used += head.length + 1;
     for (const r of rows) {
-      lines.push(`- ${r.body}${r.source === 'observed' && r.evidence ? ` (from your rows: ${r.evidence})` : ''}`);
+      const line = `- ${r.body}${r.source === 'observed' && r.evidence ? ` (from your rows: ${r.evidence})` : ''}`;
+      // Stop rather than truncate: half a sentence about somebody's pricing is
+      // worse than no sentence, because a model will complete it.
+      if (used + line.length > maxChars) return lines.join('\n');
+      lines.push(line);
+      used += line.length + 1;
     }
   }
   return lines.join('\n');

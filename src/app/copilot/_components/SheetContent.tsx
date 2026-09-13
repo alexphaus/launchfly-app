@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { computeRunwayMonths } from '@/lib/copilot/metrics';
 import { OFFER_TASK_TITLE, addOpeningToOffer, offerIsEmpty } from '@/lib/copilot/offer';
 import { CAPACITY_META, type Action, type Capacity, type Execution, type Goal, type GoalMetric, type HomeData, type Offer, type Opportunity } from '@/lib/copilot/types';
@@ -1064,26 +1064,30 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const thread = home.commissions.find((t) => t.commission.id === id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const seen = useRef(false);
-
-  // Mark it read once per open. Without this "since you last looked" counts
-  // every event forever and the card wears a permanent badge.
-  if (thread && !seen.current) {
-    seen.current = true;
+  // In an effect, keyed on the id. The first version did this in the render body
+  // behind a ref — and CopilotApp keeps the last sheet MOUNTED after it closes
+  // (sheet = top ?? lastSheet.current), so the ref survived the close and
+  // reopening the same commission never marked it read again: report.fresh grew
+  // forever and the card wore the permanent badge the whole thing exists to
+  // prevent. A render-body POST also fires on renders React throws away.
+  useEffect(() => {
     void actions.commissionAction(id, 'seen');
-  }
+    // actions is rebuilt every render; the commission id is what identifies a
+    // distinct read, and re-running on every keystroke is not one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (!thread) return <><h3>Commission</h3><p className="desc">This one is gone.</p></>;
   const c = thread.commission;
   const meta = AUTHORITY[c.authority];
   const goal = home.goals.find((g) => g.id === c.goal_id);
 
-  const act = async (action: 'approve' | 'stop' | 'done') => {
+  const act = async (action: 'approve' | 'unblock' | 'stop' | 'done') => {
     setBusy(true); setError(null);
     const r = await actions.commissionAction(id, action);
     setBusy(false);
     if (!r.ok) setError(r.error ?? 'Could not do that');
-    else if (action !== 'approve') actions.closeSheet();
+    else if (action === 'stop' || action === 'done') actions.closeSheet();
   };
 
   return (
@@ -1153,6 +1157,15 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
               )}
             </div>
           ))}
+        </>
+      )}
+
+      {c.status === 'blocked' && (
+        <>
+          <button className="cp-btn primary block" disabled={busy} onClick={() => void act('unblock')}>
+            {busy ? 'Carrying on…' : 'I have answered — carry on'}
+          </button>
+          <p className="cp-help">Until you tap this it stays put. The worker cannot clear its own question.</p>
         </>
       )}
 

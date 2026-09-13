@@ -107,8 +107,8 @@ export interface Actions {
   removeWorking(id: string): Promise<void>;
   /** Write a mandate. Always created as a draft — approving is a second act. */
   createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
-  /** Grant authority, call it off, mark it finished, or mark the thread read. */
-  commissionAction(id: string, action: 'approve' | 'stop' | 'done' | 'seen', outcome?: string): Promise<{ ok: boolean; error?: string }>;
+  /** Grant authority, carry on after answering, call it off, finish, or mark read. */
+  commissionAction(id: string, action: 'approve' | 'unblock' | 'stop' | 'done' | 'seen', outcome?: string): Promise<{ ok: boolean; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

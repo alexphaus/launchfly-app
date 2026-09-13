@@ -56,8 +56,27 @@ async function fetchPage(url: string, budgetMs: number): Promise<string | null> 
       headers: { 'user-agent': USER_AGENT, accept: 'text/html,application/xhtml+xml,*/*' },
     });
     if (!res.ok) return null;
-    const body = await res.text();
-    return body.slice(0, MAX_PAGE_BYTES);
+    // Bounded WHILE reading. `await res.text()` then slice buffers the whole
+    // response first and throws away what it already allocated, which is no cap
+    // at all — and up to MAX_VERIFY of these run at once. jobs/watcher.ts refuses
+    // anything page-sized properly; this now does too.
+    const declared = Number(res.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > MAX_PAGE_BYTES) return null;
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      size += value.byteLength;
+      // Only the <head> is ever read for autodiscovery, so stopping early on a
+      // huge page still gets what this is for.
+      if (size > MAX_PAGE_BYTES) { await reader.cancel().catch(() => {}); break; }
+      chunks.push(value);
+    }
+    return new TextDecoder().decode(await new Blob(chunks as BlobPart[]).arrayBuffer());
   } catch {
     return null;
   } finally {
@@ -162,8 +181,14 @@ export async function POST(req: Request) {
 
     // Safe to run flat out: newCandidates already guarantees one host each, so
     // there is no same-host burst to pace here the way the nightly run has to.
-    const settled = await Promise.all(candidates.slice(0, MAX_VERIFY).map((c) => verify(c, deadline)));
-    const found = rankDiscovered(settled.filter((d): d is Discovered => !!d));
+    // allSettled, not all. verify() swallows its own failures but is not
+    // rejection-proof, and one unexpected throw would discard every feed the
+    // other candidates verified — after the Exa searches were billed and the
+    // rate-limit unit spent.
+    const settled = await Promise.allSettled(candidates.slice(0, MAX_VERIFY).map((c) => verify(c, deadline)));
+    const found = rankDiscovered(settled
+      .map((r) => (r.status === 'fulfilled' ? r.value : null))
+      .filter((d): d is Discovered => !!d));
 
     return json({
       ok: true,

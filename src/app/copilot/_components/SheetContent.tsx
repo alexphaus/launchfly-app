@@ -10,6 +10,7 @@ import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watc
 import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
+import { AUTHORITIES, AUTHORITY, type Authority } from '@/lib/copilot/commission';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 import { useShell } from './shell';
@@ -32,6 +33,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'offer': return <OfferSheet home={home} actions={actions} />;
     case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
     case 'money': return <MoneySheet home={home} actions={actions} />;
+    case 'commission': return <CommissionSheet home={home} id={sheet.id} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
   }
 }
@@ -387,6 +389,78 @@ function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || !title.trim()} onClick={save}>Save</button>
         {goal && <button className="cp-btn" disabled={busy} onClick={() => actions.saveGoal({ id: goal.id, status: 'done' })}>Mark done</button>}
+      </div>
+
+      {/* The goal is where a mandate is written, so the chain the app could
+          never show — goal, the bet that moves it, the work, today's move —
+          starts at the link that makes it true rather than at a form floating
+          on its own. */}
+      {goal && <CommissionForm goalId={goal.id} goalTitle={goal.title} actions={actions} />}
+    </>
+  );
+}
+
+/**
+ * Write a mandate against a goal.
+ *
+ * Authority is chosen here and shown with what it actually does, because it is
+ * the only field on this form that decides whether anything touches the world.
+ * The two rings that cannot act by themselves say so before they are picked —
+ * a capability the app is vague about is one somebody will discover by being
+ * disappointed.
+ */
+function CommissionForm({ goalId, goalTitle, actions }: { goalId: string; goalTitle: string; actions: Actions }) {
+  const [open, setOpen] = useState(false);
+  const [objective, setObjective] = useState('');
+  const [why, setWhy] = useState('');
+  const [authority, setAuthority] = useState<Authority>('read');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <>
+        <div className="cp-section"><span className="lead">Commission work</span></div>
+        <button className="cp-btn block" onClick={() => setOpen(true)}>Put something to work on this</button>
+        <p className="cp-help">A mandate with an objective and a plan, carried by the copilot instead of by you.</p>
+      </>
+    );
+  }
+
+  const write = async () => {
+    if (!objective.trim()) return setError('What should it get done?');
+    setBusy(true); setError(null);
+    const r = await actions.createCommission({ objective: objective.trim(), why: why.trim() || undefined, goal_id: goalId, authority });
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'Could not write that');
+    setOpen(false); setObjective(''); setWhy('');
+  };
+
+  return (
+    <>
+      <div className="cp-section"><span className="lead">Commission work</span></div>
+      <div className="cp-field">
+        <label className="cp-label">What should it get done?</label>
+        <input className="cp-input sm" value={objective} onChange={(e) => { setObjective(e.target.value); setError(null); }}
+          placeholder="Find 20 people who match the offer and why each one fits" />
+      </div>
+      <div className="cp-field">
+        <label className="cp-label">Why this moves {goalTitle} — optional</label>
+        <input className="cp-input sm" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Nothing is in the pipeline and the queue is empty" />
+      </div>
+      <div className="cp-field">
+        <label className="cp-label">What it may do</label>
+        <div className="cp-chips">
+          {AUTHORITIES.map((a) => (
+            <button key={a} className={`cp-fchip ${authority === a ? 'active' : ''}`} onClick={() => setAuthority(a)}>{AUTHORITY[a].label}</button>
+          ))}
+        </div>
+        <p className="cp-help">{AUTHORITY[authority].blurb} {AUTHORITY[authority].gate ?? ''}</p>
+      </div>
+      {error && <div className="cp-note">{error}</div>}
+      <div className="cp-btn-row">
+        <button className="cp-btn primary" disabled={busy || !objective.trim()} onClick={() => void write()}>{busy ? 'Writing…' : 'Write it'}</button>
+        <button className="cp-btn ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
       </div>
     </>
   );
@@ -972,6 +1046,123 @@ function MoneySheet({ home, actions }: { home: HomeData; actions: Actions }) {
         Settled rows are kept, not deleted — what actually landed and when is the part that makes the
         next forecast worth believing.
       </div>
+    </>
+  );
+}
+
+/* ─── One mandate ─────────────────────────────────────────────────────────── */
+
+/**
+ * The plan, the log, and the button that grants authority.
+ *
+ * Approving happens here and not on the card on purpose. The plan is the thing
+ * being authorised, and a one-tap grant from a card nobody expanded is how you
+ * end up with a mandate whose steps its owner never read — which is exactly the
+ * failure the whole layer is built to prevent.
+ */
+function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; actions: Actions }) {
+  const thread = home.commissions.find((t) => t.commission.id === id);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const seen = useRef(false);
+
+  // Mark it read once per open. Without this "since you last looked" counts
+  // every event forever and the card wears a permanent badge.
+  if (thread && !seen.current) {
+    seen.current = true;
+    void actions.commissionAction(id, 'seen');
+  }
+
+  if (!thread) return <><h3>Commission</h3><p className="desc">This one is gone.</p></>;
+  const c = thread.commission;
+  const meta = AUTHORITY[c.authority];
+  const goal = home.goals.find((g) => g.id === c.goal_id);
+
+  const act = async (action: 'approve' | 'stop' | 'done') => {
+    setBusy(true); setError(null);
+    const r = await actions.commissionAction(id, action);
+    setBusy(false);
+    if (!r.ok) setError(r.error ?? 'Could not do that');
+    else if (action !== 'approve') actions.closeSheet();
+  };
+
+  return (
+    <>
+      <h3>{c.objective}</h3>
+      <p className="desc">
+        {/* The reason is the user's own sentence and they rarely end it with a
+            stop, so the goal clause ran straight on: "…nothing is in the
+            pipeline It is meant to move Monthly revenue." */}
+        {c.why ? (/[.!?]$/.test(c.why) ? c.why : `${c.why}.`) : 'No reason recorded for this one.'}
+        {goal && <> It is meant to move <b>{goal.title}</b>.</>}
+      </p>
+
+      <div className="cp-src">
+        <div className="ct">{meta.label}</div>
+        <div className="cs">{meta.blurb}</div>
+        {/* Why it will not act by itself, in the same words every time. A
+            capability the app hedges about is one nobody can plan around. */}
+        {meta.gate && <div className="cs bad">{meta.gate}</div>}
+        <div className="cs">Up to {c.budget_minutes} minutes of work.</div>
+        {/* An idle contractor and an absent one look identical from the card,
+            and only one of them is worth waiting for. */}
+        {!home.workerConnected && (
+          <div className="cs bad">No worker is connected to this deployment, so nothing will pick this up. Set COPILOT_JOBS_URL.</div>
+        )}
+      </div>
+
+      {c.status === 'draft' && (
+        <>
+          <button className="cp-btn primary block" disabled={busy} onClick={() => void act('approve')}>
+            {busy ? 'Granting…' : 'Approve it'}
+          </button>
+          <p className="cp-help">Nothing happens until you do. It runs with the next nightly pass.</p>
+        </>
+      )}
+      {error && <div className="cp-note">{error}</div>}
+
+      {c.plan.length > 0 && (
+        <>
+          <div className="cp-section"><span className="lead">The plan</span><span className="count">{thread.report.progress.done} of {thread.report.progress.total} done</span></div>
+          {c.plan.map((s) => (
+            <div key={s.n} className={`cp-step ${s.state}`}>
+              <span className="n">{s.n}</span>
+              <div>
+                <div className="d">{s.do}</div>
+                {s.note && <div className="nt">{s.note}</div>}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Everything that happened, newest first. Not a summary of it — the app
+          telling you what it did in its own words is the one thing here that
+          could be wrong without anybody noticing. */}
+      {(thread.report.yours.length > 0 || thread.report.did.length > 0) && (
+        <>
+          <div className="cp-section"><span className="lead">What happened</span></div>
+          {[...thread.report.yours, ...thread.report.did].map((e) => (
+            <div key={e.id} className="cp-src">
+              <div className="ct">{e.summary}</div>
+              <div className="cs">{relTime(e.at)}{e.step ? ` · step ${e.step}` : ''}</div>
+              {e.artifact && (
+                e.artifact.href
+                  ? <a className="cp-btn sm" href={e.artifact.href} target="_blank" rel="noreferrer">{e.artifact.label}</a>
+                  : <div className="cp-draft">{e.artifact.value}</div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+
+      {c.status !== 'draft' && c.status !== 'done' && c.status !== 'stopped' && (
+        <div className="cp-btn-row" style={{ marginTop: 14 }}>
+          <button className="cp-btn" disabled={busy} onClick={() => void act('done')}>It is finished</button>
+          <button className="cp-btn ghost" disabled={busy} onClick={() => void act('stop')}>Call it off</button>
+        </div>
+      )}
+      {c.outcome && <div className="cp-note">{c.outcome}</div>}
     </>
   );
 }

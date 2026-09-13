@@ -21,6 +21,7 @@ import { KIND_LABEL } from '@/lib/copilot/moves';
 import type { Execution, HomeData, Move, QueueItem } from '@/lib/copilot/types';
 import { money, relTime } from '../format';
 import TriageStack from '../TriageStack';
+import CommissionThread from '../CommissionThread';
 import type { Actions } from '../shared';
 
 /** Anything past this is folded. A plan you can finish beats a list you cannot. */
@@ -95,6 +96,13 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
       )}
 
       {call}
+
+      {/* Work the app owns, directly under the call. Everything else on this
+          screen asks something; this reports. It sits here rather than at the
+          bottom because "what are we working on and where is it" is the
+          question somebody has when they open the app on the move, and it was
+          the one thing the product could not answer at all. */}
+      <CommissionThread threads={home.commissions ?? []} actions={actions} />
 
       {/* Promoted from the footer, where it was the last thing on a long scroll.
           This is the only way anything the scrapers cannot see gets into the

@@ -546,6 +546,35 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-root .cp-work .ln .x { flex: none; font-size: 16px; line-height: 1; color: var(--dim); padding: 0 2px; }
 .cp-root .cp-work .wh { font-size: 11px; color: var(--dim); font-weight: 600; line-height: 1.45; margin-top: 7px; }
 .cp-root .cp-work textarea.cp-input { margin-top: 8px; resize: vertical; font-family: inherit; }
+/* ── The commission thread ────────────────────────────────────────────────── */
+/* A report, not an ask — so it is quieter than the call above it and louder
+   than the motion rows below. A draft is dashed, because nothing is running. */
+.cp-root .cp-thread { display: block; width: 100%; text-align: left; border: 2.5px solid var(--ink); border-radius: 12px; padding: 13px 14px; margin-bottom: 9px; background: var(--surface); }
+.cp-root .cp-thread.draft { border-style: dashed; }
+.cp-root .cp-thread.blocked { border-color: var(--blue); }
+.cp-root .cp-thread .hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cp-root .cp-thread .ob { font-size: 13.5px; font-weight: 700; line-height: 1.35; }
+.cp-root .cp-thread .fresh { flex: none; font-family: var(--display); font-size: 9.5px; font-weight: 800; text-transform: uppercase; background: var(--blue); color: #fff; border-radius: 20px; padding: 3px 7px; }
+.cp-root .cp-thread .ln { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+.cp-root .cp-thread .ev { display: flex; align-items: baseline; gap: 7px; margin-top: 8px; }
+.cp-root .cp-thread .ev .dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.cp-root .cp-thread .ev .dot.found { background: var(--blue); }
+.cp-root .cp-thread .ev .dot.done { background: var(--ink); }
+.cp-root .cp-thread .ev .tx { flex: 1; font-size: 12px; line-height: 1.45; }
+.cp-root .cp-thread .ev .ag { flex: none; font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.cp-root .cp-thread .ask { margin-top: 9px; padding: 9px 10px; border-radius: 8px; background: var(--bg); font-size: 12px; font-weight: 600; line-height: 1.45; }
+.cp-root .cp-thread .grant { margin-top: 9px; }
+.cp-root .cp-thread .grant .au { font-size: 11.5px; color: var(--muted); font-weight: 600; line-height: 1.45; }
+.cp-root .cp-thread .grant .go { display: inline-block; margin-top: 7px; font-size: 11.5px; font-weight: 700; color: var(--blue); }
+
+/* One step of a plan, on the sheet. */
+.cp-root .cp-step { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.cp-root .cp-step .n { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--ink); font-size: 10.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.cp-root .cp-step.done .n { background: var(--ink); color: #fff; }
+.cp-root .cp-step.doing .n { border-color: var(--blue); color: var(--blue); }
+.cp-root .cp-step.done .d { text-decoration: line-through; opacity: .55; }
+.cp-root .cp-step .d { font-size: 12.5px; line-height: 1.45; font-weight: 600; }
+.cp-root .cp-step .nt { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 600; }
 
 /* Long-form pages — privacy, terms. The only place in this app with prose that
    runs past a phone screen, so it gets a reading measure and real leading
@@ -826,6 +855,14 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-work .hd { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 700; }
 .cp-root[data-theme="soft"] .cp-work .bl { font-weight: 500; }
 .cp-root[data-theme="soft"] .cp-work .ln .ct-ev { background: var(--line); }
+.cp-root[data-theme="soft"] .cp-thread { border: 0; border-radius: 20px; box-shadow: var(--shadow-sm); padding: 16px 18px; }
+.cp-root[data-theme="soft"] .cp-thread.draft { box-shadow: none; border: 1px dashed var(--line); }
+.cp-root[data-theme="soft"] .cp-thread.blocked { box-shadow: var(--lift); }
+.cp-root[data-theme="soft"] .cp-thread .ln { font-weight: 500; }
+.cp-root[data-theme="soft"] .cp-thread .ask { background: var(--line); border-radius: 14px; }
+.cp-root[data-theme="soft"] .cp-step { border-bottom: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp-step .n { border: 0; background: var(--line); }
+.cp-root[data-theme="soft"] .cp-step.done .n { background: var(--blue); color: #fff; }
 
 .cp-root[data-theme="soft"] .cp-legal h1, .cp-root[data-theme="soft"] .cp-legal h2 { font-weight: 700; letter-spacing: 0; }
 .cp-root[data-theme="soft"] .cp-legal p, .cp-root[data-theme="soft"] .cp-legal li { font-weight: 400; }

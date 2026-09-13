@@ -1,6 +1,7 @@
 import type { PipelineStage } from '@/lib/copilot/pipeline';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { WorkingSection } from '@/lib/copilot/working';
+import type { Authority } from '@/lib/copilot/commission';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -38,7 +39,9 @@ export type SheetState =
   /** Money owed, either way. The sensor the money factor was built for. */
   | { kind: 'money' }
   /** What the app knows about this business, and what it is waiting to be told. */
-  | { kind: 'working' };
+  | { kind: 'working' }
+  /** One mandate: its plan, its log, and the button that grants it authority. */
+  | { kind: 'commission'; id: string };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -102,6 +105,10 @@ export interface Actions {
   /** Settle a proposal: yes makes it live, no is remembered so it stops coming back. */
   settleWorking(id: string, status: 'live' | 'declined'): Promise<{ ok: boolean; error?: string }>;
   removeWorking(id: string): Promise<void>;
+  /** Write a mandate. Always created as a draft — approving is a second act. */
+  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
+  /** Grant authority, call it off, mark it finished, or mark the thread read. */
+  commissionAction(id: string, action: 'approve' | 'stop' | 'done' | 'seen', outcome?: string): Promise<{ ok: boolean; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

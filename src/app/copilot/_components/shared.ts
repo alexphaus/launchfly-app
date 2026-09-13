@@ -1,5 +1,6 @@
 import type { PipelineStage } from '@/lib/copilot/pipeline';
 import type { Discovered } from '@/lib/copilot/watch/discover';
+import type { Authority } from '@/lib/copilot/commission';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -35,7 +36,9 @@ export type SheetState =
   /** The feeds this person watches. Where supply comes from is theirs to set. */
   | { kind: 'watchlist' }
   /** Money owed, either way. The sensor the money factor was built for. */
-  | { kind: 'money' };
+  | { kind: 'money' }
+  /** One mandate: its plan, its log, and the button that grants it authority. */
+  | { kind: 'commission'; id: string };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -94,6 +97,10 @@ export interface Actions {
   discoverSources(): Promise<{ ok: boolean; found?: Discovered[]; searched?: string[]; checked?: number; note?: string | null; error?: string }>;
   /** Add one discovered feed, by the URL that verified rather than the page. */
   addDiscovered(d: Discovered): Promise<{ ok: boolean; error?: string }>;
+  /** Write a mandate. Always created as a draft — approving is a second act. */
+  createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
+  /** Grant authority, call it off, mark it finished, or mark the thread read. */
+  commissionAction(id: string, action: 'approve' | 'stop' | 'done' | 'seen', outcome?: string): Promise<{ ok: boolean; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

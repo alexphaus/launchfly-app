@@ -3043,3 +3043,196 @@ async function discovery() {
 }
 
 discovery().catch((e) => { console.error(e); process.exit(1); });
+
+// --- work the app owns, as opposed to work it suggests
+//
+// The whole layer rests on two refusals, and both are tested here rather than
+// trusted. A worker cannot mark its own homework — nextStatus reads the events,
+// never the claim — and no amount of granted authority makes `commit` run by
+// itself. Everything else in this file is bookkeeping; those two are the
+// product.
+import {
+  AUTHORITY, AUTHORITIES, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX,
+  blockedMove, canAct, commissionBrief, commissionLine, dueCommissions, isAuthority,
+  normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
+} from '../../src/lib/copilot/commission';
+import type { Commission, CommissionEvent } from '../../src/lib/copilot/commission';
+
+async function commissions() {
+  const base: Commission = {
+    id: 'c1', goal_id: 'g1', objective: 'Find 20 people who match the offer', why: 'The queue is empty',
+    authority: 'read', budget_minutes: 60, status: 'active',
+    plan: [
+      { n: 1, do: 'Search for matches', state: 'done' },
+      { n: 2, do: 'Check each one fits', state: 'doing' },
+      { n: 3, do: 'Write the shortlist', state: 'todo' },
+    ],
+    created_at: '2026-09-10T08:00:00Z', approved_at: '2026-09-10T08:05:00Z',
+    last_run_at: '2026-09-12T21:00:00Z', closed_at: null, outcome: null, seen_at: '2026-09-12T07:00:00Z',
+  };
+  const ev = (o: Partial<CommissionEvent>): CommissionEvent => ({
+    id: 'e', commission_id: 'c1', kind: 'worked', step: null, summary: 's', artifact: null,
+    at: '2026-09-12T21:00:00Z', ...o,
+  });
+
+  // --- authority
+  {
+    assert.equal(canAct('read', 'read'), true);
+    // Granting more does not make the higher rings run: both gates must pass,
+    // and reach/commit are not autonomous. Granting `reach` today buys nothing
+    // extra BY DESIGN — the mandate records intent, the second gate decides.
+    assert.equal(canAct('reach', 'reach'), false, 'reach needs a verified sending identity first');
+    assert.equal(canAct('commit', 'commit'), false, 'money never moves by itself');
+    assert.equal(canAct('commit', 'read'), true, 'a wider mandate still covers the ring that does run');
+    // And a narrow mandate never reaches up.
+    assert.equal(canAct('read', 'reach'), false);
+    assert.equal(canAct('read', 'commit'), false);
+
+    // Every non-autonomous level has to say WHY, or the UI has nothing honest
+    // to render at the moment somebody picks it.
+    for (const a of AUTHORITIES) {
+      if (!AUTHORITY[a].autonomous) assert.ok(AUTHORITY[a].gate, `${a} must explain why it does not run by itself`);
+    }
+    assert.equal(AUTHORITY.commit.autonomous, false, 'this one is never true, in any future version');
+    assert.equal(isAuthority('read'), true);
+    assert.equal(isAuthority('root'), false, 'an unknown level is not a level');
+  }
+
+  // --- the brief that goes out
+  {
+    const profile = {
+      name: 'Alex', headline: 'Automations', offer: { sells: 'booking bots' }, location: 'Cebu',
+      timezone: 'Asia/Manila', target_segments: ['resorts'], target_area: 'Cebu',
+      email: 'a@b.c', id: 'p1', finance: { cash: 1000 },
+    } as unknown as Parameters<typeof commissionBrief>[1];
+    const brief = commissionBrief(base, profile, null, 'https://app.test/api/copilot/commissions/c1/result');
+
+    assert.equal(brief.commission_id, 'c1', 'an id to report against is the difference from the old socket');
+    assert.equal(brief.objective, base.objective);
+    assert.equal(brief.may_autonomously, true, 'stated, never left for the worker to infer');
+    assert.ok(brief.result_url?.endsWith('/result'));
+
+    // Same boundary as profileForRemote: this payload leaves the deployment.
+    const who = JSON.stringify(whoFor(profile));
+    assert.ok(!who.includes('a@b.c'), 'no email leaves');
+    assert.ok(!who.includes('p1'), 'no id leaves');
+    assert.ok(!who.includes('1000'), 'no billing or finance leaves');
+
+    // A reach mandate has to tell the worker it may NOT act, or it sends
+    // something under somebody's name.
+    assert.equal(commissionBrief({ ...base, authority: 'reach' }, profile, null, null).may_autonomously, false);
+  }
+
+  // --- what comes back, untrusted
+  {
+    const r = normalizeResult({
+      events: [
+        { kind: 'found', step: 2, summary: 'Three suppliers quote under $400', artifact: { kind: 'link', label: 'Quotes', value: 'x', href: 'https://q.test' } },
+        { kind: 'worked', summary: 'Checked 12 of 20' },
+        { kind: 'nonsense', summary: 'dropped' },
+        { kind: 'done' },
+        { kind: 'found', summary: 'no artifact is fine', artifact: { label: 'x' } },
+      ],
+      plan: [{ n: 1, do: 'Search', state: 'done' }, { garbage: true }],
+      status: 'done',
+    });
+    assert.equal(r.events.length, 3, 'an unknown kind and a summary-less event are both dropped');
+    // The dropped one was a bare { kind: 'done' }. For done and failed the
+    // summary IS the report, so a worker cannot close a mandate by posting the
+    // word "done" with nothing behind it.
+    assert.ok(!r.events.some((e) => e.kind === 'done'), 'a done with no summary is not a done');
+    assert.equal(r.events[0].artifact?.href, 'https://q.test');
+    assert.equal(r.events[2].artifact, null, 'an artifact with no value is no artifact, not a broken one');
+    assert.equal(r.plan?.length, 1, 'unparseable steps are dropped, not defaulted');
+    assert.equal(r.claimed, 'done', 'the claim is parsed…');
+
+    // …and never applied. This is the rule the whole return leg rests on: if a
+    // worker could set its own status, reporting success would be the cheapest
+    // way to look successful.
+    assert.equal(r.claimed, 'done');
+    assert.equal(nextStatus('active', r.events), 'active',
+      'the worker claimed done and the log carries no done event, so the mandate has not moved');
+    assert.equal(nextStatus('active', [{ kind: 'worked' }]), 'active', 'a claim with no done event moves nothing');
+    // It closes only on an event that survived the floor.
+    assert.equal(nextStatus('active', [{ kind: 'done' }]), 'done');
+
+    // A needs_you outranks a done, whatever the worker called the run.
+    assert.equal(nextStatus('active', [{ kind: 'done' }, { kind: 'needs_you' }]), 'blocked',
+      'four steps finished and a fifth awaiting approval is blocked, not finished');
+    // Terminal states are the user's to leave.
+    assert.equal(nextStatus('stopped', [{ kind: 'worked' }]), 'stopped', 'a worker cannot reopen a mandate you called off');
+    assert.equal(nextStatus('draft', [{ kind: 'done' }]), 'draft', 'and cannot start one you never approved');
+
+    // Bounds.
+    assert.equal(normalizeResult({ events: Array.from({ length: 50 }, () => ({ kind: 'worked', summary: 'x' })) }).events.length, MAX_EVENTS_PER_POST);
+    assert.equal(normalizePlan(Array.from({ length: 30 }, (_, i) => ({ do: `s${i}` }))).length, MAX_STEPS);
+    assert.equal(normalizeResult({ events: [{ kind: 'worked', summary: 'y'.repeat(999) }] }).events[0].summary.length, SUMMARY_MAX);
+    assert.deepEqual(normalizeResult(null).events, []);
+    assert.deepEqual(normalizeResult({ events: 'not an array' }).events, []);
+  }
+
+  // --- dispatch
+  {
+    const all: Commission[] = [
+      { ...base, id: 'new', last_run_at: null },
+      { ...base, id: 'old', last_run_at: '2026-09-01T00:00:00Z' },
+      { ...base, id: 'recent', last_run_at: '2026-09-12T00:00:00Z' },
+      // Blocked is waiting on the user. Handing it out again produces a second
+      // identical needs_you against the same unanswered question.
+      { ...base, id: 'blocked', status: 'blocked' },
+      { ...base, id: 'draft', status: 'draft', approved_at: null },
+    ];
+    const due = dueCommissions(all);
+    assert.deepEqual(due.map((c) => c.id), ['new', 'old', 'recent'], 'never run first, then oldest');
+    assert.ok(!due.some((c) => c.id === 'draft'), 'an ungranted mandate does nothing at all');
+    assert.ok(!due.some((c) => c.id === 'blocked'));
+    // An active row with no approved_at is not a state the app can produce, and
+    // if one appears it is not getting work.
+    assert.deepEqual(dueCommissions([{ ...base, approved_at: null }]).map((c) => c.id), []);
+    assert.equal(dueCommissions(all, 2).length, 2);
+  }
+
+  // --- the report
+  {
+    const events = [
+      ev({ id: 'a', kind: 'worked', summary: 'Checked 12', at: '2026-09-12T21:00:00Z' }),
+      ev({ id: 'b', kind: 'found', summary: 'Three fit', at: '2026-09-12T21:05:00Z' }),
+      ev({ id: 'c', kind: 'needs_you', summary: 'Which of the three?', at: '2026-09-12T21:10:00Z' }),
+      ev({ id: 'd', kind: 'planned', summary: 'Revised the plan', at: '2026-09-12T21:01:00Z' }),
+    ];
+    const r = reportOf(base, events);
+    assert.deepEqual(r.did.map((e) => e.id), ['b', 'a'], 'newest first, and planned is housekeeping not work');
+    assert.deepEqual(r.yours.map((e) => e.id), ['c']);
+    assert.deepEqual(r.progress, { done: 1, total: 3 }, 'computed from the plan, never claimed');
+    assert.equal(r.fresh, 4, 'all four land after seen_at');
+    assert.equal(reportOf({ ...base, seen_at: '2026-09-13T00:00:00Z' }, events).fresh, 0);
+    // Never looked is not the same as nothing new.
+    assert.equal(reportOf({ ...base, seen_at: null }, events).fresh, 4);
+
+    // The line: counts and state, never adjectives.
+    assert.equal(commissionLine(base, r), '1 of 3 done · 1 needs you');
+    assert.equal(commissionLine({ ...base, status: 'draft' }, r), 'Waiting for you to approve it');
+    assert.equal(commissionLine({ ...base, status: 'done', outcome: 'Found 20, 3 replied' }, r), 'Found 20, 3 replied');
+    const quiet = reportOf(base, []);
+    assert.equal(commissionLine(base, quiet), '1 of 3 done · Nothing back yet');
+  }
+
+  // --- a blocked mandate, as a Move
+  {
+    const r = reportOf(base, [ev({ id: 'c', kind: 'needs_you', summary: 'Which of the three should I brief?' })]);
+    const m = blockedMove({ ...base, status: 'blocked' }, r, 'commission')!;
+    assert.ok(m, 'a stalled mandate competes for the morning like everything else');
+    assert.equal(m.job, 'commission');
+    // Keyed on the EVENT: the same ask restated is one Move, a new ask tomorrow
+    // is a second.
+    assert.equal(m.external_id, 'commission:c1:c');
+    assert.ok(m.why.some((w) => w.includes(base.objective)), 'it says which mandate it is stopping');
+    assert.ok(m.artifact.value, 'no artifact, no Move — the same floor as every other job');
+    // Nothing to ask means no Move, rather than an empty one.
+    assert.equal(blockedMove(base, reportOf(base, []), 'commission'), null);
+  }
+
+  console.log('copilot-core: commission checks passed');
+}
+
+commissions().catch((e) => { console.error(e); process.exit(1); });

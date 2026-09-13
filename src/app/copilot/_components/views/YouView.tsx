@@ -43,6 +43,24 @@ export default function YouView({ home, actions, briefing }: { home: HomeData; a
         <div className="sub">{p.offer?.sells ? [p.offer.for_who && `For ${p.offer.for_who}`, p.offer.price_band, p.offer.proof_url ? 'proof link set' : 'no proof link yet'].filter(Boolean).join(' · ') : 'Messages fall back to your headline and stay vague until this is filled in'}</div>
       </button>
 
+      {/* Directly under the offer, because it is the offer's other half: five
+          strings are the headline and this is the business behind it. */}
+      <div className="cp-section">
+        <span className="lead">What it knows about your work</span>
+        <span className="count">{(home.workingProgress?.proposals ?? 0) > 0 ? `${home.workingProgress.proposals} waiting on you` : `${home.workingProgress?.filled ?? 0} of ${home.workingProgress?.total ?? 6}`}</span>
+      </div>
+      <button className="cp-card cp-goal" onClick={() => actions.openSheet({ kind: 'working' })}>
+        <div className="top">
+          <span className="name">{(home.workingProgress?.filled ?? 0) > 0 ? 'How you deliver, what you charge, what you will not do' : 'It only knows your headline'}</span>
+          <span className="pct">{(home.workingProgress?.filled ?? 0) > 0 ? 'Open' : 'Fill in'}</span>
+        </div>
+        <div className="sub">
+          {(home.workingProgress?.proposals ?? 0) > 0
+            ? `${home.workingProgress.proposals} thing${home.workingProgress.proposals === 1 ? '' : 's'} it counted from your own rows, waiting for you to say whether they are right.`
+            : 'Every draft, every feed it reads and every piece of research is written from this.'}
+        </div>
+      </button>
+
       <div className="cp-section"><span className="lead">Targeting</span><span className="count">drives real supply</span></div>
       <button className="cp-card cp-goal" onClick={() => actions.openSheet({ kind: 'targeting' })}>
         <div className="top"><span className="name">{p.target_segments.length ? p.target_segments.join(', ') : 'Who do you sell to?'}</span><span className="pct">{p.target_segments.length ? 'Edit' : 'Set'}</span></div>

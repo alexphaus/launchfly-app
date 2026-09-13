@@ -17,6 +17,10 @@ import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capt
 import { forecast } from './obligations';
 import { sourceYield, type SourceYield, type WatchMoveRow } from './watch/yield';
 import {
+  BODY_MAX, EVIDENCE_MAX, MAX_PER_SECTION, workingProgress,
+  type ObservedDraft, type WorkingEntry, type WorkingSection, type WorkingStatus,
+} from './working';
+import {
   MAX_ACTIVE_COMMISSIONS, MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, WHY_MAX,
   commissionLine, nextStatus, reportOf,
   type Authority, type Commission, type CommissionEvent, type CommissionResult, type CommissionStep,
@@ -548,7 +552,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, watchMoveRows, commissionRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, watchMoveRows, workingRows, commissionRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -583,6 +587,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadUnresolvedReplies(profileId),
     loadObligations(profileId),
     loadWatchMoveRows(profileId),
+    loadWorking(profileId),
     loadCommissions(profileId),
   ]);
 
@@ -722,6 +727,13 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     edge,
     sources,
     watchSources,
+    /**
+     * What the app knows about this business. The whole file, proposals
+     * included — the sheet needs the ones waiting on a yes, and only
+     * workingBrief filters to what a prompt may see.
+     */
+    working: workingRows,
+    workingProgress: workingProgress(workingRows),
     /**
      * Work the app owns, newest first, each with its report already computed.
      * The one part of Today that is neither an instruction nor a draft waiting
@@ -1312,6 +1324,99 @@ export async function saveObligation(profileId: string, patch: {
 
 export async function deleteObligation(profileId: string, id: string): Promise<void> {
   await copilotDb().from('copilot_obligations').delete().eq('profile_id', profileId).eq('id', id);
+}
+
+/* ─── The working file ────────────────────────────────────────────────────── */
+//
+// What the app knows about this business rather than what it can guess. See
+// lib/copilot/working.ts for why there are exactly two sources and no third, and
+// supabase/migrations/20260917_copilot_working.sql for the schema. Every read
+// returns empty on error: the table ships in a hand-applied migration, so until
+// somebody runs it the sheet reads as an empty file and every prompt gets the
+// same five strings it gets today.
+
+const WORKING_COLS = 'id, section, body, source, evidence, status, observed_key, created_at, updated_at, confirmed_at';
+
+export async function loadWorking(profileId: string, limit = 80): Promise<WorkingEntry[]> {
+  const { data, error } = await copilotDb().from('copilot_working').select(WORKING_COLS)
+    .eq('profile_id', profileId).order('created_at', { ascending: true }).limit(limit);
+  if (error) return [];
+  return (data ?? []) as unknown as WorkingEntry[];
+}
+
+export async function saveWorkingEntry(profileId: string, patch: {
+  id?: string; section?: WorkingSection; body?: string; status?: WorkingStatus;
+}): Promise<WorkingEntry | null> {
+  const db = copilotDb();
+  if (patch.id) {
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (patch.body !== undefined) row.body = patch.body.slice(0, BODY_MAX);
+    if (patch.status !== undefined) {
+      row.status = patch.status;
+      // Confirming is the moment a reading becomes something the app believes,
+      // and the timestamp is the only record that the user ever saw it.
+      if (patch.status === 'live') row.confirmed_at = new Date().toISOString();
+    }
+    const { data, error } = await db.from('copilot_working').update(row)
+      .eq('profile_id', profileId).eq('id', patch.id).select(WORKING_COLS).maybeSingle();
+    if (error) throw error;
+    return (data as unknown as WorkingEntry) ?? null;
+  }
+
+  if (!patch.section || !patch.body?.trim()) return null;
+  const existing = await loadWorking(profileId);
+  if (existing.filter((e) => e.section === patch.section && e.status === 'live').length >= MAX_PER_SECTION) {
+    throw new Error(`That section holds ${MAX_PER_SECTION} lines. Edit one instead.`);
+  }
+  const { data, error } = await db.from('copilot_working').insert({
+    profile_id: profileId,
+    section: patch.section,
+    body: patch.body.trim().slice(0, BODY_MAX),
+    // Anything written through this path is the user's own statement, which is
+    // why it needs no evidence and goes straight to live.
+    source: 'you',
+    status: 'live',
+    confirmed_at: new Date().toISOString(),
+  }).select(WORKING_COLS).maybeSingle();
+  if (error) throw error;
+  await logEvent(profileId, 'working_written', { section: patch.section });
+  return (data as unknown as WorkingEntry) ?? null;
+}
+
+export async function deleteWorkingEntry(profileId: string, id: string): Promise<void> {
+  await copilotDb().from('copilot_working').delete().eq('profile_id', profileId).eq('id', id);
+}
+
+/**
+ * Write tonight's readings as proposals.
+ *
+ * Upserted on (profile_id, observed_key), so the nightly pass recomputing "3 of
+ * your 4 replies came from resorts" updates one row rather than stacking the
+ * same sentence every night until the sheet is unreadable.
+ *
+ * Never fatal. A failure here costs a proposal; it must not take down the run
+ * that produced it, and an unapplied migration lands in exactly this branch.
+ */
+export async function proposeObserved(profileId: string, drafts: ObservedDraft[]): Promise<number> {
+  if (!drafts.length) return 0;
+  const { error } = await copilotDb().from('copilot_working').upsert(
+    drafts.map((d) => ({
+      profile_id: profileId,
+      section: d.section,
+      body: d.body.slice(0, BODY_MAX),
+      evidence: d.evidence.slice(0, EVIDENCE_MAX),
+      source: 'observed',
+      status: 'proposed',
+      observed_key: d.observed_key,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: 'profile_id,observed_key' },
+  );
+  if (error) {
+    console.error('[copilot/working] could not write proposals:', error.message);
+    return 0;
+  }
+  return drafts.length;
 }
 
 /* ─── Commissions ─────────────────────────────────────────────────────────── */

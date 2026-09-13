@@ -11,7 +11,8 @@ import { copilotDb, todayIso } from './db';
 import { changesSince, movedBy, snapshotOf } from './decision';
 import { openingTrend } from './diagnose';
 import { loadMetrics } from './outcomes';
-import { getProfile, loadConversations, loadDecisions, loadOpeningRows, previousSnapshot, typeAffinityFor } from './store';
+import { getProfile, loadConversations, loadDecisions, loadOpeningRows, loadWorking, previousSnapshot, typeAffinityFor } from './store';
+import { workingBrief } from './working';
 import type { Action, Candidate, ContextItem, ContextPack, ContextSource, Goal, Opportunity, PackOpening } from './types';
 
 const MAX_CONTEXT_ITEMS = 60;
@@ -26,7 +27,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
   if (!profile) throw new Error('profile not found');
 
   const today = todayIso(profile.timezone);
-  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows] = await Promise.all([
+  const [goals, context, sources, opps, actions, affinity, candidateRows, metrics, prevSnap, recent, conversations, openingRows, workingRows] = await Promise.all([
     db.from('copilot_goals').select('title, metric, unit, target_value, current_value, horizon_days, priority, note').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     db.from('copilot_context_items').select('source, kind, content, created_at, weight').eq('profile_id', profileId).order('created_at', { ascending: false }).limit(MAX_CONTEXT_ITEMS).then((r) => (r.data ?? []) as ContextItem[]),
     db.from('copilot_context_sources').select('source_key, status, last_synced_at').eq('profile_id', profileId).then((r) => (r.data ?? []) as ContextSource[]),
@@ -43,6 +44,7 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
     loadDecisions(profileId, 8),
     loadConversations(profileId),
     loadOpeningRows(profileId),
+    loadWorking(profileId),
   ]);
 
   const pick = (s: Opportunity['status']) => opps.filter((o) => o.status === s).map((o) => ({ type: o.type, title: o.title }));
@@ -68,6 +70,11 @@ export async function buildContextPack(profileId: string): Promise<ContextPack> 
       timezone: profile.timezone, capacity: profile.capacity, hunt_types: profile.hunt_types,
       target_segments: profile.target_segments, target_area: profile.target_area, offer: profile.offer,
     },
+    // The pack has always carried what the app COMPUTED about this person and
+    // never what they know. Live entries only: a proposal is the app's own
+    // reading waiting on the person who lived it, and feeding it to a model
+    // before they have seen it would make confirming it decorative.
+    working: workingBrief(workingRows),
     goals,
     context: context
       .sort((a, b) => (b.weight - a.weight) || (a.created_at < b.created_at ? 1 : -1))

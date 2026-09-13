@@ -260,6 +260,33 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not add that source' };
       }
     },
+    async saveWorking(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/working', input);
+        setHome(r.home);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not save that' };
+      }
+    },
+    async settleWorking(id, status) {
+      try {
+        const r = await post<{ home: HomeData }>('/working', { id, status });
+        setHome(r.home);
+        // Only on a yes. Saying "noted" when somebody declines something is the
+        // app thanking them for disagreeing with it.
+        if (status === 'live') say('Noted. It goes into everything from now on.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not do that' };
+      }
+    },
+    async removeWorking(id) {
+      try {
+        const r = await del<{ home: HomeData }>(`/working?id=${encodeURIComponent(id)}`);
+        setHome(r.home);
+      } catch (e) { fail(e, 'Could not remove that'); }
+    },
     async createCommission(input) {
       try {
         const r = await post<{ home: HomeData }>('/commissions', input);

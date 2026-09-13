@@ -13,6 +13,7 @@ import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, Decisi
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
 import type { SourceYield } from './watch/yield';
+import type { WorkingEntry } from './working';
 import type { Commission, CommissionReport } from './commission';
 import type { PlanKey, PlanStatus } from './plans';
 
@@ -344,6 +345,14 @@ export interface HomeData {
    */
   watchSources: WatchSource[];
   /**
+   * The working file: what the app knows about this business rather than what
+   * it can guess. Empty until somebody writes a line — and an unapplied
+   * 20260917 looks the same, which produces exactly today's behaviour.
+   */
+  working: WorkingEntry[];
+  /** Sections filled, and how many readings are waiting on a yes. */
+  workingProgress: { filled: number; total: number; proposals: number };
+  /**
    * Every mandate, live or finished, with its report already computed. Empty
    * until somebody writes one — and empty is also what an unapplied 20260916
    * looks like, which is the same screen and the correct one for both.
@@ -438,6 +447,17 @@ export interface ContextPack {
   profile: Pick<Profile, 'name' | 'headline' | 'location' | 'timezone' | 'capacity' | 'hunt_types' | 'target_segments' | 'target_area' | 'offer'>;
   goals: Array<Pick<Goal, 'title' | 'metric' | 'unit' | 'target_value' | 'current_value' | 'horizon_days' | 'priority' | 'note'>>;
   context: Array<Pick<ContextItem, 'source' | 'kind' | 'content' | 'created_at'>>;
+  /**
+   * The working file, as the block from workingBrief. Live entries only.
+   *
+   * This is the difference between a draft written from a headline and one
+   * written from a business. The pack has always carried what the app COMPUTED
+   * about this person — funnel, openings, replies — and never what they know:
+   * how delivery works, what closed, what they already tried and binned. Empty
+   * string when the file is empty, which is what every account looked like
+   * before 20260917.
+   */
+  working: string;
   sources: ContextSource[];
   /** What the user did with previous suggestions, so the agent can learn. */
   history: {

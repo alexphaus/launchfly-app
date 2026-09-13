@@ -25,7 +25,8 @@ import { MAX_ITEMS_PER_SOURCE, parseFeed, trimSeen, unseenItems, type FeedItem }
 import { moveKeepRate } from '../moves';
 import { JUDGE_SYSTEM, judgePrompt, movesFromVerdicts, parseVerdicts, watchBrief } from '../watch/judge';
 import { CAPACITY_META, type WatchSource } from '../types';
-import { loadMoveAnswers, loadWatchSources, markWatchSourceChecked } from '../store';
+import { loadMoveAnswers, loadWatchSources, loadWorking, markWatchSourceChecked } from '../store';
+import { workingBrief } from '../working';
 import type { MoveDraft } from '../moves';
 import type { Job, JobContext } from './types';
 
@@ -155,6 +156,10 @@ export const watcherJob: Job = {
       metrics,
       capacityMinutes: CAPACITY_META[ctx.profile.capacity].minutes,
       keeps,
+      // What this person knows about their own work. Without it the judge scores
+      // every item against a five-string headline, which is why a feed read for
+      // somebody who will not take retainers under $100 kept returning them.
+      working: workingBrief(await loadWorking(ctx.profile.id)),
     });
 
     // Fetch everything FIRST, then judge.

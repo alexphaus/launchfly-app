@@ -250,13 +250,28 @@ export interface CommissionResult {
 
 const ARTIFACT_KINDS: ArtifactKind[] = ['message', 'link', 'text'];
 
+/**
+ * The only schemes an artifact may link to.
+ *
+ * Everything that reaches an href in this app comes from outside it — a worker,
+ * a workflow, a feed — and every one of those is a place somebody could put
+ * `javascript:`. Allow-list rather than deny-list: data:, blob:, vbscript: and
+ * whatever comes next are all refused by not being named.
+ */
+export const SAFE_HREF = /^https?:\/\//i;
+
 function normalizeArtifact(raw: unknown): CommissionArtifact | null {
   if (!raw || typeof raw !== 'object') return null;
   const a = raw as Record<string, unknown>;
   const value = str(a.value, 4000);
   const label = str(a.label, 40);
   if (!value || !label) return null;
-  const href = str(a.href, 1000) ?? null;
+  // http(s) only, and this is a security check rather than tidiness. The sheet
+  // renders this into <a href>, React does not block javascript: URLs, and
+  // anything holding COPILOT_INBOUND_SECRET can post an artifact. A scheme-less
+  // string here is a script running on the copilot's own origin, one tap away.
+  const candidate = str(a.href, 1000);
+  const href = candidate && SAFE_HREF.test(candidate) ? candidate : null;
   const kind = ARTIFACT_KINDS.includes(a.kind as ArtifactKind) ? (a.kind as ArtifactKind) : (href ? 'link' : 'text');
   // A link artifact with nowhere to go renders a button that does nothing.
   if (kind === 'link' && !href) return null;
@@ -335,6 +350,13 @@ export function normalizeResult(raw: unknown): CommissionResult {
 export function nextStatus(current: CommissionStatus, events: Array<{ kind: CommissionEventKind }>): CommissionStatus {
   // Terminal states are the user's to leave, not a worker's to reopen.
   if (current === 'draft' || current === 'stopped' || current === 'done') return current;
+  // And so is 'blocked'. The first version fell through to 'active' here, which
+  // meant a worker that raised a needs_you could clear its own gate by posting
+  // anything else the next night — the user's question answered for them by the
+  // party that asked it. Only unblockCommission moves this, and only the user
+  // calls that. A worker reporting 'done' while a question is outstanding is
+  // still blocked: the question is what it is blocked ON.
+  if (current === 'blocked') return 'blocked';
   if (events.some((e) => e.kind === 'needs_you')) return 'blocked';
   if (events.some((e) => e.kind === 'blocked' || e.kind === 'failed')) return 'blocked';
   if (events.some((e) => e.kind === 'done')) return 'done';
@@ -409,6 +431,22 @@ export function commissionLine(c: Commission, r: CommissionReport): string {
  * A commission with its own permanent slot on the screen would be the one thing
  * in the app that cannot lose, which is the failure the send queue already was.
  */
+/**
+ * The commission a blocked Move came from, or null.
+ *
+ * blockedMove writes `commission:${commissionId}:${eventId}`, and both halves
+ * are uuids, so this splits on the fixed prefix and the next separator rather
+ * than on the last colon. Answering that Move is the user answering the
+ * question, which is what lets setMoveStatus carry the mandate forward.
+ */
+export function commissionIdFromMove(externalId: string | null | undefined): string | null {
+  if (!externalId?.startsWith('commission:')) return null;
+  const rest = externalId.slice('commission:'.length);
+  const at = rest.indexOf(':');
+  const id = at > 0 ? rest.slice(0, at) : rest;
+  return id || null;
+}
+
 export function blockedMove(c: Commission, r: CommissionReport, job: string): MoveDraft | null {
   const ask = r.yours[0];
   if (!ask) return null;

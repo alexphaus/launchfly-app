@@ -27,6 +27,7 @@
 // it can never write a Move without an artifact.
 
 import { MOVE_KINDS, type ArtifactKind, type MoveDraft, type MoveKind } from '../moves';
+import { SAFE_HREF } from '../commission';
 import type { Profile } from '../types';
 import type { Job, JobContext } from './types';
 
@@ -59,7 +60,11 @@ export function normalizeRemoteMove(raw: unknown, source?: string): MoveDraft | 
   const a = (r.artifact && typeof r.artifact === 'object' ? r.artifact : {}) as Record<string, unknown>;
   const value = str(a.value ?? r.body, 4000);
   const label = str(a.label, 40);
-  const href = str(a.href ?? r.url, 1000) ?? null;
+  // Scheme-checked for the same reason as commission artifacts: this lands in an
+  // <a href> and React will happily render `javascript:`. Pre-existing here, and
+  // fixed alongside rather than left as the one door still open.
+  const rawHref = str(a.href ?? r.url, 1000);
+  const href = rawHref && SAFE_HREF.test(rawHref) ? rawHref : null;
   if (!value || !label) return null;   // no artifact, no Move
 
   const aKind = ARTIFACT_KINDS.includes(a.kind as ArtifactKind) ? (a.kind as ArtifactKind) : (href ? 'link' : 'text');

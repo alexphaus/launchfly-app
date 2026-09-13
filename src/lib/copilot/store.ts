@@ -18,12 +18,13 @@ import { forecast } from './obligations';
 import { sourceYield, type SourceYield, type WatchMoveRow } from './watch/yield';
 import {
   BODY_MAX, EVIDENCE_MAX, MAX_PER_SECTION, workingProgress,
-  type ObservedDraft, type WorkingEntry, type WorkingSection, type WorkingStatus,
+  type ObservedWrite, type WorkingEntry, type WorkingSection, type WorkingStatus,
 } from './working';
 import {
   MAX_ACTIVE_COMMISSIONS, MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, WHY_MAX,
-  commissionLine, nextStatus, reportOf,
-  type Authority, type Commission, type CommissionEvent, type CommissionResult, type CommissionStep,
+  commissionIdFromMove, commissionLine, nextStatus, reportOf,
+  type Authority, type Commission, type CommissionEvent, type CommissionResult,
+  type CommissionStatus, type CommissionStep,
 } from './commission';
 import type { CommissionThread } from './types';
 import type { SentMessage } from './silence';
@@ -234,9 +235,19 @@ export async function setMoveStatus(profileId: string, id: string, status: 'done
   const { data } = await copilotDb().from('copilot_moves')
     .update({ status, acted_at: new Date().toISOString() })
     .eq('id', id).eq('profile_id', profileId)
-    .select('job, kind').maybeSingle();
-  const row = (data ?? {}) as { job?: string; kind?: string };
+    .select('job, kind, external_id').maybeSingle();
+  const row = (data ?? {}) as { job?: string; kind?: string; external_id?: string };
   await logEvent(profileId, 'move_answered', { move_id: id, status, job: row.job ?? null, kind: row.kind ?? null });
+
+  // Marking a commission's blocking question done IS the user answering it, and
+  // it is the answer the mandate has been waiting on. Without this the deck's
+  // card and the sheet's button are two separate acts for one decision, and the
+  // obvious one — answering the Move the app put in front of you — does nothing.
+  // Only on 'done': dismissing the card is not an answer.
+  if (status === 'done' && row.job === 'commission') {
+    const commissionId = commissionIdFromMove(row.external_id);
+    if (commissionId) await unblockCommission(profileId, commissionId).catch(() => {});
+  }
 }
 
 /**
@@ -552,7 +563,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, watchMoveRows, workingRows, commissionRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -586,7 +597,6 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadOpenedDrafts(profileId),
     loadUnresolvedReplies(profileId),
     loadObligations(profileId),
-    loadWatchMoveRows(profileId),
     loadWorking(profileId),
     loadCommissions(profileId),
   ]);
@@ -609,7 +619,17 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   // Commission threads: the report is computed here rather than on the client so
   // the "since you last looked" count is settled against the same read the rest
   // of the screen was built from.
-  const commissionEvents = await loadCommissionEvents(profileId, commissionRows.map((c) => c.id));
+  // Only for mandates that are still live. A closed commission's log is history
+  // the sheet can render from what it already has, and paying for it on every
+  // tap of every mutation route is the cost of a screen nobody is looking at.
+  // After the parallel block, because whether this read is worth making depends
+  // on a result of it. Most accounts watch nothing and pay nothing.
+  const watchMoveRows = await loadWatchMoveRows(profileId, watchSources.length > 0);
+
+  const commissionEvents = await loadCommissionEvents(
+    profileId,
+    commissionRows.filter((c) => c.status !== 'done' && c.status !== 'stopped').map((c) => c.id),
+  );
   const eventsByCommission = new Map<string, CommissionEvent[]>();
   for (const e of commissionEvents) eventsByCommission.set(e.commission_id, [...(eventsByCommission.get(e.commission_id) ?? []), e]);
   const commissionThreads: CommissionThread[] = commissionRows.map((c) => {
@@ -941,7 +961,12 @@ export async function loadWatchSources(profileId: string): Promise<WatchSource[]
  * supersedeMoves only touches open rows of supersedes:true jobs — so this is the
  * complete history, and it is the reason no counter column exists.
  */
-export async function loadWatchMoveRows(profileId: string): Promise<WatchMoveRow[]> {
+export async function loadWatchMoveRows(profileId: string, hasSources = true): Promise<WatchMoveRow[]> {
+  // Nothing watched, nothing to attribute. loadHome runs on ~20 mutation routes
+  // as well as the home GET, and on an account with no sources this was a full
+  // scan of the watcher Move history on every single tap to render a line
+  // inside a sheet that has no rows in it.
+  if (!hasSources) return [];
   const { data, error } = await copilotDb().from('copilot_moves')
     .select('external_id, status')
     .eq('profile_id', profileId).eq('job', 'watch').limit(2000);
@@ -1397,26 +1422,43 @@ export async function deleteWorkingEntry(profileId: string, id: string): Promise
  * Never fatal. A failure here costs a proposal; it must not take down the run
  * that produced it, and an unapplied migration lands in exactly this branch.
  */
-export async function proposeObserved(profileId: string, drafts: ObservedDraft[]): Promise<number> {
-  if (!drafts.length) return 0;
-  const { error } = await copilotDb().from('copilot_working').upsert(
-    drafts.map((d) => ({
-      profile_id: profileId,
-      section: d.section,
-      body: d.body.slice(0, BODY_MAX),
-      evidence: d.evidence.slice(0, EVIDENCE_MAX),
-      source: 'observed',
-      status: 'proposed',
-      observed_key: d.observed_key,
-      updated_at: new Date().toISOString(),
-    })),
-    { onConflict: 'profile_id,observed_key' },
-  );
-  if (error) {
-    console.error('[copilot/working] could not write proposals:', error.message);
-    return 0;
+export async function proposeObserved(profileId: string, write: ObservedWrite): Promise<number> {
+  const db = copilotDb();
+  const now = new Date().toISOString();
+  let written = 0;
+
+  if (write.propose.length) {
+    const { error } = await db.from('copilot_working').upsert(
+      write.propose.map((d) => ({
+        profile_id: profileId,
+        section: d.section,
+        body: d.body.slice(0, BODY_MAX),
+        evidence: d.evidence.slice(0, EVIDENCE_MAX),
+        source: 'observed',
+        status: 'proposed',
+        observed_key: d.observed_key,
+        updated_at: now,
+      })),
+      { onConflict: 'profile_id,observed_key' },
+    );
+    if (error) console.error('[copilot/working] could not write proposals:', error.message);
+    else written += write.propose.length;
   }
-  return drafts.length;
+
+  // A reading the user already confirmed, whose number has moved. Body and
+  // evidence only: touching status here is what demoted a confirmed line back
+  // to 'proposed' every night, and touching confirmed_at would lose the record
+  // that they ever saw it. Updated by key rather than upserted so a row that
+  // somehow does not exist is a no-op instead of a new proposal.
+  for (const d of write.refresh) {
+    const { error } = await db.from('copilot_working')
+      .update({ body: d.body.slice(0, BODY_MAX), evidence: d.evidence.slice(0, EVIDENCE_MAX), updated_at: now })
+      .eq('profile_id', profileId).eq('observed_key', d.observed_key).eq('status', 'live');
+    if (error) console.error('[copilot/working] could not refresh a reading:', error.message);
+    else written += 1;
+  }
+
+  return written;
 }
 
 /* ─── Commissions ─────────────────────────────────────────────────────────── */
@@ -1430,33 +1472,75 @@ export async function proposeObserved(profileId: string, drafts: ObservedDraft[]
 const COMMISSION_COLS = 'id, goal_id, objective, why, authority, budget_minutes, status, plan, created_at, approved_at, last_run_at, closed_at, outcome, seen_at';
 const COMMISSION_EVENT_COLS = 'id, commission_id, kind, step, summary, artifact, at';
 
-export async function loadCommissions(profileId: string, limit = 12): Promise<Commission[]> {
-  const { data, error } = await copilotDb().from('copilot_commissions').select(COMMISSION_COLS)
-    .eq('profile_id', profileId)
-    // Anything still live first, then the most recent history.
-    .order('created_at', { ascending: false }).limit(limit);
-  if (error) return [];
-  return ((data ?? []) as unknown as Commission[]).map((c) => ({ ...c, plan: Array.isArray(c.plan) ? c.plan : [] }));
+/**
+ * Every live mandate, plus recent history.
+ *
+ * Two reads rather than one ordered read, because the single version claimed
+ * "anything still live first" in a comment and then ordered by created_at
+ * alone. A commission approved in week one and still running dropped out of the
+ * window as soon as a dozen newer ones existed: its card vanished from Now,
+ * dueCommissions stopped dispatching it, and the worker's POST to its own
+ * result socket 404'd. Live rows are bounded by MAX_ACTIVE_COMMISSIONS, so
+ * taking all of them costs nothing and cannot truncate.
+ */
+export async function loadCommissions(profileId: string, historyLimit = 12): Promise<Commission[]> {
+  const db = copilotDb();
+  const rows = (r: { data: unknown; error: unknown }) =>
+    (r.error ? [] : ((r.data ?? []) as unknown as Commission[])).map((c) => ({ ...c, plan: Array.isArray(c.plan) ? c.plan : [] }));
+
+  const [live, closed] = await Promise.all([
+    db.from('copilot_commissions').select(COMMISSION_COLS).eq('profile_id', profileId)
+      .in('status', ['draft', 'active', 'blocked']).order('created_at', { ascending: false }),
+    db.from('copilot_commissions').select(COMMISSION_COLS).eq('profile_id', profileId)
+      .in('status', ['done', 'stopped']).order('closed_at', { ascending: false, nullsFirst: false }).limit(historyLimit),
+  ]);
+  return [...rows(live), ...rows(closed)];
 }
 
-export async function loadCommissionEvents(profileId: string, commissionIds: string[], limit = 200): Promise<CommissionEvent[]> {
+/**
+ * Recent events, PER commission.
+ *
+ * One query with a global limit was wrong in a way that only showed up in week
+ * two: three mandates posting up to MAX_EVENTS_PER_POST a night pass 200 events
+ * in about four nights, and the newest-first window then belonged entirely to
+ * whichever one was busiest. A commission blocked a week earlier came back with
+ * no events at all — its ask stopped rendering, its card read "nothing back
+ * yet", and blockedMove returned null so the deck never asked the question
+ * again. Blocked forever, with no visible reason.
+ *
+ * Per-id queries in parallel: bounded by the live cap plus the history page, so
+ * a handful of small indexed reads rather than one big one.
+ */
+export const EVENTS_PER_COMMISSION = 40;
+
+export async function loadCommissionEvents(
+  profileId: string,
+  commissionIds: string[],
+  perCommission = EVENTS_PER_COMMISSION,
+): Promise<CommissionEvent[]> {
   if (!commissionIds.length) return [];
-  const { data, error } = await copilotDb().from('copilot_commission_events').select(COMMISSION_EVENT_COLS)
-    .eq('profile_id', profileId).in('commission_id', commissionIds)
-    .order('at', { ascending: false }).limit(limit);
-  if (error) return [];
-  return (data ?? []) as unknown as CommissionEvent[];
+  const db = copilotDb();
+  const pages = await Promise.all(commissionIds.map((id) =>
+    db.from('copilot_commission_events').select(COMMISSION_EVENT_COLS)
+      .eq('profile_id', profileId).eq('commission_id', id)
+      .order('at', { ascending: false }).limit(perCommission)
+      .then((r) => (r.error ? [] : ((r.data ?? []) as unknown as CommissionEvent[])))));
+  return pages.flat();
 }
 
 export async function createCommission(profileId: string, input: {
   objective: string; why?: string | null; goal_id?: string | null;
   authority?: Authority; budget_minutes?: number; plan?: CommissionStep[];
 }): Promise<Commission | null> {
-  const open = (await loadCommissions(profileId)).filter((c) => c.status === 'active' || c.status === 'blocked');
+  // Drafts count. The first version filtered to active|blocked, so five
+  // commissions could be written in a row — every one of them passed a check
+  // that could not see the other four — and then approved one by one past a cap
+  // approveCommission did not enforce at all.
+  const held = (await loadCommissions(profileId)).filter((c) => c.status !== 'done' && c.status !== 'stopped');
   // Three mandates is a person with three priorities; eight is a person with
   // none, and the whole product is an argument against that.
-  if (open.length >= MAX_ACTIVE_COMMISSIONS) {
-    throw new Error(`You have ${open.length} commissions running. Finish or stop one first.`);
+  if (held.length >= MAX_ACTIVE_COMMISSIONS) {
+    throw new Error(`You have ${held.length} commissions on the go. Finish or stop one first.`);
   }
   const { data, error } = await copilotDb().from('copilot_commissions').insert({
     profile_id: profileId,
@@ -1484,6 +1568,13 @@ export async function createCommission(profileId: string, input: {
  * timestamp that matters if anybody ever asks what the app was allowed to do.
  */
 export async function approveCommission(profileId: string, id: string): Promise<Commission | null> {
+  // The cap, enforced at the moment a mandate actually starts consuming
+  // anything. createCommission's check is upstream of the act; this one is the
+  // act, and it is the one that was missing.
+  const running = (await loadCommissions(profileId)).filter((c) => c.status === 'active' || c.status === 'blocked');
+  if (running.length >= MAX_ACTIVE_COMMISSIONS) {
+    throw new Error(`${running.length} are already running. Finish or stop one before starting this.`);
+  }
   const now = new Date().toISOString();
   const { data, error } = await copilotDb().from('copilot_commissions')
     .update({ status: 'active', approved_at: now })
@@ -1491,6 +1582,25 @@ export async function approveCommission(profileId: string, id: string): Promise<
     .select(COMMISSION_COLS).maybeSingle();
   if (error) throw error;
   if (data) await logEvent(profileId, 'commission_approved', { commission_id: id });
+  return (data as unknown as Commission) ?? null;
+}
+
+/**
+ * Carry on after a question was answered. The only thing that clears 'blocked'.
+ *
+ * There was no such thing. A worker raised a needs_you, the commission blocked,
+ * dueCommissions stopped dispatching it, and the sheet offered "It is finished"
+ * or "Call it off" — so a mandate that asked a question was a dead end, and the
+ * only path that actually resumed one was the worker clearing its own gate,
+ * which is exactly the path nextStatus now refuses.
+ */
+export async function unblockCommission(profileId: string, id: string): Promise<Commission | null> {
+  const { data, error } = await copilotDb().from('copilot_commissions')
+    .update({ status: 'active' })
+    .eq('profile_id', profileId).eq('id', id).eq('status', 'blocked')
+    .select(COMMISSION_COLS).maybeSingle();
+  if (error) throw error;
+  if (data) await logEvent(profileId, 'commission_unblocked', { commission_id: id });
   return (data as unknown as Commission) ?? null;
 }
 
@@ -1519,20 +1629,26 @@ export async function recordCommissionWork(
   profileId: string,
   commission: Commission,
   result: CommissionResult,
-): Promise<void> {
+): Promise<{ status: CommissionStatus; events: CommissionEvent[] }> {
   const db = copilotDb();
+  // Insert and select back, so the caller gets the rows WITH their real ids.
+  // The dispatcher used to synthesise `pending:${id}:${summary}` keys for the
+  // events it had just written, which would have produced one Move tonight and
+  // a second for the same question tomorrow under the real uuid.
+  let written: CommissionEvent[] = [];
   if (result.events.length) {
-    const { error } = await db.from('copilot_commission_events').insert(result.events.map((e) => ({
+    const { data, error } = await db.from('copilot_commission_events').insert(result.events.map((e) => ({
       commission_id: commission.id,
       profile_id: profileId,
       kind: e.kind,
       step: e.step,
       summary: e.summary,
       artifact: e.artifact,
-    })));
+    }))).select(COMMISSION_EVENT_COLS);
     // A log that will not write is worth knowing about, but not worth losing the
     // status update over — the commission still moved.
     if (error) console.error('[copilot/commission] log write failed:', error.message);
+    else written = (data ?? []) as unknown as CommissionEvent[];
   }
 
   const status = nextStatus(commission.status, result.events);
@@ -1543,4 +1659,7 @@ export async function recordCommissionWork(
     patch.outcome = result.events.find((e) => e.kind === 'done')?.summary?.slice(0, 300) ?? null;
   }
   await db.from('copilot_commissions').update(patch).eq('profile_id', profileId).eq('id', commission.id);
+  // What it IS now, not what it was when the caller loaded it. The dispatcher
+  // reads this to decide whether to raise the ask in the same pass.
+  return { status, events: written };
 }

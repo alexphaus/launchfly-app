@@ -307,6 +307,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         // somebody who just opened the sheet moves the card out from under them.
         if (r.home) setHome(r.home);
         if (action === 'approve') say('Granted. It runs tonight.');
+        if (action === 'unblock') say('Carrying on. It picks up tonight.');
         if (action === 'stop') say('Stopped.');
         return { ok: true };
       } catch (e) {

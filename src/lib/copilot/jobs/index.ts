@@ -212,8 +212,8 @@ export async function runJobs(
   if (!opts.only?.length) {
     try {
       const { diagnosis, metrics } = await ctx.sense();
-      const drafts = newObserved(observedFrom(diagnosis, metrics), await loadWorking(profileId));
-      if (drafts.length) await proposeObserved(profileId, drafts);
+      const write = newObserved(observedFrom(diagnosis, metrics), await loadWorking(profileId));
+      if (write.propose.length || write.refresh.length) await proposeObserved(profileId, write);
     } catch (e) {
       console.error('[copilot/jobs] could not propose readings:', e instanceof Error ? e.message : e);
     }

@@ -3025,6 +3025,17 @@ async function discovery() {
     assert.equal(thin.get('earning')!.rate, null);
     assert.equal(thin.get('earning')!.verdict, 'unanswered');
 
+    // A middling keep rate is its own answer. The first version folded this band
+    // into 'unanswered', so a feed the user kept half of was indistinguishable
+    // from one they had never seen — and verdict ships to the client.
+    const half = sourceYield(
+      [...Array.from({ length: 5 }, (_, i) => ({ external_id: `earning:k${i}`, status: 'done' })),
+       ...Array.from({ length: 5 }, (_, i) => ({ external_id: `earning:b${i}`, status: 'dismissed' }))],
+      [sources[0]], now,
+    ).get('earning')!;
+    assert.equal(half.rate, 0.5);
+    assert.equal(half.verdict, 'mixed', 'kept half is not the same as never judged');
+
     // --- the line under the card
     assert.equal(yieldLine(undefined), null, 'a payload written before this field must not blank the sheet');
     assert.equal(yieldLine(y.get('quiet')), `Nothing in ${QUIET_AFTER_DAYS} days`);
@@ -3053,7 +3064,7 @@ discovery().catch((e) => { console.error(e); process.exit(1); });
 // carries its own arithmetic — that is what separates this from the skill levels
 // and estimated percentages deleted in 3eaa03f.
 import {
-  BODY_MAX, MAX_PER_SECTION, MIN_OBSERVED, SECTION, SECTIONS,
+  BODY_MAX, BRIEF_MAX, MAX_PER_SECTION, MIN_OBSERVED, SECTION, SECTIONS,
   emptySections, isSection, newObserved, observedFrom, workingBrief, workingProgress,
 } from '../../src/lib/copilot/working';
 import type { WorkingEntry } from '../../src/lib/copilot/working';
@@ -3124,14 +3135,32 @@ async function workingFile() {
   {
     const drafts = observedFrom(diagnosis, metrics);
     const first = drafts[0];
+    const at = (existing: WorkingEntry[]) => newObserved([first], existing);
+
     // Unchanged: nothing to write. Rewriting it bumps updated_at and makes the
     // sheet look like something happened when nothing did.
-    assert.equal(newObserved([first], [entry({ observed_key: first.observed_key, body: first.body, status: 'proposed' })]).length, 0);
-    // Changed: worth re-proposing.
-    assert.equal(newObserved([first], [entry({ observed_key: first.observed_key, body: 'something older', status: 'proposed' })]).length, 1);
+    const same = at([entry({ observed_key: first.observed_key, body: first.body, status: 'proposed' })]);
+    assert.equal(same.propose.length + same.refresh.length, 0);
+    // Changed and not yet settled: worth re-proposing.
+    const changed = at([entry({ observed_key: first.observed_key, body: 'something older', status: 'proposed' })]);
+    assert.deepEqual([changed.propose.length, changed.refresh.length], [1, 0]);
     // Declined: never again. Same failure REFUSAL_DECAY stops one layer up.
-    assert.equal(newObserved([first], [entry({ observed_key: first.observed_key, body: 'older', status: 'declined' })]).length, 0);
-    assert.equal(newObserved(drafts, []).length, drafts.length, 'an empty file takes everything');
+    const no = at([entry({ observed_key: first.observed_key, body: 'older', status: 'declined' })]);
+    assert.equal(no.propose.length + no.refresh.length, 0);
+
+    // ALREADY CONFIRMED and the number moved: refresh in place, never propose.
+    // The first version only skipped 'declined', so a confirmed "9 sent in the
+    // last 30 days, 2 replied" was demoted back to 'proposed' the night the
+    // count reached 10 — dropping out of workingBrief and reappearing under "It
+    // noticed" every morning. What was confirmed is the READING; the number
+    // moving is the reading working.
+    const live = at([entry({ observed_key: first.observed_key, body: 'an older count', status: 'live' })]);
+    assert.deepEqual([live.propose.length, live.refresh.length], [0, 1],
+      'a confirmed reading is refreshed, not demoted');
+    assert.equal(live.refresh[0].body, first.body);
+
+    assert.equal(newObserved(drafts, []).propose.length, drafts.length, 'an empty file takes everything');
+    assert.equal(newObserved(drafts, []).refresh.length, 0);
   }
 
   // --- the block the prompts read
@@ -3158,6 +3187,17 @@ async function workingFile() {
     assert.ok(brief.indexOf(SECTION.deliver.label) < brief.indexOf(SECTION.works_for.label));
     assert.equal(workingBrief([]), '', 'an empty file adds nothing rather than an empty heading');
     assert.equal(workingBrief([entry({ status: 'proposed' })]), '');
+
+    // The budget. Without it a full file is ~29k characters at the head of every
+    // per-source judge prompt, six sources a night.
+    const fat = SECTIONS.flatMap((section, i) =>
+      Array.from({ length: 8 }, (_, j) => entry({ id: `f${i}-${j}`, section, body: 'x'.repeat(BODY_MAX) })));
+    const capped = workingBrief(fat);
+    assert.ok(capped.length <= BRIEF_MAX, `budget held: ${capped.length} <= ${BRIEF_MAX}`);
+    assert.ok(capped.length > 0, 'a budget is not a mute button');
+    // Stops on a whole line rather than truncating one: half a sentence about
+    // somebody's pricing is worse than none, because a model completes it.
+    assert.ok(!capped.endsWith('x'.repeat(10) + '…') && capped.split('\n').every((l) => l.length <= BODY_MAX + 80));
   }
 
   // --- progress, as a count and never a percentage
@@ -3195,8 +3235,8 @@ workingFile().catch((e) => { console.error(e); process.exit(1); });
 // product.
 import {
   AUTHORITY, AUTHORITIES, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX,
-  blockedMove, canAct, commissionBrief, commissionLine, dueCommissions, isAuthority,
-  normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
+  SAFE_HREF, blockedMove, canAct, commissionBrief, commissionIdFromMove, commissionLine,
+  dueCommissions, isAuthority, normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
 } from '../../src/lib/copilot/commission';
 import type { Commission, CommissionEvent } from '../../src/lib/copilot/commission';
 
@@ -3305,6 +3345,15 @@ async function commissions() {
     assert.equal(nextStatus('stopped', [{ kind: 'worked' }]), 'stopped', 'a worker cannot reopen a mandate you called off');
     assert.equal(nextStatus('draft', [{ kind: 'done' }]), 'draft', 'and cannot start one you never approved');
 
+    // And 'blocked' is the user's too. This is the transition the original had
+    // no test for, and it fell through to 'active': a worker that raised a
+    // needs_you could clear its own gate by posting anything the next night —
+    // the user's question answered for them by the party that asked it.
+    assert.equal(nextStatus('blocked', [{ kind: 'worked' }]), 'blocked', 'a worker cannot clear its own question');
+    assert.equal(nextStatus('blocked', []), 'blocked', 'nor by posting nothing at all');
+    assert.equal(nextStatus('blocked', [{ kind: 'done' }]), 'blocked',
+      'nor by declaring victory — the question is what it is blocked ON');
+
     // Bounds.
     assert.equal(normalizeResult({ events: Array.from({ length: 50 }, () => ({ kind: 'worked', summary: 'x' })) }).events.length, MAX_EVENTS_PER_POST);
     assert.equal(normalizePlan(Array.from({ length: 30 }, (_, i) => ({ do: `s${i}` }))).length, MAX_STEPS);
@@ -3372,6 +3421,34 @@ async function commissions() {
     assert.ok(m.artifact.value, 'no artifact, no Move — the same floor as every other job');
     // Nothing to ask means no Move, rather than an empty one.
     assert.equal(blockedMove(base, reportOf(base, []), 'commission'), null);
+
+    // The return leg: answering that Move is how the mandate carries on, so the
+    // commission has to be readable back off the key. Both halves are uuids, so
+    // this splits on the prefix rather than on the last colon.
+    assert.equal(commissionIdFromMove(m.external_id), 'c1');
+    assert.equal(commissionIdFromMove('commission:abc-123:def-456'), 'abc-123');
+    assert.equal(commissionIdFromMove('watch:src:item'), null, 'another job\'s Move is not a commission');
+    assert.equal(commissionIdFromMove(null), null);
+    assert.equal(commissionIdFromMove('commission:'), null);
+  }
+
+  // --- nothing untrusted reaches an href without a scheme
+  {
+    const link = (href: string) => normalizeResult({
+      events: [{ kind: 'found', summary: 'x', artifact: { kind: 'link', label: 'Open', value: 'v', href } }],
+    }).events[0]?.artifact;
+
+    assert.equal(link('https://ok.test/x')?.href, 'https://ok.test/x');
+    assert.equal(link('http://ok.test/x')?.href, 'http://ok.test/x');
+    // Anything holding the inbound secret can post one of these, and the sheet
+    // renders it into <a href> — React does not block javascript: URLs.
+    for (const bad of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,<script>1</script>', 'vbscript:x', '/relative', 'mailto:a@b.c']) {
+      // A link artifact whose href is refused is dropped whole rather than
+      // rendered as a button that goes nowhere. The EVENT survives — the worker
+      // still did something and the log should say so — but with no artifact.
+      assert.equal(link(bad), null, `${bad} must not survive`);
+    }
+    assert.ok(SAFE_HREF.test('https://x.test') && !SAFE_HREF.test('javascript:1'));
   }
 
   console.log('copilot-core: commission checks passed');

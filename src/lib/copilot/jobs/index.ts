@@ -9,6 +9,7 @@ import { copilotDb, todayIso } from '../db';
 import { MAX_RESTATE_DISMISSALS, dismissedStreak, selectMoves, type MoveDraft } from '../moves';
 import { getProfile, loadMoveAnswers, logEvent, supersedeMoves } from '../store';
 import { capabilityGapJob } from './capability-gap';
+import { commissionJob } from './commission';
 import { clientDeliveryJob } from './client-delivery';
 import { goalGapJob } from './goal-gap';
 import { obligationsJob } from './obligations';
@@ -52,6 +53,11 @@ import type { Job, JobContext } from './types';
  *                and the only reason today's Call can be something other than
  *                the queue. Everything above it is computed from rows the user
  *                already had; a closed system can only ever re-rank itself
+ * decide         a mandate the user granted that has stopped and needs them.
+ *                Above `remote` because work somebody asked for outranks work
+ *                the same worker volunteered — and unlike every job above it,
+ *                this one reports on something already in flight rather than
+ *                proposing something new
  * anything       from an external workflow, because searching for a flight,
  *                quoting three suppliers or fixing an n8n node is not work a
  *                request handler can do, and pretending otherwise is how you
@@ -68,6 +74,7 @@ export const JOBS: Job[] = [
   openingGapJob,
   capabilityGapJob,
   watcherJob,
+  commissionJob,
   remoteJob,
 ];
 

@@ -260,6 +260,32 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not add that source' };
       }
     },
+    async createCommission(input) {
+      try {
+        const r = await post<{ home: HomeData }>('/commissions', input);
+        setHome(r.home);
+        // Says what happens next, because what happens next is nothing until
+        // they approve it — and a commission that silently sits in draft looks
+        // exactly like one the app ignored.
+        say('Written. Read the plan and approve it to start.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not write that commission' };
+      }
+    },
+    async commissionAction(id, action, outcome) {
+      try {
+        const r = await post<{ home?: HomeData }>(`/commissions/${encodeURIComponent(id)}`, { action, outcome });
+        // 'seen' deliberately returns no home: rewriting the screen under
+        // somebody who just opened the sheet moves the card out from under them.
+        if (r.home) setHome(r.home);
+        if (action === 'approve') say('Granted. It runs tonight.');
+        if (action === 'stop') say('Stopped.');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not update that commission' };
+      }
+    },
     async deleteAccount(confirm) {
       try {
         await del('/account', { body: JSON.stringify({ confirm }) });

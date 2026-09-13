@@ -267,8 +267,27 @@ COPILOT_AGENT_URL=https://...       # external vertical agent (contract below)
 COPILOT_AGENT_SECRET=...
 COPILOT_SUPPLY_URL=https://...      # external supply service (contract below)
 COPILOT_SUPPLY_SECRET=...
-COPILOT_JOBS_URL=https://...        # external Move producer — any of the eight kinds
+COPILOT_JOBS_URL=https://...        # the worker: external Move producer AND commission contractor
 COPILOT_JOBS_SECRET=...
+COPILOT_INBOUND_SECRET=...          # what a worker posts results back with (falls back to COPILOT_JOBS_SECRET)
+#   Two payload shapes arrive at COPILOT_JOBS_URL and the `kind` field says which:
+#
+#     { "kind": "moves", ... }       -> { "moves": MoveDraft[] }   unsolicited suggestions
+#     { "kind": "commission", ... }  -> a job order. Carries commission_id, objective,
+#                                      `may` / `may_autonomously`, budget_minutes, plan
+#                                      and result_url. Answer inline, or 202 and POST to
+#                                      result_url later — long work is expected.
+#
+#   Post work back to result_url (Bearer COPILOT_INBOUND_SECRET):
+#     { "events": [ { "kind": "found"|"worked"|"needs_you"|"blocked"|"done"|"failed",
+#                     "step": 2, "summary": "...",
+#                     "artifact": { "kind": "link", "label": "...", "value": "...", "href": "..." } } ],
+#       "plan": [ { "n": 1, "do": "...", "state": "done" } ] }
+#
+#   `status` in that body is parsed and DISCARDED. The commission's state is computed
+#   from the events (see nextStatus) because a worker must not mark its own homework,
+#   and a needs_you always outranks a done. `may_autonomously` is false for `reach` and
+#   `commit`: report what you WOULD do as needs_you rather than doing it.
 #  or
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL

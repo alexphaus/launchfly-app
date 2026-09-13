@@ -13,6 +13,7 @@ import type { Decision, DecisionDraft, DontDraft, Change, DecisionMetric, Decisi
 import type { Diagnosis, GrowthEdge } from './diagnose';
 import type { PipelineStage } from './pipeline';
 import type { SourceYield } from './watch/yield';
+import type { Commission, CommissionReport } from './commission';
 import type { PlanKey, PlanStatus } from './plans';
 
 export type Capacity = 'deep' | 'moderate' | 'low';
@@ -271,6 +272,14 @@ export interface PipelineRow {
 }
 
 /** Everything the client needs to render the three tabs and the You sheet. One request. */
+/** A commission with everything the card needs, computed server-side. */
+export interface CommissionThread {
+  commission: Commission;
+  report: CommissionReport;
+  /** Counts and state, never adjectives. See commissionLine. */
+  line: string;
+}
+
 export interface HomeData {
   profile: Profile;
   goals: Goal[];
@@ -334,6 +343,14 @@ export interface HomeData {
    * new account sees and the correct one for both.
    */
   watchSources: WatchSource[];
+  /**
+   * Every mandate, live or finished, with its report already computed. Empty
+   * until somebody writes one — and empty is also what an unapplied 20260916
+   * looks like, which is the same screen and the correct one for both.
+   */
+  commissions: CommissionThread[];
+  /** False when no worker is configured, so a mandate would never be picked up. */
+  workerConnected: boolean;
   /**
    * Per-source record, keyed by source id: how many Moves each feed produced and
    * how many survived. Computed from copilot_moves, never stored — see

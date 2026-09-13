@@ -7,7 +7,8 @@
 
 import { copilotDb, todayIso } from '../db';
 import { MAX_RESTATE_DISMISSALS, dismissedStreak, selectMoves, type MoveDraft } from '../moves';
-import { getProfile, loadMoveAnswers, logEvent, supersedeMoves } from '../store';
+import { getProfile, loadMoveAnswers, loadWorking, logEvent, proposeObserved, supersedeMoves } from '../store';
+import { newObserved, observedFrom } from '../working';
 import { capabilityGapJob } from './capability-gap';
 import { clientDeliveryJob } from './client-delivery';
 import { goalGapJob } from './goal-gap';
@@ -188,6 +189,26 @@ export async function runJobs(
     } catch (e) {
       entry.error = e instanceof Error ? e.message : String(e);
       console.error(`[copilot/jobs] ${job.key} failed:`, entry.error);
+    }
+  }
+
+  // Tonight's readings, written as proposals rather than as facts.
+  //
+  // Here rather than in a Job of its own because it produces no Moves — it adds
+  // to what the app knows, which is upstream of every Move rather than one more
+  // of them. Only on a full pass: `only` is somebody tapping "read my sources
+  // now", and recomputing the whole funnel for that would spend their tap on
+  // work they did not ask for.
+  //
+  // Never fatal. A failure costs one proposal, and an unapplied 20260917 lands
+  // in exactly this branch.
+  if (!opts.only?.length) {
+    try {
+      const { diagnosis, metrics } = await ctx.sense();
+      const drafts = newObserved(observedFrom(diagnosis, metrics), await loadWorking(profileId));
+      if (drafts.length) await proposeObserved(profileId, drafts);
+    } catch (e) {
+      console.error('[copilot/jobs] could not propose readings:', e instanceof Error ? e.message : e);
     }
   }
 

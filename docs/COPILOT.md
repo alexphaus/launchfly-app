@@ -400,6 +400,37 @@ messages in the user's own words. With no offer the template falls back to the h
 stays deliberately vague rather than inventing a business. Nothing in the copy assumes an
 industry, country, channel or company size.
 
+## The working file — the offer's other half
+
+`copilot_working` (20260917) holds what the app knows about the business rather than what it
+can guess. The offer above is five strings — a headline — and until this existed every draft,
+every judged feed item and every commissioned piece of research was written from those five
+strings, which is why the output read like a template however good the model was: there was
+nothing specific for it to be specific about.
+
+Six sections: `deliver`, `price`, `works_for`, `tried`, `refuse`, `voice`. `tried` and
+`refuse` earn their place on their own — an app that does not know outreach on Instagram
+already failed, or that this person will not take retainers under $100, proposes both
+forever.
+
+**Two sources and never a third.** `you` is the user's own statement, true because they said
+so, live immediately and carrying no evidence — they are the evidence. `observed` is computed
+from their rows and carries the count that makes it true. There is no `inferred`: the app
+does not form a view about somebody's business and feed it back to itself as context, which
+is invariant 2 at the level of prose rather than numbers.
+
+Observed readings are written by `runJobs` on a full nightly pass (never on an on-demand
+run), upserted on `(profile_id, observed_key)` so recomputing the same sentence updates one
+row instead of stacking it. They arrive as `proposed` and **never reach a prompt** until the
+user confirms them — a computed fact is still the app's reading, and the person who lived it
+gets the last word. A declined reading is kept, not deleted, so it is not proposed again next
+week.
+
+`workingBrief()` renders the live entries and is read by `buildContextPack` (so the daily
+brief sees it) and by `watchBrief` (so the feed judge scores items against the business
+rather than the headline). Observed lines carry their evidence into the prompt too, so a
+model can tell a count from a claim.
+
 ## Setting up the scheduled loop
 
 Nothing in this app wakes up on its own until this exists. No overnight supply,

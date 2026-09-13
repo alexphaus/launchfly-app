@@ -62,6 +62,16 @@ export interface WatchBrief {
    * of them were wanted.
    */
   acts?: { kept: MoveKind[]; binned: MoveKind[] };
+  /**
+   * The working file, as the block from workingBrief.
+   *
+   * `who` above is the offer — a headline. This is the business: how delivery
+   * works, what closed, what has already been tried and failed, and what this
+   * person will not do. The last one matters most here, because a judge that
+   * does not know somebody refuses retainers under $100 will keep picking them
+   * out of a feed forever and the user will keep binning them.
+   */
+  working?: string;
 }
 
 const money = (n: number, unit?: string | null) => `${unit || '$'}${Math.round(n).toLocaleString('en-US')}`;
@@ -72,6 +82,8 @@ export function watchBrief(input: {
   metrics: Pick<Metrics, 'runway_months'>;
   capacityMinutes: number;
   keeps?: KeepRates;
+  /** From workingBrief. Live entries only. */
+  working?: string;
 }): WatchBrief {
   const offer: Offer = input.profile.offer ?? {};
   const who = [offer.sells, offer.for_who && `for ${offer.for_who}`, offer.price_band]
@@ -103,6 +115,10 @@ export function watchBrief(input: {
     // Omitted entirely when neither list has anything to say, so the prompt
     // never carries a heading with nothing under it.
     ...(acts && (acts.kept.length || acts.binned.length) ? { acts } : {}),
+    // Omitted when empty rather than sent as a blank heading, same as acts: a
+    // prompt carrying "WHAT THEY KNOW:" with nothing under it reads to a model
+    // as an absence of knowledge rather than an absence of a file.
+    ...(input.working?.trim() ? { working: input.working.trim() } : {}),
   };
 }
 
@@ -120,6 +136,10 @@ export function briefText(b: WatchBrief): string {
           b.acts.binned.length ? `they bin ${b.acts.binned.join(', ')} almost every time` : null,
         ].filter(Boolean).join('; ')}.`
       : null,
+    // Last, and deliberately: everything above is who they are and what they
+    // want, which frames the read. This is the detail that decides individual
+    // items, and it is the only part the user wrote themselves.
+    b.working ? `WHAT THEY KNOW ABOUT THEIR OWN WORK:\n${b.working}` : null,
   ].filter((l) => l !== null).join('\n\n');
 }
 

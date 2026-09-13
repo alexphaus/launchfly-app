@@ -9,6 +9,7 @@ import { STAGE_LABEL, type PipelineStage } from '@/lib/copilot/pipeline';
 import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watch/catalogue';
 import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
 import type { Discovered } from '@/lib/copilot/watch/discover';
+import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 import { useShell } from './shell';
@@ -31,6 +32,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'offer': return <OfferSheet home={home} actions={actions} />;
     case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
     case 'money': return <MoneySheet home={home} actions={actions} />;
+    case 'working': return <WorkingSheet home={home} actions={actions} />;
   }
 }
 
@@ -970,6 +972,112 @@ function MoneySheet({ home, actions }: { home: HomeData; actions: Actions }) {
         Settled rows are kept, not deleted — what actually landed and when is the part that makes the
         next forecast worth believing.
       </div>
+    </>
+  );
+}
+
+/* ─── The working file ────────────────────────────────────────────────────── */
+
+/**
+ * What the app knows about this business, and what it is waiting to be told.
+ *
+ * Proposals sit at the top and are the point of the screen. Everything below is
+ * a text field somebody has to be bothered to fill in, and nobody fills in a
+ * form about their own business for an app. A reading the app computed from
+ * their rows, shown with the count behind it and answerable with one tap, is
+ * how the file actually gets written — the user corrects rather than composes.
+ */
+function WorkingSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  const entries = home.working ?? [];
+  const progress = home.workingProgress ?? { filled: 0, total: SECTIONS.length, proposals: 0 };
+  const proposals = entries.filter((e) => e.status === 'proposed');
+  const [adding, setAdding] = useState<WorkingSection | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const add = async (section: WorkingSection) => {
+    if (!draft.trim()) return;
+    setBusy(true); setError(null);
+    const r = await actions.saveWorking({ section, body: draft.trim() });
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'Could not save that');
+    setDraft(''); setAdding(null);
+  };
+
+  return (
+    <>
+      <h3>What this app knows about your work</h3>
+      <p className="desc">
+        Everything it writes — every draft, every feed it reads, every piece of research it is sent off to do —
+        comes from here. Five lines about what you sell is a headline; this is the business.
+      </p>
+
+      {proposals.length > 0 && (
+        <>
+          <div className="cp-section">
+            <span className="lead">It noticed</span>
+            <span className="count">{proposals.length} waiting</span>
+          </div>
+          <p className="desc" style={{ marginTop: -6 }}>
+            Counted from your own rows. Nothing here reaches a draft until you say it is right.
+          </p>
+          {proposals.map((e) => (
+            <div key={e.id} className="cp-src">
+              <div className="ct">{e.body}</div>
+              {/* The count is the whole reason this is allowed to be stated at
+                  all. A reading without it would be the app forming a view about
+                  somebody's business, which is the one thing it must not do. */}
+              <div className="cs">{SECTION[e.section].label}{e.evidence ? ` · ${e.evidence}` : ''}</div>
+              <div className="acts">
+                <button className="cp-connect" disabled={busy} onClick={() => void actions.settleWorking(e.id, 'live')}>That is right</button>
+                <button className="cp-connect ghost" disabled={busy} onClick={() => void actions.settleWorking(e.id, 'declined')}>No</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      <div className="cp-section">
+        <span className="lead">The file</span>
+        <span className="count">{progress.filled} of {progress.total} filled in</span>
+      </div>
+      {error && <div className="cp-note">{error}</div>}
+
+      {SECTIONS.map((section) => {
+        const meta = SECTION[section];
+        const rows = entries.filter((e) => e.section === section && e.status === 'live');
+        return (
+          <div key={section} className="cp-work">
+            <div className="hd">{meta.label}</div>
+            <div className="bl">{meta.blurb}</div>
+            {rows.map((e) => (
+              <div key={e.id} className="ln">
+                <span className="tx">{e.body}</span>
+                {e.source === 'observed' && e.evidence && <span className="ct-ev">{e.evidence}</span>}
+                <button className="x" aria-label="Remove" onClick={() => void actions.removeWorking(e.id)}>×</button>
+              </div>
+            ))}
+            {adding === section ? (
+              <>
+                <textarea className="cp-input sm" autoFocus rows={3} value={draft} maxLength={BODY_MAX}
+                  onChange={(e) => { setDraft(e.target.value); setError(null); }} placeholder={meta.placeholder} />
+                <div className="cp-btn-row" style={{ marginTop: 8 }}>
+                  <button className="cp-btn primary" disabled={busy || !draft.trim()} onClick={() => void add(section)}>Add</button>
+                  <button className="cp-btn ghost" disabled={busy} onClick={() => { setAdding(null); setDraft(''); }}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <button className="cp-connect" onClick={() => { setAdding(section); setDraft(''); }}>
+                {rows.length ? 'Add another' : 'Write it'}
+              </button>
+            )}
+            {/* What changes when it is filled in. A form that does not say why
+                it wants something gets abandoned, and this one is long. */}
+            {!rows.length && <div className="wh">{meta.changes}</div>}
+          </div>
+        );
+      })}
     </>
   );
 }

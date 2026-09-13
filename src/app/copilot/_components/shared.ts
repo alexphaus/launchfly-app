@@ -1,5 +1,6 @@
 import type { PipelineStage } from '@/lib/copilot/pipeline';
 import type { Discovered } from '@/lib/copilot/watch/discover';
+import type { WorkingSection } from '@/lib/copilot/working';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -35,7 +36,9 @@ export type SheetState =
   /** The feeds this person watches. Where supply comes from is theirs to set. */
   | { kind: 'watchlist' }
   /** Money owed, either way. The sensor the money factor was built for. */
-  | { kind: 'money' };
+  | { kind: 'money' }
+  /** What the app knows about this business, and what it is waiting to be told. */
+  | { kind: 'working' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -94,6 +97,11 @@ export interface Actions {
   discoverSources(): Promise<{ ok: boolean; found?: Discovered[]; searched?: string[]; checked?: number; note?: string | null; error?: string }>;
   /** Add one discovered feed, by the URL that verified rather than the page. */
   addDiscovered(d: Discovered): Promise<{ ok: boolean; error?: string }>;
+  /** Write or edit one line of the working file. */
+  saveWorking(input: { id?: string; section?: WorkingSection; body: string }): Promise<{ ok: boolean; error?: string }>;
+  /** Settle a proposal: yes makes it live, no is remembered so it stops coming back. */
+  settleWorking(id: string, status: 'live' | 'declined'): Promise<{ ok: boolean; error?: string }>;
+  removeWorking(id: string): Promise<void>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

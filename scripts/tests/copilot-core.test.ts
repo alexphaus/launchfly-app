@@ -3043,3 +3043,146 @@ async function discovery() {
 }
 
 discovery().catch((e) => { console.error(e); process.exit(1); });
+
+// --- what the app knows, as opposed to what it can guess
+//
+// The rule the whole file rests on: two sources and never a third. A sentence
+// the user wrote is true because they said so; a sentence the app wrote is true
+// because it can point at the count behind it. There is no inferred tier, and
+// the test that matters most here is the one asserting every observed line
+// carries its own arithmetic — that is what separates this from the skill levels
+// and estimated percentages deleted in 3eaa03f.
+import {
+  BODY_MAX, MAX_PER_SECTION, MIN_OBSERVED, SECTION, SECTIONS,
+  emptySections, isSection, newObserved, observedFrom, workingBrief, workingProgress,
+} from '../../src/lib/copilot/working';
+import type { WorkingEntry } from '../../src/lib/copilot/working';
+
+async function workingFile() {
+  const entry = (o: Partial<WorkingEntry>): WorkingEntry => ({
+    id: 'w1', section: 'deliver', body: 'Five working days', source: 'you', evidence: null,
+    status: 'live', observed_key: null, created_at: '2026-09-01T00:00:00Z',
+    updated_at: '2026-09-01T00:00:00Z', confirmed_at: '2026-09-01T00:00:00Z', ...o,
+  });
+
+  const diagnosis = {
+    thin: false,
+    stages: [
+      { key: 'matched', label: 'Matched', count: 40, rate: null },
+      { key: 'drafted', label: 'Drafted', count: 30, rate: 0.75 },
+      { key: 'sent', label: 'Sent', count: 9, rate: 0.3 },
+      { key: 'replied', label: 'Replied', count: 2, rate: 0.22 },
+    ],
+    bottleneck: { key: 'sent', label: 'Sent', count: 9, rate: 0.3 },
+    findings: [],
+    openings: [{ term: 'late-night enquiries', count: 7 }],
+    segments: [{ segment: 'resorts', businesses: 12, openings: [{ term: 'no-shows', count: 5 }] }],
+    outsideFunnel: 0,
+  } as unknown as Parameters<typeof observedFrom>[0];
+  const metrics = {
+    window_days: 30, sent: 9, replies: 2, reply_rate: 0.22, meetings: 6,
+    won: 2, won_amount: 1800, lost: 1, awaiting_approval: 51,
+    pipeline: { new: 0, saved: 0, sourced: 0, inferred: 0 }, runway_months: 3.4,
+  } as unknown as Parameters<typeof observedFrom>[1];
+
+  // --- every observed line carries its own arithmetic
+  {
+    const drafts = observedFrom(diagnosis, metrics);
+    assert.ok(drafts.length > 0);
+    for (const d of drafts) {
+      assert.ok(/\d/.test(d.body), `"${d.body}" states no number — that is an interpretation, not a reading`);
+      assert.ok(d.evidence && /\d/.test(d.evidence), `"${d.body}" carries no countable evidence`);
+      assert.ok(d.observed_key, 'without a stable key the nightly pass restacks the same sentence');
+      assert.ok(isSection(d.section));
+    }
+    // The shape that is banned: a verdict about the person rather than a count.
+    for (const d of drafts) {
+      assert.ok(!/\byou are\b|\byou're\b|\bgood at\b|\bstrong\b|\bweak\b/i.test(d.body),
+        `"${d.body}" grades the user; a reading states what happened`);
+    }
+    assert.ok(drafts.some((d) => d.body.includes('9 sent') && d.body.includes('2 replied')),
+      'a rate is stated as both counts or it reads as a grade');
+
+    // Nothing at all from a funnel the diagnosis itself calls thin. Being wrong
+    // once about somebody's own business costs being believed about anything.
+    assert.deepEqual(observedFrom({ ...diagnosis, thin: true }, metrics), []);
+    // And nothing below the floor.
+    const quiet = observedFrom(
+      { ...diagnosis, openings: [{ term: 'x', count: 2 }], segments: [{ segment: 'y', businesses: 2, openings: [] }] } as typeof diagnosis,
+      { ...metrics, sent: 2, won: 0, won_amount: 0 } as typeof metrics,
+    );
+    assert.ok(!quiet.some((d) => d.observed_key.startsWith('opening:') || d.observed_key.startsWith('segment:')),
+      `a pattern under ${MIN_OBSERVED} rows is one good week`);
+
+    // won_amount has sat at $1 against six meetings on the live account. "You
+    // have won $1" is true and teaches a model a wrong price band.
+    assert.ok(!observedFrom(diagnosis, { ...metrics, won: 1, won_amount: 0 } as typeof metrics)
+      .some((d) => d.section === 'price'), 'no price reading without a real amount');
+  }
+
+  // --- proposals do not stack, and a no is remembered
+  {
+    const drafts = observedFrom(diagnosis, metrics);
+    const first = drafts[0];
+    // Unchanged: nothing to write. Rewriting it bumps updated_at and makes the
+    // sheet look like something happened when nothing did.
+    assert.equal(newObserved([first], [entry({ observed_key: first.observed_key, body: first.body, status: 'proposed' })]).length, 0);
+    // Changed: worth re-proposing.
+    assert.equal(newObserved([first], [entry({ observed_key: first.observed_key, body: 'something older', status: 'proposed' })]).length, 1);
+    // Declined: never again. Same failure REFUSAL_DECAY stops one layer up.
+    assert.equal(newObserved([first], [entry({ observed_key: first.observed_key, body: 'older', status: 'declined' })]).length, 0);
+    assert.equal(newObserved(drafts, []).length, drafts.length, 'an empty file takes everything');
+  }
+
+  // --- the block the prompts read
+  {
+    const entries = [
+      entry({ id: 'a', section: 'deliver', body: 'Two calls, then five working days.' }),
+      entry({ id: 'b', section: 'refuse', body: 'No retainers under $100.' }),
+      entry({ id: 'c', section: 'works_for', body: '12 of your matches are resorts.', source: 'observed', evidence: '12 matches' }),
+      // A proposal is the app's reading waiting on the person who lived it.
+      // Feeding it to a model first would make confirming it decorative.
+      entry({ id: 'd', section: 'price', body: 'Not confirmed yet', status: 'proposed', source: 'observed', evidence: '2 won' }),
+      entry({ id: 'e', section: 'price', body: 'Said no to this', status: 'declined' }),
+    ];
+    const brief = workingBrief(entries);
+    assert.ok(brief.includes('No retainers under $100.'));
+    assert.ok(!brief.includes('Not confirmed yet'), 'a proposal never reaches a prompt');
+    assert.ok(!brief.includes('Said no to this'), 'nor does a declined reading');
+    // The evidence travels with it, so a model can tell a count from a claim.
+    assert.ok(brief.includes('(from your rows: 12 matches)'));
+    assert.ok(!/\(from your rows/.test(brief.split('\n').find((l) => l.includes('Two calls'))!),
+      'the user\'s own statement needs no evidence — they are the evidence');
+    // Sections come out in the declared order, so the prompt is stable across
+    // nights and the model is not re-reading a reshuffled document.
+    assert.ok(brief.indexOf(SECTION.deliver.label) < brief.indexOf(SECTION.works_for.label));
+    assert.equal(workingBrief([]), '', 'an empty file adds nothing rather than an empty heading');
+    assert.equal(workingBrief([entry({ status: 'proposed' })]), '');
+  }
+
+  // --- progress, as a count and never a percentage
+  {
+    const entries = [entry({ section: 'deliver' }), entry({ id: 'x', section: 'refuse' }), entry({ id: 'y', status: 'proposed' })];
+    assert.deepEqual(workingProgress(entries), { filled: 2, total: SECTIONS.length, proposals: 1 });
+    assert.deepEqual(emptySections(entries).sort(), ['price', 'tried', 'voice', 'works_for'].sort());
+    assert.deepEqual(workingProgress([]).filled, 0);
+  }
+
+  // --- every section says what it is for
+  {
+    for (const s of SECTIONS) {
+      const m = SECTION[s];
+      assert.ok(m.label && m.blurb && m.placeholder && m.changes, `${s} is missing its copy`);
+      // A form that does not say why it wants something gets abandoned, and
+      // this one is six fields long.
+      assert.ok(m.changes.length > 20, `${s} does not say what changes when it is filled in`);
+      // The placeholder has to be a real example, or the field gets one word.
+      assert.ok(m.placeholder.length > 30, `${s}'s placeholder is not a real example`);
+    }
+    assert.ok(BODY_MAX > 200 && MAX_PER_SECTION >= 4);
+  }
+
+  console.log('copilot-core: working-file checks passed');
+}
+
+workingFile().catch((e) => { console.error(e); process.exit(1); });

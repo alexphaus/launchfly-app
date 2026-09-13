@@ -532,6 +532,21 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-root .cp-src .cs.bad { color: var(--ink); }
 .cp-root .cp-src .acts { display: flex; gap: 8px; margin-top: 11px; }
 
+/* ── The working file ─────────────────────────────────────────────────────── */
+/* One block per section. Quiet, because this is a file somebody keeps rather
+   than a form with a finish line — an empty section is normal, not an error. */
+.cp-root .cp-work { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.cp-root .cp-work .hd { font-family: var(--display); font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 3px; }
+.cp-root .cp-work .bl { font-size: 11.5px; color: var(--muted); font-weight: 600; line-height: 1.45; margin-bottom: 9px; }
+.cp-root .cp-work .ln { display: flex; align-items: flex-start; gap: 8px; padding: 7px 0; }
+.cp-root .cp-work .ln .tx { flex: 1; font-size: 12.5px; line-height: 1.5; font-weight: 600; }
+/* The count behind an observed line, carried into the UI for the same reason it
+   is carried into the prompt: so a reading and a statement never look alike. */
+.cp-root .cp-work .ln .ct-ev { flex: none; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--bg); border-radius: 20px; padding: 2px 7px; white-space: nowrap; }
+.cp-root .cp-work .ln .x { flex: none; font-size: 16px; line-height: 1; color: var(--dim); padding: 0 2px; }
+.cp-root .cp-work .wh { font-size: 11px; color: var(--dim); font-weight: 600; line-height: 1.45; margin-top: 7px; }
+.cp-root .cp-work textarea.cp-input { margin-top: 8px; resize: vertical; font-family: inherit; }
+
 /* Long-form pages — privacy, terms. The only place in this app with prose that
    runs past a phone screen, so it gets a reading measure and real leading
    rather than the dense card type everything else uses. */
@@ -807,6 +822,10 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-src { border: 0; border-radius: 20px; box-shadow: var(--shadow-sm); padding: 16px 18px; }
 .cp-root[data-theme="soft"] .cp-src .cs { font-weight: 500; }
 .cp-root[data-theme="soft"] .cp-src .cs.bad { color: var(--blue); }
+.cp-root[data-theme="soft"] .cp-work { border-bottom: 1px solid var(--line); }
+.cp-root[data-theme="soft"] .cp-work .hd { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 700; }
+.cp-root[data-theme="soft"] .cp-work .bl { font-weight: 500; }
+.cp-root[data-theme="soft"] .cp-work .ln .ct-ev { background: var(--line); }
 
 .cp-root[data-theme="soft"] .cp-legal h1, .cp-root[data-theme="soft"] .cp-legal h2 { font-weight: 700; letter-spacing: 0; }
 .cp-root[data-theme="soft"] .cp-legal p, .cp-root[data-theme="soft"] .cp-legal li { font-weight: 400; }

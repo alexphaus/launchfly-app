@@ -56,6 +56,10 @@ export const commissionJob: Job = {
     // because recordCommissionWork moves the row and the objects in `all` are a
     // snapshot taken before any of that happened.
     const status = new Map(all.map((c) => [c.id, c.status]));
+    // Why the dispatch failed, per mandate, so a run that reached nobody can say
+    // so instead of reporting the same thing as a quiet one.
+    const failures: string[] = [];
+    let reached = 0;
     const { goals } = await ctx.sense();
     for (const c of dueCommissions(all)) {
       const left = ctx.deadline ? ctx.deadline - Date.now() : TIMEOUT_MS;
@@ -80,6 +84,7 @@ export const commissionJob: Job = {
         // An empty body is the normal answer from a worker that took the job and
         // will post back later. Recording it anyway moves last_run_at, which is
         // what stops the same mandate being handed out twice in one night.
+        reached += 1;
         const recorded = await recordCommissionWork(ctx.profile.id, c, result);
         // The status the write produced, not the one loaded before it. The first
         // version read c.status from the pre-dispatch snapshot, so a mandate
@@ -89,13 +94,27 @@ export const commissionJob: Job = {
         status.set(c.id, recorded.status);
         if (recorded.events.length) byCommission.set(c.id, [...(byCommission.get(c.id) ?? []), ...recorded.events]);
       } catch (e) {
-        // One unreachable worker is not the run failing, and it is not the
-        // commission failing either — it is a night with no progress, which the
-        // card already shows as "nothing back yet".
-        console.error(`[copilot/commission] ${c.id} dispatch failed:`, e instanceof Error ? e.message : e);
+        // A dispatch that never reached the worker is NOT "a night with no
+        // progress", which is what this used to say while swallowing the error.
+        // "Nothing back yet" means the worker is thinking; an unreachable worker
+        // means it was never asked. Those are opposite states and the screen
+        // showed the same sentence for both, so a 404 on a mistyped webhook URL
+        // was indistinguishable from a worker taking its time — for as long as
+        // somebody was willing to keep waiting.
+        const message = e instanceof Error ? e.message : String(e);
+        failures.push(message);
+        console.error(`[copilot/commission] ${c.id} dispatch failed:`, message);
       } finally {
         clearTimeout(t);
       }
+    }
+
+    // Nothing got through, and something tried. Throw so runJobs records it on
+    // perJob.commission.error, which /commissions/run returns and the nightly
+    // jobs_ran event keeps — the only honest way for the screen to tell "the
+    // worker has not answered yet" apart from "there is no worker there".
+    if (!reached && failures.length) {
+      throw new Error(`Could not reach the worker: ${failures[0]}`);
     }
 
     // Then the asks. Re-read nothing: byCommission already carries this run's

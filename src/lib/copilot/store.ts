@@ -1156,6 +1156,9 @@ export async function loadLastJobsRun(profileId: string): Promise<JobsRunSummary
     produced: n(pl.produced),
     written: n(pl.written),
     quiet: Array.isArray(pl.quiet) ? (pl.quiet as unknown[]).filter((k): k is string => typeof k === 'string') : [],
+    // Absent on every run logged before this field existed, which reads as
+    // "nothing broke" — the same thing those runs already claimed.
+    broke: Array.isArray(pl.broke) ? (pl.broke as unknown[]).filter((k): k is string => typeof k === 'string') : [],
   };
 }
 

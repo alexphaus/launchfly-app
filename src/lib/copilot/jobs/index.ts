@@ -230,6 +230,11 @@ export async function runJobs(
     // Only the keys, and only the ones that looked: a full perJob object is a
     // debug dump, and this is read to write one sentence.
     quiet: Object.entries(out.perJob).filter(([, v]) => !v.skipped && !v.produced).map(([k]) => k),
+    // A job that BROKE is not a job that was quiet, and the first version
+    // recorded only the second. A worker the app could not reach all night
+    // therefore looked exactly like a worker with nothing to say — which is the
+    // failure this whole run log exists to prevent one level up.
+    broke: Object.entries(out.perJob).filter(([, v]) => v.error).map(([k, v]) => `${k}: ${v.error}`).slice(0, 4),
   });
   if (out.written > 0) await logEvent(profileId, 'moves_written', { written: out.written, produced: out.produced });
   return out;

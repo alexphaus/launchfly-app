@@ -180,7 +180,15 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         // read as a broken one. An empty day still renders nothing at all —
         // this only speaks when something is actually missing.
         <div className="cp-empty" style={{ marginBottom: 14 }}>
-          {home.movesBlocked === 'quiet' ? (
+          {home.movesBlocked === 'quiet' && home.jobsRun?.broke?.length ? (
+            // A sensor that BROKE is not a quiet night, and saying "nothing new"
+            // over a worker the app could not reach is the screen reporting
+            // calm about a thing that is on fire.
+            <>
+              <b>{home.jobsRun.broke.length === 1 ? 'A sensor failed last night' : `${home.jobsRun.broke.length} sensors failed last night`}</b>
+              {home.jobsRun.broke.join(' · ')}
+            </>
+          ) : home.movesBlocked === 'quiet' ? (
             <>
               <b>Nothing new last night</b>
               {home.jobsRun

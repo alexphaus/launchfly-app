@@ -316,14 +316,19 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
     },
     async runCommissionsNow() {
       try {
-        const r = await post<{ home: HomeData; asked: number; handed: number; skipped: string | null }>('/commissions/run', {});
+        const r = await post<{ home: HomeData; asked: number; handed: number; skipped: string | null; error: string | null }>('/commissions/run', {});
         setHome(r.home);
-        say(r.asked > 0
-          ? `${r.asked} thing${r.asked === 1 ? '' : 's'} came back needing you.`
-          : r.skipped
-            ? r.skipped
-            : `Handed over. Nothing back yet — the worker reports when it is done.`);
-        return { ok: true, asked: r.asked };
+        // Error first. "Handed over" used to be said even when the dispatch threw
+        // and was swallowed, so a mistyped webhook URL read exactly like a worker
+        // taking its time — and the only way to tell was the server log.
+        say(r.error
+          ? r.error
+          : r.asked > 0
+            ? `${r.asked} thing${r.asked === 1 ? '' : 's'} came back needing you.`
+            : r.skipped
+              ? r.skipped
+              : 'Handed over. Nothing back yet — the worker reports when it is done.');
+        return { ok: !r.error, asked: r.asked, error: r.error ?? undefined };
       } catch (e) {
         const error = e instanceof Error ? e.message : 'Could not run it';
         say(error);

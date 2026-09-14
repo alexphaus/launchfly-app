@@ -23,7 +23,7 @@ Three commands, in this order. All three must pass before you say a change works
 
 ```bash
 npx tsc --noEmit                              # strict; catches most of it
-npx tsx scripts/tests/copilot-core.test.ts    # 9 pure-module suites, ~2s, no DB
+npx tsx scripts/tests/copilot-core.test.ts    # 32 pure-module suites, ~2s, no DB
 npm run build                                 # the one that catches route/type drift
 ```
 
@@ -48,9 +48,20 @@ Never verify inside a `/tmp` worktree — Turbopack rejects a symlinked
 `node_modules` with "Symlink node_modules is invalid, it points out of the
 filesystem root". Work in the main checkout.
 
-To kill a dev server, use a PID file. `pkill -f "next dev"` matches your own
-shell's command line and kills the session (exit code 144). A stale
-`.next/dev/lock` after that needs `rm -f .next/dev/lock`.
+When a layout is wrong, **read the computed box out of the browser** rather than
+reasoning at the CSS. `.cp-steps` already existed and sized every `span` inside
+it to 14x8, so a new component that reused the name rendered as grey rectangles
+with its label stacked on top. Two rounds of theorising missed it; one
+`getComputedStyle` found it. Scoping to `.cp-root` does not help when the
+collision is inside `.cp-root` — pick class names that are distinctive in a
+900-line file, not merely prefixed.
+
+To kill a dev server, find it **by port** (`ss -lptn 'sport = :3000'`), not by
+name. `pkill -f "next dev"` matches your own shell's command line and kills the
+session (exit code 144) — this has happened twice. A PID file alone is not
+enough either: stale servers survive under PIDs it lost track of, and the symptom
+is `EADDRINUSE` with a 500 from a half-built `.next`. A production build and a
+dev server cannot share `.next`; `rm -rf .next` between them.
 
 ---
 
@@ -83,6 +94,12 @@ Migrations are **not** applied automatically. `supabase/migrations/*.sql` are ru
 by hand in the Supabase SQL editor. Several are still unapplied in production —
 a missing column shows up as a runtime error like `column "plan" does not exist`,
 so when something works locally and not in production, suspect this first.
+
+**A partial unique index and an upsert do not mix.** PostgREST's `on_conflict`
+emits no index predicate, so Postgres cannot infer a `where`-qualified index: the
+write fails `42P10` every time. `20260917` shipped one, every nightly proposal
+was swallowed, and half a feature was dead on arrival with no visible symptom
+until `20260918` dropped the predicate.
 
 Write every migration **additive and idempotent** (`add column if not exists`,
 `create table if not exists`), and write read paths so a missing column or table
@@ -138,7 +155,29 @@ without reading why it exists.
 9. **CSS is scoped.** Everything lives under `.cp-root` in
    `src/app/copilot/copilot.css`, and every calm-theme rule under
    `.cp-root[data-theme="soft"]`. A test walks the theme block and fails on an
-   unscoped rule.
+   unscoped rule. Scoping is not namespacing — see the browser note above.
+10. **A worker cannot mark its own homework.** The commission result body carries
+    a `status`; it is parsed and discarded. `nextStatus` computes state from the
+    events, and a `needs_you` always outranks a `done` — otherwise reporting
+    success is the cheapest way to look successful, and "done" becomes how an
+    unapproved action slips past the person meant to approve it. `blocked` is the
+    user's to clear and only theirs.
+11. **`commit` is never autonomous.** Not "not yet". An agent that can spend your
+    money while you are walking is worth *less* than one that cannot, because you
+    would have to audit everything it did — the exact cost this product exists to
+    remove. `reach` is gated too, but for a different reason: invariant 4.
+12. **Two sources and never a third.** The working file holds what the user said
+    (`you`) and what the rows show (`observed`, carrying its count). There is no
+    `inferred` tier: the app does not form a view about somebody's business and
+    feed that view back to itself as context. Invariant 2, at the level of prose.
+13. **Nothing fails silently.** "It did not crash" is not "it was fine". Three
+    bugs in one week shared one shape — a component failed, the failure was
+    swallowed, and the screen reported calm: an agent died and the card read
+    "Nothing back yet" forever; an index failed `42P10` nightly and the sheet
+    looked like an account nothing had been noticed about; a dispatch threw into
+    a `console.error` while the app said "Handed over". That last one had a
+    comment explaining why it was fine. Every `catch` must either surface the
+    reason to the screen or record it where the screen can read it.
 
 ---
 

@@ -109,6 +109,11 @@ export interface Actions {
   createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
   commissionAction(id: string, action: 'approve' | 'unblock' | 'stop' | 'done' | 'seen', outcome?: string): Promise<{ ok: boolean; error?: string }>;
+  /**
+   * Hand the live mandates to the worker now. The nightly pass is otherwise the
+   * only thing that can — commissionJob cannot fit in the brief route's budget.
+   */
+  runCommissionsNow(): Promise<{ ok: boolean; asked?: number; error?: string }>;
   removeWatchSource(id: string): Promise<void>;
   /**
    * Record that a deep link was opened. Fire and forget, by beacon — the page is

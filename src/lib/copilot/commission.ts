@@ -403,6 +403,37 @@ export function reportOf(c: Commission, events: CommissionEvent[], max = 6): Com
   };
 }
 
+export type ChipTone = 'draft' | 'running' | 'needs' | 'done' | 'stopped';
+
+/**
+ * The state, as a chip rather than a sentence.
+ *
+ * The card used to say "Waiting for you to approve it" in the same grey as
+ * everything else, so the one thing that decides whether anything is happening
+ * read as a caption. A chip is scannable at arm's length, which is the posture
+ * this screen is actually used in.
+ */
+export function commissionChip(c: Commission): { label: string; tone: ChipTone } {
+  switch (c.status) {
+    case 'draft': return { label: 'Not started', tone: 'draft' };
+    case 'blocked': return { label: 'Needs you', tone: 'needs' };
+    case 'done': return { label: 'Done', tone: 'done' };
+    case 'stopped': return { label: 'Stopped', tone: 'stopped' };
+    default: return { label: 'Running', tone: 'running' };
+  }
+}
+
+/**
+ * The meta line under a mandate nobody has approved yet.
+ *
+ * What it may do and what it may spend, in one line. The card used to carry the
+ * whole authority blurb — two sentences of prose repeating the sheet, for a row
+ * that is doing nothing by definition.
+ */
+export function commissionTerms(c: Commission): string {
+  return `${AUTHORITY[c.authority].label} · up to ${c.budget_minutes} min`;
+}
+
 /**
  * The line on the card.
  *

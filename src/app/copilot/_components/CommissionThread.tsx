@@ -7,14 +7,35 @@
 // — the only place in the product that says what happened while nobody was
 // looking, rather than what to do next.
 //
-// So the order inside the card is deliberate: what it got done, then what is
-// blocked on you. Not the reverse. A thread that leads with its ask is another
+// So the order inside the card is deliberate: state, then what it got done,
+// then what is blocked on you. A thread that leads with its ask is another
 // advice card with extra steps.
+//
+// The first version said everything in prose, in one grey: the state was a
+// caption, progress was a phrase, and a draft carried two sentences of
+// authority blurb it had already said on the sheet. This one puts the three
+// things somebody reads at arm's length — is it running, how far, what does it
+// want — into a chip, a row of dots and one line.
 
-import { AUTHORITY } from '@/lib/copilot/commission';
+import { commissionChip, commissionTerms } from '@/lib/copilot/commission';
 import type { CommissionThread as Thread } from '@/lib/copilot/types';
 import type { Actions } from './shared';
 import { relTime } from './format';
+
+/** One dot per planned step, filled as they finish. */
+function Steps({ done, total }: { done: number; total: number }) {
+  if (!total) return null;
+  return (
+    <div className="cp-thread-steps">
+      <span className="dots">
+        {Array.from({ length: Math.min(total, 8) }, (_, i) => (
+          <i key={i} className={i < done ? 'on' : ''} />
+        ))}
+      </span>
+      <span className="n">{done} of {total} done</span>
+    </div>
+  );
+}
 
 export default function CommissionThread({ threads, actions }: { threads: Thread[]; actions: Actions }) {
   // Finished mandates live in the sheet, not on Today. A card that says "done"
@@ -30,18 +51,23 @@ export default function CommissionThread({ threads, actions }: { threads: Thread
       </div>
       {live.map((t) => {
         const c = t.commission;
+        const chip = commissionChip(c);
         const ask = t.report.yours[0];
-        const draft = c.status === 'draft';
         return (
           <button key={c.id} className={`cp-thread ${c.status}`} onClick={() => actions.openSheet({ kind: 'commission', id: c.id })}>
             <div className="hd">
-              <span className="ob">{c.objective}</span>
+              <span className={`chip ${chip.tone}`}>{chip.label}</span>
               {/* Only ever a count of what is new. A dot that means "look at me"
                   without saying how much is the same nag every notification
                   badge is. */}
               {t.report.fresh > 0 && <span className="fresh">{t.report.fresh} new</span>}
             </div>
-            <div className="ln">{t.line}</div>
+
+            <div className="ob">{c.objective}</div>
+
+            {c.status === 'draft'
+              ? <div className="terms">{commissionTerms(c)}</div>
+              : <Steps done={t.report.progress.done} total={t.report.progress.total} />}
 
             {/* What it got done. Two lines, newest first — enough to tell
                 whether the mandate is worth keeping, not a transcript. */}
@@ -56,14 +82,9 @@ export default function CommissionThread({ threads, actions }: { threads: Thread
             {/* The only ask on the card, and it comes last. */}
             {ask && <div className="ask">{ask.summary}</div>}
 
-            {draft && (
-              <div className="grant">
-                <div className="au">{AUTHORITY[c.authority].label} — {AUTHORITY[c.authority].blurb}</div>
-                {/* Approving is one tap, but not from here: the plan is on the
-                    sheet and granting authority without reading the plan is the
-                    thing this whole layer exists to avoid. */}
-                <span className="go">Read the plan and approve →</span>
-              </div>
+            {c.status === 'draft' && <div className="go">Read the plan and approve →</div>}
+            {c.status === 'active' && !t.report.did.length && (
+              <div className="terms quiet">Nothing back yet. Open it to hand it over now.</div>
             )}
           </button>
         );

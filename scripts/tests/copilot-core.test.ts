@@ -3235,7 +3235,7 @@ workingFile().catch((e) => { console.error(e); process.exit(1); });
 // product.
 import {
   AUTHORITY, AUTHORITIES, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX,
-  SAFE_HREF, blockedMove, canAct, commissionBrief, commissionIdFromMove, commissionLine,
+  SAFE_HREF, blockedMove, canAct, commissionBrief, commissionChip, commissionIdFromMove, commissionLine, commissionTerms,
   dueCommissions, isAuthority, normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
 } from '../../src/lib/copilot/commission';
 import type { Commission, CommissionEvent } from '../../src/lib/copilot/commission';
@@ -3399,6 +3399,17 @@ async function commissions() {
     assert.equal(reportOf({ ...base, seen_at: '2026-09-13T00:00:00Z' }, events).fresh, 0);
     // Never looked is not the same as nothing new.
     assert.equal(reportOf({ ...base, seen_at: null }, events).fresh, 4);
+
+    // The chip: the state as something readable at arm's length rather than a
+    // caption in the same grey as everything else.
+    assert.deepEqual(commissionChip({ ...base, status: 'draft' }), { label: 'Not started', tone: 'draft' });
+    assert.deepEqual(commissionChip({ ...base, status: 'blocked' }), { label: 'Needs you', tone: 'needs' });
+    assert.deepEqual(commissionChip(base), { label: 'Running', tone: 'running' });
+    assert.deepEqual(commissionChip({ ...base, status: 'done' }), { label: 'Done', tone: 'done' });
+    // Terms replace the two sentences of authority blurb the card used to carry
+    // for a row that is doing nothing by definition.
+    assert.equal(commissionTerms(base), 'Research and draft · up to 60 min');
+    assert.ok(commissionTerms({ ...base, authority: 'commit', budget_minutes: 15 }).includes('15 min'));
 
     // The line: counts and state, never adjectives.
     assert.equal(commissionLine(base, r), '1 of 3 done · 1 needs you');

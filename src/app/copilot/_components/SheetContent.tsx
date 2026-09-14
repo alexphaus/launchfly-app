@@ -1096,22 +1096,28 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       <p className="desc">
         {/* The reason is the user's own sentence and they rarely end it with a
             stop, so the goal clause ran straight on: "…nothing is in the
-            pipeline It is meant to move Monthly revenue." */}
-        {c.why ? (/[.!?]$/.test(c.why) ? c.why : `${c.why}.`) : 'No reason recorded for this one.'}
-        {goal && <> It is meant to move <b>{goal.title}</b>.</>}
+            pipeline It is meant to move Monthly revenue."
+
+            And an empty `why` is an optional field nobody filled in, not a
+            failing. It used to read "No reason recorded for this one", which is
+            the app tutting at somebody for skipping something it called
+            optional. */}
+        {c.why && <>{/[.!?]$/.test(c.why) ? c.why : `${c.why}.`} </>}
+        {goal ? <>Meant to move <b>{goal.title}</b>.</> : !c.why && <>No goal attached to this one.</>}
       </p>
 
-      <div className="cp-src">
-        <div className="ct">{meta.label}</div>
-        <div className="cs">{meta.blurb}</div>
+      {/* What is being authorised, as one block rather than four grey lines. This
+          is the thing the user is actually saying yes to. */}
+      <div className="cp-grant">
+        <div className="t">{meta.label} · up to {c.budget_minutes} min</div>
+        <div className="d">{meta.blurb}</div>
         {/* Why it will not act by itself, in the same words every time. A
             capability the app hedges about is one nobody can plan around. */}
-        {meta.gate && <div className="cs bad">{meta.gate}</div>}
-        <div className="cs">Up to {c.budget_minutes} minutes of work.</div>
+        {meta.gate && <div className="gate">{meta.gate}</div>}
         {/* An idle contractor and an absent one look identical from the card,
             and only one of them is worth waiting for. */}
         {!home.workerConnected && (
-          <div className="cs bad">No worker is connected to this deployment, so nothing will pick this up. Set COPILOT_JOBS_URL.</div>
+          <div className="gate">No worker is connected to this deployment, so nothing will pick this up. Set <code>COPILOT_JOBS_URL</code>.</div>
         )}
       </div>
 
@@ -1157,6 +1163,22 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
               )}
             </div>
           ))}
+        </>
+      )}
+
+      {c.status === 'active' && (
+        <>
+          <button className="cp-btn primary block" disabled={busy} onClick={async () => {
+            setBusy(true); setError(null);
+            const r = await actions.runCommissionsNow();
+            setBusy(false);
+            if (!r.ok) setError(r.error ?? 'Could not run it');
+          }}>
+            {busy ? 'Handing it over…' : 'Run it now'}
+          </button>
+          <p className="cp-help">
+            Otherwise it waits for tonight. The worker may take a few minutes; whatever it finds turns up here.
+          </p>
         </>
       )}
 

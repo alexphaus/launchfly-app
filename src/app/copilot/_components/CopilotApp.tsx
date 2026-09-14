@@ -314,6 +314,22 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not update that commission' };
       }
     },
+    async runCommissionsNow() {
+      try {
+        const r = await post<{ home: HomeData; asked: number; handed: number; skipped: string | null }>('/commissions/run', {});
+        setHome(r.home);
+        say(r.asked > 0
+          ? `${r.asked} thing${r.asked === 1 ? '' : 's'} came back needing you.`
+          : r.skipped
+            ? r.skipped
+            : `Handed over. Nothing back yet — the worker reports when it is done.`);
+        return { ok: true, asked: r.asked };
+      } catch (e) {
+        const error = e instanceof Error ? e.message : 'Could not run it';
+        say(error);
+        return { ok: false, error };
+      }
+    },
     async deleteAccount(confirm) {
       try {
         await del('/account', { body: JSON.stringify({ confirm }) });

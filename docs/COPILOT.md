@@ -1009,8 +1009,88 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | DELETE | `/api/copilot/session` | forget this device |
 | GET | `/api/copilot/health` | what this deployment actually has: missing env vars by name, unapplied migrations by file (session or cron bearer) |
 | GET | `/api/copilot/cron/daily` | scheduled loop (Bearer `CRON_SECRET`, fails closed) |
+| GET/POST/DELETE | `/api/copilot/watch/sources` | the feeds this profile watches |
+| POST | `/api/copilot/watch/discover` | find feeds for the offer; every result is fetched and parsed before it is offered |
+| POST | `/api/copilot/watch/run` | read the sources now (25s budget) — the nightly budget cannot fit the watcher |
+| GET/POST | `/api/copilot/working` | the working file: write a line, confirm or decline a reading |
+| DELETE | `/api/copilot/working?id=` | remove a line |
+| GET/POST | `/api/copilot/commissions` | read the thread · write a mandate (always as a draft) |
+| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen` |
+| POST | `/api/copilot/commissions/[id]/result` | **the worker's return leg** (Bearer `COPILOT_INBOUND_SECRET`) |
+| POST | `/api/copilot/commissions/run` | hand live mandates over now (25s budget) |
+| POST | `/api/copilot/obligations` | money owed, either way |
+| POST | `/api/copilot/actions/[id]/opened` | `sendBeacon` target — a draft's deep link was tapped |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).
+
+## Commissions — the principal layer
+
+`copilot_commissions` + `copilot_commission_events` (20260916). A mandate the
+user grants once: an objective tied to a goal, an **authority**, a budget, a plan
+whose steps have state, and a log. The user approves the commission and its
+authority **once, not each step** — approving every action is a form.
+
+Three rings, and only the first runs by itself:
+
+| ring | may | autonomous |
+| --- | --- | --- |
+| `read` | research, compare, draft, document | **yes** |
+| `reach` | contact someone under an identity the user owns | **no** — needs a verified sending identity (invariant 4) |
+| `commit` | money leaves, a signature, a hire, a price agreed | **never**, in any version |
+
+`canAct(granted, level)` requires both that the mandate covers the level *and*
+that the level is autonomous, so granting `reach` today buys nothing extra by
+design: the mandate records intent, the second gate decides what runs.
+
+`COPILOT_JOBS_URL` receives a second payload shape alongside `kind: "moves"`:
+
+```
+{ "kind": "commission", "commission_id", "objective", "why",
+  "may", "may_autonomously", "budget_minutes", "plan", "result_url",
+  "who": { name, headline, offer, location, timezone, target_segments, target_area },
+  "goal": { title, target, unit } }
+```
+
+`who` carries no email, no phone, no billing and no id — the payload leaves the
+deployment. The worker answers inline or posts to `result_url` later:
+
+```
+{ "events": [ { "kind": "planned|worked|found|needs_you|blocked|done|failed",
+                "step": 2, "summary": "required, <=300",
+                "artifact": { "kind", "label", "value", "href" } } ],
+  "plan": [ { "n", "do", "state" } ] }
+```
+
+`status` in that body is **parsed and discarded**. `nextStatus` computes state
+from the events: a `needs_you` outranks a `done`, a bare `done` with no summary
+is dropped, and `blocked` is the user's to clear — via the sheet button, or by
+answering the Move the app raised (`commissionIdFromMove` carries it through
+`setMoveStatus`). A draft or stopped commission refuses work outright.
+
+A blocked mandate surfaces as a Move so it competes through `scoreMove` like
+anything else. `MAX_ACTIVE_COMMISSIONS = 3`, enforced at creation (counting
+drafts) and again at approval.
+
+## The working file — the offer's other half
+
+`copilot_working` (20260917, index fixed in 20260918). Six sections: `deliver`,
+`price`, `works_for`, `tried`, `refuse`, `voice`.
+
+**Two sources and never a third.** `you` is the user's own statement — true
+because they said so, live immediately, no evidence needed. `observed` is
+computed from their rows and carries the count that makes it true. There is no
+`inferred` tier.
+
+`observedFrom` emits arithmetic with words around it, never conclusions: "9 sent
+in the last 30 days, 2 replied" is in; "you are good at resorts" is out, and the
+test greps for that shape. Nothing from a thin funnel, nothing below
+`MIN_OBSERVED`, and no price reading without a real amount.
+
+Readings arrive as `proposed` and never reach a prompt until confirmed. A
+declined one is kept so it is not re-proposed; a **confirmed** one whose number
+moves is refreshed in place, never demoted. `workingBrief()` feeds
+`buildContextPack` and `watchBrief`, capped at `BRIEF_MAX` characters because it
+sits at the head of every per-source judge prompt.
 
 ## Tests
 

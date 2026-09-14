@@ -599,6 +599,12 @@ export interface JobsRunSummary {
   written: number;
   /** Job keys that looked and found nothing. */
   quiet: string[];
+  /**
+   * Sensors that threw, as "key: reason". A job that BROKE is not a job that
+   * was quiet, and until this existed the log recorded only the second — so an
+   * unreachable worker read as a worker with nothing to say.
+   */
+  broke?: string[];
 }
 
 export interface Move {

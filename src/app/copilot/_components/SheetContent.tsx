@@ -1172,6 +1172,8 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
             setBusy(true); setError(null);
             const r = await actions.runCommissionsNow();
             setBusy(false);
+            // A toast is gone in four seconds and this is the sentence somebody
+            // needs while they go and fix an environment variable.
             if (!r.ok) setError(r.error ?? 'Could not run it');
           }}>
             {busy ? 'Handing it over…' : 'Run it now'}

@@ -36,7 +36,7 @@ export async function POST() {
   // "nothing happened" is the least useful thing this route could return.
   const due = dueCommissions(await loadCommissions(auth.pid));
   if (!due.length) {
-    return fail('Nothing to run — a commission has to be approved before anything picks it up.');
+    return fail('Nothing to run — work has to be approved before anything picks it up.');
   }
   if (!process.env.COPILOT_JOBS_URL) {
     return fail('No worker is connected to this deployment, so there is nothing to hand this to. Set COPILOT_JOBS_URL.');

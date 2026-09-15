@@ -45,6 +45,19 @@ export const METRIC_GOOD_DIRECTION: Record<BusinessMetric, 'up' | 'down' | 'none
   queue: 'down', runway_months: 'up', none: 'none',
 };
 
+/**
+ * The metric in the words somebody would use out loud.
+ *
+ * The screen was rendering the column name — "Reading runway_months back in a
+ * few days", "queue did not move" — which is the database talking. One list, so
+ * the header, the call card and the verdict line cannot drift apart.
+ */
+export const METRIC_LABEL: Record<BusinessMetric, string> = {
+  sent: 'sent', replies: 'replies', meetings: 'meetings', won: 'won',
+  won_amount: 'won', queue: 'drafts waiting', runway_months: 'months of runway',
+  none: '',
+};
+
 export interface Stake {
   /** What number should move if this was the right call. */
   metric: BusinessMetric;

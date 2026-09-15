@@ -102,7 +102,9 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
           bottom because "what are we working on and where is it" is the
           question somebody has when they open the app on the move, and it was
           the one thing the product could not answer at all. */}
-      <CommissionThread threads={home.commissions ?? []} actions={actions} />
+      {/* Hidden only on a brand-new account, where FirstRun is the whole screen
+          and an empty "Working on" is one more box saying nothing. */}
+      {!nothingYet && <CommissionThread threads={home.commissions ?? []} actions={actions} />}
 
       {/* Promoted from the footer, where it was the last thing on a long scroll.
           This is the only way anything the scrapers cannot see gets into the

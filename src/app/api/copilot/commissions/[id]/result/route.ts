@@ -58,7 +58,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // accept work. Otherwise "stop" is advisory and the approve button is a
   // suggestion.
   if (commission.status === 'draft' || commission.status === 'stopped') {
-    return fail(`That commission is ${commission.status} and is not taking work.`, 409);
+    return fail(`That one is ${commission.status} and is not taking work.`, 409);
   }
 
   const result = normalizeResult(await readJson(req).catch(() => ({})));

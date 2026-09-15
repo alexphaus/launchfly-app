@@ -450,8 +450,21 @@ export function dueCommissions(all: Commission[], max = MAX_ACTIVE_COMMISSIONS):
 export interface CommissionReport {
   /** What got done. Newest first, already trimmed to what is worth reading. */
   did: CommissionEvent[];
-  /** What is blocked on the user. The only thing on the card that is an ask. */
+  /**
+   * A question only the owner can answer. The only thing here that is an ask.
+   *
+   * `blocked` and `failed` used to be in this bucket too, and that was wrong in
+   * a way the screen made obvious: a mandate stopped by a dead search tool got
+   * rendered under the heading "Your answer", with a text box and a placeholder
+   * about supplier quotes, above a sentence reading "the web-search tool
+   * returned an internal request error". There is nothing for a person to type
+   * there. A question and a breakage are opposite states — one wants a reply,
+   * the other wants a retry — and the whole section read as a fault list
+   * because they shared a bucket.
+   */
   yours: CommissionEvent[];
+  /** The worker could not go on. Not an ask: nobody can answer a 500. */
+  stopped: CommissionEvent[];
   /**
    * What the user said back. Its own bucket rather than folded into `did`,
    * because `did` is the worker's work and this is the one kind of line in the
@@ -473,7 +486,8 @@ export function reportOf(c: Commission, events: CommissionEvent[], max = 6): Com
     // 'planned' is housekeeping, not work — it says the plan changed, which the
     // plan itself already shows. Leaving it in buries the two lines that matter.
     did: newest.filter((e) => e.kind === 'worked' || e.kind === 'found' || e.kind === 'done').slice(0, max),
-    yours: newest.filter((e) => e.kind === 'needs_you' || e.kind === 'blocked' || e.kind === 'failed').slice(0, max),
+    yours: newest.filter((e) => e.kind === 'needs_you').slice(0, max),
+    stopped: newest.filter((e) => e.kind === 'blocked' || e.kind === 'failed').slice(0, max),
     said: newest.filter((e) => e.kind === 'answered').slice(0, max),
     progress: {
       done: c.plan.filter((s) => s.state === 'done').length,
@@ -483,7 +497,30 @@ export function reportOf(c: Commission, events: CommissionEvent[], max = 6): Com
   };
 }
 
-export type ChipTone = 'draft' | 'running' | 'needs' | 'done' | 'stopped';
+export type ChipTone = 'draft' | 'running' | 'needs' | 'fault' | 'done' | 'stopped';
+
+export type BlockedOn = 'you' | 'worker';
+
+/**
+ * What a blocked mandate is actually waiting for.
+ *
+ * `status` says 'blocked' for both, and for a while the screen said "Needs you"
+ * for both — so a dead search tool and a real question looked identical, and a
+ * morning with three mandates read as three things the user had failed to do.
+ * Only one of them was.
+ *
+ * The newest event decides, because a mandate can carry an old question the user
+ * already answered and a fresh failure on top of it. Blocked with nothing
+ * recorded at all falls to 'you': there is no reason to show, and the user
+ * should always be able to clear it.
+ */
+export function blockedOn(c: Pick<Commission, 'status'>, r: CommissionReport): BlockedOn | null {
+  if (c.status !== 'blocked') return null;
+  const ask = r.yours[0];
+  const fault = r.stopped[0];
+  if (ask && fault) return ask.at >= fault.at ? 'you' : 'worker';
+  return fault ? 'worker' : 'you';
+}
 
 /**
  * The state, as a chip rather than a sentence.
@@ -493,10 +530,16 @@ export type ChipTone = 'draft' | 'running' | 'needs' | 'done' | 'stopped';
  * read as a caption. A chip is scannable at arm's length, which is the posture
  * this screen is actually used in.
  */
-export function commissionChip(c: Commission): { label: string; tone: ChipTone } {
+export function commissionChip(c: Commission, r?: CommissionReport): { label: string; tone: ChipTone } {
   switch (c.status) {
     case 'draft': return { label: 'Not started', tone: 'draft' };
-    case 'blocked': return { label: 'Needs you', tone: 'needs' };
+    // Two different states behind one status. "Needs you" on a mandate whose
+    // worker crashed is the app blaming the user for its own outage — and with
+    // three of them on screen, Working On stopped reading as a report of work
+    // and started reading as a list of your failures.
+    case 'blocked': return r && blockedOn(c, r) === 'worker'
+      ? { label: 'Needs a fix', tone: 'fault' }
+      : { label: 'Needs you', tone: 'needs' };
     case 'done': return { label: 'Done', tone: 'done' };
     case 'stopped': return { label: 'Stopped', tone: 'stopped' };
     default: return { label: 'Running', tone: 'running' };
@@ -525,8 +568,15 @@ export function commissionLine(c: Commission, r: CommissionReport): string {
   if (c.status === 'draft') return 'Waiting for you to approve it';
   if (c.status === 'stopped') return 'You called this off';
   if (c.status === 'done') return c.outcome?.slice(0, 120) || 'Finished';
+  // A mandate the worker could not finish says so plainly and on its own.
+  // Pairing it with "0 of 4 done" reports a shortfall the user did not cause,
+  // in the same breath as the reason they did not cause it.
+  if (blockedOn(c, r) === 'worker') return 'The worker could not finish — it can be tried again';
+
   const parts: string[] = [];
-  if (r.progress.total) parts.push(`${r.progress.done} of ${r.progress.total} done`);
+  // Only once something has actually moved. "0 of 4 done" on a mandate that has
+  // never run is a progress report about no progress.
+  if (r.progress.done > 0) parts.push(`${r.progress.done} of ${r.progress.total} done`);
   // Only while it is actually stopped on one. `yours` is the log of every
   // question ever raised, so counting it unconditionally left a mandate reading
   // "1 needs you" for the rest of its life — including immediately after the
@@ -563,6 +613,10 @@ export function commissionIdFromMove(externalId: string | null | undefined): str
 }
 
 export function blockedMove(c: Commission, r: CommissionReport, job: string): MoveDraft | null {
+  // `yours` is questions only, so a mandate stopped by a broken tool produces no
+  // Move — deliberately. A Move is finished work with something to act on, and
+  // "your search tool is returning 500s" is neither. It belongs on the card,
+  // with a retry, not in the day's arbitration competing with the send queue.
   const ask = r.yours[0];
   if (!ask) return null;
   return {
@@ -573,7 +627,7 @@ export function blockedMove(c: Commission, r: CommissionReport, job: string): Mo
     external_id: `commission:${c.id}:${ask.id}`.slice(0, 200),
     headline: ask.summary.slice(0, 160),
     why: [
-      `Your commission "${c.objective}" is stopped until you answer this.`,
+      `"${c.objective}" is stopped until you answer this.`,
       ...(c.why ? [c.why] : []),
     ],
     artifact: ask.artifact

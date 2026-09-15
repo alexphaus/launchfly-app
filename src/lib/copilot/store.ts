@@ -1543,7 +1543,7 @@ export async function createCommission(profileId: string, input: {
   // Three mandates is a person with three priorities; eight is a person with
   // none, and the whole product is an argument against that.
   if (held.length >= MAX_ACTIVE_COMMISSIONS) {
-    throw new Error(`You have ${held.length} commissions on the go. Finish or stop one first.`);
+    throw new Error(`You have ${held.length} things on the go. Finish or stop one first.`);
   }
   const { data, error } = await copilotDb().from('copilot_commissions').insert({
     profile_id: profileId,
@@ -1614,7 +1614,7 @@ export async function unblockCommission(profileId: string, id: string, answer?: 
     // constraint. Carrying on would unblock the mandate and silently drop the
     // answer, so it stops here and says why — the user can answer again once
     // the migration is applied, and nothing has been lost in the meantime.
-    if (error) throw new Error('Could not record your answer, so the commission has been left where it is. The 20260919 migration may not be applied yet.');
+    if (error) throw new Error('Could not record your answer, so nothing has been changed. The 20260919 migration may not be applied yet.');
   }
 
   const { data, error } = await copilotDb().from('copilot_commissions')

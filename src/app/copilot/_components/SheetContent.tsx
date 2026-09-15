@@ -10,7 +10,7 @@ import { WATCH_INTENTS, startersFor, type WatchIntent } from '@/lib/copilot/watc
 import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
-import { AUTHORITIES, AUTHORITY, type Authority } from '@/lib/copilot/commission';
+import { AUTHORITIES, AUTHORITY, blockedOn, type Authority } from '@/lib/copilot/commission';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 import { useShell } from './shell';
@@ -34,6 +34,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'watchlist': return <WatchlistSheet home={home} actions={actions} />;
     case 'money': return <MoneySheet home={home} actions={actions} />;
     case 'commission': return <CommissionSheet home={home} id={sheet.id} actions={actions} />;
+    case 'handover': return <HandoverSheet home={home} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
   }
 }
@@ -395,13 +396,18 @@ function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions
           never show — goal, the bet that moves it, the work, today's move —
           starts at the link that makes it true rather than at a form floating
           on its own. */}
-      {goal && <CommissionForm goalId={goal.id} goalTitle={goal.title} actions={actions} />}
+      {goal && <HandoverForm goalId={goal.id} goalTitle={goal.title} actions={actions} embedded />}
     </>
   );
 }
 
 /**
- * Write a mandate against a goal.
+ * Hand a piece of work over.
+ *
+ * Shared by the goal sheet, where the work is attached to the number it moves,
+ * and by its own entry on Now, which is how anybody without a goal gets in at
+ * all — for months the only door was four taps inside a saved goal, so an
+ * account with no goal simply could not hand anything over and nothing said so.
  *
  * Authority is chosen here and shown with what it actually does, because it is
  * the only field on this form that decides whether anything touches the world.
@@ -409,20 +415,48 @@ function GoalSheet({ goal, actions }: { goal: Goal | undefined; actions: Actions
  * a capability the app is vague about is one somebody will discover by being
  * disappointed.
  */
-function CommissionForm({ goalId, goalTitle, actions }: { goalId: string; goalTitle: string; actions: Actions }) {
-  const [open, setOpen] = useState(false);
+
+/**
+ * Objectives at the length one actually has to be.
+ *
+ * Not decoration: "Find jobs" and "Find a good deal" are real objectives from
+ * this account, and both came back with nothing because there was nothing in
+ * them to act on. A worker is only as specific as its brief, and a one-line
+ * field with no example gets a three-word answer. Tapping one fills the box so
+ * the shape is learned by editing rather than by reading a hint.
+ */
+export const OBJECTIVE_EXAMPLES = [
+  'Quote three suppliers for the signage job and say which is cheapest delivered',
+  'Find 20 resorts near me with no website and a phone number on file',
+  'Compare what the three closest competitors charge and how they package it',
+];
+
+function HandoverForm({
+  goalId, goalTitle, goals, actions, onDone, embedded = false,
+}: {
+  goalId?: string;
+  goalTitle?: string;
+  /** Offered as a picker when the form is not already bound to one. */
+  goals?: Goal[];
+  actions: Actions;
+  onDone?: () => void;
+  /** Inside the goal sheet it is a section that opens; on its own it is the sheet. */
+  embedded?: boolean;
+}) {
+  const [open, setOpen] = useState(!embedded);
   const [objective, setObjective] = useState('');
   const [why, setWhy] = useState('');
+  const [pickedGoal, setPickedGoal] = useState<string>(goalId ?? '');
   const [authority, setAuthority] = useState<Authority>('read');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!open) {
+  if (embedded && !open) {
     return (
       <>
-        <div className="cp-section"><span className="lead">Commission work</span></div>
+        <div className="cp-section"><span className="lead">Hand work over</span></div>
         <button className="cp-btn block" onClick={() => setOpen(true)}>Put something to work on this</button>
-        <p className="cp-help">A mandate with an objective and a plan, carried by the copilot instead of by you.</p>
+        <p className="cp-help">Something you would otherwise do yourself — research, a comparison, a shortlist.</p>
       </>
     );
   }
@@ -430,24 +464,72 @@ function CommissionForm({ goalId, goalTitle, actions }: { goalId: string; goalTi
   const write = async () => {
     if (!objective.trim()) return setError('What should it get done?');
     setBusy(true); setError(null);
-    const r = await actions.createCommission({ objective: objective.trim(), why: why.trim() || undefined, goal_id: goalId, authority });
+    const r = await actions.createCommission({
+      objective: objective.trim(),
+      why: why.trim() || undefined,
+      goal_id: pickedGoal || undefined,
+      authority,
+    });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Could not write that');
-    setOpen(false); setObjective(''); setWhy('');
+    setOpen(!embedded); setObjective(''); setWhy('');
+    onDone?.();
   };
 
   return (
     <>
-      <div className="cp-section"><span className="lead">Commission work</span></div>
+      {embedded
+        ? <div className="cp-section"><span className="lead">Hand work over</span></div>
+        : (
+          <>
+            <h3>Hand something over</h3>
+            <p className="desc">
+              It researches, compares and drafts while you are doing something else, and reports
+              back here. It never contacts anyone and never spends anything.
+            </p>
+          </>
+        )}
+
       <div className="cp-field">
-        <label className="cp-label">What should it get done?</label>
-        <input className="cp-input sm" value={objective} onChange={(e) => { setObjective(e.target.value); setError(null); }}
-          placeholder="Find 20 people who match the offer and why each one fits" />
+        <label className="cp-label" htmlFor="cp-objective">What should it get done?</label>
+        <input
+          id="cp-objective" className="cp-input sm" value={objective}
+          onChange={(e) => { setObjective(e.target.value); setError(null); }}
+          placeholder={OBJECTIVE_EXAMPLES[0]}
+        />
+        {/* A worker is only as specific as its brief. */}
+        {!objective.trim() && (
+          <div className="cp-chips" style={{ marginTop: 8 }}>
+            {OBJECTIVE_EXAMPLES.map((ex) => (
+              <button key={ex} className="cp-fchip" onClick={() => setObjective(ex)}>{ex.split(' ').slice(0, 4).join(' ')}…</button>
+            ))}
+          </div>
+        )}
       </div>
+
       <div className="cp-field">
-        <label className="cp-label">Why this moves {goalTitle} — optional</label>
-        <input className="cp-input sm" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Nothing is in the pipeline and the queue is empty" />
+        <label className="cp-label" htmlFor="cp-why">
+          {goalTitle ? `Why this moves ${goalTitle} — optional` : 'Why it matters — optional'}
+        </label>
+        <input id="cp-why" className="cp-input sm" value={why} onChange={(e) => setWhy(e.target.value)}
+          placeholder="Nothing is in the pipeline and the queue is empty" />
       </div>
+
+      {/* Only when it is not already bound to one. A goal is what lets the app
+          show the chain — goal, the work that moves it, today's move — so it is
+          offered, never required: plenty of real work moves nothing countable. */}
+      {!goalId && goals && goals.length > 0 && (
+        <div className="cp-field">
+          <label className="cp-label">Which goal does it move? — optional</label>
+          <div className="cp-chips">
+            {goals.slice(0, 4).map((g) => (
+              <button key={g.id} className={`cp-fchip ${pickedGoal === g.id ? 'active' : ''}`}
+                onClick={() => setPickedGoal(pickedGoal === g.id ? '' : g.id)}>{g.title}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="cp-field">
         <label className="cp-label">What it may do</label>
         <div className="cp-chips">
@@ -457,13 +539,19 @@ function CommissionForm({ goalId, goalTitle, actions }: { goalId: string; goalTi
         </div>
         <p className="cp-help">{AUTHORITY[authority].blurb} {AUTHORITY[authority].gate ?? ''}</p>
       </div>
+
       {error && <div className="cp-note">{error}</div>}
       <div className="cp-btn-row">
         <button className="cp-btn primary" disabled={busy || !objective.trim()} onClick={() => void write()}>{busy ? 'Writing…' : 'Write it'}</button>
-        <button className="cp-btn ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+        <button className="cp-btn ghost" disabled={busy} onClick={() => { if (embedded) setOpen(false); else actions.closeSheet(); }}>Cancel</button>
       </div>
+      <p className="cp-help">Nothing runs until you read it and approve it.</p>
     </>
   );
+}
+
+function HandoverSheet({ home, actions }: { home: HomeData; actions: Actions }) {
+  return <HandoverForm goals={home.goals} actions={actions} onDone={() => actions.closeSheet()} />;
 }
 
 /* ─── You: finance, targeting, account ──────────────────────────────────── */
@@ -1050,6 +1138,29 @@ function MoneySheet({ home, actions }: { home: HomeData; actions: Actions }) {
   );
 }
 
+/**
+ * An artifact's text, clamped.
+ *
+ * Artifacts are the reason a piece of work beats advice, so they are never
+ * summarised or truncated on the server. But a 90-word block dumped whole into
+ * a card inside a sheet stops the card being scannable, and the eye skips the
+ * section — which costs more than the words were worth. Three lines, and the
+ * rest on a tap.
+ */
+function Artifact({ value }: { value: string }) {
+  const [open, setOpen] = useState(false);
+  // Roughly three lines at this width. Cheap and stable; measuring the box to
+  // decide whether a toggle is needed costs a layout pass per artifact.
+  const long = value.length > 190;
+  if (!long) return <div className="cp-draft">{value}</div>;
+  return (
+    <>
+      <div className={`cp-draft${open ? '' : ' clamp'}`}>{value}</div>
+      <button className="cp-connect" onClick={() => setOpen((v) => !v)}>{open ? 'Show less' : 'Show all'}</button>
+    </>
+  );
+}
+
 /* ─── One mandate ─────────────────────────────────────────────────────────── */
 
 /**
@@ -1082,11 +1193,30 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const c = thread.commission;
   const meta = AUTHORITY[c.authority];
   const goal = home.goals.find((g) => g.id === c.goal_id);
-  // The open question, which is only open while it is blocked. Rendered beside
-  // the field that answers it, and therefore left out of the log below — the
-  // same sentence in two places is what the rest of this screen keeps deleting.
-  const ask = c.status === 'blocked' ? thread.report.yours[0] : null;
+  // What it is actually waiting for. `blocked` covers two opposite states: a
+  // question only this person can answer, and a worker that fell over. They
+  // want opposite things — a reply and a retry — and rendering both under "Your
+  // answer" produced a text box, with a placeholder about supplier quotes, over
+  // the sentence "the web-search tool returned an internal request error".
+  const waiting = blockedOn(c, thread.report);
+  const ask = waiting === 'you' ? thread.report.yours[0] : null;
+  const fault = waiting === 'worker' ? thread.report.stopped[0] : null;
+  // Rendered beside the field that answers it, and therefore left out of the log
+  // below — the same sentence in two places is what this screen keeps deleting.
   const olderAsks = ask ? thread.report.yours.slice(1) : thread.report.yours;
+  const olderFaults = fault ? thread.report.stopped.slice(1) : thread.report.stopped;
+
+  // Unblock, then hand it straight back. A stopped job is not in dueCommissions,
+  // so "run it now" alone would report nothing to do — the retry has to clear
+  // the gate first. One tap, because a transient 500 should cost one tap.
+  const retry = async () => {
+    setBusy(true); setError(null);
+    const r = await actions.commissionAction(id, 'unblock');
+    if (!r.ok) { setBusy(false); return setError(r.error ?? 'Could not restart it'); }
+    const run = await actions.runCommissionsNow();
+    setBusy(false);
+    if (!run.ok) setError(run.error ?? 'Restarted, but it could not be handed over just now');
+  };
 
   const act = async (action: 'approve' | 'unblock' | 'stop' | 'done', answer?: string) => {
     setBusy(true); setError(null);
@@ -1147,22 +1277,55 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
           It sat under the log in the first version of this fix, which put the
           only reason somebody opens a blocked mandate a full screen below the
           fold on a phone. The browser said so; the JSX did not. */}
-      {c.status === 'blocked' && (
+      {/* Gated on what it is WAITING for, not on having an event to show.
+          loadCommissionEvents caps at 40 per job, so a busy one can push its
+          own question out of the window — and gating on `ask` then rendered
+          neither block, leaving a blocked job with no way to carry on at all.
+          The question is shown when there is one; the way forward always is. */}
+      {waiting === 'you' && (
         <>
           <div className="cp-section"><span className="lead">Your answer</span></div>
           {ask && <p className="desc">{ask.summary}</p>}
           <textarea
             id={`cp-answer-${id}`} className="cp-input sm" rows={3} maxLength={300}
             value={answer} onChange={(e) => { setAnswer(e.target.value); setError(null); }}
-            placeholder="The second one — they quoted in writing and the others did not."
+            placeholder="Pest control first — plumbing quotes take too long to chase."
           />
-          <button className="cp-btn primary block" style={{ marginTop: 10 }} disabled={busy} onClick={() => void act('unblock', answer)}>
+          {/* Weight follows intent. Both actions are legitimate, but only one of
+              them closes the loop, and the empty one was the full-width solid
+              blue — the strongest affordance on the screen given to the outcome
+              you least want. It earns the emphasis once there is something to
+              send. */}
+          <button
+            className={`cp-btn block ${answer.trim() ? 'primary' : 'ghost'}`}
+            style={{ marginTop: 10 }} disabled={busy}
+            onClick={() => void act('unblock', answer)}
+          >
             {busy ? 'Sending…' : answer.trim() ? 'Send this and carry on' : 'Carry on without an answer'}
           </button>
           <p className="cp-help">
             {answer.trim()
               ? 'It goes out with the next run, so the question is not asked again.'
               : 'Not every question needs typing — but without one it has nothing new to go on and may ask again.'}
+          </p>
+        </>
+      )}
+
+      {/* A breakage, not an ask. It used to render under "Your answer" with a
+          text box and a placeholder about supplier quotes, over a sentence
+          reading "the web-search tool returned an internal request error" —
+          asking somebody to reply to a 500. The only useful action is another
+          go, so that is the only one offered. */}
+      {fault && (
+        <>
+          <div className="cp-section"><span className="lead">It could not finish</span></div>
+          <p className="desc">{fault.summary}</p>
+          <button className="cp-btn primary block" disabled={busy} onClick={() => void retry()}>
+            {busy ? 'Trying again…' : 'Try it again'}
+          </button>
+          <p className="cp-help">
+            Nothing here is your fault and nothing has been lost — the plan and everything already
+            found are kept. If it stops the same way twice, the worker itself needs looking at.
           </p>
         </>
       )}
@@ -1185,20 +1348,20 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {/* Everything that happened, newest first. Not a summary of it — the app
           telling you what it did in its own words is the one thing here that
           could be wrong without anybody noticing. */}
-      {(olderAsks.length > 0 || thread.report.said.length > 0 || thread.report.did.length > 0) && (
+      {(olderAsks.length > 0 || olderFaults.length > 0 || thread.report.said.length > 0 || thread.report.did.length > 0) && (
         <>
           <div className="cp-section"><span className="lead">What happened</span></div>
           {/* Earlier asks, then what you told it, then what it did. `said` is the
               one kind of line here the worker did not write, so it says whose it
               is rather than sitting anonymously among the worker's own report. */}
-          {[...olderAsks, ...thread.report.said, ...thread.report.did].map((e) => (
+          {[...olderAsks, ...olderFaults, ...thread.report.said, ...thread.report.did].map((e) => (
             <div key={e.id} className="cp-src">
               <div className="ct">{e.summary}</div>
               <div className="cs">{e.kind === 'answered' ? 'You · ' : ''}{relTime(e.at)}{e.step ? ` · step ${e.step}` : ''}</div>
               {e.artifact && (
                 e.artifact.href
                   ? <a className="cp-btn sm" href={e.artifact.href} target="_blank" rel="noreferrer">{e.artifact.label}</a>
-                  : <div className="cp-draft">{e.artifact.value}</div>
+                  : <Artifact value={e.artifact.value} />
               )}
             </div>
           ))}

@@ -1,0 +1,504 @@
+{
+  "name": "Copilot worker",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "copilot-worker",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "6550cecd-93ed-4c1f-8491-fef950f97e41",
+      "name": "Copilot calls in",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        96
+      ],
+      "webhookId": "copilot-worker",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "IyzK8wEcJgbL4fFD",
+          "name": "Header Auth account 2"
+        }
+      },
+      "notes": "Production URL goes in COPILOT_JOBS_URL. Header Auth credential: name=authorization, value=Bearer <COPILOT_JOBS_SECRET>. Responds instantly so the app's 90s fetch is never held open; real work posts back to result_url."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.body.kind }}",
+                    "rightValue": "commission",
+                    "id": "b661d261-4a56-4fbd-98d6-869c69a3415a"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "4c70fa2e-d332-4dd1-89c4-816c6fa7246a",
+      "name": "Commission, or the older moves call",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -224,
+        96
+      ],
+      "notes": "COPILOT_JOBS_URL receives two shapes. kind=commission is a job order with an id to report against. kind=moves is the older unsolicited-suggestions socket; the fallback branch ignores it."
+    },
+    {
+      "parameters": {
+        "jsCode": "// The job order, flattened for the agent and kept for the post-back.\n//\n// Two fields were being thrown away here, and both of them are the difference\n// between a contractor and a chat window.\n//\n//   b.log        what has already happened on THIS job, including the user's\n//                answer to the question this worker asked last night. Without\n//                it every dispatch was byte-identical, so the agent re-asked a\n//                question it had already been given the answer to \u2014 every\n//                night, for as long as anybody kept answering.\n//   who.working  the user's working file: how they deliver, what they charge,\n//                what they will not do. Research written from a five-string\n//                offer comes back generic however good the model is, because\n//                there is nothing specific for it to be specific about.\nconst b = $input.first().json.body || {};\n\nif (!b.commission_id || !b.result_url) {\n  throw new Error('No commission_id or result_url. If result_url is null, set NEXT_PUBLIC_COPILOT_SITE_URL on the app \u2014 without it the app cannot tell the worker where to report.');\n}\n\nconst who = b.who || {};\nconst offer = who.offer || {};\nconst plan = Array.isArray(b.plan) ? b.plan : [];\nconst log = Array.isArray(b.log) ? b.log : [];\n\n// Oldest first: it is a transcript, and \"which of the three? / the second one\"\n// only reads in that order.\nconst history = log\n  .map((e) => `  [${e.kind}${e.step ? ` step ${e.step}` : ''}] ${e.summary}`)\n  .join('\\n');\n\nconst answered = log.filter((e) => e.kind === 'answered');\n\nconst task = [\n  `OBJECTIVE: ${b.objective}`,\n  b.why ? `WHY IT MATTERS: ${b.why}` : null,\n  b.goal ? `IT IS MEANT TO MOVE: ${b.goal.title}${b.goal.target ? ` (target ${b.goal.target}${b.goal.unit || ''})` : ''}` : null,\n  '',\n  `WHO THEY ARE: ${who.name || 'unknown'}${who.headline ? ` \u2014 ${who.headline}` : ''}`,\n  offer.sells ? `WHAT THEY SELL: ${offer.sells}${offer.for_who ? ` for ${offer.for_who}` : ''}${offer.problem ? `, solving: ${offer.problem}` : ''}` : null,\n  who.target_area || who.location ? `WHERE: ${who.target_area || who.location}` : null,\n  who.target_segments?.length ? `WHO THEY TARGET: ${who.target_segments.join(', ')}` : null,\n  // Only what they wrote or confirmed. Absent for an account with no file.\n  who.working ? `\\nWHAT THEY HAVE TOLD THE APP ABOUT THEIR WORK:\\n${who.working}` : null,\n  '',\n  plan.length\n    ? `THE PLAN SO FAR:\\n${plan.map((s) => `  ${s.n}. [${s.state}] ${s.do}`).join('\\n')}`\n    : 'NO PLAN YET \u2014 propose one of 2 to 5 steps as part of your answer.',\n  '',\n  history\n    ? `WHAT HAS ALREADY HAPPENED ON THIS JOB (oldest first):\\n${history}`\n    : 'NOTHING HAS HAPPENED YET \u2014 this is the first run.',\n  answered.length\n    ? `\\nTHE OWNER HAS ANSWERED YOU. Their answer is in the log above under [answered]. Act on it. Do NOT ask it again in different words \u2014 that is the single most expensive thing you can do here.`\n    : null,\n  '',\n  `YOU MAY: ${b.may}. ${b.may_autonomously\n    ? 'You may carry this out yourself.'\n    : 'You may NOT carry this out. Research and prepare it, then report what you WOULD do as a needs_you event and stop.'}`,\n  `TIME BUDGET: about ${b.budget_minutes} minutes of work.`,\n].filter((line) => line !== null && line !== undefined).join('\\n');\n\nreturn [{ json: {\n  task,\n  commission_id: b.commission_id,\n  result_url: b.result_url,\n  plan,\n  budget_minutes: b.budget_minutes || 60,\n} }];"
+      },
+      "id": "61649fc3-cbed-41b6-8ea5-813e79cfb257",
+      "name": "Build the task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Reads b.log and who.working. Both were dropped by v4, which is why the agent re-asked answered questions and why its research read like it was written from a headline."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.task }}",
+        "options": {
+          "systemMessage": "You are a contractor working one job for one person. You are not a chatbot and not an advisor.\n\nReturn ONLY a JSON object, no prose and no code fences:\n\n{\n  \"events\": [\n    { \"kind\": \"worked\"|\"found\"|\"needs_you\"|\"blocked\"|\"done\"|\"failed\",\n      \"step\": 2,\n      \"summary\": \"one sentence, max 300 chars, required on every event\",\n      \"artifact\": { \"kind\": \"link\"|\"text\", \"label\": \"short button text\", \"value\": \"the content\", \"href\": \"https://...\" } }\n  ],\n  \"plan\": [ { \"n\": 1, \"do\": \"one line\", \"state\": \"todo\"|\"doing\"|\"done\"|\"blocked\" } ]\n}\n\nREAD THE HISTORY FIRST. The task includes WHAT HAS ALREADY HAPPENED ON THIS JOB.\nIt is the record of your own previous runs and of what the owner said back.\n\n- If it contains an [answered] line, that is the owner answering a question you\n  asked. Act on it. NEVER ask that question again in different words \u2014 it is the\n  most expensive mistake available to you, because it costs them a day and\n  teaches them the job is not moving.\n- Do not redo work the history says is already done. Carry on from it.\n- Mark plan steps \"done\" when the history shows they are done.\n\nRules, all of them load-bearing:\n\n- EVERY event needs a summary. An event without one is dropped on arrival.\n- NEVER invent a number. Every figure you state must come from something you\n  actually read, and the item you read it from must be the artifact. If you\n  cannot cite it, do not say it.\n- Search finds candidates; it does not verify them. Before you state a price, a\n  spec, a date or a name, open the page with the read tool and take it from\n  there. Six search summaries is a starting point, not a finding.\n- href must start with http:// or https://. Anything else is stripped and the\n  artifact is dropped with it.\n- Use \"found\" when you learned something, with the source attached. Use \"worked\"\n  for progress with nothing to show.\n- Use \"needs_you\" ONLY for a genuine decision that only the owner can make, and\n  phrase it as a question they can answer in one line. It puts a text box in\n  front of them.\n- Use \"blocked\" when a TOOL or a site stopped you \u2014 a search that errors, a page\n  that will not load, a login you do not have. Name what failed. Never dress\n  this as a needs_you: nobody can answer a 500, and the app offers them a retry\n  instead of a text box when you label it correctly.\n- If you were told you may NOT carry the work out, your last event is a needs_you\n  describing exactly what you would do next and what it would cost.\n- Do NOT report \"done\" unless the objective is actually met. A worker cannot mark\n  its own homework; the app recomputes state from these events and a needs_you\n  always outranks a done.\n- At most 20 events. Fewer and specific beats many and vague.",
+          "maxIterations": "={{ Math.max(6, Math.min(24, Math.round(($json.budget_minutes || 60) / 4))) }}"
+        }
+      },
+      "id": "73d4f686-8556-45c3-9660-3e1f18714918",
+      "name": "Do the work",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        224,
+        0
+      ],
+      "onError": "continueErrorOutput",
+      "notes": "Errors take the second output and are reported back as a blocked event, so a dead run shows up in the app with a retry instead of as silence. maxIterations is derived from the job's own budget: roughly one tool round per four minutes, floored at 6 and capped at 24."
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search the live web for pages, listings, companies and posts. Returns titles, URLs and short summaries \u2014 it finds candidates, it does not verify them. Follow it with 'Read a page' before stating any price, spec, date or name.",
+        "method": "POST",
+        "url": "https://api.exa.ai/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{searchTerm}\",\n  \"type\": \"auto\",\n  \"numResults\": 6,\n  \"contents\": { \"summary\": true }\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "searchTerm",
+              "description": "What to search for, as a descriptive sentence rather than keywords",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "4a63daae-7570-4aeb-b810-ea4b58beb60d",
+      "name": "Search the web",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        336,
+        224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vZRkMoEbhNdcRm84",
+          "name": "Header Auth account 4"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notes": "sendHeaders/parametersHeaders are GONE and must stay gone. v4 set sendHeaders:true with one empty entry in parametersHeaders.values \u2014 a header with no name \u2014 and every call returned an internal request-header error, which is why two live jobs sat stuck for a day. The Exa key is in the Header Auth credential; nothing else belongs here. Body is a PLAIN string, not an n8n expression: an '=' prefix makes n8n evaluate it, {searchTerm} stops being a placeholder, and the agent fails with 'tool input did not match expected schema'."
+    },
+    {
+      "parameters": {
+        "toolDescription": "Read the full text of one web page you already have the URL for. Use it before stating any price, spec, date, name or availability \u2014 search summaries are not evidence. Returns the page text.",
+        "method": "POST",
+        "url": "https://api.exa.ai/contents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"urls\": [\"{url}\"],\n  \"text\": { \"maxCharacters\": 3000 }\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "url",
+              "description": "The full https:// URL of one page to read",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "1d7c6a92-4f31-4a77-93b7-9c1ae2d1f0b5",
+      "name": "Read a page",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vZRkMoEbhNdcRm84",
+          "name": "Header Auth account 4"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notes": "The capability v4 did not have. With search-only the agent could find six links and verify nothing, so an honest one reported that it could not complete the research \u2014 which is exactly what happened to 'find a good deal on marketplace' and 'find jobs'. Same Exa credential, same node type. Body is a PLAIN string for the same reason as the search tool."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hold the agent to the same floor the app applies on arrival, so a malformed\n// answer fails here where it is visible rather than silently landing as zero\n// accepted events.\n//\n// 'answered' is deliberately NOT in this list. It is the user's reply to a\n// needs_you, written only when they answer in the app \u2014 a worker that could\n// post one would be answering its own question and clearing its own gate, which\n// is the same rule that makes `status` below unsendable.\nconst KINDS = ['planned', 'worked', 'found', 'needs_you', 'blocked', 'done', 'failed'];\nconst STATES = ['todo', 'doing', 'done', 'blocked'];\nconst built = $('Build the task').first().json;\n\nlet out = $input.first().json.output ?? $input.first().json.text ?? '';\nif (typeof out === 'string') {\n  const fenced = out.trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '');\n  const start = fenced.indexOf('{');\n  const end = fenced.lastIndexOf('}');\n  try { out = JSON.parse(start >= 0 && end > start ? fenced.slice(start, end + 1) : fenced); }\n  catch { out = { events: [{ kind: 'failed', summary: `The worker did not return JSON: ${String(fenced).slice(0, 200)}` }] }; }\n}\n\nconst str = (v, max) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);\n\nconst artifact = (a) => {\n  if (!a || typeof a !== 'object') return null;\n  const label = str(a.label, 40);\n  const value = str(a.value, 4000);\n  if (!label || !value) return null;\n  const raw = str(a.href, 1000);\n  // http(s) only. The app drops anything else, and so should this.\n  const href = raw && /^https?:\\/\\//i.test(raw) ? raw : null;\n  const kind = ['link', 'text', 'message'].includes(a.kind) ? a.kind : (href ? 'link' : 'text');\n  if (kind === 'link' && !href) return null;\n  return { kind, label, value, href };\n};\n\nlet events = (Array.isArray(out.events) ? out.events : [])\n  .map((e) => {\n    const kind = KINDS.includes(e?.kind) ? e.kind : null;\n    const summary = str(e?.summary, 300);\n    if (!kind || !summary) return null;\n    return { kind, summary, step: Number.isFinite(e?.step) ? Math.trunc(e.step) : null, artifact: artifact(e?.artifact) };\n  })\n  .filter(Boolean)\n  .slice(0, 20);\n\n// A tool that fell over is not a question for the owner.\n//\n// The app now renders needs_you as \"Your answer\" with a text box, and blocked\n// as \"It could not finish\" with a retry. A model that labels a dead search tool\n// as needs_you therefore puts a text box in front of somebody and asks them to\n// reply to a 500. The system message says which to use; this is the backstop,\n// because the cost of getting it wrong lands on the user rather than here.\nconst TOOL_TROUBLE = /\\b(tool|search|fetch|request|http|api|timeout|timed out|rate.?limit|5\\d\\d error|internal error)\\b/i;\nconst CANNOT = /\\b(could not|couldn't|cannot|can't|unable to|failed to)\\b/i;\nevents = events.map((e) => (\n  e.kind === 'needs_you' && TOOL_TROUBLE.test(e.summary) && CANNOT.test(e.summary)\n    ? { ...e, kind: 'blocked' }\n    : e\n));\n\nconst plan = (Array.isArray(out.plan) ? out.plan : [])\n  .map((s, i) => {\n    const doing = str(s?.do ?? s?.step, 200);\n    if (!doing) return null;\n    return { n: Number.isFinite(s?.n) ? Math.trunc(s.n) : i + 1, do: doing, state: STATES.includes(s?.state) ? s.state : 'todo' };\n  })\n  .filter(Boolean)\n  .slice(0, 12);\n\nif (!events.length) {\n  events.push({ kind: 'worked', summary: 'Looked, and had nothing worth reporting this run.', step: null, artifact: null });\n}\n\n// `status` is deliberately NOT sent: the app computes it from the events and\n// ignores anything a worker claims about its own state.\nreturn [{ json: { result_url: built.result_url, payload: { events, ...(plan.length ? { plan } : {}) } } }];"
+      },
+      "id": "cfb8669f-0a2f-4e84-bf10-d041b59ca0fd",
+      "name": "Shape the result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.result_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "5cf14e8f-2cdb-4200-b7d3-d42be7c2e217",
+      "name": "Report back",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "LO12dTCwVGIQw26a",
+          "name": "Header Auth account 3"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "Header Auth credential: name=authorization, value=Bearer <COPILOT_INBOUND_SECRET>. The URL comes from the brief, so nothing here is hardcoded per job. Retried: losing the report loses the whole run's work, and the app cannot tell that apart from a worker with nothing to say."
+    },
+    {
+      "parameters": {},
+      "id": "f626a6d1-750d-4c43-9cbc-0026baed662e",
+      "name": "Ignore the moves call",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "notes": "The older kind=moves socket. Left alone on purpose: unsolicited suggestions are a separate experiment from commissioned work."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-5.6-luna",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        160
+      ],
+      "id": "ec8f7cf1-281f-40ca-b1a8-43dec1b4cb8e",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "ZtRCJD17treNLrDk",
+          "name": "OpenRouter account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// The agent died. Say so in the app rather than leaving the job reading\n// 'Nothing back yet' until somebody gives up on it.\n//\n// 'blocked' rather than 'failed' on purpose: both put the job in front of the\n// user, but the app reads a blocked job that carries no question as something\n// the WORKER could not finish, and offers a retry instead of a text box. A run\n// that died on an infrastructure problem is exactly that.\nconst built = $('Build the task').first().json;\nconst err = $input.first().json;\nconst why = err?.error?.message || err?.message || 'The worker failed with no message.';\nreturn [{ json: {\n  result_url: built.result_url,\n  payload: { events: [{ kind: 'blocked', summary: String(why).slice(0, 300), step: null, artifact: null }] },\n} }];"
+      },
+      "id": "8090a246-4664-4288-a3ce-9c1bd2cfc1e1",
+      "name": "Report the failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ]
+    }
+  ],
+  "pinData": {
+    "Copilot calls in": [
+      {
+        "json": {
+          "headers": {
+            "content-type": "application/json",
+            "authorization": "Bearer <COPILOT_JOBS_SECRET>",
+            "user-agent": "node"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "kind": "commission",
+            "commission_id": "00000000-0000-4000-8000-000000000000",
+            "objective": "Find a next big thing idea for my app",
+            "why": "I need to make this work to build a million dollar startup exit",
+            "may": "read",
+            "may_autonomously": true,
+            "budget_minutes": 60,
+            "plan": [
+              {
+                "n": 1,
+                "do": "Choose the first vertical and confirm the AI dispatcher concept.",
+                "state": "blocked"
+              },
+              {
+                "n": 2,
+                "do": "Research competing tools and identify an underserved Manila-specific workflow.",
+                "state": "todo"
+              },
+              {
+                "n": 3,
+                "do": "Define the smallest sellable pilot, onboarding process, and proof-of-value metric.",
+                "state": "todo"
+              },
+              {
+                "n": 4,
+                "do": "Create a targeted outreach list and message sequence to recruit initial users.",
+                "state": "todo"
+              }
+            ],
+            "result_url": "https://example.invalid/api/copilot/commissions/00000000-0000-4000-8000-000000000000/result",
+            "who": {
+              "name": "Alex",
+              "headline": "Build custom workflows for local businesses",
+              "offer": {
+                "sells": "Booking automation, custom AI workflows, no website",
+                "for_who": "Staycation & resorts, Pest control, plumbing",
+                "problem": "Save time",
+                "price_band": "$150"
+              },
+              "location": "Manila",
+              "timezone": "Asia/Manila",
+              "target_segments": [
+                "Staycation & resorts",
+                "Pest control",
+                "plumbing"
+              ],
+              "target_area": "Manila",
+              "working": "How you deliver:\n- Two calls, then I build it in their account. Five working days.\nWhat you charge:\n- $150/mo after a $900 build. Quoted $1,800 twice and lost both."
+            },
+            "goal": {
+              "title": "Monetize App (Publicize)",
+              "target": 10,
+              "unit": "users"
+            },
+            "log": [
+              {
+                "kind": "worked",
+                "step": 1,
+                "summary": "Synthesized a focused product concept around the shared pain across Alex's target businesses.",
+                "at": "2026-09-14T09:15:15Z"
+              },
+              {
+                "kind": "needs_you",
+                "step": 2,
+                "summary": "Should I validate pest control and plumbing first, using the WhatsApp-first AI dispatcher as the initial product wedge?",
+                "at": "2026-09-14T09:15:15Z"
+              },
+              {
+                "kind": "answered",
+                "step": null,
+                "summary": "Pest control first \u2014 plumbing quotes take too long to chase.",
+                "at": "2026-09-14T18:02:00Z"
+              }
+            ]
+          },
+          "webhookUrl": "https://n8n.example.invalid/webhook/copilot-worker",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Copilot calls in": {
+      "main": [
+        [
+          {
+            "node": "Commission, or the older moves call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commission, or the older moves call": {
+      "main": [
+        [
+          {
+            "node": "Build the task",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore the moves call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build the task": {
+      "main": [
+        [
+          {
+            "node": "Do the work",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Do the work": {
+      "main": [
+        [
+          {
+            "node": "Shape the result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report the failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape the result": {
+      "main": [
+        [
+          {
+            "node": "Report back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search the web": {
+      "ai_tool": [
+        [
+          {
+            "node": "Do the work",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read a page": {
+      "ai_tool": [
+        [
+          {
+            "node": "Do the work",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Do the work",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report the failure": {
+      "main": [
+        [
+          {
+            "node": "Report back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5a1c3f60-0d4e-4b2f-9b3a-7c2f1e8d4a90",
+  "meta": {
+    "instanceId": "15418c2661006b47b5b5fde0b98fe1e06b19f3e89695e27553850f044d1c5c1e"
+  },
+  "id": "9Rnrgh01jCfbhM3E",
+  "tags": []
+}

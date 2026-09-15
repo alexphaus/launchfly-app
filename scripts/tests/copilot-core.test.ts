@@ -1801,12 +1801,12 @@ leverage().catch((e) => { console.error(e); process.exit(1); });
 // The Call is picked, not written
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  BUSINESS_METRICS, CALL_FLOOR, DEFAULT_COST_MINUTES, METRIC_GOOD_DIRECTION, MIN_COST_MINUTES,
+  BUSINESS_METRICS, CALL_FLOOR, DEFAULT_COST_MINUTES, METRIC_GOOD_DIRECTION, METRIC_LABEL, MIN_COST_MINUTES,
   arbitrate, costMinutesOf, kindPrior, scoreMove, type Stake,
 } from '../../src/lib/copilot/stake';
 import { draftFrom, scorable } from '../../src/lib/copilot/call';
 import { coldIn, sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
-import { metricValue as mv, verdictOf as vo } from '../../src/lib/copilot/decision';
+import { metricValue as mv, statusLine, verdictOf as vo } from '../../src/lib/copilot/decision';
 import type { Move as MoveRow } from '../../src/lib/copilot/types';
 
 async function arbitration() {
@@ -1825,6 +1825,34 @@ async function arbitration() {
   assert.equal(mv(metrics, 'queue'), 45);
   assert.equal(mv(metrics, 'runway_months'), 3.4);
   assert.ok(BUSINESS_METRICS.includes('runway_months'), 'the funnel is not the whole business');
+
+  // 1b. Every metric a call may stake itself on must be sayable out loud, and the
+  //     database must accept it. The second half is not decoration: 20260909
+  //     pinned verify_metric to the six funnel values, 20260911 widened this list
+  //     to eight and forgot the constraint, and every Call staking `queue` or
+  //     `runway_months` then failed 23514 into a console.error — so Today
+  //     rendered the insight instead of the call, on most mornings, for weeks.
+  for (const k of BUSINESS_METRICS) {
+    if (k === 'none') continue;
+    assert.ok(METRIC_LABEL[k]?.trim(), `${k} must have words a person would use`);
+    assert.ok(!/_/.test(METRIC_LABEL[k]), `${k} reads as a column name, not a sentence`);
+  }
+  {
+    const migration = readFileSync(new URL('../../supabase/migrations/20260920_copilot_decision_metrics.sql', import.meta.url), 'utf8');
+    for (const k of BUSINESS_METRICS) {
+      assert.ok(migration.includes(`'${k}'`), `20260920 must permit '${k}' or every Call staking it is lost`);
+    }
+  }
+
+  // 1c. The status line: one number, and the one the call will be graded on, so
+  //     the header and the card are about the same thing. It was three numbers
+  //     in three units, led by "8 more ready" — a count of Moves, offering
+  //     "more" than something the reader had never been shown.
+  assert.equal(statusLine(metrics, { verify: { metric: 'queue' } } as never), '45 drafts waiting');
+  assert.equal(statusLine(metrics, { verify: { metric: 'replies' } } as never), '2 replies');
+  assert.equal(statusLine(metrics, { verify: { metric: 'none' } } as never), '3.4 months of runway', 'an ungradeable call falls back to runway');
+  assert.equal(statusLine(metrics, null), '3.4 months of runway');
+  assert.equal(statusLine({ ...metrics, runway_months: null } as never, null), null, 'no filler under a greeting');
 
   // 2. Good is not always up. "Clear the queue" succeeds when the number falls,
   //    and grading that as no_movement is how a working call looked like a
@@ -3282,7 +3310,7 @@ workingFile().catch((e) => { console.error(e); process.exit(1); });
 // product.
 import {
   AUTHORITY, AUTHORITIES, MAX_BRIEF_LOG, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX, WORKER_EVENT_KINDS,
-  SAFE_HREF, blockedMove, briefLog, canAct, commissionBrief, commissionChip, commissionIdFromMove, commissionLine, commissionTerms,
+  SAFE_HREF, blockedMove, blockedOn, briefLog, canAct, commissionBrief, commissionChip, commissionIdFromMove, commissionLine, commissionTerms,
   dueCommissions, isAuthority, normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
 } from '../../src/lib/copilot/commission';
 import type { Commission, CommissionEvent } from '../../src/lib/copilot/commission';
@@ -3466,6 +3494,9 @@ async function commissions() {
     // for the rest of its life, including the moment after the user answered it.
     assert.equal(commissionLine({ ...base, status: 'blocked' }, r), '1 of 3 done · 1 needs you');
     assert.equal(commissionLine(base, r), '1 of 3 done', 'answered and running: it stops asking');
+    // Nothing has moved yet: a progress report about no progress is worse than
+    // none, because it implies a run is under way.
+    assert.equal(commissionLine({ ...base, plan: [] }, reportOf({ ...base, plan: [] }, [])), 'Nothing back yet');
     assert.equal(commissionLine({ ...base, status: 'draft' }, r), 'Waiting for you to approve it');
     assert.equal(commissionLine({ ...base, status: 'done', outcome: 'Found 20, 3 replied' }, r), 'Found 20, 3 replied');
     const quiet = reportOf(base, []);
@@ -3583,6 +3614,48 @@ async function commissions() {
     // Still no way to identify or bill this person.
     const who = JSON.stringify(whoFor(profile, file));
     assert.ok(!who.includes('a@b.c') && !who.includes('p1'));
+  }
+
+  // --- a question and a breakage are opposite states
+  //
+  // Both arrive as status 'blocked', and for a while both rendered as a blue
+  // "NEEDS YOU" chip over a text box. A morning with three handed-over jobs
+  // showed three things the user had apparently failed to do, two of which were
+  // a dead search tool. Nobody can answer a 500.
+  {
+    const asked = ev({ id: 'q1', kind: 'needs_you', summary: 'Which of the three?', at: '2026-09-14T09:00:00Z' });
+    const broke = ev({ id: 'f1', kind: 'failed', summary: 'The web-search tool returned an internal request error.', at: '2026-09-14T21:00:00Z' });
+    const blocked = { ...base, status: 'blocked' as const };
+
+    const askOnly = reportOf(blocked, [asked]);
+    const faultOnly = reportOf(blocked, [broke]);
+    assert.deepEqual(askOnly.yours.map((e) => e.id), ['q1']);
+    assert.deepEqual(askOnly.stopped, [], 'a question is not a breakage');
+    assert.deepEqual(faultOnly.stopped.map((e) => e.id), ['f1']);
+    assert.deepEqual(faultOnly.yours, [], 'a breakage is not a question');
+
+    assert.equal(blockedOn(blocked, askOnly), 'you');
+    assert.equal(blockedOn(blocked, faultOnly), 'worker');
+    // Both on file: the newest decides, because a job can carry a question the
+    // user already answered and a fresh failure on top of it.
+    assert.equal(blockedOn(blocked, reportOf(blocked, [asked, broke])), 'worker');
+    assert.equal(blockedOn(blocked, reportOf(blocked, [broke, { ...asked, at: '2026-09-15T00:00:00Z' }])), 'you');
+    assert.equal(blockedOn(base, askOnly), null, 'only a blocked job is waiting on anything');
+    // Blocked with nothing recorded falls to the user, who can always clear it.
+    assert.equal(blockedOn(blocked, reportOf(blocked, [])), 'you');
+
+    // The chip is what somebody reads at arm's length, so it is the thing that
+    // must not say "needs you" about an outage.
+    assert.deepEqual(commissionChip(blocked, faultOnly), { label: 'Needs a fix', tone: 'fault' });
+    assert.deepEqual(commissionChip(blocked, askOnly), { label: 'Needs you', tone: 'needs' });
+    assert.deepEqual(commissionChip(blocked), { label: 'Needs you', tone: 'needs' }, 'no report: the answerable reading');
+    assert.match(commissionLine(blocked, faultOnly), /tried again/);
+    assert.doesNotMatch(commissionLine(blocked, faultOnly), /done|needs you/, 'a shortfall the user did not cause is not reported as one');
+
+    // And a breakage raises no Move: "your search tool is returning 500s" is not
+    // finished work, and has no business competing for the day against the queue.
+    assert.equal(blockedMove(blocked, faultOnly, 'commission'), null);
+    assert.ok(blockedMove(blocked, askOnly, 'commission'), 'a real question still becomes a Move');
   }
 
   console.log('copilot-core: commission checks passed');

@@ -58,7 +58,8 @@ with expected(kind, table_name, column_name, migration) as (values
   ('table',  'copilot_commission_events', null,                     '20260916_copilot_commissions.sql'),
   ('table',  'copilot_working',        null,                        '20260917_copilot_working.sql'),
   ('column', 'copilot_working',        'observed_key',              '20260917_copilot_working.sql')
-)
+),
+
 missing as (
   select e.migration, e.kind, e.table_name, e.column_name
   from expected e

@@ -185,7 +185,12 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
    advice, so it is never summarised or truncated on the server — but ninety
    words dumped whole into a card inside a sheet is a section the eye skips
    entirely, which costs more than the words were worth. */
-.cp-draft.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* padding-bottom:0 is load-bearing. `overflow:hidden` clips at the PADDING
+   box, not the content box, so with 12px of bottom padding the fourth line
+   renders half a row of sliced glyphs between the last line and the border.
+   The ellipsis line-clamp puts on line three already says there is more; the
+   padding is what has to go. Found by reading the computed box, not the CSS. */
+.cp-draft.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; padding-bottom: 0; }
 .cp-draft-label { font-family: var(--display); font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
 
 /* Forms */
@@ -819,7 +824,7 @@ html:has(.cp-root[data-theme="soft"]), body:has(.cp-root[data-theme="soft"]) { b
 .cp-root[data-theme="soft"] .cp-option.active .cs { color: #DDE2F7; }
 .cp-root[data-theme="soft"] .cp-option .cs.quote { opacity: .7; }
 .cp-root[data-theme="soft"] .cp-draft { border: 0; border-radius: 18px; background: var(--line); padding: 14px 16px; }
-.cp-root[data-theme="soft"] .cp-draft.clamp { border-radius: 18px; }
+.cp-root[data-theme="soft"] .cp-draft.clamp { border-radius: 18px; padding-bottom: 0; }
 .cp-root[data-theme="soft"] .cp-draft-label { text-transform: none; letter-spacing: 0; font-weight: 600; }
 /* The You view is embedded in the sheet, where the frame gutters do not apply. */
 .cp-root[data-theme="soft"] .cp-sheet-embed :is(.cp-card, .cp-list, .cp-note, .cp-empty, .cp-metrics) { margin-left: 0; margin-right: 0; }

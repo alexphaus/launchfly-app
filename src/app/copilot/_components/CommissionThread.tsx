@@ -60,7 +60,11 @@ export default function CommissionThread({ threads, actions }: { threads: Thread
         </button>
       </div>
 
-      {!live.length && (
+      {/* Explained once, to somebody who has never done it. A person with five
+          finished jobs behind them does not need telling what this section is,
+          and a permanent paragraph on everyone's Now screen is the density this
+          whole pass is against. */}
+      {!live.length && !threads.length && (
         <p className="cp-help" style={{ marginTop: -4 }}>
           Nothing running. Hand over something you would otherwise do yourself — research, a
           comparison, a shortlist — and read what comes back.

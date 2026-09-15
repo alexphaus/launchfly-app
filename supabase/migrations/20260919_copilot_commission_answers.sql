@@ -35,12 +35,35 @@
 -- rather than clearing the gate and dropping what the user typed.
 
 do $$
+declare
+  con record;
 begin
   if exists (select 1 from information_schema.tables
              where table_schema = 'public' and table_name = 'copilot_commission_events') then
 
-    alter table copilot_commission_events
-      drop constraint if exists copilot_commission_events_kind_check;
+    -- Dropped by DEFINITION, not by guessed name.
+    --
+    -- An inline `column type check (...)` is auto-named <table>_<column>_check
+    -- *usually*. A table created twice, or a constraint ever re-added by hand,
+    -- gets <name>1 instead. `drop constraint if exists <guess>` then silently
+    -- does nothing, the `add` below succeeds under the guessed name, and the
+    -- table ends up carrying TWO check constraints — with the old narrow one
+    -- still rejecting every write this migration exists to permit.
+    --
+    -- The migration would report success and the bug would survive it, with no
+    -- visible symptom. That is the exact failure this file was written to end,
+    -- reproduced inside the fix for it, so the fix does not guess.
+    for con in
+      select c.conname
+      from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = 'public' and t.relname = 'copilot_commission_events'
+        and c.contype = 'c'
+        and pg_get_constraintdef(c.oid) ilike '%kind%'
+    loop
+      execute format('alter table copilot_commission_events drop constraint %I', con.conname);
+    end loop;
 
     alter table copilot_commission_events
       add constraint copilot_commission_events_kind_check

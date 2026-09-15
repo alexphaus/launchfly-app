@@ -39,18 +39,42 @@
 -- scripts/sql/copilot-schema-check.sql, which now diffs this list against
 -- BUSINESS_METRICS rather than only checking that columns exist.
 --
--- Additive and idempotent: dropping and re-adding the same named constraint is
--- safe to run twice, widening a CHECK can never reject an existing row, and the
--- whole thing is guarded on the table existing so it is safe on a database
--- where 20260909 was never applied.
+-- Additive and idempotent: every check constraint on the column is dropped by
+-- definition rather than by guessed name (see below — guessing is how a
+-- migration reports success and changes nothing), widening a CHECK can never
+-- reject an existing row, and the whole thing is guarded on the table existing
+-- so it is safe on a database where 20260909 was never applied.
 
 do $$
+declare
+  con record;
 begin
   if exists (select 1 from information_schema.tables
              where table_schema = 'public' and table_name = 'copilot_decisions') then
 
-    alter table copilot_decisions
-      drop constraint if exists copilot_decisions_verify_metric_check;
+    -- Dropped by DEFINITION, not by guessed name.
+    --
+    -- An inline `column type check (...)` is auto-named <table>_<column>_check
+    -- *usually*. A table created twice, or a constraint ever re-added by hand,
+    -- gets <name>1 instead. `drop constraint if exists <guess>` then silently
+    -- does nothing, the `add` below succeeds under the guessed name, and the
+    -- table ends up carrying TWO check constraints — with the old narrow one
+    -- still rejecting every write this migration exists to permit.
+    --
+    -- The migration would report success and the bug would survive it, with no
+    -- visible symptom. That is the exact failure this file was written to end,
+    -- reproduced inside the fix for it, so the fix does not guess.
+    for con in
+      select c.conname
+      from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = 'public' and t.relname = 'copilot_decisions'
+        and c.contype = 'c'
+        and pg_get_constraintdef(c.oid) ilike '%verify_metric%'
+    loop
+      execute format('alter table copilot_decisions drop constraint %I', con.conname);
+    end loop;
 
     -- Must stay in step with BUSINESS_METRICS in src/lib/copilot/stake.ts.
     -- A metric nobody can read back out of Metrics is not a stake, it is a

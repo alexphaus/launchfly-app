@@ -1277,10 +1277,15 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
           It sat under the log in the first version of this fix, which put the
           only reason somebody opens a blocked mandate a full screen below the
           fold on a phone. The browser said so; the JSX did not. */}
-      {ask && (
+      {/* Gated on what it is WAITING for, not on having an event to show.
+          loadCommissionEvents caps at 40 per job, so a busy one can push its
+          own question out of the window — and gating on `ask` then rendered
+          neither block, leaving a blocked job with no way to carry on at all.
+          The question is shown when there is one; the way forward always is. */}
+      {waiting === 'you' && (
         <>
           <div className="cp-section"><span className="lead">Your answer</span></div>
-          <p className="desc">{ask.summary}</p>
+          {ask && <p className="desc">{ask.summary}</p>}
           <textarea
             id={`cp-answer-${id}`} className="cp-input sm" rows={3} maxLength={300}
             value={answer} onChange={(e) => { setAnswer(e.target.value); setError(null); }}

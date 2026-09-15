@@ -7,7 +7,7 @@ import { NO_REPLY_AFTER_DAYS, SENT_TEXT_MAX, selectReplies, selectSentExamples, 
 import { addDays, copilotDb, todayIso } from './db';
 import { DECISION_RESPONSES, VERIFY_AFTER_DAYS, decisionReview, metricValue, snapshotOf, type Change, type Decision, type DecisionDraft, type DecisionMetric, type DecisionResponse, type DecisionSnapshot, type DontDraft } from './decision';
 import { diagnose, growthEdge, segmentOf, type DiagnoseInput } from './diagnose';
-import { cancelOpenDrafts, channelsConfigured, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
+import { cancelOpenDrafts, channelsConfigured, countOpenDrafts, executionsForActions, latestExecutionByOpportunity, loadSendQueue, regenerateOpeners } from './execution';
 import { SELLS_MAX, offerChangedMaterially, offerIsEmpty } from './offer';
 import { availableJobs } from './jobs';
 import { moveKeepRate, orderMoves, type KeepRates, type MoveAnswerEvent } from './moves';
@@ -17,7 +17,7 @@ import { captureAsk, openedAwaitingAnswer, repliesAwaitingOutcome } from './capt
 import { forecast } from './obligations';
 import { sourceYield, type SourceYield, type WatchMoveRow } from './watch/yield';
 import {
-  BODY_MAX, EVIDENCE_MAX, MAX_PER_SECTION, workingProgress,
+  BODY_MAX, EVIDENCE_MAX, MAX_PER_SECTION, STAND_DOWN_KEY, standingRefusals, workingProgress,
   type ObservedWrite, type WorkingEntry, type WorkingSection, type WorkingStatus,
 } from './working';
 import {
@@ -563,7 +563,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
   if (!profile) return null;
   const today = todayIso(profile.timezone);
 
-  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows] = await Promise.all([
+  const [goals, insight, planRows, oppRows, sources, ctxCount, affinity, lastRun, lastCronRun, metrics, supplyRun, pushEnabled, diagRows, usage, queue, queueTotal, pipelineRows, decisionLog, movesRead, jobKeys, watchSources, jobsRun, openedRows, replyRows2, obligationRows, workingRows, commissionRows] = await Promise.all([
     db.from('copilot_goals').select('*').eq('profile_id', profileId).eq('status', 'active').order('priority').then((r) => (r.data ?? []) as Goal[]),
     latestInsight(profileId, 'daily'),
     db.from('copilot_actions').select('*').eq('profile_id', profileId).eq('kind', 'plan').eq('for_date', today).in('status', ['open', 'done']).order('created_at').then((r) => (r.data ?? []) as Action[]),
@@ -586,6 +586,7 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     loadDiagnosisRows(profileId),
     getUsage(profileId, periodKey(profile.timezone)),
     loadSendQueue(profileId),
+    countOpenDrafts(profileId),
     // The pipeline: real businesses only, whatever state they are in. Dismissed
     // ones are gone; everything else has a place on the board.
     db.from('copilot_opportunities').select('*').eq('profile_id', profileId).eq('source_kind', 'sourced').in('status', ['new', 'saved', 'acted']).order('score', { ascending: false }).limit(200).then((r) => (r.data ?? []) as Opportunity[]),
@@ -722,6 +723,14 @@ export async function loadHome(profileId: string): Promise<HomeData | null> {
     decisionLog,
     plan: shortlist,
     queue,
+    /**
+     * Open drafts including the ones the queue cannot render. The difference is
+     * drafts whose action row has gone: counted by awaiting_approval, invisible
+     * here, unsendable, and the reason the header and the call disagreed by ten
+     * on the live account. Shown only where it changes what somebody decides —
+     * the confirmation before clearing.
+     */
+    queueTotal,
     pipeline,
     billing: {
       plan: isPlanKey(profile.plan) ? profile.plan : 'free',
@@ -1409,6 +1418,46 @@ export async function saveWorkingEntry(profileId: string, patch: {
   if (error) throw error;
   await logEvent(profileId, 'working_written', { section: patch.section });
   return (data as unknown as WorkingEntry) ?? null;
+}
+
+/**
+ * "Stop suggesting this." Not "not today".
+ *
+ * A refusal decays and expires after REFUSAL_WINDOW decisions, which is right
+ * for a mood and wrong for a conclusion. Somebody who has sent forty-four
+ * openers, got nothing, and decided outreach is no longer their leverage should
+ * not be asked again in ten days — and until this existed, that is exactly what
+ * happened, on a loop, which is the single loudest complaint this product has
+ * had about itself.
+ *
+ * Written into the working file's `refuse` section rather than a table of its
+ * own, because that section already means "what you will not do". The user can
+ * see every stand-down in one place and lift one by deleting the line, and the
+ * prose reaches the brief, the per-source judge and any commissioned worker
+ * through workingBrief — so the whole product hears it, not only the ranker.
+ */
+export async function standDownTopic(profileId: string, topic: string, phrase: string): Promise<void> {
+  const key = `${STAND_DOWN_KEY}${topic}`;
+  const { error } = await copilotDb().from('copilot_working').upsert({
+    profile_id: profileId,
+    section: 'refuse',
+    body: `Stop suggesting ${phrase}. I have decided this is not where my time goes.`,
+    // The user's own decision, so it is live immediately and needs no evidence —
+    // they are the evidence. Same rule as anything else they type.
+    source: 'you',
+    status: 'live',
+    observed_key: key,
+    confirmed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'profile_id,observed_key' });
+  if (error) throw error;
+  await logEvent(profileId, 'stood_down', { topic });
+}
+
+/** Every job this profile has told the app to stop suggesting. */
+export async function loadStandingRefusals(profileId: string): Promise<Set<string>> {
+  // Never fatal: a missing working table must cost a bar, not the whole brief.
+  return standingRefusals(await loadWorking(profileId).catch(() => []));
 }
 
 export async function deleteWorkingEntry(profileId: string, id: string): Promise<void> {

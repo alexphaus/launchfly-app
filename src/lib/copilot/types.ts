@@ -327,6 +327,8 @@ export interface HomeData {
    * sent is still the most important thing on Thursday.
    */
   queue: QueueItem[];
+  /** Open drafts including ones the queue cannot render. See loadHome. */
+  queueTotal: number;
   /** Sourced businesses only — the ones with a contact — grouped by stage on the Pipeline tab. */
   pipeline: PipelineRow[];
   /** Current plan and what is left of this month's metered allowance. */

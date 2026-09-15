@@ -134,6 +134,33 @@ export const BRIEF_MAX = 4_000;
  */
 export const MIN_OBSERVED = 4;
 
+/**
+ * The key prefix a standing refusal is stored under.
+ *
+ * "Stop suggesting this" is a permanent statement about how this person works,
+ * which is exactly what the `refuse` section already exists to hold — so it is
+ * stored as a row there rather than as a new table. Three things fall out of
+ * that for free: the user can see every stand-down in one place, remove one by
+ * deleting the line, and the prose goes to the brief, the per-source judge and
+ * any commissioned worker through workingBrief, so the whole product learns it
+ * and not just the ranker.
+ */
+export const STAND_DOWN_KEY = 'stand-down:';
+
+/** The job keys the user has told the app to stop suggesting. */
+export function standingRefusals(entries: WorkingEntry[]): Set<string> {
+  const out = new Set<string>();
+  for (const e of entries) {
+    // Declined rows are the user rejecting a READING; they say nothing about
+    // what the app may suggest. Only a live line is a standing instruction.
+    if (e.status !== 'live') continue;
+    if (!e.observed_key?.startsWith(STAND_DOWN_KEY)) continue;
+    const job = e.observed_key.slice(STAND_DOWN_KEY.length).trim();
+    if (job) out.add(job);
+  }
+  return out;
+}
+
 export function isSection(v: unknown): v is WorkingSection {
   return typeof v === 'string' && (SECTIONS as readonly string[]).includes(v);
 }

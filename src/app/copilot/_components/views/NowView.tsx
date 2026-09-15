@@ -210,6 +210,7 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
           <button className="cp-btn primary block cp-call-do" onClick={() => actions.openSheet({ kind: 'queue' })}>
             Open the queue
           </button>
+          <QueueClear home={home} actions={actions} />
         </div>
       )}
 
@@ -377,6 +378,54 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
 }
 
 /**
+ * "I am not sending these."
+ *
+ * A queue you have decided against is not a backlog, it is a dead asset that
+ * holds the top of the screen: it feeds awaiting_approval, awaiting_approval
+ * feeds the send_queue stake, and the Call proposes sending them every morning
+ * for as long as the rows exist. cancelOpenDrafts has been in the codebase
+ * since the offer-change path and had no user-facing caller, so there was no
+ * way to say so — the only exit was to keep ignoring the same card.
+ *
+ * Two taps, because sixty-one drafts is not an undo. Nothing is deleted: they
+ * move to `cancelled` with a reason, so "written and never sent" stays in the
+ * funnel, which is the most informative number this account has produced.
+ */
+function QueueClear({ home, actions }: { home: HomeData; actions: Actions }) {
+  const [arming, setArming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const total = home.queueTotal || home.queue.length;
+  // Drafts whose action row has gone: counted by the metric, absent from the
+  // queue, unsendable. Said here because this is the one moment the number
+  // changes what somebody decides — they are about to be cleared too.
+  const unreachable = Math.max(0, total - home.queue.length);
+
+  if (!arming) {
+    return (
+      <button className="cp-go" style={{ marginTop: 10 }} onClick={() => setArming(true)}>
+        I am not sending these
+      </button>
+    );
+  }
+  return (
+    <>
+      <p className="cp-help" style={{ marginTop: 10 }}>
+        Clears {total} draft{total === 1 ? '' : 's'}
+        {unreachable > 0 && `, ${unreachable} of which the app can no longer open`}. They are
+        kept as written and not sent, so the funnel still counts them — and the call stops
+        asking you to send them.
+      </p>
+      <div className="cp-btn-row">
+        <button className="cp-btn" disabled={busy} onClick={async () => {
+          setBusy(true); await actions.clearQueue(); setBusy(false); setArming(false);
+        }}>{busy ? 'Clearing…' : `Clear all ${total}`}</button>
+        <button className="cp-btn ghost" disabled={busy} onClick={() => setArming(false)}>Keep them</button>
+      </div>
+    </>
+  );
+}
+
+/**
  * One draft, two taps. The primary action opens the message in the user's own
  * WhatsApp or mail app (or sends via API when this profile owns the channel);
  * "I sent it" records that it went. Tapping the text opens the full sheet to edit.
@@ -394,6 +443,11 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
   const [busy, setBusy] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
   const [showArtifact, setShowArtifact] = useState(false);
+  // "Not doing it" opens a choice rather than firing. A plain refusal expires
+  // after REFUSAL_WINDOW decisions — right for "not today", wrong for somebody
+  // who has concluded this kind of work is not their leverage any more and
+  // watched the app ask again a fortnight later.
+  const [refusing, setRefusing] = useState(false);
   // Present when arbitration promoted a Move rather than the brief writing one.
   const move = home.callMove;
   const verdict = verdictOf(decision);
@@ -423,10 +477,11 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
     );
   }
 
-  const answer = async (r: 'did' | 'rejected' | 'wrong') => {
+  const answer = async (r: 'did' | 'rejected' | 'wrong', permanent?: boolean) => {
     setBusy(true);
-    await actions.answerCall(r);
+    await actions.answerCall(r, permanent);
     setBusy(false);
+    setRefusing(false);
   };
 
   return (
@@ -496,11 +551,28 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
             </span>
           </div>
         ) : (
-          <div className="cp-btn-row">
-            <button className="cp-btn primary" disabled={busy} onClick={() => answer('did')}>I did it</button>
-            <button className="cp-btn" disabled={busy} onClick={() => answer('rejected')}>Not doing it</button>
-            <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
-          </div>
+          refusing ? (
+            <>
+              <div className="cp-btn-row">
+                <button className="cp-btn" disabled={busy} onClick={() => answer('rejected')}>Just not today</button>
+                <button className="cp-btn" disabled={busy} onClick={() => answer('rejected', true)}>Stop suggesting this</button>
+              </div>
+              <p className="cp-help">
+                {/* Says what actually happens, because one of these is permanent
+                    and the other is not, and "no" has meant only the second one
+                    for the whole life of this product. */}
+                &ldquo;Not today&rdquo; fades after a week or so. &ldquo;Stop suggesting this&rdquo; is kept in your
+                working file under what you will not do — remove it there to undo.
+                {' '}<button className="cp-go" onClick={() => setRefusing(false)}>Back</button>
+              </p>
+            </>
+          ) : (
+            <div className="cp-btn-row">
+              <button className="cp-btn primary" disabled={busy} onClick={() => answer('did')}>I did it</button>
+              <button className="cp-btn" disabled={busy} onClick={() => setRefusing(true)}>Not doing it</button>
+              <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
+            </div>
+          )
         )}
 
         {home.insight && (

@@ -85,7 +85,14 @@ export interface Actions {
   /** Signals → "Stop matching <segment>": drops one segment and everything drafted for it. */
   dropSegment(segment: string): Promise<boolean>;
   /** What you did about today's call. "Ignored" is never sent — it is inferred. */
-  answerCall(response: 'did' | 'rejected' | 'wrong'): Promise<boolean>;
+  /**
+   * `permanent` turns a refusal into a standing one: stop suggesting this at
+   * all, rather than not today. It writes a line into the working file's
+   * `refuse` section, which is where the user can see and lift it.
+   */
+  answerCall(response: 'did' | 'rejected' | 'wrong', permanent?: boolean): Promise<boolean>;
+  /** Cancel every open draft. Nothing is deleted; they move to `cancelled`. */
+  clearQueue(): Promise<{ ok: boolean; cancelled?: number; error?: string }>;
   /** One triage card: draft an opener for it, or dismiss it. */
   triage(id: string, action: 'draft' | 'skip'): Promise<boolean>;
   /**

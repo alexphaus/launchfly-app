@@ -15,11 +15,11 @@
 // "send the drafts" led every morning because starterDecision has no other kind
 // of branch. A Move could not win because nothing was comparing them.
 
-import { refusalsByTopic } from './decision';
+import { decisionReview, refusalsByTopic } from './decision';
 import { arbitrate, costMinutesOf, type ScoreCtx } from './stake';
 import { CAPACITY_META, type Metrics, type Move, type Profile } from './types';
 import type { DecisionDraft } from './decision';
-import { loadDecisions, loadMoves } from './store';
+import { loadDecisions, loadMoves, loadStandingRefusals } from './store';
 
 /** How many open Moves arbitration considers. Past this it is not a shortlist. */
 export const ARBITRATE_POOL = 24;
@@ -80,13 +80,27 @@ export function draftFrom(win: Move, runnerUp: Move | null, stoodDown: string[] 
 export function scoreCtxFor(
   profile: Pick<Profile, 'capacity' | 'finance'>,
   refused: Record<string, number> = {},
+  extra: { dead?: Record<string, number>; standing?: Set<string> } = {},
 ): ScoreCtx {
   return {
     monthlyBurn: profile.finance?.monthly_burn ?? null,
     capacityMinutes: CAPACITY_META[profile.capacity].minutes,
     refused,
+    dead: extra.dead,
+    standing: extra.standing,
   };
 }
+
+/**
+ * How far back the ranker reads the decision record.
+ *
+ * Wider than REFUSAL_WINDOW on purpose, and the two are asking different
+ * questions. refusalsByTopic slices to its own ten internally — "have you
+ * turned this down lately" is about a mood and should expire. deadTopic is
+ * "you did this and the number never moved", which is the ledger's verdict and
+ * does not stop being true because a fortnight passed.
+ */
+export const RANKING_WINDOW = 30;
 
 /**
  * Load today's open Moves and pick one. Null when nothing clears the floor —
@@ -97,14 +111,22 @@ export async function promoteCall(
   profile: Pick<Profile, 'id' | 'capacity' | 'finance'>,
   _metrics: Metrics,
 ): Promise<PromotedCall | null> {
-  const [{ moves }, decisions] = await Promise.all([
+  const [{ moves }, decisions, standing] = await Promise.all([
     loadMoves(profile.id, ARBITRATE_POOL),
-    loadDecisions(profile.id),
+    loadDecisions(profile.id, RANKING_WINDOW),
+    loadStandingRefusals(profile.id),
   ]);
   if (!moves.length) return null;
 
   const byId = new Map(moves.map((m) => [m.id, m]));
-  const ctx = scoreCtxFor(profile, refusalsByTopic(decisions));
+  // The ledger's verdict, as a factor rather than as a sentence on another tab.
+  // decisionReview already computed this; scoreMove has never read it, so the
+  // decay heard "no" and did not hear "this does not work".
+  const { deadTopic } = decisionReview(decisions);
+  const ctx = scoreCtxFor(profile, refusalsByTopic(decisions), {
+    dead: deadTopic ? { [deadTopic.topic]: deadTopic.count } : undefined,
+    standing,
+  });
   const { call, insteadOf, stoodDown } = arbitrate(moves.map(scorable), ctx);
   if (!call) return null;
 

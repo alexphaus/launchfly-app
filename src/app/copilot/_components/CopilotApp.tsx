@@ -494,15 +494,25 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return true;
       } catch (e) { fail(e, 'Could not update targeting'); return false; }
     },
-    async answerCall(response) {
+    async answerCall(response, permanent) {
       try {
-        const r = await post<{ home: HomeData }>('/decision', { response });
+        const r = await post<{ home: HomeData; stoodDown?: string }>('/decision', { response, permanent });
         setHome(r.home);
-        say(response === 'did' ? 'Logged. The number it named gets read back in 3 days.'
-          : response === 'rejected' ? 'Noted. A call you keep turning down is worth knowing about.'
-          : 'Logged as a wrong call. That is the most useful thing you can tell it.');
+        say(r.stoodDown
+          ? 'Noted for good. It is in your working file under what you will not do — remove it there to undo.'
+          : 'Recorded');
         return true;
-      } catch (e) { fail(e, 'Could not record'); return false; }
+      } catch (e) { fail(e, 'Could not record that'); return false; }
+    },
+    async clearQueue() {
+      try {
+        const r = await post<{ home: HomeData; cancelled: number }>('/queue', { action: 'clear' });
+        setHome(r.home);
+        say(`${r.cancelled} draft${r.cancelled === 1 ? '' : 's'} cleared. They are recorded as written and not sent.`);
+        return { ok: true, cancelled: r.cancelled };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not clear the queue' };
+      }
     },
     async requestLoginLink(email) {
       try { await post('/auth/magic-link', { email, shell }); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Could not send' }; }
@@ -538,7 +548,7 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
   // statusLine() for why it is specifically the one the call is graded on.
   const headline = offerIsEmpty(home.profile.offer) && !home.decision && !home.moves.length
     ? 'Set your offer to start sending'
-    : statusLine(home.metrics, home.decision);
+    : statusLine(home.metrics, home.decision, home.queue.length);
 
   return (
     <div className="cp-frame">

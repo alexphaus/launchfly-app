@@ -20,7 +20,8 @@
 // that browses for ten minutes is another.
 
 import { AUTHORITY, blockedMove, commissionBrief, dueCommissions, normalizeResult, reportOf } from '../commission';
-import { loadCommissionEvents, loadCommissions, recordCommissionWork } from '../store';
+import { loadCommissionEvents, loadCommissions, loadWorking, recordCommissionWork } from '../store';
+import { workingBrief } from '../working';
 import type { MoveDraft } from '../moves';
 import type { Job, JobContext } from './types';
 
@@ -61,11 +62,21 @@ export const commissionJob: Job = {
     const failures: string[] = [];
     let reached = 0;
     const { goals } = await ctx.sense();
+    // One read for the whole dispatch: the file is the same for every mandate
+    // this profile holds, and it is what stops commissioned research reading
+    // like it was written from a headline — because until now it was.
+    const working = workingBrief(await loadWorking(ctx.profile.id).catch(() => []));
     for (const c of dueCommissions(all)) {
       const left = ctx.deadline ? ctx.deadline - Date.now() : TIMEOUT_MS;
       if (left < 5_000) break;
       const goal = goals.find((g) => g.id === c.goal_id) ?? null;
-      const brief = commissionBrief(c, ctx.profile, goal, resultUrl(c.id));
+      // The log carries the user's answer to whatever this worker last asked.
+      // Without it the brief is identical on every dispatch and a question can
+      // only ever be asked again — see CommissionBrief.log.
+      const brief = commissionBrief(c, ctx.profile, goal, resultUrl(c.id), {
+        working,
+        events: byCommission.get(c.id) ?? [],
+      });
 
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), Math.min(TIMEOUT_MS, left));

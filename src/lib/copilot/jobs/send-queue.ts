@@ -24,8 +24,39 @@ export const SEND_TARGET = 10;
 /** Older than this and a draft is stale enough to lead with. */
 export const STALE_DAYS = 2;
 
+/**
+ * When a draft stops being the message you would write today.
+ *
+ * It is an opinion, and naming it as one is the point: the stake used to say
+ * `withinDays: 1`, which is not an opinion about drafts at all — it is an
+ * opinion about ranking, hardcoded. One day is the floor of the urgency curve,
+ * so the send queue took the maximum multiplier (x3) every morning of its life,
+ * on top of the top kind prior, which gave outreach a structural ceiling
+ * nothing without a money figure on its stake could reach. Arbitration was
+ * real and the screen was unchanged.
+ *
+ * A queue is urgent because its recipients are going cold, and how cold they
+ * are is a fact about a row — the oldest draft's created_at — not a constant.
+ * So urgency now RISES as the queue ages instead of starting pinned:
+ *
+ *   written today   withinDays 14  ->  x2.14
+ *   four days on    withinDays 10  ->  x3.00
+ *
+ * Two weeks is where a fortnight-old opener stops being worth sending as
+ * written rather than rewriting, which is the same judgement STALE_DAYS makes
+ * one step earlier. It is a guess until something has actually been sent and
+ * replies can be read back against the wait — the first number here worth
+ * measuring rather than choosing.
+ */
+export const COLD_AFTER_DAYS = 14;
+
 export function daysWaiting(iso: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000));
+}
+
+/** How long the oldest draft has left before it is not worth sending as written. */
+export function coldIn(waited: number): number {
+  return Math.max(1, COLD_AFTER_DAYS - waited);
 }
 
 export const sendQueueJob: Job = {
@@ -84,8 +115,11 @@ export const sendQueueJob: Job = {
         metric: 'queue',
         direction: 'down',
         by: ask,
-        // Today. A queue is only urgent because it is not getting less urgent.
-        withinDays: 1,
+        // From the oldest draft's own age, not from a constant — see
+        // COLD_AFTER_DAYS. A queue written this morning is not as urgent as one
+        // whose oldest has sat eleven days, and saying it was is what kept
+        // outreach at the top of the screen whatever else the night produced.
+        withinDays: coldIn(waited),
         value: perSend != null ? Math.round(perSend * ask) : undefined,
       },
     }];

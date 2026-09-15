@@ -300,14 +300,16 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not write that commission' };
       }
     },
-    async commissionAction(id, action, outcome) {
+    async commissionAction(id, action, outcome, answer) {
       try {
-        const r = await post<{ home?: HomeData }>(`/commissions/${encodeURIComponent(id)}`, { action, outcome });
+        const r = await post<{ home?: HomeData }>(`/commissions/${encodeURIComponent(id)}`, { action, outcome, answer });
         // 'seen' deliberately returns no home: rewriting the screen under
         // somebody who just opened the sheet moves the card out from under them.
         if (r.home) setHome(r.home);
         if (action === 'approve') say('Granted. It runs tonight.');
-        if (action === 'unblock') say('Carrying on. It picks up tonight.');
+        // Two different things happened, and which one decides whether the
+        // worker stops asking. Saying "carrying on" for both would hide it.
+        if (action === 'unblock') say(answer?.trim() ? 'Sent. It gets your answer on the next run.' : 'Carrying on. It picks up tonight.');
         if (action === 'stop') say('Stopped.');
         return { ok: true };
       } catch (e) {

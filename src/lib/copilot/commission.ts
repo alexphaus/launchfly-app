@@ -133,7 +133,22 @@ export interface Commission {
   seen_at: string | null;
 }
 
-export const EVENT_KINDS = ['planned', 'worked', 'found', 'needs_you', 'blocked', 'done', 'failed'] as const;
+/**
+ * What a WORKER may post. Not the same list as what may exist — see below.
+ */
+export const WORKER_EVENT_KINDS = ['planned', 'worked', 'found', 'needs_you', 'blocked', 'done', 'failed'] as const;
+
+/**
+ * Every kind of line the log can hold, which is the worker's seven plus one the
+ * worker may never write.
+ *
+ * `answered` is the user's reply to a needs_you, recorded by unblockCommission
+ * and by nothing else. It is deliberately outside WORKER_EVENT_KINDS, which is
+ * what normalizeResult validates against: if a worker could post `answered` it
+ * could answer its own question and clear its own gate, which is invariant 10
+ * with one extra step — the same reason `status` is parsed and discarded.
+ */
+export const EVENT_KINDS = [...WORKER_EVENT_KINDS, 'answered'] as const;
 export type CommissionEventKind = (typeof EVENT_KINDS)[number];
 
 export interface CommissionArtifact {
@@ -183,6 +198,45 @@ export interface CommissionBrief {
   result_url: string | null;
   who: ReturnType<typeof whoFor>;
   goal: { title: string; target: number | null; unit: string | null } | null;
+  /**
+   * What has already happened on this mandate, oldest first.
+   *
+   * This field is why the loop can close. A worker raised a needs_you, the user
+   * answered it, and the next dispatch sent objective/may/budget/plan and
+   * nothing else — a byte-identical brief. So the worker asked the identical
+   * question, forever, and no commission that needed anything from its owner
+   * could ever finish. The answer had nowhere to go.
+   *
+   * Summaries only, capped: the worker produced the artifacts and does not need
+   * them posted back, and a mandate running for a month must not grow a payload
+   * with it.
+   */
+  log: BriefLogLine[];
+}
+
+export interface BriefLogLine {
+  kind: CommissionEventKind;
+  step: number | null;
+  summary: string;
+  at: string;
+}
+
+/** Lines of history a brief carries. Enough for a question and its answer to
+ *  survive a long run; short enough that the payload stays a brief. */
+export const MAX_BRIEF_LOG = 12;
+
+/**
+ * The tail of the log, oldest first, as the worker should read it.
+ *
+ * Oldest-first because it is a transcript: "needs_you: which of the three? /
+ * answered: the second one" only reads in that order. Everything else in this
+ * file sorts newest-first, for screens.
+ */
+export function briefLog(events: CommissionEvent[], max = MAX_BRIEF_LOG): BriefLogLine[] {
+  return [...events]
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .slice(-max)
+    .map((e) => ({ kind: e.kind, step: e.step, summary: e.summary, at: e.at }));
 }
 
 /**
@@ -193,7 +247,7 @@ export interface CommissionBrief {
  * id. A worker needs to know what this person sells and to whom; it never needs
  * to be able to identify or bill them.
  */
-export function whoFor(p: Profile) {
+export function whoFor(p: Profile, working = '') {
   return {
     name: p.name,
     headline: p.headline,
@@ -202,6 +256,20 @@ export function whoFor(p: Profile) {
     timezone: p.timezone,
     target_segments: p.target_segments,
     target_area: p.target_area,
+    /**
+     * The working file, as the block from workingBrief. Live entries only.
+     *
+     * The offer is five strings — a headline — and research written from a
+     * headline comes back generic however good the worker is, because there is
+     * nothing specific for it to be specific about. How delivery actually
+     * happens, what was quoted and whether it closed, what has already been
+     * tried and failed, and what this person will not do are the difference
+     * between a commissioned piece of work and a search result.
+     *
+     * Omitted rather than sent empty: an account with no file should not spend
+     * payload on the fact.
+     */
+    ...(working ? { working } : {}),
   };
 }
 
@@ -220,6 +288,7 @@ export function commissionBrief(
   profile: Profile,
   goal: Goal | null,
   resultUrl: string | null,
+  ctx: { working?: string; events?: CommissionEvent[] } = {},
 ): CommissionBrief {
   return {
     kind: 'commission',
@@ -233,8 +302,9 @@ export function commissionBrief(
     budget_minutes: c.budget_minutes,
     plan: c.plan,
     result_url: resultUrl,
-    who: whoFor(profile),
+    who: whoFor(profile, ctx.working ?? ''),
     goal: goal ? { title: goal.title, target: goal.target_value, unit: goal.unit } : null,
+    log: briefLog(ctx.events ?? []),
   };
 }
 
@@ -322,7 +392,9 @@ export function normalizeResult(raw: unknown): CommissionResult {
     .map((e) => {
       if (!e || typeof e !== 'object') return null;
       const ev = e as Record<string, unknown>;
-      const kind = EVENT_KINDS.includes(ev.kind as CommissionEventKind) ? (ev.kind as CommissionEventKind) : null;
+      // WORKER_EVENT_KINDS, not EVENT_KINDS: a worker posting `answered` would
+      // be answering the question it just asked, on the user's behalf.
+      const kind = (WORKER_EVENT_KINDS as readonly string[]).includes(ev.kind as string) ? (ev.kind as CommissionEventKind) : null;
       const summary = str(ev.summary ?? ev.text, SUMMARY_MAX);
       if (!kind || !summary) return null;
       const step = typeof ev.step === 'number' && Number.isFinite(ev.step) ? Math.trunc(ev.step) : null;
@@ -380,6 +452,13 @@ export interface CommissionReport {
   did: CommissionEvent[];
   /** What is blocked on the user. The only thing on the card that is an ask. */
   yours: CommissionEvent[];
+  /**
+   * What the user said back. Its own bucket rather than folded into `did`,
+   * because `did` is the worker's work and this is the one kind of line in the
+   * log the worker did not write. Shown under the ask it answers, so the sheet
+   * reads as the exchange it is.
+   */
+  said: CommissionEvent[];
   /** Steps finished out of steps planned. Computed, never claimed. */
   progress: { done: number; total: number };
   /** Events since seen_at. Null when they have seen everything. */
@@ -395,6 +474,7 @@ export function reportOf(c: Commission, events: CommissionEvent[], max = 6): Com
     // plan itself already shows. Leaving it in buries the two lines that matter.
     did: newest.filter((e) => e.kind === 'worked' || e.kind === 'found' || e.kind === 'done').slice(0, max),
     yours: newest.filter((e) => e.kind === 'needs_you' || e.kind === 'blocked' || e.kind === 'failed').slice(0, max),
+    said: newest.filter((e) => e.kind === 'answered').slice(0, max),
     progress: {
       done: c.plan.filter((s) => s.state === 'done').length,
       total: c.plan.length,
@@ -447,7 +527,11 @@ export function commissionLine(c: Commission, r: CommissionReport): string {
   if (c.status === 'done') return c.outcome?.slice(0, 120) || 'Finished';
   const parts: string[] = [];
   if (r.progress.total) parts.push(`${r.progress.done} of ${r.progress.total} done`);
-  if (r.yours.length) parts.push(`${r.yours.length} need${r.yours.length === 1 ? 's' : ''} you`);
+  // Only while it is actually stopped on one. `yours` is the log of every
+  // question ever raised, so counting it unconditionally left a mandate reading
+  // "1 needs you" for the rest of its life — including immediately after the
+  // user answered, which made answering look like it had done nothing.
+  if (c.status === 'blocked' && r.yours.length) parts.push(`${r.yours.length} need${r.yours.length === 1 ? 's' : ''} you`);
   else if (!r.did.length) parts.push('Nothing back yet');
   return parts.join(' · ');
 }

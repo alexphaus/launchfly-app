@@ -52,7 +52,13 @@ export const SECTION: Record<WorkingSection, SectionMeta> = {
     label: 'How you deliver',
     blurb: 'The actual steps, how long they take, and what you need from them to start.',
     placeholder: 'Two calls, then I build it in their account. Five working days. I need admin access and their current reply templates.',
-    changes: 'Lets a draft say "live in five days" instead of "quick turnaround".',
+    // What this actually reaches today: the brief, the per-source judge, and a
+    // commissioned worker. NOT the opener template, which is built from the
+    // offer's five strings and nothing else. It said "lets a draft say 'live in
+    // five days'" — invariant 7 in the sheet rather than on the pricing page,
+    // and the one place a trust feature can least afford it. Change the line
+    // back when draftOpener reads this file, not before.
+    changes: 'Lets research you commission say "live in five days" instead of "quick turnaround".',
   },
   price: {
     label: 'What you charge',
@@ -82,7 +88,10 @@ export const SECTION: Record<WorkingSection, SectionMeta> = {
     label: 'How you write',
     blurb: 'So a draft sounds like you and not like an app.',
     placeholder: 'Short. No "I hope this finds you well". I open with what I noticed about their place.',
-    changes: 'Changes every draft, which is most of what this app produces.',
+    // The most overstated line in the file: openers come from openerTemplate,
+    // which never reads this. Same correction as `deliver` — say what it does
+    // reach, and put the draft path back in the sentence when it is true.
+    changes: 'Changes how the brief and anything you commission is written for you.',
   },
 };
 

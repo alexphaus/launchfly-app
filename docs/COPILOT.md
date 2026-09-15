@@ -274,9 +274,19 @@ COPILOT_INBOUND_SECRET=...          # what a worker posts results back with (fal
 #
 #     { "kind": "moves", ... }       -> { "moves": MoveDraft[] }   unsolicited suggestions
 #     { "kind": "commission", ... }  -> a job order. Carries commission_id, objective,
-#                                      `may` / `may_autonomously`, budget_minutes, plan
-#                                      and result_url. Answer inline, or 202 and POST to
-#                                      result_url later — long work is expected.
+#                                      `may` / `may_autonomously`, budget_minutes, plan,
+#                                      result_url, who (incl. who.working) and `log`.
+#                                      Answer inline, or 202 and POST to result_url
+#                                      later — long work is expected.
+#
+#   READ `log` BEFORE ASKING ANYTHING. It is the tail of this mandate's own history,
+#   oldest first, and it is where the user's answer to your last needs_you arrives:
+#     [ { "kind": "needs_you", "summary": "Which of the three?", "at": ... },
+#       { "kind": "answered",  "summary": "The second one.",     "at": ... } ]
+#   Without it every dispatch was byte-identical, so a worker re-asked the same
+#   question every night and no commission that needed its owner could finish.
+#   `who.working` is the user's working file — how they deliver, what they charge,
+#   what they will not do — and is absent for an account that has not written one.
 #
 #   Post work back to result_url (Bearer COPILOT_INBOUND_SECRET):
 #     { "events": [ { "kind": "found"|"worked"|"needs_you"|"blocked"|"done"|"failed",
@@ -288,6 +298,8 @@ COPILOT_INBOUND_SECRET=...          # what a worker posts results back with (fal
 #   from the events (see nextStatus) because a worker must not mark its own homework,
 #   and a needs_you always outranks a done. `may_autonomously` is false for `reach` and
 #   `commit`: report what you WOULD do as needs_you rather than doing it.
+#   `answered` is NOT postable here — it is the user's line, written only when they
+#   answer in the app. A worker that could post one would clear its own gate.
 #  or
 OPENAI_API_KEY=... / DEEPSEEK_API_KEY=...
 COPILOT_AI_API_KEY / COPILOT_AI_BASE_URL / COPILOT_AI_MODEL
@@ -1047,12 +1059,35 @@ design: the mandate records intent, the second gate decides what runs.
 ```
 { "kind": "commission", "commission_id", "objective", "why",
   "may", "may_autonomously", "budget_minutes", "plan", "result_url",
-  "who": { name, headline, offer, location, timezone, target_segments, target_area },
-  "goal": { title, target, unit } }
+  "who": { name, headline, offer, location, timezone, target_segments, target_area,
+           working? },
+  "goal": { title, target, unit },
+  "log": [ { kind, step, summary, at } ] }
 ```
 
-`who` carries no email, no phone, no billing and no id — the payload leaves the
-deployment. The worker answers inline or posts to `result_url` later:
+`who` carries no email, no phone, no billing and no id. `who.working` is
+`workingBrief` — live entries only, omitted for an account with no file — and it
+is what stops commissioned research reading like it was written from a headline,
+because until `20260919` it was: the offer's five strings were all a worker got.
+
+**`log` is why the loop can close.** It is the tail of this mandate's own events,
+oldest first, capped at `MAX_BRIEF_LOG`. A worker raised a `needs_you`, the user
+tapped "I have answered", `unblockCommission` wrote a status and nothing else —
+and the next brief went out identical to the last. So the worker asked the same
+question again, every night, and no commission that needed anything from its
+owner could ever finish. That is the whole of "the loop has never completed
+unassisted end to end": not a hard problem, a field that did not exist.
+
+The user's reply is an `answered` event, written by `unblockCommission` and by
+nothing else. It is deliberately outside `WORKER_EVENT_KINDS`, which is what
+`normalizeResult` validates the result socket against — a worker that could post
+`answered` would be answering its own question and clearing its own gate, which
+is invariant 10 with one extra step. The database permits the kind
+(`20260919`); the parser is what refuses it from a worker. Until that migration
+is applied `unblockCommission` refuses to move the mandate at all, rather than
+clearing the gate and silently dropping what the user typed.
+
+The worker answers inline or posts to `result_url` later:
 
 ```
 { "events": [ { "kind": "planned|worked|found|needs_you|blocked|done|failed",
@@ -1089,8 +1124,20 @@ test greps for that shape. Nothing from a thin funnel, nothing below
 Readings arrive as `proposed` and never reach a prompt until confirmed. A
 declined one is kept so it is not re-proposed; a **confirmed** one whose number
 moves is refreshed in place, never demoted. `workingBrief()` feeds
-`buildContextPack` and `watchBrief`, capped at `BRIEF_MAX` characters because it
-sits at the head of every per-source judge prompt.
+`buildContextPack`, `watchBrief` and `commissionBrief`, capped at `BRIEF_MAX`
+characters because it sits at the head of every per-source judge prompt.
+
+**Three destinations, and the sheet may only name those three.** It reaches the
+daily read, the per-source judge, and a commissioned worker. It does **not**
+reach a draft: `draftOpener` calls `openerTemplate`, which is built from the
+offer's five strings and has never read this table. The sheet claimed "every
+draft" anyway, and `SECTION.voice.changes` said "changes every draft, which is
+most of what this app produces" — invariant 7 inside the app's own copy, on the
+one feature whose entire argument is that it never overstates what it knows. The
+copy now says what is true and a test in `workingFile` fails on the word
+"draft" in any `changes` line. Delete that assertion when `draftOpener` reads the
+file; it is the single highest-value wire left in this feature, because `voice`,
+`deliver` and `price` are mostly worth typing for what they would do to a draft.
 
 ## Tests
 
@@ -1119,3 +1166,27 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
 - API sending needs a per-profile channel, and there is no UI to provision one — set
   `linked_business_id` / `email_from` and `send_mode` in the database. Manual dispatch is the
   path everyone else uses, and it is the default.
+- The working file does not reach a draft. Three of its six sections are worth typing
+  mostly for what they would do to one. See the working file section above.
+- `budget_minutes` is written, shown as "up to 60 min" and sent in the payload, and
+  nothing accounts for it. `dueCommissions` re-dispatches every active mandate nightly
+  with no cooldown, so what reads as a total is a per-night allowance with no ledger
+  behind it. Of the three rails a mandate is sold on — objective, budget, authority —
+  that one is currently a hint to a third party.
+- A commission is written only from inside a saved goal's sheet, so an account with no
+  goal cannot commission anything and nothing says why. No reference worker ships either:
+  without `COPILOT_JOBS_URL` the whole layer is inert, which the sheet says honestly and
+  which still leaves "grant a mandate" resting on the user authoring an n8n workflow.
+- Answering a blocked mandate through its **Move** (marking the card done) carries no
+  text — only the sheet has the field. The mandate unblocks either way, but a worker
+  told nothing new may ask the same question again.
+- `deadTopic` — "you did this three times and the number never moved" — is computed by
+  `decisionReview` and read by `growthEdge` and the Working tab, but not by `scoreMove`.
+  So the refusal decay hears an explicit no and an inferred ignore, and does not hear
+  "this does not work". It is the same shape as the bug `REFUSAL_DECAY` exists to fix,
+  one level up, and wants its own change with its own test.
+- Refusals are keyed on `decision.topic`, and only Move-driven calls write a job key
+  there: `starterDecision` writes `'sending'`, `'opener'`, `'offer'`. Refusing the
+  starter ladder therefore increments a counter `scoreMove` never reads, and the starter
+  ladder is what runs when every job has been barred — so the one path that cannot be
+  stood down is the one reached by standing everything else down.

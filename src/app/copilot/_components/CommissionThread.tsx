@@ -52,7 +52,10 @@ export default function CommissionThread({ threads, actions }: { threads: Thread
       {live.map((t) => {
         const c = t.commission;
         const chip = commissionChip(c);
-        const ask = t.report.yours[0];
+        // Only while it is actually stopped on one. `yours` is every question
+        // ever raised, so an answered mandate went on showing the question it
+        // had already been given the answer to.
+        const ask = c.status === 'blocked' ? t.report.yours[0] : null;
         return (
           <button key={c.id} className={`cp-thread ${c.status}`} onClick={() => actions.openSheet({ kind: 'commission', id: c.id })}>
             <div className="hd">

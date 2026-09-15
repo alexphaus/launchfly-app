@@ -96,6 +96,17 @@ Four rules keep the record honest:
   that would settle it. A system that is never unsure is not being honest about
   a twelve-message sample.
 
+**A call that cannot be saved is a call that never existed.** `verify_metric`
+was pinned by `20260909` to the six funnel metrics. `20260911` widened
+`BUSINESS_METRICS` to eight — `queue` and `runway_months` are the whole point of
+arbitration — and did not touch the constraint. So every Call promoted from
+`send_queue`, `runway_guard` or `obligations` failed `23514` on write, was
+swallowed into a `console.error`, and Today rendered the insight instead. The
+insight row saved, so `needsBrief` was false and opening the app never retried
+it. Fixed by `20260920`; the guard is in `copilot-schema-check.sql`, which now
+diffs constraint CONTENTS against the code rather than only checking that
+columns exist. **If the Call is ever missing again, look there first.**
+
 Today renders **one** card for all of it. The call absorbs the primary action,
 the "not today" line and the daily read (behind *See the read*) because the
 first version shipped them as four separate blocks that all said the same
@@ -1102,6 +1113,17 @@ is dropped, and `blocked` is the user's to clear — via the sheet button, or by
 answering the Move the app raised (`commissionIdFromMove` carries it through
 `setMoveStatus`). A draft or stopped commission refuses work outright.
 
+**A question and a breakage are opposite states.** Both arrive as `blocked`, and
+for a while both rendered as a blue "NEEDS YOU" chip over a text box — so a
+morning with three handed-over jobs showed three things the user had apparently
+failed to do, two of which were a dead search tool, and the section stopped
+being a report and became a fault list. `reportOf` now splits them: `yours` is
+`needs_you` only, `stopped` is `blocked`/`failed`, and `blockedOn()` says which
+the mandate is actually waiting for (newest wins, because a job can carry an
+answered question and a fresh failure). A breakage gets a grey chip, a plain
+sentence and one retry — never a text box, because nobody can answer a 500 —
+and it raises no Move at all.
+
 A blocked mandate surfaces as a Move so it competes through `scoreMove` like
 anything else. `MAX_ACTIVE_COMMISSIONS = 3`, enforced at creation (counting
 drafts) and again at approval.
@@ -1139,6 +1161,36 @@ copy now says what is true and a test in `workingFile` fails on the word
 file; it is the single highest-value wire left in this feature, because `voice`,
 `deliver` and `price` are mostly worth typing for what they would do to a draft.
 
+## The worker
+
+`scripts/n8n/copilot-worker.json` is the reference worker, importable as-is. It
+is the `read` ring and nothing more: it searches, reads pages, compares, drafts
+and asks one good question. That is a complete v1 — `reach` and `commit` are not
+autonomous by design, so a contractor that cannot act is not a limitation, it is
+the product.
+
+Four things in it are load-bearing and were each learned the hard way:
+
+- **It reads `log`.** The version before it did not, so the agent re-asked a
+  question the owner had already answered — in new words, the next night, for as
+  long as anybody kept answering. `Build the task` renders the log oldest-first
+  and says outright not to ask an answered question again.
+- **It reads `who.working`.** Research written from a five-string offer comes
+  back generic however good the model is.
+- **It has no `sendHeaders`.** The previous version set `sendHeaders: true` with
+  one empty entry in `parametersHeaders.values` — a header with no name — and
+  every Exa call returned an internal request-header error. Two live jobs sat
+  stuck on it for a day. The key belongs in the Header Auth credential and
+  nothing else belongs in that node.
+- **It can read a page, not just search.** Search returns six summaries; a price,
+  a spec or a date has to come off the page itself or the honest answer is "I
+  could not", which is exactly what the search-only version kept reporting.
+
+`Shape the result` re-validates everything the app validates on arrival, and
+relabels a `needs_you` that is plainly a tool failure as `blocked` — the model is
+told which to use, and this is the backstop, because the cost of getting it wrong
+lands on the user as a text box asking them to reply to a 500.
+
 ## Tests
 
 ```
@@ -1173,13 +1225,12 @@ per hour and refuses when the device already has a copilot. Stored in `copilot_r
   with no cooldown, so what reads as a total is a per-night allowance with no ledger
   behind it. Of the three rails a mandate is sold on — objective, budget, authority —
   that one is currently a hint to a third party.
-- A commission is written only from inside a saved goal's sheet, so an account with no
-  goal cannot commission anything and nothing says why. No reference worker ships either:
-  without `COPILOT_JOBS_URL` the whole layer is inert, which the sheet says honestly and
-  which still leaves "grant a mandate" resting on the user authoring an n8n workflow.
 - Answering a blocked mandate through its **Move** (marking the card done) carries no
   text — only the sheet has the field. The mandate unblocks either way, but a worker
   told nothing new may ask the same question again.
+- A worker failure still consumes one of the three mandate slots. That is deliberate —
+  a broken job is still a job somebody asked for — but it means three bad nights fill
+  the cap. The retry is one tap; the cap is not lifted.
 - `deadTopic` — "you did this three times and the number never moved" — is computed by
   `decisionReview` and read by `growthEdge` and the Working tab, but not by `scoreMove`.
   So the refusal decay hears an explicit no and an inferred ignore, and does not hear

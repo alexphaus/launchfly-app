@@ -41,7 +41,9 @@ export type SheetState =
   /** What the app knows about this business, and what it is waiting to be told. */
   | { kind: 'working' }
   /** One mandate: its plan, its log, and the button that grants it authority. */
-  | { kind: 'commission'; id: string };
+  | { kind: 'commission'; id: string }
+  /** Hand work over without starting from a goal. */
+  | { kind: 'handover' };
 
 export interface OutcomeInput {
   opportunity_id?: string;

@@ -19,7 +19,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // Null means it was not a draft. Re-approving would reset approved_at
         // and lose when the mandate was actually granted, which is the one
         // timestamp that matters if anybody asks what the app was allowed to do.
-        if (!c) return fail('That commission is already running.');
+        if (!c) return fail('That one is already running.');
         return json({ ok: true, commission: c, home: await loadHome(auth.pid) });
       }
       case 'unblock': {
@@ -28,7 +28,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         // it, not by typing. When there IS one it goes out with the next brief,
         // which is the only reason the worker can stop asking.
         const c = await unblockCommission(auth.pid, id, typeof b.answer === 'string' ? b.answer : null);
-        if (!c) return fail('That commission is not waiting on you.');
+        if (!c) return fail('That one is not waiting on you.');
         return json({ ok: true, commission: c, home: await loadHome(auth.pid) });
       }
       case 'stop':

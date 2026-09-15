@@ -6,7 +6,7 @@
 // Grading is against the ledger, never against the model's opinion of itself —
 // that is the whole point of keeping the record.
 
-import { BUSINESS_METRICS, METRIC_GOOD_DIRECTION, type BusinessMetric } from './stake';
+import { BUSINESS_METRICS, METRIC_GOOD_DIRECTION, METRIC_LABEL, type BusinessMetric } from './stake';
 import type { Metrics } from './types';
 
 export type DecisionResponse = 'pending' | 'did' | 'rejected' | 'ignored' | 'wrong';
@@ -104,6 +104,31 @@ export function metricValue(m: Metrics, k: DecisionMetric): number {
     case 'won_amount': return m.won_amount;
     default: return 0;
   }
+}
+
+/**
+ * The one line under the greeting: the number today's call is staked on.
+ *
+ * It used to be three — "8 more ready · 2 replied · runway 3.4 mo" — in three
+ * different units, with no verb and no hierarchy. "8 more ready" counted the
+ * open Moves, so on a morning when the call itself had failed to save it was
+ * offering "more" than a thing the reader had never been shown. And the branch
+ * that would have said "one call today" only fired when there were NO Moves, so
+ * the header never once mentioned the call it sits above.
+ *
+ * One number, and it is the one the call will be graded on, so the status line
+ * and the card are about the same thing. Falls back to runway — the only other
+ * number that changes what a morning is for — and then to silence, because a
+ * greeting with nothing true to add is better than a greeting with filler.
+ */
+export function statusLine(
+  m: Metrics,
+  decision: { verify: { metric: DecisionMetric } } | null,
+): string | null {
+  const metric = decision?.verify.metric;
+  if (metric && metric !== 'none') return `${metricValue(m, metric)} ${METRIC_LABEL[metric]}`;
+  if (m.runway_months != null) return `${m.runway_months} months of runway`;
+  return null;
 }
 
 /** Constraints first, then outcomes, then effort, then supply: the order a

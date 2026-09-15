@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { offerIsEmpty } from '@/lib/copilot/offer';
+import { statusLine } from '@/lib/copilot/decision';
 import { CAPACITY_META, type ActionStatus, type Capacity, type Channel, type Goal, type HomeData, type Offer, type OpportunityStatus, type SourceKey } from '@/lib/copilot/types';
 import { api, del, get, post } from './api';
 import { greeting, urlBase64ToUint8Array } from './format';
@@ -294,10 +295,10 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         // Says what happens next, because what happens next is nothing until
         // they approve it — and a commission that silently sits in draft looks
         // exactly like one the app ignored.
-        say('Written. Read the plan and approve it to start.');
+        say('Written. Read it and approve it to start.');
         return { ok: true };
       } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : 'Could not write that commission' };
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
       }
     },
     async commissionAction(id, action, outcome, answer) {
@@ -306,14 +307,14 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         // 'seen' deliberately returns no home: rewriting the screen under
         // somebody who just opened the sheet moves the card out from under them.
         if (r.home) setHome(r.home);
-        if (action === 'approve') say('Granted. It runs tonight.');
+        if (action === 'approve') say('Approved. It runs tonight.');
         // Two different things happened, and which one decides whether the
         // worker stops asking. Saying "carrying on" for both would hide it.
         if (action === 'unblock') say(answer?.trim() ? 'Sent. It gets your answer on the next run.' : 'Carrying on. It picks up tonight.');
         if (action === 'stop') say('Stopped.');
         return { ok: true };
       } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : 'Could not update that commission' };
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not update that' };
       }
     },
     async runCommissionsNow() {
@@ -533,25 +534,19 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
   //
   // Once the call carries the instruction, repeating it here is the fourth time
   // the same sentence appears above the fold. The header goes back to being the
-  // status line it was built to be.
-  // Finished work only. Counting the send queue here read "45 ready for you" on
-  // a morning when 45 was the number of things NOT done — outreach back at the
-  // top of the screen, above the one decision, wearing the word "ready".
-  const ready = home.moves.length;
+  // status line it was built to be — and a status line is one number. See
+  // statusLine() for why it is specifically the one the call is graded on.
   const headline = offerIsEmpty(home.profile.offer) && !home.decision && !home.moves.length
     ? 'Set your offer to start sending'
-    : [
-        ready ? `${ready} more ready` : 'one call today',
-        `${home.metrics.replies} replied`,
-        home.metrics.runway_months != null ? `runway ${home.metrics.runway_months} mo` : null,
-      ].filter(Boolean).join(' · ');
+    : statusLine(home.metrics, home.decision);
 
   return (
     <div className="cp-frame">
       <header className="cp-header">
         <div>
           <h1>{greeting(home.profile.timezone, home.profile.name)}</h1>
-          <p>{headline}</p>
+          {/* Nothing true to add beats filler under a greeting. */}
+          {headline && <p>{headline}</p>}
         </div>
         <div className="cp-header-right">
           <button className="cp-capacity" onClick={() => openSheet({ kind: 'capacity' })} aria-label="Set your capacity">

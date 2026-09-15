@@ -111,6 +111,36 @@ wrong as (
       where n.nspname = 'public' and t.relname = 'copilot_commission_events'
         and c.contype = 'c'
         and pg_get_constraintdef(c.oid) like '%answered%')
+
+  union all
+
+  -- The drift that cost the Call for weeks, and the reason this file now checks
+  -- constraint CONTENTS and not just that columns exist.
+  --
+  -- 20260909 pinned verify_metric to the outbound funnel. 20260911 widened
+  -- BUSINESS_METRICS to eight and added its columns without touching this. Every
+  -- Call promoted from send_queue ('queue'), runway_guard or obligations
+  -- ('runway_months') then failed 23514 on save, was swallowed into a
+  -- console.error, and Today rendered the insight instead of the call — with the
+  -- insight row saved, so needsBrief was false and nothing ever retried.
+  --
+  -- One row per value rather than one for the constraint, so adding a ninth
+  -- metric to stake.ts and forgetting the migration lands here too.
+  select '20260920_copilot_decision_metrics.sql',
+         'constraint',
+         'copilot_decisions_verify_metric_check',
+         'does not permit ''' || m.metric || ''': every Call staking it fails 23514 and Today shows no call'
+  from (values ('queue'), ('runway_months')) as m(metric)
+  where exists (
+      select 1 from information_schema.tables
+      where table_schema = 'public' and table_name = 'copilot_decisions')
+    and not exists (
+      select 1 from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = 'public' and t.relname = 'copilot_decisions'
+        and c.contype = 'c'
+        and pg_get_constraintdef(c.oid) like '%' || m.metric || '%')
 )
 
 select * from missing

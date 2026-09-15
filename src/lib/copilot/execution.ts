@@ -186,6 +186,41 @@ export async function regenerateOpeners(profile: Profile, opportunityIds: string
  * a draft from Tuesday that nobody sent used to vanish from view on Wednesday
  * while still blocking a fresh one.
  */
+/**
+ * Every open draft execution, including the ones loadSendQueue cannot render.
+ *
+ * The same state set clearQueue cancels, so "how many will this clear" and "how
+ * many are there" are one number. Subtract loadSendQueue().length from it and
+ * the difference is the drafts whose action row has gone — real rows, counted
+ * by metrics.awaiting_approval, invisible in the queue, and unsendable. On the
+ * live account that gap was ten, which is why the header said 61 and the call
+ * said 51 on the same screen.
+ */
+export async function countOpenDrafts(profileId: string): Promise<number> {
+  const { count } = await copilotDb().from('copilot_executions')
+    .select('id', { count: 'exact', head: true })
+    .eq('profile_id', profileId).in('approval_state', [...OPEN_DRAFT_STATES]);
+  return count ?? 0;
+}
+
+/**
+ * Cancel every open draft. "I am not sending these."
+ *
+ * cancelOpenDrafts has existed since the offer-change path and had no
+ * user-facing caller, so a queue of sixty-one drafts somebody had decided
+ * against was permanent: it fed awaiting_approval, awaiting_approval fed the
+ * send_queue stake, and the Call proposed sending them every morning forever.
+ * A backlog you have decided against is not a backlog, it is a dead asset
+ * holding the top of the screen.
+ *
+ * Nothing is deleted — the executions move to `cancelled` with a reason, so the
+ * record of what was written and abandoned survives for the funnel to read.
+ */
+export async function clearQueue(profileId: string): Promise<{ cancelled: number }> {
+  const { cancelled } = await cancelOpenDrafts(profileId, { reason: 'user_cleared' });
+  return { cancelled };
+}
+
 export async function loadSendQueue(profileId: string): Promise<QueueItem[]> {
   const db = copilotDb();
   const { data: execs } = await db.from('copilot_executions').select('*')
@@ -206,7 +241,15 @@ export async function loadSendQueue(profileId: string): Promise<QueueItem[]> {
   const out: QueueItem[] = [];
   for (const e of rows) {
     const a = e.action_id ? actionById.get(e.action_id) : undefined;
-    if (!a) continue;                                   // an execution with no action row cannot be opened in the sheet
+    // An execution with no action row cannot be opened in the sheet, so it is
+    // not in this list — but it IS still counted by metrics.awaiting_approval,
+    // which is what the header shows and what a `queue` call is graded against.
+    // On the live account that was ten drafts: invisible, unsendable, and
+    // holding the metric permanently above zero so the Call could never be
+    // graded as having worked. Counted now rather than dropped in silence, and
+    // clearQueue cancels them along with the rest, and countOpenDrafts is what
+    // the screen subtracts from to say how many there are.
+    if (!a) continue;
     const o = e.opportunity_id ? oppById.get(e.opportunity_id) : undefined;
     const d = (o?.data ?? {}) as Record<string, unknown>;
     const segment = [d.segment, d.service_type, d.category].find((v) => typeof v === 'string' && v.trim()) as string | undefined;

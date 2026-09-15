@@ -1,6 +1,7 @@
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 import { todayIso } from '@/lib/copilot/db';
-import { getProfile, loadHome, respondToDecision, setMoveStatus } from '@/lib/copilot/store';
+import { getProfile, loadHome, respondToDecision, setMoveStatus, standDownTopic } from '@/lib/copilot/store';
+import { phraseFor } from '@/lib/copilot/call';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +33,16 @@ export async function POST(req: Request) {
   // which is what promoting it was meant to stop.
   if (decision.source_move_id) {
     await setMoveStatus(auth.pid, decision.source_move_id, response === 'did' ? 'done' : 'dismissed');
+  }
+
+  // "Not today" versus "stop suggesting this". A plain refusal decays and
+  // expires after REFUSAL_WINDOW decisions, which is right for a mood and wrong
+  // for a conclusion — somebody who has decided outreach is no longer their
+  // leverage should not be asked again in ten days. Only ever on a refusal: you
+  // cannot stand down something you just said you did.
+  if (b.permanent === true && response === 'rejected' && decision.topic) {
+    await standDownTopic(auth.pid, decision.topic, phraseFor(decision.topic));
+    return json({ ok: true, decision, stoodDown: decision.topic, home: await loadHome(auth.pid) });
   }
   return json({ ok: true, decision, home: await loadHome(auth.pid) });
 }

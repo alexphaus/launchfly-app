@@ -103,6 +103,16 @@ export const CALL_FLOOR = 0.35;
  *  anything under CALL_FLOOR, which is the point. */
 export const REFUSAL_DECAY = 0.55;
 /**
+ * Acted on three or more times, and the metric it named never moved.
+ *
+ * Harsher than a refusal, and the asymmetry is the point: a refusal is an
+ * opinion about a suggestion, this is the ledger's verdict on one the user
+ * actually carried out. "I did it and nothing happened" is the strongest
+ * evidence this product can collect, and until now it was computed, shown on
+ * one tab, and read by nothing that decides anything.
+ */
+export const DEAD_TOPIC_DECAY = 0.3;
+/**
  * Refused this often and it is barred from leading entirely.
  *
  * Lives here rather than in decision.ts because decision.ts already imports this
@@ -121,6 +131,20 @@ export interface ScoreCtx {
    * Move's topic is its job key, which is what draftFrom writes onto the call.
    */
   refused?: Record<string, number>;
+  /**
+   * Topics the ledger says do not work: acted on repeatedly, and the number
+   * they staked themselves on never moved. From decisionReview().deadTopic.
+   */
+  dead?: Record<string, number>;
+  /**
+   * Jobs the user has stood down for good — "stop suggesting this", not "not
+   * today". A refusal expires after REFUSAL_WINDOW decisions, which is correct
+   * for a mood and wrong for a decision: somebody who has concluded that cold
+   * outreach is not their leverage any more should not be asked again in ten
+   * days. These never expire; they are rows in the working file's `refuse`
+   * section and the user removes them there.
+   */
+  standing?: Set<string>;
 }
 
 export interface Scorable {
@@ -184,8 +208,12 @@ export function scoreMove(m: Scorable, ctx: ScoreCtx): number {
 
   const refusals = (m.job && ctx.refused?.[m.job]) || 0;
   const refusal = REFUSAL_DECAY ** refusals;
+  // The ledger's own verdict, and it outranks the user's opinion of the
+  // suggestion because it is about what happened rather than about how the
+  // card read.
+  const dead = m.job && ctx.dead?.[m.job] ? DEAD_TOPIC_DECAY : 1;
 
-  return prior * money * urgency * fit * refusal;
+  return prior * money * urgency * fit * refusal * dead;
 }
 
 export interface Arbitrated<T> {
@@ -221,8 +249,10 @@ export function arbitrate<T extends Scorable & { id: string }>(
     .map((x) => x.m);
 
   // Barred from leading, not from existing. A job refused this many times has
-  // been answered; asking again is the app not listening.
-  const barred = (m: T) => !!m.job && (ctx.refused?.[m.job] ?? 0) >= MAX_REFUSALS;
+  // been answered; asking again is the app not listening. A standing refusal is
+  // the same bar with no expiry — the user did not say "not today", they said
+  // stop.
+  const barred = (m: T) => !!m.job && ((ctx.refused?.[m.job] ?? 0) >= MAX_REFUSALS || !!ctx.standing?.has(m.job));
   const stoodDown = [...new Set(ranked.filter(barred).map((m) => m.job as string))];
   const eligible = ranked.filter((m) => !barred(m));
 

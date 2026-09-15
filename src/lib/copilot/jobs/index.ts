@@ -7,7 +7,7 @@
 
 import { copilotDb, todayIso } from '../db';
 import { MAX_RESTATE_DISMISSALS, dismissedStreak, selectMoves, type MoveDraft } from '../moves';
-import { getProfile, loadMoveAnswers, loadWorking, logEvent, proposeObserved, supersedeMoves } from '../store';
+import { getProfile, loadMoveAnswers, loadStandingRefusals, loadWorking, logEvent, proposeObserved, supersedeMoves } from '../store';
 import { newObserved, observedFrom } from '../working';
 import { capabilityGapJob } from './capability-gap';
 import { commissionJob } from './commission';
@@ -155,6 +155,10 @@ export async function runJobs(
   // keeps binning. Loaded here rather than in each job so there is one opinion
   // about it and one query.
   const answers = await loadMoveAnswers(profileId).catch(() => []);
+  // Jobs the user has told the app to stop suggesting. Barring one from leading
+  // is not enough: it would keep writing the card, and "stop suggesting this"
+  // plainly means stop making it.
+  const standing = await loadStandingRefusals(profileId).catch(() => new Set<string>());
 
   // `only` narrows the run to named jobs — the on-demand source read is one
   // job somebody asked for, not a nightly pass in miniature.
@@ -166,6 +170,7 @@ export async function runJobs(
     try {
       if (opts.deadline && Date.now() > opts.deadline) { entry.skipped = 'no time left this run'; continue; }
       if (!(await job.available(ctx))) { entry.skipped = 'sensor not connected for this profile'; continue; }
+      if (standing.has(job.key)) { entry.skipped = 'you asked the app to stop suggesting this'; continue; }
       // A standing state is true until it is fixed, so it restates weekly — but
       // one binned twice running has been answered, and asking again is the app
       // not listening. Event-driven jobs are never suppressed this way: a

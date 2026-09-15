@@ -124,9 +124,26 @@ export function metricValue(m: Metrics, k: DecisionMetric): number {
 export function statusLine(
   m: Metrics,
   decision: { verify: { metric: DecisionMetric } } | null,
+  /**
+   * The drafts actually in the queue, when the call is staked on `queue`.
+   *
+   * metricValue reads awaiting_approval, which counts every open draft
+   * execution — including ones whose action row has gone and which the queue
+   * therefore cannot render. That is the right basis for GRADING, because it is
+   * stable and self-consistent over time. It is the wrong number to show,
+   * because the call underneath was saying 51 while this said 61 on the same
+   * screen, from two different reads — the "40 on Today, 42 on Pipeline" bug
+   * this product already killed once.
+   *
+   * So: grade on the metric, show the list you can act on.
+   */
+  queueCount?: number,
 ): string | null {
   const metric = decision?.verify.metric;
-  if (metric && metric !== 'none') return `${metricValue(m, metric)} ${METRIC_LABEL[metric]}`;
+  if (metric && metric !== 'none') {
+    const value = metric === 'queue' && queueCount != null ? queueCount : metricValue(m, metric);
+    return `${value} ${METRIC_LABEL[metric]}`;
+  }
   if (m.runway_months != null) return `${m.runway_months} months of runway`;
   return null;
 }
@@ -294,6 +311,36 @@ export interface StarterDecisionInput {
   candidates: number;
   offerEmpty: boolean;
   hasSegments: boolean;
+  /**
+   * Jobs the user has told the app to stop suggesting.
+   *
+   * The ladder has to honour these or the whole stand-down is theatre: barring
+   * a job from arbitration means arbitration promotes nothing, which falls
+   * through to exactly this function — and six of its seven rungs are outreach.
+   * The user would stand down "sending the drafts", and the next morning the
+   * starter would propose sending the drafts.
+   *
+   * Keyed on the job name, and STARTER_TOPIC_JOB maps this function's own prose
+   * topics onto them.
+   */
+  standing?: Set<string>;
+}
+
+/**
+ * The starter's prose topics, mapped to the job that means the same thing.
+ *
+ * Only where the correspondence is exact, not where it is plausible. `sending`
+ * and `send_queue` both mean "send the drafts already written" — that one is
+ * safe. `opener`, `converting`, `targeting`, `supply` and `offer` have no job
+ * that does the same work, and inventing a mapping would bar a job the user
+ * never refused.
+ */
+export const STARTER_TOPIC_JOB: Record<string, string> = { sending: 'send_queue' };
+
+/** Whether this rung has been stood down, under either name. */
+function stoodDown(topic: string, standing?: Set<string>): boolean {
+  if (!standing?.size) return false;
+  return standing.has(topic) || standing.has(STARTER_TOPIC_JOB[topic] ?? '');
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -367,7 +414,7 @@ export function starterDecision(input: StarterDecisionInput): { decision: Decisi
     };
   }
 
-  if (queue > 0) {
+  if (queue > 0 && !stoodDown('sending', input.standing)) {
     const runway = m.runway_months != null && m.runway_months < 4 ? `Runway is ${m.runway_months} months, so unsent work is the expensive kind.` : null;
     return {
       decision: {
@@ -402,6 +449,25 @@ export function starterDecision(input: StarterDecisionInput): { decision: Decisi
         because: [`Nothing is left to write to: ${m.pipeline.sourced} sourced, none of them open.`],
         instead_of: 'Re-reading the ones you already skipped.',
         confidence: 'high', topic: 'supply', verify_metric: 'sent',
+      },
+      dont: null,
+    };
+  }
+
+  // Last rung. When even this has been stood down there is nothing honest left
+  // to lead with, so the day says so rather than proposing the one thing the
+  // user has explicitly asked it to stop proposing.
+  if (stoodDown('sending', input.standing)) {
+    return {
+      decision: {
+        headline: 'Nothing worth leading with today.',
+        because: [
+          'You asked the app to stop suggesting outreach, and nothing else it can see clears the bar.',
+          'Add what you are owed, or hand something over, and there will be something to rank.',
+        ],
+        confidence: 'low',
+        missing: 'The app can only rank what it can see. Right now that is the funnel and not much else.',
+        topic: 'quiet', verify_metric: 'none',
       },
       dont: null,
     };

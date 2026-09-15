@@ -796,6 +796,69 @@ system catches an ordering bug.
 Both callers now go through **`runJobsThenBrief`** in `daily.ts`, so the two
 orders cannot drift apart again. Anything new that produces a brief must use it.
 
+### A no that is heard, and one that is kept
+
+`refusalsByTopic` counts recent `rejected` and `ignored` responses per topic, and
+`scoreMove` multiplies by `REFUSAL_DECAY ** n`. Past `MAX_REFUSALS` a job is
+barred from leading — it stays in the stack, because the work is still real, it
+just cannot be the Call again — and the winner's evidence says so once.
+
+**But a refusal expires after `REFUSAL_WINDOW` decisions**, which is right for a
+mood and wrong for a conclusion. Somebody who has sent forty-four openers, got
+nothing back and decided outreach is no longer their leverage was asked again ten
+days later, every time, forever. That is the loudest complaint this product has
+had about itself, and it is why "Not doing it" is now two answers:
+
+| | what it means | where it lives | expires |
+| --- | --- | --- | --- |
+| Just not today | a mood about one card | `copilot_decisions.response` | after `REFUSAL_WINDOW` |
+| Stop suggesting this | a conclusion about a kind of work | working file, `refuse` | never |
+
+A standing refusal is a row in the working file's **`refuse`** section, keyed
+`stand-down:<job>`. Not a new table, and the reuse buys three things: the user
+sees every stand-down in the one place that already means "what you will not
+do", lifts one by deleting the line, and the prose reaches the brief, the
+per-source judge and any commissioned worker through `workingBrief` — so the
+whole product hears it, not only the ranker.
+
+It bars in three places, and it needs all three. `scoreMove` bars it from
+leading; `runJobs` stops the job producing at all, because "stop suggesting
+this" plainly means stop making the card; and `starterDecision` honours it too,
+because barring a job means arbitration promotes nothing, which falls through to
+exactly that ladder — six of whose seven rungs are outreach. Without the third,
+standing down the queue bought one quiet morning and then the starter proposed
+the queue.
+
+### The ledger's own verdict
+
+`decisionReview().deadTopic` — acted on three or more times, and the metric it
+named never moved — was computed, shown on the Working tab, and read by nothing
+that decides anything. It now reaches `scoreMove` as `DEAD_TOPIC_DECAY`, harsher
+than a refusal, and the asymmetry is the point: a refusal is an opinion about a
+suggestion, this is the ledger on one that was actually carried out. The ranker
+reads `RANKING_WINDOW` decisions rather than ten, because "you did this and
+nothing happened" does not stop being true because a fortnight passed.
+
+### The queue you have decided against
+
+`cancelOpenDrafts` existed since the offer-change path and had **no user-facing
+caller**, so a queue somebody had decided against was permanent: it fed
+`awaiting_approval`, that fed the `send_queue` stake, and the Call proposed
+sending them every morning. `POST /api/copilot/queue {action:'clear'}` is the way
+to say so. Nothing is deleted — the executions move to `cancelled` with a
+reason, so "written and never sent" stays in the funnel, which is the most
+informative number this account has produced.
+
+It also clears the drafts nobody could see. `loadSendQueue` drops executions
+whose action row has gone (`if (!a) continue`), while `awaiting_approval` counts
+them — on the live account that was ten: invisible, unsendable, and holding the
+metric permanently above zero so a `queue` call could never grade as having
+worked. `countOpenDrafts` is the honest total, `HomeData.queueTotal` carries it,
+and the gap is stated at the one moment it changes a decision: the confirmation
+before clearing. **Grade on the metric, show the list you can act on** — that is
+why `statusLine` takes the queue length, after the header said 61 while the call
+under it said 51.
+
 ### A no that is heard
 
 `refusalsByTopic` counts recent `rejected` and `ignored` responses per topic, and

@@ -1801,12 +1801,13 @@ leverage().catch((e) => { console.error(e); process.exit(1); });
 // The Call is picked, not written
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  BUSINESS_METRICS, CALL_FLOOR, DEFAULT_COST_MINUTES, METRIC_GOOD_DIRECTION, METRIC_LABEL, MIN_COST_MINUTES,
+  BUSINESS_METRICS, CALL_FLOOR, DEAD_TOPIC_DECAY, DEFAULT_COST_MINUTES, METRIC_GOOD_DIRECTION, METRIC_LABEL, MIN_COST_MINUTES,
   arbitrate, costMinutesOf, kindPrior, scoreMove, type Stake,
 } from '../../src/lib/copilot/stake';
 import { draftFrom, scorable } from '../../src/lib/copilot/call';
 import { coldIn, sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
-import { metricValue as mv, statusLine, verdictOf as vo } from '../../src/lib/copilot/decision';
+import { STARTER_TOPIC_JOB, metricValue as mv, starterDecision as starter, statusLine, verdictOf as vo } from '../../src/lib/copilot/decision';
+import { STAND_DOWN_KEY, standingRefusals } from '../../src/lib/copilot/working';
 import type { Move as MoveRow } from '../../src/lib/copilot/types';
 
 async function arbitration() {
@@ -1852,6 +1853,11 @@ async function arbitration() {
   assert.equal(statusLine(metrics, { verify: { metric: 'replies' } } as never), '2 replies');
   assert.equal(statusLine(metrics, { verify: { metric: 'none' } } as never), '3.4 months of runway', 'an ungradeable call falls back to runway');
   assert.equal(statusLine(metrics, null), '3.4 months of runway');
+  // One number on screen. metricValue reads awaiting_approval, which counts open
+  // drafts the queue cannot render — right for grading, wrong for showing, and
+  // the reason the header said 61 while the call under it said 51.
+  assert.equal(statusLine(metrics, { verify: { metric: 'queue' } } as never, 51), '51 drafts waiting');
+  assert.equal(statusLine(metrics, { verify: { metric: 'queue' } } as never), '45 drafts waiting', 'no list given: the metric stands');
   assert.equal(statusLine({ ...metrics, runway_months: null } as never, null), null, 'no filler under a greeting');
 
   // 2. Good is not always up. "Clear the queue" succeeds when the number falls,
@@ -1912,6 +1918,68 @@ async function arbitration() {
   assert.equal(arbitrate([], ctx).call, null);
   assert.equal(arbitrate([m('w', 'learn', null, 240)], ctx, 99).call, null, 'nothing clears an impossible floor');
   assert.ok(CALL_FLOOR > 0, 'a floor of zero promotes the best of a bad list');
+
+  // 8b. THE ANSWER TO "can I trust it over time". Three signals of the user's
+  //     own judgment were collected and one was read, weakly and temporarily.
+  {
+    const ctx2 = { capacityMinutes: 60 };
+    const job = (id: string, j: string) => ({ id, kind: 'earn' as const, job: j, costMinutes: 30, stake: { metric: 'queue' as const, direction: 'down' as const, by: 10, withinDays: 1 } });
+
+    // A refusal is an opinion about a suggestion. "I did it three times and the
+    // number never moved" is the ledger's verdict on one that was carried out,
+    // so it has to bite harder — it was computed, shown on one tab, and read by
+    // nothing that decides anything.
+    const plain = scoreMove(job('a', 'send_queue'), ctx2);
+    const refusedOnce = scoreMove(job('a', 'send_queue'), { ...ctx2, refused: { send_queue: 1 } });
+    const dead = scoreMove(job('a', 'send_queue'), { ...ctx2, dead: { send_queue: 3 } });
+    assert.ok(dead < refusedOnce, 'the ledger outranks a mood');
+    assert.ok(Math.abs(dead - plain * DEAD_TOPIC_DECAY) < 1e-9);
+
+    // A standing refusal never expires. REFUSAL_WINDOW forgives after ten
+    // decisions, which is right for "not today" and wrong for somebody who has
+    // concluded outreach is no longer their leverage — and who then watched the
+    // same card come back a fortnight later, which is the loudest complaint
+    // this product has had about itself.
+    const board = [job('a', 'send_queue'), job('b', 'silence')];
+    assert.equal(arbitrate(board, ctx2).call?.id, 'a');
+    const stood = arbitrate(board, { ...ctx2, standing: new Set(['send_queue']) });
+    assert.equal(stood.call?.id, 'b', 'a standing refusal bars it however long ago it was made');
+    assert.ok(stood.stoodDown.includes('send_queue'), 'and it is said out loud, once');
+    // Barred from LEADING, not from existing: the work is still real.
+    assert.ok(stood.rest.some((m) => m.id === 'a'));
+  }
+
+  // 8c. The ladder has to honour it too, or the stand-down is theatre: barring a
+  //     job means arbitration promotes nothing, which falls through to exactly
+  //     the function whose rungs are all outreach.
+  {
+    const m = { sent: 9, replies: 2, meetings: 1, won: 0, won_amount: 0, awaiting_approval: 61, runway_months: 3.4, window_days: 30, pipeline: { sourced: 140 } } as never;
+    const input = { metrics: m, candidates: 5, offerEmpty: false, hasSegments: true };
+    assert.match(starter(input).decision.headline, /Send the/, 'with a queue, the ladder sends');
+    const quiet = starter({ ...input, standing: new Set(['send_queue']) }).decision;
+    assert.doesNotMatch(quiet.headline, /Send|draft/i, 'stood down: it does not propose it under another name');
+    assert.equal(quiet.verify_metric, 'none');
+    // Mapped by name, not by guess. Only where the two mean the same thing.
+    assert.equal(STARTER_TOPIC_JOB.sending, 'send_queue');
+    assert.ok(!STARTER_TOPIC_JOB.opener, 'no job does what "change the opener" does; inventing one would bar a job never refused');
+  }
+
+  // 8d. Where a standing refusal lives. Not a new table: the working file's
+  //     `refuse` section already means "what you will not do", so the user can
+  //     see every stand-down in one place and lift one by deleting the line.
+  {
+    const row = (o: Record<string, unknown>) => ({ id: 'x', section: 'refuse', body: 'b', source: 'you', evidence: null, status: 'live', observed_key: null, created_at: '', updated_at: '', confirmed_at: null, ...o }) as never;
+    const set = standingRefusals([
+      row({ observed_key: `${STAND_DOWN_KEY}send_queue` }),
+      row({ observed_key: `${STAND_DOWN_KEY}silence`, status: 'declined' }),
+      row({ observed_key: 'opening:facebook ads' }),
+      row({ observed_key: null }),
+    ]);
+    assert.deepEqual([...set], ['send_queue']);
+    // A declined row is the user rejecting a READING, not an instruction about
+    // what may be suggested. Counting it would bar a job they never refused.
+    assert.ok(!set.has('silence'));
+  }
 
   // 9. Deterministic. A call that reshuffles on reload is not a decision.
   const pool = [m('c', 'earn', { withinDays: 5, value: 100 }), m('a', 'earn', { withinDays: 5, value: 100 }), m('b', 'earn', { withinDays: 5, value: 100 })];

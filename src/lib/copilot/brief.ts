@@ -12,7 +12,7 @@ import { metricValue, snapshotOf, starterDecision } from './decision';
 import { offerIsEmpty } from './offer';
 import { sendPush } from './push';
 import { scoreOpportunity } from './ranking';
-import { getProfile, gradeDecisions, saveDecision } from './store';
+import { getProfile, gradeDecisions, loadStandingRefusals, saveDecision } from './store';
 import type { DecisionSweep } from './store';
 import type { BriefOutput, OpportunityAgent, Profile, ContextPack } from './types';
 
@@ -88,11 +88,17 @@ async function persistBrief(profile: Profile, pack: ContextPack, runId: string, 
   // proposed — the same rule that strips drafts written from nothing, because
   // "send the waiting drafts" is wrong advice when none of them can exist.
   const blankOffer = offerIsEmpty(profile.offer);
+  // The ladder has to honour a stand-down too. Barring a job from arbitration
+  // means arbitration promotes nothing, which falls through to exactly this —
+  // and six of its seven rungs are outreach. Without this, standing down "the
+  // drafts" bought one quiet morning and then the starter proposed the drafts.
+  const standing = await loadStandingRefusals(profile.id).catch(() => new Set<string>());
   const floor = starterDecision({
     metrics: pack.metrics,
     candidates: pack.candidates.length,
     offerEmpty: blankOffer,
     hasSegments: profile.target_segments.length > 0,
+    standing,
   });
   // The ladder is in call.ts. Short version: a blank offer forces the offer
   // call; otherwise the winning Move takes it, because it is grounded in a real

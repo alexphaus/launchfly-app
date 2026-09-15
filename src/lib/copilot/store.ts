@@ -21,7 +21,7 @@ import {
   type ObservedWrite, type WorkingEntry, type WorkingSection, type WorkingStatus,
 } from './working';
 import {
-  MAX_ACTIVE_COMMISSIONS, MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, WHY_MAX,
+  MAX_ACTIVE_COMMISSIONS, MAX_BUDGET_MINUTES, MIN_BUDGET_MINUTES, OBJECTIVE_MAX, SUMMARY_MAX, WHY_MAX,
   commissionIdFromMove, commissionLine, nextStatus, reportOf,
   type Authority, type Commission, type CommissionEvent, type CommissionResult,
   type CommissionStatus, type CommissionStep,
@@ -1597,13 +1597,32 @@ export async function approveCommission(profileId: string, id: string): Promise<
  * only path that actually resumed one was the worker clearing its own gate,
  * which is exactly the path nextStatus now refuses.
  */
-export async function unblockCommission(profileId: string, id: string): Promise<Commission | null> {
+export async function unblockCommission(profileId: string, id: string, answer?: string | null): Promise<Commission | null> {
+  const said = answer?.trim().slice(0, SUMMARY_MAX);
+
+  // The answer is written BEFORE the status moves, and the order is the point.
+  // Flipping first and failing to record would clear the gate and lose the one
+  // thing the worker is waiting for — a mandate that carries on knowing nothing
+  // more than it did, which is the exact state this whole change exists to end.
+  // Written as an event rather than a column because an answer is a line in the
+  // thread: the user reads it under the question, and briefLog carries it out.
+  if (said) {
+    const { error } = await copilotDb().from('copilot_commission_events').insert({
+      commission_id: id, profile_id: profileId, kind: 'answered', step: null, summary: said, artifact: null,
+    });
+    // A database that has not had 20260919 rejects 'answered' on the check
+    // constraint. Carrying on would unblock the mandate and silently drop the
+    // answer, so it stops here and says why — the user can answer again once
+    // the migration is applied, and nothing has been lost in the meantime.
+    if (error) throw new Error('Could not record your answer, so the commission has been left where it is. The 20260919 migration may not be applied yet.');
+  }
+
   const { data, error } = await copilotDb().from('copilot_commissions')
     .update({ status: 'active' })
     .eq('profile_id', profileId).eq('id', id).eq('status', 'blocked')
     .select(COMMISSION_COLS).maybeSingle();
   if (error) throw error;
-  if (data) await logEvent(profileId, 'commission_unblocked', { commission_id: id });
+  if (data) await logEvent(profileId, 'commission_unblocked', { commission_id: id, answered: !!said });
   return (data as unknown as Commission) ?? null;
 }
 

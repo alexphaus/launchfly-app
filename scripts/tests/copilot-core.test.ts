@@ -1805,7 +1805,7 @@ import {
   arbitrate, costMinutesOf, kindPrior, scoreMove, type Stake,
 } from '../../src/lib/copilot/stake';
 import { draftFrom, scorable } from '../../src/lib/copilot/call';
-import { sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
+import { coldIn, sendQueueJob } from '../../src/lib/copilot/jobs/send-queue';
 import { metricValue as mv, verdictOf as vo } from '../../src/lib/copilot/decision';
 import type { Move as MoveRow } from '../../src/lib/copilot/types';
 
@@ -1918,6 +1918,39 @@ async function arbitration() {
   assert.equal(JOBS.includes(sendQueueJob), true, 'a job not in the registry never runs');
   assert.equal(await sendQueueJob.available({ profile: { offer: {} } } as never), false, 'nothing to send from a blank offer');
   assert.equal(await sendQueueJob.available({ profile: { offer: { sells: 'automations' } } } as never), true);
+
+  // The queue's urgency comes off the oldest draft, not off a constant.
+  //
+  // It was `withinDays: 1` — the floor of the urgency curve, so outreach took
+  // the x3 multiplier every morning of its life on top of the top kind prior.
+  // Nothing without a money figure on its stake could reach that, which meant
+  // arbitration was real and the screen was unchanged: every `decide` job in
+  // the registry sat below the send queue by construction.
+  const qm = (waited: number) => ({ id: 'q', kind: 'earn' as const, job: 'send_queue', costMinutes: 30, stake: { metric: 'queue' as const, direction: 'down' as const, by: 10, withinDays: coldIn(waited) } });
+  assert.ok(coldIn(0) > coldIn(11), 'a draft that has waited longer has less time left, not more');
+  assert.equal(coldIn(99), 1, 'past cold it is today, and never zero — urgency must not divide by zero');
+  assert.ok(scoreMove(qm(0), { capacityMinutes: 60 }) < scoreMove(qm(11), { capacityMinutes: 60 }),
+    'a queue written this morning is not as urgent as one eleven days old');
+  // What the change is worth, stated as what it costs to beat the queue rather
+  // than as a claim it no longer wins — because a fresh queue still edges a
+  // decide Move carrying no number at all, 2.14 to 2.10, and asserting
+  // otherwise would be tuning COLD_AFTER_DAYS until a test passed.
+  //
+  // What moved is the PRICE of the top of the screen. Against a queue pinned at
+  // x3, a decide Move needed roughly 43% of monthly burn on its stake before it
+  // could win. Against one that starts at x2.14 and climbs, the smallest named
+  // number does it. That is the money factor doing the work instead of a
+  // constant, which is the only version of this that is honest — and it is why
+  // the remaining distance is obligations with real data in them, not a bigger
+  // thumb on the scale here.
+  const burn = { capacityMinutes: 60, monthlyBurn: 3000 };
+  const decide = (value?: number) => ({ id: 'd', kind: 'decide' as const, job: 'silence', costMinutes: 10, stake: { metric: 'replies' as const, direction: 'up' as const, by: 1, withinDays: 7, value } });
+  assert.equal(arbitrate([qm(0), decide()], burn).call?.id, 'q', 'with nothing named, the queue still edges it');
+  assert.equal(arbitrate([qm(0), decide(100)], burn).call?.id, 'd', 'but now any real number takes the day off a fresh queue');
+  assert.equal(arbitrate([qm(11), decide(100)], burn).call?.id, 'q', 'and a stale queue still wins, which is correct');
+  // The old pin, for the size of what changed: 100 against a x3 queue lost.
+  const pinned = { id: 'q', kind: 'earn' as const, job: 'send_queue', costMinutes: 30, stake: { metric: 'queue' as const, direction: 'down' as const, by: 10, withinDays: 1 } };
+  assert.equal(arbitrate([pinned, decide(100)], burn).call?.id, 'q', 'before, the same Move could not');
 
   console.log('copilot-core: arbitration checks passed');
 }
@@ -3218,6 +3251,20 @@ async function workingFile() {
       assert.ok(m.changes.length > 20, `${s} does not say what changes when it is filled in`);
       // The placeholder has to be a real example, or the field gets one word.
       assert.ok(m.placeholder.length > 30, `${s}'s placeholder is not a real example`);
+
+      // And it may only promise somewhere this file actually reaches.
+      //
+      // workingBrief feeds buildContextPack (the daily read), the per-source
+      // judge, and the commission payload. It does NOT feed draftOpener, which
+      // builds every opener from the offer's five strings. `voice` claimed
+      // "changes every draft, which is most of what this app produces" and
+      // `deliver` claimed "lets a draft say 'live in five days'" — invariant 7
+      // in the app's own sheet, on the one feature whose entire argument is
+      // that it never overstates what it knows. Delete this assertion when
+      // draftOpener reads the file; until then it is what stops the copy
+      // drifting back.
+      assert.ok(!/\bdraft(s|ed|ing)?\b/i.test(m.changes),
+        `${s} promises the draft path, which workingBrief does not reach: "${m.changes}"`);
     }
     assert.ok(BODY_MAX > 200 && MAX_PER_SECTION >= 4);
   }
@@ -3234,8 +3281,8 @@ workingFile().catch((e) => { console.error(e); process.exit(1); });
 // itself. Everything else in this file is bookkeeping; those two are the
 // product.
 import {
-  AUTHORITY, AUTHORITIES, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX,
-  SAFE_HREF, blockedMove, canAct, commissionBrief, commissionChip, commissionIdFromMove, commissionLine, commissionTerms,
+  AUTHORITY, AUTHORITIES, MAX_BRIEF_LOG, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX, WORKER_EVENT_KINDS,
+  SAFE_HREF, blockedMove, briefLog, canAct, commissionBrief, commissionChip, commissionIdFromMove, commissionLine, commissionTerms,
   dueCommissions, isAuthority, normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
 } from '../../src/lib/copilot/commission';
 import type { Commission, CommissionEvent } from '../../src/lib/copilot/commission';
@@ -3412,7 +3459,13 @@ async function commissions() {
     assert.ok(commissionTerms({ ...base, authority: 'commit', budget_minutes: 15 }).includes('15 min'));
 
     // The line: counts and state, never adjectives.
-    assert.equal(commissionLine(base, r), '1 of 3 done · 1 needs you');
+    //
+    // The count of asks is true only while the mandate is actually stopped on
+    // one. `yours` is every question ever raised, so counting it unconditionally
+    // — which this asserted — left a running commission reading "1 needs you"
+    // for the rest of its life, including the moment after the user answered it.
+    assert.equal(commissionLine({ ...base, status: 'blocked' }, r), '1 of 3 done · 1 needs you');
+    assert.equal(commissionLine(base, r), '1 of 3 done', 'answered and running: it stops asking');
     assert.equal(commissionLine({ ...base, status: 'draft' }, r), 'Waiting for you to approve it');
     assert.equal(commissionLine({ ...base, status: 'done', outcome: 'Found 20, 3 replied' }, r), 'Found 20, 3 replied');
     const quiet = reportOf(base, []);
@@ -3460,6 +3513,76 @@ async function commissions() {
       assert.equal(link(bad), null, `${bad} must not survive`);
     }
     assert.ok(SAFE_HREF.test('https://x.test') && !SAFE_HREF.test('javascript:1'));
+  }
+
+  // --- the answer has somewhere to go
+  //
+  // THE REASON THIS LAYER NEVER CLOSED A LOOP. A worker raised a needs_you, the
+  // user tapped "I have answered", unblockCommission wrote a status and nothing
+  // else, and the next brief carried objective/may/budget/plan — byte-identical
+  // to the last one. So the worker asked the same question again, every night,
+  // and no commission that needed anything from its owner could finish.
+  {
+    const profile = {
+      id: 'p1', name: 'A', headline: 'h', email: 'a@b.c', offer: { sells: 'automations' },
+      location: 'Cebu', timezone: 'Asia/Manila', target_segments: ['resorts'], target_area: 'Cebu',
+      finance: { cash: 1000 },
+    } as never;
+
+    const asked = ev({ id: 'e1', kind: 'needs_you', summary: 'Which of the three should I brief?', at: '2026-09-13T09:00:00Z' });
+    const said = ev({ id: 'e2', kind: 'answered', summary: 'The second one — they quoted in writing.', at: '2026-09-13T18:00:00Z' });
+    const brief = commissionBrief(base, profile, null, null, { events: [said, asked] });
+
+    assert.ok(brief.log.some((l) => l.kind === 'answered' && /second one/.test(l.summary)),
+      'the answer must reach the worker, or the question is only ever asked again');
+    // Oldest first: it is a transcript, and "which of the three? / the second
+    // one" only reads in that order. Everything else in the file is newest-first.
+    assert.deepEqual(brief.log.map((l) => l.kind), ['needs_you', 'answered']);
+    assert.equal(commissionBrief(base, profile, null, null).log.length, 0, 'no history is an empty log, not a missing field');
+
+    // Bounded: a mandate running for a month must not grow its payload with it.
+    const many = Array.from({ length: 40 }, (_, i) =>
+      ev({ id: `x${i}`, kind: 'worked', summary: `step ${i}`, at: `2026-09-${String(i % 28 + 1).padStart(2, '0')}T00:00:00Z` }));
+    assert.equal(briefLog(many).length, MAX_BRIEF_LOG);
+    assert.equal(briefLog(many).at(-1)?.at, briefLog(many).map((l) => l.at).sort().at(-1), 'the tail kept is the newest');
+    // Summaries only. The worker produced the artifacts; posting them back is
+    // payload for nothing.
+    assert.ok(briefLog([said]).every((l) => !('artifact' in l)));
+
+    // --- and the worker may not write it
+    //
+    // 'answered' exists as a kind but is not in WORKER_EVENT_KINDS, which is
+    // what the result socket validates against. A worker that could post one
+    // would be answering its own question on the user's behalf — invariant 10
+    // with one extra step.
+    assert.ok(!(WORKER_EVENT_KINDS as readonly string[]).includes('answered'));
+    assert.equal(
+      normalizeResult({ events: [{ kind: 'answered', summary: 'They said go ahead' }] }).events.length, 0,
+      'a worker cannot answer its own question',
+    );
+
+    // It reads as the exchange it is: the ask, then what you said.
+    const r = reportOf(base, [asked, said]);
+    assert.deepEqual(r.said.map((e) => e.id), ['e2']);
+    assert.deepEqual(r.yours.map((e) => e.id), ['e1']);
+    assert.ok(!r.did.some((e) => e.kind === 'answered'), 'the user\'s reply is not the worker\'s work');
+  }
+
+  // --- what the worker is told about the person
+  //
+  // Five strings is a headline, and research written from a headline comes back
+  // generic however good the worker is. This is the one field that changes it.
+  {
+    const profile = { name: 'A', headline: 'h', email: 'a@b.c', offer: {}, location: 'Cebu', timezone: 'Asia/Manila', target_segments: [], target_area: null } as never;
+    const file = 'What you charge:\n- $900 for the build. Quoted $1,800 twice and lost both.';
+    assert.equal(whoFor(profile, file).working, file);
+    // Omitted rather than sent empty: an account with no file should not spend
+    // payload saying so.
+    assert.ok(!('working' in whoFor(profile)));
+    assert.equal(commissionBrief(base, profile, null, null, { working: file }).who.working, file);
+    // Still no way to identify or bill this person.
+    const who = JSON.stringify(whoFor(profile, file));
+    assert.ok(!who.includes('a@b.c') && !who.includes('p1'));
   }
 
   console.log('copilot-core: commission checks passed');

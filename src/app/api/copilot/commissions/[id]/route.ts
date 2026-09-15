@@ -23,7 +23,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return json({ ok: true, commission: c, home: await loadHome(auth.pid) });
       }
       case 'unblock': {
-        const c = await unblockCommission(auth.pid, id);
+        // The answer is optional because not every needs_you is a question —
+        // "the site wants a login I do not have" is cleared by going and fixing
+        // it, not by typing. When there IS one it goes out with the next brief,
+        // which is the only reason the worker can stop asking.
+        const c = await unblockCommission(auth.pid, id, typeof b.answer === 'string' ? b.answer : null);
         if (!c) return fail('That commission is not waiting on you.');
         return json({ ok: true, commission: c, home: await loadHome(auth.pid) });
       }

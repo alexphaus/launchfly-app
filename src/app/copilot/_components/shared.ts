@@ -108,7 +108,8 @@ export interface Actions {
   /** Write a mandate. Always created as a draft — approving is a second act. */
   createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
-  commissionAction(id: string, action: 'approve' | 'unblock' | 'stop' | 'done' | 'seen', outcome?: string): Promise<{ ok: boolean; error?: string }>;
+  /** `answer` is the user's reply to a needs_you, and only 'unblock' carries one. */
+  commissionAction(id: string, action: 'approve' | 'unblock' | 'stop' | 'done' | 'seen', outcome?: string, answer?: string): Promise<{ ok: boolean; error?: string }>;
   /**
    * Hand the live mandates to the worker now. The nightly pass is otherwise the
    * only thing that can — commissionJob cannot fit in the brief route's budget.

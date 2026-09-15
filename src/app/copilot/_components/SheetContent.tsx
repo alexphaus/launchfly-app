@@ -1064,6 +1064,7 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const thread = home.commissions.find((t) => t.commission.id === id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [answer, setAnswer] = useState('');
   // In an effect, keyed on the id. The first version did this in the render body
   // behind a ref — and CopilotApp keeps the last sheet MOUNTED after it closes
   // (sheet = top ?? lastSheet.current), so the ref survived the close and
@@ -1081,13 +1082,19 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const c = thread.commission;
   const meta = AUTHORITY[c.authority];
   const goal = home.goals.find((g) => g.id === c.goal_id);
+  // The open question, which is only open while it is blocked. Rendered beside
+  // the field that answers it, and therefore left out of the log below — the
+  // same sentence in two places is what the rest of this screen keeps deleting.
+  const ask = c.status === 'blocked' ? thread.report.yours[0] : null;
+  const olderAsks = ask ? thread.report.yours.slice(1) : thread.report.yours;
 
-  const act = async (action: 'approve' | 'unblock' | 'stop' | 'done') => {
+  const act = async (action: 'approve' | 'unblock' | 'stop' | 'done', answer?: string) => {
     setBusy(true); setError(null);
-    const r = await actions.commissionAction(id, action);
+    const r = await actions.commissionAction(id, action, undefined, answer);
     setBusy(false);
-    if (!r.ok) setError(r.error ?? 'Could not do that');
-    else if (action === 'stop' || action === 'done') actions.closeSheet();
+    if (!r.ok) return setError(r.error ?? 'Could not do that');
+    if (action === 'unblock') setAnswer('');
+    if (action === 'stop' || action === 'done') actions.closeSheet();
   };
 
   return (
@@ -1131,6 +1138,35 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       )}
       {error && <div className="cp-note">{error}</div>}
 
+      {/* Where the answer goes, and it goes ABOVE the plan and the log.
+          There was nowhere at all. The button said "I have answered" and the app
+          wrote a status and nothing else, so the next brief went out identical
+          to the last one and the worker asked the same question again — every
+          night, forever. No commission that needed anything from its owner could
+          finish. What is typed here rides out with the next dispatch.
+          It sat under the log in the first version of this fix, which put the
+          only reason somebody opens a blocked mandate a full screen below the
+          fold on a phone. The browser said so; the JSX did not. */}
+      {c.status === 'blocked' && (
+        <>
+          <div className="cp-section"><span className="lead">Your answer</span></div>
+          {ask && <p className="desc">{ask.summary}</p>}
+          <textarea
+            id={`cp-answer-${id}`} className="cp-input sm" rows={3} maxLength={300}
+            value={answer} onChange={(e) => { setAnswer(e.target.value); setError(null); }}
+            placeholder="The second one — they quoted in writing and the others did not."
+          />
+          <button className="cp-btn primary block" style={{ marginTop: 10 }} disabled={busy} onClick={() => void act('unblock', answer)}>
+            {busy ? 'Sending…' : answer.trim() ? 'Send this and carry on' : 'Carry on without an answer'}
+          </button>
+          <p className="cp-help">
+            {answer.trim()
+              ? 'It goes out with the next run, so the question is not asked again.'
+              : 'Not every question needs typing — but without one it has nothing new to go on and may ask again.'}
+          </p>
+        </>
+      )}
+
       {c.plan.length > 0 && (
         <>
           <div className="cp-section"><span className="lead">The plan</span><span className="count">{thread.report.progress.done} of {thread.report.progress.total} done</span></div>
@@ -1149,13 +1185,16 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
       {/* Everything that happened, newest first. Not a summary of it — the app
           telling you what it did in its own words is the one thing here that
           could be wrong without anybody noticing. */}
-      {(thread.report.yours.length > 0 || thread.report.did.length > 0) && (
+      {(olderAsks.length > 0 || thread.report.said.length > 0 || thread.report.did.length > 0) && (
         <>
           <div className="cp-section"><span className="lead">What happened</span></div>
-          {[...thread.report.yours, ...thread.report.did].map((e) => (
+          {/* Earlier asks, then what you told it, then what it did. `said` is the
+              one kind of line here the worker did not write, so it says whose it
+              is rather than sitting anonymously among the worker's own report. */}
+          {[...olderAsks, ...thread.report.said, ...thread.report.did].map((e) => (
             <div key={e.id} className="cp-src">
               <div className="ct">{e.summary}</div>
-              <div className="cs">{relTime(e.at)}{e.step ? ` · step ${e.step}` : ''}</div>
+              <div className="cs">{e.kind === 'answered' ? 'You · ' : ''}{relTime(e.at)}{e.step ? ` · step ${e.step}` : ''}</div>
               {e.artifact && (
                 e.artifact.href
                   ? <a className="cp-btn sm" href={e.artifact.href} target="_blank" rel="noreferrer">{e.artifact.label}</a>
@@ -1181,15 +1220,6 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
           <p className="cp-help">
             Otherwise it waits for tonight. The worker may take a few minutes; whatever it finds turns up here.
           </p>
-        </>
-      )}
-
-      {c.status === 'blocked' && (
-        <>
-          <button className="cp-btn primary block" disabled={busy} onClick={() => void act('unblock')}>
-            {busy ? 'Carrying on…' : 'I have answered — carry on'}
-          </button>
-          <p className="cp-help">Until you tap this it stays put. The worker cannot clear its own question.</p>
         </>
       )}
 
@@ -1236,9 +1266,15 @@ function WorkingSheet({ home, actions }: { home: HomeData; actions: Actions }) {
   return (
     <>
       <h3>What this app knows about your work</h3>
+      {/* It used to claim "every draft" as well. Openers are built by
+          openerTemplate from the offer's five strings and have never read this
+          file, so one of the three destinations was not true — and a feature
+          whose whole argument is that its numbers are traceable cannot be the
+          one overstating itself. Research became true the moment workingBrief
+          was added to the commission payload; drafts are still owed. */}
       <p className="desc">
-        Everything it writes — every draft, every feed it reads, every piece of research it is sent off to do —
-        comes from here. Five lines about what you sell is a headline; this is the business.
+        Your daily read, every feed it judges, and anything you commission are written from here.
+        Five lines about what you sell is a headline; this is the business.
       </p>
 
       {proposals.length > 0 && (

@@ -376,6 +376,10 @@ html:has(.cp-root), body:has(.cp-root) { background: #E9E6DD; overflow-x: hidden
 .cp-sheet-embed .cp-note { margin-bottom: 8px; }
 .cp-section.sub { padding-top: 14px; padding-bottom: 8px; }
 .cp-section.sub .lead { font-size: 11px; color: var(--muted); }
+/* The marker too. The blue square at full size is what made a sub-header read
+   as a peer however small its text was — three of them stacked in one zone and
+   the zone header stopped containing anything. */
+.cp-section.sub::before { width: 5px; height: 5px; background: var(--dim); }
 .cp-prow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 2px solid var(--ink); width: 100%; text-align: left; }
 .cp-prow:last-child { border-bottom: none; }
 .cp-pmain { flex: 1; min-width: 0; }

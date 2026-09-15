@@ -497,6 +497,40 @@ export function reportOf(c: Commission, events: CommissionEvent[], max = 6): Com
   };
 }
 
+/**
+ * The three zones a handed-over job can be in, from the reader's side.
+ *
+ * Now was organised by FEATURE — jobs here, Moves there, the queue somewhere
+ * else — while the question somebody has when they open it is temporal: what
+ * needs me, and what happened while I was away. So the screen alternated
+ * between asking and reporting four times going down the page, and a job sat in
+ * whichever block its feature owned regardless of which of the two it was.
+ *
+ * A draft counts as needing you. Nothing happens to it until it is approved,
+ * and a mandate sitting unapproved is indistinguishable from one the app
+ * forgot — which is what the approve button exists to prevent.
+ */
+export interface ThreadZones<T> {
+  /** Waiting on a person: a question, a breakage, or an unapproved draft. */
+  needsYou: T[];
+  /** Under way. Nothing to do; this is the half that reports. */
+  running: T[];
+  /** Over. Belongs beside the decision record, not on Now. */
+  finished: T[];
+}
+
+export function splitThreads<T extends { commission: Pick<Commission, 'status'> }>(threads: T[]): ThreadZones<T> {
+  const out: ThreadZones<T> = { needsYou: [], running: [], finished: [] };
+  for (const t of threads) {
+    switch (t.commission.status) {
+      case 'done': case 'stopped': out.finished.push(t); break;
+      case 'blocked': case 'draft': out.needsYou.push(t); break;
+      default: out.running.push(t);
+    }
+  }
+  return out;
+}
+
 export type ChipTone = 'draft' | 'running' | 'needs' | 'fault' | 'done' | 'stopped';
 
 export type BlockedOn = 'you' | 'worker';

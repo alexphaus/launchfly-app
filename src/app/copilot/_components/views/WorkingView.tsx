@@ -14,6 +14,7 @@
 // data the tab says so rather than filling the space.
 
 import { MIN_REVIEW, VERDICT_LABEL, decisionReview, movedBy, verdictOf } from '@/lib/copilot/decision';
+import { splitThreads } from '@/lib/copilot/commission';
 import type { OpeningTrend, Finding, FunnelStage } from '@/lib/copilot/diagnose';
 import { useState } from 'react';
 import type { HomeData } from '@/lib/copilot/types';
@@ -64,6 +65,7 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
   const offerSet = !!home.profile.offer?.sells;
   // The record of calls this app made. Not advice — the ledger read back.
   const log = home.decisionLog;
+  const finishedJobs = splitThreads(home.commissions ?? []).finished;
   const review = decisionReview(log);
 
   return (
@@ -209,6 +211,39 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
                 : 'No pattern yet. A call that keeps being made and never works shows up here.'}
             </div>
           )}
+        </>
+      )}
+
+      {/* Work that is over, beside the calls that were graded — because a
+          finished job with an outcome IS a graded call, and "did that actually
+          work" is the only question this tab asks. It used to sit on Now,
+          where a card reading "done" for a fortnight was the screen
+          congratulating itself in the middle of the one screen meant for
+          deciding what to do next. */}
+      {finishedJobs.length > 0 && (
+        <>
+          <div className="cp-section">
+            <span className="lead">Work you handed over</span>
+            <span className="count">{finishedJobs.length === 1 ? 'one finished' : `${finishedJobs.length} finished`}</span>
+          </div>
+          <div className="cp-list">
+            {finishedJobs.map((t) => (
+              <button key={t.commission.id} className="cp-crow tap" onClick={() => actions.openSheet({ kind: 'commission', id: t.commission.id })}>
+                <div className="cp-dmain">
+                  <div className="t">{t.commission.objective}</div>
+                  <span className={`cp-chip verdict ${t.commission.status === 'done' ? 'done' : 'rejected'}`}>
+                    {t.commission.status === 'done' ? 'Finished' : 'Called off'}
+                  </span>
+                </div>
+                <div className="cp-dsub">
+                  {t.commission.closed_at ? shortDay(t.commission.closed_at.slice(0, 10)) : ''}
+                  {/* The outcome, which is the only part worth reading later.
+                      An honest "nothing came of it" is a real entry. */}
+                  {t.commission.outcome ? ` · ${t.commission.outcome}` : ' · no outcome recorded'}
+                </div>
+              </button>
+            ))}
+          </div>
         </>
       )}
 

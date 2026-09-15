@@ -8,20 +8,43 @@
 // the Pipeline tab with a different count.
 //
 // The rule now is one instruction, one place. The call leads and carries the
-// work. Under it: finished work from the jobs, the one judgement cheap enough to
-// make with a thumb, the queue as a single row, and everything else folded. The
-// numbers moved to Working, which is the tab for asking whether any of it is
-// landing.
+// work. The numbers moved to Working, which is the tab for asking whether any
+// of it is landing.
+//
+// THREE ZONES, and the axis is the point.
+//
+//   1. The call            one decision, alone, no header above it
+//   2. Also needs you      capture, jobs waiting on you, the deck, the queue,
+//                          and the one input the scrapers cannot supply
+//   3. Since you last      running jobs, finished Moves, what is in motion
+//      looked
+//
+// Before this the screen was grouped by FEATURE — handed-over jobs in one
+// section, Moves in another, the queue somewhere below, the composer near the
+// top — and the reader's attention bounced between "do something" and "here is
+// what happened" four times on the way down. A job in particular was in
+// whichever block its feature owned regardless of whether it was waiting on an
+// answer or quietly making progress, which are opposite things to a person
+// holding a phone at nine in the morning.
+//
+// The call stays outside zone two deliberately. It is one decision, and putting
+// a header above it that announces three things need you is the dilution the
+// whole single-call design exists to prevent.
+//
+// Finished jobs are not here at all. They live on Working, beside the decision
+// record, because a finished job with an outcome IS a graded call and "did that
+// work" is the question that tab asks.
 import { useEffect, useState } from 'react';
 import { VERDICT_LABEL, movedBy, verdictOf, type Decision } from '@/lib/copilot/decision';
 import { OFFER_TASK_TITLE, offerIsEmpty } from '@/lib/copilot/offer';
 import { PLANS } from '@/lib/copilot/plans';
 import { useShell } from '../shell';
 import { KIND_LABEL } from '@/lib/copilot/moves';
+import { splitThreads } from '@/lib/copilot/commission';
 import type { Execution, HomeData, Move, QueueItem } from '@/lib/copilot/types';
 import { money, relTime } from '../format';
 import TriageStack from '../TriageStack';
-import CommissionThread from '../CommissionThread';
+import JobList from '../CommissionThread';
 import type { Actions } from '../shared';
 
 /** Anything past this is folded. A plan you can finish beats a list you cannot. */
@@ -70,6 +93,20 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
   // app; one card reads as a new one.
   const nothingYet = !home.decision && !home.insight && !queue.length && !home.motion.length && !home.moves.length;
 
+  // The screen's whole organising idea, in one line. Now used to be grouped by
+  // FEATURE — jobs in one section, Moves in another, the queue somewhere below
+  // — while the question a person actually has when they open it is temporal:
+  // what needs me, and what happened while I was away. So it alternated between
+  // asking and reporting four times going down the page, and a handed-over job
+  // sat in whichever block its feature owned regardless of which of the two it
+  // was. Three zones now: the call, what else needs you, what happened.
+  const jobs = splitThreads(home.commissions ?? []);
+  // Everything in zone two that is genuinely an ask, so the header can say how
+  // many rather than making somebody scroll to find out.
+  const asks = (home.capture ? 1 : 0) + jobs.needsYou.length + (home.triage.length ? 1 : 0)
+    + (!noOffer && !queueIsCall && queue.length > 0 ? 1 : 0);
+  const reports = jobs.running.length + home.moves.length + home.motion.length;
+
   const submit = async (regenerate: boolean) => {
     if (!note.trim()) return;
     setSending(true);
@@ -97,122 +134,16 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
 
       {call}
 
-      {/* Work the app owns, directly under the call. Everything else on this
-          screen asks something; this reports. It sits here rather than at the
-          bottom because "what are we working on and where is it" is the
-          question somebody has when they open the app on the move, and it was
-          the one thing the product could not answer at all. */}
-      {/* Hidden only on a brand-new account, where FirstRun is the whole screen
-          and an empty "Working on" is one more box saying nothing. */}
-      {!nothingYet && <CommissionThread threads={home.commissions ?? []} actions={actions} />}
-
-      {/* Promoted from the footer, where it was the last thing on a long scroll.
-          This is the only way anything the scrapers cannot see gets into the
-          system — a reply that came by phone, a burn that dropped, a job
-          interview, three clients complaining about the same part of the offer.
-          Everything else on this screen is derived from data the app already
-          had, which is why it repeats itself. */}
-      {tellOpen ? (
-        <div className="cp-composer">
-          <textarea
-            autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
-            placeholder="Maria replied. Burn is down to 200. Three people asked about the same thing. I have an interview Thursday…"
-          />
-          <div className="bar">
-            <span className="hint">Changes tomorrow&rsquo;s call.</span>
-            <button className="cp-btn" disabled={sending} onClick={() => { setTellOpen(false); setNote(''); }}>Cancel</button>
-            <button className="cp-btn primary" disabled={sending || briefing || !note.trim()} onClick={() => submit(true)}>Add &amp; re-plan</button>
-          </div>
-        </div>
-      ) : (
-        <button className="cp-tell" onClick={() => setTellOpen(true)}>
-          <span className="t">Tell the copilot what changed</span>
-          <span className="s">{home.contextCount} in context · changes tomorrow&rsquo;s call</span>
-        </button>
-      )}
-
-      {b.matches.remaining === 0 && (
-        <div className="cp-card cp-wall">
-          <div className="cp-eyebrow">Out of matches</div>
-          <p>
-            You have used all {b.matches.limit} matches on {PLANS[b.effective].name} this month. Your brief,
-            drafts and funnel keep running on what you already have — only new supply stops.
-          </p>
-          {b.effective !== 'operator' && (
-            <a className="cp-btn primary block" href={`${shell}/pricing`}>
-              See plans — {PLANS[b.effective === 'free' ? 'pro' : 'operator'].limits.matchesPerMonth.toLocaleString()} a month
-            </a>
-          )}
-          <p className="cp-wall-sub">
-            Resets on the 1st.{b.effective === 'operator' && ' If you are hitting 2,000 a month, get in touch and we will size something.'}
-          </p>
+      {/* ── Zone two: everything else that is waiting on a person ──────────
+          The call stands alone above this on purpose. It is one decision, and
+          wrapping it in a header announcing that three things need you is
+          exactly the dilution the single-call design exists to prevent. */}
+      {!nothingYet && asks > 0 && (
+        <div className="cp-section">
+          <span className="lead">Also needs you</span>
+          <span className="count">{asks}</span>
         </div>
       )}
-
-      {nothingYet && <FirstRun home={home} actions={actions} finding={finding} />}
-
-      {/* The read only appears here when there is no call to carry it. With a
-          call it lives inside that card, and the full read is on Working. */}
-      {home.insight && !home.decision && !nothingYet && (
-        <div className="cp-card cp-insight">
-          <div className="cp-eyebrow">{home.insight.eyebrow}</div>
-          <p>{home.insight.body}</p>
-          {home.insight.reasoning && (
-            <>
-              <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the reasoning' : 'See the reasoning →'}</button>
-              {showWhy && <div className="cp-reasoning">{home.insight.reasoning}</div>}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Finished work from every job. The one promoted to the call is not in
-          here — loadHome takes it out, because rendering it twice is exactly the
-          duplication this screen exists to remove. */}
-      {home.moves.length > 0 ? (
-        <>
-          <div className="cp-section">
-            <span className="lead">Done while you slept</span>
-            <span className="count">{home.moves.length}</span>
-          </div>
-          {home.moves.map((m) => <MoveCard key={m.id} move={m} actions={actions} />)}
-        </>
-      ) : home.movesBlocked ? (
-        // Silence and "not wired up" looked identical here, so a working build
-        // read as a broken one. An empty day still renders nothing at all —
-        // this only speaks when something is actually missing.
-        <div className="cp-empty" style={{ marginBottom: 14 }}>
-          {home.movesBlocked === 'quiet' && home.jobsRun?.broke?.length ? (
-            // A sensor that BROKE is not a quiet night, and saying "nothing new"
-            // over a worker the app could not reach is the screen reporting
-            // calm about a thing that is on fire.
-            <>
-              <b>{home.jobsRun.broke.length === 1 ? 'A sensor failed last night' : `${home.jobsRun.broke.length} sensors failed last night`}</b>
-              {home.jobsRun.broke.join(' · ')}
-            </>
-          ) : home.movesBlocked === 'quiet' ? (
-            <>
-              <b>Nothing new last night</b>
-              {home.jobsRun
-                ? `${home.jobsRun.ran} sensor${home.jobsRun.ran === 1 ? '' : 's'} looked${home.jobsRun.produced > home.jobsRun.written ? `, and what they found you have already answered` : ''}. ${home.watchSources.length ? 'Your sources are the part that brings in something from outside — a quiet one is worth replacing.' : 'Nothing is being watched yet, so nothing can arrive from outside.'}`
-                : 'The sensors looked and found nothing new.'}
-            </>
-          ) : home.movesBlocked === 'migration' ? (
-            <>
-              <b>Moves are not switched on yet</b>
-              The copilot_moves table is missing. Run the migration
-              20260910_copilot_moves.sql.
-            </>
-          ) : (
-            <>
-              <b>No sensors connected</b>
-              Moves are found overnight from things the copilot can see: a sale, your runway,
-              what your matches keep asking for. Finish setting up and the first ones appear
-              after the next run.
-            </>
-          )}
-        </div>
-      ) : null}
 
       {/* What the app saw and was never told the end of.
           Placed directly under the call because it is the only thing on this
@@ -254,6 +185,11 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         </div>
       )}
 
+      {/* A job waiting on an answer, a fix, or your approval. It used to sit
+          with the running ones under "Working on", which put a question you had
+          to answer in the same block as a report you only had to read. */}
+      {!nothingYet && <JobList threads={jobs.needsYou} actions={actions} />}
+
       {/* The triage deck, which used to be a section on a tab of its own. It is
           one judgement, answerable with a thumb, so it is one card. TriageStack
           carries its own section header and returns null when empty — adding a
@@ -277,6 +213,99 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         </div>
       )}
 
+      {tellOpen ? (
+        <div className="cp-composer">
+          <textarea
+            autoFocus value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
+            placeholder="Maria replied. Burn is down to 200. Three people asked about the same thing. I have an interview Thursday…"
+          />
+          <div className="bar">
+            <span className="hint">Changes tomorrow&rsquo;s call.</span>
+            <button className="cp-btn" disabled={sending} onClick={() => { setTellOpen(false); setNote(''); }}>Cancel</button>
+            <button className="cp-btn primary" disabled={sending || briefing || !note.trim()} onClick={() => submit(true)}>Add &amp; re-plan</button>
+          </div>
+        </div>
+      ) : (
+        <button className="cp-tell" onClick={() => setTellOpen(true)}>
+          <span className="t">Tell the copilot what changed</span>
+          <span className="s">{home.contextCount} in context · changes tomorrow&rsquo;s call</span>
+        </button>
+      )}
+
+      {/* ── Zone three: what happened while you were not here ──────────────
+          Nothing in here is an ask. The header stays even when the zone is
+          empty, because "nothing came back" is itself the report — the same
+          reason the Moves block says so out loud rather than rendering
+          nothing. It also carries the way in to handing work over, which for
+          months existed only four taps inside a saved goal. */}
+      {!nothingYet && (
+        <div className="cp-section">
+          <span className="lead">Since you last looked</span>
+          <button className="cp-connect" onClick={() => actions.openSheet({ kind: 'handover' })}>
+            Hand something over
+          </button>
+        </div>
+      )}
+
+      {!nothingYet && <JobList threads={jobs.running} actions={actions} />}
+
+      {/* Said once, to somebody who has never done it. A person with finished
+          jobs behind them does not need telling what this is. */}
+      {!nothingYet && !jobs.needsYou.length && !jobs.running.length && !jobs.finished.length && (
+        <p className="cp-help" style={{ marginTop: -4 }}>
+          Nothing handed over. Give it something you would otherwise do yourself — research, a
+          comparison, a shortlist — and read what comes back.
+        </p>
+      )}
+
+      {/* Finished work from every job. The one promoted to the call is not in
+          here — loadHome takes it out, because rendering it twice is exactly the
+          duplication this screen exists to remove. */}
+      {home.moves.length > 0 ? (
+        <>
+          {/* No header of its own any more. "Done while you slept" and "Since
+              you last looked" are the same sentence, and rendering both at the
+              same weight made the zone header read as a third peer section
+              rather than as the thing containing them. */}
+          {home.moves.map((m) => <MoveCard key={m.id} move={m} actions={actions} />)}
+        </>
+      ) : home.movesBlocked ? (
+        // Silence and "not wired up" looked identical here, so a working build
+        // read as a broken one. An empty day still renders nothing at all —
+        // this only speaks when something is actually missing.
+        <div className="cp-empty" style={{ marginBottom: 14 }}>
+          {home.movesBlocked === 'quiet' && home.jobsRun?.broke?.length ? (
+            // A sensor that BROKE is not a quiet night, and saying "nothing new"
+            // over a worker the app could not reach is the screen reporting
+            // calm about a thing that is on fire.
+            <>
+              <b>{home.jobsRun.broke.length === 1 ? 'A sensor failed last night' : `${home.jobsRun.broke.length} sensors failed last night`}</b>
+              {home.jobsRun.broke.join(' · ')}
+            </>
+          ) : home.movesBlocked === 'quiet' ? (
+            <>
+              <b>Nothing new last night</b>
+              {home.jobsRun
+                ? `${home.jobsRun.ran} sensor${home.jobsRun.ran === 1 ? '' : 's'} looked${home.jobsRun.produced > home.jobsRun.written ? `, and what they found you have already answered` : ''}. ${home.watchSources.length ? 'Your sources are the part that brings in something from outside — a quiet one is worth replacing.' : 'Nothing is being watched yet, so nothing can arrive from outside.'}`
+                : 'The sensors looked and found nothing new.'}
+            </>
+          ) : home.movesBlocked === 'migration' ? (
+            <>
+              <b>Moves are not switched on yet</b>
+              The copilot_moves table is missing. Run the migration
+              20260910_copilot_moves.sql.
+            </>
+          ) : (
+            <>
+              <b>No sensors connected</b>
+              Moves are found overnight from things the copilot can see: a sale, your runway,
+              what your matches keep asking for. Finish setting up and the first ones appear
+              after the next run.
+            </>
+          )}
+        </div>
+      ) : null}
+
       {/* What is already running. Every other section on this screen is an ask —
           the call, the composer, the moves, the deck, the queue — and none of
           them answered the question a person actually has at nine at night.
@@ -288,7 +317,10 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
           time, with the numbers disagreeing. Nothing here is written by a model. */}
       {home.motion.length > 0 && (
         <>
-          <div className="cp-section">
+          {/* Subordinate: it is a group INSIDE "since you last looked", not a
+              peer of it. At the same weight three identical headers stacked up
+              and the zone stopped reading as a zone. */}
+          <div className="cp-section sub">
             <span className="lead">In motion</span>
             <span className="count">nothing to do here</span>
           </div>
@@ -306,6 +338,40 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
         </>
       )}
 
+      {/* The read only appears here when there is no call to carry it. With a
+          call it lives inside that card, and the full read is on Working. */}
+      {home.insight && !home.decision && !nothingYet && (
+        <div className="cp-card cp-insight">
+          <div className="cp-eyebrow">{home.insight.eyebrow}</div>
+          <p>{home.insight.body}</p>
+          {home.insight.reasoning && (
+            <>
+              <button className="cp-go" onClick={() => setShowWhy((v) => !v)}>{showWhy ? 'Hide the reasoning' : 'See the reasoning →'}</button>
+              {showWhy && <div className="cp-reasoning">{home.insight.reasoning}</div>}
+            </>
+          )}
+        </div>
+      )}
+
+      {nothingYet && <FirstRun home={home} actions={actions} finding={finding} />}
+
+      {b.matches.remaining === 0 && (
+        <div className="cp-card cp-wall">
+          <div className="cp-eyebrow">Out of matches</div>
+          <p>
+            You have used all {b.matches.limit} matches on {PLANS[b.effective].name} this month. Your brief,
+            drafts and funnel keep running on what you already have — only new supply stops.
+          </p>
+          {b.effective !== 'operator' && (
+            <a className="cp-btn primary block" href={`${shell}/pricing`}>
+              See plans — {PLANS[b.effective === 'free' ? 'pro' : 'operator'].limits.matchesPerMonth.toLocaleString()} a month
+            </a>
+          )}
+          <p className="cp-wall-sub">
+            Resets on the 1st.{b.effective === 'operator' && ' If you are hitting 2,000 a month, get in touch and we will size something.'}
+          </p>
+        </div>
+      )}
     </>
   );
 }

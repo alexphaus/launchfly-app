@@ -217,6 +217,46 @@ when the token is written.
 
 Two questions, two tabs: **Now** (what do I do) and **Working?** (is it working).
 
+### Three zones on Now, and the axis is the point
+
+```
+   the call            one decision, alone, no header above it
+   also needs you      confirm, jobs waiting on you, the deck, the queue,
+                       and the one input the scrapers cannot supply
+   since you last      running jobs, finished Moves, what is in motion
+   looked
+```
+
+Before this, Now was grouped by **feature** — handed-over jobs in one section,
+Moves in another, the queue below that, the composer near the top — while the
+question somebody has when they open it is temporal: *what needs me* and *what
+happened while I was away*. So the screen alternated between asking and
+reporting four times on the way down, and a job sat in whichever block its
+feature owned regardless of which of the two it was. `splitThreads` is the whole
+idea in one function: `needsYou` (blocked or draft — an unapproved mandate is
+waiting on a person), `running`, `finished`.
+
+Three rules keep it legible:
+
+- **The call stays outside zone two.** It is one decision, and a header above it
+  announcing that three things need you is the dilution the single-call design
+  exists to prevent.
+- **A zone header contains; a sub-header is contained.** "Done while you slept"
+  and "Since you last looked" are the same sentence, so the first one is gone;
+  the deck and In motion are `cp-section sub`, with a smaller, dimmer marker.
+  At equal weight three stacked headers made the zone header read as a third
+  peer and the grouping was invisible.
+- **Zone three's header stays when the zone is empty.** "Nothing came back" is
+  itself the report — the same reason the Moves block says so out loud. It also
+  carries the way in to handing work over, which for months existed only four
+  taps inside a saved goal.
+
+**Finished jobs are not on Now.** They live on Working?, beside the decision
+record, because a finished job with an outcome *is* a graded call and "did that
+work" is the only question that tab asks. A card reading "done" for a fortnight
+in the middle of the one screen meant for deciding what to do next is the screen
+congratulating itself.
+
 Pipeline was the third and every part of it already existed somewhere else. Its
 send queue was Today's send queue read a second way — the two rendered from
 different queries and disagreed on screen, 40 against 42. Its triage deck is one

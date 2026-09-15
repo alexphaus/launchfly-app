@@ -3309,9 +3309,9 @@ workingFile().catch((e) => { console.error(e); process.exit(1); });
 // itself. Everything else in this file is bookkeeping; those two are the
 // product.
 import {
-  AUTHORITY, AUTHORITIES, MAX_BRIEF_LOG, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX, WORKER_EVENT_KINDS,
+  AUTHORITY, AUTHORITIES, COMMISSION_STATUSES, MAX_BRIEF_LOG, MAX_STEPS, MAX_EVENTS_PER_POST, SUMMARY_MAX, WORKER_EVENT_KINDS,
   SAFE_HREF, blockedMove, blockedOn, briefLog, canAct, commissionBrief, commissionChip, commissionIdFromMove, commissionLine, commissionTerms,
-  dueCommissions, isAuthority, normalizePlan, normalizeResult, nextStatus, reportOf, whoFor,
+  dueCommissions, isAuthority, normalizePlan, normalizeResult, nextStatus, reportOf, splitThreads, whoFor,
 } from '../../src/lib/copilot/commission';
 import type { Commission, CommissionEvent } from '../../src/lib/copilot/commission';
 
@@ -3656,6 +3656,29 @@ async function commissions() {
     // finished work, and has no business competing for the day against the queue.
     assert.equal(blockedMove(blocked, faultOnly, 'commission'), null);
     assert.ok(blockedMove(blocked, askOnly, 'commission'), 'a real question still becomes a Move');
+  }
+
+  // --- which zone of Now a job belongs in
+  //
+  // Now was grouped by feature, so a job sat in whichever block its feature
+  // owned regardless of whether it was waiting on an answer or quietly making
+  // progress — opposite things to somebody holding a phone. The axis is
+  // temporal now: what needs me, what happened, and what is over.
+  {
+    const t = (status: string) => ({ commission: { status } }) as never;
+    const z = splitThreads([t('blocked'), t('active'), t('done'), t('draft'), t('stopped')]);
+    // A draft needs you: nothing happens to it until it is approved, and an
+    // unapproved mandate is indistinguishable from one the app forgot — which
+    // is the whole reason the approve button exists.
+    assert.deepEqual(z.needsYou.map((x) => x.commission.status), ['blocked', 'draft']);
+    assert.deepEqual(z.running.map((x) => x.commission.status), ['active']);
+    assert.deepEqual(z.finished.map((x) => x.commission.status), ['done', 'stopped']);
+    // Every job lands in exactly one zone, or the screen either loses one or
+    // renders it twice.
+    const all = [...COMMISSION_STATUSES].map(t);
+    const split = splitThreads(all);
+    assert.equal(split.needsYou.length + split.running.length + split.finished.length, COMMISSION_STATUSES.length);
+    assert.deepEqual(splitThreads([]), { needsYou: [], running: [], finished: [] });
   }
 
   console.log('copilot-core: commission checks passed');

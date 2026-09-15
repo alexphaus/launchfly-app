@@ -64,7 +64,8 @@ export default function TriageStack({ cards, held, actions }: { cards: TriageCar
 
   return (
     <>
-      <div className="cp-section">
+      {/* Subordinate: a group inside "Also needs you", not a peer of it. */}
+      <div className="cp-section sub">
         <span className="lead">Worth approaching?</span>
         <span className="count">{cards.length} to judge</span>
       </div>

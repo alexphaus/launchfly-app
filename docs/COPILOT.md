@@ -839,6 +839,113 @@ suggestion, this is the ledger on one that was actually carried out. The ranker
 reads `RANKING_WINDOW` decisions rather than ten, because "you did this and
 nothing happened" does not stop being true because a fortnight passed.
 
+### What the work turned out to be worth
+
+`copilot_outcomes` could only describe a message — `reply` / `meeting` /
+`proposal` / `won` / `lost` / `no_reply`, with `opportunity_id`, `action_id` and
+`execution_id` to hang them on. Eight of the nine Jobs produce work that is not a
+message, and a **commission** is work the app was authorised to have done; when
+one closed, the answer went into free text on the commission row that nothing
+read. So a mandate could run for a week, spend worker minutes and be closed
+without leaving a row any ranking, metric or verdict could see.
+
+`20260921` adds `move_id` and `commission_id`, and widens `kind` by three. The
+new three are the answers to **"what did this turn out to be worth?"**, asked once
+when a mandate closes (`WORTH_KINDS` in `lib/copilot/worth.ts`):
+
+| | means |
+| --- | --- |
+| `won` | money arrived. Amount optional; with one it moves the revenue goal |
+| `saved` | money or time that would otherwise have gone. Counts for ranking, **never** for `won_amount` |
+| `delivered` | something useful exists and no number describes it |
+| `nothing` | it was worth nothing |
+
+`nothing` is the point, not a leftover. A close-out question with no honest zero
+collects agreement: every answer is a flavour of value, the rollup reads as
+uniformly positive, and the ranker learns nothing it did not already assume.
+
+**Two consequences in `scoreMove`.** `worthByJob` rolls outcomes up by job key —
+through `copilot_moves.job` for a Move, and to the literal `commission` for a
+mandate, so handing work over is graded as a kind of work like any other. Then:
+
+- the **money** factor prefers the observed average over the job's own
+  `stake.value`. Evidence beats a claim, invariant 3 at the level of value, and
+  including when the evidence is *lower*: a job claiming a customer is worth the
+  full contract with three closes averaging a tenth of that has had its claim
+  tested. The `MAX_MONEY_FACTOR` ceiling still applies, so one enormous close
+  cannot run away with the day.
+- `WORTHLESS_DECAY` bites when a job has `MIN_WORTH_RUN` closes and **every one**
+  said nothing. Not a ratio — a job that produced something once is a job that
+  can, and an average would bury work whose payoff is occasional and large. It
+  multiplies with `DEAD_TOPIC_DECAY` rather than replacing it: "the number did
+  not move" and "it moved and I still got nothing" are separate findings.
+
+A worth answer is always `source: 'manual'`. Invariant 10 with more force than
+anywhere else in the codebase: a worker allowed to file its own work as valuable
+would be grading the one number that decides whether it keeps getting work.
+
+The sheet asks on **both** close buttons. "Call it off" pre-selects `nothing`,
+because that is almost always what it means and the escape hatch should not cost
+thinking — the other three stay available, since a mandate can produce something
+real and still be worth stopping. **Skipping is a real path**: a required answer
+here would be given by whichever button is nearest the thumb, and a ledger of taps
+is worse than an empty one because it looks like evidence.
+
+`closeCommission` writes twice, in this order, and the order is the design. The
+close goes first with the answer as a sentence on the commission row; the ledger
+insert follows. If the insert is rejected — an unapplied `20260921` makes
+`delivered` a `23514` — the mandate is closed, the sentence is saved, and the
+route answers `recorded: false` with a reason the sheet renders. Nothing reports
+a clean close over a verdict that never landed.
+
+### Ask your own record
+
+`GET /api/copilot/ask` answers five questions by counting: which segment replies,
+where drafts die, which calls worked, what has been stood down, and whether any
+of it has been worth money. Opened from the card under the funnel on Working.
+
+**Deliberately not a chatbot, and `lib/copilot/ask.ts` argues it at length.** A
+free-text question over these rows has to be answered by a model; a model counting
+rows will produce a plausible figure; and nobody — including whoever built it —
+can tell which time it is wrong. That is invariant 2 at its root: the skill levels
+and estimated percentages deleted in `3eaa03f` went because a figure nobody can
+trace is worse than no figure, since it gets acted on.
+
+Two rules the answers keep. `MIN_ASK_SAMPLE` — a reply rate off three sends is not
+a smaller fact but a different kind of thing, so under-sampled segments are left
+out **and named as left out**. And every answer that renders no rows carries
+`thin`: why it is empty. A blank card is the shape of the three bugs in invariant
+13, in the one feature whose job is to tell the truth about the record.
+
+`worth` will not subtract across currencies. The plan is priced in a
+deployment-wide `CURRENCY` and the user's money is counted in their own, so when
+they differ both figures are stated and no verdict is drawn — "₱100 against ₱87"
+out of a $29 plan is exactly the invented number invariant 2 forbids.
+
+### Take it somewhere else
+
+`GET /api/copilot/handoff` renders everything the app knows as text: the working
+file with `you` and `observed` still distinguishable, the funnel, every call it
+made and what was done about it, what has been stood down, what is running, what
+is owed, what people wrote back. One tap copies it.
+
+This looks like giving the product away and is the opposite. The whole thesis is
+that judgement about what is worth doing today gets better with **this user's**
+rows rather than with a better model — a claim, and until now an untestable one. A
+general model asked "what should I do now?" has no funnel, no record of what was
+refused and no working file. If handing it all of that closes the gap, the value
+is in the rows and this should be a system of record; if it does not, the value is
+in the arbitration. Either answer is worth more than the argument.
+
+It is also the honest answer to lock-in: somebody whose context cannot leave is a
+hostage, and a product chosen because leaving is expensive finds out what it was
+worth the moment that changes.
+
+Truncation at `HANDOFF_MAX` says so in the text. A paste that looks whole and is
+not is worse than a short one, because the reader cannot tell which they have. No
+contact details leave — the destination is a third-party model, and the export is
+context about the user's own business, not a list of other people's numbers.
+
 ### The queue you have decided against
 
 `cancelOpenDrafts` existed since the offer-change path and had **no user-facing
@@ -1125,7 +1232,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/actions/:id` | `{ status: done \| dismissed \| open }` |
 | POST/DELETE | `/api/copilot/actions/:id/send` | approve & send via API (only when the profile owns the channel) / cancel |
 | POST | `/api/copilot/actions/:id/sent` | manual dispatch: "I sent it from my own app" |
-| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` |
+| POST | `/api/copilot/outcomes` | `{ kind, opportunity_id?, action_id?, amount?, currency?, note? }` — `kind` is any `OUTCOME_KINDS` value, including the three worth answers |
 | POST | `/api/copilot/decision` | `{ response: did \| rejected \| wrong }` — what you did about today's call |
 | POST | `/api/copilot/growth/:id` | `{ status: active \| done \| dismissed }` |
 | POST | `/api/copilot/sources/:key` | mark a connector as requested (foundation) |
@@ -1141,11 +1248,13 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | GET/POST | `/api/copilot/working` | the working file: write a line, confirm or decline a reading |
 | DELETE | `/api/copilot/working?id=` | remove a line |
 | GET/POST | `/api/copilot/commissions` | read the thread · write a mandate (always as a draft) |
-| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen` |
+| POST | `/api/copilot/commissions/[id]` | `approve` · `unblock` · `stop` · `done` · `seen`. `stop` and `done` carry the close-out verdict `{ worth, amount?, note? }`, and answer with `recorded` plus a `note` when it did not reach the ledger |
 | POST | `/api/copilot/commissions/[id]/result` | **the worker's return leg** (Bearer `COPILOT_INBOUND_SECRET`) |
 | POST | `/api/copilot/commissions/run` | hand live mandates over now (25s budget) |
 | POST | `/api/copilot/obligations` | money owed, either way |
 | POST | `/api/copilot/actions/[id]/opened` | `sendBeacon` target — a draft's deep link was tapped |
+| GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
+| GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 
 All copilot API responses are `Cache-Control: private, no-store` (rule in `next.config.ts`).
 
@@ -1303,6 +1412,13 @@ npm run test:copilot
 Pure-module tests: ranking (sourced/inferred rule, capacity plan selection, outcome-weighted
 affinity), metrics, phone normalisation and heuristic fit, message templates, agent output
 normalisation, starter agent, session signing.
+
+Two of them read files rather than modules, and both exist because the same bug
+shipped twice. `OUTCOME_KINDS` is diffed against the `kind` CHECK in
+`20260921_copilot_outcome_worth.sql` **in both directions**, and `BUSINESS_METRICS`
+against `20260920`'s. A widened TS union over an untouched constraint is a silent
+`23514` — that drift made the daily Call invisible for a fortnight while every
+write went into a `console.error` and the screen reported calm.
 
 ## Quotas
 

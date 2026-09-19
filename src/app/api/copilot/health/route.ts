@@ -33,6 +33,21 @@ const PROBES: Array<{ table: string; column: string; migration: string }> = [
   { table: 'copilot_moves', column: 'artifact', migration: '20260910_copilot_moves.sql' },
   { table: 'copilot_moves', column: 'stake', migration: '20260911_copilot_arbitration.sql' },
   { table: 'copilot_decisions', column: 'source_move_id', migration: '20260911_copilot_arbitration.sql' },
+  // This list stopped at 20260911 while ten migrations shipped past it, which is
+  // the same rot that made scripts/sql/copilot-schema-check.sql answer "complete"
+  // for the entire commission layer. Every read path below degrades to an empty
+  // list on purpose, so an unapplied migration and a quiet account render
+  // identically — this route is the only place a deployment can be asked which it
+  // is. Invariant 13: a failure that degrades still has to be visible somewhere.
+  { table: 'copilot_sources', column: 'discovered_by', migration: '20260915_copilot_source_discovery.sql' },
+  { table: 'copilot_obligations', column: 'amount', migration: '20260914_copilot_obligations.sql' },
+  { table: 'copilot_commissions', column: 'authority', migration: '20260916_copilot_commissions.sql' },
+  { table: 'copilot_working', column: 'observed_key', migration: '20260917_copilot_working.sql' },
+  // The two columns loadWorthLedger selects. Without them it returns {} and the
+  // ranker weights commission work by a guess about a category — silently, and
+  // for as long as the deployment runs.
+  { table: 'copilot_outcomes', column: 'move_id', migration: '20260921_copilot_outcome_worth.sql' },
+  { table: 'copilot_outcomes', column: 'commission_id', migration: '20260921_copilot_outcome_worth.sql' },
 ];
 
 /**

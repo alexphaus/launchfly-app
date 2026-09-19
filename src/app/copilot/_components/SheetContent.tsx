@@ -11,6 +11,8 @@ import { pruneSuggestions, yieldLine } from '@/lib/copilot/watch/yield';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import { BODY_MAX, SECTION, SECTIONS, type WorkingSection } from '@/lib/copilot/working';
 import { AUTHORITIES, AUTHORITY, blockedOn, type Authority } from '@/lib/copilot/commission';
+import { WORTH, WORTH_KINDS, WORTH_NOTE_MAX, type WorthKind } from '@/lib/copilot/worth';
+import type { AskAnswer } from '@/lib/copilot/ask';
 import { TREND_LABEL } from './views/WorkingView';
 import YouView from './views/YouView';
 import { useShell } from './shell';
@@ -36,6 +38,7 @@ export default function SheetContent({ sheet, home, actions, briefing = false }:
     case 'commission': return <CommissionSheet home={home} id={sheet.id} actions={actions} />;
     case 'handover': return <HandoverSheet home={home} actions={actions} />;
     case 'working': return <WorkingSheet home={home} actions={actions} />;
+    case 'ask': return <AskSheet actions={actions} />;
   }
 }
 
@@ -1176,6 +1179,14 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState('');
+  // Which close is being made, or null while the buttons are still just buttons.
+  // Closing is a two-step act now: the second step is the only moment this app
+  // ever gets to ask what a piece of work was actually worth, and it is also the
+  // cheapest — the person is right there, it just ended, and they know.
+  const [closing, setClosing] = useState<'done' | 'stopped' | null>(null);
+  const [worth, setWorth] = useState<WorthKind | null>(null);
+  const [worthAmount, setWorthAmount] = useState('');
+  const [worthNote, setWorthNote] = useState('');
   // In an effect, keyed on the id. The first version did this in the render body
   // behind a ref — and CopilotApp keeps the last sheet MOUNTED after it closes
   // (sheet = top ?? lastSheet.current), so the ref survived the close and
@@ -1193,6 +1204,10 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
   const c = thread.commission;
   const meta = AUTHORITY[c.authority];
   const goal = home.goals.find((g) => g.id === c.goal_id);
+  // Shown beside the amount field so nobody has to guess which currency a bare
+  // number is in. Empty when there is no burn and no currency goal on file, and
+  // then the field simply does not name one rather than assuming dollars.
+  const currency = home.profile.finance?.currency || home.goals.find((g) => g.metric === 'currency')?.unit || '';
   // What it is actually waiting for. `blocked` covers two opposite states: a
   // question only this person can answer, and a worker that fell over. They
   // want opposite things — a reply and a retry — and rendering both under "Your
@@ -1225,6 +1240,31 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
     if (!r.ok) return setError(r.error ?? 'Could not do that');
     if (action === 'unblock') setAnswer('');
     if (action === 'stop' || action === 'done') actions.closeSheet();
+  };
+
+  // Close, with or without a verdict. `skip` is a real path and not a courtesy:
+  // a required answer here would be given by whichever button is nearest the
+  // thumb, and a ledger of taps looks like evidence while being worse than an
+  // empty one.
+  const close = async (skip = false) => {
+    if (!closing) return;
+    setBusy(true); setError(null);
+    const amount = Number(worthAmount.replace(/[^\d.]/g, ''));
+    const r = await actions.commissionAction(
+      id, closing === 'done' ? 'done' : 'stop',
+      skip || !worth ? undefined : {
+        worth,
+        amount: Number.isFinite(amount) && amount > 0 ? amount : null,
+        note: worthNote.trim() || null,
+      },
+    );
+    setBusy(false);
+    if (!r.ok) return setError(r.error ?? 'Could not close it');
+    // The mandate closed either way, so the sheet goes — but a verdict that did
+    // not reach the ledger has to be said out loud rather than dissolve into a
+    // success toast. The note stays on screen and the sheet holds.
+    if (r.note) return setError(r.note);
+    actions.closeSheet();
   };
 
   return (
@@ -1386,13 +1426,186 @@ function CommissionSheet({ home, id, actions }: { home: HomeData; id: string; ac
         </>
       )}
 
-      {c.status !== 'draft' && c.status !== 'done' && c.status !== 'stopped' && (
+      {c.status !== 'draft' && c.status !== 'done' && c.status !== 'stopped' && !closing && (
         <div className="cp-btn-row" style={{ marginTop: 14 }}>
-          <button className="cp-btn" disabled={busy} onClick={() => void act('done')}>It is finished</button>
-          <button className="cp-btn ghost" disabled={busy} onClick={() => void act('stop')}>Call it off</button>
+          <button className="cp-btn" disabled={busy} onClick={() => { setClosing('done'); setWorth(null); }}>It is finished</button>
+          {/* Calling it off pre-selects `nothing`, because that is almost always
+              what it means and the escape hatch should not cost thinking. The
+              other three stay available: a mandate can produce something real and
+              still be worth stopping. */}
+          <button className="cp-btn ghost" disabled={busy} onClick={() => { setClosing('stopped'); setWorth('nothing'); }}>Call it off</button>
         </div>
       )}
+
+      {/* The one question this app has never asked.
+          A commission could run for a week, spend worker minutes, finish every
+          step and close, and the only trace was free text in a column nothing
+          read — so the ranker went on weighting this kind of work by a guess
+          about a category, and "was any of it worth it" had nowhere to read from.
+          Asked here because here is where it is cheap: the work just ended and
+          the person deciding is already looking at what came of it. */}
+      {closing && (
+        <>
+          <div className="cp-section" style={{ marginTop: 14 }}>
+            <span className="lead">{closing === 'done' ? 'What was it worth?' : 'What was it worth up to now?'}</span>
+          </div>
+          <p className="desc">
+            This is the only thing that changes what gets suggested next.
+            {' '}<b>Nothing</b> is a real answer and the most useful one.
+          </p>
+          {WORTH_KINDS.map((k) => (
+            <button key={k} className={`cp-option ${worth === k ? 'active' : ''}`} onClick={() => { setWorth(k); setError(null); }}>
+              <div><div className="ct">{WORTH[k].label}</div><div className="cs">{WORTH[k].sub}</div></div>
+            </button>
+          ))}
+
+          {/* Optional, never required. Somebody who knows it made money but not
+              how much would otherwise either abandon the question or type a
+              figure — and a typed figure is the invented number invariant 2
+              exists to keep out of this database. */}
+          {worth && WORTH[worth].amount === 'optional' && (
+            <input
+              className="cp-input sm" style={{ marginTop: 10 }} inputMode="decimal"
+              value={worthAmount} onChange={(e) => setWorthAmount(e.target.value)}
+              // Short enough to fit the field at 390px. The long version
+              // ("…leave blank if you do not") was clipped mid-word in the
+              // browser, which reads as a broken input rather than an optional
+              // one — the opposite of what it was there to say. The button
+              // below stays enabled without a figure, which says it better.
+              placeholder={`How much, if you know${currency ? ` (${currency})` : ''}`}
+            />
+          )}
+          {worth && (
+            <input
+              className="cp-input sm" style={{ marginTop: 10 }} maxLength={WORTH_NOTE_MAX}
+              value={worthNote} onChange={(e) => setWorthNote(e.target.value)}
+              placeholder={worth === 'nothing' ? 'What was missing?' : 'What came of it?'}
+            />
+          )}
+
+          <button
+            className={`cp-btn block ${worth ? 'primary' : 'ghost'}`} style={{ marginTop: 12 }}
+            disabled={busy || !worth} onClick={() => void close()}
+          >
+            {busy ? 'Closing…' : closing === 'done' ? 'Finish it' : 'Call it off'}
+          </button>
+          <div className="cp-btn-row" style={{ marginTop: 8 }}>
+            <button className="cp-btn ghost" disabled={busy} onClick={() => void close(true)}>Close without saying</button>
+            <button className="cp-btn ghost" disabled={busy} onClick={() => { setClosing(null); setWorth(null); setError(null); }}>Back</button>
+          </div>
+        </>
+      )}
       {c.outcome && <div className="cp-note">{c.outcome}</div>}
+    </>
+  );
+}
+
+/* ─── Questions ───────────────────────────────────────────────────────────── */
+
+/**
+ * Five questions about your own rows, and one escape hatch.
+ *
+ * The app writes constantly and could be asked nothing. Everything on every other
+ * screen is a decision it made or a record it rendered; the thing somebody
+ * actually says out loud after a fortnight — "which of these segments ever
+ * replies?" — had nowhere to go, while the answer sat in the database.
+ *
+ * A fixed list rather than a text box, and lib/copilot/ask.ts argues it at length.
+ * The short version: a typed question has to be answered by a model, a model
+ * counting rows will produce a plausible figure, and nobody can tell which time it
+ * is wrong. Every answer here is arithmetic.
+ *
+ * The handoff at the bottom is the other half of the same honesty. These five are
+ * what the app can answer by counting; for everything else it hands you the whole
+ * record and gets out of the way.
+ */
+function AskSheet({ actions }: { actions: Actions }) {
+  const [answers, setAnswers] = useState<AskAnswer[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const r = await actions.askRows();
+      if (!live) return;
+      if (!r.ok) return setError(r.error ?? 'Could not count that');
+      setAnswers(r.answers ?? []);
+      // The first question opens itself. A screen of five collapsed rows makes
+      // somebody tap before they know whether any of it is worth reading.
+      setOpen(r.answers?.[0]?.id ?? null);
+    })();
+    return () => { live = false; };
+    // actions is rebuilt every render and this is a one-shot load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const copy = async () => {
+    setCopying(true); setCopied(null); setError(null);
+    const r = await actions.handoff();
+    if (!r.ok || !r.text) { setCopying(false); return setError(r.error ?? 'Could not gather your context'); }
+    try {
+      await navigator.clipboard.writeText(r.text);
+      setCopied(`${r.chars?.toLocaleString() ?? r.text.length.toLocaleString()} characters copied. Paste it into anything.`);
+    } catch {
+      // Clipboard access is refused outright in some embedded browsers, and a
+      // button that silently does nothing is the worst outcome — the user pastes
+      // stale clipboard content into a model and blames the answer.
+      setError('This browser would not let the page write to the clipboard. Open the app in Safari or Chrome directly and try again.');
+    }
+    setCopying(false);
+  };
+
+  return (
+    <>
+      <h3>Ask your own record</h3>
+      <p className="desc">
+        Every answer here is counted from rows you made. Nothing is estimated, so nothing can be
+        confidently wrong.
+      </p>
+
+      {error && <div className="cp-note">{error}</div>}
+      {!answers && !error && <p className="desc">Counting…</p>}
+
+      {answers?.map((a) => (
+        <div key={a.id}>
+          <button className={`cp-option ${open === a.id ? 'active' : ''}`} onClick={() => setOpen(open === a.id ? null : a.id)}>
+            <div><div className="ct">{a.q}</div><div className="cs">{a.headline}</div></div>
+          </button>
+          {open === a.id && (
+            <div className="cp-list" style={{ marginTop: 8 }}>
+              {a.rows.map((r, n) => (
+                <div key={`${a.id}-${n}`} className="cp-ctx">
+                  <div><div className="l">{r.label}</div>{r.note && <div className="s">{r.note}</div>}</div>
+                  <span className="cp-connect ghost">{r.value}</span>
+                </div>
+              ))}
+              {/* Never an empty card. Three bugs in this codebase shared the shape
+                  of a component failing, the failure being swallowed, and the
+                  screen reporting calm — a blank answer here would be that
+                  shape in the one feature whose job is to tell the truth. */}
+              {a.thin && <div className="cp-note">{a.thin}</div>}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div className="cp-section" style={{ marginTop: 16 }}><span className="lead">Anything else</span></div>
+      <p className="desc">
+        Those five are what this app can answer by counting. For everything else, take the whole
+        record and ask something that can actually reason — your working file, your funnel, every
+        call it made and what you did about it, what you have stood down, what is running.
+      </p>
+      <button className="cp-btn primary block" disabled={copying} onClick={() => void copy()}>
+        {copying ? 'Gathering…' : 'Copy everything it knows'}
+      </button>
+      {copied && <div className="cp-note">{copied}</div>}
+      <p className="cp-help">
+        Your rows are yours. If a general model does better with all of this than this app does
+        without it, that is worth knowing — and it is the reason this button exists.
+      </p>
     </>
   );
 }

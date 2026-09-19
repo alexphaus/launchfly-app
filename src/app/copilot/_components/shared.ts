@@ -2,6 +2,8 @@ import type { PipelineStage } from '@/lib/copilot/pipeline';
 import type { Discovered } from '@/lib/copilot/watch/discover';
 import type { WorkingSection } from '@/lib/copilot/working';
 import type { Authority } from '@/lib/copilot/commission';
+import type { WorthKind } from '@/lib/copilot/worth';
+import type { AskAnswer } from '@/lib/copilot/ask';
 import type { ActionStatus, Capacity, Channel, Goal, Offer, OpportunityStatus, OutcomeKind, SourceKey } from '@/lib/copilot/types';
 
 /**
@@ -43,7 +45,12 @@ export type SheetState =
   /** One mandate: its plan, its log, and the button that grants it authority. */
   | { kind: 'commission'; id: string }
   /** Hand work over without starting from a goal. */
-  | { kind: 'handover' };
+  | { kind: 'handover' }
+  /**
+   * Questions about your own rows, each answered by counting — plus the one
+   * escape hatch for everything the list cannot answer. See lib/copilot/ask.ts.
+   */
+  | { kind: 'ask' };
 
 export interface OutcomeInput {
   opportunity_id?: string;
@@ -117,8 +124,18 @@ export interface Actions {
   /** Write a mandate. Always created as a draft — approving is a second act. */
   createCommission(input: { objective: string; why?: string; goal_id?: string; authority?: Authority; budget_minutes?: number }): Promise<{ ok: boolean; error?: string }>;
   /** Grant authority, carry on after answering, call it off, finish, or mark read. */
-  /** `answer` is the user's reply to a needs_you, and only 'unblock' carries one. */
-  commissionAction(id: string, action: 'approve' | 'unblock' | 'stop' | 'done' | 'seen', outcome?: string, answer?: string): Promise<{ ok: boolean; error?: string }>;
+  /**
+   * `answer` is the user's reply to a needs_you, and only 'unblock' carries one.
+   * `worth` is the close-out verdict and only 'done' and 'stop' carry one — it is
+   * optional because the question can be skipped, and `note` reports a verdict
+   * that was saved on the mandate but did not reach the ledger.
+   */
+  commissionAction(
+    id: string,
+    action: 'approve' | 'unblock' | 'stop' | 'done' | 'seen',
+    worth?: { worth: WorthKind; amount?: number | null; note?: string | null },
+    answer?: string,
+  ): Promise<{ ok: boolean; error?: string; note?: string | null }>;
   /**
    * Hand the live mandates to the worker now. The nightly pass is otherwise the
    * only thing that can — commissionJob cannot fit in the brief route's budget.
@@ -148,6 +165,18 @@ export interface Actions {
   setWatchSourceStatus(id: string, status: 'active' | 'paused'): Promise<void>;
   /** A Move is finished work: say it is done, or that it is not for you. */
   answerMove(id: string, status: 'done' | 'dismissed'): Promise<boolean>;
+  /**
+   * The five questions, answered by counting. A fixed list on purpose — a text
+   * box here would have to be answered by a model, and a plausible invented
+   * figure is worse than no figure because it gets acted on.
+   */
+  askRows(): Promise<{ ok: boolean; answers?: AskAnswer[]; error?: string }>;
+  /**
+   * Everything the app knows, as text to paste into any model. Resolves the text
+   * rather than copying it, because the clipboard write has to happen inside the
+   * tap handler to count as a user gesture in Safari.
+   */
+  handoff(): Promise<{ ok: boolean; text?: string; chars?: number; error?: string }>;
   requestLoginLink(email: string): Promise<{ ok: boolean; error?: string }>;
   setPush(enabled: boolean): Promise<boolean>;
 }

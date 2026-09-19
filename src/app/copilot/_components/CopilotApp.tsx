@@ -20,6 +20,7 @@ import { useShell } from './shell';
 import SheetContent from './SheetContent';
 import type { Actions, OutcomeInput, SheetState, Tab } from './shared';
 import type { Discovered } from '@/lib/copilot/watch/discover';
+import type { AskAnswer } from '@/lib/copilot/ask';
 import WorkingView from './views/WorkingView';
 import NowView from './views/NowView';
 
@@ -301,9 +302,9 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
       }
     },
-    async commissionAction(id, action, outcome, answer) {
+    async commissionAction(id, action, worth, answer) {
       try {
-        const r = await post<{ home?: HomeData }>(`/commissions/${encodeURIComponent(id)}`, { action, outcome, answer });
+        const r = await post<{ home?: HomeData; note?: string | null }>(`/commissions/${encodeURIComponent(id)}`, { action, answer, ...(worth ?? {}) });
         // 'seen' deliberately returns no home: rewriting the screen under
         // somebody who just opened the sheet moves the card out from under them.
         if (r.home) setHome(r.home);
@@ -311,8 +312,14 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         // Two different things happened, and which one decides whether the
         // worker stops asking. Saying "carrying on" for both would hide it.
         if (action === 'unblock') say(answer?.trim() ? 'Sent. It gets your answer on the next run.' : 'Carrying on. It picks up tonight.');
-        if (action === 'stop') say('Stopped.');
-        return { ok: true };
+        // The toast reports whether the verdict LANDED, not merely that the
+        // mandate closed. A worth answer that did not reach the ledger changes
+        // nothing about what gets suggested next, and saying "noted" either way
+        // is how a broken feature looks like a working one.
+        if (action === 'stop' || action === 'done') {
+          say(r.note ? 'Closed, but the verdict did not save.' : worth ? 'Closed, and noted.' : 'Closed.');
+        }
+        return { ok: true, note: r.note ?? null };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not update that' };
       }
@@ -512,6 +519,22 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return { ok: true, cancelled: r.cancelled };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : 'Could not clear the queue' };
+      }
+    },
+    async askRows() {
+      try {
+        const r = await get<{ answers: AskAnswer[] }>('/ask');
+        return { ok: true, answers: r.answers };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not count that' };
+      }
+    },
+    async handoff() {
+      try {
+        const r = await get<{ text: string; chars: number }>('/handoff');
+        return { ok: true, text: r.text, chars: r.chars };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not gather your context' };
       }
     },
     async requestLoginLink(email) {

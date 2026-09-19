@@ -31,7 +31,27 @@ export type SourceStatus = 'not_connected' | 'requested' | 'connected' | 'error'
 export type SourceKind = 'sourced' | 'inferred';
 export type Channel = 'whatsapp' | 'email';
 export type ApprovalState = 'needs_approval' | 'approved' | 'sent' | 'failed' | 'cancelled';
-export type OutcomeKind = 'reply' | 'meeting' | 'proposal' | 'won' | 'lost' | 'no_reply';
+/**
+ * Everything that can be recorded as having happened.
+ *
+ * The first six are the outbound funnel and were the whole list until 20260921 —
+ * which meant the ledger could describe a message and nothing else, while eight
+ * of the nine Jobs produce work that is not one. The last three are the answers
+ * to "what did this turn out to be worth?" (see WORTH_KINDS in worth.ts), and
+ * `nothing` is a first-class entry rather than an absence: a close-out question
+ * with no honest zero in it collects agreement.
+ *
+ * An ARRAY and not a bare union, so a test can read it back. The CHECK
+ * constraint in 20260921_copilot_outcome_worth.sql has to permit exactly these,
+ * and the drift between a widened union and an untouched CHECK is what made the
+ * daily Call invisible for a fortnight: every write 23514'd into a console.error
+ * while the screen reported calm.
+ */
+export const OUTCOME_KINDS = [
+  'reply', 'meeting', 'proposal', 'won', 'lost', 'no_reply',
+  'delivered', 'saved', 'nothing',
+] as const;
+export type OutcomeKind = (typeof OUTCOME_KINDS)[number];
 export type SendMode = 'manual' | 'api';
 export type Dispatch = 'api' | 'manual';
 
@@ -169,6 +189,15 @@ export interface Outcome {
   opportunity_id: string | null;
   action_id: string | null;
   execution_id: string | null;
+  /**
+   * The Move this came out of, when it came out of one. Through
+   * copilot_moves.job it is how an outcome reaches the job key the ranker reads,
+   * which is the whole reason it exists — before it, work that was not a message
+   * could be done but never graded. Null on an unapplied 20260921.
+   */
+  move_id?: string | null;
+  /** The mandate this closed. Same purpose, for work the app had done. */
+  commission_id?: string | null;
   kind: OutcomeKind;
   amount: number | null;
   currency: string | null;

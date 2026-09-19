@@ -33,7 +33,8 @@ import type { Obligation, ObligationDirection, ObligationStatus } from './obliga
 import { canTriage, oldestWaitDays, orderTriage, queueIsBacked, segmentKeepRate, type TriageCard, type TriageEvent } from './triage';
 import type { JobsRunSummary, Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
-import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType } from './outcomes';
+import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType, recordOutcome } from './outcomes';
+import { WORTH_NOTE_MAX, worthSentence, type WorthKind } from './worth';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
 import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
@@ -1675,11 +1676,70 @@ export async function unblockCommission(profileId: string, id: string, answer?: 
   return (data as unknown as Commission) ?? null;
 }
 
-export async function closeCommission(profileId: string, id: string, status: 'done' | 'stopped', outcome?: string): Promise<void> {
+/**
+ * Close a mandate, and record what it turned out to be worth.
+ *
+ * Two writes, in this order, and the order is the whole design.
+ *
+ * The close goes first. If the ledger insert fails — an unapplied 20260921
+ * rejects `delivered` on the kind check and move_id with PGRST204 — the mandate
+ * is already closed and the user's own sentence is already in
+ * copilot_commissions.outcome, where the sheet renders it. The caller is told the
+ * verdict did not reach the ledger and can say so. The other order loses either
+ * the close or the answer, and a worth answer typed into a mandate that stayed
+ * open is the worst of the three outcomes.
+ *
+ * Recording is what makes closing informative rather than tidy. Before this, a
+ * commission could run for a week, spend worker minutes and be closed, and the
+ * only trace was free text in a column nothing read — so scoreMove weighted
+ * commission work by kindPrior forever, and "was any of this worth it" had no row
+ * to read. `nothing` is a real answer here and the one the ranker most needs.
+ */
+export async function closeCommission(
+  profileId: string,
+  id: string,
+  status: 'done' | 'stopped',
+  worth?: { kind: WorthKind; amount?: number | null; note?: string | null },
+): Promise<{ recorded: boolean; reason?: string }> {
+  // Non-fatal, and deliberately so. The currency only formats a sentence, and a
+  // transient profile read must never be the reason a mandate cannot be closed —
+  // that would put the close behind the cosmetic half of this function, which is
+  // the inversion the write order below exists to prevent.
+  const currency = worth ? await getProfile(profileId).then((p) => p?.finance?.currency ?? '').catch(() => '') : '';
+  // Written whether or not the ledger accepts the row, so the sentence survives
+  // an unapplied migration. See worthSentence.
+  const sentence = worth ? worthSentence(worth.kind, worth.amount, worth.note, currency) : null;
+
   await copilotDb().from('copilot_commissions')
-    .update({ status, closed_at: new Date().toISOString(), outcome: outcome?.slice(0, 300) ?? null })
+    .update({ status, closed_at: new Date().toISOString(), outcome: sentence?.slice(0, 300) ?? null })
     .eq('profile_id', profileId).eq('id', id);
-  await logEvent(profileId, 'commission_closed', { commission_id: id, status });
+  await logEvent(profileId, 'commission_closed', { commission_id: id, status, worth: worth?.kind ?? null });
+
+  if (!worth) return { recorded: false };
+  try {
+    await recordOutcome(profileId, {
+      kind: worth.kind,
+      commission_id: id,
+      // Always the user's. A worker that could file its own work as valuable
+      // would be grading the one number that decides whether it keeps getting
+      // work — invariant 10, where it matters most.
+      source: 'manual',
+      amount: worth.amount ?? null,
+      currency: currency || null,
+      note: worth.note?.slice(0, WORTH_NOTE_MAX) ?? null,
+    });
+    return { recorded: true };
+  } catch (e) {
+    // Surfaced, never swallowed. The mandate IS closed and the sentence IS saved;
+    // what did not happen is the part that changes future ranking, and a screen
+    // that reported a clean close would be claiming the app had learned something
+    // it has not.
+    console.error('[copilot] worth not recorded', e);
+    return {
+      recorded: false,
+      reason: 'Closed, and your answer is saved on the mandate — but it did not reach the ledger, so it will not change what gets suggested. The 20260921 migration may not be applied yet.',
+    };
+  }
 }
 
 /** Mark the thread read, so "since you last looked" means something. */

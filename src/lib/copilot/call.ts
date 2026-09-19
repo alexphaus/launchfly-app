@@ -19,7 +19,9 @@ import { decisionReview, refusalsByTopic } from './decision';
 import { arbitrate, costMinutesOf, type ScoreCtx } from './stake';
 import { CAPACITY_META, type Metrics, type Move, type Profile } from './types';
 import type { DecisionDraft } from './decision';
+import { loadWorthLedger } from './outcomes';
 import { loadDecisions, loadMoves, loadStandingRefusals } from './store';
+import type { WorthRecord } from './worth';
 
 /** How many open Moves arbitration considers. Past this it is not a shortlist. */
 export const ARBITRATE_POOL = 24;
@@ -80,7 +82,7 @@ export function draftFrom(win: Move, runnerUp: Move | null, stoodDown: string[] 
 export function scoreCtxFor(
   profile: Pick<Profile, 'capacity' | 'finance'>,
   refused: Record<string, number> = {},
-  extra: { dead?: Record<string, number>; standing?: Set<string> } = {},
+  extra: { dead?: Record<string, number>; standing?: Set<string>; worth?: Record<string, WorthRecord> } = {},
 ): ScoreCtx {
   return {
     monthlyBurn: profile.finance?.monthly_burn ?? null,
@@ -88,6 +90,7 @@ export function scoreCtxFor(
     refused,
     dead: extra.dead,
     standing: extra.standing,
+    worth: extra.worth,
   };
 }
 
@@ -111,10 +114,13 @@ export async function promoteCall(
   profile: Pick<Profile, 'id' | 'capacity' | 'finance'>,
   _metrics: Metrics,
 ): Promise<PromotedCall | null> {
-  const [{ moves }, decisions, standing] = await Promise.all([
+  const [{ moves }, decisions, standing, worth] = await Promise.all([
     loadMoves(profile.id, ARBITRATE_POOL),
     loadDecisions(profile.id, RANKING_WINDOW),
     loadStandingRefusals(profile.id),
+    // What work of each kind has actually turned out to be worth, in the user's
+    // own words. {} on an unapplied 20260921, which is the same as no opinion.
+    loadWorthLedger(profile.id),
   ]);
   if (!moves.length) return null;
 
@@ -126,6 +132,7 @@ export async function promoteCall(
   const ctx = scoreCtxFor(profile, refusalsByTopic(decisions), {
     dead: deadTopic ? { [deadTopic.topic]: deadTopic.count } : undefined,
     standing,
+    worth,
   });
   const { call, insteadOf, stoodDown } = arbitrate(moves.map(scorable), ctx);
   if (!call) return null;

@@ -3753,3 +3753,435 @@ async function commissions() {
 }
 
 commissions().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The worth ledger, the handoff export, and the questions
+//
+// Three changes with one thing in common: each turns something the app already
+// held into something it can be asked about. The ledger could only describe a
+// message, so eight of the nine Jobs produced work that was never graded; the
+// context could not leave, so the product's central claim was untestable; and the
+// record could not be interrogated, so "which segment actually replies" had no
+// answer on the tab whose whole subject is whether any of this is working.
+// ---------------------------------------------------------------------------
+import { readFileSync as readWorthFile } from 'node:fs';
+import { OUTCOME_KINDS } from '../../src/lib/copilot/types';
+import { WORTH, WORTH_KINDS, isWorthKind, worthByJob, worthSentence } from '../../src/lib/copilot/worth';
+import { HANDOFF_MAX, renderHandoff } from '../../src/lib/copilot/handoff';
+import { ASK_IDS, MIN_ASK_SAMPLE, answerAll } from '../../src/lib/copilot/ask';
+import {
+  DEAD_TOPIC_DECAY as DEAD2, MIN_WORTH_RUN, WORTHLESS_DECAY, scoreMove as score2, type ScoreCtx as Ctx2,
+} from '../../src/lib/copilot/stake';
+
+async function worthLedger() {
+  /* ─── 1. The drift lock ─────────────────────────────────────────────────── */
+  //
+  // The single most valuable assertion in this file, because the exact failure it
+  // prevents has already happened once and cost a fortnight of mornings: 20260909
+  // pinned verify_metric to six values, stake.ts widened the union to eight, and
+  // every write 23514'd into a console.error while the screen reported calm.
+  //
+  // Both directions. A kind the TS union permits and the CHECK does not is a
+  // silent write failure; a kind the CHECK permits and the union does not is a row
+  // nothing can read back, which is the same bug one release later.
+  {
+    const sql = readWorthFile(new URL('../../supabase/migrations/20260921_copilot_outcome_worth.sql', import.meta.url), 'utf8');
+    // Only the constraint's own list, not the prose above it — the file's header
+    // names several kinds in passing and matching against that would pass for the
+    // wrong reason.
+    const check = /check \(kind in \(([\s\S]*?)\)\)/.exec(sql);
+    assert.ok(check, '20260921 must carry a kind CHECK this test can read');
+    const permitted = [...check![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+    assert.deepEqual(permitted, [...OUTCOME_KINDS].sort(),
+      'OutcomeKind and the 20260921 CHECK must be the same set — drift here is a silent 23514');
+
+    // And the columns the ledger reads, or loadWorthLedger returns {} forever
+    // while the ranker goes on guessing.
+    assert.match(sql, /add column if not exists move_id/);
+    assert.match(sql, /add column if not exists commission_id/);
+    // Dropped by definition, never by guessed name. A renamed constraint leaves
+    // TWO checks behind and the old narrow one keeps rejecting every write this
+    // migration exists to permit — proved on Postgres 16 before it shipped.
+    assert.match(sql, /pg_get_constraintdef/, 'the constraint must be dropped by definition, not by guessed name');
+    assert.doesNotMatch(sql, /drop constraint if exists copilot_outcomes_kind_check;/,
+      'a guessed drop is how a migration reports success and changes nothing');
+
+    // The schema checker has to be able to report all of it, or an unapplied
+    // migration and a quiet account look identical.
+    const checker = readWorthFile(new URL('../../scripts/sql/copilot-schema-check.sql', import.meta.url), 'utf8');
+    for (const k of ['delivered', 'saved', 'nothing']) {
+      assert.ok(checker.includes(`('${k}')`), `the schema checker must name '${k}'`);
+    }
+    assert.ok(checker.includes("'move_id'") && checker.includes("'commission_id'"));
+  }
+
+  /* ─── 2. The vocabulary ─────────────────────────────────────────────────── */
+  {
+    for (const k of WORTH_KINDS) {
+      assert.ok((OUTCOME_KINDS as readonly string[]).includes(k), `${k} must be a real OutcomeKind`);
+      assert.ok(WORTH[k].label.trim() && WORTH[k].sub.trim(), `${k} needs words somebody would read`);
+      // Never required, anywhere. Somebody who knows it made money but not how
+      // much would otherwise type a figure, and a typed figure is the invented
+      // number invariant 2 exists to keep out of this database.
+      assert.notEqual(WORTH[k].amount as string, 'required');
+    }
+    // `nothing` is the point of the whole change, not a leftover. A close-out
+    // question with no honest zero collects agreement.
+    assert.ok(WORTH_KINDS.includes('nothing'), 'an honest zero is the answer the ranker most needs');
+    assert.ok(isWorthKind('nothing') && !isWorthKind('reply') && !isWorthKind('') && !isWorthKind(null));
+  }
+
+  /* ─── 3. The rollup ─────────────────────────────────────────────────────── */
+  {
+    const rows = [
+      { job: 'commission', kind: 'nothing' as const, amount: null },
+      { job: 'commission', kind: 'nothing' as const, amount: null },
+      { job: 'commission', kind: 'won' as const, amount: 9000 },
+      { job: 'client_delivery', kind: 'saved' as const, amount: 1200 },
+      // A reply against a Move is news, not a verdict. Counting it as a close
+      // would let funnel events dilute the `nothing` ratio the decay reads.
+      { job: 'client_delivery', kind: 'reply' as const, amount: null },
+      // No job key: nothing to attribute it to, and the funnel already grades it.
+      { job: null, kind: 'won' as const, amount: 50_000 },
+    ];
+    const by = worthByJob(rows);
+    assert.deepEqual(by.commission, { closes: 3, money: 9000, nothing: 2 });
+    assert.deepEqual(by.client_delivery, { closes: 1, money: 1200, nothing: 0 },
+      'a reply is not a close');
+    assert.equal(Object.keys(by).length, 2, 'an unattributed outcome is not a job');
+
+    // Saved money counts for ranking and must never reach revenue. computeMetrics
+    // sums only `won`, so the goal bar and the runway forecast cannot see a
+    // saving as income — the split between the two is the whole reason `saved`
+    // is a separate kind rather than a `won` with a note on it.
+    assert.equal(by.commission.money + by.client_delivery.money, 9000 + 1200);
+  }
+
+  /* ─── 4. The sentence kept on the mandate ───────────────────────────────── */
+  //
+  // Written as well as the ledger row, because the two writes fail independently:
+  // if the insert is rejected the commission is already closed and the user's
+  // answer has to survive somewhere they can see it.
+  {
+    assert.equal(worthSentence('nothing'), 'Worth nothing.');
+    assert.equal(worthSentence('won', 18_000, null, '₱'), 'Made ₱18,000.');
+    assert.equal(worthSentence('won', null), 'Made money.', 'no figure is not no answer');
+    assert.equal(worthSentence('saved', 0), 'Saved money or time.', 'zero is not a figure');
+    assert.equal(worthSentence('delivered', null, 'A shortlist of four suppliers with prices.'),
+      'Produced something usable. A shortlist of four suppliers with prices.');
+    assert.doesNotMatch(worthSentence('nothing', null, 'x'.repeat(500)), /x{400}/, 'the note is bounded');
+  }
+
+  /* ─── 5. Evidence beats a claim ─────────────────────────────────────────── */
+  //
+  // stake.value is what a job SAYS this kind of work is worth. The worth ledger is
+  // what the user said it actually turned out to be worth. When both exist the
+  // second wins — including when it is lower, which is the case that matters:
+  // a job whose claim has been tested and found high should stop leading on it.
+  {
+    const ctx = (worth?: Ctx2['worth']): Ctx2 => ({ monthlyBurn: 10_000, capacityMinutes: 90, worth });
+    // A claim of half the monthly burn, deliberately UNDER the money ceiling.
+    // 20k against a 10k burn is already at MAX_MONEY_FACTOR, so a test written
+    // there compares two capped values and passes or fails for the wrong reason.
+    const move = { id: 'm1', kind: 'earn' as const, job: 'client_delivery', costMinutes: 30,
+      stake: { metric: 'won_amount' as const, direction: 'up' as const, by: 1, withinDays: 30, value: 5_000 } };
+
+    const claimed = score2(move, ctx());
+    const tested = score2(move, ctx({ client_delivery: { closes: 3, money: 3_000, nothing: 0 } }));
+    assert.ok(tested < claimed, 'three closes averaging 1k must beat a 5k claim downward');
+
+    const beaten = score2(move, ctx({ client_delivery: { closes: 2, money: 30_000, nothing: 0 } }));
+    assert.ok(beaten > claimed, 'and upward, when the work really has been worth more');
+
+    // The ceiling still holds over evidence. Every factor in this file has a
+    // floor and a cap precisely so one input cannot run away with the day, and
+    // a single enormous close is exactly the input that would try.
+    const huge = score2(move, ctx({ client_delivery: { closes: 1, money: 4_000_000, nothing: 0 } }));
+    assert.equal(huge, score2(move, ctx({ client_delivery: { closes: 1, money: 20_000, nothing: 0 } })),
+      'observed money is capped at MAX_MONEY_FACTOR like any other');
+
+    // No money observed at all falls back to the claim rather than to zero. An
+    // all-nothing record is handled by the decay below, not by pretending the
+    // job never said anything.
+    assert.equal(score2(move, ctx({ client_delivery: { closes: 2, money: 0, nothing: 2 } })), claimed);
+  }
+
+  /* ─── 6. The all-nothing decay ──────────────────────────────────────────── */
+  {
+    const ctx = (worth?: Ctx2['worth'], dead?: Record<string, number>): Ctx2 =>
+      ({ monthlyBurn: 10_000, capacityMinutes: 90, worth, dead });
+    // No stake, so the score rides the kind prior alone and the factors are
+    // readable rather than buried in a money term.
+    const move = { id: 'm2', kind: 'earn' as const, job: 'commission', costMinutes: 30, stake: null };
+    const plain = score2(move, ctx());
+
+    const twice = score2(move, ctx({ commission: { closes: 2, money: 0, nothing: 2 } }));
+    assert.equal(twice, plain, `two is a bad fortnight; the bar is ${MIN_WORTH_RUN}`);
+
+    const thrice = score2(move, ctx({ commission: { closes: MIN_WORTH_RUN, money: 0, nothing: MIN_WORTH_RUN } }));
+    assert.ok(Math.abs(thrice - plain * WORTHLESS_DECAY) < 1e-9, 'three, all nothing, and it decays');
+
+    // One that produced something is a job that can. Deliberately not a ratio:
+    // decaying on an average would bury work whose payoff is occasional and
+    // large, which describes most of what this product is for.
+    const mixed = score2(move, ctx({ commission: { closes: 4, money: 0, nothing: 3 } }));
+    assert.equal(mixed, plain, 'one non-nothing close clears the bar');
+
+    // The two verdicts compose rather than override. "The number did not move"
+    // and "it moved and I still got nothing" are separate findings and a job
+    // carrying both has earned 0.09.
+    const both = score2(move, ctx({ commission: { closes: 3, money: 0, nothing: 3 } }, { commission: 3 }));
+    assert.ok(Math.abs(both - plain * WORTHLESS_DECAY * DEAD2) < 1e-9);
+    assert.ok(both < plain * 0.1, 'both verdicts together put it out of the running');
+
+    // A job with no record is not penalised. Most accounts are this one, and an
+    // empty ledger has to mean no opinion rather than a zero.
+    assert.equal(score2({ ...move, job: 'send_queue' }, ctx({ commission: { closes: 9, money: 0, nothing: 9 } })), plain);
+  }
+
+  console.log('copilot-core: worth ledger checks passed');
+}
+
+worthLedger().catch((e) => { console.error(e); process.exit(1); });
+
+async function handoffAndAsk() {
+  /* ─── 7. The handoff export ─────────────────────────────────────────────── */
+  //
+  // A product whose whole claim is "your own rows beat a better model" should ship
+  // the button that tests that claim against a better model. What the export has to
+  // carry is therefore not decorative: the sections a general model cannot
+  // reconstruct — what was already suggested, what was refused, what the working
+  // file says — are the only reason the comparison is interesting.
+  const pack = {
+    today: '2026-09-19',
+    profile: {
+      name: 'Alex', headline: 'Builds shops that sell', location: 'Cebu', timezone: 'Asia/Manila',
+      capacity: 'moderate', hunt_types: ['client'], target_segments: ['plumbers', 'pest control'],
+      target_area: 'Cebu City',
+      offer: { sells: 'A store that takes orders', for_who: 'trades with no website', price_band: '₱25k' },
+    },
+    goals: [{ title: 'Monthly revenue', metric: 'currency', unit: '₱', target_value: 120_000, current_value: 18_000, horizon_days: 30, priority: 1, note: null }],
+    context: [{ source: 'note', kind: 'fact', content: 'Two of my last three came from referrals.', created_at: '2026-09-18T00:00:00Z' }],
+    working: '',
+    sources: [],
+    history: { saved: [], dismissed: [], acted: [], doneActions: [], openActions: [{ title: 'Send the Ramos quote', owner: 'you', urgency: 'high' }] },
+    changed: [],
+    recentDecisions: [
+      { for_date: '2026-09-18', headline: 'Send 10 of the 51 drafts', topic: 'send_queue', response: 'ignored', moved: null },
+      { for_date: '2026-09-17', headline: 'Chase the Ramos delivery', topic: 'client_delivery', response: 'did', moved: 1 },
+    ],
+    typeAffinity: {},
+    candidates: [{ id: 'c1', type: 'client', title: 'Cebu Drain Pros', summary: 'No website, 41 reviews', source: 'maps', url: null, contact: {}, fit_score: 70, scored: true }],
+    replies: [{ business: 'Ramos Plumbing', text: 'Send the quote to my accountant.', occurred_at: '2026-09-18T00:00:00Z' }],
+    sent: [],
+    openings: [{ term: 'emergency callout', businesses: 12, trend: 'rising', segment: 'plumbers' }],
+    metrics: { window_days: 30, sent: 44, replies: 1, reply_rate: 0.023, meetings: 0, won: 0, won_amount: 0, lost: 0, awaiting_approval: 61, pipeline: { new: 3, saved: 2, sourced: 9, inferred: 0 }, runway_months: 3.4 },
+  } as unknown as ContextPack;
+
+  const input = {
+    pack,
+    working: [
+      { id: 'w1', section: 'price' as const, body: 'Nothing under ₱18k.', source: 'you' as const, evidence: null, status: 'live' as const, observed_key: null, created_at: '', updated_at: '', confirmed_at: null },
+      { id: 'w2', section: 'works_for' as const, body: 'Plumbers close; pest control does not.', source: 'observed' as const, evidence: '4 of your last 6 wins', status: 'live' as const, observed_key: 'segment:plumbers', created_at: '', updated_at: '', confirmed_at: null },
+      // A proposal is the app's own reading waiting on the person who lived it.
+      // Exporting one as fact would launder a guess into the record.
+      { id: 'w3', section: 'tried' as const, body: 'You have given up on cold email.', source: 'observed' as const, evidence: '0 of 44', status: 'proposed' as const, observed_key: 'x', created_at: '', updated_at: '', confirmed_at: null },
+    ],
+    standing: ['sending the drafts'],
+    dead: [{ phrase: 'sending the drafts', count: 4 }],
+    obligations: [{ id: 'o1', direction: 'in' as const, counterparty: 'Ramos Plumbing', amount: 18_000, currency: '₱', due_on: '2026-09-30', status: 'open' as const, note: null, settled_at: null, created_at: '' }],
+    commissions: [{ objective: 'Find three suppliers who deliver same-day', status: 'active' as const, authority: 'read' as const, why: 'Delivery is what lost the last two' }],
+    queueTotal: 61,
+  };
+
+  {
+    const text = renderHandoff(input);
+    // The sections that are the point.
+    assert.match(text, /Send 10 of the 51 drafts · I ignored/, 'the record of what was suggested and refused must survive');
+    assert.match(text, /I did it · the number moved \+1/);
+    assert.match(text, /sending the drafts — I have said stop suggesting this/);
+    assert.match(text, /sending the drafts — I did it 4 times/);
+    // A job key is the database talking, and this document is written to be
+    // pasted into a model. The raw key must not reach it.
+    assert.doesNotMatch(text, /send_queue/);
+    assert.match(text, /61 drafts written and not sent/);
+    assert.match(text, /Find three suppliers who deliver same-day — active/);
+    assert.match(text, /Owed to me: ₱18000 · Ramos Plumbing/);
+    assert.match(text, /"Send the quote to my accountant\."/, "their words, not a summary of them");
+
+    // The two sources stay distinguishable. A reader who cannot tell a counted
+    // line from a stated one has been handed one undifferentiated opinion, which
+    // is invariant 12 — there are two sources and never a third.
+    assert.match(text, /Nothing under ₱18k\.$/m);
+    // The section order comes from SECTIONS itself, not a hand-kept copy — which
+    // is the drift class this codebase has been bitten by three times. The
+    // fixture holds a `price` line and a `works_for` line, and SECTIONS puts
+    // price first, so this fails if the order is ever re-typed out of step.
+    assert.ok(text.indexOf('What you charge') < text.indexOf('Who it works for'));
+    assert.doesNotMatch(text, /How you deliver/, 'an empty section is not a heading');
+    assert.match(text, /Plumbers close; pest control does not\..*my app counted this: 4 of your last 6 wins/);
+    assert.doesNotMatch(text, /given up on cold email/, 'a proposal is not yet part of the record');
+
+    // No contact details leave. The destination is a third-party model, and the
+    // export is context about the user's own business — not a list of other
+    // people's phone numbers.
+    assert.doesNotMatch(text, /\+63|@[a-z]+\.(com|ph)/i);
+  }
+
+  {
+    // A section with nothing in it is left out entirely rather than rendered as
+    // an empty heading. Eight blank headings is how this screen would read for
+    // a new account, and it would look broken rather than new.
+    const bare = renderHandoff({ ...input, standing: [], dead: [], obligations: [], commissions: [], working: [] });
+    assert.doesNotMatch(bare, /## What I have decided not to do again/);
+    assert.doesNotMatch(bare, /## Money owed/);
+    assert.doesNotMatch(bare, /## What I know about my own work/);
+    assert.match(bare, /## Where I actually am/, 'the numbers are always there');
+  }
+
+  {
+    // Truncation says so. A paste that looks whole and is not is worse than a
+    // short one, because the reader cannot tell which they have.
+    const fat = { ...input, pack: { ...pack, context: Array.from({ length: 400 }, (_, n) => ({ source: 'note', kind: 'fact', content: `${n} ${'x'.repeat(400)}`, created_at: '2026-09-18T00:00:00Z' })) } as unknown as ContextPack };
+    const text = renderHandoff(fat);
+    // The per-section cap does most of the work, so force the overall cap too.
+    const huge = renderHandoff({ ...fat, commissions: Array.from({ length: 4000 }, () => ({ objective: 'x'.repeat(200), status: 'active' as const, authority: 'read' as const, why: null })) });
+    assert.ok(text.length <= HANDOFF_MAX);
+    assert.ok(huge.length <= HANDOFF_MAX + 200);
+    assert.match(huge, /\[Cut here/, 'a trimmed export must admit it');
+  }
+
+  /* ─── 8. The questions ──────────────────────────────────────────────────── */
+  const askBase = {
+    decisions: [],
+    segments: [],
+    drafts: { written: 0, opened: 0, sent: 0, replied: 0, cancelled: 0 },
+    standing: [],
+    dead: [],
+    worth: {},
+    phraseFor: (j: string) => j.replace(/_/g, ' '),
+    currency: '₱',
+    planCurrency: '₱',
+    plan: 'free' as const,
+    monthsActive: 1,
+  };
+
+  {
+    // Every question answers, always, even on a brand-new account — and every
+    // empty one says WHY it is empty. Three bugs in this codebase shared the
+    // shape of a component failing, the failure being swallowed, and the screen
+    // reporting calm. A blank answer card is that shape in the one feature whose
+    // job is to tell the truth about the record.
+    const fresh = answerAll(askBase);
+    assert.equal(fresh.length, ASK_IDS.length);
+    assert.deepEqual(new Set(fresh.map((a) => a.id)), new Set(ASK_IDS));
+    for (const a of fresh) {
+      assert.ok(a.q.trim().endsWith('?'), `${a.id} must be a question`);
+      assert.ok(a.headline.trim(), `${a.id} must answer something`);
+      assert.ok(a.rows.length || a.thin, `${a.id} renders nothing and explains nothing`);
+    }
+  }
+
+  {
+    // A reply rate off three sends is not a smaller fact, it is a different kind
+    // of thing. Rendering it beside one off eighty is how a reader is misled by
+    // arithmetic that is technically correct.
+    const thin = answerAll({ ...askBase, segments: [{ segment: 'plumbers', sent: MIN_ASK_SAMPLE - 1, replied: 1 }] });
+    const replies = thin.find((a) => a.id === 'replies')!;
+    assert.deepEqual(replies.rows, []);
+    assert.match(replies.thin!, new RegExp(String(MIN_ASK_SAMPLE)));
+
+    const real = answerAll({ ...askBase, segments: [
+      { segment: 'plumbers', sent: 20, replied: 4 },
+      { segment: 'pest control', sent: 30, replied: 1 },
+      { segment: 'roofers', sent: 2, replied: 2 },
+    ] });
+    const a = real.find((x) => x.id === 'replies')!;
+    assert.match(a.headline, /plumbers replies 20%/);
+    assert.match(a.headline, /pest control replies 3%/);
+    assert.deepEqual(a.rows.map((r) => r.label), ['plumbers', 'pest control'], 'best first, and the thin one is out');
+    // A 100% rate off two sends must not lead the answer. That is the whole point
+    // of the floor and it is the failure mode a reader would act on.
+    assert.doesNotMatch(a.headline, /roofers/);
+    assert.match(a.thin!, /roofers/, 'and it is named as left out rather than dropped silently');
+  }
+
+  {
+    // "Has any of this been worth anything" — the question the ledger was widened
+    // to make answerable at all.
+    const none = answerAll(askBase).find((a) => a.id === 'worth')!;
+    assert.match(none.thin!, /including "nothing"/);
+
+    const free = answerAll({ ...askBase, worth: { commission: { closes: 2, money: 40_000, nothing: 0 } } }).find((a) => a.id === 'worth')!;
+    assert.match(free.headline, /₱40,000/);
+    // A free plan costs nothing, so "did it pay for itself" is not a question it
+    // can fail, and claiming it passed one would be the same invention.
+    assert.doesNotMatch(free.headline, /paid for itself/);
+
+    const paid = answerAll({ ...askBase, plan: 'pro', monthsActive: 3, worth: { commission: { closes: 2, money: 40_000, nothing: 0 } } }).find((a) => a.id === 'worth')!;
+    assert.match(paid.headline, /has paid for itself/);
+    const short = answerAll({ ...askBase, plan: 'pro', monthsActive: 3, worth: { commission: { closes: 2, money: 5, nothing: 1 } } }).find((a) => a.id === 'worth')!;
+    assert.match(short.headline, /has not paid for itself/);
+
+    // Across currencies there is no subtraction to do. The plan is priced in a
+    // deployment-wide currency that is usually not the user's, and computing
+    // "₱100 against ₱87" out of a $29 plan would be the invented number
+    // invariant 2 exists to keep off the screen — it would tell somebody their
+    // app had paid for itself on the strength of an exchange rate nobody applied.
+    const crossed = answerAll({ ...askBase, currency: '₱', planCurrency: '$', plan: 'pro', monthsActive: 3, worth: { commission: { closes: 2, money: 100, nothing: 1 } } }).find((a) => a.id === 'worth')!;
+    assert.match(crossed.headline, /₱100 attributed/);
+    assert.match(crossed.headline, /\$87/);
+    assert.match(crossed.headline, /yours to make/);
+    assert.doesNotMatch(crossed.headline, /paid for itself/, 'no verdict is drawn across currencies');
+
+    // All nothing, and it says so plainly rather than rendering a row of dashes.
+    const dud = answerAll({ ...askBase, worth: { commission: { closes: 3, money: 0, nothing: 3 } } }).find((a) => a.id === 'worth')!;
+    assert.match(dud.rows[0].value, /Nothing/);
+    assert.match(dud.thin!, /weighing on what gets suggested/, 'the decay is real and is said out loud');
+  }
+
+  {
+    // The two kinds of bar read differently because they mean different things:
+    // one is a decision the user made, the other is a verdict the ledger reached.
+    const barred = answerAll({ ...askBase, standing: ['sending the drafts'], dead: [{ topic: 'send_queue', count: 4 }] }).find((a) => a.id === 'stood_down')!;
+    assert.equal(barred.rows.length, 2);
+    assert.match(barred.rows[0].note!, /never expires/);
+    assert.match(barred.rows[1].note!, /did it 4 times/);
+    // A bar nobody can find is indistinguishable from the app quietly breaking.
+    assert.match(barred.thin!, /refuse section of your working file/);
+  }
+
+  {
+    const dead = { verify: { metric: 'queue' as const, baseline: 10, after: 12 } };
+    const won = { verify: { metric: 'queue' as const, baseline: 10, after: 4 } };
+    const worked = answerAll({ ...askBase, decisions: [
+      { ...won, topic: 'send_queue', response: 'did', headline: 'Send 10', for_date: '2026-09-18' },
+      { ...dead, topic: 'send_queue', response: 'did', headline: 'Send 10 again', for_date: '2026-09-17' },
+      { ...dead, topic: 'watch', response: 'ignored', headline: 'Read the feed', for_date: '2026-09-16' },
+    ] as never }).find((a) => a.id === 'worked')!;
+    assert.match(worked.headline, /1 of 2 calls you carried out moved the number/);
+    assert.deepEqual(worked.rows.map((r) => `${r.label}:${r.value}`), ['Moved the number:1', 'Did it, nothing moved:1', 'Never done:1']);
+
+    // Ignored every one of them: that is a finding about the calls, and the copy
+    // says so rather than reading as a telling-off.
+    const ignored = answerAll({ ...askBase, decisions: [
+      { ...dead, topic: 'send_queue', response: 'ignored', headline: 'Send 10', for_date: '2026-09-18' },
+    ] as never }).find((a) => a.id === 'worked')!;
+    assert.match(ignored.thin!, /an answer about the calls, not about you/);
+  }
+
+  {
+    const drafts = answerAll({ ...askBase, drafts: { written: 61, opened: 20, sent: 44, replied: 1, cancelled: 10 } }).find((a) => a.id === 'drafts')!;
+    assert.match(drafts.headline, /2% of what you send gets a reply/);
+    assert.deepEqual(drafts.rows.map((r) => r.label), ['Written', 'Opened', 'Sent', 'Replied', 'Cancelled']);
+    assert.match(drafts.rows[4].note!, /most informative number/);
+    // Nothing sent at all is the loudest version of this and gets its own line
+    // rather than a division by zero.
+    const stuck = answerAll({ ...askBase, drafts: { written: 61, opened: 0, sent: 0, replied: 0, cancelled: 0 } }).find((a) => a.id === 'drafts')!;
+    assert.equal(stuck.headline, 'Nothing you have written has been sent.');
+  }
+
+  console.log('copilot-core: handoff and ask checks passed');
+}
+
+handoffAndAsk().catch((e) => { console.error(e); process.exit(1); });

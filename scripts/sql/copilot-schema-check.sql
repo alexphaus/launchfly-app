@@ -4,15 +4,16 @@
 -- almost always means one file was never pasted into the SQL editor. Guessing
 -- which one costs more time than asking. Paste this into the Supabase SQL
 -- editor; every row it returns is something the code expects and the database
--- does not have — a table, a column, or one of the two shapes below that are
+-- does not have — a table, a column, or one of the shapes below that are
 -- neither — with the file that adds it.
 --
--- Keep this file level with supabase/migrations. It stopped at 20260909 for ten
--- releases, which meant it returned no rows for the entire commission layer and
--- the entire working file: exactly the two features whose read paths degrade to
--- an empty list on purpose, and therefore the two where an unapplied migration
--- is indistinguishable from a quiet account. A checker that is silently behind
--- is worse than no checker, because it answers.
+-- Keep this file level with supabase/migrations — currently through 20260921.
+-- It stopped at 20260909 for ten releases, which meant it returned no rows for
+-- the entire commission layer and the entire working file: exactly the two
+-- features whose read paths degrade to an empty list on purpose, and therefore
+-- the two where an unapplied migration is indistinguishable from a quiet
+-- account. A checker that is silently behind is worse than no checker, because
+-- it answers.
 --
 -- No rows returned = the schema is complete and any PGRST204 you are seeing is
 -- a stale PostgREST cache. Fix that with:  notify pgrst, 'reload schema';
@@ -57,7 +58,9 @@ with expected(kind, table_name, column_name, migration) as (values
   ('table',  'copilot_commissions',       null,                     '20260916_copilot_commissions.sql'),
   ('table',  'copilot_commission_events', null,                     '20260916_copilot_commissions.sql'),
   ('table',  'copilot_working',        null,                        '20260917_copilot_working.sql'),
-  ('column', 'copilot_working',        'observed_key',              '20260917_copilot_working.sql')
+  ('column', 'copilot_working',        'observed_key',              '20260917_copilot_working.sql'),
+  ('column', 'copilot_outcomes',       'move_id',                   '20260921_copilot_outcome_worth.sql'),
+  ('column', 'copilot_outcomes',       'commission_id',             '20260921_copilot_outcome_worth.sql')
 ),
 
 missing as (
@@ -71,10 +74,10 @@ missing as (
           where t.table_schema = 'public' and t.table_name = e.table_name))
 ),
 
--- Two migrations do not add a table or a column, and a table-and-column check
--- is blind to both. Each is a live example of the thing worth catching: the
--- object exists, so everything above says the schema is complete, and the
--- feature behind it is dead anyway.
+-- Three migrations do not add a table or a column, or add one whose CONTENTS
+-- matter, and a table-and-column check is blind to all of them. Each is a live
+-- example of the thing worth catching: the object exists, so everything above
+-- says the schema is complete, and the feature behind it is dead anyway.
 --
 --   20260918  dropped a WHERE predicate from a unique index. While it was
 --             partial, PostgREST's on_conflict could not infer it and every
@@ -85,6 +88,9 @@ missing as (
 --             user's reply to a worker's question cannot be recorded, so
 --             unblockCommission refuses rather than clearing the gate and
 --             dropping what they typed.
+--   20260920  widened verify_metric to all eight BUSINESS_METRICS. See below.
+--   20260921  widened copilot_outcomes.kind so work that is not a message can
+--             be graded at all. See below.
 wrong as (
   select '20260918_copilot_working_index.sql' as migration,
          'index' as kind,
@@ -142,6 +148,36 @@ wrong as (
       where n.nspname = 'public' and t.relname = 'copilot_decisions'
         and c.contype = 'c'
         and pg_get_constraintdef(c.oid) like '%' || m.metric || '%')
+
+  union all
+
+  -- The same drift class, one migration later, and the reason this section keeps
+  -- growing rather than being replaced by a column check.
+  --
+  -- 20260921 widened copilot_outcomes.kind by three so that work which is not a
+  -- message can be graded at all. Without it, closing a mandate with anything but
+  -- 'won' fails 23514: closeCommission catches that one and tells the user their
+  -- verdict did not reach the ledger, so it is visible — but the ranker goes on
+  -- weighting commission work by a guess about a category, silently, forever.
+  --
+  -- One row per value, so widening OutcomeKind again and forgetting the migration
+  -- lands here too. copilot-core.test.ts covers the other direction: it reads the
+  -- migration file and fails if the TS union has a kind this list does not.
+  select '20260921_copilot_outcome_worth.sql',
+         'constraint',
+         'copilot_outcomes_kind_check',
+         'does not permit ''' || k.kind || ''': a close-out verdict of that kind fails 23514 and never reaches the ranker'
+  from (values ('delivered'), ('saved'), ('nothing')) as k(kind)
+  where exists (
+      select 1 from information_schema.tables
+      where table_schema = 'public' and table_name = 'copilot_outcomes')
+    and not exists (
+      select 1 from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = 'public' and t.relname = 'copilot_outcomes'
+        and c.contype = 'c'
+        and pg_get_constraintdef(c.oid) like '%''' || k.kind || '''%')
 )
 
 select * from missing

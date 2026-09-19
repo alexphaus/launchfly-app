@@ -16,6 +16,9 @@
 // of the screen the same way a runway decision does.
 
 import { KIND_ORDER, type MoveKind } from './moves';
+// Type-only, so no runtime edge is added to a module decision.ts already imports
+// at init time — see MAX_REFUSALS below for what a runtime cycle costs here.
+import type { WorthRecord } from './worth';
 
 /**
  * Everything a Call is allowed to stake itself on.
@@ -121,6 +124,29 @@ export const DEAD_TOPIC_DECAY = 0.3;
  */
 export const MAX_REFUSALS = 3;
 
+/**
+ * Done this often, and worth nothing every single time.
+ *
+ * As harsh as DEAD_TOPIC_DECAY because it is the same strength of evidence from
+ * the other direction. `dead` is "you did it and the number did not move";
+ * this is "the number may well have moved and you still got nothing out of it",
+ * which is the user's own verdict on finished work and the only signal in this
+ * product that no metric can reach. They multiply rather than override: a job
+ * that neither moves its number nor produces anything the user values should end
+ * up at 0.09, and never lead again while that remains true.
+ */
+export const WORTHLESS_DECAY = 0.3;
+/**
+ * How many worth answers before an all-nothing run counts.
+ *
+ * Three, matching MIN_TOPIC_RUN. Two is a bad fortnight; one is a mood. The bar
+ * is deliberately "every single one of at least three said nothing" rather than
+ * a ratio — a job that produced something once is a job that can, and decaying
+ * it on an average would bury work whose payoff is occasional and large, which
+ * describes most of what this product is for.
+ */
+export const MIN_WORTH_RUN = 3;
+
 export interface ScoreCtx {
   /** What the business spends a month. The scale money is judged against. */
   monthlyBurn?: number | null;
@@ -145,6 +171,15 @@ export interface ScoreCtx {
    * section and the user removes them there.
    */
   standing?: Set<string>;
+  /**
+   * Job key → what work of that kind has actually turned out to be worth, from
+   * loadWorthLedger. Two things read it: the money factor prefers an observed
+   * average over a job's own claim, and an all-nothing run decays the score.
+   *
+   * Absent for most accounts and that is the honest default — no answers means no
+   * opinion, not a zero.
+   */
+  worth?: Record<string, WorthRecord>;
 }
 
 export interface Scorable {
@@ -182,19 +217,33 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  *   urgency  how soon the thing it is about stops being fixable
  *   fit      whether it fits in the time the user says they have
  *   refusal  how many times this exact topic has already been turned down
+ *   dead     the ledger's verdict: done repeatedly, the number never moved
+ *   worth    the user's verdict: done repeatedly, and worth nothing every time
  *
- * The last one is the only one that reads the user rather than the world, and it
- * is the one that stops "send the drafts" being the call on a fifth consecutive
- * morning. Refusing something three times is information; ignoring it is what
- * the app was doing.
+ * The last three read the user's own record rather than the world, and they are
+ * what stops "send the drafts" being the call on a fifth consecutive morning.
+ * Refusing something three times is information; ignoring it is what the app was
+ * doing. They multiply rather than override each other, because "I said no",
+ * "the number did not move" and "it moved and I got nothing" are three separate
+ * findings and a job that collects all three has earned 0.05.
  */
 export function scoreMove(m: Scorable, ctx: ScoreCtx): number {
   const prior = kindPrior(m.kind);
   const s = m.stake;
+  const w = m.job ? ctx.worth?.[m.job] : undefined;
 
   const reference = ctx.monthlyBurn && ctx.monthlyBurn > 0 ? ctx.monthlyBurn : DEFAULT_REFERENCE;
-  const money = s?.value != null && s.value > 0
-    ? 1 + clamp(s.value / reference, 0, MAX_MONEY_FACTOR - 1)
+  // Evidence beats a claim — invariant 3 at the level of value. `stake.value` is
+  // what a job SAYS this kind of work is worth, computed from its own sensor.
+  // The worth ledger is what the user said work of this kind actually turned out
+  // to be worth, averaged over their own closes. When both exist the second
+  // wins, including when it is LOWER: a job that claims a customer is worth the
+  // full contract and has three closes averaging a tenth of that is a job whose
+  // claim has been tested and found high.
+  const observed = w && w.closes > 0 && w.money > 0 ? w.money / w.closes : null;
+  const value = observed ?? (s?.value != null && s.value > 0 ? s.value : null);
+  const money = value != null
+    ? 1 + clamp(value / reference, 0, MAX_MONEY_FACTOR - 1)
     : 1;
 
   const urgency = s?.withinDays != null
@@ -212,8 +261,13 @@ export function scoreMove(m: Scorable, ctx: ScoreCtx): number {
   // suggestion because it is about what happened rather than about how the
   // card read.
   const dead = m.job && ctx.dead?.[m.job] ? DEAD_TOPIC_DECAY : 1;
+  // The one signal in this product that no metric can produce. A commission can
+  // finish every step, move its goal and still be worth nothing to the person who
+  // authorised it, and until the close-out question existed there was no row
+  // anywhere that could say so.
+  const worth = w && w.closes >= MIN_WORTH_RUN && w.nothing === w.closes ? WORTHLESS_DECAY : 1;
 
-  return prior * money * urgency * fit * refusal * dead;
+  return prior * money * urgency * fit * refusal * dead * worth;
 }
 
 export interface Arbitrated<T> {

@@ -1,11 +1,14 @@
 import { recordOutcome } from '@/lib/copilot/outcomes';
 import { loadHome } from '@/lib/copilot/store';
-import type { OutcomeKind } from '@/lib/copilot/types';
+import { OUTCOME_KINDS, type OutcomeKind } from '@/lib/copilot/types';
 import { fail, json, profileIdOr401, readJson } from '@/lib/copilot/http';
 
 export const runtime = 'nodejs';
 
-const KINDS: OutcomeKind[] = ['reply', 'meeting', 'proposal', 'won', 'lost', 'no_reply'];
+// Was a second hand-written copy of the list, which is how a kind gets accepted
+// by the type system, rejected by this route, and permitted by the database all
+// at once. One source.
+const KINDS: readonly OutcomeKind[] = OUTCOME_KINDS;
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : undefined);
 
 /** The user tells us what happened: replied, meeting, won (with amount), lost. */

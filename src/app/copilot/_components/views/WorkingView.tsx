@@ -119,6 +119,18 @@ export default function WorkingView({ home, actions, finding }: { home: HomeData
         </div>
       </div>
 
+      {/* Directly under the funnel, because the funnel is what prompts the
+          question. This tab renders the record; until now nothing let anybody
+          interrogate it — "which of these segments ever replies" had no answer
+          on a screen whose entire subject is whether any of this is working. */}
+      <button className="cp-card cp-goal" style={{ marginTop: 12 }} onClick={() => actions.openSheet({ kind: 'ask' })}>
+        <div className="top"><span className="name">Ask your own record</span><span className="pct">5 questions</span></div>
+        <div className="sub">
+          Which segment replies, where drafts die, which calls worked, what you have stood down,
+          whether any of it has been worth money. Counted, never estimated.
+        </div>
+      </button>
+
       <div className="cp-section"><span className="lead">Where the opening is</span><span className="count">{sourced ? `across ${sourced} real matches` : 'no real matches yet'}</span></div>
       {d.openings.length ? (
         <>

@@ -2,7 +2,13 @@ import type { Goal, OpportunityType, OutcomeKind } from '@/lib/copilot/types';
 
 export const TYPE_LABEL: Record<OpportunityType, string> = { client: 'Client', people: 'People', service: 'Service', community: 'Community', signal: 'Signal' };
 export const TYPE_PLURAL: Record<OpportunityType, string> = { client: 'Clients', people: 'People', service: 'Services', community: 'Communities', signal: 'Signals' };
-export const OUTCOME_LABEL: Record<OutcomeKind, string> = { reply: 'Replied', meeting: 'Meeting', proposal: 'Proposal', won: 'Won', lost: 'Lost', no_reply: 'No reply' };
+// Exhaustive on purpose: widening OutcomeKind fails the build here until the
+// screen has words for the new kind, which is cheaper than shipping a card that
+// renders a column name at somebody.
+export const OUTCOME_LABEL: Record<OutcomeKind, string> = {
+  reply: 'Replied', meeting: 'Meeting', proposal: 'Proposal', won: 'Won', lost: 'Lost', no_reply: 'No reply',
+  delivered: 'Produced something', saved: 'Saved money or time', nothing: 'Worth nothing',
+};
 const SOURCE_LABEL: Record<string, string> = { hunter: 'Pipeline', google_maps: 'Google Maps', inferred: 'Inferred' };
 export const sourceLabel = (s: string | null | undefined) => (s ? SOURCE_LABEL[s] ?? s.replace(/_/g, ' ') : 'unknown');
 

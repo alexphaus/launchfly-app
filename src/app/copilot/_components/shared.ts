@@ -166,6 +166,12 @@ export interface Actions {
   /** A Move is finished work: say it is done, or that it is not for you. */
   answerMove(id: string, status: 'done' | 'dismissed'): Promise<boolean>;
   /**
+   * A PROPOSED Move is the one kind you do not carry out: hand it over and the
+   * app does it. Creates the mandate and grants `read` in one act — see
+   * handOverMove for why that is a real approval rather than a shortcut.
+   */
+  handOverMove(id: string): Promise<{ ok: boolean; error?: string }>;
+  /**
    * The five questions, answered by counting. A fixed list on purpose — a text
    * box here would have to be answered by a model, and a plausible invented
    * figure is worse than no figure because it gets acted on.

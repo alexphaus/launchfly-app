@@ -15,6 +15,7 @@ import { clientDeliveryJob } from './client-delivery';
 import { goalGapJob } from './goal-gap';
 import { obligationsJob } from './obligations';
 import { openingGapJob } from './opening-gap';
+import { proposeJob } from './propose';
 import { remoteJob } from './remote';
 import { repeatCustomerJob } from './repeat-customer';
 import { runwayGuardJob } from './runway-guard';
@@ -76,6 +77,12 @@ export const JOBS: Job[] = [
   capabilityGapJob,
   watcherJob,
   commissionJob,
+  // Last, and it reads what the others wrote. It is the only job that proposes
+  // work for the APP to do rather than for the user, so it runs after the ones
+  // that can tell it what is already in flight — and it is the cheapest to lose
+  // if the run is out of budget, because a night with no proposal is a normal
+  // night while a night with no send queue is a broken one.
+  proposeJob,
   remoteJob,
 ];
 

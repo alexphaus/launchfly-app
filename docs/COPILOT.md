@@ -718,11 +718,18 @@ whatever the landing page says.
 | `runway_guard` | `decide` | `finance.cash` + `monthly_burn` | no |
 | `opening_gap` | `decide` | `target_segments` | no |
 | `capability_gap` | `learn` / `avoid` | onboarding complete | no |
+| `silence` | `fix` | onboarding complete | no |
+| `obligations` | `decide` | typed rows | no |
+| `watch` | any | an active feed | yes — to judge each item |
+| `commission` | `decide` | `COPILOT_JOBS_URL` | no — it dispatches |
+| `propose` | any | a model, and onboarding | yes — one call a night |
 | `remote` | any of the eight | `COPILOT_JOBS_URL` | remote's business |
 
-Not one of them calls a model. Every line of evidence is a number the app
-counted or a value the user typed, which is the only reason a Move can cite
-something and be believed.
+Only two call a model, and neither of them writes a number. `watch` judges
+whether an item is worth the morning; `propose` writes an objective and a plan
+and is told never to state a figure, because `whyFor` computes every line of its
+evidence from rows. Everything else here is arithmetic the app did or a value the
+user typed, which is the only reason a Move can cite something and be believed.
 
 `spend`, `meet` and `fix` have no built-in job on purpose. Finding the laptop
 you wanted at a price, quoting three suppliers, or fixing the n8n node that is
@@ -838,6 +845,74 @@ than a refusal, and the asymmetry is the point: a refusal is an opinion about a
 suggestion, this is the ledger on one that was actually carried out. The ranker
 reads `RANKING_WINDOW` decisions rather than ten, because "you did this and
 nothing happened" does not stop being true because a fortnight passed.
+
+### Work it offers to take off you
+
+Every surface on Now was something the app **found** and the user **does**:
+
+| | who finds it | who does it | button |
+| --- | --- | --- | --- |
+| the Call | app | you | Did it / Not doing it / Wrong call |
+| a Move | app | you | Did it / Not this one |
+| a mandate | **you** | app | *type it into a blank box* |
+
+The gradient was inverted. The one thing that asks least of somebody to carry
+out asked most of them to conceive — and the app's only real edge, knowing which
+of forty things matters from this person's own rows, was spent on work they then
+did themselves and withheld from the surface where it would do the work for
+them. "Put something to work" is also, precisely, what you can already get by
+typing into a chat window, which makes it the worst place in the product to ask
+for effort.
+
+**A proposal is a Move, not a fourth surface.** The shapes already matched:
+
+```
+MoveDraft   job, kind, headline, why[], artifact, cost_label, stake
+Commission  objective,     why,  plan[], budget_minutes, goal_id
+```
+
+`headline` is the objective, `why[]` the reason, `cost_label` what approving
+costs *you*, `stake` the goal it claims to move — and the plan is the artifact.
+`ArtifactKind` gains `plan`, carrying `steps[]` alongside the readable `value`.
+
+**That is also why it cannot be noisy.** It enters the pool `arbitrate()` already
+ranks, so it either wins and *is* the Call with a different verb, or it places
+among the Moves, or it is under `CALL_FLOOR` and nothing renders. Measured
+against a send queue seven days from stale: 0.90 to 3.00, so urgent real work
+still leads. On a 20-minute day the proposal doubles its standing — it costs a
+tap, the queue costs 45 minutes — without taking the day. It leads against a
+two-hour `learn` with no stake, and it leads once the queue is stood down. The
+permanent "Hand something over" button, saying the same thing every morning
+forever whether or not anything is worth handing over, is the noisy design.
+
+**The model writes WHAT; the job writes WHY.** `proposeJob` asks for an objective
+and 2–5 plan steps and is told never to state a number. Every `why` line is
+computed by `whyFor` from rows — the goal gap, the funnel, the runway, the worth
+ledger — so it never passes through a model at all. Invariant 2 made structural
+rather than promised. The prompt carries the two things a general model cannot
+have: what has already been handed over, and what the user has stood down.
+
+**Four gates before it spends a model call** (`shouldPropose`): an active goal,
+because a proposal with none is the app inventing a direction for somebody's
+business; `MAX_ACTIVE_COMMISSIONS`; one open proposal at a time; and silence once
+`QUIET_AFTER_WORTHLESS` mandates have closed worth nothing. That last one reads
+the `commission` worth record, because "was handing this over worth anything" is
+the same question a proposal asks you to bet on again — and it stops the card
+being *made*, which is stronger than ranking it down.
+
+Its job key is `propose` and deliberately not `commission`. `runJobs` bars a
+stood-down job from producing at all, so sharing the key would mean "stop
+proposing work to me" also silenced the question a mandate you already approved
+is blocked on. Refusing suggestions and refusing to be asked are different
+sentences.
+
+**One tap is a real approval.** `handOverMove` creates the commission and grants
+`read` in one act. The draft state exists so nobody approves a mandate they have
+not read — and on a proposal card they have: objective, reasons, every step, the
+authority and the budget are all on screen, and `approved_at` still records the
+moment of the tap. What must never happen is a proposal *arriving* active, and it
+cannot. `reach` and `commit` still need the sheet, so invariants 4 and 11 are
+untouched.
 
 ### What the work turned out to be worth
 
@@ -1253,6 +1328,7 @@ discovery belong; to add a source inside the app instead, implement one `SupplyA
 | POST | `/api/copilot/commissions/run` | hand live mandates over now (25s budget) |
 | POST | `/api/copilot/obligations` | money owed, either way |
 | POST | `/api/copilot/actions/[id]/opened` | `sendBeacon` target — a draft's deep link was tapped |
+| POST | `/api/copilot/moves/:id` | `{ status: done \| dismissed \| handover }` — `handover` turns a proposed Move into a live mandate |
 | GET | `/api/copilot/ask` | five questions about your own rows, each answered by counting. No model, no free text |
 | GET | `/api/copilot/handoff` | everything the app knows, as text to paste into any model |
 

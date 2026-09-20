@@ -28,8 +28,13 @@ export const KIND_LABEL: Record<MoveKind, string> = {
  * - `message`: drafted text, usually with a deep link to send it as themselves
  * - `link`:    something found — a listing, a tutorial, a supplier
  * - `text`:    a finding with no destination, e.g. a diagnosis
+ * - `plan`:    work the app is offering to do ITSELF, with the steps it would
+ *              take. The only kind the user does not carry out — the button
+ *              hands it over instead of reporting it done. See lib/copilot/
+ *              propose.ts for why a proposed mandate is a Move and not a
+ *              fourth surface.
  */
-export type ArtifactKind = 'message' | 'link' | 'text';
+export type ArtifactKind = 'message' | 'link' | 'text' | 'plan';
 
 export interface MoveArtifact {
   kind: ArtifactKind;
@@ -39,6 +44,14 @@ export interface MoveArtifact {
   value: string;
   /** Where the button goes. Null when the artifact is the value itself. */
   href?: string | null;
+  /**
+   * A `plan` artifact's steps, structured, which become CommissionStep[] when
+   * the user hands it over. `value` carries the same thing as readable text so
+   * nothing that does not understand a plan renders an empty card; this is what
+   * is actually read. Splitting `value` back apart would break the first time a
+   * step contained a newline.
+   */
+  steps?: string[];
 }
 
 export interface MoveDraft {
@@ -80,6 +93,9 @@ export function isDeliverable(d: MoveDraft): boolean {
   const a = d.artifact;
   if (!a || !a.value?.trim() || !a.label?.trim()) return false;
   if (a.kind === 'link' && !a.href) return false;   // a link Move with no link is a text Move
+  // A plan Move whose button would create an empty mandate. Invariant 7, in the
+  // small: the card offers to go and do something, so there has to be something.
+  if (a.kind === 'plan' && !a.steps?.some((x) => x?.trim())) return false;
   return true;
 }
 

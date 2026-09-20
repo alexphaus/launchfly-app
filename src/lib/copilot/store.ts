@@ -35,6 +35,7 @@ import type { JobsRunSummary, Move, WatchSource } from './types';
 import type { MoveKind } from './moves';
 import { lastOutcomeByOpportunity, loadMetrics, outcomeStatsByType, recordOutcome } from './outcomes';
 import { WORTH_NOTE_MAX, worthSentence, type WorthKind } from './worth';
+import { PROPOSAL_BUDGET_MINUTES } from './propose';
 import { hasSubscription, vapidPublicKey } from './push';
 import { billingConfigured, effectivePlan, isPlanKey, remaining } from './plans';
 import { computeOutcomeAffinity, rankOpportunities, selectPlan } from './ranking';
@@ -215,6 +216,25 @@ export async function loadMoves(profileId: string, limit = 8): Promise<{ moves: 
 }
 
 /**
+ * How many open Moves this job has, exactly.
+ *
+ * loadMoves is a SCREEN read: orderMoves slices it to eight, which is right for
+ * rendering and wrong for counting. proposeJob's "one open proposal at a time"
+ * gate was built on it and therefore leaked precisely when it mattered — on a
+ * busy morning a proposal ranked below the cut read as none, and the app wrote a
+ * second one. `head: true` so this costs a count and never carries the rows.
+ */
+export async function countOpenMoves(profileId: string, job: string): Promise<number> {
+  const { count, error } = await copilotDb().from('copilot_moves')
+    .select('id', { count: 'exact', head: true })
+    .eq('profile_id', profileId).eq('job', job).eq('status', 'open');
+  // An unreadable count must not read as zero: that is the answer that lets a
+  // second proposal through, which is the bug this function exists to close.
+  if (error) throw new Error(`could not count open ${job} moves`);
+  return count ?? 0;
+}
+
+/**
  * One Move by id, for the case where the promoted call is not in the screen's
  * top slice. Rare — the winner is usually near the top of orderMoves too — but a
  * Call rendering without its artifact is the exact failure this whole change is
@@ -226,6 +246,83 @@ export async function loadMoveById(profileId: string, id: string): Promise<Move 
   let { data, error } = await read(MOVE_COLS_V2);
   if (error) ({ data, error } = await read(MOVE_COLS));
   return error || !data ? null : (data as unknown as Move);
+}
+
+/**
+ * Turn a proposed Move into a live mandate. One tap.
+ *
+ * ON THE DRAFT STATE, which createCommission otherwise guarantees. A commission
+ * is always written as a draft because "the approve button is the entire point
+ * of this layer, and a commission that begins approved has quietly removed it".
+ * That rule is about CONSENT, not about ceremony: the draft exists so nobody can
+ * approve a mandate they have not read.
+ *
+ * On a proposal card they have read it. The objective, the reasons, every plan
+ * step, the authority and the budget are all on screen, and the button under
+ * them says what it does. The card IS the approval screen, and approved_at
+ * still records the moment of their tap — so the one question that matters
+ * later, what was this app allowed to do and when, is answered exactly as
+ * before. What must never happen is a proposal ARRIVING active, and it cannot:
+ * this runs behind a POST from a button.
+ *
+ * `read` only, and never higher. Authority is the one thing the card cannot
+ * meaningfully ask about in a single tap, so the tap buys the ring that touches
+ * nothing outside — invariant 4 and invariant 11 both untouched. Widening it
+ * means opening the mandate and saying so deliberately, which is where that
+ * decision belongs.
+ */
+export async function handOverMove(profileId: string, moveId: string): Promise<{ commission: Commission | null }> {
+  // By id, never out of the screen's top slice. A proposal that placed rather
+  // than won sits below orderMoves' cut on a busy morning, and a hand-over
+  // button that works on some cards and not others is worse than none.
+  const move = await loadMoveById(profileId, moveId);
+  if (!move || move.status !== 'open') throw new Error('That one is no longer open.');
+  const steps = move.artifact?.kind === 'plan' ? move.artifact.steps ?? [] : [];
+  if (!steps.length) throw new Error('That one has no plan to hand over.');
+
+  // Already handed over. The button is disabled while the request is in flight,
+  // which is not the same as once: a tap that times out on a phone and is tapped
+  // again writes the mandate twice, and two identical mandates eat two of the
+  // three slots somebody is allowed. The Move is only marked done at the end —
+  // deliberately, so a failure cannot lose it — so this is what makes the whole
+  // thing idempotent in between.
+  const live = (await loadCommissions(profileId)).find(
+    (c) => c.status !== 'done' && c.status !== 'stopped' && c.objective === move.headline.slice(0, OBJECTIVE_MAX),
+  );
+  if (live) {
+    await setMoveStatus(profileId, moveId, 'done');
+    return { commission: live };
+  }
+
+  // The same rule the proposal's `why` argued from: the top-priority active
+  // goal. Re-read here rather than carried on the Move, so a mandate written
+  // today attaches to the goal that is actually current — and the one case where
+  // those differ, somebody having re-prioritised overnight, is one where the new
+  // goal is the right answer.
+  const { data: goalRow } = await copilotDb().from('copilot_goals')
+    .select('id').eq('profile_id', profileId).eq('status', 'active').order('priority').limit(1).maybeSingle();
+
+  const commission = await createCommission(profileId, {
+    objective: move.headline,
+    why: move.why[0] ?? null,
+    goal_id: (goalRow as { id?: string } | null)?.id ?? null,
+    authority: 'read',
+    budget_minutes: PROPOSAL_BUDGET_MINUTES,
+    plan: steps.map((d, i) => ({ n: i + 1, do: d, state: 'todo' as const })),
+  });
+  if (!commission) throw new Error('Could not write that mandate.');
+
+  // Approved by the tap that created it — see the note above. If this half
+  // fails the mandate is still there as a draft with its plan intact, and the
+  // commission sheet's own Approve button finishes the job, so the work is
+  // never lost between the two writes.
+  const approved = await approveCommission(profileId, commission.id);
+
+  // The Move is answered either way. Leaving it open would put a card offering
+  // to hand over work that has already been handed over at the top of tomorrow.
+  await setMoveStatus(profileId, moveId, 'done');
+  await logEvent(profileId, 'move_handed_over', { move_id: moveId, commission_id: commission.id, approved: !!approved });
+  return { commission: approved ?? commission };
 }
 
 export async function setMoveStatus(profileId: string, id: string, status: 'done' | 'dismissed'): Promise<void> {

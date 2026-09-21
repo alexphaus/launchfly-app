@@ -224,6 +224,20 @@ export default function CopilotApp({ initial }: { initial: HomeData }) {
         return true;
       } catch (e) { fail(e, 'Could not record'); void refresh(); return false; }
     },
+    async handOverMove(id) {
+      try {
+        const r = await post<{ home: HomeData }>(`/moves/${id}`, { status: 'handover' });
+        setHome(r.home);
+        // Says what will actually happen next, not that a row was written. The
+        // worker picks it up on the nightly pass, and somebody who taps this and
+        // sees "Done" will come back in ten minutes looking for a result.
+        say('Handed over. It starts tonight, and what it finds turns up on Now.');
+        return { ok: true };
+      } catch (e) {
+        void refresh();
+        return { ok: false, error: e instanceof Error ? e.message : 'Could not hand that over' };
+      }
+    },
     async addWatchSource(input) {
       try {
         const r = await post<{ home: HomeData; note?: string | null }>('/watch/sources', input);

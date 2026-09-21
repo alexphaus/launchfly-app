@@ -1508,6 +1508,15 @@ import { clientDeliveryJob } from '../../src/lib/copilot/jobs/client-delivery';
 import type { Profile as JobProfile } from '../../src/lib/copilot/types';
 
 async function jobSensors() {
+  // The availability assertions below are exact lists, and several sensors read
+  // the environment. tsx does not load .env.local, so they have always passed by
+  // accident — one exported OPENAI_API_KEY and the deepEqual breaks for somebody
+  // who changed nothing. Cleared here and restored at the end, so the suite
+  // tests the sensors rather than the shell it happens to run in.
+  const envKeys = ['COPILOT_AI_API_KEY', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'COPILOT_JOBS_URL'] as const;
+  const savedEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
+  for (const k of envKeys) delete process.env[k];
+
   const profile = (over: Record<string, unknown> = {}) =>
     ({
       id: 'p1', name: 'Alex', timezone: 'Asia/Manila', linked_business_id: 'biz-1',
@@ -1569,6 +1578,19 @@ async function jobSensors() {
     assert.ok(kinds.has(key), `${key} is registered`);
   }
 
+  // The proposer is gated on a model being configured, exactly like `remote` is
+  // gated on a worker URL. Both report "no sensor" rather than an empty list,
+  // because a deployment with no model cannot propose and should say so.
+  assert.ok(!(await availableJobs(profile())).includes('propose'), 'no model configured, no proposer');
+  process.env.OPENAI_API_KEY = 'test-key';
+  assert.ok((await availableJobs(profile())).includes('propose'));
+  // And it still respects onboarding: a half-created profile has no goal to
+  // move, and a proposal with no goal is the app inventing a direction for
+  // somebody's business.
+  assert.ok(!(await availableJobs(profile({ onboarding_complete: false }))).includes('propose'));
+  delete process.env.OPENAI_API_KEY;
+
+  for (const [k, v] of Object.entries(savedEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   console.log('copilot-core: job-sensor checks passed');
 }
 
@@ -2840,7 +2862,15 @@ async function watcherReality() {
   //    each quoting a different count of the same pile — and restating standing
   //    states weekly would have done the same to runway and the opening gap.
   const supersedes = REGISTRY.filter((j) => j.supersedes || j.standing).map((j) => j.key).sort();
-  assert.deepEqual(supersedes, ['capability_gap', 'obligations', 'opening_gap', 'runway_guard', 'send_queue']);
+  // `propose` supersedes without being standing, which is the pair coming apart
+  // for the first time. It is not a state that stays true and restates weekly
+  // under a period-keyed id — each proposal is different work — but two open at
+  // once is exactly the stacked send_queue problem above, each card saying "hand
+  // this over" about something else. Superseded rows are deleted rather than
+  // dismissed, so one the user never saw cannot teach dismissedStreak that they
+  // turned it down.
+  assert.deepEqual(supersedes, ['capability_gap', 'obligations', 'opening_gap', 'propose', 'runway_guard', 'send_queue']);
+  assert.ok(!REGISTRY.find((j) => j.key === 'propose')?.standing, 'a proposal is not a standing state');
   // An event-driven job must NOT supersede: two different sales, two Moves.
   for (const key of ['client_delivery', 'repeat_customer', 'watch', 'silence', 'goal_gap']) {
     const j = REGISTRY.find((x) => x.key === key);
@@ -4185,3 +4215,232 @@ async function handoffAndAsk() {
 }
 
 handoffAndAsk().catch((e) => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------------------
+// The app proposing its own work
+//
+// Every other surface on Now is something the app found and the user does. A
+// mandate was the one thing the USER had to think of and the app would do — so
+// the gradient was inverted, and the part requiring least to carry out required
+// most to conceive. A proposal fixes that by being a Move, which is also what
+// stops it adding a card: it competes through arbitrate() like everything else.
+// ---------------------------------------------------------------------------
+import { isDeliverable } from '../../src/lib/copilot/moves';
+import { MAX_ACTIVE_COMMISSIONS as CAP } from '../../src/lib/copilot/commission';
+import {
+  MAX_OPEN_PROPOSALS, PROPOSAL_BUDGET_MINUTES, PROPOSAL_STEPS_MAX, PROPOSE_JOB, PROPOSE_SYSTEM,
+  QUIET_AFTER_BINNED, QUIET_AFTER_WORTHLESS, parseProposal, proposalFrom, proposePrompt, shouldPropose, stakeMetricFor, whyFor,
+} from '../../src/lib/copilot/propose';
+import { arbitrate as arbitrate2, scoreMove as score3 } from '../../src/lib/copilot/stake';
+
+async function proposals() {
+  const goal = { title: 'Monthly revenue', metric: 'currency' as const, unit: '₱', target_value: 120_000, current_value: 18_000, horizon_days: 30 };
+  const metrics = { window_days: 30, sent: 44, replies: 1, reply_rate: 0.023, meetings: 0, won: 0, won_amount: 0, lost: 0, awaiting_approval: 61, pipeline: { new: 3, saved: 2, sourced: 9, inferred: 0 }, runway_months: 3.4 } as never;
+
+  /* ─── 1. Whether to propose at all ──────────────────────────────────────── */
+  {
+    const base = { held: 0, openProposals: 0, hasGoal: true };
+    assert.deepEqual(shouldPropose(base), { ok: true });
+
+    // A proposal with no goal behind it is the app inventing a direction for
+    // somebody's business — invariant 12, which is the one thing this whole
+    // feature could most easily have broken.
+    const noGoal = shouldPropose({ ...base, hasGoal: false });
+    assert.equal(noGoal.ok, false);
+    assert.match((noGoal as { reason: string }).reason, /goal/);
+
+    const full = shouldPropose({ ...base, held: CAP });
+    assert.equal(full.ok, false, 'three on the go is a person with three priorities');
+    const waiting = shouldPropose({ ...base, openProposals: MAX_OPEN_PROPOSALS });
+    assert.equal(waiting.ok, false, 'proposing a second while the first is unanswered is how a suggestion becomes a backlog');
+
+    // Binned twice running and it stops. A feed item is news from outside and a
+    // dismissal says nothing about tomorrow's; a proposal is the app's OWN idea,
+    // so two bins in a row is an answer about the proposer rather than about two
+    // pieces of work.
+    const binned = shouldPropose({ ...base, binnedInARow: QUIET_AFTER_BINNED });
+    assert.equal(binned.ok, false);
+    assert.match((binned as { reason: string }).reason, /binned the last 2/);
+    assert.deepEqual(shouldPropose({ ...base, binnedInARow: QUIET_AFTER_BINNED - 1 }), { ok: true }, 'one is not a pattern');
+
+    // The gate the worth ledger earned. It stops the card being MADE, which is
+    // stronger than ranking it down, and it is the same reasoning as the
+    // three-place bar on a standing refusal.
+    const dud = shouldPropose({ ...base, worth: { closes: QUIET_AFTER_WORTHLESS, money: 0, nothing: QUIET_AFTER_WORTHLESS } });
+    assert.equal(dud.ok, false);
+    assert.match((dud as { reason: string }).reason, /none of it was worth anything/);
+    // One that paid clears it: a job that produced something once is a job that
+    // can, and an average would bury work whose payoff is occasional and large.
+    assert.deepEqual(shouldPropose({ ...base, worth: { closes: 4, money: 9000, nothing: 3 } }), { ok: true });
+    assert.deepEqual(shouldPropose({ ...base, worth: { closes: 2, money: 0, nothing: 2 } }), { ok: true }, 'two is a bad fortnight');
+  }
+
+  /* ─── 2. What the model is allowed to come back with ────────────────────── */
+  {
+    const ok = parseProposal({ objective: 'Find three suppliers who deliver same-day', kind: 'build', steps: ['Search Cebu suppliers', 'Compare lead times'] });
+    assert.deepEqual(ok, { objective: 'Find three suppliers who deliver same-day', kind: 'build', steps: ['Search Cebu suppliers', 'Compare lead times'] });
+
+    // Declining is first-class and the prompt asks for it by name. A proposer
+    // that must always propose will propose on a quiet week, and a mandate
+    // invented to fill a slot costs worker minutes and the trust in every one
+    // that follows.
+    assert.equal(parseProposal({ objective: null }), null);
+    assert.equal(parseProposal({ objective: '   ' }), null);
+    assert.equal(parseProposal(null), null);
+    assert.equal(parseProposal('nope'), null);
+
+    // A mandate with no plan is a wish. The user is approving on the strength of
+    // what it says it will do, so it has to say.
+    assert.equal(parseProposal({ objective: 'Do something', steps: ['Only one'] }), null);
+    assert.equal(parseProposal({ objective: 'Do something' }), null);
+
+    // An unrecognised kind lands mid-prior rather than burying or floating it.
+    assert.equal(parseProposal({ objective: 'x', kind: 'invented', steps: ['a', 'b'] })!.kind, 'decide');
+    assert.equal(parseProposal({ objective: 'x', steps: ['a', 'b'] })!.kind, 'decide');
+
+    const long = parseProposal({ objective: 'x', steps: Array.from({ length: 20 }, (_, i) => `step ${i}`) })!;
+    assert.equal(long.steps.length, PROPOSAL_STEPS_MAX, 'past five nobody reads it, and an unread plan approved anyway is the ceremony the approve button exists to avoid');
+
+    // The model is told not to state numbers, because the app writes those. The
+    // instruction has to actually be in the prompt or the rule is a comment.
+    assert.match(PROPOSE_SYSTEM, /Never state a number/);
+    assert.match(PROPOSE_SYSTEM, /Never propose sending, messaging, posting, buying, booking or hiring/);
+  }
+
+  /* ─── 3. The reasons are arithmetic, never a model's prose ──────────────── */
+  {
+    const why = whyFor({ goal, metrics });
+    assert.match(why[0], /₱102,000 short with 30 days on it/, 'the gap is computed, not described');
+    assert.match(why[1], /44 sent in 30 days for 1 reply\. This is not that\./);
+    assert.match(why[2], /3\.4 months of runway/);
+
+    // Nothing sent reads differently from nothing back, because they are
+    // different situations and only one of them is an argument.
+    const quiet = whyFor({ goal, metrics: { ...metrics as object, sent: 0 } as never });
+    assert.ok(!quiet.some((w) => /sent/.test(w)));
+
+    const noReply = whyFor({ goal, metrics: { ...metrics as object, replies: 0 } as never });
+    assert.match(noReply[1], /nothing has come back/);
+
+    // Long runway drops the urgency line rather than inventing pressure.
+    const safe = whyFor({ goal, metrics: { ...metrics as object, runway_months: 22 } as never });
+    assert.ok(!safe.some((w) => /runway/.test(w)));
+
+    // The ledger speaks for itself once there is one.
+    const graded = whyFor({ goal, metrics, worth: { closes: 3, money: 0, nothing: 3 } });
+    assert.match(graded[graded.length - 1], /closed 3 of these and said none of them were worth something/);
+
+    // A goal with no target still produces a reason rather than an empty case.
+    const bare = whyFor({ goal: { ...goal, target_value: null, current_value: null }, metrics });
+    assert.match(bare[0], /meant to move Monthly revenue/);
+  }
+
+  /* ─── 4. A proposal is a Move, and a valid one ──────────────────────────── */
+  {
+    const draft = parseProposal({ objective: 'Find three suppliers who deliver same-day', kind: 'build', steps: ['Search Cebu suppliers', 'Compare lead times and minimums'] })!;
+    const move = proposalFrom(draft, { goal, metrics }, PROPOSAL_BUDGET_MINUTES)!;
+
+    assert.ok(isDeliverable(move), 'it has to survive the same validation as every other Move');
+    assert.equal(move.job, PROPOSE_JOB);
+    assert.equal(move.artifact.kind, 'plan');
+    assert.deepEqual(move.artifact.steps, ['Search Cebu suppliers', 'Compare lead times and minimums']);
+    // The readable rendering carries the budget, because the budget is part of
+    // what is being authorised and discovering it afterwards inside the mandate
+    // is finding out what you agreed to.
+    assert.match(move.artifact.value, /1\. Search Cebu suppliers/);
+    assert.match(move.artifact.value, new RegExp(`Up to ${PROPOSAL_BUDGET_MINUTES} minutes`));
+    assert.match(move.artifact.value, /contacts nobody and spends nothing/);
+
+    // Its own key, and deliberately NOT `commission`. runJobs bars a stood-down
+    // job from producing at all, so sharing the key would mean "stop proposing
+    // work to me" also silenced the questions from mandates already approved.
+    assert.notEqual(move.job, 'commission');
+
+    // No invented value on the stake. A mandate's worth is genuinely unknown
+    // when it is proposed, and the house rule is that a job which cannot say is
+    // better off silent than making a figure up.
+    assert.equal(move.stake!.value, undefined);
+    assert.equal(move.stake!.metric, 'won_amount');
+    assert.equal(stakeMetricFor('number'), 'none', 'only money maps to a metric that can be read back');
+    assert.equal(stakeMetricFor('none'), 'none');
+
+    // A plan Move with no steps has a button that would create an empty
+    // mandate. Invariant 7, in the small.
+    assert.equal(isDeliverable({ ...move, artifact: { ...move.artifact, steps: [] } }), false);
+    assert.equal(isDeliverable({ ...move, artifact: { ...move.artifact, steps: ['  '] } }), false);
+  }
+
+  /* ─── 5. It competes. That is the whole reason it is not a fourth card ──── */
+  {
+    const draft = parseProposal({ objective: 'Find three suppliers who deliver same-day', kind: 'build', steps: ['a', 'b'] })!;
+    const proposal = proposalFrom(draft, { goal, metrics }, PROPOSAL_BUDGET_MINUTES)!;
+    const scorable = { id: 'prop', kind: proposal.kind, job: proposal.job, stake: proposal.stake, costMinutes: 1 };
+    const queue = { id: 'q', kind: 'earn' as const, job: 'send_queue', stake: { metric: 'queue' as const, direction: 'down' as const, by: 10, withinDays: 7 }, costMinutes: 45 };
+    const ctx = { monthlyBurn: 42_000, capacityMinutes: 90 };
+
+    // It does NOT automatically win, and it must not: a proposal that outranks
+    // real work by construction is the permanent button again, wearing a card.
+    // A send queue seven days from going stale is urgent real work, and it
+    // leads on any day — measured, 3.00 against 0.90, not assumed.
+    assert.equal(arbitrate2([scorable, queue], ctx).call?.id, 'q', 'urgent real work still leads');
+
+    // On a day with no time in it the proposal DOUBLES its standing, because it
+    // genuinely costs a tap while the queue costs 45 minutes. The fit factor
+    // doing what it is for, rather than a thumb on the scale: it closes the gap,
+    // it does not hand over the day.
+    const busy = { ...ctx, capacityMinutes: 20 };
+    const ratio = (c: typeof ctx) => score3(scorable, c) / score3(queue, c);
+    assert.equal(score3(scorable, busy), score3(scorable, ctx), 'a proposal fits any day');
+    assert.ok(score3(queue, busy) < score3(queue, ctx), 'a 45-minute task does not');
+    assert.ok(ratio(busy) > ratio(ctx) * 1.9, 'and the proposal closes the gap on a day with no time in it');
+
+    // Where it does lead: against work that is neither urgent nor cheap. A
+    // two-hour `learn` with no stake is exactly the thing somebody has been not
+    // doing for a fortnight, and offering to take it off them beats suggesting
+    // it again.
+    const learn = { id: 'l', kind: 'learn' as const, job: 'capability_gap', stake: null, costMinutes: 120 };
+    assert.equal(arbitrate2([scorable, learn], ctx).call?.id, 'prop');
+
+    // And the case the whole product arc has been about: once the queue is
+    // stood down — the user having said outreach is no longer their leverage —
+    // the proposal is what is left to lead, instead of the starter ladder
+    // proposing the queue again under another name.
+    assert.equal(arbitrate2([scorable, queue], { ...ctx, standing: new Set(['send_queue']) }).call?.id, 'prop');
+
+    // And every damper already built reaches it, because it is a Move.
+    const refused = arbitrate2([scorable, queue], { ...ctx, refused: { [PROPOSE_JOB]: 3 } });
+    assert.notEqual(refused.call?.id, 'prop', 'refused three times and it cannot lead');
+    assert.ok(refused.stoodDown.includes(PROPOSE_JOB));
+    const stopped = arbitrate2([scorable, queue], { ...ctx, standing: new Set([PROPOSE_JOB]) });
+    assert.notEqual(stopped.call?.id, 'prop', 'stood down for good');
+    // Barred from leading, not from existing: the work is still real.
+    assert.ok(stopped.rest.some((m) => m.id === 'prop'));
+  }
+
+  /* ─── 6. The prompt carries what a general model cannot know ────────────── */
+  {
+    const p = proposePrompt({
+      goalTitle: 'Monthly revenue',
+      offer: 'A store that takes orders',
+      working: 'Nothing under ₱18k.',
+      metricsLine: '44 sent, 1 reply (2%)',
+      recentObjectives: ['Find three suppliers who deliver same-day'],
+      refusedPhrases: ['sending the drafts'],
+    });
+    // These two lists are the entire argument for doing this inside the app
+    // rather than in a chat window. Without them it is a worse chat window.
+    assert.match(p, /do not propose these again:[\s\S]*Find three suppliers/);
+    assert.match(p, /stop suggesting:[\s\S]*sending the drafts/);
+    assert.match(p, /Nothing under ₱18k/);
+    assert.match(p, /Propose one piece of work, or decline\./);
+
+    // An empty working file leaves the section out rather than heading nothing.
+    const bare = proposePrompt({ goalTitle: 'g', offer: '', working: '   ', metricsLine: 'm', recentObjectives: [], refusedPhrases: [] });
+    assert.doesNotMatch(bare, /told the app about their own work/);
+    assert.match(bare, /have not written down what they sell/);
+  }
+
+  console.log('copilot-core: proposal checks passed');
+}
+
+proposals().catch((e) => { console.error(e); process.exit(1); });

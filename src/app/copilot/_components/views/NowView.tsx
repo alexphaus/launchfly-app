@@ -251,8 +251,13 @@ export default function NowView({ home, actions, briefing, finding }: { home: Ho
       {!nothingYet && <JobList threads={jobs.running} actions={actions} />}
 
       {/* Said once, to somebody who has never done it. A person with finished
-          jobs behind them does not need telling what this is. */}
-      {!nothingYet && !jobs.needsYou.length && !jobs.running.length && !jobs.finished.length && (
+          jobs behind them does not need telling what this is — and neither does
+          somebody looking at a proposal, which is the app doing the asking for
+          them. Without that second clause this read "give it something you
+          would otherwise do yourself" directly above a card offering to take
+          exactly that off them. */}
+      {!nothingYet && !jobs.needsYou.length && !jobs.running.length && !jobs.finished.length
+        && !home.moves.some((mv) => mv.artifact.kind === 'plan') && (
         <p className="cp-help" style={{ marginTop: -4 }}>
           Nothing handed over. Give it something you would otherwise do yourself — research, a
           comparison, a shortlist — and read what comes back.
@@ -448,6 +453,14 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
   // who has concluded this kind of work is not their leverage any more and
   // watched the app ask again a fortnight later.
   const [refusing, setRefusing] = useState(false);
+  // ABOVE the `answered` early return, with every other hook, and it has to be.
+  // Declared below it this was a conditional hook: an answered call renders four
+  // useState calls and a pending one five, so the moment a decision flipped from
+  // pending to did on a mounted card React threw "rendered fewer hooks than
+  // expected" and Now went blank — on the single commonest action in the app.
+  // tsc cannot see it and the browser pass missed it, because the preview's
+  // hand-over was mocked to fail and the decision never flipped.
+  const [handError, setHandError] = useState<string | null>(null);
   // Present when arbitration promoted a Move rather than the brief writing one.
   const move = home.callMove;
   const verdict = verdictOf(decision);
@@ -484,6 +497,23 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
     setRefusing(false);
   };
 
+  // When the day's call is work the app is offering to do, "I did it" is the
+  // wrong verb — nobody did anything, they authorised something. The refusal
+  // path is unchanged: turning this down is still a no like any other, and
+  // "stop suggesting this" still stands the proposer down for good.
+  const proposal = move?.artifact.kind === 'plan';
+  const handOver = async () => {
+    if (!move) return;
+    setBusy(true); setHandError(null);
+    const r = await actions.handOverMove(move.id);
+    if (!r.ok) { setBusy(false); return setHandError(r.error ?? 'Could not hand that over'); }
+    // Only once it actually went. Recording the call as acted on over a mandate
+    // that was never written is the ledger grading something that did not
+    // happen — and this app decides tomorrow out of that ledger.
+    await actions.answerCall('did');
+    setBusy(false);
+  };
+
   return (
     <>
       <div className="cp-card cp-call">
@@ -515,7 +545,12 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
             work. A Decision has no artifact of its own, which is why this used
             to be a sentence with three verdict buttons under it and nothing to
             actually do. */}
-        {move && (move.artifact.kind === 'text'
+        {move && (move.artifact.kind === 'plan'
+          // Always open, never behind a "show it": this is the thing being
+          // authorised, and a one-tap approval over a hidden plan is a rubber
+          // stamp with extra steps.
+          ? <div className="cp-reasoning" style={{ marginTop: 4, whiteSpace: 'pre-line' }}>{move.artifact.value}</div>
+          : move.artifact.kind === 'text'
           ? <div className="cp-reasoning" style={{ marginTop: 4 }}>{move.artifact.value}</div>
           : move.artifact.href
           ? <a className="cp-btn primary block cp-call-do" href={move.artifact.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{move.artifact.label}</a>
@@ -567,11 +602,30 @@ function CallCard({ decision, home, actions, noOffer }: { decision: Decision; ho
               </p>
             </>
           ) : (
-            <div className="cp-btn-row">
-              <button className="cp-btn primary" disabled={busy} onClick={() => answer('did')}>I did it</button>
-              <button className="cp-btn" disabled={busy} onClick={() => setRefusing(true)}>Not doing it</button>
-              <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
-            </div>
+            proposal ? (
+              <>
+                {handError && <div className="cp-note">{handError}</div>}
+                <button className="cp-btn primary block cp-call-do" disabled={busy} onClick={() => void handOver()}>
+                  {busy ? 'Handing it over…' : 'Hand it over'}
+                </button>
+                <div className="cp-btn-row" style={{ marginTop: 8 }}>
+                  <button className="cp-btn" disabled={busy} onClick={() => setRefusing(true)}>Not doing it</button>
+                  <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
+                </div>
+                {/* Says what happens NEXT and nothing else. The first draft
+                    repeated "it contacts nobody and spends nothing" from the
+                    last line of the plan directly above — the same sentence
+                    twice on one card, which is the duplication this screen
+                    keeps deleting. The browser showed it; the JSX did not. */}
+                <p className="cp-help">It picks this up on tonight&rsquo;s run, and whatever it finds turns up here.</p>
+              </>
+            ) : (
+              <div className="cp-btn-row">
+                <button className="cp-btn primary" disabled={busy} onClick={() => answer('did')}>I did it</button>
+                <button className="cp-btn" disabled={busy} onClick={() => setRefusing(true)}>Not doing it</button>
+                <button className="cp-btn" disabled={busy} onClick={() => answer('wrong')}>Wrong call</button>
+              </div>
+            )
           )
         )}
 
@@ -659,10 +713,25 @@ function FirstRun({ home, actions, finding }: { home: HomeData; actions: Actions
 function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const a = move.artifact;
+  // The one kind of Move the user does not carry out. Everything else on this
+  // screen is work the app found and you do; a plan is work the app found and
+  // would do itself, so the verbs are different all the way down — "Hand it
+  // over" rather than "Did it", "Not worth it" rather than "Not this one".
+  const proposal = a.kind === 'plan';
   const answer = async (status: 'done' | 'dismissed') => {
     setBusy(true);
     try { await actions.answerMove(move.id, status); } finally { setBusy(false); }
+  };
+  const handOver = async () => {
+    setBusy(true); setError(null);
+    const r = await actions.handOverMove(move.id);
+    setBusy(false);
+    // Every way this fails is something the user can act on — three already
+    // running, a plan that did not survive — so it is said on the card rather
+    // than in a toast that is gone before they finish reading it.
+    if (!r.ok) setError(r.error ?? 'Could not hand that over');
   };
 
   return (
@@ -681,7 +750,12 @@ function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
           is always on screen and needs no button. Giving it one produced a
           control that toggled nothing and then read "Hide it" while the text
           stayed exactly where it was. */}
-      {a.kind === 'text'
+      {/* A plan is always open. It is the thing being approved, and hiding what
+          somebody is about to authorise behind a "show it" button is how a one
+          tap approval becomes a rubber stamp. */}
+      {proposal
+        ? <div className="cp-reasoning" style={{ marginTop: 4, whiteSpace: 'pre-line' }}>{a.value}</div>
+        : a.kind === 'text'
         ? <div className="cp-reasoning" style={{ marginTop: 4 }}>{a.value}</div>
         : a.href
         ? <a className="cp-btn primary block cp-call-do" href={a.href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{a.label}</a>
@@ -692,10 +766,23 @@ function MoveCard({ move, actions }: { move: Move; actions: Actions }) {
             {shown && <div className="cp-reasoning">{a.value}</div>}
           </>}
 
-      <div className="cp-btn-row">
-        <button className="cp-btn" disabled={busy} onClick={() => answer('done')}>Did it</button>
-        <button className="cp-btn" disabled={busy} onClick={() => answer('dismissed')}>Not this one</button>
-      </div>
+      {error && <div className="cp-note">{error}</div>}
+
+      {proposal ? (
+        <>
+          <button className="cp-btn primary block cp-call-do" disabled={busy} onClick={() => void handOver()}>
+            {busy ? 'Handing it over…' : a.label}
+          </button>
+          <div className="cp-btn-row" style={{ marginTop: 8 }}>
+            <button className="cp-btn ghost" disabled={busy} onClick={() => answer('dismissed')}>Not worth it</button>
+          </div>
+        </>
+      ) : (
+        <div className="cp-btn-row">
+          <button className="cp-btn" disabled={busy} onClick={() => answer('done')}>Did it</button>
+          <button className="cp-btn" disabled={busy} onClick={() => answer('dismissed')}>Not this one</button>
+        </div>
+      )}
     </div>
   );
 }
